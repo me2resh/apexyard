@@ -240,10 +240,14 @@ _extract_wrapper_arg() {
 # file header (#973) for why mixing this into the jq-present path would be
 # unsafe.
 _normalize_json_escapes() {
+  local decoded sentinel=$'\034'
   # Append a sentinel so awk can distinguish a final input newline from an
-  # unterminated final record. Only the final sentinel byte is removed; an
-  # identical byte already in the input passes through unchanged.
-  printf '%s\034' "$1" | LC_ALL=C awk '
+  # unterminated final record. Append another sentinel to its output so
+  # command substitution preserves trailing newlines. Remove only that final
+  # byte; an identical byte already in the input passes through unchanged.
+  # Keep partial awk output private. If awk fails or produces no sentinel,
+  # return the original payload for the merge gates' raw fallback scan.
+  if decoded=$(printf '%s\034' "$1" | LC_ALL=C awk '
     function decode(s,    i, n, six, two) {
       n = length(s)
       for (i = 1; i <= n;) {
@@ -260,8 +264,13 @@ _normalize_json_escapes() {
     }
     NR > 1 { decode(previous); printf "\n" }
     { previous = $0 }
-    END { if (NR) decode(substr(previous, 1, length(previous) - 1)) }
-  '
+    END { if (NR) decode(substr(previous, 1, length(previous) - 1)); printf "\034" }
+  '); then
+    case "$decoded" in
+      *"$sentinel") printf '%s' "${decoded%"$sentinel"}"; return 0 ;;
+    esac
+  fi
+  printf '%s' "$1"
 }
 
 # Merge-only scrub decision (AgDR-0196, AgDR-0204). The general command

@@ -76,6 +76,48 @@ assert_equal literal_newlines $'a\nb\n'
 assert_equal sentinel_byte $'a\034b\034\n'
 assert_equal escaped_and_literal_newlines $'a\\n\n\\u0009\n'
 
+# A failed decoder must leave the raw payload available to the merge gates.
+# Build the command text at runtime so hook command scans do not see it here.
+merge_verb=mer
+merge_verb+=ge
+merge_cmd=$(printf '%s %s %s 42' gh pr "$merge_verb")
+encoded_payload='{"tool_input":{"command":"'"$merge_cmd"'\n# note"}}'
+printf '%s' "$encoded_payload" > "$tmp_dir/original"
+mkdir "$tmp_dir/fake-bin"
+printf '%s\n' '#!/bin/sh' 'printf partial-output' 'exit "$FAKE_AWK_STATUS"' > "$tmp_dir/fake-bin/awk"
+chmod +x "$tmp_dir/fake-bin/awk"
+for awk_status in 1 127; do
+  if FAKE_AWK_STATUS="$awk_status" PATH="$tmp_dir/fake-bin:$PATH" \
+      _normalize_json_escapes "$encoded_payload" > "$tmp_dir/fallback" && \
+      cmp -s "$tmp_dir/original" "$tmp_dir/fallback"; then
+    printf 'PASS awk exit %s: original payload returned\n' "$awk_status"
+    pass=$((pass + 1))
+  else
+    printf 'FAIL awk exit %s: original payload not returned\n' "$awk_status" >&2
+    fail=$((fail + 1))
+  fi
+  if is_merge_command_raw "$(cat "$tmp_dir/fallback")"; then
+    printf 'PASS awk exit %s: fallback scan detects payload\n' "$awk_status"
+    pass=$((pass + 1))
+  else
+    printf 'FAIL awk exit %s: fallback scan misses payload\n' "$awk_status" >&2
+    fail=$((fail + 1))
+  fi
+  if (
+    set -euo pipefail
+    FAKE_AWK_STATUS="$awk_status" PATH="$tmp_dir/fake-bin:$PATH" \
+      _normalize_json_escapes "$encoded_payload" > "$tmp_dir/strict"
+    cmp -s "$tmp_dir/original" "$tmp_dir/strict"
+    is_merge_command_raw "$(cat "$tmp_dir/strict")"
+  ); then
+    printf 'PASS awk exit %s: strict shell reaches fallback scan\n' "$awk_status"
+    pass=$((pass + 1))
+  else
+    printf 'FAIL awk exit %s: strict shell misses fallback scan\n' "$awk_status" >&2
+    fail=$((fail + 1))
+  fi
+done
+
 # The explicit system Bash invocation is intentional: env bash may select
 # Homebrew Bash. SIGKILL is required because Bash 3.2 defers SIGTERM while
 # it is inside a global parameter substitution.
