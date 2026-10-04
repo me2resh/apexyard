@@ -42,17 +42,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import type { BashToolCallEvent, ExtensionAPI, ToolCallEventResult } from "@earendil-works/pi-coding-agent";
+
 import { registerGateDispatcher, runGateHook, deriveGatesFromOpsRoot, type GateDefinition } from "../src/gate-dispatcher.ts";
 
 // ---------------------------------------------------------------------
-// Minimal structural mock of pi's ExtensionAPI. Typed loosely (no import
-// of the real pi types here) because this test suite must run WITHOUT
-// the @earendil-works/pi-coding-agent package installed — the whole
-// point of a CI-runnable proof harness is that it doesn't require model
-// credentials or a live pi install. gate-dispatcher.ts itself imports the
-// real types (type-only; erased at runtime by Node's type stripping), so
-// production code still tracks pi's real contract even though this test
-// double does not import it.
+// Minimal structural mock of pi's ExtensionAPI. Typed loosely at the
+// registration boundary so the suite stays offline-friendly; production
+// code still type-imports the real contract from
+// `@earendil-works/pi-coding-agent`. The dedicated 1.0-shaped event test
+// below imports real `BashToolCallEvent` / `ToolCallEventResult` types so
+// a pi 1.0 field drift fails typecheck or this assertion, not silently.
 // ---------------------------------------------------------------------
 type Handler = (event: any, ctx: any) => Promise<any>;
 
@@ -145,6 +145,30 @@ test("a custom gate hook that exits 2 is surfaced as a block with the stderr rea
   const toolCall = handlers.get("tool_call")!;
 
   const result = await toolCall({ type: "tool_call", toolCallId: "4", toolName: "bash", input: { command: "anything" } }, { cwd: opsRoot });
+  assert.equal(result?.block, true);
+  assert.match(result?.reason ?? "", /blocked for test/);
+});
+
+test("gate dispatch blocks a pi 1.0-shaped tool_call event (parentToolCallId + BashToolCallEvent input)", async () => {
+  // pi 1.0 keeps type/toolCallId/toolName/input and adds optional
+  // parentToolCallId for nested executeTool calls. This event is typed as
+  // BashToolCallEvent so a field rename in 1.x fails here at typecheck.
+  const opsRoot = makeIsolatedOpsRoot();
+  const customGates: GateDefinition[] = [
+    { name: "always-block", hookRelativePath: ".claude/hooks/always-block.sh", wires: [{ tool: "bash", commandGlob: null }] },
+  ];
+  const { pi, handlers } = makeMockPi();
+  registerGateDispatcher(pi as unknown as ExtensionAPI, { gates: customGates, resolveOpsRoot: () => opsRoot });
+  const toolCall = handlers.get("tool_call")!;
+
+  const event: BashToolCallEvent = {
+    type: "tool_call",
+    toolCallId: "parent-call/1",
+    parentToolCallId: "parent-call",
+    toolName: "bash",
+    input: { command: "gh pr merge 1 --squash" },
+  };
+  const result: ToolCallEventResult | undefined = await toolCall(event, { cwd: opsRoot });
   assert.equal(result?.block, true);
   assert.match(result?.reason ?? "", /blocked for test/);
 });
