@@ -22,11 +22,39 @@ fi
 # Fixes apexyard#743 Bug 2: without normalization, a --repo value split onto
 # its own continuation line could be mis-extracted (the trailing '\' captured
 # instead of the repo slug, yielding garbled TRACKER_REPO like "(hook)").
-# NOTE: must be bash-3.2-safe (macOS default). The combined ANSI-C pattern
-# ${COMMAND//$'\\\n'/ } is a silent NO-OP under bash 3.2 — the newline in the
-# pattern doesn't match. Holding the newline in a var and escaping the
-# backslash separately works on both 3.2 and 5.x (verified via `od -c`).
-nl=$'\n'; COMMAND="${COMMAND//\\$nl/ }"
+# A one-line lookahead joins each backslash-newline pair in one linear awk
+# pass. The extra final record marks the artificial newline added by printf;
+# it is never emitted. The C locale accepts invalid UTF-8 on macOS awk.
+_vpc_join_failed=0
+if _vpc_joined=$(printf '%s\n.' "$COMMAND" | LC_ALL=C awk '
+    function emit_line(line) {
+      if (sub(/\\$/, " ", line)) printf "%s", line
+      else printf "%s\n", line
+    }
+    NR == 1 { previous = $0; next }
+    {
+      if (NR > 2) emit_line(before)
+      before = previous
+      previous = $0
+    }
+    END { if (NR > 1) printf "%s", before }
+  '); then
+  COMMAND=$_vpc_joined
+else
+  _vpc_join_failed=1
+  # A failed awk must not let a continued PR verb bypass validation.
+  # Replacing every backslash and newline with a space is broader than the
+  # normal join, so a PR verb remains visible to the gate.
+  if _vpc_joined=$(printf '%s' "$COMMAND" | LC_ALL=C tr '\\\n' '  '); then
+    COMMAND=$_vpc_joined
+  else
+    # Core utilities are unavailable: keep the exact old behavior as a
+    # final fail-safe, even though this rare path is slower on Bash 3.2.
+    _vpc_nl=$'\n'; COMMAND="${COMMAND//\\$_vpc_nl/ }"
+    unset _vpc_nl
+  fi
+fi
+unset _vpc_joined
 
 # Parse --repo / -R from the gh command for cross-repo PR creation.
 # Handles: --repo VALUE, --repo=VALUE, -R VALUE, -R=VALUE.
@@ -206,13 +234,19 @@ while [ "$_gate_iter" -lt 10 ]; do
   [ "$_cmd_head" = "$_cmd_head_prev" ] && break
   _gate_iter=$((_gate_iter + 1))
 done
-if [ "$_gate_fired" -ne 1 ]; then
+if [ "$_gate_fired" -ne 1 ] && [ "$_vpc_join_failed" -eq 0 ]; then
   unset _cmd_for_gate _cmd_head _cmd_head_prev _gate_iter _gate_fired _stripped
   exit 0
 fi
 unset _cmd_for_gate _cmd_head _cmd_head_prev _gate_iter _gate_fired _stripped
 
 ERRORS=""
+if [ "$_vpc_join_failed" -ne 0 ]; then
+  # The broad tr fallback can alter title or path text. Continue validation,
+  # but never accept a command after its exact normalization failed.
+  ERRORS="${ERRORS}Could not normalize command text safely. Retry PR creation.\n"
+fi
+unset _vpc_join_failed
 
 # Extract --title value (macOS-compatible, no grep -P).
 #
