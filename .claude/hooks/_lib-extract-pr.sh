@@ -89,19 +89,19 @@
 #
 # `_normalize_json_escapes` (below) is a small, best-effort decoder for
 # the handful of escape shapes that matter here — NOT a full JSON string
-# parser, the same "regex/parameter-expansion only, sufficient for the
-# shapes real callers emit" discipline as `_extract_wrapper_arg` above.
+# parser, only sufficient for the shapes real callers emit.
 # It is called ONLY at the four hooks' raw-payload fallback call sites
 # (`is_merge_command_raw "$(_normalize_json_escapes "$INPUT")"`), never from
-# inside `is_merge_command` itself and never on the normal jq-present
-# path: jq has ALREADY correctly decoded these same escapes for that path
+# inside `is_merge_command` itself and never when jq returns a nonempty
+# command: jq has ALREADY correctly decoded these same escapes for that path
 # (that's what `jq -r` does), so re-normalizing already-decoded text would
 # be redundant at best and, for the rare case of a command that legitimately
 # contains a literal backslash-t/backslash-n substring (e.g. inside a sed
 # script), actively wrong — it would corrupt real command text that jq had
 # already decoded correctly. Keeping the two paths separate is what makes
-# this change safe for the jq-present callers: their behaviour is provably
-# unchanged because they never call the new function at all.
+# this change safe for commands successfully read by jq: they never call
+# this function. An empty or failed jq result enters the fallback even when
+# jq is installed.
 
 # Lazily source the tracker lib so `tracker_review_kind` is available for forge
 # resolution. Guarded: only source if not already defined and the lib is
@@ -221,16 +221,18 @@ _extract_wrapper_arg() {
 # backslash-n and backslash-u000A (either case) decode to a newline;
 # backslash-u0020 decodes to a plain space; backslash-slash decodes to a
 # plain slash.
+# The original substitution order is u0020, u0009, u000A, u000a, slash,
+# short t, short n. None of their replacements introduces a backslash, so
+# each match can be emitted during one left-to-right scan in that order.
 #
 # This is deliberately NOT a full JSON string decoder — no handling of
 # arbitrary \uXXXX code points, no awareness of escaped-backslash context
 # (a literal `\\t` — escaped backslash followed by a bare `t` — will still
 # be (mis-)decoded as a tab; that's an accepted, documented limitation, not
 # a security gap: it can only make the fallback MORE eager to treat text as
-# merge-shaped, i.e. fail closed, never a new way to evade it). Pure bash
-# parameter expansion — no eval, no external process, no regex
-# backtracking on attacker-controlled text — matching the same discipline
-# as `_extract_wrapper_arg` above.
+# merge-shaped, i.e. fail closed, never a new way to evade it). A single awk
+# pass avoids bash 3.2's superlinear global substitutions. It does not eval
+# or run the input text.
 #
 # Callers: ONLY the four merge-gate hooks' raw-payload fallback branches
 # (`is_merge_command_raw "$(_normalize_json_escapes "$INPUT")"`), never
@@ -238,36 +240,28 @@ _extract_wrapper_arg() {
 # file header (#973) for why mixing this into the jq-present path would be
 # unsafe.
 _normalize_json_escapes() {
-  local text="$1"
-  local tab=$'\t'
-  local nl=$'\n'
-  # Two literal backslash characters. Used as the escape-matching prefix
-  # below rather than a single backslash: bash's `${var//pattern/repl}`
-  # treats a SINGLE backslash inside an expanded pattern as a glob escape
-  # character (it would consume/escape the following char instead of
-  # matching a literal backslash), so building the pattern from a
-  # single-backslash variable silently fails to consume the backslash
-  # itself — the doubled form is what makes the pattern match one literal
-  # backslash followed by the literal marker character.
-  local bs2='\\'
-
-  local esc_u0020="${bs2}u0020"
-  local esc_u0009="${bs2}u0009"
-  local esc_u000A="${bs2}u000A"
-  local esc_u000a="${bs2}u000a"
-  local esc_slash="${bs2}/"
-  local esc_t="${bs2}t"
-  local esc_n="${bs2}n"
-
-  text="${text//$esc_u0020/ }"
-  text="${text//$esc_u0009/$tab}"
-  text="${text//$esc_u000A/$nl}"
-  text="${text//$esc_u000a/$nl}"
-  text="${text//$esc_slash//}"
-  text="${text//$esc_t/$tab}"
-  text="${text//$esc_n/$nl}"
-
-  printf '%s' "$text"
+  # Append a sentinel so awk can distinguish a final input newline from an
+  # unterminated final record. Only the final sentinel byte is removed; an
+  # identical byte already in the input passes through unchanged.
+  printf '%s\034' "$1" | LC_ALL=C awk '
+    function decode(s,    i, n, six, two) {
+      n = length(s)
+      for (i = 1; i <= n;) {
+        six = substr(s, i, 6)
+        two = substr(s, i, 2)
+        if (six == "\\u0020") { printf " "; i += 6 }
+        else if (six == "\\u0009") { printf "\t"; i += 6 }
+        else if (six == "\\u000A" || six == "\\u000a") { printf "\n"; i += 6 }
+        else if (two == "\\/") { printf "/"; i += 2 }
+        else if (two == "\\t") { printf "\t"; i += 2 }
+        else if (two == "\\n") { printf "\n"; i += 2 }
+        else { printf "%s", substr(s, i, 1); i++ }
+      }
+    }
+    NR > 1 { decode(previous); printf "\n" }
+    { previous = $0 }
+    END { if (NR) decode(substr(previous, 1, length(previous) - 1)) }
+  '
 }
 
 # Merge-only scrub decision (AgDR-0196, AgDR-0204). The general command
