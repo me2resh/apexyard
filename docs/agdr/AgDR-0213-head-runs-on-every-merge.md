@@ -26,6 +26,8 @@ Evaluate the latest run per `[workflow_id, event]`. Choose the highest `run_numb
 
 Allow Actions API failures when PR checks passed or reported no checks (A3). An invalid response cannot prove all runs passed. If it exposes a blocking latest run with readable selection and state fields, block and report the partial response. Otherwise, print the existing unverified-CI note. Red or pending PR checks still block. Never call an API failure "no CI checks configured."
 
+An incomplete runs page always blocks, even when the response fails validation. If jq fails while selecting blocking head runs, block because the gate cannot evaluate them.
+
 If the runs request fails or returns a non-number count, print the unverified note unless a parseable latest run blocks (N1). Require the exact head SHA filter in the test stub (N2). Reject empty, `.` and `..` owner/repo parts. Validate the repo before passing it to any `gh` call. Validate the 40-character hexadecimal head SHA before placing it in an API path (N3). Block malformed values because the merge command or PR lookup supplied them.
 
 Keep the exact no-checks branch from AgDR-0212. Allow a repository with no checks and no head runs when its workflow inventory is empty. Report that workflows exist when filters leave this head with no runs.
