@@ -26,6 +26,8 @@ Evaluate the latest run per `[workflow_id, event]`. Choose the highest `run_numb
 
 Allow Actions API failures when PR checks passed or reported no checks (A3). An invalid response cannot prove all runs passed. If it exposes a blocking latest run with readable selection and state fields, block and report the partial response. Otherwise, print the existing unverified-CI note. Red or pending PR checks still block. Never call an API failure "no CI checks configured."
 
+An incomplete runs page always blocks, even when the response fails validation. If jq fails while selecting blocking head runs, block because the gate cannot evaluate them.
+
 If the runs request fails or returns a non-number count, print the unverified note unless a parseable latest run blocks (N1). Require the exact head SHA filter in the test stub (N2). Reject empty, `.` and `..` owner/repo parts. Validate the repo before passing it to any `gh` call. Validate the 40-character hexadecimal head SHA before placing it in an API path (N3). Block malformed values because the merge command or PR lookup supplied them.
 
 Keep the exact no-checks branch from AgDR-0212. Allow a repository with no checks and no head runs when its workflow inventory is empty. Report that workflows exist when filters leave this head with no runs.
@@ -37,6 +39,10 @@ Keep the exact no-checks branch from AgDR-0212. Allow a repository with no check
 - Red or pending PR checks still block when the Actions API fails or all latest head runs pass.
 - Invalid repository or head identifiers block before the Actions request.
 - A partial runs page cannot prove all runs passed. The gate blocks until it can inspect every head run.
+
+## Known limits
+
+- **jq failure on one filter only (C-1, low).** The partial-page jq call and the JSON-object check ignore their own exit status. If jq fails on just one of those filters while the others succeed, the gate can allow a merge it should block. A failed JSON-object check skips the run selection, so a complete page with a failing run is allowed with no output. A failed partial-page call lets an incomplete page of green runs through. This is not a regression: the base hook read a failed count as "not partial" too. No jq version in use and no outside actor can cause it. Fix it when this code is next changed: treat a jq failure in any of the three calls as "cannot evaluate" and block. Source: the security review of PR #1560.
 
 ## Artifacts
 

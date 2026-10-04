@@ -168,6 +168,9 @@ case "\$*" in
       runs_non_json) echo '<html>rate limit</html>' ;;
       runs_missing_field) echo '{"total_count":0}' ;;
       partial_page) echo '{"total_count":101,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build","status":"completed","conclusion":"success"}]}' ;;
+      partial_missing_event) echo '{"total_count":2,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build","status":"completed","conclusion":"success"}]}' ;;
+      partial_missing_created_at) echo '{"total_count":2,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"id":101,"name":"Build","status":"completed","conclusion":"success"}]}' ;;
+      full_missing_event) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build","status":"completed","conclusion":"success"}]}' ;;
       *) echo '{"total_count":0,"workflow_runs":[]}' ;;
     esac
     ;;
@@ -465,6 +468,33 @@ run_case "#1551 A5: invalid response with only successful parseable runs -> hone
 sb=$(make_sandbox green "" partial_page)
 run_case "#1536: partial runs page cannot prove all passed -> blocks" 2 "101 head workflow runs.*returned only 1" "$sb" \
   "gh pr merge 1536 --repo $TEST_REPO --squash"
+
+sb=$(make_sandbox green "" partial_missing_event)
+run_case "#1559: partial page with missing event blocks" 2 "2 head workflow runs.*returned only 1" "$sb" \
+  "gh pr merge 1559 --repo $TEST_REPO --squash" "CI state could not be checked"
+
+sb=$(make_sandbox green "" partial_missing_created_at)
+run_case "#1559: partial page with missing created_at blocks" 2 "2 head workflow runs.*returned only 1" "$sb" \
+  "gh pr merge 1559 --repo $TEST_REPO --squash" "CI state could not be checked"
+
+sb=$(make_sandbox green "" full_missing_event)
+run_case "#1559: complete page with missing event keeps unverified note" 0 "CI state could not be checked.*Actions API unavailable" "$sb" \
+  "gh pr merge 1559 --repo $TEST_REPO --squash" "BLOCKED"
+
+# A jq failure while selecting the latest blocking runs must not turn a
+# visible failing run into a silent allow. Only that filter is intercepted.
+sb=$(make_sandbox green "" failure)
+real_jq=$(command -v jq)
+cat > "$sb/bin/jq" <<EOF
+#!/bin/bash
+case "\$*" in
+  *'group_by([.workflow_id, .event])'*) exit 3 ;;
+esac
+exec "$real_jq" "\$@"
+EOF
+chmod +x "$sb/bin/jq"
+run_case "#1559 B-3: jq run selection failure blocks" 2 "cannot evaluate the head runs" "$sb" \
+  "gh pr merge 1559 --repo $TEST_REPO --squash"
 
 sb=$(make_sandbox green "" action_required)
 run_case "#1536 N3: invalid repo -> blocks before API path" 2 "invalid.*owner/repo" "$sb" \
