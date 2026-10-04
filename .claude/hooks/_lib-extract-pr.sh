@@ -102,6 +102,15 @@
 # this change safe for commands successfully read by jq: they never call
 # this function. An empty or failed jq result enters the fallback even when
 # jq is installed.
+#
+# BACKSLASH-NEWLINE CONTINUATIONS ON THE RAW-PAYLOAD PATH (#1564)
+# ---------------------------------------------------------------
+# After decode, a JSON-escaped shell continuation (`\\` then `\n` in the
+# payload → real backslash then newline) is still two lines to the raw
+# scanner. `is_merge_command_raw` scans both the original and continuation-
+# joined text (outside single quotes), so `<cli> \<newline>pr <verb>` and
+# `<cli> pr \<newline><verb>` block like the one-line form. A plain newline
+# at the same positions stays two commands and is not treated as a merge.
 
 # Lazily source the tracker lib so `tracker_review_kind` is available for forge
 # resolution. Guarded: only source if not already defined and the lib is
@@ -222,17 +231,12 @@ _extract_wrapper_arg() {
 # backslash-u0020 decodes to a plain space; backslash-slash decodes to a
 # plain slash.
 # The original substitution order is u0020, u0009, u000A, u000a, slash,
-# short t, short n. None of their replacements introduces a backslash, so
-# each match can be emitted during one left-to-right scan in that order.
-#
-# This is deliberately NOT a full JSON string decoder — no handling of
-# arbitrary \uXXXX code points, no awareness of escaped-backslash context
-# (a literal `\\t` — escaped backslash followed by a bare `t` — will still
-# be (mis-)decoded as a tab; that's an accepted, documented limitation, not
-# a security gap: it can only make the fallback MORE eager to treat text as
-# merge-shaped, i.e. fail closed, never a new way to evade it). A single awk
-# pass avoids bash 3.2's superlinear global substitutions. It does not eval
-# or run the input text.
+# short t, short n, then JSON `\\` (escaped backslash). Specific two-char
+# escapes are matched before `\\` so `\n` / `\t` / `\/` stay correct.
+# Decoding `\\` to one backslash makes payload `\\\n` (JSON backslash then
+# newline) a real shell continuation for the join in `is_merge_command_raw`
+# (#1564). A single awk pass avoids bash 3.2's superlinear global
+# substitutions. It does not eval or run the input text.
 #
 # Callers: ONLY the four merge-gate hooks' raw-payload fallback branches
 # (`is_merge_command_raw "$(_normalize_json_escapes "$INPUT")"`), never
@@ -260,6 +264,7 @@ _normalize_json_escapes() {
         else if (two == "\\/") { printf "/"; i += 2 }
         else if (two == "\\t") { printf "\t"; i += 2 }
         else if (two == "\\n") { printf "\n"; i += 2 }
+        else if (two == "\\\\") { printf "\\"; i += 2 }
         else { printf "%s", substr(s, i, 1); i++ }
       }
     }
@@ -274,8 +279,9 @@ _normalize_json_escapes() {
   _normalize_json_escapes_legacy "$1"
 }
 
-# The pre-#1550 decoder, retained verbatim for awk failure. Bash 3.2 global
-# substitutions are slow on huge input, so the normal path uses awk above.
+# Pre-#1550 decoder with #1564 `\\` handling, retained for awk failure.
+# Bash 3.2 global substitutions are slow on huge input, so the normal path
+# uses awk above.
 _normalize_json_escapes_legacy() {
   local text="$1"
   local tab=$'\t'
@@ -289,6 +295,12 @@ _normalize_json_escapes_legacy() {
   # itself — the doubled form is what makes the pattern match one literal
   # backslash followed by the literal marker character.
   local bs2='\\'
+  # Four backslash characters: matches two literal backslashes (JSON `\\`).
+  local esc_bs="${bs2}${bs2}"
+  # Protect escaped backslashes before `\n`/`\t` so payload `\\\n` becomes
+  # a real backslash-newline (#1564), not two backslashes then a newline.
+  local bs_sentinel=$'\036'
+  local bs1=$'\\'
 
   local esc_u0020="${bs2}u0020"
   local esc_u0009="${bs2}u0009"
@@ -298,6 +310,7 @@ _normalize_json_escapes_legacy() {
   local esc_t="${bs2}t"
   local esc_n="${bs2}n"
 
+  text="${text//$esc_bs/$bs_sentinel}"
   text="${text//$esc_u0020/ }"
   text="${text//$esc_u0009/$tab}"
   text="${text//$esc_u000A/$nl}"
@@ -305,8 +318,62 @@ _normalize_json_escapes_legacy() {
   text="${text//$esc_slash//}"
   text="${text//$esc_t/$tab}"
   text="${text//$esc_n/$nl}"
+  text="${text//$bs_sentinel/$bs1}"
 
   printf '%s' "$text"
+}
+
+# Join shell line continuations: a backslash immediately before a newline
+# (#1564). Bash removes that pair before tokenising, so
+# `<cli> \<newline>pr <verb>` is one merge command. The raw merge scan is
+# line-oriented and would otherwise miss it after JSON-escape decode on the
+# jq-failure path (decode turns payload `\\\n` into a real backslash-newline
+# without joining).
+#
+# Outside single quotes only. Joining inside double quotes is broader than
+# bash for some shapes and only makes merge detection more eager (fail
+# closed). Linear awk over stdin — no ENVIRON/-v (Linux 128 KB cap), no
+# bash `${var//…}` on large input. On awk failure, crush backslashes and
+# newlines to spaces. This fallback only broadens detection because the
+# original text is also scanned.
+_join_shell_continuations() {
+  local joined
+  if joined=$(printf '%s\n.' "$1" | LC_ALL=C awk '
+    BEGIN { sq = sprintf("%c", 39); in_sq = 0 }
+    function emit(line,    i, n, c, out, bs) {
+      n = length(line); out = ""; bs = 0
+      for (i = 1; i <= n; i++) {
+        c = substr(line, i, 1)
+        if (in_sq) {
+          out = out c
+          if (c == sq) in_sq = 0
+          bs = 0
+          continue
+        }
+        if (c == sq) { out = out c; in_sq = 1; bs = 0; continue }
+        if (c == "\\") { out = out c; bs++; continue }
+        out = out c
+        bs = 0
+      }
+      if (!in_sq && (bs % 2) == 1) {
+        # Drop the continuing backslash; next record appends immediately.
+        printf "%s", substr(out, 1, length(out) - 1)
+        return
+      }
+      printf "%s\n", out
+    }
+    NR == 1 { prev = $0; next }
+    {
+      if (NR > 2) emit(before)
+      before = prev
+      prev = $0
+    }
+    END { if (NR > 1) printf "%s", before }
+  '); then
+    printf '%s' "$joined"
+    return 0
+  fi
+  printf '%s' "$1" | LC_ALL=C tr '\\\n' '  '
 }
 
 # Merge-only scrub decision (AgDR-0196, AgDR-0204). The general command
@@ -730,41 +797,47 @@ _has_opaque_merge_wrapper() {
 
 # Raw scan for the unparseable JSON fallback. Do not scrub the encoded payload:
 # JSON quotes are transport syntax, not shell argument boundaries.
+# Scan both the original text and backslash-newline-joined text (#1564).
+# A backslash at the end of a comment line does not continue that comment,
+# so the original scan must remain available for every detector.
 is_merge_command_raw() {
-  local cmd="$1"
-  if echo "$cmd" | grep -qE '\bgh\s+pr\s+merge\b'; then
-    return 0
-  fi
-  if _has_argv_merge "$cmd"; then
-    return 0
-  fi
-  # `gh api` with a `/pulls/<N>/merge` path anywhere in the command. The path
-  # may be quoted, slash-separated, and may include query params.
-  if echo "$cmd" | grep -qE '\bgh\s+api\b.*repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge\b'; then
-    return 0
-  fi
-  # `glab mr merge ...` — GitLab merge-request merge (#764).
-  if echo "$cmd" | grep -qE '\bglab\s+mr\s+merge\b'; then
-    return 0
-  fi
-  # `glab api` with a `/merge_requests/<N>/merge` path — GitLab's raw-API merge
-  # passthrough (#767, the forge analog of the #47 `gh api …/pulls/<N>/merge`
-  # bypass). The project is a URL-encoded path (`projects/<owner>%2F<repo>`); the
-  # MR iid + `/merge` action is what we match. The trailing `\b` is load-bearing:
-  # it stops `/merge_ref`, `/merge_requests/<N>` (GET), and `/notes` from
-  # false-matching — a false match here would be fail-CLOSED (block), but a
-  # false NEGATIVE is fail-open, so the anchor is verified by negative tests.
-  if echo "$cmd" | grep -qE '\bglab\s+api\b.*merge_requests/[0-9]+/merge\b'; then
-    return 0
-  fi
-  # `tracker_pr_merge <owner/repo> <pr> <strategy> [<delete_branch>]` — the
-  # #759 tracker-agnostic merge wrapper /approve-merge calls instead of
-  # shelling out to `gh pr merge`/`glab mr merge` directly. Without this
-  # branch the gates never fire on the wrapper form at all — see the HIGH
-  # finding writeup in the file header (#759).
-  if echo "$cmd" | grep -qE '\btracker_pr_merge\b'; then
-    return 0
-  fi
+  local cmd joined
+  joined=$(_join_shell_continuations "$1")
+  for cmd in "$1" "$joined"; do
+    if echo "$cmd" | grep -qE '\bgh\s+pr\s+merge\b'; then
+      return 0
+    fi
+    if _has_argv_merge "$cmd"; then
+      return 0
+    fi
+    # `gh api` with a `/pulls/<N>/merge` path anywhere in the command. The path
+    # may be quoted, slash-separated, and may include query params.
+    if echo "$cmd" | grep -qE '\bgh\s+api\b.*repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge\b'; then
+      return 0
+    fi
+    # `glab mr merge ...` — GitLab merge-request merge (#764).
+    if echo "$cmd" | grep -qE '\bglab\s+mr\s+merge\b'; then
+      return 0
+    fi
+    # `glab api` with a `/merge_requests/<N>/merge` path — GitLab's raw-API merge
+    # passthrough (#767, the forge analog of the #47 `gh api …/pulls/<N>/merge`
+    # bypass). The project is a URL-encoded path (`projects/<owner>%2F<repo>`); the
+    # MR iid + `/merge` action is what we match. The trailing `\b` is load-bearing:
+    # it stops `/merge_ref`, `/merge_requests/<N>` (GET), and `/notes` from
+    # false-matching — a false match here would be fail-CLOSED (block), but a
+    # false NEGATIVE is fail-open, so the anchor is verified by negative tests.
+    if echo "$cmd" | grep -qE '\bglab\s+api\b.*merge_requests/[0-9]+/merge\b'; then
+      return 0
+    fi
+    # `tracker_pr_merge <owner/repo> <pr> <strategy> [<delete_branch>]` — the
+    # #759 tracker-agnostic merge wrapper /approve-merge calls instead of
+    # shelling out to `gh pr merge`/`glab mr merge` directly. Without this
+    # branch the gates never fire on the wrapper form at all — see the HIGH
+    # finding writeup in the file header (#759).
+    if echo "$cmd" | grep -qE '\btracker_pr_merge\b'; then
+      return 0
+    fi
+  done
   return 1
 }
 
