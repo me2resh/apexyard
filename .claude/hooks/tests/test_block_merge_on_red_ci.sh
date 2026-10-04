@@ -994,11 +994,19 @@ run_case "#1564: jq broken, plain newline between pr and verb -> no-op" 0 \
 
 sb=$(make_sandbox green success)
 _cont_cmd=$(printf '%s \\\npr %s 314 --repo %s --squash' "$_cli" "$_merge_verb" "$TEST_REPO")
-run_case "#1564: jq working, continuation between cli and pr -> BLOCKS" 2 \
-  "BLOCKED" "$sb" "$_cont_cmd"
+# #1568: these two cases previously expected BLOCKS only because the gate
+# could not read the continued PR/repo and failed closed. With extractors
+# joining continuations, green CI for the literal target correctly ALLOWS.
+run_case "#1564/#1568: jq working, continuation between cli and pr -> ALLOWS (green CI)" 0 \
+  "" "$sb" "$_cont_cmd"
 sb=$(make_sandbox green success)
 _cont_cmd=$(printf '%s pr \\\n%s 315 --repo %s --squash' "$_cli" "$_merge_verb" "$TEST_REPO")
-run_case "#1564: jq working, continuation between pr and verb -> BLOCKS" 2 \
+run_case "#1564/#1568: jq working, continuation between pr and verb -> ALLOWS (green CI)" 0 \
+  "" "$sb" "$_cont_cmd"
+# Prove the gate evaluates the continued target: same shape, red CI → BLOCKS.
+sb=$(make_sandbox red success)
+_cont_cmd=$(printf '%s \\\npr %s 316 --repo %s --squash' "$_cli" "$_merge_verb" "$TEST_REPO")
+run_case "#1568: jq working, continuation targets PR with red CI -> BLOCKS" 2 \
   "BLOCKED" "$sb" "$_cont_cmd"
 sb=$(make_sandbox green success)
 _plain_cmd=$(printf '%s\npr %s 316 --repo %s --squash' "$_cli" "$_merge_verb" "$TEST_REPO")

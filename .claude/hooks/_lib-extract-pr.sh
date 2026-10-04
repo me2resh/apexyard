@@ -850,6 +850,12 @@ _is_argv_only_merge_command() {
   if _has_argv_merge "$1"; then
     return 0
   fi
+  # Continuations can split an argv list across lines (#1568). Detectors in
+  # is_merge_command_raw already scan the joined text; opacity must too, or
+  # the extractors fall through to the current branch's PR.
+  if _has_argv_merge "$(_join_shell_continuations "$1")"; then
+    return 0
+  fi
   _has_opaque_merge_wrapper "$1"
 }
 
@@ -875,7 +881,10 @@ _is_argv_only_merge_command() {
 #   require that the first post-`merge` token is a bare integer — not a shell
 #   variable, not a flag. If it is a variable or absent, return empty.
 extract_pr_number() {
-  local cmd="$1"
+  local cmd
+  # Join before parsing so a backslash-newline split `gh pr merge N` still
+  # yields N (#1568). Detectors already join; extractors must match.
+  cmd=$(_join_shell_continuations "$1")
   local pr=""
 
   # 1. gh api path extraction — greps the /pulls/<N>/merge segment directly.
@@ -1009,7 +1018,10 @@ extract_pr_number() {
 # remain opaque even with a literal element because this parser cannot read
 # their target. `$(...)` is not a PR/repo variable token.
 merge_command_uses_variable() {
-  local cmd="$1"
+  local cmd
+  # Join first so continued CLI merges and argv lists keep a readable target
+  # for the opacity / variable checks (#1568).
+  cmd=$(_join_shell_continuations "$1")
   # Use the same bounded data view as is_merge_command. Uncertain or
   # executable commands keep the raw text, so variable targets still block.
   cmd=$(_scrub_merge_command "$cmd") || cmd="$1"
@@ -1262,7 +1274,8 @@ resolve_ci_status_glab() {
 # target > cd-target heuristic > ambient checkout" without duplicating the
 # command parser (me2resh/apexyard#1151).
 extract_explicit_repo_from_command() {
-  local cmd="$1"
+  local cmd
+  cmd=$(_join_shell_continuations "$1")
   local repo=""
 
   # 1. --repo/-R on the merge-command span only. A flag is the clearest
@@ -1304,7 +1317,8 @@ extract_explicit_repo_from_command() {
 # forge/CWD discovery. pr_cmd_cd_target + git_origin_repo are supplied by
 # _lib-pr-repo.sh, which each merge-gate hook sources before calling this.
 resolve_merge_repo() {
-  local cmd="$1" repo="" cd_target=""
+  local cmd repo="" cd_target=""
+  cmd=$(_join_shell_continuations "$1")
 
   repo=$(extract_explicit_repo_from_command "$cmd")
 
@@ -1345,7 +1359,8 @@ resolve_merge_repo() {
 #
 # Returns empty if the repo cannot be determined.
 extract_repo_from_command() {
-  local cmd="$1"
+  local cmd
+  cmd=$(_join_shell_continuations "$1")
   local repo=""
 
   repo=$(extract_explicit_repo_from_command "$cmd")

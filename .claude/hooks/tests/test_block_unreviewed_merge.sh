@@ -1121,6 +1121,42 @@ done
 unset _cli _merge_verb _cont_cmd _plain_cmd
 unset _merge_line _comment _comment_cmd
 
+# --- #1568: continued merge targets the literal PR, not the branch PR -----
+# Branch PR 1546 is fully approved. A continued merge of PR 7 must still
+# require PR 7's markers (pre-fix fell back to 1546 and would have allowed).
+_cli=gh
+_merge_verb=mer
+_merge_verb+=ge
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+_cont_cmd=$(printf '%s \\\npr %s 7 --repo %s --squash' "$_cli" "$_merge_verb" "$TEST_REPO")
+run_case_custom_cmd "#1568: continued cli/pr checks PR 7 markers (not branch 1546)" 2 \
+  "no recorded code-reviewer|no CEO approval marker" "$sb" "$_cont_cmd"
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+_cont_cmd=$(printf '%s pr \\\n%s 7 --repo %s --squash' "$_cli" "$_merge_verb" "$TEST_REPO")
+run_case_custom_cmd "#1568: continued pr/verb checks PR 7 markers (not branch 1546)" 2 \
+  "no recorded code-reviewer|no CEO approval marker" "$sb" "$_cont_cmd"
+sb=$(make_sandbox)
+write_rex_marker "$sb" 7
+write_ceo_marker_structured "$sb" 7
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+_cont_cmd=$(printf '%s \\\npr %s 7 --repo %s --squash' "$_cli" "$_merge_verb" "$TEST_REPO")
+run_case_custom_cmd "#1568: continued merge allows when PR 7 has markers" 0 \
+  "" "$sb" "$_cont_cmd"
+# Argv-list split by continuation inside a quoted python -c arg is opaque.
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+_argv_cont=$(printf 'python3 -c "import subprocess as s; s.run(['\''%s'\'',\\\n'\''%s'\'','\''%s'\'','\''5'\''])"' \
+  "$_cli" pr "$_merge_verb")
+run_case_custom_cmd "#1568: continued argv-list merge is opaque" 2 \
+  "cannot resolve" "$sb" "$_argv_cont"
+unset _cli _merge_verb _cont_cmd _argv_cont
+
 # --- #1091: forge HEAD unresolvable -> the gate must FAIL CLOSED -------
 #
 # The gate's integrity property is that marker SHAs are compared against the

@@ -586,6 +586,26 @@ for _comment in '#x' 'echo hi #x' 'true #comment'; do
 done
 unset _cli _merge_verb _merge_line _cont_cmd _plain_cmd _comment _comment_cmd
 
+# --- #1568: extractors join continuations (not only detectors) ------------
+# Detectors already join (#1564/#1566). Without the same join in extractors,
+# a continued `… merge 7` falls through to the branch PR. MOCK_BRANCH_PR
+# proves the ambient fallback is not used.
+export MOCK_BRANCH_PR=99
+_cli=gh
+_merge_verb=mer
+_merge_verb+=ge
+_cont_cmd=$(printf '%s \\\npr %s 7 --repo o/r --squash' "$_cli" "$_merge_verb")
+assert_pr "1568 continued cli/pr extracts 7 (not branch 99)" "$_cont_cmd" "7"
+_cont_cmd=$(printf '%s pr \\\n%s 7 --repo o/r --squash' "$_cli" "$_merge_verb")
+assert_pr "1568 continued pr/verb extracts 7 (not branch 99)" "$_cont_cmd" "7"
+# Argv list split by backslash-newline inside a quoted python -c argument
+# must stay opaque (joined text reveals the argv merge).
+_argv_cont=$(printf 'python3 -c "import subprocess as s; s.run(['\''%s'\'',\\\n'\''%s'\'','\''%s'\'','\''5'\''])"' \
+  "$_cli" pr "$_merge_verb")
+assert_opaque "1568 continued argv-list merge is opaque" "$_argv_cont"
+assert_pr "1568 continued argv-list does not inherit branch PR" "$_argv_cont" ""
+unset MOCK_BRANCH_PR _cli _merge_verb _cont_cmd _argv_cont
+
 # --- Bash 3.2 time bound (PR #1546 security review, H1) --------------------
 # A gate that times out does not block, so a padded merge could skip every
 # gate. Run /bin/bash directly with a SIGKILL watchdog. The watchdog's EXIT
