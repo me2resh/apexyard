@@ -20,5 +20,7 @@ grep -q 'record PR reviewed and merged' "$skill"
 grep -q 'ORBIT slice:' "$skill"
 grep -q 'does not create branches, commits, code changes, or deployments' "$skill"
 grep -q 'gh issue create' "$skill"
+grep -q 'active-issue-skill' "$skill"
+grep -q 'Remove the marker on' "$skill"
 
 echo "orbit skill smoke test passed"

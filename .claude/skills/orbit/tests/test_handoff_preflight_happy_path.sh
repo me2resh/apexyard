@@ -47,6 +47,16 @@ case "$output" in
   *) echo "FAIL: preview does not report dryRun:true"; fail=1 ;;
 esac
 
+sed 's/\[Slice\]/[Task]/g' "$sb/bin/orbit" > "$sb/bin/orbit-wrong-title"
+chmod +x "$sb/bin/orbit-wrong-title"
+ORBIT_BIN="$sb/bin/orbit-wrong-title"
+output=$("$HELPER" --slice "$orbit_root/slices/slice-demo-o1.json" --repo demo-org/demo-widget --orbit-root "$orbit_root" 2>"$stderr_file")
+rc=$?
+if [ "$rc" -ne 13 ] || ! grep -q 'did not return a \[Slice\] issue title' "$stderr_file"; then
+  echo "FAIL: expected a non-Slice adapter preview title to stop handoff (got $rc: $(cat "$stderr_file"))"
+  fail=1
+fi
+
 rm -rf "$sb"
 
 if [ "$fail" -eq 0 ]; then

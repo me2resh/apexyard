@@ -1,14 +1,25 @@
 #!/bin/bash
-# Require a merged ORBIT slice for Feature and Task issue creation.
+# Require a merged ORBIT slice for Feature, Task, and ORBIT Slice issues.
 # Use the same command matcher as require-skill-for-issue-create.sh.
 
 set -u
 
 input=$(cat)
+if ! command -v jq >/dev/null 2>&1; then
+  # The dispatcher cannot recover a title or target from JSON without jq.
+  # A create-shaped payload must wait until the gate can parse it.
+  case "$input" in
+    *'issue create'*|*'tracker_create'*|*'api repos/'*)
+      echo 'BLOCKED: Cannot check an ORBIT ticket while jq is unavailable.' >&2
+      exit 2 ;;
+  esac
+  exit 0
+fi
 tool=$(printf '%s' "$input" | jq -r '.tool_name // empty' 2>/dev/null)
 [ "$tool" = Bash ] || exit 0
 command=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null)
 [ -n "$command" ] || exit 0
+case "$command" in *create*|*'api repos/'*) : ;; *) exit 0 ;; esac
 
 hook_dir=$(cd "$(dirname "$0")" && pwd)
 # shellcheck source=/dev/null
@@ -26,7 +37,19 @@ while IFS= read -r pat; do
 done <<EOF
 $patterns
 EOF
+# Shell wrappers can place the create command inside a quoted argument. The
+# older skill gate intentionally does not inspect those forms; this guard must
+# still see them when ORBIT is enabled.
+if [ -z "$matched" ]; then
+  case "$norm" in
+    *'tracker_create '*) matched=tracker_create ;;
+    *'gh api repos/'*) matched='gh api repos/' ;;
+    *'gh issue create '*) matched=wrapped ;;
+  esac
+fi
 [ -n "$matched" ] || exit 0
+is_issue_create=0
+case "$norm" in *'gh issue create '*) is_issue_create=1 ;; esac
 case "$matched" in
   'gh api'*)
     case "$norm" in *'/issues'*) : ;; *) exit 0 ;; esac
@@ -64,7 +87,7 @@ tracker_arg() {
   printf '%s' "$command" | awk -v wanted="$1" '
     { s = s (NR == 1 ? "" : "\n") $0 }
     END {
-      if (!match(s, /(^|[;&|][[:space:]]*|\$\()tracker_create[[:space:]]+/)) exit
+      if (!match(s, /tracker_create[[:space:]]+/)) exit
       s=substr(s,RSTART+RLENGTH)
       for (i=1; i<=wanted; i++) {
         sub(/^[[:space:]]+/,"",s)
@@ -116,8 +139,61 @@ api_field() {
     }'
 }
 
+shell_words() {
+  printf '%s' "$command" | awk '
+    { s=s (NR==1 ? "" : "\n") $0 }
+    END {
+      word=""; quote=""; escape=0
+      for (i=1; i<=length(s); i++) {
+        c=substr(s,i,1)
+        if (escape) { word=word c; escape=0; continue }
+        if (c=="\\" && quote!="\047") { escape=1; continue }
+        if (quote!="") {
+          if (c==quote) quote=""; else word=word c
+          continue
+        }
+        if (c=="\047" || c=="\"") { quote=c; continue }
+        if (c ~ /[[:space:];&|()<>]/) {
+          if (word!="") { printf "%s%c",word,0; word="" }
+          continue
+        }
+        word=word c
+      }
+      if (word!="") printf "%s%c",word,0
+    }'
+}
+
+repo_flags=0
+title_flags=0
+repo_from_words=""
+title_from_words=""
+pending_flag=""
+while IFS= read -r -d '' word; do
+  if [ -n "$pending_flag" ]; then
+    case "$pending_flag" in
+      repo) repo_from_words=$word ;;
+      title) title_from_words=$word ;;
+    esac
+    pending_flag=""
+    continue
+  fi
+  case "$word" in
+    --repo|-R) repo_flags=$((repo_flags+1)); pending_flag=repo ;;
+    --repo=*) repo_flags=$((repo_flags+1)); repo_from_words=${word#--repo=} ;;
+    -R?*) repo_flags=$((repo_flags+1)); repo_from_words=${word#-R} ;;
+    --title|-t) title_flags=$((title_flags+1)); pending_flag=title ;;
+    --title=*) title_flags=$((title_flags+1)); title_from_words=${word#--title=} ;;
+    -t?*) title_flags=$((title_flags+1)); title_from_words=${word#-t} ;;
+  esac
+done < <(shell_words)
+if [ "$repo_flags" -gt 1 ]; then
+  echo 'BLOCKED: ORBIT ticket has ambiguous repo flags.' >&2
+  exit 2
+fi
 repo=$(flag_value '--repo|-R')
 title=$(flag_value '--title|-t')
+if [ "$repo_flags" -gt 0 ]; then repo=$repo_from_words; fi
+if [ "$title_flags" -gt 0 ]; then title=$title_from_words; fi
 if [ "$matched" = tracker_create ]; then
   repo=$(tracker_arg 1)
   title=$(tracker_arg 2)
@@ -128,7 +204,33 @@ case "$matched" in
     title=$(api_field title)
     ;;
 esac
-case "$title" in '[Feature]'*|'[Task]'*) : ;; *) exit 0 ;; esac
+api_title_fields=0
+if [ "$matched" = 'gh api repos/' ]; then
+  field_next=0
+  while IFS= read -r -d '' word; do
+    if [ "$field_next" -eq 1 ]; then
+      case "$word" in title=*) api_title_fields=$((api_title_fields+1)) ;; esac
+      field_next=0
+      continue
+    fi
+    case "$word" in
+      -f|-F|--field|--raw-field) field_next=1 ;;
+      -ftitle=*|-Ftitle=*) api_title_fields=$((api_title_fields+1)) ;;
+    esac
+  done < <(shell_words)
+fi
+config_root=$(_config_repo_root)
+if [ -z "$config_root" ] || [ ! -r "$config_root/.claude/project-config.defaults.json" ] ||
+   ! jq -e 'type == "object"' "$config_root/.claude/project-config.defaults.json" >/dev/null 2>&1; then
+  echo 'BLOCKED: Cannot read the ORBIT project configuration.' >&2
+  exit 2
+fi
+if [ -e "$config_root/.claude/project-config.json" ] &&
+   { [ ! -r "$config_root/.claude/project-config.json" ] ||
+     ! jq -e 'type == "object"' "$config_root/.claude/project-config.json" >/dev/null 2>&1; }; then
+  echo 'BLOCKED: Cannot read the ORBIT project configuration.' >&2
+  exit 2
+fi
 if [ -z "$repo" ]; then
   remote_url=$(git remote get-url origin 2>/dev/null)
   repo=$(printf '%s' "$remote_url" | sed -E 's#^.*[:/]([^/:]+/[^/:]+)(\.git)?$#\1#; s#\.git$##')
@@ -161,9 +263,83 @@ workspace=$(printf '%s' "$entry" | cut -f2)
 enabled=$(printf '%s' "$entry" | cut -f3)
 [ -n "$enabled" ] || enabled=$(config_get '.orbit.default_planning' 2>/dev/null)
 [ "$enabled" = true ] || exit 0
+case "$norm" in
+  *' -c '*|*' -lc '*|*'xargs '*)
+    echo 'BLOCKED: Wrapped ORBIT ticket creation cannot be verified. Use a direct create call.' >&2
+    exit 2 ;;
+esac
+if [ "$title_flags" -gt 1 ] || [ "$api_title_fields" -gt 1 ]; then
+  echo 'BLOCKED: ORBIT ticket has ambiguous title flags.' >&2
+  exit 2
+fi
+# Treat malformed bracketed variants as governed tickets too. Otherwise a
+# leading space or changed case skips this gate.
+lower_title=$(printf '%s' "$title" | LC_ALL=C tr '[:upper:]' '[:lower:]')
+case "$lower_title" in
+  *'[feature]'*|*'[task]'*|*'[slice]'*|*'［feature］'*|*'［task］'*|*'［slice］'*|*'【feature】'*|*'【task】'*|*'【slice】'*) : ;;
+  '') : ;; # An interactive title cannot prove this is a Bug or Spike.
+  *) exit 0 ;;
+esac
+if [ -z "$title" ]; then
+  echo 'BLOCKED: ORBIT ticket title cannot be read.' >&2
+  exit 2
+fi
+
+# Tokenize shell words once, without executing command substitutions. A
+# quoted multiline body remains one token. Count every body source so a later
+# flag cannot replace the value that this hook inspected.
+body_sources=0
+body_from_words=""
+body_file_from_words=""
+field_next=0
+pending_body=""
+while IFS= read -r -d '' word; do
+  if [ -n "$pending_body" ]; then
+    case "$pending_body" in
+      body) body_from_words=$word ;;
+      file) body_file_from_words=$word ;;
+    esac
+    pending_body=""
+    continue
+  fi
+  if [ "$field_next" -eq 1 ]; then
+    case "$word" in body=*|body@=*) body_sources=$((body_sources+1)) ;; esac
+    field_next=0
+  fi
+  case "$word" in
+    --body|-b) body_sources=$((body_sources+1)); pending_body=body ;;
+    --body-file) body_sources=$((body_sources+1)); pending_body='file' ;;
+    -F)
+      if [ "$is_issue_create" -eq 1 ]; then
+        body_sources=$((body_sources+1)); pending_body='file'
+      else
+        field_next=1
+      fi ;;
+    --body=*) body_sources=$((body_sources+1)); body_from_words=${word#--body=} ;;
+    --body-file=*) body_sources=$((body_sources+1)); body_file_from_words=${word#--body-file=} ;;
+    -b?*) body_sources=$((body_sources+1)); body_from_words=${word#-b} ;;
+    -Fbody=*|-Fbody@=*|-fbody=*|-fbody@=*)
+      body_sources=$((body_sources+1)) ;;
+    -F?*)
+      if [ "$is_issue_create" -eq 1 ]; then
+        body_sources=$((body_sources+1)); body_file_from_words=${word#-F}
+      else
+        case "$word" in -Fbody=*|-Fbody@=*) body_sources=$((body_sources+1)) ;; esac
+      fi ;;
+    -f|--field|--raw-field) field_next=1 ;;
+  esac
+done < <(shell_words)
+if [ "$body_sources" -gt 1 ]; then
+  echo 'BLOCKED: ORBIT ticket has multiple body sources.' >&2
+  exit 2
+fi
 
 body=$(flag_value '--body|-b')
 body_file=$(flag_value '--body-file')
+if [ "$is_issue_create" -eq 1 ]; then
+  body=$body_from_words
+  body_file=$body_file_from_words
+fi
 if [ "$matched" = tracker_create ]; then body_file=$(tracker_arg 3); fi
 case "$matched" in
   'gh api'*)
@@ -179,7 +355,7 @@ if [ -z "$body_file" ]; then
   case "$body_file" in *=*) body_file="" ;; esac
 fi
 if [ -n "$body_file" ]; then
-  if [ ! -f "$body_file" ] || [ ! -r "$body_file" ]; then
+  if [ "$body_file" = - ] || [ ! -f "$body_file" ] || [ ! -r "$body_file" ]; then
     echo "BLOCKED: ORBIT is on for $project, but ticket body file cannot be read: $body_file. Run /orbit slice." >&2
     exit 2
   fi
@@ -194,10 +370,13 @@ if [ -z "$body" ]; then
 fi
 
 directive=$(printf '%s\n' "$body" | awk '
-  /^[[:space:]]*(\*\*ORBIT slice:\*\*|ORBIT slice:)[[:space:]]*/ {
-    sub(/^[[:space:]]*(\*\*ORBIT slice:\*\*|ORBIT slice:)[[:space:]]*/, "")
-    gsub(/^`|`$/, ""); print; exit
-  }')
+  NR==1 && /^(\*\*ORBIT slice:\*\*|ORBIT slice:)[[:space:]]*/ {
+    sub(/^(\*\*ORBIT slice:\*\*|ORBIT slice:)[[:space:]]*/, "")
+    gsub(/^`|`$/, ""); first=$0; next
+  }
+  NR==2 && $0 !~ /^[[:space:]]*$/ { invalid=1 }
+  END { if (!invalid) print first }
+')
 case "$directive" in
   none*)
     reason=$(printf '%s' "$directive" | sed -nE 's/^none[[:space:]]*(—|--|-)[[:space:]]*(.*)$/\2/p')
@@ -207,7 +386,7 @@ case "$directive" in
     fi ;;
 esac
 if ! printf '%s' "$directive" | LC_ALL=C grep -Eq '^slice-[a-z0-9]+(-[a-z0-9]+)*$'; then
-  echo "BLOCKED: [Feature] and [Task] tickets for $project need ORBIT slice: <id> or ORBIT slice: none — <reason>. Run /orbit slice." >&2
+  echo "BLOCKED: [Feature], [Task], and [Slice] tickets for $project need ORBIT slice: <id> or ORBIT slice: none — <reason>. Run /orbit slice." >&2
   exit 2
 fi
 
@@ -221,7 +400,9 @@ if [ ! -d "$workspace" ]; then
   exit 2
 fi
 branch=$(git -C "$workspace" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)
-if [ -z "$branch" ] || ! git -C "$workspace" cat-file -e "refs/remotes/$branch:docs/orbit/slices/$directive.json" 2>/dev/null; then
+record_path="docs/orbit/slices/$directive.json"
+record_mode=$(git -C "$workspace" ls-tree "refs/remotes/$branch" -- "$record_path" 2>/dev/null | awk 'NR==1 { print $1 }')
+if [ -z "$branch" ] || [ "$record_mode" != 100644 ] && [ "$record_mode" != 100755 ]; then
   echo "BLOCKED: ORBIT slice $directive is not on $project's default branch. Merge its record, then file the ticket with /orbit slice." >&2
   exit 2
 fi

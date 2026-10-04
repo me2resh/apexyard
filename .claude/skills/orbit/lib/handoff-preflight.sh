@@ -206,6 +206,12 @@ if [ -z "$title" ] && [ -z "$body" ]; then
   echo "orbit sync github --dry-run returned neither a title nor a body to scrub." >&2
   exit 13
 fi
+case "$title" in
+  '[Slice] '*) : ;;
+  *)
+    echo "orbit sync github --dry-run did not return a [Slice] issue title." >&2
+    exit 13 ;;
+esac
 
 # 5. Leak scrub. Scrub the PLAIN-TEXT title/body (via jq -r), not the raw
 # JSON: in JSON a newline is the two characters \n, so a name at the start

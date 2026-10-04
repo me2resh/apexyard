@@ -178,7 +178,7 @@ The helper's flow, in order:
 1. **CLI check.** If `$ORBIT_BIN` (default `orbit`) is not on `PATH`, stop with one install note (ac1-4): "ORBIT CLI not found. Install orbit-spec ... or set ORBIT_BIN to the CLI path." Take no further action.
 2. **Validate.** Run `orbit validate --all --root "$orbit_root"`. On a non-zero exit, stop and state the reason from the CLI's own error text (ac1-3).
 3. **Duplicate check.** Search open issues in `$project_repo` for the slice ID, but only *count* a hit when an issue's body contains the exact backtick-quoted token the adapter renders under "Orbit identifiers" (`` `<slice-id>` ``) — a shared word or a prefix is not a match. When the search itself fails (auth, network, rate limit), stop with a "cannot verify" error; never treat a failed search as "no duplicate found".
-4. **Dry-run preview.** Run `orbit sync github --dry-run --plan <plan_file> --snapshot <snapshot_file> --reconciliation <reconciliation_file> --slice <slice_file> --repo "$project_repo"`. The adapter renders the issue title and body with the Plan ID and revision, objective, scope, and identifiers. Keep that content.
+4. **Dry-run preview.** Run `orbit sync github --dry-run --plan <plan_file> --snapshot <snapshot_file> --reconciliation <reconciliation_file> --slice <slice_file> --repo "$project_repo"`. The adapter renders the issue title and body with the Plan ID and revision, objective, scope, and identifiers. The preflight requires a `[Slice]` title. Keep that content.
 5. **Leak scrub.** Extract the plain-text title and body from the preview with `jq -r '.title'` / `jq -r '.body'` — not the raw JSON, where a name at the start of a body line is preceded by the two characters `\n` rather than a real newline, and the scrub's word-boundary rule misses it. Run `check-private-refs-runtime.sh` against `$project_repo`, the plain-text title, and the plain-text body written to a file. A non-zero exit blocks the handoff (ac1-6).
 
 After the helper exits 0 with the scrubbed preview on stdout, continue in the skill itself (these two steps ask for and act on operator input, so they stay outside the mechanical helper):
@@ -191,7 +191,11 @@ After the helper exits 0 with the scrubbed preview on stdout, continue in the sk
    absent, stop until the record PR merges and the local ref is updated. Write
    the adapter preview's `.body` to a temporary file, with
    `**ORBIT slice:** \`<slice-id>\`` as its first line and one blank line before
-   the preview body. Use the preview's `.title`:
+   the preview body. Use the preview's `.title`. Before the create call, write
+   `orbit` to the ops root's `.claude/session/active-issue-skill` marker. Resolve
+   the ops root with `_lib-ops-root.sh`'s `resolve_ops_root`, as the ticket
+   creation gate does. Stop if the ops root is unknown. Remove the marker on
+   every exit path, including cancellation and create failure.
 
    ```bash
    slice_id=$(jq -r '.id' "$slice_file")

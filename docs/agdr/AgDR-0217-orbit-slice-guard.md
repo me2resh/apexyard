@@ -19,7 +19,7 @@ That breaks the link used by progress views and later reconciliations.
 ## Decision
 
 Chosen: **PreToolUse guard with a default-branch read**. When the target
-project enables `orbit.default_planning`, Feature and Task issues must carry
+project enables `orbit.default_planning`, Feature, Task, and ORBIT Slice issues must carry
 `ORBIT slice: <id>` and the matching `docs/orbit/slices/<id>.json` must exist
 on the project's local default-branch remote ref. The slice ID is restricted
 to lowercase, hyphen-separated `slice-` identifiers before it enters a Git
@@ -33,6 +33,10 @@ The gate fails closed with exit 2 when ORBIT is on and it cannot read the
 ticket body, the default-branch ref, or the named record. It does not block
 Bug or Spike issues or projects with ORBIT off. `/start-ticket` warns about
 a missing slice line but still starts the ticket.
+
+The ORBIT handoff requires the adapter preview to use a `[Slice]` title. The
+default ticket prefix list accepts this title so the standard issue-structure
+gate permits handoff.
 
 ## Consequences
 

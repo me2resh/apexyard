@@ -21,6 +21,7 @@
   "ticket": {
     "prefix_whitelist": [
       "Feature",
+      "Slice",
       "Bug",
       "Chore",
       "Refactor",

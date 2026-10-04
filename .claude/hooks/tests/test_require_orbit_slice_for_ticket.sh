@@ -13,6 +13,7 @@ if [ ! -x "$src/.claude/hooks/require-orbit-slice-for-ticket.sh" ]; then
 fi
 sb=$(mktemp -d "${TMPDIR:-/tmp}/orbit-gate-test.XXXXXX") || exit 1
 trap 'rm -rf "$sb"' EXIT
+git -C "$sb" init -q
 mkdir -p "$sb/.claude/hooks" "$sb/workspace"
 cp "$src/.claude/hooks/require-orbit-slice-for-ticket.sh" "$src/.claude/hooks/_lib-read-config.sh" \
   "$src/.claude/hooks/_lib-portfolio-paths.sh" "$src/.claude/hooks/_lib-ops-root.sh" \
@@ -62,6 +63,8 @@ make_cmd() {
 }
 
 check valid 0 "$(make_cmd Feature 'ORBIT slice: slice-demo-o1')"
+check slice_valid 0 "$(make_cmd Slice 'ORBIT slice: slice-demo-o1')"
+check slice_missing 2 "$(make_cmd Slice 'plain body')"
 check bold 0 "$(make_cmd Task '**ORBIT slice:** `slice-demo-o1`')"
 check missing 2 "$(make_cmd Feature 'ORBIT slice: slice-demo-o9')"
 check nondefault 2 "$(make_cmd Task 'ORBIT slice: slice-demo-o2')"
@@ -81,9 +84,126 @@ check tracker_file 0 "tracker_create demo-org/demo '[Feature] Demo' '$body_file'
 check tracker_wrapped 0 "result=\$(tracker_create demo-org/demo '[Feature] Demo' '$body_file')"
 check api_body_file 0 "gh api repos/demo-org/demo/issues -X POST -f title='[Feature] Demo' -F body=@$body_file"
 check api_missing 2 "gh api repos/demo-org/demo/issues -X POST -f title='[Task] Demo' -f body='plain body'"
+check env_api_missing 2 "env gh api repos/demo-org/demo/issues -X POST -f title='[Task] Demo' -f body='plain body'"
+check path_api_missing 2 "/usr/local/bin/gh api repos/demo-org/demo/issues -X POST -f title='[Task] Demo' -f body='plain body'"
+check api_duplicate_title 2 "gh api repos/demo-org/demo/issues -X POST -f title='[Bug] Demo' -f title='[Feature] Demo' -f body='ORBIT slice: slice-demo-o1'"
+check api_duplicate_body 2 "gh api repos/demo-org/demo/issues -X POST -f title='[Feature] Demo' -f body='ORBIT slice: slice-demo-o1' -f body='plain body'"
 check unreadable 2 "gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body-file '$sb/absent'"
+check leading_title 2 "gh issue $verb --repo demo-org/demo --title ' [Feature] Demo' --body 'plain body'"
+check mid_title 2 "gh issue $verb --repo demo-org/demo --title 'Demo [Task]' --body 'plain body'"
+check lower_title 2 "gh issue $verb --repo demo-org/demo --title '[feature] Demo' --body 'plain body'"
+check unicode_title 2 "gh issue $verb --repo demo-org/demo --title '［Feature］ Demo' --body 'plain body'"
+check upper_title 2 "gh issue $verb --repo demo-org/demo --title '[FEATURE] Demo' --body 'plain body'"
+check no_title 2 "gh issue $verb --repo demo-org/demo --body 'ORBIT slice: slice-demo-o1'"
+check quoted_directive 2 "$(make_cmd Feature '> ORBIT slice: slice-demo-o1')"
+check comment_directive 2 "$(make_cmd Feature '<!-- ORBIT slice: slice-demo-o1 -->')"
+check late_directive 2 "$(make_cmd Feature 'plain body
+ORBIT slice: slice-demo-o1')"
+check encoded_traversal 2 "$(make_cmd Feature 'ORBIT slice: slice-%2e%2e')"
+check newline_id 2 "$(make_cmd Feature 'ORBIT slice: slice-demo-o1
+evil')"
+check stdin_file 2 "gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body-file -"
+check equals_file 0 "gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body-file='$body_file'"
+check equals_repo 0 "gh issue $verb --repo=demo-org/demo --title='[Feature] Demo' --body-file='$body_file'"
+check equals_repo_missing 2 "gh issue $verb --repo=demo-org/demo --title='[Feature] Demo' --body 'plain body'"
+check equals_body 0 "gh issue $verb --repo=demo-org/demo --title='[Feature] Demo' --body='ORBIT slice: slice-demo-o1'"
+check duplicate_repo 2 "gh issue $verb --repo demo-org/demo --repo demo-org/other --title '[Feature] Demo' --body 'ORBIT slice: slice-demo-o1'"
+check duplicate_repo_equals 2 "gh issue $verb --repo=demo-org/demo --repo=demo-org/other --title '[Feature] Demo' --body 'ORBIT slice: slice-demo-o1'"
+check duplicate_title 2 "gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --title '[Bug] Demo' --body 'ORBIT slice: slice-demo-o1'"
+check duplicate_title_equals 2 "gh issue $verb --repo demo-org/demo --title='[Feature] Demo' --title='[Bug] Demo' --body='ORBIT slice: slice-demo-o1'"
+check repo_in_body 2 "gh issue $verb --body 'ORBIT slice: slice-demo-o1
+--repo demo-org/other' --repo demo-org/demo --title '[Feature] Demo'"
+check title_in_body 2 "gh issue $verb --repo demo-org/demo --body 'plain body --title [Bug]' --title '[Feature] Demo'"
+check duplicate_body 2 "gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body 'ORBIT slice: slice-demo-o1' --body 'plain body'"
+check duplicate_body_equals 2 "gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body='ORBIT slice: slice-demo-o1' --body='plain body'"
+check mixed_body 2 "gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body 'plain body' --body-file '$body_file'"
+check duplicate_body_file 2 "gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body-file='$body_file' --body-file '$sb/absent'"
+check duplicate_short_file 2 "gh issue $verb --repo demo-org/demo --title '[Feature] Demo' -F '$body_file' -F '$sb/absent'"
+check mixed_short_file 2 "gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body='plain body' -F '$body_file'"
+check variable_file 2 "gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body-file '\$body_file'"
+check wrapped_bash 2 "bash -c \"gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body 'plain body'\""
+check wrapped_sh 2 "sh -c \"gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body 'plain body'\""
+check wrapped_zsh 2 "zsh -c \"gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body 'plain body'\""
+check wrapped_xargs 2 "printf x | xargs gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body 'plain body'"
+check wrapped_xargs_replace 2 "printf x | xargs -I{} gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body 'plain body'"
+check env_gh 2 "env gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body 'plain body'"
+check command_gh 2 "command gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body 'plain body'"
+check full_path_gh 2 "/usr/local/bin/gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body 'plain body'"
+check env_gh_valid 0 "env gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body 'ORBIT slice: slice-demo-o1'"
+check wrapped_substitution 2 "result=\$(gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body 'plain body')"
+check wrapped_bash_ambiguous 2 "bash -c \"gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body 'ORBIT slice: slice-demo-o1'\""
+check wrapped_duplicate_body 2 "bash -c \"gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body 'ORBIT slice: slice-demo-o1' --body 'plain body'\""
+check tracker_variable 2 "tracker_create demo-org/demo '[Feature] Demo' '\$body_file'"
+check tracker_in_bash 2 "bash -c \"tracker_create demo-org/demo '[Feature] Demo' '$body_file'\""
+check api_two_fields 0 "gh api repos/demo-org/demo/issues -X POST -F title='[Feature] Demo' -F body=@$body_file"
+ln -s slice-demo-o1.json "$project/docs/orbit/slices/slice-symlink.json"
+git -C "$project" add docs/orbit/slices/slice-symlink.json
+git -C "$project" commit -qm symlink
+git -C "$project" update-ref refs/remotes/origin/main HEAD
+check symlink_record 2 "$(make_cmd Feature 'ORBIT slice: slice-symlink')"
+cat > "$sb/apexyard.projects.yaml" <<'YAML'
+projects:
+  - name: other
+    repo: demo-org/other
+    workspace: workspace/other
+    orbit:
+      default_planning: true
+  - name: demo
+    repo: demo-org/demo
+    workspace: workspace/demo
+    orbit:
+      default_planning: true
+YAML
+git -C "$sb/workspace" init -q -b main other
+other="$sb/workspace/other"
+git -C "$other" config user.email test@example.com
+git -C "$other" config user.name test
+mkdir -p "$other/docs/orbit/slices"
+printf '{"id":"slice-other"}\n' > "$other/docs/orbit/slices/slice-other.json"
+git -C "$other" add docs/orbit/slices/slice-other.json
+git -C "$other" commit -qm fixture
+git -C "$other" update-ref refs/remotes/origin/main HEAD
+git -C "$other" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+check other_repo_valid 0 "gh issue $verb --repo demo-org/other --title '[Feature] Demo' --body 'ORBIT slice: slice-other'"
+check other_repo_wrong_slice 2 "gh issue $verb --repo demo-org/other --title '[Feature] Demo' --body 'ORBIT slice: slice-demo-o1'"
+cp "$src/.claude/hooks/require-skill-for-issue-create.sh" \
+  "$src/.claude/hooks/validate-issue-structure.sh" "$sb/.claude/hooks/"
+mkdir -p "$sb/.claude/session"
+printf 'orbit\n' > "$sb/.claude/session/active-issue-skill"
+payload=$(jq -n --arg c "gh issue $verb --repo demo-org/demo --title '[Slice] Demo' --body-file '$body_file'" '{tool_name:"Bash",tool_input:{command:$c}}')
+for gate in require-skill-for-issue-create.sh validate-issue-structure.sh require-orbit-slice-for-ticket.sh; do
+  (cd "$sb" && printf '%s' "$payload" | /bin/bash ".claude/hooks/$gate") > "$sb/out" 2> "$sb/err"
+  if [ "$?" -ne 0 ]; then
+    printf 'FAIL handoff_%s: %s\n' "$gate" "$(cat "$sb/err")"
+    fail=1
+  else
+    printf 'PASS handoff_%s\n' "$gate"
+  fi
+done
+printf '{broken\n' > "$sb/.claude/project-config.json"
+check config_invalid 2 "$(make_cmd Feature 'ORBIT slice: slice-demo-o1')"
+printf '{}\n' > "$sb/.claude/project-config.json"
+mv "$other" "$sb/workspace/other-hidden"
+check checkout_missing 2 "gh issue $verb --repo demo-org/other --title '[Feature] Demo' --body 'ORBIT slice: slice-other'"
+mv "$sb/workspace/other-hidden" "$other"
+git -C "$other" symbolic-ref --delete refs/remotes/origin/HEAD
+check branch_unknown 2 "gh issue $verb --repo demo-org/other --title '[Feature] Demo' --body 'ORBIT slice: slice-other'"
+git -C "$other" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+mkdir -p "$sb/bin"
+cat > "$sb/bin/git" <<'SH'
+#!/bin/sh
+exit 127
+SH
+chmod +x "$sb/bin/git"
+payload=$(jq -n --arg c "$(make_cmd Feature 'ORBIT slice: slice-demo-o1')" '{tool_name:"Bash",tool_input:{command:$c}}')
+(cd "$sb" && printf '%s' "$payload" | PATH="$sb/bin:$PATH" /bin/bash .claude/hooks/require-orbit-slice-for-ticket.sh) > "$sb/out" 2> "$sb/err"
+if [ "$?" -ne 2 ]; then echo 'FAIL git_missing'; fail=1; else echo 'PASS git_missing'; fi
+payload=$(jq -n --arg c "$(make_cmd Feature 'ORBIT slice: slice-demo-o1')" '{tool_name:"Bash",tool_input:{command:$c}}')
+(cd "$sb" && printf '%s' "$payload" | PATH=/bin /bin/bash .claude/hooks/require-orbit-slice-for-ticket.sh) > "$sb/out" 2> "$sb/err"
+if [ "$?" -ne 2 ]; then echo 'FAIL jq_missing'; fail=1; else echo 'PASS jq_missing'; fi
 printf '{"orbit":{"default_planning":false}}\n' > "$sb/.claude/project-config.json"
 awk '!/    orbit:/ && !/      default_planning: true/' "$sb/apexyard.projects.yaml" > "$sb/registry.tmp"
 mv "$sb/registry.tmp" "$sb/apexyard.projects.yaml"
 check orbit_off 0 "$(make_cmd Feature 'plain body')"
+check orbit_off_wrapped 0 "bash -c \"gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body 'plain body'\""
 exit "$fail"
