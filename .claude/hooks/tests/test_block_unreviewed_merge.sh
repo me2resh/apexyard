@@ -453,6 +453,20 @@ write_ceo_marker_structured "$sb" 1546
 run_case_custom_cmd "1552 xargs merge blocks (wrong-PR)" 2 \
   "cannot resolve" "$sb" \
   "echo 5 | xargs gh pr merge"
+# Round-2: separators inside the quoted -c script must stay opaque.
+_m1552_gate=$(printf '%s %s %s' gh pr merge)
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 xargs sh -c quoted semicolon blocks" 2 \
+  "cannot resolve" "$sb" \
+  "xargs -I{} sh -c 'cd x; ${_m1552_gate} {}'"
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 xargs sh -c quoted newline blocks" 2 \
+  "cannot resolve" "$sb" \
+  "$(printf "xargs -I{} sh -c 'cd x\n%s {}'" "$_m1552_gate")"
 sb=$(make_sandbox)
 write_rex_marker "$sb" 1546
 write_ceo_marker_structured "$sb" 1546

@@ -577,52 +577,120 @@ _has_argv_merge() {
 # detected as merges by the contiguous phrase matcher, but their PR/repo
 # cannot be trusted (or is absent). Treat them as opaque targets so the
 # gates never fall back to the current branch's PR (#1552 shapes 10–12).
-# Wrapper and merge text must share one simple-command / pipeline segment
-# (split on ; && || and newlines). Flattening for this check turns newlines
-# into " ; " so a prior-line xargs does not poison a later plain merge.
+# Wrapper and merge text must share one statement: split on ; && || and
+# newlines ONLY outside single/double quotes (backslash escapes outside
+# single quotes). One awk pass — a per-statement grep loop was super-linear
+# under /bin/bash 3.2 and could time out every merge gate (#1552 round 2).
+# Same statement + xargs = opaque (no character window). The argv -c form
+# still requires the merge within 200 characters after '-c'. On awk failure,
+# fail closed when a merge phrase is present.
 _has_opaque_merge_wrapper() {
-  local normalized segment segments
-  # Preserve statement boundaries that flattening would otherwise erase.
-  normalized=$(printf '%s' "$1" | awk '{ if (n++) printf " ; "; printf "%s", $0 }')
-  # Only when a contiguous merge phrase is already present.
-  if ! printf '%s\n' "$normalized" | grep -qE '\b(gh[[:space:]]+pr[[:space:]]+merge|glab[[:space:]]+mr[[:space:]]+merge)\b'; then
+  local result
+  if ! command -v awk >/dev/null 2>&1; then
+    if printf '%s\n' "$1" | grep -qE '\b(gh[[:space:]]+pr[[:space:]]+merge|glab[[:space:]]+mr[[:space:]]+merge)\b'; then
+      return 0
+    fi
     return 1
   fi
-  local quote='[\\]?["`'"'"']'
-  local comma='[[:space:]]*,[[:space:]]*'
-  local merge_re='(gh[[:space:]]+pr[[:space:]]+merge|glab[[:space:]]+mr[[:space:]]+merge)'
-  # One segment per line: split on ; && || (newlines already became " ; ").
-  # awk gsub uses a real newline so BSD and GNU sed are not required.
-  segments=$(printf '%s' "$normalized" | awk '{
-    gsub(/&&/, "\n")
-    gsub(/\|\|/, "\n")
-    gsub(/;/, "\n")
-    print
-  }')
-  while IFS= read -r segment; do
-    [ -z "$segment" ] && continue
-    if ! printf '%s\n' "$segment" | grep -qE "\\b${merge_re}\\b"; then
-      continue
-    fi
-    # 10: ['sh'|bash|zsh, '-c', '<merge text>'] — -c and merge in one segment,
-    # within 200 chars (the argv string holding the merge phrase).
-    if printf '%s\n' "$segment" | grep -qE "${quote}(sh|bash|zsh)${quote}${comma}${quote}-c${quote}.{0,200}\\b${merge_re}\\b"; then
+  result=$(OPAQUE_MERGE_CMD="$1" awk '
+    function wb_before(t, p) {
+      return p <= 1 || substr(t, p - 1, 1) !~ /[A-Za-z0-9_]/
+    }
+    function wb_after(t, p, len) {
+      return p + len > length(t) || substr(t, p + len, 1) !~ /[A-Za-z0-9_]/
+    }
+    function has_merge(t,    p) {
+      p = match(t, /gh[[:space:]]+pr[[:space:]]+merge/)
+      if (p && wb_before(t, p) && wb_after(t, p, RLENGTH)) return 1
+      p = match(t, /glab[[:space:]]+mr[[:space:]]+merge/)
+      if (p && wb_before(t, p) && wb_after(t, p, RLENGTH)) return 1
       return 0
-    fi
-    # 11: xargs feeds the merge (merge phrase after xargs, ≤80 chars, same segment).
-    if printf '%s\n' "$segment" | grep -qE "\\bxargs\\b.{0,80}\\b${merge_re}\\b"; then
+    }
+    function has_xargs(t,    p) {
+      p = match(t, /xargs/)
+      return p && wb_before(t, p) && wb_after(t, p, 5)
+    }
+    function has_sh_c_near_merge(t,    flat, q, re) {
+      # Flatten newlines so .{0,200} spans a quoted multi-line -c script.
+      flat = t
+      gsub(/\n/, " ", flat)
+      q = "[\\\\]?[\"'"'"'`]"
+      re = q "(sh|bash|zsh)" q "[[:space:]]*,[[:space:]]*" q "-c" q ".{0,200}"
+      if (match(flat, re "(gh[[:space:]]+pr[[:space:]]+merge)")) return 1
+      if (match(flat, re "(glab[[:space:]]+mr[[:space:]]+merge)")) return 1
       return 0
-    fi
-    # 12: Perl qw(gh pr merge …) / qw(glab mr merge …) / qw/…/
-    if printf '%s\n' "$segment" | grep -qE "\\bqw[[:space:]]*[(][^)]*\\b${merge_re}\\b"; then
+    }
+    function has_qw(t,    flat) {
+      flat = t
+      gsub(/\n/, " ", flat)
+      if (match(flat, /qw[[:space:]]*[(][^)]*gh[[:space:]]+pr[[:space:]]+merge/)) return 1
+      if (match(flat, /qw[[:space:]]*[(][^)]*glab[[:space:]]+mr[[:space:]]+merge/)) return 1
+      if (match(flat, /qw[[:space:]]*\/[^\/]*gh[[:space:]]+pr[[:space:]]+merge/)) return 1
+      if (match(flat, /qw[[:space:]]*\/[^\/]*glab[[:space:]]+mr[[:space:]]+merge/)) return 1
       return 0
-    fi
-    if printf '%s\n' "$segment" | grep -qE "\\bqw[[:space:]]*/[^/]*\\b${merge_re}\\b"; then
+    }
+    function stmt_opaque(t) {
+      if (!has_merge(t)) return 0
+      if (has_xargs(t)) return 1
+      if (has_sh_c_near_merge(t)) return 1
+      if (has_qw(t)) return 1
       return 0
-    fi
-  done <<SEG_EOF
-$segments
-SEG_EOF
+    }
+    BEGIN {
+      s = ENVIRON["OPAQUE_MERGE_CMD"]
+      n = length(s)
+      sq = sprintf("%c", 39); dq = sprintf("%c", 34); bs = sprintf("%c", 92)
+      in_sq = 0; in_dq = 0; stmt = ""; opaque = 0
+      for (i = 1; i <= n; i++) {
+        c = substr(s, i, 1)
+        nx = (i < n) ? substr(s, i + 1, 1) : ""
+        if (!in_sq && c == bs && i < n) {
+          stmt = stmt c nx
+          i++
+          continue
+        }
+        if (!in_dq && c == sq) {
+          in_sq = !in_sq
+          stmt = stmt c
+          continue
+        }
+        if (!in_sq && c == dq) {
+          in_dq = !in_dq
+          stmt = stmt c
+          continue
+        }
+        if (!in_sq && !in_dq) {
+          if (c == "\n" || c == ";") {
+            if (stmt_opaque(stmt)) { opaque = 1; break }
+            stmt = ""
+            continue
+          }
+          if (c == "&" && nx == "&") {
+            if (stmt_opaque(stmt)) { opaque = 1; break }
+            stmt = ""; i++; continue
+          }
+          if (c == "|" && nx == "|") {
+            if (stmt_opaque(stmt)) { opaque = 1; break }
+            stmt = ""; i++; continue
+          }
+        }
+        stmt = stmt c
+      }
+      if (!opaque && stmt_opaque(stmt)) opaque = 1
+      if (opaque) print "opaque"
+      else print "clear"
+    }
+  ' 2>/dev/null) || result=""
+  if [ "$result" = "opaque" ]; then
+    return 0
+  fi
+  if [ "$result" = "clear" ]; then
+    return 1
+  fi
+  # awk missing output or failed — never fewer blocks than a working check.
+  if printf '%s\n' "$1" | grep -qE '\b(gh[[:space:]]+pr[[:space:]]+merge|glab[[:space:]]+mr[[:space:]]+merge)\b'; then
+    return 0
+  fi
   return 1
 }
 

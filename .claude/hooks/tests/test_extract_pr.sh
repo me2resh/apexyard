@@ -381,8 +381,8 @@ assert_pr "1552 xargs does not inherit branch PR" "echo 5 | xargs gh pr merge" "
 assert_pr "1552 perl qw does not inherit branch PR" "perl -e 'system qw(gh pr merge 5)'" ""
 assert_pr "1552 perl qw glab does not inherit branch MR" "perl -e 'system qw(glab mr merge 5)'" ""
 
-# Wrapper opacity is segment-local: an earlier xargs / -c must not poison a
-# later plain merge separated by ; && || or a newline.
+# Wrapper opacity is statement-local: an earlier xargs / -c must not poison a
+# later plain merge separated by ; && || or a newline outside quotes.
 assert_readable "1552 xargs then plain merge stays readable" \
   "ls | xargs echo; gh pr merge 5 --repo o/r --squash" "5"
 assert_readable "1552 xargs && plain merge stays readable" \
@@ -391,6 +391,20 @@ xargs_nl=$(printf '%s\n%s' 'ls | xargs echo' 'gh pr merge 5 --repo o/r --squash'
 assert_readable "1552 xargs newline then plain merge stays readable" "$xargs_nl" "5"
 assert_readable "1552 sh -c elsewhere then plain merge stays readable" \
   "python3 -c \"import subprocess; subprocess.run(['bash','-c','make test'])\" && gh pr merge 5 --repo o/r" "5"
+
+# Quoted separators inside xargs -I{} sh -c '…' must NOT split the statement
+# (#1552 round 2). Same statement + xargs = opaque (no 80-char window).
+_m1552=$(printf '%s %s %s' gh pr merge)
+assert_opaque "1552 xargs sh -c quoted semicolon" "xargs -I{} sh -c 'cd x; ${_m1552} {}'"
+assert_opaque "1552 xargs sh -c quoted &&" "xargs -I{} sh -c 'cd x && ${_m1552} {}'"
+assert_opaque "1552 xargs sh -c quoted ||" "xargs -I{} sh -c 'false || ${_m1552} {}'"
+xargs_qnl=$(printf "xargs -I{} sh -c 'cd x\n%s {}'" "$_m1552")
+assert_opaque "1552 xargs sh -c quoted newline" "$xargs_qnl"
+_pad90=$(awk 'BEGIN{for(i=0;i<90;i++)printf "x"}')
+assert_opaque "1552 xargs >80 chars before merge same statement" \
+  "xargs -I{} sh -c '${_pad90}; ${_m1552} {}'"
+assert_pr "1552 xargs quoted semicolon does not inherit branch PR" \
+  "xargs -I{} sh -c 'cd x; ${_m1552} {}'" ""
 unset MOCK_BRANCH_PR
 
 # Fail-before evidence: the pre-#1552 lib must miss these shapes. The saved
@@ -454,46 +468,97 @@ else
   echo "NOTE: not counted [1552 fail-before evidence — no BEFORE_LIB at $BEFORE_LIB]"
 fi
 
-# --- Bash 3.2 time bound (PR #1546 security review, H1) --------------------
-# ${1//$'\n'/ } slows sharply with input size under /bin/bash 3.2. A gate that
-# times out does not block, so a padded merge could skip every gate. Run the
-# variable check on a 3,000-line command under /bin/bash and require it to
-# finish within 10 seconds. SIGKILL ends a stuck run; 3.2 defers SIGTERM.
-# #1552: also exercise the new argv / glue / wrapper patterns on the pad.
-if [ -x /bin/bash ]; then
-  perf_dir=$(mktemp -d)
-  {
-    echo '#!/bin/bash'
-    echo ". \"$LIB_SRC\""
-    echo 'w=merge'
-    echo 'pad=$(i=0; while [ $i -lt 3000 ]; do echo true; i=$((i+1)); done)'
-    echo 'merge_command_uses_variable "gh pr $w 5 --repo o/r'
-    echo '$pad"'
-    echo 'merge_command_uses_variable "['\''/usr/bin/gh'\'','\''-R'\'','\''o/r'\'','\''pr'\'','\''$w'\'','\''5'\'']'
-    echo '$pad"'
-    echo 'merge_command_uses_variable "['\''gh'\'','\''pr'\''] + ['\''$w'\'','\''5'\'']'
-    echo '$pad"'
-    echo 'merge_command_uses_variable "echo 5 | xargs gh pr $w'
-    echo '$pad"'
-    echo 'echo done > "$1"'
-  } > "$perf_dir/run.sh"
-  /bin/bash "$perf_dir/run.sh" "$perf_dir/out" &
-  perf_pid=$!
-  waited=0
-  while kill -0 "$perf_pid" 2>/dev/null && [ "$waited" -lt 10 ]; do
-    sleep 1; waited=$((waited+1))
-  done
-  if kill -0 "$perf_pid" 2>/dev/null; then
-    kill -9 "$perf_pid" 2>/dev/null
-    echo "FAIL [3,000-line command checked within 10s under /bin/bash]"; FAIL=$((FAIL+1))
-    FAILED_CASES="$FAILED_CASES perf-bash32"
-  elif [ -s "$perf_dir/out" ]; then
-    echo "PASS [3,000-line command checked within 10s under /bin/bash]"; PASS=$((PASS+1))
+# Round-2 fail-before: quoted-separator xargs forms fail on 9240c7f head.
+HEAD_R2_LIB="${EXTRACT_PR_HEAD_R2_LIB:-/tmp/_lib-extract-pr-1552-head-9240c7f.sh}"
+if [ -f "$HEAD_R2_LIB" ]; then
+  before_shim=$(mktemp -d)
+  printf '%s\n' '#!/bin/bash' 'case "$*" in *number*) printf "%s\n" "${MOCK_BRANCH_PR:-}";; esac' 'exit 0' \
+    > "$before_shim/gh"
+  chmod +x "$before_shim/gh"
+  before_out=$(mktemp)
+  PATH="$before_shim:$PATH" MOCK_BRANCH_PR=1546 bash -c '
+    . "$1"
+    fail=0
+    m=$(printf "%s %s %s" gh pr merge)
+    check() {
+      local label="$1" cmd="$2"
+      if merge_command_uses_variable "$cmd"; then
+        echo "UNEXPECTED-PASS $label"; fail=1
+      else
+        echo "FAIL-BEFORE-OK $label"
+      fi
+    }
+    check "xargs-q-semi" "xargs -I{} sh -c \"cd x; ${m} {}\""
+    check "xargs-q-and" "xargs -I{} sh -c \"cd x && ${m} {}\""
+    check "xargs-q-or" "xargs -I{} sh -c \"false || ${m} {}\""
+    qnl=$(printf "xargs -I{} sh -c \"cd x\\n%s {}\"" "$m")
+    check "xargs-q-nl" "$qnl"
+    pad90=$(awk "BEGIN{for(i=0;i<90;i++)printf \"x\"}")
+    check "xargs-long" "xargs -I{} sh -c \"${pad90}; ${m} {}\""
+    exit "$fail"
+  ' _ "$HEAD_R2_LIB" > "$before_out" 2>&1
+  before_rc=$?
+  if [ "$before_rc" -eq 0 ] && grep -q 'FAIL-BEFORE-OK' "$before_out" && ! grep -q 'UNEXPECTED-PASS' "$before_out"; then
+    echo "PASS [1552 round-2 fail-before against head 9240c7f lib]"
+    PASS=$((PASS+1))
   else
-    echo "FAIL [3,000-line command check did not complete]"; FAIL=$((FAIL+1))
-    FAILED_CASES="$FAILED_CASES perf-bash32"
+    echo "FAIL [1552 round-2 fail-before]: rc=$before_rc" >&2
+    cat "$before_out" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}1552-fail-before-r2 "
   fi
-  rm -rf "$perf_dir"
+  rm -rf "$before_shim" "$before_out"
+else
+  echo "NOTE: not counted [1552 round-2 fail-before — no HEAD_R2_LIB at $HEAD_R2_LIB]"
+fi
+
+# --- Bash 3.2 time bound (PR #1546 security review, H1) --------------------
+# A gate that times out does not block, so a padded merge could skip every
+# gate. Run the variable check under /bin/bash with a SIGKILL watchdog.
+# Inputs are built in a script file (never one huge argv to the test runner).
+# #1552 round 2: one awk pass must finish well inside the bound every run;
+# also cover 6,000 trailing statement lines.
+if [ -x /bin/bash ]; then
+  _run_perf_bound() {
+    local lines="$1" limit_s="$2" label="$3"
+    local perf_dir perf_pid waited
+    perf_dir=$(mktemp -d)
+    {
+      echo '#!/bin/bash'
+      echo ". \"$LIB_SRC\""
+      echo 'w=merge'
+      echo "padfile=\$(mktemp)"
+      echo "{ printf 'gh pr %s 5 --repo o/r --squash\\n' \"\$w\""
+      echo "  i=0; while [ \$i -lt $lines ]; do echo true; i=\$((i+1)); done"
+      echo '} > "$padfile"'
+      echo 'cmd=$(cat "$padfile")'
+      echo 'merge_command_uses_variable "$cmd" >/dev/null'
+      echo 'merge_command_uses_variable "['\''/usr/bin/gh'\'','\''-R'\'','\''o/r'\'','\''pr'\'','\''$w'\'','\''5'\'']" >/dev/null'
+      echo 'xcmd=$(printf "echo 5 | xargs gh pr %s" "$w")'
+      echo 'merge_command_uses_variable "$xcmd" >/dev/null'
+      echo 'echo done > "$1"'
+      echo 'rm -f "$padfile"'
+    } > "$perf_dir/run.sh"
+    /bin/bash "$perf_dir/run.sh" "$perf_dir/out" &
+    perf_pid=$!
+    waited=0
+    while kill -0 "$perf_pid" 2>/dev/null && [ "$waited" -lt "$limit_s" ]; do
+      sleep 1; waited=$((waited+1))
+    done
+    if kill -0 "$perf_pid" 2>/dev/null; then
+      kill -9 "$perf_pid" 2>/dev/null
+      wait "$perf_pid" 2>/dev/null || true
+      echo "FAIL [$label]"; FAIL=$((FAIL+1))
+      FAILED_CASES="$FAILED_CASES perf-bash32-$lines"
+    elif [ -s "$perf_dir/out" ]; then
+      echo "PASS [$label]"; PASS=$((PASS+1))
+    else
+      echo "FAIL [$label did not complete]"; FAIL=$((FAIL+1))
+      FAILED_CASES="$FAILED_CASES perf-bash32-$lines"
+    fi
+    rm -rf "$perf_dir"
+  }
+  _run_perf_bound 3000 10 "3,000-line command checked within 10s under /bin/bash"
+  _run_perf_bound 6000 10 "6,000-line command checked within 10s under /bin/bash"
 fi
 
 # --- Cleanup -------------------------------------------------------------
