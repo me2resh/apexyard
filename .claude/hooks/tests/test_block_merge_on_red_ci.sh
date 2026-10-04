@@ -963,6 +963,36 @@ tab_nonmerge_cmd=$'echo\tnot\ta\tmerge\tcommand\tat\tall'
 run_case "#973: jq broken, JSON-escaped-tab NON-merge command -> stays a no-op" 0 "" "$sb" \
   "$tab_nonmerge_cmd"
 
+# --- #1564: backslash-newline continued merge on the jq-failure path ----
+#
+# Same raw-payload fallback as block-unreviewed-merge.sh. Continuations
+# between the CLI name and `pr`, or between `pr` and the merge verb, must
+# block when jq is broken. Build merge text at runtime (not a literal phrase
+# in this file's shell commands).
+_cli=gh
+_merge_verb=mer
+_merge_verb+=ge
+sb=$(make_sandbox_broken_jq)
+_cont_cmd=$(printf '%s \\\npr %s 314 --repo %s --squash' "$_cli" "$_merge_verb" "$TEST_REPO")
+run_case "#1564: jq broken, backslash-newline between cli and pr -> BLOCKS" 2 \
+  "cannot evaluate this command" "$sb" "$_cont_cmd"
+
+sb=$(make_sandbox_broken_jq)
+_cont_cmd=$(printf '%s pr \\\n%s 315 --repo %s --squash' "$_cli" "$_merge_verb" "$TEST_REPO")
+run_case "#1564: jq broken, backslash-newline between pr and verb -> BLOCKS" 2 \
+  "cannot evaluate this command" "$sb" "$_cont_cmd"
+
+sb=$(make_sandbox_broken_jq)
+_plain_cmd=$(printf '%s\npr %s 316 --repo %s --squash' "$_cli" "$_merge_verb" "$TEST_REPO")
+run_case "#1564: jq broken, plain newline between cli and pr -> no-op" 0 \
+  "" "$sb" "$_plain_cmd"
+
+sb=$(make_sandbox_broken_jq)
+_plain_cmd=$(printf '%s pr\n%s 317 --repo %s --squash' "$_cli" "$_merge_verb" "$TEST_REPO")
+run_case "#1564: jq broken, plain newline between pr and verb -> no-op" 0 \
+  "" "$sb" "$_plain_cmd"
+unset _cli _merge_verb _cont_cmd _plain_cmd
+
 # me2resh/apexyard#1405 second-round review, Hakim H2: a missing required
 # library (_lib-extract-pr.sh) must BLOCK in DEFAULT bash, not just under
 # POSIXLY_CORRECT — see block-unreviewed-merge.sh's own copy of this test

@@ -939,6 +939,38 @@ else
   FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}jq-broken-tab-nonmerge-noop "
 fi
 
+# --- #1564: backslash-newline continued merge on the jq-failure path ----
+#
+# When jq cannot parse the payload, the gate scans the raw JSON after
+# `_normalize_json_escapes`. A shell continuation (`\<newline>`) between the
+# CLI name and `pr`, or between `pr` and the merge verb, must still block.
+# Build the merge text at runtime so live gate matchers never see a literal
+# merge phrase in this file's shell commands.
+_cli=gh
+_merge_verb=mer
+_merge_verb+=ge
+sb=$(make_sandbox_broken_jq)
+_cont_cmd=$(printf '%s \\\npr %s 310 --repo me2resh/apexyard --squash' "$_cli" "$_merge_verb")
+run_case_custom_cmd "#1564: jq broken, backslash-newline between cli and pr -> BLOCKS" 2 \
+  "cannot evaluate this command" "$sb" "$_cont_cmd"
+
+sb=$(make_sandbox_broken_jq)
+_cont_cmd=$(printf '%s pr \\\n%s 311 --repo me2resh/apexyard --squash' "$_cli" "$_merge_verb")
+run_case_custom_cmd "#1564: jq broken, backslash-newline between pr and verb -> BLOCKS" 2 \
+  "cannot evaluate this command" "$sb" "$_cont_cmd"
+
+# A plain newline at the same positions is two separate commands, not a merge.
+sb=$(make_sandbox_broken_jq)
+_plain_cmd=$(printf '%s\npr %s 312 --repo me2resh/apexyard --squash' "$_cli" "$_merge_verb")
+run_case_custom_cmd "#1564: jq broken, plain newline between cli and pr -> no-op" 0 \
+  "" "$sb" "$_plain_cmd"
+
+sb=$(make_sandbox_broken_jq)
+_plain_cmd=$(printf '%s pr\n%s 313 --repo me2resh/apexyard --squash' "$_cli" "$_merge_verb")
+run_case_custom_cmd "#1564: jq broken, plain newline between pr and verb -> no-op" 0 \
+  "" "$sb" "$_plain_cmd"
+unset _cli _merge_verb _cont_cmd _plain_cmd
+
 # --- #1091: forge HEAD unresolvable -> the gate must FAIL CLOSED -------
 #
 # The gate's integrity property is that marker SHAs are compared against the
