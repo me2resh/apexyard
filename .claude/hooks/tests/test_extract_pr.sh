@@ -284,6 +284,32 @@ assert_merge "quoted argv in cat data heredoc" $'cat > f <<\'EOF\'\nExample: [\'
 assert_merge "gh pr view argv" "['gh','pr','view','12']" "no"
 assert_merge "gh pr merged argv" "['gh','pr','merged']" "no"
 
+# #1564 review: Bash ends a comment at the newline even when its last byte
+# is a backslash. The original scan must remain available after joining.
+_cli=gh
+_merge_verb=mer
+_merge_verb+=ge
+_merge_line=$(printf '%s %s %s 5 --repo o/r --squash' "$_cli" pr "$_merge_verb")
+_cont_cmd=$(printf '%s \\\npr %s 5 --repo o/r --squash' "$_cli" "$_merge_verb")
+assert_merge "continued cli/pr" "$_cont_cmd" "yes"
+_cont_cmd=$(printf '%s pr \\\n%s 5 --repo o/r --squash' "$_cli" "$_merge_verb")
+assert_merge "continued pr/verb" "$_cont_cmd" "yes"
+_plain_cmd=$(printf '%s\npr %s 5 --repo o/r --squash' "$_cli" "$_merge_verb")
+assert_merge "plain newline cli/pr" "$_plain_cmd" "no"
+_plain_cmd=$(printf '%s pr\n%s 5 --repo o/r --squash' "$_cli" "$_merge_verb")
+assert_merge "plain newline pr/verb" "$_plain_cmd" "no"
+for _comment in '#x' 'echo hi #x' 'true #comment'; do
+  _comment_cmd=$(printf '%s\\\n%s' "$_comment" "$_merge_line")
+  assert_merge "comment continuation: $_comment" "$_comment_cmd" "yes"
+  if is_merge_command_raw "$_comment_cmd"; then
+    echo "PASS [raw comment continuation: $_comment]"; PASS=$((PASS+1))
+  else
+    echo "FAIL [raw comment continuation: $_comment]" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}raw-comment-continuation "
+  fi
+done
+unset _cli _merge_verb _merge_line _cont_cmd _plain_cmd _comment _comment_cmd
+
 # --- Bash 3.2 time bound (PR #1546 security review, H1) --------------------
 # ${1//$'\n'/ } slows sharply with input size under /bin/bash 3.2. A gate that
 # times out does not block, so a padded merge could skip every gate. Run the

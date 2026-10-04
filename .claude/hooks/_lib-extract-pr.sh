@@ -107,8 +107,8 @@
 # ---------------------------------------------------------------
 # After decode, a JSON-escaped shell continuation (`\\` then `\n` in the
 # payload → real backslash then newline) is still two lines to the raw
-# scanner. `is_merge_command_raw` joins those continuations (outside single
-# quotes) before grep, so `<cli> \<newline>pr <verb>` and
+# scanner. `is_merge_command_raw` scans both the original and continuation-
+# joined text (outside single quotes), so `<cli> \<newline>pr <verb>` and
 # `<cli> pr \<newline><verb>` block like the one-line form. A plain newline
 # at the same positions stays two commands and is not treated as a merge.
 
@@ -334,7 +334,8 @@ _normalize_json_escapes_legacy() {
 # bash for some shapes and only makes merge detection more eager (fail
 # closed). Linear awk over stdin — no ENVIRON/-v (Linux 128 KB cap), no
 # bash `${var//…}` on large input. On awk failure, crush backslashes and
-# newlines to spaces so a continued merge verb stays visible.
+# newlines to spaces. This fallback only broadens detection because the
+# original text is also scanned.
 _join_shell_continuations() {
   local joined
   if joined=$(printf '%s\n.' "$1" | LC_ALL=C awk '
@@ -640,44 +641,47 @@ _has_argv_merge() {
 
 # Raw scan for the unparseable JSON fallback. Do not scrub the encoded payload:
 # JSON quotes are transport syntax, not shell argument boundaries.
-# Join backslash-newline continuations first (#1564) so a merge split across
-# lines after JSON-escape decode is still visible to the line-oriented grep.
+# Scan both the original text and backslash-newline-joined text (#1564).
+# A backslash at the end of a comment line does not continue that comment,
+# so the original scan must remain available for every detector.
 is_merge_command_raw() {
-  local cmd
-  cmd=$(_join_shell_continuations "$1")
-  if echo "$cmd" | grep -qE '\bgh\s+pr\s+merge\b'; then
-    return 0
-  fi
-  if _has_argv_merge "$cmd"; then
-    return 0
-  fi
-  # `gh api` with a `/pulls/<N>/merge` path anywhere in the command. The path
-  # may be quoted, slash-separated, and may include query params.
-  if echo "$cmd" | grep -qE '\bgh\s+api\b.*repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge\b'; then
-    return 0
-  fi
-  # `glab mr merge ...` — GitLab merge-request merge (#764).
-  if echo "$cmd" | grep -qE '\bglab\s+mr\s+merge\b'; then
-    return 0
-  fi
-  # `glab api` with a `/merge_requests/<N>/merge` path — GitLab's raw-API merge
-  # passthrough (#767, the forge analog of the #47 `gh api …/pulls/<N>/merge`
-  # bypass). The project is a URL-encoded path (`projects/<owner>%2F<repo>`); the
-  # MR iid + `/merge` action is what we match. The trailing `\b` is load-bearing:
-  # it stops `/merge_ref`, `/merge_requests/<N>` (GET), and `/notes` from
-  # false-matching — a false match here would be fail-CLOSED (block), but a
-  # false NEGATIVE is fail-open, so the anchor is verified by negative tests.
-  if echo "$cmd" | grep -qE '\bglab\s+api\b.*merge_requests/[0-9]+/merge\b'; then
-    return 0
-  fi
-  # `tracker_pr_merge <owner/repo> <pr> <strategy> [<delete_branch>]` — the
-  # #759 tracker-agnostic merge wrapper /approve-merge calls instead of
-  # shelling out to `gh pr merge`/`glab mr merge` directly. Without this
-  # branch the gates never fire on the wrapper form at all — see the HIGH
-  # finding writeup in the file header (#759).
-  if echo "$cmd" | grep -qE '\btracker_pr_merge\b'; then
-    return 0
-  fi
+  local cmd joined
+  joined=$(_join_shell_continuations "$1")
+  for cmd in "$1" "$joined"; do
+    if echo "$cmd" | grep -qE '\bgh\s+pr\s+merge\b'; then
+      return 0
+    fi
+    if _has_argv_merge "$cmd"; then
+      return 0
+    fi
+    # `gh api` with a `/pulls/<N>/merge` path anywhere in the command. The path
+    # may be quoted, slash-separated, and may include query params.
+    if echo "$cmd" | grep -qE '\bgh\s+api\b.*repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge\b'; then
+      return 0
+    fi
+    # `glab mr merge ...` — GitLab merge-request merge (#764).
+    if echo "$cmd" | grep -qE '\bglab\s+mr\s+merge\b'; then
+      return 0
+    fi
+    # `glab api` with a `/merge_requests/<N>/merge` path — GitLab's raw-API merge
+    # passthrough (#767, the forge analog of the #47 `gh api …/pulls/<N>/merge`
+    # bypass). The project is a URL-encoded path (`projects/<owner>%2F<repo>`); the
+    # MR iid + `/merge` action is what we match. The trailing `\b` is load-bearing:
+    # it stops `/merge_ref`, `/merge_requests/<N>` (GET), and `/notes` from
+    # false-matching — a false match here would be fail-CLOSED (block), but a
+    # false NEGATIVE is fail-open, so the anchor is verified by negative tests.
+    if echo "$cmd" | grep -qE '\bglab\s+api\b.*merge_requests/[0-9]+/merge\b'; then
+      return 0
+    fi
+    # `tracker_pr_merge <owner/repo> <pr> <strategy> [<delete_branch>]` — the
+    # #759 tracker-agnostic merge wrapper /approve-merge calls instead of
+    # shelling out to `gh pr merge`/`glab mr merge` directly. Without this
+    # branch the gates never fire on the wrapper form at all — see the HIGH
+    # finding writeup in the file header (#759).
+    if echo "$cmd" | grep -qE '\btracker_pr_merge\b'; then
+      return 0
+    fi
+  done
   return 1
 }
 
