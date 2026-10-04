@@ -90,6 +90,7 @@ case "\$*" in
   *"pr view"*"headRefOid"*)        echo "$FIXED_SHA" ;;
   *"pr view"*"headRefName"*)       echo "feature/GH-99-test" ;;
   *"pr view"*"headRepository"*)    echo "me2resh/apexyard" ;;
+  *"pr view"*"--json number"*)      echo "1546" ;;
   *"pr view"*"mergeStateStatus"*)  echo "\${MOCK_MERGE_STATE:-CLEAN}" ;;
   *"pr view"*"baseRefName"*)       echo "\${MOCK_BASE_BRANCH:-dev}" ;;
   # #1386: is_pr_behind_base reads behind_by from the compare API, not
@@ -366,7 +367,7 @@ run_case_custom_cmd() {
   local input
   input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
   local got_stderr got_rc
-  got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+  got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && printf '%s' "$input" | APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash .claude/hooks/block-unreviewed-merge.sh 2>&1 >/dev/null)
   got_rc=$?
   rm -rf "$sb"
   if [ "$got_rc" != "$want_rc" ]; then
@@ -380,6 +381,53 @@ run_case_custom_cmd() {
   echo "PASS [$label]"
   PASS=$((PASS+1))
 }
+
+# B1: the branch PR is fully approved. An argv merge targets another PR, so
+# using the branch PR's approvals would authorize the wrong merge.
+for argv_target in "'5'" "os.environ['PR']"; do
+  sb=$(make_sandbox)
+  write_rex_marker "$sb" 1546
+  write_ceo_marker_structured "$sb" 1546
+  run_case_custom_cmd "argv merge target $argv_target does not use branch PR" 2 \
+    "cannot resolve" "$sb" \
+    "python3 -c \"import subprocess, os; subprocess.run(['gh','pr','merge',$argv_target])\""
+done
+
+# #1525: quoted data passes. Executable heredocs and a real merge still block.
+data_cmd=$(cat <<'CMD'
+cat > /tmp/brief.md <<'EOF'
+run: gh pr merge 315 --repo $TEST_REPO --squash
+EOF
+CMD
+)
+sb=$(make_sandbox)
+run_case_custom_cmd "#1525 data heredoc passes" 0 "" "$sb" "$data_cmd"
+for shell in bash sh zsh; do
+  sb=$(make_sandbox)
+  run_case_custom_cmd "#1525 $shell heredoc blocks" 2 "unexpanded" "$sb" \
+    "$(printf "%s <<'EOF'\ngh pr merge \$PR --repo \$R\nEOF" "$shell")"
+done
+sb=$(make_sandbox)
+run_case_custom_cmd "#1525 python subprocess heredoc blocks" 2 "BLOCKED" "$sb" \
+  $'python3 - <<\'EOF\'\nimport subprocess\nsubprocess.run(["gh","pr","merge", PR, "--repo", R])\nEOF'
+sb=$(make_sandbox)
+run_case_custom_cmd "#1525 python edit with sample merge stays blocked" 2 "unexpanded" "$sb" \
+  $'python3 - <<\'EOF\'\nline = "gh pr merge 315 --repo $TEST_REPO --squash"\nEOF'
+sb=$(make_sandbox)
+run_case_custom_cmd "#1525 eval heredoc blocks" 2 "unexpanded" "$sb" \
+  $'eval "$(cat <<\'EOF\'\ngh pr merge $PR --repo $R\nEOF\n)"'
+sb=$(make_sandbox)
+run_case_custom_cmd "#1525 source stdin heredoc blocks" 2 "unexpanded" "$sb" \
+  $'source /dev/stdin <<\'EOF\'\ngh pr merge $PR --repo $R\nEOF'
+sb=$(make_sandbox)
+run_case_custom_cmd "#1525 cat piped to bash blocks" 2 "unexpanded" "$sb" \
+  $'cat <<\'EOF\' | bash\ngh pr merge $PR --repo $R\nEOF'
+sb=$(make_sandbox)
+run_case_custom_cmd "#1525 unquoted substitution blocks" 2 "unexpanded" "$sb" \
+  $'cat <<EOF\n$(gh pr merge $X)\nEOF'
+sb=$(make_sandbox)
+run_case_custom_cmd "#1525 real variable merge beside data blocks" 2 "unexpanded" "$sb" \
+  "$data_cmd"$'\ngh pr merge $PR'
 
 # Case: compound command with valid inline marker + merge → should PASS
 sb=$(make_sandbox)

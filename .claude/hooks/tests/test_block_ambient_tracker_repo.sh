@@ -52,6 +52,10 @@ run_case 'single-quoted tracker text is data' 0 "printf '%s' 'gh pr create --tit
 run_case 'double-quoted tracker text is data' 0 'printf "%s" "gh issue create --title x"' "$root"
 run_case 'quoted command text inside a quoted argument is data' 0 "printf '%s' \"'gh' pr create --title x\"" "$root"
 run_case 'quoted heredoc tracker text is data' 0 "$(printf "cat <<'TEXT'\ngh pr create --title x\nTEXT")" "$root"
+run_case '#1525 brief-only tracker text is data' 0 \
+  $'cat > /tmp/brief.md <<\'EOF\'\ngh issue view 4\nEOF' "$root"
+run_case '#1525 build-agent command keeps raw fallback' 2 \
+  $'cat > /tmp/brief.md <<\'EOF\'\ngh issue view 4\nEOF\nclaude -p build' "$root"
 run_case 'unquoted heredoc tracker text is data' 0 "$(printf 'cat <<TEXT\ngh issue create --title x\nTEXT')" "$root"
 run_case 'real PR create with tracker text in its body is blocked' 2 "gh pr create --body 'gh issue create --title x'" "$root"
 run_case 'plain issue create is blocked' 2 'gh issue create --title x' "$root"
