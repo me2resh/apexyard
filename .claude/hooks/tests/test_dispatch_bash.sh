@@ -269,9 +269,8 @@ for command in "${join_cases[@]}"; do
 done
 rm -f "$TMP/bin/grep"
 
-# A failed or unavailable awk must not abort dispatch before the whole-command
-# scan reaches push and commit gates. Construct the subcommand at runtime so
-# this test script does not itself submit a push or commit command to hooks.
+# A failed or unavailable awk must route both gate groups. Construct the
+# subcommand at runtime so this test does not submit one to live hooks.
 mkdir -p "$TMP/failed-awk"
 cat > "$TMP/failed-awk/awk" <<'EOF'
 #!/usr/bin/env bash
@@ -279,23 +278,35 @@ exit "${FAKE_AWK_EXIT:?}"
 EOF
 chmod +x "$TMP/failed-awk/awk"
 for awk_exit in 1 127; do
-  for subcommand in push commit; do
+  for scenario in continued-push continued-commit compound-push unrelated; do
     : > "$TMP/log"
-    if [ "$subcommand" = push ]; then
-      command="cd x && git $subcommand origin main"
-      gate=block-main-push.sh
-    else
-      command="cd x && git $subcommand -m fix"
-      gate=check-secrets.sh
-    fi
+    case "$scenario" in
+      continued-push)
+        w=push
+        command=$(printf 'git \\\n%s origin x' "$w")
+        ;;
+      continued-commit)
+        w=commit
+        command=$(printf 'git -C /r \\\n  %s -m x' "$w")
+        ;;
+      compound-push)
+        w=push
+        command=$(printf 'cd x && git \\\n %s' "$w")
+        ;;
+      unrelated)
+        command='ls'
+        ;;
+    esac
     set +e
     jq -nc --arg c "$command" '{tool_name:"Bash",tool_input:{command:$c}}' \
       | PATH="$TMP/failed-awk:$PATH" FAKE_AWK_EXIT="$awk_exit" \
         DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh" > "$TMP/awk-out" 2> "$TMP/awk-err"
     rc=$?
     set -e
-    if [ "$rc" -ne 0 ] || [ "$(grep -c "^${gate}\$" "$TMP/log")" -ne 1 ]; then
-      echo "FAIL: awk exit $awk_exit skipped $subcommand gates (dispatcher rc=$rc)" >&2
+    if [ "$rc" -ne 0 ] \
+      || [ "$(grep -c '^block-main-push.sh$' "$TMP/log")" -ne 1 ] \
+      || [ "$(grep -c '^check-secrets.sh$' "$TMP/log")" -ne 1 ]; then
+      echo "FAIL: awk exit $awk_exit did not route both gates for $scenario (dispatcher rc=$rc)" >&2
       cat "$TMP/awk-err" >&2
       cat "$TMP/log" >&2
       exit 1
@@ -303,37 +314,12 @@ for awk_exit in 1 127; do
   done
 done
 
-# The tr fallback joins plain newlines; if tr also fails, scan the raw command.
-command=$(printf 'cd x && git\n%s origin main' push)
+# A working join must leave unrelated commands outside both gate groups.
 : > "$TMP/log"
-set +e
-jq -nc --arg c "$command" '{tool_name:"Bash",tool_input:{command:$c}}' \
-  | PATH="$TMP/failed-awk:$PATH" FAKE_AWK_EXIT=1 \
-    DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh" > "$TMP/awk-out" 2> "$TMP/awk-err"
-rc=$?
-set -e
-if [ "$rc" -ne 0 ] || [ "$(grep -c '^block-main-push.sh$' "$TMP/log")" -ne 1 ]; then
-  echo "FAIL: tr fallback did not join a newline (dispatcher rc=$rc)" >&2
-  cat "$TMP/awk-err" >&2
-  exit 1
-fi
-cat > "$TMP/failed-awk/tr" <<'EOF'
-#!/usr/bin/env bash
-exit 1
-EOF
-chmod +x "$TMP/failed-awk/tr"
-: > "$TMP/log"
-subcommand=push
-command="cd x && git $subcommand origin main"
-set +e
-jq -nc --arg c "$command" '{tool_name:"Bash",tool_input:{command:$c}}' \
-  | PATH="$TMP/failed-awk:$PATH" FAKE_AWK_EXIT=1 \
-    DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh" > "$TMP/awk-out" 2> "$TMP/awk-err"
-rc=$?
-set -e
-if [ "$rc" -ne 0 ] || [ "$(grep -c '^block-main-push.sh$' "$TMP/log")" -ne 1 ]; then
-  echo "FAIL: raw-command fallback skipped push gates (dispatcher rc=$rc)" >&2
-  cat "$TMP/awk-err" >&2
+run_json ls
+if grep -qE '^(block-main-push|check-secrets)\.sh$' "$TMP/log"; then
+  echo 'FAIL: working awk routed ls to push or commit gates' >&2
+  cat "$TMP/log" >&2
   exit 1
 fi
 
