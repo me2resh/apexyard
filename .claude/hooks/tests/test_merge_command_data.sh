@@ -52,6 +52,15 @@ check 'pipe into bash merge' yes "echo 'gh pr merge 7' | bash"
 check 'heredoc executed by bash' yes "$(printf "bash <<'TEXT'\ngh pr merge 7\nTEXT")"
 check 'grep then real merge' yes "grep -q 'gh pr merge' notes.txt && gh pr merge 7"
 check 'scratch heredoc then real merge' yes "$(printf "cat > /tmp/merge-notes <<'TEXT'\ngh pr merge 7\nTEXT\ngh pr merge 8")"
+check 'python subprocess list in heredoc stays visible' yes \
+  $'python3 - <<\'EOF\'\nimport subprocess\nsubprocess.run(["gh","pr","merge", PR, "--repo", R])\nEOF'
+python_payload=$(jq -nc --arg c $'python3 - <<\'EOF\'\nimport subprocess\nsubprocess.run(["gh","pr","merge", PR])\nEOF' \
+  '{tool_input:{command:$c}}')
+if is_merge_command_raw "$(_normalize_json_escapes "$python_payload")"; then
+  printf 'PASS [python subprocess list in raw JSON stays visible]\n'; PASS=$((PASS + 1))
+else
+  printf 'FAIL [python subprocess list in raw JSON was missed]\n' >&2; FAIL=$((FAIL + 1))
+fi
 # This conservative route is pinned by test_command_scrub_must_block.sh.
 check 'cd then quoted API remains gated' yes "cd /tmp && echo 'gh api repos/demo/service/pulls/7/merge'"
 
