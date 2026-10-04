@@ -31,9 +31,10 @@ old_normalize_json_escapes() {
 }
 
 if [ "${1:-}" = --worker ]; then
+  input=$(cat "$3")
   case "$2" in
-    old) old_normalize_json_escapes "$3" ;;
-    new) _normalize_json_escapes "$3" ;;
+    old) old_normalize_json_escapes "$input" ;;
+    new) _normalize_json_escapes "$input" ;;
     *) exit 2 ;;
   esac
   exit $?
@@ -124,7 +125,7 @@ done
 run_timed() {
   local kind="$1" output="$2" pid watchdog status started elapsed
   started=$(date +%s)
-  /bin/bash "$0" --worker "$kind" "$payload" > "$output" &
+  /bin/bash "$0" --worker "$kind" "$tmp_dir/payload" > "$output" &
   pid=$!
   ( sleep 10; kill -KILL "$pid" 2>/dev/null ) &
   watchdog=$!
@@ -136,14 +137,20 @@ run_timed() {
   printf '%s %s\n' "$status" "$elapsed"
 }
 
-payload=$(awk 'BEGIN { for (i = 0; i < 10000; i++) printf "\\n" }')
-read -r old_status old_seconds < <(run_timed old "$tmp_dir/old-large")
-if [ "$old_status" -eq 137 ]; then
-  printf 'PASS old implementation timed out: SIGKILL after %ss\n' "$old_seconds"
-  pass=$((pass + 1))
+awk 'BEGIN { for (i = 0; i < 10000; i++) printf "\\n" }' > "$tmp_dir/payload"
+# Override only for testing the Bash 5 branch on a host whose /bin/bash is 3.x.
+bash_major=${TEST_FORCE_BASH_MAJOR:-$(/bin/bash -c 'echo "${BASH_VERSINFO[0]}"')}
+if [ "$bash_major" -eq 3 ]; then
+  read -r old_status old_seconds < <(run_timed old "$tmp_dir/old-large")
+  if [ "$old_status" -eq 137 ]; then
+    printf 'PASS old implementation timed out: SIGKILL after %ss\n' "$old_seconds"
+    pass=$((pass + 1))
+  else
+    printf 'FAIL old implementation unexpectedly exited %s after %ss\n' "$old_status" "$old_seconds" >&2
+    fail=$((fail + 1))
+  fi
 else
-  printf 'FAIL old implementation unexpectedly exited %s after %ss\n' "$old_status" "$old_seconds" >&2
-  fail=$((fail + 1))
+  printf 'SKIP old implementation timing: /bin/bash major version %s\n' "$bash_major"
 fi
 
 read -r new_status new_seconds < <(run_timed new "$tmp_dir/new-large")
