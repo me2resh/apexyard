@@ -42,7 +42,7 @@ Keep the exact no-checks branch from AgDR-0212. Allow a repository with no check
 
 ## Known limits
 
-- **jq failure on one filter only (C-1, low).** The partial-page jq call and the JSON-object check ignore their own exit status. If jq fails on just one of those filters while the others succeed, a valid partial page of green runs can be allowed. This is not a regression: the base hook read a failed count as "not partial" too. No jq version in use and no outside actor can cause it. Fix it when this code is next changed: treat a jq failure in any of the three calls as "cannot evaluate" and block. Source: the security review of PR #1560.
+- **jq failure on one filter only (C-1, low).** The partial-page jq call and the JSON-object check ignore their own exit status. If jq fails on just one of those filters while the others succeed, the gate can allow a merge it should block. A failed JSON-object check skips the run selection, so a complete page with a failing run is allowed with no output. A failed partial-page call lets an incomplete page of green runs through. This is not a regression: the base hook read a failed count as "not partial" too. No jq version in use and no outside actor can cause it. Fix it when this code is next changed: treat a jq failure in any of the three calls as "cannot evaluate" and block. Source: the security review of PR #1560.
 
 ## Artifacts
 
