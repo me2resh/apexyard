@@ -284,6 +284,41 @@ assert_merge "quoted argv in cat data heredoc" $'cat > f <<\'EOF\'\nExample: [\'
 assert_merge "gh pr view argv" "['gh','pr','view','12']" "no"
 assert_merge "gh pr merged argv" "['gh','pr','merged']" "no"
 
+# --- Bash 3.2 time bound (PR #1546 security review, H1) --------------------
+# ${1//$'\n'/ } slows sharply with input size under /bin/bash 3.2. A gate that
+# times out does not block, so a padded merge could skip every gate. Run the
+# variable check on a 3,000-line command under /bin/bash and require it to
+# finish within 10 seconds. SIGKILL ends a stuck run; 3.2 defers SIGTERM.
+if [ -x /bin/bash ]; then
+  perf_dir=$(mktemp -d)
+  {
+    echo '#!/bin/bash'
+    echo ". \"$LIB_SRC\""
+    echo 'w=merge'
+    echo 'pad=$(i=0; while [ $i -lt 3000 ]; do echo true; i=$((i+1)); done)'
+    echo 'merge_command_uses_variable "gh pr $w 5 --repo o/r'
+    echo '$pad"'
+    echo 'echo done > "$1"'
+  } > "$perf_dir/run.sh"
+  /bin/bash "$perf_dir/run.sh" "$perf_dir/out" &
+  perf_pid=$!
+  waited=0
+  while kill -0 "$perf_pid" 2>/dev/null && [ "$waited" -lt 10 ]; do
+    sleep 1; waited=$((waited+1))
+  done
+  if kill -0 "$perf_pid" 2>/dev/null; then
+    kill -9 "$perf_pid" 2>/dev/null
+    echo "FAIL [3,000-line command checked within 10s under /bin/bash]"; FAIL=$((FAIL+1))
+    FAILED_CASES="$FAILED_CASES perf-bash32"
+  elif [ -s "$perf_dir/out" ]; then
+    echo "PASS [3,000-line command checked within 10s under /bin/bash]"; PASS=$((PASS+1))
+  else
+    echo "FAIL [3,000-line command check did not complete]"; FAIL=$((FAIL+1))
+    FAILED_CASES="$FAILED_CASES perf-bash32"
+  fi
+  rm -rf "$perf_dir"
+fi
+
 # --- Cleanup -------------------------------------------------------------
 rm -rf "$SHIM_DIR"
 

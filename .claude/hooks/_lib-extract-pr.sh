@@ -515,7 +515,11 @@ is_merge_command() {
 # contiguous CLI phrase. Flatten newlines so one scan also sees multi-line
 # lists. The optional `[` after gh covers spawn('gh', ['pr', 'merge', ...]).
 _has_argv_merge() {
-  local flat="${1//$'\n'/ }"
+  # Use tr, not ${1//$'\n'/ }: under macOS /bin/bash 3.2 that substitution
+  # slows sharply with input size (about 2,000 lines took over a minute), and
+  # a gate that times out does not block. tr is linear.
+  local flat
+  flat=$(printf '%s' "$1" | tr '\n' ' ')
   local quote='[\\]?["'"'"']'
   local comma='[[:space:]]*,[[:space:]]*'
   local argv_start='\[?[[:space:]]*'
