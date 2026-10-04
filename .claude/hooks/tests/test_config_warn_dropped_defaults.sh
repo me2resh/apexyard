@@ -26,7 +26,7 @@ set -u
 
 # Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
 # shellcheck disable=SC1091
-. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
 
 
 # Test isolation: this sandbox is NOT the real ops fork. Disable both the

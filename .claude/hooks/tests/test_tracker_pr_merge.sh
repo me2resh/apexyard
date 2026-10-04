@@ -37,7 +37,7 @@ set -u
 
 # Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
 # shellcheck disable=SC1091
-. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
 
 unset APEXYARD_OPS_PIN_DIR CLAUDE_CODE_SESSION_ID 2>/dev/null || true
 

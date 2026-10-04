@@ -44,7 +44,11 @@ export APEXYARD_DISABLE_RESOLUTION_CACHE=1
 
 unset CLAUDE_CODE_SESSION_ID
 SUITE_PIN_DIR=$(mktemp -d "${TMPDIR:-/tmp}/apexyard-hook-suite-pins.XXXXXX") || exit 1
+# Share one pin dir with suites that source _test-session-isolation.sh so a
+# full run does not leave ~N mktemp directories behind; remove on EXIT.
+export _APEXYARD_TEST_PIN_DIR="$SUITE_PIN_DIR"
 export APEXYARD_OPS_PIN_DIR="$SUITE_PIN_DIR"
+trap 'rm -rf "$SUITE_PIN_DIR"' EXIT
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT" || exit 1
@@ -106,11 +110,13 @@ for t in "${TESTS[@]}"; do
   fi
   # Force isolation even when a suite forgets to source
   # _test-session-isolation.sh (me2resh/apexyard#1549).
+  # Pass _APEXYARD_TEST_PIN_DIR so the helper reuses SUITE_PIN_DIR.
   # shellcheck disable=SC2086
   if env -u CLAUDE_CODE_SESSION_ID \
       APEXYARD_OPS_DISABLE_PIN=1 \
       APEXYARD_DISABLE_RESOLUTION_CACHE=1 \
       APEXYARD_OPS_PIN_DIR="$SUITE_PIN_DIR" \
+      _APEXYARD_TEST_PIN_DIR="$SUITE_PIN_DIR" \
       $TIMEOUT_BIN bash "$t" </dev/null >/tmp/_hooktest.out 2>&1; then
     if grep -q '^SKIP' /tmp/_hooktest.out; then
       printf '  diagnostics from %s:\n' "$t"

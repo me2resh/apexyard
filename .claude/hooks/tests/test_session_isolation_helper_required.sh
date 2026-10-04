@@ -13,9 +13,9 @@ set -u
 
 # Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
 # shellcheck disable=SC1091
-. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
 
-TESTS_DIR="$(cd "$(dirname "$0")" && pwd)"
+TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 HELPER_NAME="_test-session-isolation.sh"
 # Sole-line opt-out body (matched only as: ^# <marker>$).
 OPT_OUT_MARKER='apexyard-test-session-isolation: opt-out'
@@ -31,10 +31,14 @@ mark_fail() {
   FAILED_CASES="${FAILED_CASES}${1}"$'\n'
 }
 
-# A suite "runs hooks" when it references a hook/lib script path or HOOK_DIR.
+# A suite "runs hooks" when it references a hook/lib path, common indirection
+# vars (HOOK / HOOK_SRC / LIB / …), or a `_lib-*.sh` name. Variable-only
+# invocations like `bash "$HOOK"` are covered via the assignment patterns.
 runs_hooks() {
   local f="$1"
-  grep -qE 'HOOK_DIR=|\.claude/hooks/[A-Za-z0-9_./-]+\.sh' "$f"
+  grep -qE \
+    'HOOK_DIR=|HOOK_SRC=|HOOKS_DIR=|(^|[^A-Za-z0-9_])HOOK=|(^|[^A-Za-z0-9_])LIB=|\.claude/hooks/[A-Za-z0-9_./-]+\.sh|_lib-[A-Za-z0-9_-]+\.sh' \
+    "$f"
 }
 
 has_opt_out() {
@@ -50,7 +54,14 @@ uses_temp_pin_dir() {
     && grep -qE 'mktemp' "$f"
 }
 
+uses_bash_source_include() {
+  local f="$1"
+  grep -qF 'dirname "${BASH_SOURCE[0]:-$0}"' "$f" \
+    && grep -qF "$HELPER_NAME" "$f"
+}
+
 missing=()
+bad_include=()
 opt_out_bad=()
 
 while IFS= read -r f; do
@@ -64,6 +75,8 @@ while IFS= read -r f; do
   if runs_hooks "$f"; then
     if ! grep -qF "$HELPER_NAME" "$f"; then
       missing+=("$base")
+    elif ! uses_bash_source_include "$f"; then
+      bad_include+=("$base")
     fi
   fi
 done < <(find "$TESTS_DIR" -maxdepth 1 -type f -name 'test_*.sh' | sort)
@@ -73,6 +86,13 @@ if [ "${#missing[@]}" -eq 0 ]; then
 else
   mark_fail "hook-invoking suites missing $HELPER_NAME" \
     "$(printf '%s ' "${missing[@]}")"
+fi
+
+if [ "${#bad_include[@]}" -eq 0 ]; then
+  mark_pass "hook-invoking suites resolve helper via BASH_SOURCE[0]"
+else
+  mark_fail "hook-invoking suites must use dirname \"\${BASH_SOURCE[0]:-\$0}\"" \
+    "$(printf '%s ' "${bad_include[@]}")"
 fi
 
 if [ "${#opt_out_bad[@]}" -eq 0 ]; then

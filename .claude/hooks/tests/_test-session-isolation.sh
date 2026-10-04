@@ -13,12 +13,24 @@
 #   - APEXYARD_OPS_PIN_DIR=<fresh temp dir> (belt-and-suspenders if a case
 #     re-exports a session id without its own pin dir)
 #
-# Temp pin dirs are left under $TMPDIR (no EXIT trap). Pin-behaviour suites
-# may override these exports per-case after sourcing this file.
+# Include line (must use BASH_SOURCE so `source ./test_foo.sh` resolves the
+# helper next to the test file; plain `$0` is `/bin/bash` when sourced):
+#   . "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+#
+# Temp pin dirs are left under $TMPDIR unless the runner exports
+# _APEXYARD_TEST_PIN_DIR (bin/run-hook-tests.sh does, and removes it on EXIT).
+# Pin-behaviour suites may override these exports per-case after sourcing.
 #
 # Re-applying on every source is intentional: a subshell inherits
 # _TEST_SESSION_ISOLATION_SOURCED from its parent, and must still clear a
 # freshly exported CLAUDE_CODE_SESSION_ID before invoking a hook.
+#
+# Architecture evolution (#1549): isolation used to be runner-only
+# (APEXYARD_OPS_DISABLE_PIN + APEXYARD_DISABLE_RESOLUTION_CACHE). That left
+# direct `bash test_*.sh` under a live session able to overwrite
+# ~/.claude/apexyard/ops-root-<sid> and resolve-cache-<sid>-*. The helper
+# moves the same neutralisation into every suite, keeps a disposable pin
+# dir, and pairs with a required-helper lint plus a write-capable regression.
 
 unset CLAUDE_CODE_SESSION_ID
 
