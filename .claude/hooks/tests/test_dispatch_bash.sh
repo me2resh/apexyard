@@ -5,6 +5,12 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SETTINGS="$ROOT/../settings.json"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+# The dispatcher and stub hooks use env bash; pin them to the interpreter
+# running this test so a /bin/bash run really exercises Bash 3.2.
+mkdir -p "$TMP/bin"
+ln -s "$BASH" "$TMP/bin/bash"
+PATH="$TMP/bin:$PATH"
+export PATH
 
 bash_entries=$(jq '[.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[]] | length' "$SETTINGS")
 [ "$bash_entries" -eq 1 ]
@@ -218,6 +224,148 @@ run_json() {
   jq -nc --arg c "$1" '{tool_name:"Bash",tool_input:{command:$c}}' \
     | DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh"
 }
+
+# Capture the first whole-command grep input. A here-string adds one newline,
+# so compare with the old substitution plus that same newline. The wrapper
+# delegates grep itself to the original executable to keep routing unchanged.
+scan_grep="$(command -v grep)"
+cat > "$TMP/bin/grep" <<'EOF'
+#!/usr/bin/env bash
+if [ "${1:-}" = -qE ] && [ -n "${SCAN_CAPTURE:-}" ] && [ ! -e "$SCAN_CAPTURE" ]; then
+  cat > "$SCAN_CAPTURE"
+  exec "$SCAN_GREP" "$@" < "$SCAN_CAPTURE"
+fi
+exec "$SCAN_GREP" "$@"
+EOF
+chmod +x "$TMP/bin/grep"
+
+join_cases=(
+  ''
+  'echo ok'
+  $'a\\\nb'
+  $'a\\\nb\\\nc'
+  $'a\\'
+  $'a\\b'
+  $'a\nb'
+  $'a\\\\\nb'
+  $'a\\\n\nb'
+)
+for command in "${join_cases[@]}"; do
+  # jq extraction in dispatch-bash.sh uses command substitution, which
+  # removes trailing newlines before the join. These cases retain any
+  # plain newline internally so the captured input is unambiguous.
+  old_scan=${command//$'\\\n'/ }
+  rm -f "$TMP/scan-capture"
+  printf '%s\n' "$old_scan" > "$TMP/scan-expected"
+  jq -nc --arg c "$command" '{tool_name:"Bash",tool_input:{command:$c}}' \
+    | DISPATCH_LOG="$TMP/log" SCAN_CAPTURE="$TMP/scan-capture" SCAN_GREP="$scan_grep" \
+      "$TMP/hooks/dispatch-bash.sh"
+  if ! cmp -s "$TMP/scan-expected" "$TMP/scan-capture"; then
+    echo 'FAIL: whole-command join differs from the old substitution' >&2
+    od -An -tx1 "$TMP/scan-expected" >&2
+    od -An -tx1 "$TMP/scan-capture" >&2
+    exit 1
+  fi
+done
+rm -f "$TMP/bin/grep"
+
+# A failed or unavailable awk must route both gate groups. Construct the
+# subcommand at runtime so this test does not submit one to live hooks.
+mkdir -p "$TMP/failed-awk"
+cat > "$TMP/failed-awk/awk" <<'EOF'
+#!/usr/bin/env bash
+exit "${FAKE_AWK_EXIT:?}"
+EOF
+chmod +x "$TMP/failed-awk/awk"
+for awk_exit in 1 127; do
+  for scenario in continued-push continued-commit compound-push unrelated; do
+    : > "$TMP/log"
+    case "$scenario" in
+      continued-push)
+        w=push
+        command=$(printf 'git \\\n%s origin x' "$w")
+        ;;
+      continued-commit)
+        w=commit
+        command=$(printf 'git -C /r \\\n  %s -m x' "$w")
+        ;;
+      compound-push)
+        w=push
+        command=$(printf 'cd x && git \\\n %s' "$w")
+        ;;
+      unrelated)
+        command='ls'
+        ;;
+    esac
+    set +e
+    jq -nc --arg c "$command" '{tool_name:"Bash",tool_input:{command:$c}}' \
+      | PATH="$TMP/failed-awk:$PATH" FAKE_AWK_EXIT="$awk_exit" \
+        DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh" > "$TMP/awk-out" 2> "$TMP/awk-err"
+    rc=$?
+    set -e
+    if [ "$rc" -ne 0 ] \
+      || [ "$(grep -c '^block-main-push.sh$' "$TMP/log")" -ne 1 ] \
+      || [ "$(grep -c '^check-secrets.sh$' "$TMP/log")" -ne 1 ]; then
+      echo "FAIL: awk exit $awk_exit did not route both gates for $scenario (dispatcher rc=$rc)" >&2
+      cat "$TMP/awk-err" >&2
+      cat "$TMP/log" >&2
+      exit 1
+    fi
+  done
+done
+
+# A working join must leave unrelated commands outside both gate groups.
+: > "$TMP/log"
+run_json ls
+if grep -qE '^(block-main-push|check-secrets)\.sh$' "$TMP/log"; then
+  echo 'FAIL: working awk routed ls to push or commit gates' >&2
+  cat "$TMP/log" >&2
+  exit 1
+fi
+
+# The stock macOS Bash 3.2 substitution used to exceed the hook timeout on
+# 3,000 continued lines. SIGTERM is deferred inside that substitution, so a
+# watchdog must use SIGKILL. Run the real dispatcher with the stub gates.
+awk 'BEGIN { for (i = 0; i < 3000; i++) printf "echo x\\\n"; printf "true" }' \
+  | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' > "$TMP/long-command.json"
+continued_lines=$(jq -r '.tool_input.command' "$TMP/long-command.json" | awk '/\\$/ { n++ } END { print n+0 }')
+[ "$continued_lines" -eq 3000 ]
+: > "$TMP/log"
+rm -f "$TMP/dispatch-timeout"
+start_time=$(date +%s)
+# Run the dispatcher under /bin/bash explicitly. Its `env bash` shebang picks
+# the first bash on PATH, which is bash 5 on machines with Homebrew bash, and
+# then this check would never exercise the stock macOS 3.2 interpreter.
+dispatch_bash=/bin/bash
+[ -x "$dispatch_bash" ] || dispatch_bash=bash
+DISPATCH_LOG="$TMP/log" "$dispatch_bash" "$TMP/hooks/dispatch-bash.sh" \
+  < "$TMP/long-command.json" > "$TMP/dispatch-out" 2> "$TMP/dispatch-err" &
+dispatch_pid=$!
+(
+  sleep 10 &
+  watchdog_sleep_pid=$!
+  trap 'kill "$watchdog_sleep_pid" 2>/dev/null || true; exit 0' TERM
+  wait "$watchdog_sleep_pid" || exit 0
+  if kill -0 "$dispatch_pid" 2>/dev/null; then
+    : > "$TMP/dispatch-timeout"
+    kill -KILL "$dispatch_pid" 2>/dev/null || true
+  fi
+) &
+watchdog_pid=$!
+set +e
+wait "$dispatch_pid"
+dispatch_rc=$?
+set -e
+kill "$watchdog_pid" 2>/dev/null || true
+wait "$watchdog_pid" 2>/dev/null || true
+elapsed=$(( $(date +%s) - start_time ))
+if [ -e "$TMP/dispatch-timeout" ] || [ "$dispatch_rc" -ne 0 ] || [ "$elapsed" -gt 10 ]; then
+  echo "FAIL: 3,000-line dispatcher took ${elapsed}s (rc=$dispatch_rc; limit 10s)" >&2
+  cat "$TMP/dispatch-err" >&2
+  exit 1
+fi
+echo "PASS: 3,000-line dispatcher took ${elapsed}s under $("$dispatch_bash" -c 'echo "$BASH_VERSION"')"
+
 for command in \
   'git push origin main' \
   'cd /some/repo && git push origin main' \
