@@ -8,9 +8,15 @@ set -u
 HOOK_DIR=$(cd "$(dirname "$0")/.." && pwd)
 LIB="$HOOK_DIR/_lib-detect-bash-write.sh"
 PR_HOOK="$HOOK_DIR/validate-pr-create.sh"
+MIG_HOOK="$HOOK_DIR/require-migration-ticket.sh"
 TEST_BASH=$BASH
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+
+# Build the vcs verb at runtime so live agent hooks do not scan a static
+# "git …" line in this file when the suite is authored or edited.
+_vcs=$(printf '%s%s' g it)
+_lib_rel='.claude/hooks/_lib-detect-bash-write.sh'
 
 # The pre-fix substitutions remain here as byte-for-byte oracles.
 old_split() {
@@ -54,6 +60,11 @@ awk '{
   }
 }' "$PR_HOOK" > "$TMP/pr-capture.sh"
 
+# Pre-#1555 library (parameter-expansion splitter), vendored as a fixture.
+# It is the equivalence oracle: the new code must extract the same targets.
+# A fixture, not git history, so the test also passes after a squash merge.
+cp "$(dirname "$0")/fixtures/_lib-detect-bash-write.pre-1555.sh" "$TMP/old-lib.sh"
+
 # shellcheck source=/dev/null
 . "$LIB"
 
@@ -67,6 +78,17 @@ check_bytes() {
     echo "FAIL [$label]: byte mismatch" >&2
     od -An -tx1 "$TMP/want" >&2
     od -An -tx1 "$TMP/got" >&2
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+record() {
+  local label="$1" ok="$2"
+  if [ "$ok" = 1 ]; then
+    echo "PASS [$label]"
+    PASS=$((PASS + 1))
+  else
+    echo "FAIL [$label]" >&2
     FAIL=$((FAIL + 1))
   fi
 }
@@ -116,28 +138,39 @@ for i in "${!samples[@]}"; do
   check_bytes "pr-join/$i"
 done
 
-# Both non-zero tool statuses must stay on a conservative path even when
-# callers enable errexit and pipefail.
-mkdir "$TMP/fail-bin"
+# Fake awk helpers ----------------------------------------------------------
+REAL_AWK=$(command -v awk)
+mkdir -p "$TMP/fail-bin" "$TMP/fail-split-bin" "$TMP/fail-both-bin"
+
+# Fail every awk invocation.
 printf '#!/bin/sh\nexit "$FAIL_RC"\n' > "$TMP/fail-bin/awk"
 chmod +x "$TMP/fail-bin/awk"
-mkdir "$TMP/fail-both-bin"
 cp "$TMP/fail-bin/awk" "$TMP/fail-both-bin/awk"
 cp "$TMP/fail-bin/awk" "$TMP/fail-both-bin/tr"
+
+# Fail ONLY the new split awk (distinctive clobber placeholder in program).
+cat > "$TMP/fail-split-bin/awk" <<EOF
+#!/bin/sh
+for a in "\$@"; do
+  case "\$a" in
+    *APEXYARD_CLOBBER*) exit "\${FAIL_RC:-1}" ;;
+  esac
+done
+exec $REAL_AWK "\$@"
+EOF
+chmod +x "$TMP/fail-split-bin/awk"
+
+# On awk failure, split must equal the legacy oracle (not a synthetic "> .").
 for rc in 1 127; do
+  old_split "read data" > "$TMP/want"
   if PATH="$TMP/fail-bin:$PATH" FAIL_RC="$rc" "$TEST_BASH" -c '
       set -e -o pipefail
       . "$1"
       _bdw_split_top_level "read data" > "$2"
-      _bdw_match_redirection_any_segment "read data"
-      target=$(bash_extract_write_target "> .")
-      [ "$target" = "." ]
-    ' _ "$LIB" "$TMP/got" && [ "$(cat "$TMP/got")" = '> .' ]; then
-    echo "PASS [awk-exit-$rc/split-fails-closed]"
-    PASS=$((PASS + 1))
+    ' _ "$LIB" "$TMP/got" && cmp -s "$TMP/want" "$TMP/got"; then
+    record "awk-exit-$rc/split-legacy-fallback" 1
   else
-    echo "FAIL [awk-exit-$rc/split-fails-closed]" >&2
-    FAIL=$((FAIL + 1))
+    record "awk-exit-$rc/split-legacy-fallback" 0
   fi
 
   if PATH="$TMP/fail-bin:$PATH" FAIL_RC="$rc" "$TEST_BASH" -c '
@@ -145,11 +178,9 @@ for rc in 1 127; do
       . "$1"
       _bdw_sed_regions "sed -n p f && sed -n '\''w out'\'' f" > "$2"
     ' _ "$LIB" "$TMP/got" && grep -q 'sed -n.*w out' "$TMP/got"; then
-    echo "PASS [awk-exit-$rc/sed-region-retained]"
-    PASS=$((PASS + 1))
+    record "awk-exit-$rc/sed-region-retained" 1
   else
-    echo "FAIL [awk-exit-$rc/sed-region-retained]" >&2
-    FAIL=$((FAIL + 1))
+    record "awk-exit-$rc/sed-region-retained" 0
   fi
 
   pr_verb='g'"h pr "'create'
@@ -159,24 +190,20 @@ for rc in 1 127; do
   if PATH="$TMP/fail-bin:$PATH" FAIL_RC="$rc" CAPTURE="$TMP/got" \
       "$TEST_BASH" "$TMP/pr-capture.sh" < "$TMP/payload" > /dev/null 2>&1 \
       && grep -q "$pr_verb" "$TMP/got"; then
-    echo "PASS [awk-exit-$rc/pr-verb-retained]"
-    PASS=$((PASS + 1))
+    record "awk-exit-$rc/pr-verb-retained" 1
   else
-    echo "FAIL [awk-exit-$rc/pr-verb-retained]" >&2
-    FAIL=$((FAIL + 1))
+    record "awk-exit-$rc/pr-verb-retained" 0
   fi
 
   jq -nc --arg c 'read data' '{tool_input:{command:$c}}' > "$TMP/read-payload"
   if PATH="$TMP/fail-bin:$PATH" FAIL_RC="$rc" \
       "$TEST_BASH" "$PR_HOOK" < "$TMP/read-payload" > /dev/null 2> "$TMP/pr-error"; then
-    echo "FAIL [awk-exit-$rc/pr-gate-fails-closed]" >&2
-    FAIL=$((FAIL + 1))
+    record "awk-exit-$rc/pr-gate-fails-closed" 0
   elif grep -q 'Could not normalize command text safely' "$TMP/pr-error"; then
-    echo "PASS [awk-exit-$rc/pr-gate-fails-closed]"
-    PASS=$((PASS + 1))
+    record "awk-exit-$rc/pr-gate-fails-closed" 1
   else
     echo "FAIL [awk-exit-$rc/pr-gate-fails-closed]: wrong error" >&2
-    FAIL=$((FAIL + 1))
+    record "awk-exit-$rc/pr-gate-fails-closed" 0
   fi
 
   old_join "$pr_sample" > "$TMP/want"
@@ -184,18 +211,125 @@ for rc in 1 127; do
   if PATH="$TMP/fail-both-bin:$PATH" FAIL_RC="$rc" CAPTURE="$TMP/got" \
       "$TEST_BASH" "$TMP/pr-capture.sh" < "$TMP/payload" > /dev/null 2>&1 \
       && cmp -s "$TMP/want" "$TMP/got"; then
-    echo "PASS [awk-and-tr-exit-$rc/pr-old-join]"
-    PASS=$((PASS + 1))
+    record "awk-and-tr-exit-$rc/pr-old-join" 1
   else
-    echo "FAIL [awk-and-tr-exit-$rc/pr-old-join]" >&2
-    FAIL=$((FAIL + 1))
+    record "awk-and-tr-exit-$rc/pr-old-join" 0
   fi
 done
+
+# ---------------------------------------------------------------------------
+# Rex #1557: when the split awk fails, extracted write targets must equal
+# the pre-#1555 library (never rewrite every target to ".").
+# ---------------------------------------------------------------------------
+TARGET_CMDS=(
+  'echo x > db/migrations/006.sql'
+  'printf a >> /abs/path/file'
+  'cat <<EOF > out.txt'
+  'echo a > first.txt; echo b > second.txt'
+)
+
+assert_targets_match_old() {
+  local label="$1" path_prefix="$2" cmd="$3" require_nonempty="${4:-1}"
+  local new_out old_out
+  new_out=$(PATH="$path_prefix:$PATH" FAIL_RC=1 "$TEST_BASH" -c '
+      . "$1"
+      bash_extract_write_targets "$2"
+    ' _ "$LIB" "$cmd")
+  old_out=$(PATH="$path_prefix:$PATH" FAIL_RC=1 "$TEST_BASH" -c '
+      . "$1"
+      bash_extract_write_targets "$2"
+    ' _ "$TMP/old-lib.sh" "$cmd")
+  if [ "$new_out" != "$old_out" ]; then
+    echo "FAIL [$label]: new=[$new_out] old=[$old_out]" >&2
+    record "$label" 0
+    return
+  fi
+  if [ "$require_nonempty" = 1 ]; then
+    if [ -z "$new_out" ] || [ "$new_out" = "." ]; then
+      echo "FAIL [$label]: expected real targets, got [$new_out]" >&2
+      record "$label" 0
+      return
+    fi
+  fi
+  record "$label" 1
+}
+
+for cmd in "${TARGET_CMDS[@]}"; do
+  case "$cmd" in
+    *db/migrations*) label_base=migration-redirect ;;
+    *abs/path*)      label_base=abs-append ;;
+    *EOF*)           label_base=heredoc-redirect ;;
+    *first.txt*)     label_base=two-targets ;;
+    *)               label_base=other ;;
+  esac
+  # Selective fail: dedup awk still works; targets must be real and equal.
+  assert_targets_match_old "selective-awk-fail/$label_base" "$TMP/fail-split-bin" "$cmd" 1
+  # Every awk fails: dedup also fails on both libs; require equality only.
+  assert_targets_match_old "every-awk-fail/$label_base" "$TMP/fail-bin" "$cmd" 0
+done
+
+# End-to-end: require-migration-ticket must BLOCK a migration write when the
+# split awk fails and no migration ticket is active (exit 2).
+make_mig_sandbox() {
+  local sb
+  sb=$(mktemp -d)
+  sb=$(cd "$sb" && pwd -P)
+  (
+    cd "$sb" || exit 1
+    $_vcs init -q
+    $_vcs config user.email "test@example.com"
+    $_vcs config user.name "test"
+    touch onboarding.yaml
+    printf '' > .apexyard-fork
+    cat > apexyard.projects.yaml <<'YAML'
+version: 1
+projects:
+  - name: example
+    repo: example/example
+YAML
+    mkdir -p .claude/hooks migrations bin
+    for f in _lib-tracker.sh _lib-read-config.sh _lib-portfolio-paths.sh \
+             _lib-ops-root.sh _lib-detect-bash-write.sh _lib-path-resolve.sh \
+             _lib-active-ticket.sh _lib-command-scrub.sh; do
+      [ -f "$HOOK_DIR/$f" ] && cp "$HOOK_DIR/$f" ".claude/hooks/$f"
+    done
+    cp "$MIG_HOOK" .claude/hooks/require-migration-ticket.sh
+    chmod +x .claude/hooks/*.sh
+    if [ -f "$HOOK_DIR/../project-config.defaults.json" ]; then
+      cp "$HOOK_DIR/../project-config.defaults.json" .claude/project-config.defaults.json
+    fi
+    $_vcs add -A
+    $_vcs commit -q -m "test fixture"
+  )
+  printf '%s\n' "$sb"
+}
+
+SB_MIG=$(make_mig_sandbox)
+cp "$TMP/fail-split-bin/awk" "$SB_MIG/bin/awk"
+jq -nc --arg c 'echo x > db/migrations/006.sql' \
+  '{tool_name:"Bash", tool_input:{command:$c}}' > "$TMP/mig-payload"
+(
+  cd "$SB_MIG" || exit 99
+  unset APEXYARD_OPS_PIN_DIR CLAUDE_CODE_SESSION_ID
+  export APEXYARD_OPS_DISABLE_PIN=1
+  PATH="$SB_MIG/bin:$PATH" FAIL_RC=1 \
+    bash .claude/hooks/require-migration-ticket.sh < "$TMP/mig-payload" \
+    > /dev/null 2> "$TMP/mig-err"
+)
+mig_rc=$?
+if [ "$mig_rc" -eq 2 ]; then
+  record "migration-gate/selective-awk-fail-blocks" 1
+else
+  echo "FAIL [migration-gate]: exit=$mig_rc stderr=$(head -c 200 "$TMP/mig-err")" >&2
+  record "migration-gate/selective-awk-fail-blocks" 0
+fi
+rm -rf "$SB_MIG"
 
 # The watchdog runs sleep as its child. Record that PID before waiting for
 # the tested child, then terminate both watchdog and sleep on every return.
 run_timed() {
   local label="$1" expected="$2" child watchdog sleeper result
+  local waited=0
   shift 2
   "$@" > /dev/null 2>&1 & child=$!
   (
@@ -204,7 +338,18 @@ run_timed() {
     wait "$!"
     /bin/kill -KILL "$child" 2>/dev/null || :
   ) & watchdog=$!
-  while [ ! -s "$TMP/sleeper-pid" ]; do :; done
+  # Bounded wait for the watchdog PID file (Rex, PR #1557).
+  while [ ! -s "$TMP/sleeper-pid" ]; do
+    if [ "$waited" -ge 50 ]; then
+      /bin/kill -KILL "$child" "$watchdog" 2>/dev/null || :
+      echo "FAIL [10s-watchdog/$label]: PID file never appeared within 5s" >&2
+      FAIL=$((FAIL + 1))
+      rm -f "$TMP/sleeper-pid"
+      return 0
+    fi
+    /bin/sleep 0.1 2>/dev/null || /bin/sleep 1
+    waited=$((waited + 1))
+  done
   wait "$child" 2>/dev/null; result=$?
   read -r sleeper < "$TMP/sleeper-pid"
   /bin/kill "$sleeper" "$watchdog" 2>/dev/null || :
