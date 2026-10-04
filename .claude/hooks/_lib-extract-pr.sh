@@ -579,8 +579,9 @@ _has_argv_merge() {
 # gates never fall back to the current branch's PR (#1552 shapes 10–12).
 # Wrapper and merge text must share one statement: split on ; && || and
 # newlines ONLY outside single/double quotes (backslash escapes outside
-# single quotes). One awk pass — a per-statement grep loop was super-linear
-# under /bin/bash 3.2 and could time out every merge gate (#1552 round 2).
+# single quotes). Skip shell comments and fail closed on an unclosed quote.
+# Split into characters once: macOS awk makes repeated one-character substr
+# calls quadratic on a long statement (#1552 round 3).
 # Same statement + xargs = opaque (no character window). The argv -c form
 # still requires the merge within 200 characters after '-c'. On awk failure,
 # fail closed when a merge phrase is present.
@@ -640,43 +641,31 @@ _has_opaque_merge_wrapper() {
       s = ENVIRON["OPAQUE_MERGE_CMD"]
       n = length(s)
       sq = sprintf("%c", 39); dq = sprintf("%c", 34); bs = sprintf("%c", 92)
-      in_sq = 0; in_dq = 0; stmt = ""; opaque = 0
+      in_sq = 0; in_dq = 0; opaque = 0; st = 1
+      n = split(s, ch, "")
       for (i = 1; i <= n; i++) {
-        c = substr(s, i, 1)
-        nx = (i < n) ? substr(s, i + 1, 1) : ""
-        if (!in_sq && c == bs && i < n) {
-          stmt = stmt c nx
-          i++
-          continue
-        }
-        if (!in_dq && c == sq) {
-          in_sq = !in_sq
-          stmt = stmt c
-          continue
-        }
-        if (!in_sq && c == dq) {
-          in_dq = !in_dq
-          stmt = stmt c
-          continue
-        }
+        c = ch[i]
+        nx = (i < n) ? ch[i + 1] : ""
+        if (!in_sq && c == bs && i < n) { i++; continue }
+        if (!in_dq && c == sq) { in_sq = !in_sq; continue }
+        if (!in_sq && c == dq) { in_dq = !in_dq; continue }
         if (!in_sq && !in_dq) {
-          if (c == "\n" || c == ";") {
-            if (stmt_opaque(stmt)) { opaque = 1; break }
-            stmt = ""
+          if (c == "#" && (i == 1 || ch[i - 1] ~ /[ \t\n;&|(]/)) {
+            while (i < n && ch[i + 1] != "\n") i++
             continue
           }
-          if (c == "&" && nx == "&") {
-            if (stmt_opaque(stmt)) { opaque = 1; break }
-            stmt = ""; i++; continue
+          if (c == "\n" || c == ";") {
+            if (stmt_opaque(substr(s, st, i - st))) { opaque = 1; break }
+            st = i + 1; continue
           }
-          if (c == "|" && nx == "|") {
-            if (stmt_opaque(stmt)) { opaque = 1; break }
-            stmt = ""; i++; continue
+          if ((c == "&" && nx == "&") || (c == "|" && nx == "|")) {
+            if (stmt_opaque(substr(s, st, i - st))) { opaque = 1; break }
+            i++; st = i + 1; continue
           }
         }
-        stmt = stmt c
       }
-      if (!opaque && stmt_opaque(stmt)) opaque = 1
+      if (!opaque && stmt_opaque(substr(s, st))) opaque = 1
+      if (!opaque && (in_sq || in_dq) && has_merge(s)) opaque = 1
       if (opaque) print "opaque"
       else print "clear"
     }

@@ -60,14 +60,14 @@ Issue #1552 extends that detector. It still prefers a cheap text match over a fu
 
 ### Known limits (not regressions against `dev`)
 
-Rex's round-2 LOW advisories. The gates may still resolve the branch PR or miss the merge for these shapes. Recorded so operators recognize the gap; not filed as tickets.
+Rex's LOW advisories. The gates may still resolve the branch PR or miss the merge for these shapes. Recorded so operators recognize the gap; not filed as tickets.
 
 | Limit | Example shape | Notes |
 |-------|---------------|-------|
-| Multi-line `qw(` with the GitLab phrase | `qw(` then a newline then `glab mr merge …)` | Resolves to the branch PR. The newline lands outside the `qw` token scan when the opener and the merge phrase are not kept together. |
 | `qw` list broken across lines inside the merge phrase | `qw(gh pr` then a newline then `merge 5)` | Not detected as a merge. The contiguous phrase check works one line at a time. |
 | API argv element with an escaped inner double quote | `"m=say \"hi\""` as an intermediate element | Not detected. The element ends at the inner quote. |
 | Argv `bash -c` that changes directory first, or has more than 200 characters before the merge | `['bash','-c','cd other && … merge …']` or a long `-c` script | Resolves to the branch PR. A plain merge with no PR number after a `cd` has the same gap on `dev`. |
+| Unquoted command substitution or backticks beside `xargs` | An `env $(…)` or backtick argument containing `;` before the merge | The scanner splits at that semicolon and may resolve the branch PR. Tracking nested substitutions is outside this bounded text scan. |
 
 ### Known false positives (fail closed)
 
@@ -98,3 +98,5 @@ These non-merge commands can still match the argv detector. The gate blocks with
 **2026-10-04 — Rex #1556 delta (#1552 follow-up).** The first #1552 pass put the backtick in a shared quote class. It also removed the backtick from the element body. A backtick inside a `'…'` or `"…"` API element then ended that element. The merge became invisible. Fix: match each quote style on its own. The Perl `qw` opacity patterns now match `glab mr merge` as well as the GitHub phrase. Wrapper opacity for `sh -c` and `xargs` now requires the same segment. Newlines flatten to ` ; ` for that check. The scan uses a 200-character bound after `-c` and the existing 80-character bound after `xargs`. Joined-list glue now requires a structural join character. That change drops three space-separated prose false positives. Compact JSON argv blobs remain a known fail-closed false positive. Reasoning: restore detection that base already had. Finish the GitLab `qw` acceptance criterion. Stop unrelated earlier wrappers from blocking plain literal merges.
 
 **2026-10-04 — Rex #1556 round-2 (issue 1552 follow-up).** The segment loop ran one `grep` per statement. A plain merge with thousands of trailing lines took about 10–18 s per gate under `/bin/bash` 3.2 and could time out fail-open. The splitter also ignored quotes, so `xargs -I{} sh -c` with a semicolon inside the quoted script separated `xargs` from the merge and fell back to the branch PR. The 80-character `xargs` window had the same gap for longer same-statement forms. Fix: one awk pass that tracks single and double quotes (and backslash escapes outside single quotes), splits only on unquoted semicolon / AND / OR / newline, and treats same-statement `xargs` as opaque with no character window. The argv `-c` form keeps the 200-character bound. Awk failure fails closed when a merge phrase is present. Known limits above record Rex's four LOW advisories. Reasoning: keep every block that `dev` had, close the main `xargs -I{} sh -c` form, and keep gate latency bounded under bash 3.2.
+
+**2026-10-04 — Rex #1556 round-3 (issue 1552 follow-up).** Repeated one-character `substr` calls in macOS awk made a single long merge statement quadratic. The scanner now splits the text into characters once and extracts each statement at its boundary. It also skips shell comments and treats an open quote at the end of a merge-shaped scan as an opaque target. This closes wrong-PR resolution when an earlier comment or heredoc line contains an apostrophe, or an ANSI-C string contains an escaped quote. A multi-line GitLab `qw(` opener is now handled. Unquoted nested substitutions beside `xargs` remain a known limit above.

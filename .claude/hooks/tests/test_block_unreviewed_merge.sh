@@ -467,6 +467,24 @@ write_ceo_marker_structured "$sb" 1546
 run_case_custom_cmd "1552 xargs sh -c quoted newline blocks" 2 \
   "cannot resolve" "$sb" \
   "$(printf "xargs -I{} sh -c 'cd x\n%s {}'" "$_m1552_gate")"
+# Round-3 quote desyncs must block even with valid markers for branch PR 1546.
+_q1552_comment=$(printf "true # don't\necho 5 | xargs -I{} sh -c 'x; %s {}'" "$_m1552_gate")
+_q1552_heredoc=$(printf "cat <<EOT\ndon't\nEOT\necho 5 | xargs -I{} sh -c 'x; %s {}'" "$_m1552_gate")
+_q1552_ansi=$(printf "echo 5 | xargs -I{} sh -c \$'a\\'b; %s {}'" "$_m1552_gate")
+_q1552_unclosed=$(printf "echo 'unfinished; echo 5 | xargs -I{} sh -c 'x; %s {}'" "$_m1552_gate")
+for _q1552_name in comment heredoc ansi unclosed; do
+  sb=$(make_sandbox)
+  write_rex_marker "$sb" 1546
+  write_ceo_marker_structured "$sb" 1546
+  case "$_q1552_name" in
+    comment) _q1552_cmd=$_q1552_comment ;;
+    heredoc) _q1552_cmd=$_q1552_heredoc ;;
+    ansi) _q1552_cmd=$_q1552_ansi ;;
+    unclosed) _q1552_cmd=$_q1552_unclosed ;;
+  esac
+  run_case_custom_cmd "1552 round-3 $_q1552_name blocks" 2 \
+    "cannot resolve" "$sb" "$_q1552_cmd"
+done
 sb=$(make_sandbox)
 write_rex_marker "$sb" 1546
 write_ceo_marker_structured "$sb" 1546

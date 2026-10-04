@@ -405,6 +405,22 @@ assert_opaque "1552 xargs >80 chars before merge same statement" \
   "xargs -I{} sh -c '${_pad90}; ${_m1552} {}'"
 assert_pr "1552 xargs quoted semicolon does not inherit branch PR" \
   "xargs -I{} sh -c 'cd x; ${_m1552} {}'" ""
+
+# Round 3: quote-like text before the wrapper must not let its target inherit
+# the branch PR. The open-quote case deliberately has malformed shell text;
+# the scanner must fail closed when it still contains a merge phrase.
+q_comment=$(printf "true # don't\necho 5 | xargs -I{} sh -c 'x; %s {}'" "$_m1552")
+q_heredoc=$(printf "cat <<EOT\ndon't\nEOT\necho 5 | xargs -I{} sh -c 'x; %s {}'" "$_m1552")
+q_ansi=$(printf "echo 5 | xargs -I{} sh -c \$'a\\'b; %s {}'" "$_m1552")
+q_unclosed=$(printf "echo 'unfinished; echo 5 | xargs -I{} sh -c 'x; %s {}'" "$_m1552")
+assert_opaque "1552 comment apostrophe before xargs is opaque" "$q_comment"
+assert_opaque "1552 heredoc apostrophe before xargs is opaque" "$q_heredoc"
+assert_opaque "1552 escaped quote in ANSI-C string is opaque" "$q_ansi"
+assert_opaque "1552 unclosed quote with merge phrase is opaque" "$q_unclosed"
+assert_pr "1552 comment apostrophe does not inherit branch PR" "$q_comment" ""
+assert_pr "1552 heredoc apostrophe does not inherit branch PR" "$q_heredoc" ""
+assert_pr "1552 ANSI-C escaped quote does not inherit branch PR" "$q_ansi" ""
+assert_pr "1552 unclosed quote does not inherit branch PR" "$q_unclosed" ""
 unset MOCK_BRANCH_PR
 
 # Fail-before evidence: the pre-#1552 lib must miss these shapes. The saved
@@ -513,52 +529,95 @@ fi
 
 # --- Bash 3.2 time bound (PR #1546 security review, H1) --------------------
 # A gate that times out does not block, so a padded merge could skip every
-# gate. Run the variable check under /bin/bash with a SIGKILL watchdog.
-# Inputs are built in a script file (never one huge argv to the test runner).
-# #1552 round 2: one awk pass must finish well inside the bound every run;
-# also cover 6,000 trailing statement lines.
+# gate. Run /bin/bash directly with a SIGKILL watchdog. The watchdog's EXIT
+# trap also kills its sleep child. Large inputs are built from files in the
+# child process; the test runner never passes them as an argv string.
 if [ -x /bin/bash ]; then
+  _run_perf_watchdog() {
+    local script="$1" out="$2" limit_s="$3"
+    local perf_pid watchdog_pid sleep_pid perf_rc
+    PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash "$script" "$out" &
+    perf_pid=$!
+    (
+      sleep "$limit_s" &
+      sleep_pid=$!
+      trap 'kill "$sleep_pid" 2>/dev/null; wait "$sleep_pid" 2>/dev/null || true' EXIT
+      trap 'exit 0' TERM
+      wait "$sleep_pid"
+      kill -9 "$perf_pid" 2>/dev/null || true
+    ) &
+    watchdog_pid=$!
+    wait "$perf_pid" 2>/dev/null
+    perf_rc=$?
+    kill "$watchdog_pid" 2>/dev/null || true
+    wait "$watchdog_pid" 2>/dev/null || true
+    [ "$perf_rc" -eq 0 ] && [ -s "$out" ]
+  }
+
   _run_perf_bound() {
     local lines="$1" limit_s="$2" label="$3"
-    local perf_dir perf_pid waited
+    local perf_dir
     perf_dir=$(mktemp -d)
     {
       echo '#!/bin/bash'
       echo ". \"$LIB_SRC\""
+      echo 'm=$(printf "%s %s %s" gh pr merge)'
       echo 'w=merge'
       echo "padfile=\$(mktemp)"
-      echo "{ printf 'gh pr %s 5 --repo o/r --squash\\n' \"\$w\""
+      echo "{ printf '%s 5 --repo o/r --squash\\n' \"\$m\""
       echo "  i=0; while [ \$i -lt $lines ]; do echo true; i=\$((i+1)); done"
       echo '} > "$padfile"'
       echo 'cmd=$(cat "$padfile")'
       echo 'merge_command_uses_variable "$cmd" >/dev/null'
       echo 'merge_command_uses_variable "['\''/usr/bin/gh'\'','\''-R'\'','\''o/r'\'','\''pr'\'','\''$w'\'','\''5'\'']" >/dev/null'
-      echo 'xcmd=$(printf "echo 5 | xargs gh pr %s" "$w")'
+      echo 'xcmd=$(printf "echo 5 | xargs %s" "$m")'
       echo 'merge_command_uses_variable "$xcmd" >/dev/null'
       echo 'echo done > "$1"'
       echo 'rm -f "$padfile"'
     } > "$perf_dir/run.sh"
-    /bin/bash "$perf_dir/run.sh" "$perf_dir/out" &
-    perf_pid=$!
-    waited=0
-    while kill -0 "$perf_pid" 2>/dev/null && [ "$waited" -lt "$limit_s" ]; do
-      sleep 1; waited=$((waited+1))
-    done
-    if kill -0 "$perf_pid" 2>/dev/null; then
-      kill -9 "$perf_pid" 2>/dev/null
-      wait "$perf_pid" 2>/dev/null || true
-      echo "FAIL [$label]"; FAIL=$((FAIL+1))
-      FAILED_CASES="$FAILED_CASES perf-bash32-$lines"
-    elif [ -s "$perf_dir/out" ]; then
+    if _run_perf_watchdog "$perf_dir/run.sh" "$perf_dir/out" "$limit_s"; then
       echo "PASS [$label]"; PASS=$((PASS+1))
     else
-      echo "FAIL [$label did not complete]"; FAIL=$((FAIL+1))
+      echo "FAIL [$label]"; FAIL=$((FAIL+1))
       FAILED_CASES="$FAILED_CASES perf-bash32-$lines"
     fi
     rm -rf "$perf_dir"
   }
+
+  _run_long_statement_bound() {
+    local bytes="$1" run="$2" limit_s=8 perf_dir start_s elapsed_s
+    perf_dir=$(mktemp -d)
+    {
+      echo '#!/bin/bash'
+      echo ". \"$LIB_SRC\""
+      echo 'm=$(printf "%s %s %s" gh pr merge)'
+      echo "padfile=\"$perf_dir/pad\""
+      echo "cmdfile=\"$perf_dir/command\""
+      echo "head -c $bytes /dev/zero | tr '\\000' x > \"\$padfile\""
+      echo 'printf "%s 5 --repo o/r --body " "$m" > "$cmdfile"'
+      echo 'cat "$padfile" >> "$cmdfile"'
+      echo 'cmd=$(cat "$cmdfile")'
+      echo 'if merge_command_uses_variable "$cmd"; then exit 1; fi'
+      echo 'echo done > "$1"'
+    } > "$perf_dir/run.sh"
+    start_s=$(date +%s)
+    if _run_perf_watchdog "$perf_dir/run.sh" "$perf_dir/out" "$limit_s"; then
+      elapsed_s=$(($(date +%s) - start_s))
+      echo "PASS [long statement ${bytes} bytes run ${run}: ${elapsed_s}s]"
+      PASS=$((PASS+1))
+    else
+      echo "FAIL [long statement ${bytes} bytes run ${run}: >${limit_s}s or wrong result]"
+      FAIL=$((FAIL+1)); FAILED_CASES="$FAILED_CASES long-statement-$bytes-$run"
+    fi
+    rm -rf "$perf_dir"
+  }
+
   _run_perf_bound 3000 10 "3,000-line command checked within 10s under /bin/bash"
   _run_perf_bound 6000 10 "6,000-line command checked within 10s under /bin/bash"
+  for _perf_run in 1 2 3 4 5 6; do
+    _run_long_statement_bound 200000 "$_perf_run"
+    _run_long_statement_bound 800000 "$_perf_run"
+  done
 fi
 
 # --- Cleanup -------------------------------------------------------------
