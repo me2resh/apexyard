@@ -246,7 +246,8 @@ _normalize_json_escapes() {
   # command substitution preserves trailing newlines. Remove only that final
   # byte; an identical byte already in the input passes through unchanged.
   # Keep partial awk output private. If awk fails or produces no sentinel,
-  # return the original payload for the merge gates' raw fallback scan.
+  # use the correct legacy decoder. It is slow on huge input under Bash 3.2,
+  # but runs only when the tool fails.
   if decoded=$(printf '%s\034' "$1" | LC_ALL=C awk '
     function decode(s,    i, n, six, two) {
       n = length(s)
@@ -270,7 +271,42 @@ _normalize_json_escapes() {
       *"$sentinel") printf '%s' "${decoded%"$sentinel"}"; return 0 ;;
     esac
   fi
-  printf '%s' "$1"
+  _normalize_json_escapes_legacy "$1"
+}
+
+# The pre-#1550 decoder, retained verbatim for awk failure. Bash 3.2 global
+# substitutions are slow on huge input, so the normal path uses awk above.
+_normalize_json_escapes_legacy() {
+  local text="$1"
+  local tab=$'\t'
+  local nl=$'\n'
+  # Two literal backslash characters. Used as the escape-matching prefix
+  # below rather than a single backslash: bash's `${var//pattern/repl}`
+  # treats a SINGLE backslash inside an expanded pattern as a glob escape
+  # character (it would consume/escape the following char instead of
+  # matching a literal backslash), so building the pattern from a
+  # single-backslash variable silently fails to consume the backslash
+  # itself — the doubled form is what makes the pattern match one literal
+  # backslash followed by the literal marker character.
+  local bs2='\\'
+
+  local esc_u0020="${bs2}u0020"
+  local esc_u0009="${bs2}u0009"
+  local esc_u000A="${bs2}u000A"
+  local esc_u000a="${bs2}u000a"
+  local esc_slash="${bs2}/"
+  local esc_t="${bs2}t"
+  local esc_n="${bs2}n"
+
+  text="${text//$esc_u0020/ }"
+  text="${text//$esc_u0009/$tab}"
+  text="${text//$esc_u000A/$nl}"
+  text="${text//$esc_u000a/$nl}"
+  text="${text//$esc_slash//}"
+  text="${text//$esc_t/$tab}"
+  text="${text//$esc_n/$nl}"
+
+  printf '%s' "$text"
 }
 
 # Merge-only scrub decision (AgDR-0196, AgDR-0204). The general command

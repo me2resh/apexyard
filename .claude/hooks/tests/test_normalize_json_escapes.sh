@@ -6,34 +6,10 @@ LIB_SRC="$(cd "$(dirname "$0")/.." && pwd)/_lib-extract-pr.sh"
 # shellcheck source=/dev/null
 . "$LIB_SRC"
 
-# The implementation before #1550, retained as the behavior oracle. The
-# order is significant, including for adjacent and doubled backslashes.
-old_normalize_json_escapes() {
-  local text="$1"
-  local tab=$'\t'
-  local nl=$'\n'
-  local bs2='\\'
-  local esc_u0020="${bs2}u0020"
-  local esc_u0009="${bs2}u0009"
-  local esc_u000A="${bs2}u000A"
-  local esc_u000a="${bs2}u000a"
-  local esc_slash="${bs2}/"
-  local esc_t="${bs2}t"
-  local esc_n="${bs2}n"
-  text="${text//$esc_u0020/ }"
-  text="${text//$esc_u0009/$tab}"
-  text="${text//$esc_u000A/$nl}"
-  text="${text//$esc_u000a/$nl}"
-  text="${text//$esc_slash//}"
-  text="${text//$esc_t/$tab}"
-  text="${text//$esc_n/$nl}"
-  printf '%s' "$text"
-}
-
 if [ "${1:-}" = --worker ]; then
   input=$(cat "$3")
   case "$2" in
-    old) old_normalize_json_escapes "$input" ;;
+    old) _normalize_json_escapes_legacy "$input" ;;
     new) _normalize_json_escapes "$input" ;;
     *) exit 2 ;;
   esac
@@ -47,7 +23,7 @@ fail=0
 
 assert_equal() {
   local label="$1" input="$2"
-  old_normalize_json_escapes "$input" > "$tmp_dir/old"
+  _normalize_json_escapes_legacy "$input" > "$tmp_dir/old"
   _normalize_json_escapes "$input" > "$tmp_dir/new"
   if cmp -s "$tmp_dir/old" "$tmp_dir/new"; then
     printf 'PASS equivalence: %s\n' "$label"
@@ -76,48 +52,71 @@ assert_equal trailing_backslash 'ends\'
 assert_equal literal_newlines $'a\nb\n'
 assert_equal sentinel_byte $'a\034b\034\n'
 assert_equal escaped_and_literal_newlines $'a\\n\n\\u0009\n'
+assert_equal invalid_utf8 $'before\377\\t\\/after'
 
-# A failed decoder must leave the raw payload available to the merge gates.
-# Build the command text at runtime so hook command scans do not see it here.
+# Keep the large equivalence input modest enough for the legacy Bash 3.2
+# substitution path while exercising record boundaries and escape decoding.
+large_input=$(awk 'BEGIN { for (line = 0; line < 5000; line++) print "x" }')
+large_input+='\t'
+assert_equal five_thousand_lines "$large_input"
+
+# Build each command at runtime so hook command scans do not see it here.
 merge_verb=mer
 merge_verb+=ge
-merge_cmd=$(printf '%s %s %s 42' gh pr "$merge_verb")
-encoded_payload='{"tool_input":{"command":"'"$merge_cmd"'\n# note"}}'
-printf '%s' "$encoded_payload" > "$tmp_dir/original"
-mkdir "$tmp_dir/fake-bin"
-printf '%s\n' '#!/bin/sh' 'printf partial-output' 'exit "$FAKE_AWK_STATUS"' > "$tmp_dir/fake-bin/awk"
-chmod +x "$tmp_dir/fake-bin/awk"
-for awk_status in 1 127; do
-  if FAKE_AWK_STATUS="$awk_status" PATH="$tmp_dir/fake-bin:$PATH" \
-      _normalize_json_escapes "$encoded_payload" > "$tmp_dir/fallback" && \
-      cmp -s "$tmp_dir/original" "$tmp_dir/fallback"; then
-    printf 'PASS awk exit %s: original payload returned\n' "$awk_status"
-    pass=$((pass + 1))
-  else
-    printf 'FAIL awk exit %s: original payload not returned\n' "$awk_status" >&2
-    fail=$((fail + 1))
-  fi
-  if is_merge_command_raw "$(cat "$tmp_dir/fallback")"; then
-    printf 'PASS awk exit %s: fallback scan detects payload\n' "$awk_status"
-    pass=$((pass + 1))
-  else
-    printf 'FAIL awk exit %s: fallback scan misses payload\n' "$awk_status" >&2
-    fail=$((fail + 1))
-  fi
-  if (
-    set -euo pipefail
-    FAKE_AWK_STATUS="$awk_status" PATH="$tmp_dir/fake-bin:$PATH" \
-      _normalize_json_escapes "$encoded_payload" > "$tmp_dir/strict"
-    cmp -s "$tmp_dir/original" "$tmp_dir/strict"
-    is_merge_command_raw "$(cat "$tmp_dir/strict")"
-  ); then
-    printf 'PASS awk exit %s: strict shell reaches fallback scan\n' "$awk_status"
-    pass=$((pass + 1))
-  else
-    printf 'FAIL awk exit %s: strict shell misses fallback scan\n' "$awk_status" >&2
-    fail=$((fail + 1))
-  fi
+cli=gh
+payloads=(
+  "$(printf '%s\\tpr %s 5' "$cli" "$merge_verb")"
+  "$(printf '%s pr\\u0020%s 5' "$cli" "$merge_verb")"
+  "$(printf '%s\\u0009pr %s 5' "$cli" "$merge_verb")"
+  "$(printf '%s api repos\\/o\\/r\\/pulls\\/5\\/%s' "$cli" "$merge_verb")"
+)
+mkdir "$tmp_dir/selective-bin" "$tmp_dir/all-bin"
+cat > "$tmp_dir/selective-bin/awk" <<'EOF'
+#!/bin/sh
+case "$*" in
+  *'function decode(s,'*) printf partial-output; exit 1 ;;
+esac
+exec /usr/bin/awk "$@"
+EOF
+printf '%s\n' '#!/bin/sh' 'printf partial-output' 'exit 1' > "$tmp_dir/all-bin/awk"
+printf '%s\n' '#!/bin/sh' 'exit 1' > "$tmp_dir/selective-bin/jq"
+chmod +x "$tmp_dir/selective-bin/awk" "$tmp_dir/all-bin/awk" "$tmp_dir/selective-bin/jq"
+
+for mode in selective all; do
+  for i in 0 1 2 3; do
+    encoded_payload='{"tool_input":{"command":"'"${payloads[$i]}"'"}}'
+    _normalize_json_escapes_legacy "$encoded_payload" > "$tmp_dir/old"
+    PATH="$tmp_dir/$mode-bin:$PATH" _normalize_json_escapes "$encoded_payload" > "$tmp_dir/fallback"
+    if cmp -s "$tmp_dir/old" "$tmp_dir/fallback"; then
+      printf 'PASS %s awk failure: payload %s equals legacy\n' "$mode" "$i"
+      pass=$((pass + 1))
+    else
+      printf 'FAIL %s awk failure: payload %s differs from legacy\n' "$mode" "$i" >&2
+      fail=$((fail + 1))
+    fi
+    if is_merge_command_raw "$(cat "$tmp_dir/fallback")"; then
+      printf 'PASS %s awk failure: payload %s detects merge\n' "$mode" "$i"
+      pass=$((pass + 1))
+    else
+      printf 'FAIL %s awk failure: payload %s misses merge\n' "$mode" "$i" >&2
+      fail=$((fail + 1))
+    fi
+  done
 done
+
+# The gate uses this exact fallback expression when jq cannot parse input.
+# The fake jq forces that path; the selective awk shim leaves other awk calls.
+encoded_payload='{"tool_input":{"command":"'"${payloads[0]}"'"}}'
+printf '%s' "$encoded_payload" | PATH="$tmp_dir/selective-bin:$PATH" \
+  /bin/bash "$(dirname "$LIB_SRC")/block-unreviewed-merge.sh" > "$tmp_dir/gate-out" 2>&1
+gate_status=$?
+if [ "$gate_status" -eq 2 ] && grep -q 'BLOCKED: merge gate cannot evaluate' "$tmp_dir/gate-out"; then
+  printf 'PASS selective awk failure: merge gate blocks\n'
+  pass=$((pass + 1))
+else
+  printf 'FAIL selective awk failure: merge gate exit %s\n' "$gate_status" >&2
+  fail=$((fail + 1))
+fi
 
 # The explicit system Bash invocation is intentional: env bash may select
 # Homebrew Bash. SIGKILL is required because Bash 3.2 defers SIGTERM while
@@ -127,7 +126,13 @@ run_timed() {
   started=$(date +%s)
   /bin/bash "$0" --worker "$kind" "$tmp_dir/payload" > "$output" &
   pid=$!
-  ( sleep 10; kill -KILL "$pid" 2>/dev/null ) &
+  (
+    sleep 10 &
+    sleeper=$!
+    trap 'kill "$sleeper" 2>/dev/null; wait "$sleeper" 2>/dev/null; exit 0' TERM
+    wait "$sleeper" 2>/dev/null
+    kill -KILL "$pid" 2>/dev/null
+  ) &
   watchdog=$!
   wait "$pid"
   status=$?
