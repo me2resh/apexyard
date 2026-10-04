@@ -244,7 +244,8 @@ esac
 # command, as the merge gates do (AgDR-0162). Any non-word character ends
 # the subcommand, so `git push;`, `git push&&` and `(git push)` also route.
 #
-# The scan only adds routing, so it cannot skip a gate. It does not scrub
+# The scan adds routing when its join succeeds. If awk fails, run the push
+# and commit gates unconditionally. The scan does not scrub
 # quoted data, so text that only mentions a push or commit (a heredoc body,
 # an echo, a commit message) also routes. That over-match can cause a false
 # block from a gate that refuses compound commands. A real compound commit
@@ -253,16 +254,30 @@ esac
 #
 # Line continuations are joined first, because grep reads one line at a
 # time and `git \<newline> push` would otherwise put git and push on
-# different lines. The option list accepts `-C`, `-c` and the long options
-# that take a separate-word value, plus any `-x`, `--opt` or `--opt=value`.
-_scan_cmd=${COMMAND//$'\\\n'/ }
+# different lines. Bash 3.2's whole-string substitution is superlinear on
+# thousands of continuations, so use one awk pass. The sentinel preserves
+# trailing newlines through command substitution and a final lone backslash.
+# The conditional awk substitution cannot abort dispatch under set -e.
+# The option list accepts `-C`, `-c` and the long options that take a
+# separate-word value, plus any `-x`, `--opt` or `--opt=value`.
+_scan_failed=0
+if _scan_cmd=$(printf '%sX' "$COMMAND" | LC_ALL=C awk '{ if (sub(/\\$/, "")) printf "%s ", $0; else printf "%s\n", $0 }'); then
+  _scan_cmd=${_scan_cmd%X}
+else
+  _scan_failed=1
+fi
 _git_opt_val='("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:];&|]+)'
 _git_sub_re='(^|[^[:alnum:]_.-])git([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env))[[:space:]]+'"${_git_opt_val}"'|--?[A-Za-z][A-Za-z-]*(=[^[:space:];&|]+)?))*[[:space:]]+'
-if grep -qE "${_git_sub_re}push([^[:alnum:]_.-]|\$)" <<<"$_scan_cmd"; then
+if [ "$_scan_failed" -eq 1 ]; then
   run_push_gates
-fi
-if grep -qE "${_git_sub_re}commit([^[:alnum:]_.-]|\$)" <<<"$_scan_cmd"; then
   run_commit_gates
+else
+  if LC_ALL=C grep -qE "${_git_sub_re}push([^[:alnum:]_.-]|\$)" <<<"$_scan_cmd"; then
+    run_push_gates
+  fi
+  if LC_ALL=C grep -qE "${_git_sub_re}commit([^[:alnum:]_.-]|\$)" <<<"$_scan_cmd"; then
+    run_commit_gates
+  fi
 fi
 
 # A wrapper such as `bash -c '… tracker_pr_merge …'` misses the prefix case.
