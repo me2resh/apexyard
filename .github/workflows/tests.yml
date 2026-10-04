@@ -19,8 +19,24 @@ concurrency:
 
 jobs:
   hook-tests:
-    name: hook test suite
-    runs-on: ubuntu-latest
+    name: hook tests (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    # The macOS leg starts non-blocking (#1558). It reports stock-macOS
+    # failures (bash 3.2, Apple jq, /var vs /private/var) without failing the
+    # required "hook test suite" check. Make it blocking once its known
+    # failures are fixed in a follow-up ticket.
+    continue-on-error: ${{ matrix.os == 'macos-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: linux jq-1.7
+          - os: ubuntu-latest
+            label: linux jq-1.8
+          - os: macos-latest
+            label: macos bash-3.2
     steps:
       - name: Checkout
         with:
@@ -28,7 +44,22 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install jq (used by the hooks + their tests)
+        if: runner.os == 'Linux'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq jq
+
+      - name: Install jq 1.8.2
+        if: matrix.label == 'linux jq-1.8'
+        run: |
+          jq_bin="$RUNNER_TEMP/jq-1.8-bin"
+          mkdir -p "$jq_bin"
+          curl --fail --location --silent --show-error \
+            https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-amd64 \
+            --output "$jq_bin/jq"
+          echo "b1c22172dd303f3be49e935aa56aa48a8b7a46e0bc838b4997d3bb451495870f  $jq_bin/jq" | sha256sum -c -
+          chmod +x "$jq_bin/jq"
+          echo "$jq_bin" >> "$GITHUB_PATH"
+          export PATH="$jq_bin:$PATH"
+          test "$(jq --version)" = jq-1.8.2
 
       - name: Configure git identity (test sandboxes run git init/commit)
         run: |
@@ -38,6 +69,18 @@ jobs:
 
       - name: Run the hook test suite
         run: |
+          if [ "$RUNNER_OS" = macOS ]; then
+            export PATH="/bin:/usr/bin:$PATH"
+          fi
+          jq --version
+          command -v jq
+          bash --version | head -1
+          /bin/bash --version | head -1
+          if [ "$RUNNER_OS" = macOS ]; then
+            test "$(command -v jq)" = /usr/bin/jq
+            test "$(command -v bash)" = /bin/bash
+            [[ "$(/bin/bash --version | head -1)" == *"version 3.2."* ]]
+          fi
           snapshot_repo=$(mktemp -d)
           trap 'rm -rf "$snapshot_repo"' EXIT
           git -C "$snapshot_repo" init -q --bare
@@ -58,4 +101,19 @@ jobs:
             fi
           done
           APEXYARD_SNAPSHOT_REPO="$snapshot_repo" REQUIRE_SNAPSHOTS=1 \
-            bash bin/run-hook-tests.sh
+            /bin/bash bin/run-hook-tests.sh
+
+  # The dev ruleset requires "hook test suite". Matrix jobs have distinct names.
+  # This final job fails unless every blocking leg passes, preserving the
+  # required check. The macOS leg uses continue-on-error, so its failure does
+  # not change needs.hook-tests.result while it is non-blocking.
+  hook-test-suite:
+    name: hook test suite
+    needs: [hook-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every matrix leg to pass
+        env:
+          MATRIX_RESULT: ${{ needs.hook-tests.result }}
+        run: test "$MATRIX_RESULT" = success
