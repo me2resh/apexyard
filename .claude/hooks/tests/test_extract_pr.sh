@@ -643,6 +643,30 @@ else
 fi
 unset MOCK_BRANCH_PR _cli _merge_verb _comment_mid _cont_repo _got_repo
 
+# An escaped quote is a literal shell character. It must not hide the #
+# comment or join that comment's trailing backslash to a later --repo.
+export MOCK_BRANCH_REPO=me2resh/apexyard
+_cli=gh
+_merge_verb=mer
+_merge_verb+=ge
+for _quote in '"' "'"; do
+  _escaped_quote=$(printf '\\%s' "$_quote")
+  _comment_text=note
+  [ "$_quote" = "'" ] && _comment_text="note '"
+  _comment_cmd=$(printf '%s pr %s 5 --subject %s # %s \\\n--repo other/approved' \
+    "$_cli" "$_merge_verb" "$_escaped_quote" "$_comment_text")
+  assert_pr "1568 escaped $_quote before comment keeps PR 5" "$_comment_cmd" "5"
+  _got_repo=$(extract_repo_from_command "$_comment_cmd")
+  if [ "$_got_repo" = "$MOCK_BRANCH_REPO" ]; then
+    echo "PASS [1568 escaped $_quote before comment keeps ambient repo]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [1568 escaped $_quote before comment keeps ambient repo]: got=[$_got_repo]" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}1568-escaped-quote-repo "
+  fi
+done
+unset MOCK_BRANCH_REPO _cli _merge_verb _quote _escaped_quote _comment_text _comment_cmd _got_repo
+
 # --- Bash 3.2 time bound (PR #1546 security review, H1) --------------------
 # A gate that times out does not block, so a padded merge could skip every
 # gate. Run /bin/bash directly with a SIGKILL watchdog. The watchdog's EXIT

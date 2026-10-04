@@ -380,8 +380,8 @@ _join_shell_continuations() {
           prev = c
           continue
         }
-        if (c == sq) { out = out c; in_sq = 1; bs = 0; prev = c; continue }
-        if (c == dq) { out = out c; in_dq = 1; bs = 0; prev = c; continue }
+        if (c == sq && (bs % 2) == 0) { out = out c; in_sq = 1; bs = 0; prev = c; continue }
+        if (c == dq && (bs % 2) == 0) { out = out c; in_dq = 1; bs = 0; prev = c; continue }
         if (c == "#" && is_word_boundary_prev(prev)) {
           # Comment to EOL — trailing backslash must not join (#1568).
           out = out c
@@ -1060,13 +1060,13 @@ extract_pr_number() {
 # remain opaque even with a literal element because this parser cannot read
 # their target. `$(...)` is not a PR/repo variable token.
 merge_command_uses_variable() {
-  local cmd
+  local cmd joined
   # Join first so continued CLI merges and argv lists keep a readable target
   # for the opacity / variable checks (#1568).
-  cmd=$(_join_shell_continuations "$1")
+  joined=$(_join_shell_continuations "$1")
   # Use the same bounded data view as is_merge_command. Uncertain or
   # executable commands keep the raw text, so variable targets still block.
-  cmd=$(_scrub_merge_command "$cmd") || cmd="$1"
+  cmd=$(_scrub_merge_command "$joined") || cmd="$joined"
 
   # All four hooks call this check before PR extraction. Three intentionally
   # skip when extraction returns empty, leaving the approval hook to report

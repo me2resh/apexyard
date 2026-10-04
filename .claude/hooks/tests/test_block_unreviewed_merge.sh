@@ -1167,9 +1167,25 @@ write_rex_marker "$sb" 5
 write_ceo_marker_structured "$sb" 5
 _comment_mid=$(printf '%s %s %s 5 --repo %s # \\\n%s %s %s 7 --repo other/nope --squash' \
   "$_cli" pr "$_merge_verb" "$TEST_REPO" "$_cli" pr "$_merge_verb")
-run_case_custom_cmd "#1568: comment backslash must not retarget --repo" 0 \
+run_case_custom_cmd "#1568: first merge's --repo is not retargeted by later merge" 0 \
   "" "$sb" "$_comment_mid"
+
+# Escaped quotes do not open shell quotes. The comment ends line 1, so the
+# later --repo cannot supply approval for PR 5 in the ambient repo.
+for _quote in '"' "'"; do
+  sb=$(make_sandbox)
+  write_rex_marker "$sb" 5 "$FIXED_SHA" other/approved
+  write_ceo_marker_structured "$sb" 5 "$FIXED_SHA" other/approved
+  _escaped_quote=$(printf '\\%s' "$_quote")
+  _comment_text=note
+  [ "$_quote" = "'" ] && _comment_text="note '"
+  _comment_cmd=$(printf '%s pr %s 5 --subject %s # %s \\\n--repo other/approved' \
+    "$_cli" "$_merge_verb" "$_escaped_quote" "$_comment_text")
+  run_case_custom_cmd "#1568: escaped $_quote before comment cannot borrow decoy approval" 2 \
+    "no recorded code-reviewer|no CEO approval marker" "$sb" "$_comment_cmd"
+done
 unset _cli _merge_verb _cont_cmd _argv_cont _comment_mid
+unset _quote _escaped_quote _comment_text _comment_cmd
 
 # --- #1091: forge HEAD unresolvable -> the gate must FAIL CLOSED -------
 #
