@@ -253,9 +253,13 @@ esac
 #
 # Line continuations are joined first, because grep reads one line at a
 # time and `git \<newline> push` would otherwise put git and push on
-# different lines. The option list accepts `-C`, `-c` and the long options
-# that take a separate-word value, plus any `-x`, `--opt` or `--opt=value`.
-_scan_cmd=${COMMAND//$'\\\n'/ }
+# different lines. Bash 3.2's whole-string substitution is superlinear on
+# thousands of continuations, so use one awk pass. The sentinel preserves
+# trailing newlines through command substitution and a final lone backslash.
+# The option list accepts `-C`, `-c` and the long options that take a
+# separate-word value, plus any `-x`, `--opt` or `--opt=value`.
+_scan_cmd=$(printf '%sX' "$COMMAND" | awk '{ if (sub(/\\$/, "")) printf "%s ", $0; else printf "%s\n", $0 }')
+_scan_cmd=${_scan_cmd%X}
 _git_opt_val='("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:];&|]+)'
 _git_sub_re='(^|[^[:alnum:]_.-])git([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env))[[:space:]]+'"${_git_opt_val}"'|--?[A-Za-z][A-Za-z-]*(=[^[:space:];&|]+)?))*[[:space:]]+'
 if grep -qE "${_git_sub_re}push([^[:alnum:]_.-]|\$)" <<<"$_scan_cmd"; then
