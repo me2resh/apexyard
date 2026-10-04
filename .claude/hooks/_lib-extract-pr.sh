@@ -89,19 +89,19 @@
 #
 # `_normalize_json_escapes` (below) is a small, best-effort decoder for
 # the handful of escape shapes that matter here — NOT a full JSON string
-# parser, the same "regex/parameter-expansion only, sufficient for the
-# shapes real callers emit" discipline as `_extract_wrapper_arg` above.
+# parser, only sufficient for the shapes real callers emit.
 # It is called ONLY at the four hooks' raw-payload fallback call sites
 # (`is_merge_command_raw "$(_normalize_json_escapes "$INPUT")"`), never from
-# inside `is_merge_command` itself and never on the normal jq-present
-# path: jq has ALREADY correctly decoded these same escapes for that path
+# inside `is_merge_command` itself and never when jq returns a nonempty
+# command: jq has ALREADY correctly decoded these same escapes for that path
 # (that's what `jq -r` does), so re-normalizing already-decoded text would
 # be redundant at best and, for the rare case of a command that legitimately
 # contains a literal backslash-t/backslash-n substring (e.g. inside a sed
 # script), actively wrong — it would corrupt real command text that jq had
 # already decoded correctly. Keeping the two paths separate is what makes
-# this change safe for the jq-present callers: their behaviour is provably
-# unchanged because they never call the new function at all.
+# this change safe for commands successfully read by jq: they never call
+# this function. An empty or failed jq result enters the fallback even when
+# jq is installed.
 
 # Lazily source the tracker lib so `tracker_review_kind` is available for forge
 # resolution. Guarded: only source if not already defined and the lib is
@@ -221,16 +221,18 @@ _extract_wrapper_arg() {
 # backslash-n and backslash-u000A (either case) decode to a newline;
 # backslash-u0020 decodes to a plain space; backslash-slash decodes to a
 # plain slash.
+# The original substitution order is u0020, u0009, u000A, u000a, slash,
+# short t, short n. None of their replacements introduces a backslash, so
+# each match can be emitted during one left-to-right scan in that order.
 #
 # This is deliberately NOT a full JSON string decoder — no handling of
 # arbitrary \uXXXX code points, no awareness of escaped-backslash context
 # (a literal `\\t` — escaped backslash followed by a bare `t` — will still
 # be (mis-)decoded as a tab; that's an accepted, documented limitation, not
 # a security gap: it can only make the fallback MORE eager to treat text as
-# merge-shaped, i.e. fail closed, never a new way to evade it). Pure bash
-# parameter expansion — no eval, no external process, no regex
-# backtracking on attacker-controlled text — matching the same discipline
-# as `_extract_wrapper_arg` above.
+# merge-shaped, i.e. fail closed, never a new way to evade it). A single awk
+# pass avoids bash 3.2's superlinear global substitutions. It does not eval
+# or run the input text.
 #
 # Callers: ONLY the four merge-gate hooks' raw-payload fallback branches
 # (`is_merge_command_raw "$(_normalize_json_escapes "$INPUT")"`), never
@@ -238,6 +240,43 @@ _extract_wrapper_arg() {
 # file header (#973) for why mixing this into the jq-present path would be
 # unsafe.
 _normalize_json_escapes() {
+  local decoded sentinel=$'\034'
+  # Append a sentinel so awk can distinguish a final input newline from an
+  # unterminated final record. Append another sentinel to its output so
+  # command substitution preserves trailing newlines. Remove only that final
+  # byte; an identical byte already in the input passes through unchanged.
+  # Keep partial awk output private. If awk fails or produces no sentinel,
+  # use the correct legacy decoder. It is slow on huge input under Bash 3.2,
+  # but runs only when the tool fails.
+  if decoded=$(printf '%s\034' "$1" | LC_ALL=C awk '
+    function decode(s,    i, n, six, two) {
+      n = length(s)
+      for (i = 1; i <= n;) {
+        six = substr(s, i, 6)
+        two = substr(s, i, 2)
+        if (six == "\\u0020") { printf " "; i += 6 }
+        else if (six == "\\u0009") { printf "\t"; i += 6 }
+        else if (six == "\\u000A" || six == "\\u000a") { printf "\n"; i += 6 }
+        else if (two == "\\/") { printf "/"; i += 2 }
+        else if (two == "\\t") { printf "\t"; i += 2 }
+        else if (two == "\\n") { printf "\n"; i += 2 }
+        else { printf "%s", substr(s, i, 1); i++ }
+      }
+    }
+    NR > 1 { decode(previous); printf "\n" }
+    { previous = $0 }
+    END { if (NR) decode(substr(previous, 1, length(previous) - 1)); printf "\034" }
+  '); then
+    case "$decoded" in
+      *"$sentinel") printf '%s' "${decoded%"$sentinel"}"; return 0 ;;
+    esac
+  fi
+  _normalize_json_escapes_legacy "$1"
+}
+
+# The pre-#1550 decoder, retained verbatim for awk failure. Bash 3.2 global
+# substitutions are slow on huge input, so the normal path uses awk above.
+_normalize_json_escapes_legacy() {
   local text="$1"
   local tab=$'\t'
   local nl=$'\n'
