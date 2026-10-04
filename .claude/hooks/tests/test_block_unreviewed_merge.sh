@@ -1155,7 +1155,16 @@ _argv_cont=$(printf 'python3 -c "import subprocess as s; s.run(['\''%s'\'',\\\n'
   "$_cli" pr "$_merge_verb")
 run_case_custom_cmd "#1568: continued argv-list merge is opaque" 2 \
   "cannot resolve" "$sb" "$_argv_cont"
-unset _cli _merge_verb _cont_cmd _argv_cont
+# Comment-ending `\` must not join a later merge's --repo onto the first PR.
+# PR 5 has markers for a/a; PR 7 does not. Blind join would check 5 against b/b.
+sb=$(make_sandbox)
+write_rex_marker "$sb" 5
+write_ceo_marker_structured "$sb" 5
+_comment_mid=$(printf '%s %s %s 5 --repo %s # \\\n%s %s %s 7 --repo other/nope --squash' \
+  "$_cli" pr "$_merge_verb" "$TEST_REPO" "$_cli" pr "$_merge_verb")
+run_case_custom_cmd "#1568: comment backslash must not retarget --repo" 0 \
+  "" "$sb" "$_comment_mid"
+unset _cli _merge_verb _cont_cmd _argv_cont _comment_mid
 
 # --- #1091: forge HEAD unresolvable -> the gate must FAIL CLOSED -------
 #

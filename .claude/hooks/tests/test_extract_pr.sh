@@ -606,6 +606,38 @@ assert_opaque "1568 continued argv-list merge is opaque" "$_argv_cont"
 assert_pr "1568 continued argv-list does not inherit branch PR" "$_argv_cont" ""
 unset MOCK_BRANCH_PR _cli _merge_verb _cont_cmd _argv_cont
 
+# --- #1568: comment-ending backslash is not a continuation (repo integrity) -
+# Blind join rewrote `--repo a/a` onto a later merge's `--repo b/b` when a
+# `# … \` line was glued to the next command. Bash does not continue comments.
+export MOCK_BRANCH_PR=99
+_cli=gh
+_merge_verb=mer
+_merge_verb+=ge
+_comment_mid=$(printf '%s %s %s 5 --repo a/a # \\\n%s %s %s 7 --repo b/b' \
+  "$_cli" pr "$_merge_verb" "$_cli" pr "$_merge_verb")
+assert_pr "1568 comment backslash keeps first PR (not glued 7)" "$_comment_mid" "5"
+_got_repo=$(extract_explicit_repo_from_command "$_comment_mid")
+if [ "$_got_repo" = "a/a" ]; then
+  echo "PASS [1568 comment backslash does not steal --repo]"
+  PASS=$((PASS+1))
+else
+  echo "FAIL [1568 comment backslash does not steal --repo]: got=[$_got_repo] want=[a/a]" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}1568-comment-repo "
+fi
+# Real continuation after a non-comment line must still join for extraction.
+_cont_repo=$(printf '%s %s %s 7 --repo \\\nother/repo --squash' \
+  "$_cli" pr "$_merge_verb")
+assert_pr "1568 --repo split across continuation extracts 7" "$_cont_repo" "7"
+_got_repo=$(extract_explicit_repo_from_command "$_cont_repo")
+if [ "$_got_repo" = "other/repo" ]; then
+  echo "PASS [1568 --repo split across continuation]"
+  PASS=$((PASS+1))
+else
+  echo "FAIL [1568 --repo split across continuation]: got=[$_got_repo]" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}1568-repo-split "
+fi
+unset MOCK_BRANCH_PR _cli _merge_verb _comment_mid _cont_repo _got_repo
+
 # --- Bash 3.2 time bound (PR #1546 security review, H1) --------------------
 # A gate that times out does not block, so a padded merge could skip every
 # gate. Run /bin/bash directly with a SIGKILL watchdog. The watchdog's EXIT
