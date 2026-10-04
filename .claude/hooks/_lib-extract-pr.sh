@@ -102,6 +102,15 @@
 # this change safe for commands successfully read by jq: they never call
 # this function. An empty or failed jq result enters the fallback even when
 # jq is installed.
+#
+# BACKSLASH-NEWLINE CONTINUATIONS ON THE RAW-PAYLOAD PATH (#1564)
+# ---------------------------------------------------------------
+# After decode, a JSON-escaped shell continuation (`\\` then `\n` in the
+# payload → real backslash then newline) is still two lines to the raw
+# scanner. `is_merge_command_raw` scans both the original and continuation-
+# joined text (outside single quotes), so `<cli> \<newline>pr <verb>` and
+# `<cli> pr \<newline><verb>` block like the one-line form. A plain newline
+# at the same positions stays two commands and is not treated as a merge.
 
 # Lazily source the tracker lib so `tracker_review_kind` is available for forge
 # resolution. Guarded: only source if not already defined and the lib is
@@ -222,17 +231,12 @@ _extract_wrapper_arg() {
 # backslash-u0020 decodes to a plain space; backslash-slash decodes to a
 # plain slash.
 # The original substitution order is u0020, u0009, u000A, u000a, slash,
-# short t, short n. None of their replacements introduces a backslash, so
-# each match can be emitted during one left-to-right scan in that order.
-#
-# This is deliberately NOT a full JSON string decoder — no handling of
-# arbitrary \uXXXX code points, no awareness of escaped-backslash context
-# (a literal `\\t` — escaped backslash followed by a bare `t` — will still
-# be (mis-)decoded as a tab; that's an accepted, documented limitation, not
-# a security gap: it can only make the fallback MORE eager to treat text as
-# merge-shaped, i.e. fail closed, never a new way to evade it). A single awk
-# pass avoids bash 3.2's superlinear global substitutions. It does not eval
-# or run the input text.
+# short t, short n, then JSON `\\` (escaped backslash). Specific two-char
+# escapes are matched before `\\` so `\n` / `\t` / `\/` stay correct.
+# Decoding `\\` to one backslash makes payload `\\\n` (JSON backslash then
+# newline) a real shell continuation for the join in `is_merge_command_raw`
+# (#1564). A single awk pass avoids bash 3.2's superlinear global
+# substitutions. It does not eval or run the input text.
 #
 # Callers: ONLY the four merge-gate hooks' raw-payload fallback branches
 # (`is_merge_command_raw "$(_normalize_json_escapes "$INPUT")"`), never
@@ -260,6 +264,7 @@ _normalize_json_escapes() {
         else if (two == "\\/") { printf "/"; i += 2 }
         else if (two == "\\t") { printf "\t"; i += 2 }
         else if (two == "\\n") { printf "\n"; i += 2 }
+        else if (two == "\\\\") { printf "\\"; i += 2 }
         else { printf "%s", substr(s, i, 1); i++ }
       }
     }
@@ -274,8 +279,9 @@ _normalize_json_escapes() {
   _normalize_json_escapes_legacy "$1"
 }
 
-# The pre-#1550 decoder, retained verbatim for awk failure. Bash 3.2 global
-# substitutions are slow on huge input, so the normal path uses awk above.
+# Pre-#1550 decoder with #1564 `\\` handling, retained for awk failure.
+# Bash 3.2 global substitutions are slow on huge input, so the normal path
+# uses awk above.
 _normalize_json_escapes_legacy() {
   local text="$1"
   local tab=$'\t'
@@ -289,6 +295,12 @@ _normalize_json_escapes_legacy() {
   # itself — the doubled form is what makes the pattern match one literal
   # backslash followed by the literal marker character.
   local bs2='\\'
+  # Four backslash characters: matches two literal backslashes (JSON `\\`).
+  local esc_bs="${bs2}${bs2}"
+  # Protect escaped backslashes before `\n`/`\t` so payload `\\\n` becomes
+  # a real backslash-newline (#1564), not two backslashes then a newline.
+  local bs_sentinel=$'\036'
+  local bs1=$'\\'
 
   local esc_u0020="${bs2}u0020"
   local esc_u0009="${bs2}u0009"
@@ -298,6 +310,7 @@ _normalize_json_escapes_legacy() {
   local esc_t="${bs2}t"
   local esc_n="${bs2}n"
 
+  text="${text//$esc_bs/$bs_sentinel}"
   text="${text//$esc_u0020/ }"
   text="${text//$esc_u0009/$tab}"
   text="${text//$esc_u000A/$nl}"
@@ -305,8 +318,62 @@ _normalize_json_escapes_legacy() {
   text="${text//$esc_slash//}"
   text="${text//$esc_t/$tab}"
   text="${text//$esc_n/$nl}"
+  text="${text//$bs_sentinel/$bs1}"
 
   printf '%s' "$text"
+}
+
+# Join shell line continuations: a backslash immediately before a newline
+# (#1564). Bash removes that pair before tokenising, so
+# `<cli> \<newline>pr <verb>` is one merge command. The raw merge scan is
+# line-oriented and would otherwise miss it after JSON-escape decode on the
+# jq-failure path (decode turns payload `\\\n` into a real backslash-newline
+# without joining).
+#
+# Outside single quotes only. Joining inside double quotes is broader than
+# bash for some shapes and only makes merge detection more eager (fail
+# closed). Linear awk over stdin — no ENVIRON/-v (Linux 128 KB cap), no
+# bash `${var//…}` on large input. On awk failure, crush backslashes and
+# newlines to spaces. This fallback only broadens detection because the
+# original text is also scanned.
+_join_shell_continuations() {
+  local joined
+  if joined=$(printf '%s\n.' "$1" | LC_ALL=C awk '
+    BEGIN { sq = sprintf("%c", 39); in_sq = 0 }
+    function emit(line,    i, n, c, out, bs) {
+      n = length(line); out = ""; bs = 0
+      for (i = 1; i <= n; i++) {
+        c = substr(line, i, 1)
+        if (in_sq) {
+          out = out c
+          if (c == sq) in_sq = 0
+          bs = 0
+          continue
+        }
+        if (c == sq) { out = out c; in_sq = 1; bs = 0; continue }
+        if (c == "\\") { out = out c; bs++; continue }
+        out = out c
+        bs = 0
+      }
+      if (!in_sq && (bs % 2) == 1) {
+        # Drop the continuing backslash; next record appends immediately.
+        printf "%s", substr(out, 1, length(out) - 1)
+        return
+      }
+      printf "%s\n", out
+    }
+    NR == 1 { prev = $0; next }
+    {
+      if (NR > 2) emit(before)
+      before = prev
+      prev = $0
+    }
+    END { if (NR > 1) printf "%s", before }
+  '); then
+    printf '%s' "$joined"
+    return 0
+  fi
+  printf '%s' "$1" | LC_ALL=C tr '\\\n' '  '
 }
 
 # Merge-only scrub decision (AgDR-0196, AgDR-0204). The general command
@@ -553,71 +620,237 @@ is_merge_command() {
 # Interpreter calls can pass gh/pr/merge as quoted argv elements without a
 # contiguous CLI phrase. Flatten newlines so one scan also sees multi-line
 # lists. The optional `[` after gh covers spawn('gh', ['pr', 'merge', ...]).
+# #1552 also covers padded/full-path binaries, global flags between elements,
+# glab argv, API elements with internal commas, split-tail strings, JS
+# backticks, and short list-join / star-unpack gaps. See AgDR-0214.
 _has_argv_merge() {
   # Use tr, not ${1//$'\n'/ }: under macOS /bin/bash 3.2 that substitution
   # slows sharply with input size (about 2,000 lines took over a minute), and
   # a gate that times out does not block. tr is linear.
   local flat
   flat=$(printf '%s' "$1" | tr '\n' ' ')
-  local quote='[\\]?["'"'"']'
+  # Match each quote style separately so one kind cannot close another.
+  # A backtick inside '…' or "…" (e.g. commit_message with inline code) must
+  # stay inside that element. Optional JSON-style backslash before each
+  # opener and closer (covers \"gh\" as well as "gh").
+  local elem='([\\]?"[^"]*[\\]?"|[\\]?'\''[^'\'']*[\\]?'\''|[\\]?`[^`]*[\\]?`)'
   local comma='[[:space:]]*,[[:space:]]*'
   local argv_start='\[?[[:space:]]*'
-  if printf '%s\n' "$flat" | grep -qE "${quote}gh${quote}${comma}${argv_start}${quote}pr${quote}${comma}${quote}merge${quote}"; then
+  # Quoted flag/option elements between major tokens (e.g. '-R', 'o/r').
+  local argv_flags="(${elem}${comma})*"
+  # ≤20 chars of list-join / star-unpack glue, and at least one of ] [ + * ,
+  # (#1552 shape 7). Space-only gaps between quoted tokens stay non-matches
+  # so prose like '`gh` `pr` `merge`' does not look like an argv list.
+  local glue='([][:space:]"`'"'"']){0,10}[][+*,]([][+*,[:space:]"`'"'"']){0,9}'
+  # Binary element: optional path prefix and/or leading pad inside the quotes.
+  local gh_elem='([\]?["'"'"'`]([^/"'"'"'`[:space:]]*/)*[[:space:]]*gh[\]?["'"'"'`])'
+  local glab_elem='([\]?["'"'"'`]([^/"'"'"'`[:space:]]*/)*[[:space:]]*glab[\]?["'"'"'`])'
+  local pr_elem='([\]?["'"'"'`]pr[\]?["'"'"'`])'
+  local mr_elem='([\]?["'"'"'`]mr[\]?["'"'"'`])'
+  local merge_elem='([\]?["'"'"'`]merge[\]?["'"'"'`])'
+  local api_tok='([\]?["'"'"'`]api[\]?["'"'"'`])'
+  local open_q='([\\]?"|[\\]?'\''|[\\]?`)'
+
+  # Classic comma-separated argv, with optional global flags between tokens.
+  if printf '%s\n' "$flat" | grep -qE "${gh_elem}${comma}${argv_start}${argv_flags}${pr_elem}${comma}${merge_elem}"; then
     return 0
   fi
+  # Joined lists / star-unpacking with a bounded glue gap (#1552 shape 7).
+  if printf '%s\n' "$flat" | grep -qE "${gh_elem}${glue}${pr_elem}${glue}${merge_elem}"; then
+    return 0
+  fi
+  # One element holds the remainder: 'gh' then a quoted "pr merge …" (#1552 shape 5).
+  if printf '%s\n' "$flat" | grep -qE "${gh_elem}${glue}${open_q}pr[[:space:]]+merge\b"; then
+    return 0
+  fi
+  # glab mr merge argv (with optional flags or glue).
+  if printf '%s\n' "$flat" | grep -qE "${glab_elem}${comma}${argv_start}${argv_flags}${mr_elem}${comma}${merge_elem}"; then
+    return 0
+  fi
+  if printf '%s\n' "$flat" | grep -qE "${glab_elem}${glue}${mr_elem}${glue}${merge_elem}"; then
+    return 0
+  fi
+
   # The same argv shape can call the GitHub API merge endpoint directly.
-  local api_path='[^[:space:],"'"'"']*/pulls/[0-9]+/merge([?][^[:space:],"'"'"']*)?'
-  # Other quoted arguments, such as '-X', 'PUT', may sit between api and the path.
-  local argv_any="(${quote}[^\"',]*${quote}${comma})*"
-  printf '%s\n' "$flat" | grep -qE "${quote}gh${quote}${comma}${argv_start}${quote}api${quote}${comma}${argv_any}${quote}${api_path}${quote}"
+  # Intermediate quoted args may contain commas (e.g. '-f', 'm=a,b') and
+  # backticks (e.g. commit_message with inline code).
+  local api_elem='([\\]?"[^"[:space:],]*/pulls/[0-9]+/merge([?][^"[:space:],]*)?[\\]?"|[\\]?'\''[^'\''[:space:],]*/pulls/[0-9]+/merge([?][^'\''[:space:],]*)?[\\]?'\''|[\\]?`[^`[:space:],]*/pulls/[0-9]+/merge([?][^`[:space:],]*)?[\\]?`)'
+  local argv_any="(${elem}${comma})*"
+  printf '%s\n' "$flat" | grep -qE "${gh_elem}${comma}${argv_start}${api_tok}${comma}${argv_any}${api_elem}"
+}
+
+# Merges nested in shell -c argv lists, xargs pipelines, or Perl qw() are
+# detected as merges by the contiguous phrase matcher, but their PR/repo
+# cannot be trusted (or is absent). Treat them as opaque targets so the
+# gates never fall back to the current branch's PR (#1552 shapes 10–12).
+# Wrapper and merge text must share one statement: split on ; && || and
+# newlines ONLY outside single/double quotes (backslash escapes outside
+# single quotes). Skip shell comments and fail closed on an unclosed quote.
+# Split into characters once: macOS awk makes repeated one-character substr
+# calls quadratic on a long statement (#1552 round 3).
+# Same statement + xargs = opaque (no character window). The argv -c form
+# still requires the merge within 200 characters after '-c'. On awk failure,
+# fail closed when a merge phrase is present.
+_has_opaque_merge_wrapper() {
+  local result
+  if ! command -v awk >/dev/null 2>&1; then
+    if printf '%s\n' "$1" | grep -qE '\b(gh[[:space:]]+pr[[:space:]]+merge|glab[[:space:]]+mr[[:space:]]+merge)\b'; then
+      return 0
+    fi
+    return 1
+  fi
+  # Bash printf streams the command without an exec argv or environment string.
+  # The final record separator exposes even a separator at the end of input.
+  result=$(printf '%s\034' "$1" | awk '
+    function wb_before(t, p) {
+      return p <= 1 || substr(t, p - 1, 1) !~ /[A-Za-z0-9_]/
+    }
+    function wb_after(t, p, len) {
+      return p + len > length(t) || substr(t, p + len, 1) !~ /[A-Za-z0-9_]/
+    }
+    function has_merge(t,    p) {
+      p = match(t, /gh[[:space:]]+pr[[:space:]]+merge/)
+      if (p && wb_before(t, p) && wb_after(t, p, RLENGTH)) return 1
+      p = match(t, /glab[[:space:]]+mr[[:space:]]+merge/)
+      if (p && wb_before(t, p) && wb_after(t, p, RLENGTH)) return 1
+      return 0
+    }
+    function has_xargs(t,    p) {
+      p = match(t, /xargs/)
+      return p && wb_before(t, p) && wb_after(t, p, 5)
+    }
+    function has_sh_c_near_merge(t,    flat, q, re) {
+      # Flatten newlines so .{0,200} spans a quoted multi-line -c script.
+      flat = t
+      gsub(/\n/, " ", flat)
+      q = "[\\\\]?[\"'"'"'`]"
+      re = q "(sh|bash|zsh)" q "[[:space:]]*,[[:space:]]*" q "-c" q ".{0,200}"
+      if (match(flat, re "(gh[[:space:]]+pr[[:space:]]+merge)")) return 1
+      if (match(flat, re "(glab[[:space:]]+mr[[:space:]]+merge)")) return 1
+      return 0
+    }
+    function has_qw(t,    flat) {
+      flat = t
+      gsub(/\n/, " ", flat)
+      if (match(flat, /qw[[:space:]]*[(][^)]*gh[[:space:]]+pr[[:space:]]+merge/)) return 1
+      if (match(flat, /qw[[:space:]]*[(][^)]*glab[[:space:]]+mr[[:space:]]+merge/)) return 1
+      if (match(flat, /qw[[:space:]]*\/[^\/]*gh[[:space:]]+pr[[:space:]]+merge/)) return 1
+      if (match(flat, /qw[[:space:]]*\/[^\/]*glab[[:space:]]+mr[[:space:]]+merge/)) return 1
+      return 0
+    }
+    function stmt_opaque(t) {
+      if (!has_merge(t)) return 0
+      if (has_xargs(t)) return 1
+      if (has_sh_c_near_merge(t)) return 1
+      if (has_qw(t)) return 1
+      return 0
+    }
+    # A separator in caller text creates another record and fails closed.
+    BEGIN { RS = sprintf("%c", 28) }
+    { if (NR == 1) s = $0; else multiple = 1 }
+    END {
+      if (multiple) { print "opaque"; exit }
+      n = length(s)
+      sq = sprintf("%c", 39); dq = sprintf("%c", 34); bs = sprintf("%c", 92)
+      in_sq = 0; in_dq = 0; opaque = 0; st = 1; escaped_prev = 0
+      n = split(s, ch, "")
+      for (i = 1; i <= n; i++) {
+        c = ch[i]
+        nx = (i < n) ? ch[i + 1] : ""
+        was_escaped = escaped_prev; escaped_prev = 0
+        if (!in_sq && c == bs && i < n) { i++; escaped_prev = 1; continue }
+        if (!in_dq && c == sq) { in_sq = !in_sq; continue }
+        if (!in_sq && c == dq) { in_dq = !in_dq; continue }
+        if (!in_sq && !in_dq) {
+          if (c == "#" && !was_escaped && (i == 1 || ch[i - 1] ~ /[ \t\n;&|(]/)) {
+            while (i < n && ch[i + 1] != "\n") i++
+            continue
+          }
+          if (c == "\n" || c == ";") {
+            if (stmt_opaque(substr(s, st, i - st))) { opaque = 1; break }
+            st = i + 1; continue
+          }
+          if ((c == "&" && nx == "&") || (c == "|" && nx == "|")) {
+            if (stmt_opaque(substr(s, st, i - st))) { opaque = 1; break }
+            i++; st = i + 1; continue
+          }
+        }
+      }
+      if (!opaque && stmt_opaque(substr(s, st))) opaque = 1
+      if (!opaque && (in_sq || in_dq) && has_merge(s)) opaque = 1
+      if (opaque) print "opaque"
+      else print "clear"
+    }
+  ' 2>/dev/null) || result=""
+  if [ "$result" = "opaque" ]; then
+    return 0
+  fi
+  if [ "$result" = "clear" ]; then
+    return 1
+  fi
+  # awk missing output or failed — never fewer blocks than a working check.
+  if printf '%s\n' "$1" | grep -qE '\b(gh[[:space:]]+pr[[:space:]]+merge|glab[[:space:]]+mr[[:space:]]+merge)\b'; then
+    return 0
+  fi
+  return 1
 }
 
 # Raw scan for the unparseable JSON fallback. Do not scrub the encoded payload:
 # JSON quotes are transport syntax, not shell argument boundaries.
+# Scan both the original text and backslash-newline-joined text (#1564).
+# A backslash at the end of a comment line does not continue that comment,
+# so the original scan must remain available for every detector.
 is_merge_command_raw() {
-  local cmd="$1"
-  if echo "$cmd" | grep -qE '\bgh\s+pr\s+merge\b'; then
-    return 0
-  fi
-  if _has_argv_merge "$cmd"; then
-    return 0
-  fi
-  # `gh api` with a `/pulls/<N>/merge` path anywhere in the command. The path
-  # may be quoted, slash-separated, and may include query params.
-  if echo "$cmd" | grep -qE '\bgh\s+api\b.*repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge\b'; then
-    return 0
-  fi
-  # `glab mr merge ...` — GitLab merge-request merge (#764).
-  if echo "$cmd" | grep -qE '\bglab\s+mr\s+merge\b'; then
-    return 0
-  fi
-  # `glab api` with a `/merge_requests/<N>/merge` path — GitLab's raw-API merge
-  # passthrough (#767, the forge analog of the #47 `gh api …/pulls/<N>/merge`
-  # bypass). The project is a URL-encoded path (`projects/<owner>%2F<repo>`); the
-  # MR iid + `/merge` action is what we match. The trailing `\b` is load-bearing:
-  # it stops `/merge_ref`, `/merge_requests/<N>` (GET), and `/notes` from
-  # false-matching — a false match here would be fail-CLOSED (block), but a
-  # false NEGATIVE is fail-open, so the anchor is verified by negative tests.
-  if echo "$cmd" | grep -qE '\bglab\s+api\b.*merge_requests/[0-9]+/merge\b'; then
-    return 0
-  fi
-  # `tracker_pr_merge <owner/repo> <pr> <strategy> [<delete_branch>]` — the
-  # #759 tracker-agnostic merge wrapper /approve-merge calls instead of
-  # shelling out to `gh pr merge`/`glab mr merge` directly. Without this
-  # branch the gates never fire on the wrapper form at all — see the HIGH
-  # finding writeup in the file header (#759).
-  if echo "$cmd" | grep -qE '\btracker_pr_merge\b'; then
-    return 0
-  fi
+  local cmd joined
+  joined=$(_join_shell_continuations "$1")
+  for cmd in "$1" "$joined"; do
+    if echo "$cmd" | grep -qE '\bgh\s+pr\s+merge\b'; then
+      return 0
+    fi
+    if _has_argv_merge "$cmd"; then
+      return 0
+    fi
+    # `gh api` with a `/pulls/<N>/merge` path anywhere in the command. The path
+    # may be quoted, slash-separated, and may include query params.
+    if echo "$cmd" | grep -qE '\bgh\s+api\b.*repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge\b'; then
+      return 0
+    fi
+    # `glab mr merge ...` — GitLab merge-request merge (#764).
+    if echo "$cmd" | grep -qE '\bglab\s+mr\s+merge\b'; then
+      return 0
+    fi
+    # `glab api` with a `/merge_requests/<N>/merge` path — GitLab's raw-API merge
+    # passthrough (#767, the forge analog of the #47 `gh api …/pulls/<N>/merge`
+    # bypass). The project is a URL-encoded path (`projects/<owner>%2F<repo>`); the
+    # MR iid + `/merge` action is what we match. The trailing `\b` is load-bearing:
+    # it stops `/merge_ref`, `/merge_requests/<N>` (GET), and `/notes` from
+    # false-matching — a false match here would be fail-CLOSED (block), but a
+    # false NEGATIVE is fail-open, so the anchor is verified by negative tests.
+    if echo "$cmd" | grep -qE '\bglab\s+api\b.*merge_requests/[0-9]+/merge\b'; then
+      return 0
+    fi
+    # `tracker_pr_merge <owner/repo> <pr> <strategy> [<delete_branch>]` — the
+    # #759 tracker-agnostic merge wrapper /approve-merge calls instead of
+    # shelling out to `gh pr merge`/`glab mr merge` directly. Without this
+    # branch the gates never fire on the wrapper form at all — see the HIGH
+    # finding writeup in the file header (#759).
+    if echo "$cmd" | grep -qE '\btracker_pr_merge\b'; then
+      return 0
+    fi
+  done
   return 1
 }
 
 # The argv detector can identify a merge without identifying its target.
 # Treat ANY argv merge as opaque, even beside a parseable CLI form: in a mixed
 # command the extractors would read the CLI form's PR (for example one only
-# echoed as text) while the argv list merges a different PR.
+# echoed as text) while the argv list merges a different PR. Nested shell -c /
+# xargs / Perl qw wrappers are opaque for the same reason (#1552).
 _is_argv_only_merge_command() {
-  _has_argv_merge "$1"
+  if _has_argv_merge "$1"; then
+    return 0
+  fi
+  _has_opaque_merge_wrapper "$1"
 }
 
 # Echoes the PR number extracted from the command, or empty if none found.

@@ -398,6 +398,125 @@ for argv_target in "'5'" "os.environ['PR']"; do
     "python3 -c \"import subprocess, os; subprocess.run(['gh','pr','merge',$argv_target])\""
 done
 
+# #1552: gap shapes and wrong-PR wrappers must block even when the branch PR
+# is fully approved. Grouped: padded/path+flags, glab, api-comma, split-tail,
+# backticks+join, nested wrappers (sh -c / xargs / perl qw).
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 padded/path gh argv blocks despite branch approval" 2 \
+  "cannot resolve" "$sb" \
+  "python3 -c \"import subprocess; subprocess.run(['/usr/bin/gh','-R','o/r','pr','merge','5'])\""
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 glab argv blocks despite branch approval" 2 \
+  "cannot resolve" "$sb" \
+  "python3 -c \"import subprocess; subprocess.run(['glab','mr','merge','5'])\""
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 api argv with comma in element blocks" 2 \
+  "cannot resolve" "$sb" \
+  "python3 -c \"import subprocess; subprocess.run(['gh','api','-f','m=a,b','repos/o/r/pulls/5/merge'])\""
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+api_bt_cmd=$(cat <<'CMD'
+python3 -c "import subprocess; subprocess.run(['gh','api','-X','PUT','-f','commit_message=fix `x`','repos/o/r/pulls/5/merge'])"
+CMD
+)
+run_case_custom_cmd "1552 api argv backtick in element blocks" 2 \
+  "cannot resolve" "$sb" "$api_bt_cmd"
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 split-tail element blocks" 2 \
+  "cannot resolve" "$sb" \
+  "node -e \"require('child_process').execFileSync('gh', 'pr merge 5'.split(' '))\""
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 joined list argv blocks" 2 \
+  "cannot resolve" "$sb" \
+  "python3 -c \"import subprocess; subprocess.run(['gh','pr'] + ['merge','5'])\""
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 JS backtick argv blocks" 2 \
+  "cannot resolve" "$sb" \
+  'node -e "require('"'"'child_process'"'"').spawnSync('"'"'gh'"'"',[`pr`,`merge`,`5`])"'
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 sh -c argv wrapper blocks (wrong-PR)" 2 \
+  "cannot resolve" "$sb" \
+  "python3 -c \"import subprocess; subprocess.run(['sh','-c','gh pr merge 5'])\""
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 xargs merge blocks (wrong-PR)" 2 \
+  "cannot resolve" "$sb" \
+  "echo 5 | xargs gh pr merge"
+# Round-2: separators inside the quoted -c script must stay opaque.
+_m1552_gate=$(printf '%s %s %s' gh pr merge)
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 xargs sh -c quoted semicolon blocks" 2 \
+  "cannot resolve" "$sb" \
+  "xargs -I{} sh -c 'cd x; ${_m1552_gate} {}'"
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 xargs sh -c quoted newline blocks" 2 \
+  "cannot resolve" "$sb" \
+  "$(printf "xargs -I{} sh -c 'cd x\n%s {}'" "$_m1552_gate")"
+# Round-3 quote desyncs must block even with valid markers for branch PR 1546.
+_q1552_comment=$(printf "true # don't\necho 5 | xargs -I{} sh -c 'x; %s {}'" "$_m1552_gate")
+_q1552_heredoc=$(printf "cat <<EOT\ndon't\nEOT\necho 5 | xargs -I{} sh -c 'x; %s {}'" "$_m1552_gate")
+_q1552_ansi=$(printf "echo 5 | xargs -I{} sh -c \$'a\\'b; %s {}'" "$_m1552_gate")
+_q1552_unclosed=$(printf "echo 'unfinished; echo 5 | xargs -I{} sh -c 'x; %s {}'" "$_m1552_gate")
+for _q1552_name in comment heredoc ansi unclosed; do
+  sb=$(make_sandbox)
+  write_rex_marker "$sb" 1546
+  write_ceo_marker_structured "$sb" 1546
+  case "$_q1552_name" in
+    comment) _q1552_cmd=$_q1552_comment ;;
+    heredoc) _q1552_cmd=$_q1552_heredoc ;;
+    ansi) _q1552_cmd=$_q1552_ansi ;;
+    unclosed) _q1552_cmd=$_q1552_unclosed ;;
+  esac
+  run_case_custom_cmd "1552 round-3 $_q1552_name blocks" 2 \
+    "cannot resolve" "$sb" "$_q1552_cmd"
+done
+# Escaped boundaries before # are shell text, not the start of a comment.
+_q1552_escaped_cont=$(printf '%s\n' "echo 5 | xargs -I{} sh -c x\\" "#'" "y; $_m1552_gate {}' # it's")
+_q1552_escaped_semi=$(printf '%s\n' "echo 5 | xargs -I{} sh -c x\\;#'" "y; $_m1552_gate {}' # it's")
+for _q1552_name in escaped_cont escaped_semi; do
+  sb=$(make_sandbox)
+  write_rex_marker "$sb" 1546
+  write_ceo_marker_structured "$sb" 1546
+  case "$_q1552_name" in
+    escaped_cont) _q1552_cmd=$_q1552_escaped_cont ;;
+    escaped_semi) _q1552_cmd=$_q1552_escaped_semi ;;
+  esac
+  run_case_custom_cmd "1552 round-4 $_q1552_name blocks" 2 \
+    "cannot resolve" "$sb" "$_q1552_cmd"
+done
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 perl qw merge blocks (wrong-PR)" 2 \
+  "cannot resolve" "$sb" \
+  "perl -e 'system qw(gh pr merge 5)'"
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 perl qw glab mr blocks (wrong-PR)" 2 \
+  "cannot resolve" "$sb" \
+  "perl -e 'system qw(glab mr merge 5)'"
+
 # #1525: quoted data passes. Executable heredocs and a real merge still block.
 data_cmd=$(cat <<'CMD'
 cat > /tmp/brief.md <<'EOF'
@@ -943,6 +1062,69 @@ else
   echo "FAIL [#973: jq broken, JSON-escaped-tab NON-merge command -> stays a no-op]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
   FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}jq-broken-tab-nonmerge-noop "
 fi
+
+# --- #1564: backslash-newline continued merge on the jq-failure path ----
+#
+# When jq cannot parse the payload, the gate scans the raw JSON after
+# `_normalize_json_escapes`. A shell continuation (`\<newline>`) between the
+# CLI name and `pr`, or between `pr` and the merge verb, must still block.
+# Build the merge text at runtime so live gate matchers never see a literal
+# merge phrase in this file's shell commands.
+_cli=gh
+_merge_verb=mer
+_merge_verb+=ge
+sb=$(make_sandbox_broken_jq)
+_cont_cmd=$(printf '%s \\\npr %s 310 --repo me2resh/apexyard --squash' "$_cli" "$_merge_verb")
+run_case_custom_cmd "#1564: jq broken, backslash-newline between cli and pr -> BLOCKS" 2 \
+  "cannot evaluate this command" "$sb" "$_cont_cmd"
+
+sb=$(make_sandbox_broken_jq)
+_cont_cmd=$(printf '%s pr \\\n%s 311 --repo me2resh/apexyard --squash' "$_cli" "$_merge_verb")
+run_case_custom_cmd "#1564: jq broken, backslash-newline between pr and verb -> BLOCKS" 2 \
+  "cannot evaluate this command" "$sb" "$_cont_cmd"
+
+# A plain newline at the same positions is two separate commands, not a merge.
+sb=$(make_sandbox_broken_jq)
+_plain_cmd=$(printf '%s\npr %s 312 --repo me2resh/apexyard --squash' "$_cli" "$_merge_verb")
+run_case_custom_cmd "#1564: jq broken, plain newline between cli and pr -> no-op" 0 \
+  "" "$sb" "$_plain_cmd"
+
+sb=$(make_sandbox_broken_jq)
+_plain_cmd=$(printf '%s pr\n%s 313 --repo me2resh/apexyard --squash' "$_cli" "$_merge_verb")
+run_case_custom_cmd "#1564: jq broken, plain newline between pr and verb -> no-op" 0 \
+  "" "$sb" "$_plain_cmd"
+
+sb=$(make_sandbox)
+_cont_cmd=$(printf '%s \\\npr %s 310 --repo %s --squash' "$_cli" "$_merge_verb" "$TEST_REPO")
+run_case_custom_cmd "#1564: jq working, continuation between cli and pr -> BLOCKS" 2 \
+  "BLOCKED" "$sb" "$_cont_cmd"
+sb=$(make_sandbox)
+_cont_cmd=$(printf '%s pr \\\n%s 311 --repo %s --squash' "$_cli" "$_merge_verb" "$TEST_REPO")
+run_case_custom_cmd "#1564: jq working, continuation between pr and verb -> BLOCKS" 2 \
+  "BLOCKED" "$sb" "$_cont_cmd"
+sb=$(make_sandbox)
+_plain_cmd=$(printf '%s\npr %s 312 --repo %s --squash' "$_cli" "$_merge_verb" "$TEST_REPO")
+run_case_custom_cmd "#1564: jq working, plain newline between cli and pr -> no-op" 0 \
+  "" "$sb" "$_plain_cmd"
+sb=$(make_sandbox)
+_plain_cmd=$(printf '%s pr\n%s 313 --repo %s --squash' "$_cli" "$_merge_verb" "$TEST_REPO")
+run_case_custom_cmd "#1564: jq working, plain newline between pr and verb -> no-op" 0 \
+  "" "$sb" "$_plain_cmd"
+
+# The comment ends at the newline; its trailing backslash does not join the
+# next command. Both the parsed and raw-payload paths must detect that merge.
+_merge_line=$(printf '%s %s %s 318 --repo %s --squash' "$_cli" pr "$_merge_verb" "$TEST_REPO")
+for _comment in '#x' 'echo hi #x' 'true #comment'; do
+  _comment_cmd=$(printf '%s\\\n%s' "$_comment" "$_merge_line")
+  sb=$(make_sandbox)
+  run_case_custom_cmd "#1564: jq working, comment continuation $_comment -> BLOCKS" 2 \
+    "BLOCKED" "$sb" "$_comment_cmd"
+  sb=$(make_sandbox_broken_jq)
+  run_case_custom_cmd "#1564: jq broken, comment continuation $_comment -> BLOCKS" 2 \
+    "cannot evaluate this command" "$sb" "$_comment_cmd"
+done
+unset _cli _merge_verb _cont_cmd _plain_cmd
+unset _merge_line _comment _comment_cmd
 
 # --- #1091: forge HEAD unresolvable -> the gate must FAIL CLOSED -------
 #
