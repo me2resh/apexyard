@@ -40,6 +40,10 @@ Keep the exact no-checks branch from AgDR-0212. Allow a repository with no check
 - Invalid repository or head identifiers block before the Actions request.
 - A partial runs page cannot prove all runs passed. The gate blocks until it can inspect every head run.
 
+## Known limits
+
+- **jq failure on one filter only (C-1, low).** The partial-page jq call and the JSON-object check ignore their own exit status. If jq fails on just one of those filters while the others succeed, a valid partial page of green runs can be allowed. This is not a regression: the base hook read a failed count as "not partial" too. No jq version in use and no outside actor can cause it. Fix it when this code is next changed: treat a jq failure in any of the three calls as "cannot evaluate" and block. Source: the security review of PR #1560.
+
 ## Artifacts
 
 - Issue: me2resh/apexyard#1536
