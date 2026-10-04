@@ -70,16 +70,25 @@ jobs:
       - name: Run the hook test suite
         run: |
           if [ "$RUNNER_OS" = macOS ]; then
-            export PATH="/bin:/usr/bin:$PATH"
+            # Override only bash and jq. Putting /usr/bin first on PATH would
+            # also select Apple's Python 3.9, which has no tomllib, and the
+            # dependency-audit helper needs Python 3.11+ (#1561).
+            stock_bin="$RUNNER_TEMP/stock-macos-bin"
+            mkdir -p "$stock_bin"
+            ln -sf /bin/bash "$stock_bin/bash"
+            ln -sf /usr/bin/jq "$stock_bin/jq"
+            export PATH="$stock_bin:$PATH"
           fi
           jq --version
           command -v jq
           bash --version | head -1
           /bin/bash --version | head -1
+          python3 --version
           if [ "$RUNNER_OS" = macOS ]; then
-            test "$(command -v jq)" = /usr/bin/jq
-            test "$(command -v bash)" = /bin/bash
+            test "$(readlink "$(command -v jq)")" = /usr/bin/jq
+            test "$(readlink "$(command -v bash)")" = /bin/bash
             [[ "$(/bin/bash --version | head -1)" == *"version 3.2."* ]]
+            python3 -c 'import tomllib'
           fi
           snapshot_repo=$(mktemp -d)
           trap 'rm -rf "$snapshot_repo"' EXIT
