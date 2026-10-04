@@ -511,11 +511,36 @@ is_merge_command() {
   is_merge_command_raw "$cmd"
 }
 
+# Interpreter calls can pass gh/pr/merge as quoted argv elements without a
+# contiguous CLI phrase. Flatten newlines so one scan also sees multi-line
+# lists. The optional `[` after gh covers spawn('gh', ['pr', 'merge', ...]).
+_has_argv_merge() {
+  # Use tr, not ${1//$'\n'/ }: under macOS /bin/bash 3.2 that substitution
+  # slows sharply with input size (about 2,000 lines took over a minute), and
+  # a gate that times out does not block. tr is linear.
+  local flat
+  flat=$(printf '%s' "$1" | tr '\n' ' ')
+  local quote='[\\]?["'"'"']'
+  local comma='[[:space:]]*,[[:space:]]*'
+  local argv_start='\[?[[:space:]]*'
+  if printf '%s\n' "$flat" | grep -qE "${quote}gh${quote}${comma}${argv_start}${quote}pr${quote}${comma}${quote}merge${quote}"; then
+    return 0
+  fi
+  # The same argv shape can call the GitHub API merge endpoint directly.
+  local api_path='[^[:space:],"'"'"']*/pulls/[0-9]+/merge([?][^[:space:],"'"'"']*)?'
+  # Other quoted arguments, such as '-X', 'PUT', may sit between api and the path.
+  local argv_any="(${quote}[^\"',]*${quote}${comma})*"
+  printf '%s\n' "$flat" | grep -qE "${quote}gh${quote}${comma}${argv_start}${quote}api${quote}${comma}${argv_any}${quote}${api_path}${quote}"
+}
+
 # Raw scan for the unparseable JSON fallback. Do not scrub the encoded payload:
 # JSON quotes are transport syntax, not shell argument boundaries.
 is_merge_command_raw() {
   local cmd="$1"
   if echo "$cmd" | grep -qE '\bgh\s+pr\s+merge\b'; then
+    return 0
+  fi
+  if _has_argv_merge "$cmd"; then
     return 0
   fi
   # `gh api` with a `/pulls/<N>/merge` path anywhere in the command. The path
@@ -548,6 +573,14 @@ is_merge_command_raw() {
   return 1
 }
 
+# The argv detector can identify a merge without identifying its target.
+# Treat ANY argv merge as opaque, even beside a parseable CLI form: in a mixed
+# command the extractors would read the CLI form's PR (for example one only
+# echoed as text) while the argv list merges a different PR.
+_is_argv_only_merge_command() {
+  _has_argv_merge "$1"
+}
+
 # Echoes the PR number extracted from the command, or empty if none found.
 # Tries (in order):
 #   1. `gh api .../pulls/<N>/merge` URL path
@@ -556,7 +589,8 @@ is_merge_command_raw() {
 #      as `2>&1`, and NOT an unexpanded shell variable such as `$pr` or `$PR`).
 #      When the token is a shell variable the function returns empty so the
 #      caller's step-3 fallback can invoke `gh pr view`.
-#   3. falls back to `gh pr view --json number` (current branch's PR)
+#   3. falls back to `gh pr view --json number` (current branch's PR), except
+#      for argv-only merges, whose target must stay unresolved
 #
 # BUG #568 — root cause and fix:
 #   The old step-2 span `[^|;&]*` included `2>&1` because the `&` lookahead
@@ -669,6 +703,10 @@ extract_pr_number() {
   # 3. Last resort: ask the forge which PR/MR the current branch points at.
   #    Forge-aware (#764): a glab command falls back to `glab mr view`.
   if [ -z "$pr" ]; then
+    if _is_argv_only_merge_command "$cmd"; then
+      echo ""
+      return 0
+    fi
     if [ "$(_forge_from_command "$cmd")" = glab ]; then
       pr=$(glab mr view --output json 2>/dev/null | jq -r '.iid // empty' 2>/dev/null)
     else
@@ -679,8 +717,8 @@ extract_pr_number() {
   echo "$pr"
 }
 
-# Returns 0 if the merge command's PR positional arg OR its --repo value is an
-# UNEXPANDED shell variable ($VAR / ${VAR}). (#643)
+# Returns 0 if the merge target is opaque: an unexpanded PR/repo variable
+# ($VAR / ${VAR}), or an argv-only merge whose target cannot be parsed. (#643)
 #
 # WHY THIS EXISTS
 # ---------------
@@ -695,10 +733,23 @@ extract_pr_number() {
 # "re-run with literal values" message. This helper is that detector.
 #
 # Matches `$VAR`, `${VAR}` (the leading char after $ / ${ is a letter or _).
-# Does NOT match a literal repo/number, and does NOT match `$(...)` command
-# substitution as a PR/repo token (those aren't valid PR/repo values anyway).
+# Plain CLI forms with literal targets do not match. Quoted argv-only forms
+# remain opaque even with a literal element because this parser cannot read
+# their target. `$(...)` is not a PR/repo variable token.
 merge_command_uses_variable() {
   local cmd="$1"
+  # Use the same bounded data view as is_merge_command. Uncertain or
+  # executable commands keep the raw text, so variable targets still block.
+  cmd=$(_scrub_merge_command "$cmd") || cmd="$1"
+
+  # All four hooks call this check before PR extraction. Three intentionally
+  # skip when extraction returns empty, leaving the approval hook to report
+  # that error. An argv-only merge must block in every hook because its
+  # target may differ from the branch PR, so use this early unresolved-target
+  # guard as well as suppressing the extractors' ambient fallbacks.
+  if _is_argv_only_merge_command "$cmd"; then
+    return 0
+  fi
 
   # PR positional arg: first token after `gh pr merge` (reuse the same span +
   # redirection-stripping discipline as extract_pr_number so `2>&1` etc. don't
@@ -984,6 +1035,13 @@ resolve_merge_repo() {
   local cmd="$1" repo="" cd_target=""
 
   repo=$(extract_explicit_repo_from_command "$cmd")
+
+  # An argv-only merge can target another repo. Never borrow the checkout's
+  # repo unless the command has an explicit form the extractor can read.
+  if [ -z "$repo" ] && _is_argv_only_merge_command "$cmd"; then
+    echo ""
+    return 0
+  fi
   if [ -z "$repo" ] && command -v pr_cmd_cd_target >/dev/null 2>&1 && command -v git_origin_repo >/dev/null 2>&1; then
     cd_target=$(pr_cmd_cd_target "$cmd")
     if [ -n "$cd_target" ] && git -C "$cd_target" rev-parse --git-dir >/dev/null 2>&1; then
@@ -1019,6 +1077,12 @@ extract_repo_from_command() {
   local repo=""
 
   repo=$(extract_explicit_repo_from_command "$cmd")
+
+  # An argv-only merge may target a different repo from the checkout's.
+  if [ -z "$repo" ] && _is_argv_only_merge_command "$cmd"; then
+    echo ""
+    return 0
+  fi
 
   # 3. Last resort: ask the forge which repo the current branch's PR/MR belongs
   #    to. Forge-aware (#764): a glab command falls back to `glab repo view`.

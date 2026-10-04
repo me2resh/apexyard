@@ -25,8 +25,8 @@
 set -u
 
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-HOOK_SRC="$SRC_ROOT/.claude/hooks/block-merge-on-red-ci.sh"
-LIB_PR="$SRC_ROOT/.claude/hooks/_lib-extract-pr.sh"
+HOOK_SRC="${HOOK_SRC:-$SRC_ROOT/.claude/hooks/block-merge-on-red-ci.sh}"
+LIB_PR="${LIB_PR_OVERRIDE:-$SRC_ROOT/.claude/hooks/_lib-extract-pr.sh}"
 
 for f in "$HOOK_SRC" "$LIB_PR"; do
   if [ ! -f "$f" ]; then
@@ -40,9 +40,10 @@ FAIL=0
 FAILED_CASES=""
 
 TEST_REPO="me2resh/apexyard"
+TEST_SHA="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
 
 # make_sandbox <gh_mode> <glab_mode>
-#   gh_mode:   green | red | none | none_exit0 | red_named_phrase |
+#   gh_mode:   green | red | pending | none | none_exit0 | red_named_phrase |
 #              full_msg_name_red | full_msg_name_green | multiline_wrap | ""
 #              (mock `gh pr checks` behaviour; #1523 modes cover the
 #              "no checks reported" false-allow)
@@ -59,7 +60,7 @@ TEST_REPO="me2resh/apexyard"
 # off (#793 fail-open fix). The new failure-shape modes below deliberately
 # omit `.iid` (or aren't a JSON object at all), the way a broken/hostile
 # response would be.
-# The third argument only matters when $gh_mode is `none`. `gh pr checks`
+# The third argument sets the Actions API response. `gh pr checks`
 # prints the same "no checks reported" line for several different states,
 # which is the defect #1519 reports, so this selects what the follow-up API
 # calls see:
@@ -69,7 +70,7 @@ TEST_REPO="me2resh/apexyard"
 #            waiting at "Approve and run workflows", must BLOCK
 #   filtered workflows but no run for this head — path/branch filters, allow
 #            but do not claim the repo has no CI
-#   unknown  the API calls fail — fall through to the pre-#1519 allow
+#   unknown  the workflows call fails — allow with an unverified-CI note
 make_sandbox() {
   local gh_mode="$1" glab_mode="$2" nocheck_mode="${3:-unknown}"
   local sb
@@ -81,11 +82,13 @@ make_sandbox() {
 
   cat > "$sb/bin/gh" <<EOF
 #!/bin/bash
+if [ "\$1" = "api" ]; then echo "\$2" >> "$sb/api-calls"; fi
 case "\$*" in
   *"pr checks"*)
     case "$gh_mode" in
       green) printf 'build\tpass\t1m\thttps://x\n'; exit 0 ;;
       red)   printf 'build\tfail\t1m\thttps://x\n'; exit 1 ;;
+      pending) printf 'build\tpending\t1m\thttps://x\n'; exit 8 ;;
       none)  echo "no checks reported on the 'feature' branch"; exit 1 ;;
       # #1523: exact CLI message but exit 0 — must NOT take the no-checks allow arm
       none_exit0) echo "no checks reported on the 'feature' branch"; exit 0 ;;
@@ -118,21 +121,51 @@ case "\$*" in
     ;;
   *"actions/workflows"*)
     case "$nocheck_mode" in
-      no_ci)          echo "0" ;;
-      gated|filtered) echo "5" ;;
+      no_ci) echo '{"total_count":0,"workflows":[]}' ;;
+      gated|filtered|runs_fail|runs_non_number)
+        echo '{"total_count":1,"workflows":[{"state":"active"}]}' ;;
+      workflows_missing_field) echo '{"total_count":0}' ;;
       *)              exit 1 ;;
     esac
     ;;
   *"actions/runs"*)
+    # The exact head filter is part of the contract. An unfiltered query
+    # fails here, so the failure-run cases cannot pass without that filter.
+    case "\$2" in
+      "repos/$TEST_REPO/actions/runs?head_sha=$TEST_SHA&per_page=100") ;;
+      *) exit 1 ;;
+    esac
     case "$nocheck_mode" in
-      gated) echo "1" ;;
-      *)     echo "0" ;;
+      gated|action_required|workflow_fail_gated) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"action_required"}]}' ;;
+      queued) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"queued","conclusion":null}]}' ;;
+      in_progress) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"in_progress","conclusion":null}]}' ;;
+      startup_failure) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"startup_failure"}]}' ;;
+      failure) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"failure"}]}' ;;
+      null_name_failure) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":null,"status":"completed","conclusion":"failure"}]}' ;;
+      cancelled) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"cancelled"}]}' ;;
+      good_runs) echo '{"total_count":3,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build","status":"completed","conclusion":"success"},{"workflow_id":2,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":102,"name":"Docs","status":"completed","conclusion":"neutral"},{"workflow_id":3,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":103,"name":"Optional","status":"completed","conclusion":"skipped"}]}' ;;
+      old_failure_new_success) echo '{"total_count":2,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"failure"},{"workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
+      old_success_new_failure) echo '{"total_count":2,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"success"},{"workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"failure"}]}' ;;
+      old_cancelled_new_success) echo '{"total_count":2,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"cancelled"},{"workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
+      tied_number_newer_created) echo '{"total_count":2,"workflow_runs":[{"workflow_id":1,"run_number":2,"created_at":"2026-10-01T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"failure"},{"workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
+      tied_number_created_higher_id) echo '{"total_count":2,"workflow_runs":[{"workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"failure"},{"workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
+      different_workflows_one_failed) echo '{"total_count":2,"workflow_runs":[{"workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"success"},{"workflow_id":2,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":201,"name":"Docs","status":"completed","conclusion":"failure"}]}' ;;
+      missing_workflow_id) echo '{"total_count":1,"workflow_runs":[{"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
+      missing_run_number) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
+      missing_conclusion) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed"}]}' ;;
+      runs_fail) echo 'API rate limit' >&2; exit 1 ;;
+      runs_non_number) echo '{"total_count":"unknown","workflow_runs":[]}' ;;
+      runs_non_json) echo '<html>rate limit</html>' ;;
+      runs_missing_field) echo '{"total_count":0}' ;;
+      partial_page) echo '{"total_count":101,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build","status":"completed","conclusion":"success"}]}' ;;
+      *) echo '{"total_count":0,"workflow_runs":[]}' ;;
     esac
     ;;
   *"pr view"*)
+    if [[ " \$* " == *" --json number "* ]]; then echo "77"; exit 0; fi
     case "$nocheck_mode" in
-      unknown) exit 1 ;;
-      *)       echo "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" ;;
+      bad_sha) echo "deadbeef" ;;
+      *)       echo "$TEST_SHA" ;;
     esac
     ;;
   *) exit 0 ;;
@@ -180,11 +213,16 @@ EOF
 
 run_case() {
   local label="$1" want_rc="$2" want_stderr_regex="$3" sb="$4" cmd="$5"
+  local reject_stderr_regex="${6:-}" want_no_api="${7:-0}" want_runs_calls="${8:-}"
   local input
   input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
-  local got_stderr got_rc
-  got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-merge-on-red-ci.sh" 2>&1 >/dev/null)
+  local got_stderr got_rc api_calls=0 runs_calls=0
+  got_stderr=$(cd "$sb" && printf '%s' "$input" | APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash .claude/hooks/block-merge-on-red-ci.sh 2>&1 >/dev/null)
   got_rc=$?
+  if [ -f "$sb/api-calls" ]; then
+    api_calls=$(wc -l < "$sb/api-calls")
+    runs_calls=$(grep -c 'actions/runs' "$sb/api-calls")
+  fi
   rm -rf "$sb"
 
   if [ "$got_rc" != "$want_rc" ]; then
@@ -196,9 +234,31 @@ run_case() {
     echo "    stderr: $got_stderr" >&2
     FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "; return
   fi
+  if [ -n "$reject_stderr_regex" ] && echo "$got_stderr" | grep -qE "$reject_stderr_regex"; then
+    echo "FAIL [$label]: stderr unexpectedly matched /$reject_stderr_regex/" >&2
+    echo "    stderr: $got_stderr" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "; return
+  fi
+  if [ "$want_no_api" = "1" ] && [ "$api_calls" -ne 0 ]; then
+    echo "FAIL [$label]: expected no gh api calls, got $api_calls" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "; return
+  fi
+  if [ -n "$want_runs_calls" ] && [ "$runs_calls" -ne "$want_runs_calls" ]; then
+    echo "FAIL [$label]: expected $want_runs_calls runs query, got $runs_calls" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "; return
+  fi
   echo "PASS [$label]"
   PASS=$((PASS+1))
 }
+
+# B1: the current branch PR has green checks, but argv targets PR 5 or a
+# runtime value. Neither may inherit the branch PR's green result.
+for argv_target in "'5'" "os.environ['PR']"; do
+  sb=$(make_sandbox green "")
+  run_case "argv merge target $argv_target does not use green branch PR" 2 \
+    "cannot verify CI" "$sb" \
+    "python3 -c \"import subprocess, os; subprocess.run(['gh','pr','merge',$argv_target])\""
+done
 
 # ======================================================================
 # GH PATH — regression (must stay byte-identical to pre-#790 behaviour)
@@ -223,14 +283,14 @@ run_case "gh: no checks configured -> allows (no-op note)" 0 "" "$sb" \
 
 # THE REGRESSION: CI is configured and gated. Must block.
 sb=$(make_sandbox none "" gated)
-run_case "#1519: gated fork-PR workflow -> BLOCKS" 2 "workflow run is waiting" "$sb" \
+run_case "#1519: gated fork-PR workflow -> BLOCKS" 2 "workflow runs that have not passed" "$sb" \
   "gh pr merge 310 --repo $TEST_REPO --squash"
 sb=$(make_sandbox none "" gated)
-run_case "#1519: gated -> names the approval gate" 2 "Approve and run" "$sb" \
+run_case "#1519: gated -> names the approval gate" 2 "Approve runs at action_required" "$sb" \
   "gh pr merge 310 --repo $TEST_REPO --squash"
 sb=$(make_sandbox none "" gated)
-run_case "#1519: gated -> does not claim the repo has no CI" 2 "active workflow" "$sb" \
-  "gh pr merge 310 --repo $TEST_REPO --squash"
+run_case "#1519: gated -> does not claim the repo has no CI" 2 "Build PR.*action_required" "$sb" \
+  "gh pr merge 310 --repo $TEST_REPO --squash" "no CI checks configured"
 
 # A repo with genuinely no CI keeps the original allow, unchanged.
 sb=$(make_sandbox none "" no_ci)
@@ -245,8 +305,119 @@ run_case "#1519: workflows exist, none matched -> allows" 0 "no run matched this
 
 # The API calls failing must not invent a refusal: fall back to the old allow.
 sb=$(make_sandbox none "" unknown)
-run_case "#1519: API unresolvable -> allows (no new block)" 0 "could not be resolved" "$sb" \
-  "gh pr merge 313 --repo $TEST_REPO --squash"
+run_case "#1519: API unresolvable -> allows with honest note" 0 "CI state could not be checked" "$sb" \
+  "gh pr merge 313 --repo $TEST_REPO --squash" "no CI checks configured"
+
+sb=$(make_sandbox none "" workflows_missing_field)
+run_case "#1536 A3: missing workflow field -> honest note" 0 "CI state could not be checked.*Actions API unavailable" "$sb" \
+  "gh pr merge 314 --repo $TEST_REPO --squash" "no CI checks configured"
+
+sb=$(make_sandbox none "" workflow_fail_gated)
+run_case "#1536: gated run still blocks if workflow inventory fails" 2 "Build PR.*action_required" "$sb" \
+  "gh pr merge 315 --repo $TEST_REPO --squash"
+
+# #1536: the head run state must be checked even when other PR checks pass.
+# The runs stub answers only the exact head-filtered URL above. In particular,
+# the first case fails if the hook omits head_sha or queries only no-checks.
+for run_state in action_required queued in_progress startup_failure failure cancelled; do
+  sb=$(make_sandbox green "" "$run_state")
+  run_case "#1536: green checks + $run_state head run -> blocks" 2 "Build PR.*$run_state" "$sb" \
+    "gh pr merge 1536 --repo $TEST_REPO --squash"
+done
+
+sb=$(make_sandbox green "" action_required)
+run_case "#1536 N2: exact head-filtered runs URL is required" 2 "Build PR.*action_required" "$sb" \
+  "gh pr merge 1537 --repo $TEST_REPO --squash" "" 0 1
+
+sb=$(make_sandbox green "" good_runs)
+run_case "#1536: success, neutral, skipped runs -> allows" 0 "" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash"
+
+sb=$(make_sandbox green "" null_name_failure)
+run_case "#1536: failed run with null name -> blocks with workflow ID" 2 "workflow 1.*failure" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash"
+
+# A workflow can run again on the same head after a PR edit. Only its latest
+# run decides the gate; a separate workflow still has its own latest run.
+sb=$(make_sandbox green "" old_failure_new_success)
+run_case "#1536: older failed + newer successful same workflow -> allows" 0 "" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash" "Build PR.*failure"
+
+sb=$(make_sandbox green "" old_success_new_failure)
+run_case "#1536: older successful + newer failed same workflow -> blocks" 2 "Build PR.*failure" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash"
+
+sb=$(make_sandbox green "" old_cancelled_new_success)
+run_case "#1536: older cancelled + newer successful same workflow -> allows" 0 "" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash" "Build PR.*cancelled"
+
+sb=$(make_sandbox green "" tied_number_newer_created)
+run_case "#1536: equal run number uses newer created_at -> allows" 0 "" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash" "Build PR.*failure"
+
+sb=$(make_sandbox green "" tied_number_created_higher_id)
+run_case "#1536: equal run number and created_at uses higher id -> allows" 0 "" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash" "Build PR.*failure"
+
+sb=$(make_sandbox green "" different_workflows_one_failed)
+run_case "#1536: different workflow latest failure -> blocks" 2 "Docs.*failure" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash"
+
+for missing_field in missing_workflow_id missing_run_number missing_conclusion; do
+  sb=$(make_sandbox green "" "$missing_field")
+  run_case "#1536: $missing_field -> honest note" 0 "CI state could not be checked.*Actions API unavailable" "$sb" \
+    "gh pr merge 1536 --repo $TEST_REPO --squash" "no CI checks configured"
+done
+
+sb=$(make_sandbox none "" no_ci)
+run_case "#1536: no runs and no checks -> allows as no CI" 0 "has no CI checks configured" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash"
+
+sb=$(make_sandbox green "" runs_fail)
+run_case "#1536: runs API failure -> allows with honest note" 0 "CI state could not be checked.*Actions API unavailable" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash" "no CI checks configured"
+
+# An Actions fault cannot override red or pending PR checks. These cases
+# catch an unconditional exit 0 in the RUNS_ERROR branch.
+sb=$(make_sandbox red "" runs_fail)
+run_case "#1536: red checks + runs API failure -> blocks" 2 "red CI" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash"
+
+sb=$(make_sandbox pending "" runs_fail)
+run_case "#1536: pending checks + runs API failure -> blocks" 2 "pending checks" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash"
+
+sb=$(make_sandbox pending "" good_runs)
+run_case "#1536: pending checks + green head runs -> blocks" 2 "pending checks" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash"
+
+sb=$(make_sandbox none "" runs_fail)
+run_case "#1536 N1: workflows succeed, runs fail -> honest note" 0 "CI state could not be checked.*Actions API unavailable" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash" "no run matched this head|no CI checks configured"
+
+sb=$(make_sandbox none "" runs_non_number)
+run_case "#1536 N1: runs count non-number -> honest note" 0 "CI state could not be checked.*Actions API unavailable" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash" "no run matched this head|no CI checks configured"
+
+sb=$(make_sandbox green "" runs_non_json)
+run_case "#1536 A3: non-JSON runs response -> honest note" 0 "CI state could not be checked.*Actions API unavailable" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash" "no CI checks configured"
+
+sb=$(make_sandbox green "" runs_missing_field)
+run_case "#1536 A3: missing runs field -> honest note" 0 "CI state could not be checked.*Actions API unavailable" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash" "no CI checks configured"
+
+sb=$(make_sandbox green "" partial_page)
+run_case "#1536: partial runs page cannot prove all passed -> blocks" 2 "101 head workflow runs.*returned only 1" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash"
+
+sb=$(make_sandbox green "" action_required)
+run_case "#1536 N3: invalid repo -> blocks before API path" 2 "invalid.*owner/repo" "$sb" \
+  "gh pr merge 1536 --repo bad/repo/extra --squash" "" 1
+
+sb=$(make_sandbox green "" bad_sha)
+run_case "#1536: invalid head SHA -> blocks" 2 "invalid.*head SHA" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash" "" 1
 # ----------------------------------------------------------------------
 # #1523: "no checks reported" must match the whole CLI message + non-zero
 # exit — a substring in a check NAME must not open the no-checks allow arm.
@@ -547,6 +718,9 @@ case "\$*" in
       *)     exit 0 ;;
     esac
     ;;
+  *"pr view"*) echo "$TEST_SHA" ;;
+  *"repos/g/p2/actions/runs?head_sha=$TEST_SHA&per_page=100"*)
+    echo '{"total_count":0,"workflow_runs":[]}' ;;
   *) exit 0 ;;
 esac
 EOF
