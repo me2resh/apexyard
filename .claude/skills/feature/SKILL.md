@@ -205,6 +205,11 @@ cat > "$body_file" <<'BODY'
 {formatted body}
 BODY
 
+# When ORBIT default planning is on, finish this Bash call here and print
+# the absolute body_file path. In the next Bash call, use that LITERAL path
+# in tracker_create and rm below. The PreToolUse gate must read the file
+# before the create call runs; it cannot resolve a shell variable at that time.
+
 # tracker_create <owner/repo> <title> <body_file> [<labels_csv>] → {"ref","url"}.
 # Gated by require-skill-for-issue-create.sh; the step-0 marker keeps it allowed.
 result="$(tracker_create "{owner/repo}" "[Feature] {title}" "$body_file" "enhancement,{priority}")"

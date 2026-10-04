@@ -95,6 +95,7 @@ run_merge_gate_hook() {
 # APEXYARD_DISPATCH_GATE: Bash|*|block-ambient-tracker-repo.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|block-privileged-escalation.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|require-skill-for-issue-create.sh
+# APEXYARD_DISPATCH_GATE: Bash|*|require-orbit-slice-for-ticket.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|require-migration-ticket.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|require-active-ticket.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|warn-review-marker-write.sh
@@ -151,6 +152,7 @@ for script in \
   block-ambient-tracker-repo.sh \
   block-privileged-escalation.sh \
   require-skill-for-issue-create.sh \
+  require-orbit-slice-for-ticket.sh \
   require-migration-ticket.sh \
   require-active-ticket.sh \
   warn-review-marker-write.sh \

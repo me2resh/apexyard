@@ -64,6 +64,7 @@ issue_json=$(tracker_view "<number>" "<owner/repo>")
 state=$(echo "$issue_json" | jq -r '.state // empty')
 title=$(echo "$issue_json" | jq -r '.title // empty')
 url=$(echo "$issue_json" | jq -r '.url // empty')
+body=$(echo "$issue_json" | jq -r '.body // empty')
 ```
 
 The lib emits normalised JSON: `{state, title, url, labels}`. Each tracker adapter parses the underlying CLI's JSON into this common shape, so the skill doesn't need to branch per-CLI.
@@ -71,6 +72,19 @@ The lib emits normalised JSON: `{state, title, url, labels}`. Each tracker adapt
 If the lib exits non-zero with empty stdout, the issue does not exist (or the CLI isn't installed / authenticated). Stop and report the error — do not write the marker.
 
 If `state` indicates the ticket is closed (gh: `CLOSED`; linear/jira/asana: `Done` / `Closed` / `Resolved` / `Cancelled`), warn the user and confirm before continuing (sometimes you do want to resume work on a re-opened issue).
+
+When the resolved project has `orbit.default_planning: true`, check `body`
+for an `ORBIT slice:` line, including the bold form
+`**ORBIT slice:** \`<id>\``. If it has no such line, print:
+
+```text
+WARN: This ticket names no ORBIT slice. Run /orbit slice or record ORBIT slice: none — <reason> in the issue body.
+```
+
+Use the project's `orbit.default_planning` registry value when present; fall
+back to `config_get '.orbit.default_planning'`. Make this check after step 4b
+resolves the project. Continue to write the marker even when the line is
+missing. A missing or unreadable issue body also produces the warning.
 
 **`tracker.kind = none` adopters:** the lib returns no data. Skip the existence check entirely; trust the user's input. Re-verify the shape against `tracker_id_pattern` so obvious typos still block.
 

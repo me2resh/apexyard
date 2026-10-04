@@ -122,6 +122,11 @@ in=$(jq -nc --arg c 'tracker_create foo/bar "my title" /tmp/body.md' \
   '{tool_name:"Bash", tool_input:{command:$c}}')
 run_case "tracker_create blocked w/o marker (#670)" 2 "BLOCKED" "$in" "$sb"
 
+sb=$(make_sandbox)
+in=$(jq -nc --arg c 'result=$(tracker_create foo/bar "my title" /tmp/body.md)' \
+  '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "wrapped tracker_create blocked w/o marker" 2 "BLOCKED" "$in" "$sb"
+
 # glab (GitLab) create — the create-guard previously didn't recognise it (#670).
 sb=$(make_sandbox)
 in=$(jq -nc --arg c "glab issue create -R foo/bar --title x" \

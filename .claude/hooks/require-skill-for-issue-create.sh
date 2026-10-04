@@ -73,7 +73,7 @@ fi
 NORM_CMD=$(echo "$COMMAND" | tr -s '[:space:]' ' ')
 
 # Match patterns at a COMMAND BOUNDARY only — at the start of the line,
-# or immediately after a shell command separator (`;`, `&&`, `||`, `|`).
+# after a shell command separator (`;`, `&&`, `||`, `|`), or after `$(`.
 # Substring-anywhere matching false-positives on commit messages or
 # scripts that mention the pattern in prose, e.g.
 # `git commit -m "...mentions gh issue create..."`.
@@ -81,7 +81,7 @@ MATCHED=""
 while IFS= read -r pat; do
   [ -z "$pat" ] && continue
   case "$NORM_CMD" in
-    "$pat"*|*"; $pat"*|*"&& $pat"*|*"|| $pat"*|*"| $pat"*)
+    "$pat"*|*"; $pat"*|*"&& $pat"*|*"|| $pat"*|*"| $pat"*|*'$('"$pat"*)
       MATCHED="$pat"; break ;;
   esac
 done <<EOF

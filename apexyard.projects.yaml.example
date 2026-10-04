@@ -88,6 +88,10 @@ version: 1
 #               project alongside a GitLab one (see Example 4 below). The
 #               tracker is selected by the operation's target repo, so the
 #               right CLI is used per project, not per session.
+#   orbit       Optional per-project planning gate. Set
+#                 default_planning: true
+#               to require a merged ORBIT slice for Feature and Task issues.
+#               Omit it to use the global orbit.default_planning setting.
 #
 
 projects:

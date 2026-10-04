@@ -84,7 +84,7 @@ setup_dispatch_sandbox() {
   chmod +x "$dest/hooks/dispatch-bash.sh"
   local script
   for script in block-ambient-tracker-repo.sh block-privileged-escalation.sh \
-    require-skill-for-issue-create.sh require-migration-ticket.sh \
+    require-skill-for-issue-create.sh require-orbit-slice-for-ticket.sh require-migration-ticket.sh \
     require-active-ticket.sh warn-review-marker-write.sh \
     warn-isolated-build-risk.sh block-reviewer-repo-mutation.sh \
     block-git-add-all.sh block-main-push.sh validate-branch-name.sh \

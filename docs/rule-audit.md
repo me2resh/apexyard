@@ -132,6 +132,7 @@ Columns:
 | `Ticket`, `#N`, `blocked by #N` refer ONLY to real GitHub issues | `.claude/rules/ticket-vocabulary.md § The rule`, `CLAUDE.md § Quality Rules` | prose + downstream backstops | partial | prose is primary; `validate-pr-create.sh` and `verify-commit-refs.sh` catch the symptoms in durable artefacts [^self-discipline] |
 | Never apply tracker notation to in-conversation plan items | `.claude/rules/ticket-vocabulary.md § The rule` | prose | no | chat-output rule, same class as the `/decide` triggers [^self-discipline] |
 | Crossing "plan item → tracker item" requires an explicit `gh issue create` | `.claude/rules/ticket-vocabulary.md § The boundary-crossing rule` | prose | no | workflow rule, not a mechanical check |
+| ORBIT Feature and Task issues need a merged slice record or a logged reason for `none` when default planning is on | `.claude/skills/orbit/SKILL.md`, AgDR-0217 | `require-orbit-slice-for-ticket.sh` | yes | PreToolUse Bash gate reads the target project's default-branch ref |
 
 ### 5a. Evidence grounding
 
