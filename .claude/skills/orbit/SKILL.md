@@ -193,7 +193,7 @@ After the helper exits 0 with the scrubbed preview on stdout, continue in the sk
    `**ORBIT slice:** \`<slice-id>\`` as its first line and one blank line before
    the preview body. Use the preview's `.title`. Before the create call, write
    `orbit` to the ops root's `.claude/session/active-issue-skill` marker. Resolve
-   the ops root with `_lib-ops-root.sh`'s `resolve_ops_root`, as the ticket
+   the ops root with `resolve_ops_root` from `_lib-ops-root.sh`, as the ticket
    creation gate does. Stop if the ops root is unknown. Remove the marker on
    every exit path, including cancellation and create failure.
 
