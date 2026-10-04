@@ -522,7 +522,9 @@ fi
 # Apply the same latest-run rule to complete and partly invalid responses.
 # In an invalid response, only inspect runs whose blocking state and selection
 # keys can be read. Missing tie-break fields sort before valid values.
-BLOCKING_RUNS=$(printf '%s' "$RUNS_JSON" | jq -r '
+BLOCKING_RUNS=""
+if printf '%s' "$RUNS_JSON" | jq -e 'type == "object"' >/dev/null 2>&1; then
+  BLOCKING_RUNS=$(printf '%s' "$RUNS_JSON" | jq -r '
   (.workflow_runs | if type == "array" then . else [] end) |
   map(select(type == "object" and
     (.workflow_id | type == "number") and
@@ -542,6 +544,12 @@ BLOCKING_RUNS=$(printf '%s' "$RUNS_JSON" | jq -r '
     ("workflow " + (.workflow_id | tostring))) as $run_name |
   "\($run_name) — status=\(.status), conclusion=\(.conclusion // "none")"
 ' 2>/dev/null)
+  BLOCKING_RUNS_RC=$?
+  if [ "$BLOCKING_RUNS_RC" -ne 0 ]; then
+    echo "BLOCKED: PR #${PR_NUMBER}: the gate cannot evaluate the head runs. Retry when jq can read the Actions response." >&2
+    exit 2
+  fi
+fi
 
 if [ -n "$BLOCKING_RUNS" ]; then
   if [ -n "$RUNS_ERROR" ]; then
@@ -561,6 +569,23 @@ MSG
   exit 2
 fi
 
+# Count the returned page independently of full run validation. Even an
+# invalid run cannot make an incomplete page safe to merge.
+PARTIAL_PAGE=$(printf '%s' "$RUNS_JSON" | jq -r '
+  if type == "object" and
+     (.total_count | type == "number") and
+     (.workflow_runs | type == "array") then
+    (.workflow_runs | length) as $page_count |
+    select(.total_count > $page_count) |
+    "\(.total_count)\t\($page_count)"
+  else empty end
+' 2>/dev/null)
+if [ -n "$PARTIAL_PAGE" ]; then
+  IFS="$(printf '\t')" read -r RUN_COUNT PAGE_COUNT <<< "$PARTIAL_PAGE"
+  echo "BLOCKED: PR #${PR_NUMBER} has ${RUN_COUNT} head workflow runs, but the Actions API returned only ${PAGE_COUNT}. Review all head runs and retry when the gate can check every run." >&2
+  exit 2
+fi
+
 if [ -n "$RUNS_ERROR" ]; then
   echo "NOTE: PR #${PR_NUMBER}: CI state could not be checked (Actions API unavailable: ${RUNS_ERROR}). Merge-on-red-CI gate did not verify CI state." >&2
   if [ "$CHECKS_RC" = "0" ] || [ "$NO_CHECKS" = "1" ]; then
@@ -568,11 +593,6 @@ if [ -n "$RUNS_ERROR" ]; then
   fi
 else
   RUN_COUNT=$(printf '%s' "$RUNS_JSON" | jq -r '.total_count')
-  PAGE_COUNT=$(printf '%s' "$RUNS_JSON" | jq -r '.workflow_runs | length')
-  if [ "$RUN_COUNT" -gt "$PAGE_COUNT" ]; then
-    echo "BLOCKED: PR #${PR_NUMBER} has ${RUN_COUNT} head workflow runs, but the Actions API returned only ${PAGE_COUNT}. Review all head runs and retry when the gate can check every run." >&2
-    exit 2
-  fi
 fi
 
 if [ -n "$WORKFLOW_ERROR" ]; then

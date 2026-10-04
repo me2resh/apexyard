@@ -308,18 +308,12 @@ _bdw_match_redirection() {
 # Protects the force-clobber operators (`>|`, `>>|`) from being torn
 # apart by the bare-`|` split — a real bash tokenizer lexes them as ONE
 # operator, never as `>` followed by a separate pipe — via a
-# placeholder-and-restore step. The fast path is one awk pass (literal
-# newlines in replacement text on BSD and GNU; LC_ALL=C accepts invalid
-# UTF-8). On awk failure the correct-but-slow legacy path below runs.
+# placeholder-and-restore step. Uses bash parameter-expansion
+# substitution, NOT sed, for the split itself: BSD sed (macOS's default,
+# non-GNU) does not honour `\n` in replacement text as a literal newline,
+# so a sed-based split would silently no-op on a stock Mac.
 # ------------------------------------------------------------------------------
-
-# Correct-but-slow legacy path: bash parameter-expansion substitutions.
-# Used only when the awk splitter fails (tool exit non-zero). Same
-# algorithm as pre-#1555. Slow on huge input under bash 3.2, but preserves
-# real write targets — a synthetic `> .` rewrite would make every extracted
-# target `.` and let a migration-path write slip past
-# require-migration-ticket.sh (Rex, PR #1557).
-_bdw_split_top_level_legacy() {
+_bdw_split_top_level() {
   local cmd="$1"
   [ -z "$cmd" ] && return 0
 
@@ -340,35 +334,6 @@ _bdw_split_top_level_legacy() {
   split="${split//@@APEXYARD_CLOBBER@@/>|}"
 
   printf '%s\n' "$split"
-}
-
-_bdw_split_top_level() {
-  local cmd="$1"
-  [ -z "$cmd" ] && return 0
-
-  local split
-  # One external pass preserves the original substitution order, including
-  # collisions with literal placeholder text in the command. An added input
-  # newline and the output sentinel preserve every original trailing newline
-  # across both awk's records and Bash command substitution.
-  if split=$(printf '%s\n' "$cmd" | LC_ALL=C awk '
-      {
-        gsub(/>>\|/, "@@APEXYARD_CLOBBER_APPEND@@")
-        gsub(/>\|/, "@@APEXYARD_CLOBBER@@")
-        gsub(/&&/, "\n")
-        gsub(/\|\|/, "\n")
-        gsub(/;/, "\n")
-        gsub(/\|/, "\n")
-        gsub(/@@APEXYARD_CLOBBER_APPEND@@/, ">>|")
-        gsub(/@@APEXYARD_CLOBBER@@/, ">|")
-        printf "%s\n", $0
-      }
-    ' && printf '\001'); then
-    printf '%s' "${split%?}"
-  else
-    # Correct-but-slow legacy path, used only on tool failure.
-    _bdw_split_top_level_legacy "$cmd"
-  fi
 }
 
 # ------------------------------------------------------------------------------
@@ -488,26 +453,16 @@ _bdw_match_sed_inplace() {
 #   - Text after `;` in the same region, such as `sed -n 1p f; echo "5W on"`.
 _BDW_SED_WRITE_POS='([;{][[:space:]]*|['"'"'"][[:space:]]*|[/|#!$0-9,:@%][gpiIeMm0-9]*)[wW][[:space:]]+'
 
-# Echoes each sed region of COMMAND, one per line.
+# Echoes each sed region of COMMAND, one per line. The split uses bash
+# substitution, not sed, for the BSD reason given at _bdw_split_top_level.
 # It splits only on separators with a space on each side, because sed
 # scripts hold bare `;` and `|` (`p;w f`, `s|a|b|w f`).
 _bdw_sed_regions() {
   local s="$1"
-  local regions
-  if regions=$(printf '%s\n' "$s" | LC_ALL=C awk '
-      {
-        gsub(/ && /, "\n")
-        gsub(/ \|\| /, "\n")
-        gsub(/ \| /, "\n")
-        printf "%s\n", $0
-      }
-    ' && printf '\001'); then
-    printf '%s' "${regions%?}" | grep -oE '\bsed\b.*'
-  else
-    # Keeping the unsplit text exposes every sed region to the matcher;
-    # it may match more text, but cannot discard a later sed write.
-    printf '%s\n' "$s" | grep -oE '\bsed\b.*'
-  fi
+  s="${s// && /$'\n'}"
+  s="${s// || /$'\n'}"
+  s="${s// | /$'\n'}"
+  printf '%s\n' "$s" | grep -oE '\bsed\b.*'
 }
 
 _bdw_match_sed_write() {
