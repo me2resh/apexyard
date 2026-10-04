@@ -22,11 +22,6 @@ jobs:
     name: hook tests (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
-    # The macOS leg starts non-blocking (#1558). It reports stock-macOS
-    # failures (bash 3.2, Apple jq, /var vs /private/var) without failing the
-    # required "hook test suite" check. Make it blocking once its known
-    # failures are fixed in a follow-up ticket.
-    continue-on-error: ${{ matrix.os == 'macos-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -113,9 +108,7 @@ jobs:
             /bin/bash bin/run-hook-tests.sh
 
   # The dev ruleset requires "hook test suite". Matrix jobs have distinct names.
-  # This final job fails unless every blocking leg passes, preserving the
-  # required check. The macOS leg uses continue-on-error, so its failure does
-  # not change needs.hook-tests.result while it is non-blocking.
+  # This final job fails unless every leg passes, preserving the required check.
   hook-test-suite:
     name: hook test suite
     needs: [hook-tests]
