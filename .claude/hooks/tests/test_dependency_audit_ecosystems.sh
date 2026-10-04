@@ -14,6 +14,11 @@
 # Fail-before is shown by running this test on dev, where the helper does not exist.
 
 set -u
+
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+
 export PYTHONDONTWRITEBYTECODE=1
 
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"

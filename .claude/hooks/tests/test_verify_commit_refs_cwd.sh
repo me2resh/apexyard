@@ -75,6 +75,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+
+
 HOOK_SRC="$(cd "$(dirname "$0")/.." && pwd)/verify-commit-refs.sh"
 # shellcheck source=_lib-mock-gh.sh
 source "$(cd "$(dirname "$0")" && pwd)/_lib-mock-gh.sh"

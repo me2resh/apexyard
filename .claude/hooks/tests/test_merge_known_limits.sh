@@ -3,6 +3,11 @@
 # Also pin that the three new raw shapes detect, while ordinary data does not.
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+
+
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 HOOKS=${HOOKS_OVERRIDE:-$ROOT/.claude/hooks}
 AGDR=${AGDR_0196_OVERRIDE:-$ROOT/docs/agdr/AgDR-0196-merge-command-data-and-library-integrity.md}

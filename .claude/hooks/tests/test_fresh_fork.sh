@@ -12,6 +12,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+
+
 LIB_SRC="$(cd "$(dirname "$0")/.." && pwd)/_lib-fresh-fork.sh"
 PORTFOLIO_LIB_SRC="$(cd "$(dirname "$0")/.." && pwd)/_lib-portfolio-paths.sh"
 CONFIG_LIB_SRC="$(cd "$(dirname "$0")/.." && pwd)/_lib-read-config.sh"

@@ -10,6 +10,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+
+
 HOOK_SRC="$(cd "$(dirname "$0")/.." && pwd)/check-upstream-drift.sh"
 GENERATOR_SRC="$(cd "$(dirname "$0")/../../.." && pwd)/bin/sync-codex-adapter.sh"
 PASS=0

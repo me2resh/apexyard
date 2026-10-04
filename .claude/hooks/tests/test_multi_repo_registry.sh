@@ -28,6 +28,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+
+
 HOOK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 LEAK_HOOK="$HOOK_DIR/block-private-refs-in-public-repos.sh"
 TRACKER_LIB="$HOOK_DIR/_lib-tracker.sh"

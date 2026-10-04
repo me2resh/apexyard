@@ -23,6 +23,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+
+
 HOOK_SRC="${PRE_PUSH_GATE_HOOK_SRC:-$(cd "$(dirname "$0")/.." && pwd)/pre-push-gate.sh}"
 AGDR_SRC="${PRE_PUSH_GATE_AGDR_SRC:-$(cd "$(dirname "$0")/../../.." && pwd)/docs/agdr/AgDR-0173-git-native-pre-push-command-execution.md}"
 if [ ! -x "$HOOK_SRC" ]; then

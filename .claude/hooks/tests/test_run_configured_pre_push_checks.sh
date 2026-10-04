@@ -18,6 +18,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+
+
 SCRIPT_SRC="$(cd "$(dirname "$0")/../../.." && pwd)/bin/run-configured-pre-push-checks.sh"
 if [ ! -x "$SCRIPT_SRC" ]; then
   echo "FAIL: script not found or not executable at $SCRIPT_SRC" >&2

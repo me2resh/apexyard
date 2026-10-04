@@ -35,6 +35,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+
+
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 REAL_PRE_COMMIT="$ROOT/.githooks/pre-commit"
 REAL_PRIVATE_REFS_HOOK="$ROOT/.claude/hooks/check-private-refs-staged.sh"

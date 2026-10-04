@@ -4,6 +4,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+
+
 SOURCE_ROOT=${APEXYARD_TEST_SOURCE_ROOT:-$(cd "$(dirname "$0")/../../.." && pwd)}
 SKILL="$SOURCE_ROOT/.claude/skills/code-review/SKILL.md"
 AGENT="$SOURCE_ROOT/.claude/agents/qa-engineer.md"

@@ -3,6 +3,11 @@
 # ran in a long-lived shell. Each fixture owns its own temporary git repository.
 
 set -u
+
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+
 unset CLAUDE_CODE_SESSION_ID APEXYARD_OPS_PIN_DIR 2>/dev/null || true
 
 HOOK_DIR="$(cd "$(dirname "$0")/.." && pwd)"

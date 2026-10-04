@@ -18,6 +18,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+
+
 # Test isolation (#528): link-custom-skills.sh resolves the ops-root via
 # _lib-ops-root.sh and WRITES symlinks into <ops-root>/.claude/skills/. Inside a
 # live Claude Code session the session pin would resolve to the REAL fork, so a

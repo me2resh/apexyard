@@ -40,6 +40,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+
+
 # Fixture resolution must not use a pin from the runner's live session.
 export APEXYARD_OPS_DISABLE_PIN=1
 

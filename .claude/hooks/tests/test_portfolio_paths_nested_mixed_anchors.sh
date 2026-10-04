@@ -5,6 +5,11 @@
 
 set -eu
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+
+
 SRC_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OPS_LIB="$SRC_ROOT/hooks/_lib-ops-root.sh"
 CONFIG_LIB="$SRC_ROOT/hooks/_lib-read-config.sh"

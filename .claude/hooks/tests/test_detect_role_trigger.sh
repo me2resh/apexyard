@@ -16,6 +16,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+
+
 # The session-scoped de-dupe (#995) keys on CLAUDE_CODE_SESSION_ID. Unset it
 # for the per-case tests below so each invocation is in the fail-open
 # always-fire mode — deterministic and independent of whatever ambient

@@ -8,6 +8,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+
+
 # Pin isolation: the hook resolves its ops-root (and thus the sandbox markers /
 # config) via the session pin. Run interactively inside a live apexyard session,
 # the pin resolves PAST each mktemp sandbox to the operator's real fork, so the

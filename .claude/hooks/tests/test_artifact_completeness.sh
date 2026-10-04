@@ -3,6 +3,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+
+
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 LIB="${ARTIFACT_TEST_LIB:-$SRC_ROOT/.claude/hooks/_lib-review-markers.sh}"
 HOOK="${ARTIFACT_TEST_HOOK:-$SRC_ROOT/.claude/hooks/validate-pr-create.sh}"

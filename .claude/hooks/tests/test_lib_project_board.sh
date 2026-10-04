@@ -19,6 +19,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+
+
 if ! command -v jq >/dev/null 2>&1; then
   echo "SKIP: jq not installed; _lib-project-board.sh requires jq" >&2
   exit 0

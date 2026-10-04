@@ -2,6 +2,11 @@
 # Split issue/review tracker axes (#1225). No real tracker calls are made.
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+
+
 HOOK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SB=$(mktemp -d)
 mkdir -p "$SB/.claude/hooks" "$SB/bin"
