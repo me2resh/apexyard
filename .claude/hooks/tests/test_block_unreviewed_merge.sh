@@ -393,6 +393,64 @@ for argv_target in "'5'" "os.environ['PR']"; do
     "python3 -c \"import subprocess, os; subprocess.run(['gh','pr','merge',$argv_target])\""
 done
 
+# #1552: gap shapes and wrong-PR wrappers must block even when the branch PR
+# is fully approved. Grouped: padded/path+flags, glab, api-comma, split-tail,
+# backticks+join, nested wrappers (sh -c / xargs / perl qw).
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 padded/path gh argv blocks despite branch approval" 2 \
+  "cannot resolve" "$sb" \
+  "python3 -c \"import subprocess; subprocess.run(['/usr/bin/gh','-R','o/r','pr','merge','5'])\""
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 glab argv blocks despite branch approval" 2 \
+  "cannot resolve" "$sb" \
+  "python3 -c \"import subprocess; subprocess.run(['glab','mr','merge','5'])\""
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 api argv with comma in element blocks" 2 \
+  "cannot resolve" "$sb" \
+  "python3 -c \"import subprocess; subprocess.run(['gh','api','-f','m=a,b','repos/o/r/pulls/5/merge'])\""
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 split-tail element blocks" 2 \
+  "cannot resolve" "$sb" \
+  "node -e \"require('child_process').execFileSync('gh', 'pr merge 5'.split(' '))\""
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 joined list argv blocks" 2 \
+  "cannot resolve" "$sb" \
+  "python3 -c \"import subprocess; subprocess.run(['gh','pr'] + ['merge','5'])\""
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 JS backtick argv blocks" 2 \
+  "cannot resolve" "$sb" \
+  'node -e "require('"'"'child_process'"'"').spawnSync('"'"'gh'"'"',[`pr`,`merge`,`5`])"'
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 sh -c argv wrapper blocks (wrong-PR)" 2 \
+  "cannot resolve" "$sb" \
+  "python3 -c \"import subprocess; subprocess.run(['sh','-c','gh pr merge 5'])\""
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 xargs merge blocks (wrong-PR)" 2 \
+  "cannot resolve" "$sb" \
+  "echo 5 | xargs gh pr merge"
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 perl qw merge blocks (wrong-PR)" 2 \
+  "cannot resolve" "$sb" \
+  "perl -e 'system qw(gh pr merge 5)'"
+
 # #1525: quoted data passes. Executable heredocs and a real merge still block.
 data_cmd=$(cat <<'CMD'
 cat > /tmp/brief.md <<'EOF'

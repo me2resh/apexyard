@@ -514,23 +514,87 @@ is_merge_command() {
 # Interpreter calls can pass gh/pr/merge as quoted argv elements without a
 # contiguous CLI phrase. Flatten newlines so one scan also sees multi-line
 # lists. The optional `[` after gh covers spawn('gh', ['pr', 'merge', ...]).
+# #1552 also covers padded/full-path binaries, global flags between elements,
+# glab argv, API elements with internal commas, split-tail strings, JS
+# backticks, and short list-join / star-unpack gaps. See AgDR-0214.
 _has_argv_merge() {
   # Use tr, not ${1//$'\n'/ }: under macOS /bin/bash 3.2 that substitution
   # slows sharply with input size (about 2,000 lines took over a minute), and
   # a gate that times out does not block. tr is linear.
   local flat
   flat=$(printf '%s' "$1" | tr '\n' ' ')
-  local quote='[\\]?["'"'"']'
+  # Optional JSON-style backslash before the quote; ", ', or JS backtick.
+  local quote='[\\]?["`'"'"']'
   local comma='[[:space:]]*,[[:space:]]*'
   local argv_start='\[?[[:space:]]*'
-  if printf '%s\n' "$flat" | grep -qE "${quote}gh${quote}${comma}${argv_start}${quote}pr${quote}${comma}${quote}merge${quote}"; then
+  # Quoted flag/option elements between major tokens (e.g. '-R', 'o/r').
+  local argv_flags="(${quote}[^\"'\`]*${quote}${comma})*"
+  # ≤20 chars of list-join / star-unpack glue only — never arbitrary prose
+  # (#1552 shape 7). Allowed: ] [ + * , whitespace, and quotes.
+  local glue='([][+*,[:space:]"`'"'"']){0,20}'
+  # Binary element: optional path prefix and/or leading pad inside the quotes.
+  local gh_elem="${quote}([^/\"'\`[:space:]]*/)*[[:space:]]*gh${quote}"
+  local glab_elem="${quote}([^/\"'\`[:space:]]*/)*[[:space:]]*glab${quote}"
+  local pr_elem="${quote}pr${quote}"
+  local mr_elem="${quote}mr${quote}"
+  local merge_elem="${quote}merge${quote}"
+
+  # Classic comma-separated argv, with optional global flags between tokens.
+  if printf '%s\n' "$flat" | grep -qE "${gh_elem}${comma}${argv_start}${argv_flags}${pr_elem}${comma}${merge_elem}"; then
     return 0
   fi
+  # Joined lists / star-unpacking with a bounded glue gap (#1552 shape 7).
+  if printf '%s\n' "$flat" | grep -qE "${gh_elem}${glue}${pr_elem}${glue}${merge_elem}"; then
+    return 0
+  fi
+  # One element holds the remainder: 'gh' then a quoted "pr merge …" (#1552 shape 5).
+  if printf '%s\n' "$flat" | grep -qE "${gh_elem}${glue}${quote}pr[[:space:]]+merge\b"; then
+    return 0
+  fi
+  # glab mr merge argv (with optional flags or glue).
+  if printf '%s\n' "$flat" | grep -qE "${glab_elem}${comma}${argv_start}${argv_flags}${mr_elem}${comma}${merge_elem}"; then
+    return 0
+  fi
+  if printf '%s\n' "$flat" | grep -qE "${glab_elem}${glue}${mr_elem}${glue}${merge_elem}"; then
+    return 0
+  fi
+
   # The same argv shape can call the GitHub API merge endpoint directly.
-  local api_path='[^[:space:],"'"'"']*/pulls/[0-9]+/merge([?][^[:space:],"'"'"']*)?'
-  # Other quoted arguments, such as '-X', 'PUT', may sit between api and the path.
-  local argv_any="(${quote}[^\"',]*${quote}${comma})*"
-  printf '%s\n' "$flat" | grep -qE "${quote}gh${quote}${comma}${argv_start}${quote}api${quote}${comma}${argv_any}${quote}${api_path}${quote}"
+  # Intermediate quoted args may contain commas (e.g. '-f', 'm=a,b').
+  local api_path='[^[:space:],"`'"'"']*/pulls/[0-9]+/merge([?][^[:space:],"`'"'"']*)?'
+  local argv_any="(${quote}[^\"'\`]*${quote}${comma})*"
+  printf '%s\n' "$flat" | grep -qE "${gh_elem}${comma}${argv_start}${quote}api${quote}${comma}${argv_any}${quote}${api_path}${quote}"
+}
+
+# Merges nested in shell -c argv lists, xargs pipelines, or Perl qw() are
+# detected as merges by the contiguous phrase matcher, but their PR/repo
+# cannot be trusted (or is absent). Treat them as opaque targets so the
+# gates never fall back to the current branch's PR (#1552 shapes 10–12).
+_has_opaque_merge_wrapper() {
+  local flat
+  flat=$(printf '%s' "$1" | tr '\n' ' ')
+  # Only when a contiguous merge phrase is already present.
+  if ! printf '%s\n' "$flat" | grep -qE '\b(gh[[:space:]]+pr[[:space:]]+merge|glab[[:space:]]+mr[[:space:]]+merge)\b'; then
+    return 1
+  fi
+  local quote='[\\]?["`'"'"']'
+  local comma='[[:space:]]*,[[:space:]]*'
+  # 10: ['sh'|bash|zsh, '-c', '<merge text>']
+  if printf '%s\n' "$flat" | grep -qE "${quote}(sh|bash|zsh)${quote}${comma}${quote}-c${quote}"; then
+    return 0
+  fi
+  # 11: xargs feeds the merge (merge phrase after xargs, bounded gap).
+  if printf '%s\n' "$flat" | grep -qE '\bxargs\b.{0,80}\b(gh[[:space:]]+pr[[:space:]]+merge|glab[[:space:]]+mr[[:space:]]+merge)\b'; then
+    return 0
+  fi
+  # 12: Perl qw(gh pr merge …) / qw/…/
+  if printf '%s\n' "$flat" | grep -qE '\bqw[[:space:]]*[(][^)]*\bgh[[:space:]]+pr[[:space:]]+merge\b'; then
+    return 0
+  fi
+  if printf '%s\n' "$flat" | grep -qE '\bqw[[:space:]]*/[^/]*\bgh[[:space:]]+pr[[:space:]]+merge\b'; then
+    return 0
+  fi
+  return 1
 }
 
 # Raw scan for the unparseable JSON fallback. Do not scrub the encoded payload:
@@ -576,9 +640,13 @@ is_merge_command_raw() {
 # The argv detector can identify a merge without identifying its target.
 # Treat ANY argv merge as opaque, even beside a parseable CLI form: in a mixed
 # command the extractors would read the CLI form's PR (for example one only
-# echoed as text) while the argv list merges a different PR.
+# echoed as text) while the argv list merges a different PR. Nested shell -c /
+# xargs / Perl qw wrappers are opaque for the same reason (#1552).
 _is_argv_only_merge_command() {
-  _has_argv_merge "$1"
+  if _has_argv_merge "$1"; then
+    return 0
+  fi
+  _has_opaque_merge_wrapper "$1"
 }
 
 # Echoes the PR number extracted from the command, or empty if none found.

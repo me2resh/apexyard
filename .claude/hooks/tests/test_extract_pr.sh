@@ -283,12 +283,118 @@ unset MOCK_BRANCH_PR MOCK_BRANCH_REPO
 assert_merge "quoted argv in cat data heredoc" $'cat > f <<\'EOF\'\nExample: [\'gh\',\'pr\',\'merge\',\'12\']\nEOF' "no"
 assert_merge "gh pr view argv" "['gh','pr','view','12']" "no"
 assert_merge "gh pr merged argv" "['gh','pr','merged']" "no"
+assert_merge "gh pr list argv" "['gh','pr','list']" "no"
+assert_merge "jq mergeable array" 'jq -n '\''["gh","pr","mergeable"]'\''' "no"
+
+# --- #1552 argv-merge gap shapes ------------------------------------------
+# Positive cases: each must detect as a merge and treat the target as opaque.
+assert_opaque() {
+  local label="$1" cmd="$2"
+  if ! is_merge_command "$cmd"; then
+    echo "FAIL [$label]: not detected as merge; cmd=[$cmd]" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "
+    return
+  fi
+  if ! merge_command_uses_variable "$cmd"; then
+    echo "FAIL [$label]: target not opaque; cmd=[$cmd]" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "
+    return
+  fi
+  echo "PASS [$label]"; PASS=$((PASS+1))
+}
+
+assert_opaque "1552 padded gh element" "[' gh','pr','merge','5']"
+assert_opaque "1552 full-path gh element" "['/usr/bin/gh','pr','merge','5']"
+assert_opaque "1552 homebrew gh element" '["/opt/homebrew/bin/gh","pr","merge","5"]'
+assert_opaque "1552 global -R between elements" "['gh','-R','o/r','pr','merge','5']"
+assert_opaque "1552 global --repo between elements" "['gh','--repo','o/r','pr','merge','5']"
+assert_opaque "1552 glab argv" "['glab','mr','merge','5']"
+assert_opaque "1552 glab argv with -R" "['glab','-R','o/r','mr','merge','5']"
+assert_opaque "1552 api argv with comma in element" \
+  "['gh','api','-f','m=a,b','repos/o/r/pulls/5/merge']"
+assert_opaque "1552 split-tail element" "execFileSync('gh', 'pr merge 5'.split(' '))"
+assert_opaque "1552 concat split-tail" "['gh'] + 'pr merge 5'.split()"
+assert_opaque "1552 JS backtick argv" '[`gh`,`pr`,`merge`]'
+assert_opaque "1552 joined list" "['gh','pr'] + ['merge','5']"
+assert_opaque "1552 star-unpack list" "[*['gh','pr'], 'merge']"
+
+# Wrong-PR wrappers: opaque, and must not resolve to the branch PR.
+export MOCK_BRANCH_PR=1546
+assert_opaque "1552 sh -c argv wrapper" "['sh','-c', 'gh pr merge 5']"
+assert_opaque "1552 bash -c argv wrapper" "['bash','-c', 'gh pr merge 5']"
+assert_opaque "1552 zsh -c argv wrapper" "['zsh','-c', 'gh pr merge 5']"
+assert_opaque "1552 xargs merge" "echo 5 | xargs gh pr merge"
+assert_opaque "1552 perl qw merge" "perl -e 'system qw(gh pr merge 5)'"
+assert_opaque "1552 perl system list" "perl -e \"system('gh','pr','merge',5)\""
+assert_pr "1552 sh -c does not inherit branch PR" "['sh','-c', 'gh pr merge 5']" ""
+assert_pr "1552 xargs does not inherit branch PR" "echo 5 | xargs gh pr merge" ""
+assert_pr "1552 perl qw does not inherit branch PR" "perl -e 'system qw(gh pr merge 5)'" ""
+unset MOCK_BRANCH_PR
+
+# Fail-before evidence: the pre-#1552 lib must miss these shapes. The saved
+# copy is optional (CI has no /tmp fixture); when present, each case must fail.
+BEFORE_LIB="${EXTRACT_PR_BEFORE_LIB:-/tmp/_lib-extract-pr-1552-before.sh}"
+if [ -f "$BEFORE_LIB" ]; then
+  before_shim=$(mktemp -d)
+  printf '%s\n' '#!/bin/bash' 'case "$*" in *number*) printf "%s\n" "${MOCK_BRANCH_PR:-}";; esac' 'exit 0' \
+    > "$before_shim/gh"
+  chmod +x "$before_shim/gh"
+  before_out=$(mktemp)
+  PATH="$before_shim:$PATH" MOCK_BRANCH_PR=1546 bash -c '
+    . "$1"
+    fail=0
+    check() {
+      local label="$1" cmd="$2" mode="$3"
+      case "$mode" in
+        detect)
+          if is_merge_command "$cmd" && merge_command_uses_variable "$cmd"; then
+            echo "UNEXPECTED-PASS $label"; fail=1
+          else
+            echo "FAIL-BEFORE-OK $label"
+          fi
+          ;;
+        opaque)
+          if merge_command_uses_variable "$cmd"; then
+            echo "UNEXPECTED-PASS $label"; fail=1
+          else
+            echo "FAIL-BEFORE-OK $label"
+          fi
+          ;;
+      esac
+    }
+    check "padded" "['\'' gh'\'','\''pr'\'','\''merge'\'','\''5'\'']" detect
+    check "flags" "['\''gh'\'','\''-R'\'','\''o/r'\'','\''pr'\'','\''merge'\'','\''5'\'']" detect
+    check "glab" "['\''glab'\'','\''mr'\'','\''merge'\'','\''5'\'']" detect
+    check "api-comma" "['\''gh'\'','\''api'\'','\''-f'\'','\''m=a,b'\'','\''repos/o/r/pulls/5/merge'\'']" detect
+    check "split-tail" "execFileSync('\''gh'\'', '\''pr merge 5'\''.split('\'' '\''))" detect
+    check "backtick" "[\`gh\`,\`pr\`,\`merge\`]" detect
+    check "joined" "['\''gh'\'','\''pr'\''] + ['\''merge'\'','\''5'\'']" detect
+    check "sh-c" "['\''sh'\'','\''-c'\'', '\''gh pr merge 5'\'']" opaque
+    check "xargs" "echo 5 | xargs gh pr merge" opaque
+    check "qw" "perl -e '\''system qw(gh pr merge 5)'\''" opaque
+    exit "$fail"
+  ' _ "$BEFORE_LIB" > "$before_out" 2>&1
+  before_rc=$?
+  if [ "$before_rc" -eq 0 ] && grep -q 'FAIL-BEFORE-OK' "$before_out" && ! grep -q 'UNEXPECTED-PASS' "$before_out"; then
+    echo "PASS [1552 fail-before evidence against saved pre-change lib]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [1552 fail-before evidence]: rc=$before_rc" >&2
+    cat "$before_out" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}1552-fail-before "
+  fi
+  rm -rf "$before_shim" "$before_out"
+else
+  echo "PASS [1552 fail-before evidence skipped — no BEFORE_LIB at $BEFORE_LIB]"
+  PASS=$((PASS+1))
+fi
 
 # --- Bash 3.2 time bound (PR #1546 security review, H1) --------------------
 # ${1//$'\n'/ } slows sharply with input size under /bin/bash 3.2. A gate that
 # times out does not block, so a padded merge could skip every gate. Run the
 # variable check on a 3,000-line command under /bin/bash and require it to
 # finish within 10 seconds. SIGKILL ends a stuck run; 3.2 defers SIGTERM.
+# #1552: also exercise the new argv / glue / wrapper patterns on the pad.
 if [ -x /bin/bash ]; then
   perf_dir=$(mktemp -d)
   {
@@ -297,6 +403,12 @@ if [ -x /bin/bash ]; then
     echo 'w=merge'
     echo 'pad=$(i=0; while [ $i -lt 3000 ]; do echo true; i=$((i+1)); done)'
     echo 'merge_command_uses_variable "gh pr $w 5 --repo o/r'
+    echo '$pad"'
+    echo 'merge_command_uses_variable "['\''/usr/bin/gh'\'','\''-R'\'','\''o/r'\'','\''pr'\'','\''$w'\'','\''5'\'']'
+    echo '$pad"'
+    echo 'merge_command_uses_variable "['\''gh'\'','\''pr'\''] + ['\''$w'\'','\''5'\'']'
+    echo '$pad"'
+    echo 'merge_command_uses_variable "echo 5 | xargs gh pr $w'
     echo '$pad"'
     echo 'echo done > "$1"'
   } > "$perf_dir/run.sh"
