@@ -133,6 +133,9 @@ case "\$args" in
   *"pr view"*headRepository*)
     printf '%s\n' "$repo"
     ;;
+  *"pr view"*"--json number"*)
+    printf '%s\n' 77
+    ;;
   *) exit 0 ;;
 esac
 EOF
@@ -145,12 +148,32 @@ EOF
 run_gate() {
   local sb="$1" command="$2"
   local input
-  input=$(printf '{"tool_input":{"command":"%s"}}' "$command")
+  input=$(jq -nc --arg c "$command" '{tool_input:{command:$c}}')
   ( cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash "$HOOK_SRC" >/dev/null 2>&1 <<< "$input" )
   echo $?
 }
 
+# #1525: data-only heredocs pass, but executable bodies still reach the gate.
+sb=$(make_sandbox)
+install_mock_gh "$sb" '"projects/foo/docs/technical-design-x.md"' "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+code=$(run_gate "$sb" $'cat <<\'EOF\'\ngh pr merge 315 --repo $R\nEOF')
+assert_eq "#1525 quoted data heredoc passes" "0" "$code"
+code=$(run_gate "$sb" $'sh <<\'EOF\'\ngh pr merge $PR --repo $R\nEOF')
+assert_eq "#1525 sh heredoc variable blocks" "2" "$code"
+rm -rf "$sb"
+
 SHA="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+# B1: the branch PR has a matching architecture approval. An argv merge of
+# another PR or a runtime value must not inherit that approval.
+for argv_target in "'5'" "os.environ['PR']"; do
+  sb=$(make_sandbox)
+  install_mock_gh "$sb" '"projects/foo/docs/technical-design-x.md"' "$SHA"
+  printf '%s\n' "$SHA" > "$(review_marker_path "o/r" 77 architecture "$sb")"
+  code=$(run_gate "$sb" "python3 -c \"import subprocess, os; subprocess.run(['gh','pr','merge',$argv_target])\"")
+  assert_eq "argv merge target $argv_target does not use approved branch PR" "2" "$code"
+  rm -rf "$sb"
+done
 
 echo ""
 echo "B) design-artifact PR + NO marker -> BLOCK (exit 2)"

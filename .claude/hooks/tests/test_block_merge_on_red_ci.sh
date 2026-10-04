@@ -26,7 +26,7 @@ set -u
 
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 HOOK_SRC="${HOOK_SRC:-$SRC_ROOT/.claude/hooks/block-merge-on-red-ci.sh}"
-LIB_PR="$SRC_ROOT/.claude/hooks/_lib-extract-pr.sh"
+LIB_PR="${LIB_PR_OVERRIDE:-$SRC_ROOT/.claude/hooks/_lib-extract-pr.sh}"
 
 for f in "$HOOK_SRC" "$LIB_PR"; do
   if [ ! -f "$f" ]; then
@@ -162,6 +162,7 @@ case "\$*" in
     esac
     ;;
   *"pr view"*)
+    if [[ " \$* " == *" --json number "* ]]; then echo "77"; exit 0; fi
     case "$nocheck_mode" in
       bad_sha) echo "deadbeef" ;;
       *)       echo "$TEST_SHA" ;;
@@ -216,7 +217,7 @@ run_case() {
   local input
   input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
   local got_stderr got_rc api_calls=0 runs_calls=0
-  got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-merge-on-red-ci.sh" 2>&1 >/dev/null)
+  got_stderr=$(cd "$sb" && printf '%s' "$input" | APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash .claude/hooks/block-merge-on-red-ci.sh 2>&1 >/dev/null)
   got_rc=$?
   if [ -f "$sb/api-calls" ]; then
     api_calls=$(wc -l < "$sb/api-calls")
@@ -249,6 +250,15 @@ run_case() {
   echo "PASS [$label]"
   PASS=$((PASS+1))
 }
+
+# B1: the current branch PR has green checks, but argv targets PR 5 or a
+# runtime value. Neither may inherit the branch PR's green result.
+for argv_target in "'5'" "os.environ['PR']"; do
+  sb=$(make_sandbox green "")
+  run_case "argv merge target $argv_target does not use green branch PR" 2 \
+    "cannot verify CI" "$sb" \
+    "python3 -c \"import subprocess, os; subprocess.run(['gh','pr','merge',$argv_target])\""
+done
 
 # ======================================================================
 # GH PATH — regression (must stay byte-identical to pre-#790 behaviour)

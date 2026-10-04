@@ -529,6 +529,13 @@ else
   echo "PASS [stderr backslash cmd]"; pass=$((pass + 1))
 fi
 
+# #1525: dispatcher must route executable merge bodies to the merge gates.
+setup_dispatch_sandbox "$TMP/merge-dispatch" "$HOOKS"
+check 'python subprocess merge heredoc routes' yes "$(dispatch_has_merge "$TMP/merge-dispatch" \
+  $'python3 - <<\'EOF\'\nimport subprocess\nsubprocess.run(["gh","pr","merge", PR, "--repo", R])\nEOF')"
+check 'bash merge heredoc routes' yes "$(dispatch_has_merge "$TMP/merge-dispatch" \
+  $'bash <<\'EOF\'\ngh pr merge $PR --repo $R\nEOF')"
+
 printf 'RESULT: %s passed, %s failed; fail-before proofs %s ok / %s missed\n' \
   "$pass" "$fail" "$fail_before_pass" "$fail_before_fail"
 [ "$fail" -eq 0 ] && [ "$fail_before_fail" -eq 0 ]
