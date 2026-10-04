@@ -417,6 +417,15 @@ run_case_custom_cmd "1552 api argv with comma in element blocks" 2 \
 sb=$(make_sandbox)
 write_rex_marker "$sb" 1546
 write_ceo_marker_structured "$sb" 1546
+api_bt_cmd=$(cat <<'CMD'
+python3 -c "import subprocess; subprocess.run(['gh','api','-X','PUT','-f','commit_message=fix `x`','repos/o/r/pulls/5/merge'])"
+CMD
+)
+run_case_custom_cmd "1552 api argv backtick in element blocks" 2 \
+  "cannot resolve" "$sb" "$api_bt_cmd"
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
 run_case_custom_cmd "1552 split-tail element blocks" 2 \
   "cannot resolve" "$sb" \
   "node -e \"require('child_process').execFileSync('gh', 'pr merge 5'.split(' '))\""
@@ -450,6 +459,12 @@ write_ceo_marker_structured "$sb" 1546
 run_case_custom_cmd "1552 perl qw merge blocks (wrong-PR)" 2 \
   "cannot resolve" "$sb" \
   "perl -e 'system qw(gh pr merge 5)'"
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1546
+write_ceo_marker_structured "$sb" 1546
+run_case_custom_cmd "1552 perl qw glab mr blocks (wrong-PR)" 2 \
+  "cannot resolve" "$sb" \
+  "perl -e 'system qw(glab mr merge 5)'"
 
 # #1525: quoted data passes. Executable heredocs and a real merge still block.
 data_cmd=$(cat <<'CMD'

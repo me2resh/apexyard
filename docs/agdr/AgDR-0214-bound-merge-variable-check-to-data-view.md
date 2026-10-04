@@ -38,8 +38,8 @@ Issue #1552 extends that detector. It still prefers a cheap text match over a fu
 - A representative `claude -p` build-agent command triggers the tracker gate's raw fallback. The ticket does not include the exact build-agent command word.
 - The raw argument match covers literal Python, Node, and Ruby calls with consecutive quoted elements, including JSON-escaped quotes. The bounded scrub still removes quoted data-only heredocs before detection.
 - Tokens built at runtime, passed through variables, or hidden in base64 remain outside this text detector's guarantee.
-- #1552: padded or full-path `gh` elements, global flags between argv tokens, `glab`/`mr`/`merge` lists, API argv elements that contain commas, split-tail `"pr merge …"` strings, JS backtick quotes, and short list-join / star-unpack glue (≤ 20 characters of `][+,*,` whitespace and quotes only) are detected and treated as opaque targets.
-- #1552: `['sh'|bash|zsh, '-c', <merge text>]`, `xargs` feeding a merge, and Perl `qw(gh pr merge …)` stay detected as merges but are opaque targets so they never inherit the branch PR. Perl `system('gh','pr','merge',…)` is opaque via the argv list match.
+- #1552: padded or full-path `gh` elements, global flags between argv tokens, `glab`/`mr`/`merge` lists, API argv elements that contain commas or backticks, split-tail `"pr merge …"` strings, JS backtick quotes, and short list-join / star-unpack glue (≤ 20 characters with at least one of `][+*,`) are detected and treated as opaque targets.
+- #1552: `['sh'|bash|zsh, '-c', <merge text>]`, `xargs` feeding a merge, and Perl `qw(gh pr merge …)` / `qw(glab mr merge …)` stay detected as merges but are opaque targets so they never inherit the branch PR. Opacity is segment-local. Perl `system('gh','pr','merge',…)` is opaque via the argv list match.
 
 ## Follow-ups
 
@@ -50,13 +50,22 @@ Issue #1552 extends that detector. It still prefers a cheap text match over a fu
 | 3 | `glab` / `mr` / `merge` argv lists | Handled | Same argv matcher with a `glab` binary element and `mr` token. |
 | 4 | Comma inside another API argv element (`'m=a,b'`) | Handled | Intermediate quoted args may contain commas. |
 | 5 | Split-tail element (`'pr merge 5'.split(...)`) | Handled | Quoted `gh` element plus a short glue gap, then a quoted string that starts with `pr` + `merge`. |
-| 6 | JS backtick element quotes | Handled | Quote class accepts `` ` `` alongside `'` and `"`. |
-| 7 | Joined lists / star-unpacking | Handled (bounded) | At most 20 characters of `]`, `[`, `+`, `*`, `,`, whitespace, and quotes between tokens. Arbitrary text between tokens stays out of scope so ordinary prose does not match. |
+| 6 | JS backtick element quotes | Handled | Each quote style matches on its own (`'…'`, `"…"`, `` `…` ``). A backtick inside a single- or double-quoted element (for example a `commit_message` with inline code) does not end that element. |
+| 7 | Joined lists / star-unpacking | Handled (bounded) | At most 20 characters between tokens, and the gap must include at least one of `]`, `[`, `+`, `*`, or `,`. Space-only gaps between quoted tokens stay non-matches so prose like `` `gh` `pr` `merge` `` does not look like an argv list. |
 | 8 | Python triple-quoted elements, or a comment between elements | Out of scope | A text matcher that accepted comments or triple quotes would also match ordinary prose and review samples. |
 | 9 | API path built with an f-string | Out of scope | The merge path is not literal in the command text; no static phrase exists to match. |
-| 10 | `['sh', '-c', <merge text>]`, also with `bash` or `zsh` | Handled | Contiguous merge phrase already detects; wrapper check makes the target opaque so the branch PR is never used. |
-| 11 | `xargs` feeding a merge | Handled | Contiguous phrase detects; `xargs` before the phrase makes the target opaque. |
-| 12 | Perl `qw(...)` and `system('gh','pr','merge',…)` | Handled | `qw` wrapper is opaque; the `system` list form is an argv merge. |
+| 10 | `['sh', '-c', <merge text>]`, also with `bash` or `zsh` | Handled | Contiguous merge phrase already detects. Opacity applies only when the shell `-c` tokens and the merge phrase share one simple-command / pipeline segment, within 200 characters after `-c`. An earlier unrelated `-c` in a separate statement (after a semicolon, an AND or OR operator, or a newline) does not make a later plain merge opaque. |
+| 11 | `xargs` feeding a merge | Handled | Contiguous phrase detects. Opacity applies only when `xargs` and the merge phrase share one segment, within an 80-character window. An earlier `xargs` in another segment does not poison a later plain merge. |
+| 12 | Perl `qw(...)` and `system('gh','pr','merge',…)` | Handled | `qw` is opaque for both `gh pr merge` and `glab mr merge` (paren and slash forms). The `system` list form is an argv merge. |
+
+### Known false positives (fail closed)
+
+These non-merge commands can still match the argv detector. The gate blocks with an unresolved target. That is acceptable. A missed merge is the failure that matters.
+
+| Class | Example shape | Notes |
+|-------|---------------|-------|
+| JSON argv blob | `jq . <<< '{"cmd":["gh","pr","merge"]}'` | Present before #1552. Comma-separated quoted elements look like a real argv list. |
+| Compact JSON / encoded payloads | Same three tokens as consecutive JSON string elements | Same cause as the row above. |
 
 ## Artifacts
 
@@ -74,3 +83,5 @@ Issue #1552 extends that detector. It still prefers a cheap text match over a fu
 ## Evolution
 
 **2026-10-04 — Argv-merge gap shapes (#1552).** The #1525 argv matcher closed the contiguous-phrase hole for literal `['gh','pr','merge']` lists, but padded binaries, global flags, `glab` lists, commas inside API elements, split-tail strings, JS backticks, short list joins, and nested `sh -c` / `xargs` / Perl `qw` wrappers still either missed detection or resolved the wrong PR. Fix: extend `_has_argv_merge` for the cheap literal shapes, and mark nested wrappers opaque via `_has_opaque_merge_wrapper` so extractors never fall back to the branch PR. Triple-quoted elements, comments between tokens, and f-string API paths stay out of scope — a text detector cannot see them without matching prose. Reasoning: a missed merge is the failure that matters; GitHub's required-review rule remains the backstop for runtime-built payloads.
+
+**2026-10-04 — Rex #1556 delta (#1552 follow-up).** The first #1552 pass put the backtick in a shared quote class. It also removed the backtick from the element body. A backtick inside a `'…'` or `"…"` API element then ended that element. The merge became invisible. Fix: match each quote style on its own. The Perl `qw` opacity patterns now match `glab mr merge` as well as the GitHub phrase. Wrapper opacity for `sh -c` and `xargs` now requires the same segment. Newlines flatten to ` ; ` for that check. The scan uses a 200-character bound after `-c` and the existing 80-character bound after `xargs`. Joined-list glue now requires a structural join character. That change drops three space-separated prose false positives. Compact JSON argv blobs remain a known fail-closed false positive. Reasoning: restore detection that base already had. Finish the GitLab `qw` acceptance criterion. Stop unrelated earlier wrappers from blocking plain literal merges.

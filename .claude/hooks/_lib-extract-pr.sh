@@ -523,21 +523,27 @@ _has_argv_merge() {
   # a gate that times out does not block. tr is linear.
   local flat
   flat=$(printf '%s' "$1" | tr '\n' ' ')
-  # Optional JSON-style backslash before the quote; ", ', or JS backtick.
-  local quote='[\\]?["`'"'"']'
+  # Match each quote style separately so one kind cannot close another.
+  # A backtick inside '…' or "…" (e.g. commit_message with inline code) must
+  # stay inside that element. Optional JSON-style backslash before each
+  # opener and closer (covers \"gh\" as well as "gh").
+  local elem='([\\]?"[^"]*[\\]?"|[\\]?'\''[^'\'']*[\\]?'\''|[\\]?`[^`]*[\\]?`)'
   local comma='[[:space:]]*,[[:space:]]*'
   local argv_start='\[?[[:space:]]*'
   # Quoted flag/option elements between major tokens (e.g. '-R', 'o/r').
-  local argv_flags="(${quote}[^\"'\`]*${quote}${comma})*"
-  # ≤20 chars of list-join / star-unpack glue only — never arbitrary prose
-  # (#1552 shape 7). Allowed: ] [ + * , whitespace, and quotes.
-  local glue='([][+*,[:space:]"`'"'"']){0,20}'
+  local argv_flags="(${elem}${comma})*"
+  # ≤20 chars of list-join / star-unpack glue, and at least one of ] [ + * ,
+  # (#1552 shape 7). Space-only gaps between quoted tokens stay non-matches
+  # so prose like '`gh` `pr` `merge`' does not look like an argv list.
+  local glue='([][:space:]"`'"'"']){0,10}[][+*,]([][+*,[:space:]"`'"'"']){0,9}'
   # Binary element: optional path prefix and/or leading pad inside the quotes.
-  local gh_elem="${quote}([^/\"'\`[:space:]]*/)*[[:space:]]*gh${quote}"
-  local glab_elem="${quote}([^/\"'\`[:space:]]*/)*[[:space:]]*glab${quote}"
-  local pr_elem="${quote}pr${quote}"
-  local mr_elem="${quote}mr${quote}"
-  local merge_elem="${quote}merge${quote}"
+  local gh_elem='([\\]?"([^/"[:space:]]*/)*[[:space:]]*gh[\\]?"|[\\]?'\''([^/'\''[:space:]]*/)*[[:space:]]*gh[\\]?'\''|[\\]?`([^/`[:space:]]*/)*[[:space:]]*gh[\\]?`)'
+  local glab_elem='([\\]?"([^/"[:space:]]*/)*[[:space:]]*glab[\\]?"|[\\]?'\''([^/'\''[:space:]]*/)*[[:space:]]*glab[\\]?'\''|[\\]?`([^/`[:space:]]*/)*[[:space:]]*glab[\\]?`)'
+  local pr_elem='([\\]?"pr[\\]?"|[\\]?'\''pr[\\]?'\''|[\\]?`pr[\\]?`)'
+  local mr_elem='([\\]?"mr[\\]?"|[\\]?'\''mr[\\]?'\''|[\\]?`mr[\\]?`)'
+  local merge_elem='([\\]?"merge[\\]?"|[\\]?'\''merge[\\]?'\''|[\\]?`merge[\\]?`)'
+  local api_tok='([\\]?"api[\\]?"|[\\]?'\''api[\\]?'\''|[\\]?`api[\\]?`)'
+  local open_q='([\\]?"|[\\]?'\''|[\\]?`)'
 
   # Classic comma-separated argv, with optional global flags between tokens.
   if printf '%s\n' "$flat" | grep -qE "${gh_elem}${comma}${argv_start}${argv_flags}${pr_elem}${comma}${merge_elem}"; then
@@ -548,7 +554,7 @@ _has_argv_merge() {
     return 0
   fi
   # One element holds the remainder: 'gh' then a quoted "pr merge …" (#1552 shape 5).
-  if printf '%s\n' "$flat" | grep -qE "${gh_elem}${glue}${quote}pr[[:space:]]+merge\b"; then
+  if printf '%s\n' "$flat" | grep -qE "${gh_elem}${glue}${open_q}pr[[:space:]]+merge\b"; then
     return 0
   fi
   # glab mr merge argv (with optional flags or glue).
@@ -560,40 +566,63 @@ _has_argv_merge() {
   fi
 
   # The same argv shape can call the GitHub API merge endpoint directly.
-  # Intermediate quoted args may contain commas (e.g. '-f', 'm=a,b').
-  local api_path='[^[:space:],"`'"'"']*/pulls/[0-9]+/merge([?][^[:space:],"`'"'"']*)?'
-  local argv_any="(${quote}[^\"'\`]*${quote}${comma})*"
-  printf '%s\n' "$flat" | grep -qE "${gh_elem}${comma}${argv_start}${quote}api${quote}${comma}${argv_any}${quote}${api_path}${quote}"
+  # Intermediate quoted args may contain commas (e.g. '-f', 'm=a,b') and
+  # backticks (e.g. commit_message with inline code).
+  local api_elem='([\\]?"[^"[:space:],]*/pulls/[0-9]+/merge([?][^"[:space:],]*)?[\\]?"|[\\]?'\''[^'\''[:space:],]*/pulls/[0-9]+/merge([?][^'\''[:space:],]*)?[\\]?'\''|[\\]?`[^`[:space:],]*/pulls/[0-9]+/merge([?][^`[:space:],]*)?[\\]?`)'
+  local argv_any="(${elem}${comma})*"
+  printf '%s\n' "$flat" | grep -qE "${gh_elem}${comma}${argv_start}${api_tok}${comma}${argv_any}${api_elem}"
 }
 
 # Merges nested in shell -c argv lists, xargs pipelines, or Perl qw() are
 # detected as merges by the contiguous phrase matcher, but their PR/repo
 # cannot be trusted (or is absent). Treat them as opaque targets so the
 # gates never fall back to the current branch's PR (#1552 shapes 10–12).
+# Wrapper and merge text must share one simple-command / pipeline segment
+# (split on ; && || and newlines). Flattening for this check turns newlines
+# into " ; " so a prior-line xargs does not poison a later plain merge.
 _has_opaque_merge_wrapper() {
-  local flat
-  flat=$(printf '%s' "$1" | tr '\n' ' ')
+  local normalized segment segments
+  # Preserve statement boundaries that flattening would otherwise erase.
+  normalized=$(printf '%s' "$1" | awk '{ if (n++) printf " ; "; printf "%s", $0 }')
   # Only when a contiguous merge phrase is already present.
-  if ! printf '%s\n' "$flat" | grep -qE '\b(gh[[:space:]]+pr[[:space:]]+merge|glab[[:space:]]+mr[[:space:]]+merge)\b'; then
+  if ! printf '%s\n' "$normalized" | grep -qE '\b(gh[[:space:]]+pr[[:space:]]+merge|glab[[:space:]]+mr[[:space:]]+merge)\b'; then
     return 1
   fi
   local quote='[\\]?["`'"'"']'
   local comma='[[:space:]]*,[[:space:]]*'
-  # 10: ['sh'|bash|zsh, '-c', '<merge text>']
-  if printf '%s\n' "$flat" | grep -qE "${quote}(sh|bash|zsh)${quote}${comma}${quote}-c${quote}"; then
-    return 0
-  fi
-  # 11: xargs feeds the merge (merge phrase after xargs, bounded gap).
-  if printf '%s\n' "$flat" | grep -qE '\bxargs\b.{0,80}\b(gh[[:space:]]+pr[[:space:]]+merge|glab[[:space:]]+mr[[:space:]]+merge)\b'; then
-    return 0
-  fi
-  # 12: Perl qw(gh pr merge …) / qw/…/
-  if printf '%s\n' "$flat" | grep -qE '\bqw[[:space:]]*[(][^)]*\bgh[[:space:]]+pr[[:space:]]+merge\b'; then
-    return 0
-  fi
-  if printf '%s\n' "$flat" | grep -qE '\bqw[[:space:]]*/[^/]*\bgh[[:space:]]+pr[[:space:]]+merge\b'; then
-    return 0
-  fi
+  local merge_re='(gh[[:space:]]+pr[[:space:]]+merge|glab[[:space:]]+mr[[:space:]]+merge)'
+  # One segment per line: split on ; && || (newlines already became " ; ").
+  # awk gsub uses a real newline so BSD and GNU sed are not required.
+  segments=$(printf '%s' "$normalized" | awk '{
+    gsub(/&&/, "\n")
+    gsub(/\|\|/, "\n")
+    gsub(/;/, "\n")
+    print
+  }')
+  while IFS= read -r segment; do
+    [ -z "$segment" ] && continue
+    if ! printf '%s\n' "$segment" | grep -qE "\\b${merge_re}\\b"; then
+      continue
+    fi
+    # 10: ['sh'|bash|zsh, '-c', '<merge text>'] — -c and merge in one segment,
+    # within 200 chars (the argv string holding the merge phrase).
+    if printf '%s\n' "$segment" | grep -qE "${quote}(sh|bash|zsh)${quote}${comma}${quote}-c${quote}.{0,200}\\b${merge_re}\\b"; then
+      return 0
+    fi
+    # 11: xargs feeds the merge (merge phrase after xargs, ≤80 chars, same segment).
+    if printf '%s\n' "$segment" | grep -qE "\\bxargs\\b.{0,80}\\b${merge_re}\\b"; then
+      return 0
+    fi
+    # 12: Perl qw(gh pr merge …) / qw(glab mr merge …) / qw/…/
+    if printf '%s\n' "$segment" | grep -qE "\\bqw[[:space:]]*[(][^)]*\\b${merge_re}\\b"; then
+      return 0
+    fi
+    if printf '%s\n' "$segment" | grep -qE "\\bqw[[:space:]]*/[^/]*\\b${merge_re}\\b"; then
+      return 0
+    fi
+  done <<SEG_EOF
+$segments
+SEG_EOF
   return 1
 }
 

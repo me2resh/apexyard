@@ -44,6 +44,19 @@ esac
 exit 0
 GHEOF
 chmod +x "$SHIM_DIR/gh"
+cat > "$SHIM_DIR/glab" <<'GLABEOF'
+#!/bin/bash
+# Controlled branch MR fallback for glab opacity tests.
+case "$*" in
+  *"mr view"*)
+    if [ -n "${MOCK_BRANCH_PR:-}" ]; then
+      printf '{"iid":%s}\n' "$MOCK_BRANCH_PR"
+    fi
+    ;;
+esac
+exit 0
+GLABEOF
+chmod +x "$SHIM_DIR/glab"
 export PATH="$SHIM_DIR:$PATH"
 
 # shellcheck source=/dev/null
@@ -312,11 +325,47 @@ assert_opaque "1552 glab argv" "['glab','mr','merge','5']"
 assert_opaque "1552 glab argv with -R" "['glab','-R','o/r','mr','merge','5']"
 assert_opaque "1552 api argv with comma in element" \
   "['gh','api','-f','m=a,b','repos/o/r/pulls/5/merge']"
+# Rex #1556: backtick inside a '…' / "…" API element must not end the element.
+api_bt_sq=$(cat <<'CMD'
+python3 -c "import subprocess; subprocess.run(['gh','api','-X','PUT','-f','commit_message=fix `x`','repos/o/r/pulls/5/merge'])"
+CMD
+)
+assert_opaque "1552 api argv backtick in single-quoted element" "$api_bt_sq"
+api_bt_dq=$(cat <<'CMD'
+python3 -c 'import subprocess; subprocess.run(["gh","api","-f","commit_title=Use `foo`","repos/o/r/pulls/5/merge"])'
+CMD
+)
+assert_opaque "1552 api argv backtick in double-quoted element" "$api_bt_dq"
 assert_opaque "1552 split-tail element" "execFileSync('gh', 'pr merge 5'.split(' '))"
 assert_opaque "1552 concat split-tail" "['gh'] + 'pr merge 5'.split()"
 assert_opaque "1552 JS backtick argv" '[`gh`,`pr`,`merge`]'
 assert_opaque "1552 joined list" "['gh','pr'] + ['merge','5']"
 assert_opaque "1552 star-unpack list" "[*['gh','pr'], 'merge']"
+
+# Readable: merge yes, opaque no, optional expected PR.
+assert_readable() {
+  local label="$1" cmd="$2" want_pr="${3:-}"
+  local got
+  if ! is_merge_command "$cmd"; then
+    echo "FAIL [$label]: not detected as merge; cmd=[$cmd]" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "
+    return
+  fi
+  if merge_command_uses_variable "$cmd"; then
+    echo "FAIL [$label]: target unexpectedly opaque; cmd=[$cmd]" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "
+    return
+  fi
+  if [ -n "$want_pr" ]; then
+    got=$(extract_pr_number "$cmd")
+    if [ "$got" != "$want_pr" ]; then
+      echo "FAIL [$label]: want pr=[$want_pr] got=[$got]; cmd=[$cmd]" >&2
+      FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "
+      return
+    fi
+  fi
+  echo "PASS [$label]"; PASS=$((PASS+1))
+}
 
 # Wrong-PR wrappers: opaque, and must not resolve to the branch PR.
 export MOCK_BRANCH_PR=1546
@@ -325,10 +374,23 @@ assert_opaque "1552 bash -c argv wrapper" "['bash','-c', 'gh pr merge 5']"
 assert_opaque "1552 zsh -c argv wrapper" "['zsh','-c', 'gh pr merge 5']"
 assert_opaque "1552 xargs merge" "echo 5 | xargs gh pr merge"
 assert_opaque "1552 perl qw merge" "perl -e 'system qw(gh pr merge 5)'"
+assert_opaque "1552 perl qw glab mr" "perl -e 'system qw(glab mr merge 5)'"
 assert_opaque "1552 perl system list" "perl -e \"system('gh','pr','merge',5)\""
 assert_pr "1552 sh -c does not inherit branch PR" "['sh','-c', 'gh pr merge 5']" ""
 assert_pr "1552 xargs does not inherit branch PR" "echo 5 | xargs gh pr merge" ""
 assert_pr "1552 perl qw does not inherit branch PR" "perl -e 'system qw(gh pr merge 5)'" ""
+assert_pr "1552 perl qw glab does not inherit branch MR" "perl -e 'system qw(glab mr merge 5)'" ""
+
+# Wrapper opacity is segment-local: an earlier xargs / -c must not poison a
+# later plain merge separated by ; && || or a newline.
+assert_readable "1552 xargs then plain merge stays readable" \
+  "ls | xargs echo; gh pr merge 5 --repo o/r --squash" "5"
+assert_readable "1552 xargs && plain merge stays readable" \
+  "find . -name '*.tmp' | xargs rm -f && gh pr merge 5 --repo o/r --squash" "5"
+xargs_nl=$(printf '%s\n%s' 'ls | xargs echo' 'gh pr merge 5 --repo o/r --squash')
+assert_readable "1552 xargs newline then plain merge stays readable" "$xargs_nl" "5"
+assert_readable "1552 sh -c elsewhere then plain merge stays readable" \
+  "python3 -c \"import subprocess; subprocess.run(['bash','-c','make test'])\" && gh pr merge 5 --repo o/r" "5"
 unset MOCK_BRANCH_PR
 
 # Fail-before evidence: the pre-#1552 lib must miss these shapes. The saved
@@ -339,6 +401,9 @@ if [ -f "$BEFORE_LIB" ]; then
   printf '%s\n' '#!/bin/bash' 'case "$*" in *number*) printf "%s\n" "${MOCK_BRANCH_PR:-}";; esac' 'exit 0' \
     > "$before_shim/gh"
   chmod +x "$before_shim/gh"
+  printf '%s\n' '#!/bin/bash' 'case "$*" in *"mr view"*) printf "{\"iid\":%s}\n" "${MOCK_BRANCH_PR:-}";; esac' 'exit 0' \
+    > "$before_shim/glab"
+  chmod +x "$before_shim/glab"
   before_out=$(mktemp)
   PATH="$before_shim:$PATH" MOCK_BRANCH_PR=1546 bash -c '
     . "$1"
@@ -372,6 +437,7 @@ if [ -f "$BEFORE_LIB" ]; then
     check "sh-c" "['\''sh'\'','\''-c'\'', '\''gh pr merge 5'\'']" opaque
     check "xargs" "echo 5 | xargs gh pr merge" opaque
     check "qw" "perl -e '\''system qw(gh pr merge 5)'\''" opaque
+    check "qw-glab" "perl -e '\''system qw(glab mr merge 5)'\''" opaque
     exit "$fail"
   ' _ "$BEFORE_LIB" > "$before_out" 2>&1
   before_rc=$?
@@ -385,8 +451,7 @@ if [ -f "$BEFORE_LIB" ]; then
   fi
   rm -rf "$before_shim" "$before_out"
 else
-  echo "PASS [1552 fail-before evidence skipped — no BEFORE_LIB at $BEFORE_LIB]"
-  PASS=$((PASS+1))
+  echo "NOTE: not counted [1552 fail-before evidence — no BEFORE_LIB at $BEFORE_LIB]"
 fi
 
 # --- Bash 3.2 time bound (PR #1546 security review, H1) --------------------
