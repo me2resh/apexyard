@@ -28,7 +28,9 @@ patterns=$(config_get '.ticket.create_command_patterns[]' 2>/dev/null)
 [ -n "$patterns" ] || exit 0
 norm=$(printf '%s' "$command" | tr -s '[:space:]' ' ')
 matched=""
-# Keep this boundary list aligned with require-skill-for-issue-create.sh.
+# Boundary list matches require-skill-for-issue-create.sh, plus `$(pat…)` so
+# ORBIT still sees `result="$(tracker_create …)"` when planning is on. The
+# skill gate deliberately omits that form (AgDR-0217 / #1565).
 while IFS= read -r pat; do
   [ -n "$pat" ] || continue
   case "$norm" in
@@ -38,7 +40,7 @@ done <<EOF
 $patterns
 EOF
 # Shell wrappers can place the create command inside a quoted argument. The
-# older skill gate intentionally does not inspect those forms; this guard must
+# skill gate intentionally does not inspect those forms; this guard must
 # still see them when ORBIT is enabled.
 if [ -z "$matched" ]; then
   case "$norm" in
@@ -233,34 +235,106 @@ if [ -e "$config_root/.claude/project-config.json" ] &&
 fi
 if [ -z "$repo" ]; then
   remote_url=$(git remote get-url origin 2>/dev/null)
-  repo=$(printf '%s' "$remote_url" | sed -E 's#^.*[:/]([^/:]+/[^/:]+)(\.git)?$#\1#; s#\.git$##')
+  repo=$remote_url
 fi
+
+# Lowercase owner/name. Strip URL scheme, git@host:, host/, trailing .git, /.
+# gh accepts Owner/Name, https://…, and github.com/…; the registry stores slugs.
+normalize_repo_target() {
+  # awk /regex/ delimiters cannot host an unescaped / inside [^/], so host
+  # stripping uses split + a hostname-shaped first segment (contains a dot).
+  printf '%s' "$1" | LC_ALL=C awk '
+    {
+      s = $0
+      sub(/[[:space:]]+#.*/, "", s)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
+      gsub(/^["\047]|["\047]$/, "", s)
+      s = tolower(s)
+      while (s ~ /\/$/) sub(/\/$/, "", s)
+      if (s ~ /\.git$/) sub(/\.git$/, "", s)
+      while (s ~ /\/$/) sub(/\/$/, "", s)
+      if (match(s, /^[a-z][a-z0-9+.-]*:\/\//)) s = substr(s, RLENGTH + 1)
+      if (match(s, /^git@[^:]+:/)) s = substr(s, RLENGTH + 1)
+      n = split(s, p, "/")
+      start = 1
+      if (n >= 3 && index(p[1], ".") > 0) start = 2
+      if (n - start + 1 >= 2) print p[n - 1] "/" p[n]
+      else if (n >= start) {
+        out = p[start]
+        for (i = start + 1; i <= n; i++) out = out "/" p[i]
+        print out
+      } else print s
+    }
+  '
+}
 
 # Resolve the target registry entry. A per-project flag wins over the global
 # default. No registered target means the project has no ORBIT gate.
 # shellcheck source=/dev/null
 . "$hook_dir/_lib-portfolio-paths.sh"
+# shellcheck source=/dev/null
+. "$hook_dir/_lib-registry-parser.sh"
 registry=$(portfolio_registry)
 [ -f "$registry" ] || exit 0
-entry=$(awk -v target="$repo" '
-  function clean(v) { sub(/^[^:]*:[[:space:]]*/,"",v); gsub(/^["\047]|["\047]$/,"",v); return v }
-  function emit() { if (found) print name "\t" workspace "\t" orbit }
-  /^[[:space:]]*- name:/ { emit(); name=clean($0); workspace=""; orbit=""; found=0; in_orbit=0; in_repos=0; next }
-  /^[[:space:]]*repo:/ { if (clean($0)==target) found=1; in_orbit=0; next }
-  /^[[:space:]]*repos:[[:space:]]*$/ { in_repos=1; in_orbit=0; next }
-  /^[[:space:]]*-[[:space:]]*[^:]+\/[^:]+[[:space:]]*$/ {
-    v=$0; sub(/^[[:space:]]*-[[:space:]]*/,"",v); gsub(/^["\047]|["\047]$/,"",v)
-    if (in_repos && v==target) found=1; next
+if ! declare -F registry_parse_entries >/dev/null 2>&1; then
+  echo 'BLOCKED: Cannot read the ORBIT project registry.' >&2
+  exit 2
+fi
+parsed=$(registry_parse_entries "$registry") || {
+  echo 'BLOCKED: Cannot read the ORBIT project registry.' >&2
+  exit 2
+}
+target=$(normalize_repo_target "$repo")
+if [ -z "$target" ]; then
+  if [ -n "$repo" ]; then
+    echo 'BLOCKED: Cannot normalise the ORBIT ticket repo target.' >&2
+    exit 2
+  fi
+  exit 0
+fi
+project=""
+while IFS= read -r entry; do
+  case "$entry" in
+    PAIR=*)
+      pair=${entry#PAIR=}
+      pname=$(printf '%s' "$pair" | cut -f1)
+      prepo=$(printf '%s' "$pair" | cut -f2)
+      if [ "$(normalize_repo_target "$prepo")" = "$target" ]; then
+        project=$pname
+        break
+      fi
+      ;;
+  esac
+done <<EOF
+$parsed
+EOF
+[ -n "$project" ] || exit 0
+# Workspace and orbit.default_planning stay on the named entry; the shared
+# parser correlates tokens for leak scrubbing and does not emit those fields.
+fields=$(awk -v want="$project" '
+  function clean(v) {
+    sub(/^[^:]*:[[:space:]]*/, "", v)
+    sub(/[[:space:]]+#.*/, "", v)
+    gsub(/^["\047]|["\047]$/, "", v)
+    gsub(/[[:space:]]+$/, "", v)
+    return v
   }
-  /^[[:space:]]*workspace:/ { workspace=clean($0); in_orbit=0; next }
-  /^[[:space:]]*orbit:[[:space:]]*$/ { in_orbit=1; next }
-  /^[[:space:]]*[a-zA-Z_]+:/ { in_repos=0; if (in_orbit && $1 ~ /^default_planning:/) orbit=clean($0); else in_orbit=0 }
+  function emit() { if (found) print workspace "\t" orbit }
+  /^[[:space:]]*- name:/ {
+    emit()
+    name = clean($0); found = (name == want)
+    workspace = ""; orbit = ""; in_orbit = 0; next
+  }
+  found && /^[[:space:]]*workspace:/ { workspace = clean($0); in_orbit = 0; next }
+  found && /^[[:space:]]*orbit:[[:space:]]*$/ { in_orbit = 1; next }
+  found && /^[[:space:]]*[a-zA-Z_]+:/ {
+    if (in_orbit && $1 ~ /^default_planning:/) orbit = clean($0)
+    in_orbit = 0
+  }
   END { emit() }
 ' "$registry" | head -1)
-[ -n "$entry" ] || exit 0
-project=$(printf '%s' "$entry" | cut -f1)
-workspace=$(printf '%s' "$entry" | cut -f2)
-enabled=$(printf '%s' "$entry" | cut -f3)
+workspace=$(printf '%s' "$fields" | cut -f1)
+enabled=$(printf '%s' "$fields" | cut -f2)
 [ -n "$enabled" ] || enabled=$(config_get '.orbit.default_planning' 2>/dev/null)
 [ "$enabled" = true ] || exit 0
 case "$norm" in

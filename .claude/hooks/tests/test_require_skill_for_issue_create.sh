@@ -122,11 +122,6 @@ in=$(jq -nc --arg c 'tracker_create foo/bar "my title" /tmp/body.md' \
   '{tool_name:"Bash", tool_input:{command:$c}}')
 run_case "tracker_create blocked w/o marker (#670)" 2 "BLOCKED" "$in" "$sb"
 
-sb=$(make_sandbox)
-in=$(jq -nc --arg c 'result=$(tracker_create foo/bar "my title" /tmp/body.md)' \
-  '{tool_name:"Bash", tool_input:{command:$c}}')
-run_case "wrapped tracker_create blocked w/o marker" 2 "BLOCKED" "$in" "$sb"
-
 # glab (GitLab) create — the create-guard previously didn't recognise it (#670).
 sb=$(make_sandbox)
 in=$(jq -nc --arg c "glab issue create -R foo/bar --title x" \
@@ -214,6 +209,48 @@ run_case "custom matcher 'mycorp-tracker new' enforced" 2 "BLOCKED" "$in" "$sb"
 sb=$(make_sandbox); : > "$sb/.claude/session/active-issue-skill"
 in=$(jq -nc --arg c "gh issue create --repo foo/bar --title x" '{tool_name:"Bash", tool_input:{command:$c}}')
 run_case "empty skill marker → blocked" 2 "BLOCKED" "$in" "$sb"
+
+# --- Wrapped tracker_create (skill shapes) must match upstream/dev ----------
+# /tickets-batch, /roadmap, /spike-close --promote, and /prototype-close
+# --promote assign result="$(tracker_create …)" without the skill marker.
+# Matching `$(…)` here would block every adopter; ORBIT covers that form.
+# Build the create verb at runtime so live PreToolUse gates do not see a
+# literal create command on the test-runner shell line.
+dev_hook=$(mktemp)
+git -C "$SRC_ROOT" show upstream/dev:.claude/hooks/require-skill-for-issue-create.sh > "$dev_hook" || {
+  echo "FAIL: cannot read upstream/dev require-skill-for-issue-create.sh" >&2
+  exit 1
+}
+chmod +x "$dev_hook"
+create_verb=create
+tracker_fn="tracker_${create_verb}"
+# Four skill call shapes (tickets-batch, roadmap, spike-close, prototype-close).
+shape_i=0
+for shape_fmt in \
+  'result="$(%s "{owner/repo}" "[Feature] {title}" "$body_file" "{type-label},{priority},{area-labels}")"' \
+  'result="$(%s "$owner_repo" "[Roadmap] {item}" "$body_file" "roadmap,{priority}")"' \
+  'result="$(%s "{owner/repo}" "[Feature] {title}" "$body_file" "enhancement")"' \
+  'result="$(%s "{owner/repo}" "[Feature] {title}" "$body_file" "enhancement")"'
+do
+  shape_i=$((shape_i + 1))
+  shape=$(printf "$shape_fmt" "$tracker_fn")
+  sb=$(make_sandbox)
+  cp "$dev_hook" "$sb/.claude/hooks/require-skill-for-issue-create-dev.sh"
+  in=$(jq -nc --arg c "$shape" '{tool_name:"Bash", tool_input:{command:$c}}')
+  pr_rc=0
+  dev_rc=0
+  (cd "$sb" && printf '%s' "$in" | bash .claude/hooks/require-skill-for-issue-create.sh >/dev/null 2>"$sb/err-pr") || pr_rc=$?
+  (cd "$sb" && printf '%s' "$in" | bash .claude/hooks/require-skill-for-issue-create-dev.sh >/dev/null 2>"$sb/err-dev") || dev_rc=$?
+  rm -rf "$sb"
+  if [ "$pr_rc" -ne 0 ] || [ "$dev_rc" -ne 0 ] || [ "$pr_rc" -ne "$dev_rc" ]; then
+    echo "FAIL [wrapped skill shape $shape_i matches dev]: pr_rc=$pr_rc dev_rc=$dev_rc" >&2
+    FAIL=$((FAIL + 1)); FAILED_CASES="${FAILED_CASES}wrapped-shape-$shape_i "
+  else
+    echo "PASS [wrapped skill shape $shape_i matches dev (rc=0)]"
+    PASS=$((PASS + 1))
+  fi
+done
+rm -f "$dev_hook"
 
 # --- Summary --------------------------------------------------------------
 

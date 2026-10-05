@@ -17,7 +17,8 @@ git -C "$sb" init -q
 mkdir -p "$sb/.claude/hooks" "$sb/workspace"
 cp "$src/.claude/hooks/require-orbit-slice-for-ticket.sh" "$src/.claude/hooks/_lib-read-config.sh" \
   "$src/.claude/hooks/_lib-portfolio-paths.sh" "$src/.claude/hooks/_lib-ops-root.sh" \
-  "$src/.claude/hooks/_lib-resolution-cache.sh" "$sb/.claude/hooks/"
+  "$src/.claude/hooks/_lib-resolution-cache.sh" "$src/.claude/hooks/_lib-registry-parser.sh" \
+  "$sb/.claude/hooks/"
 cp "$src/.claude/project-config.defaults.json" "$sb/.claude/"
 printf '{}\n' > "$sb/.claude/project-config.json"
 : > "$sb/onboarding.yaml"
@@ -198,9 +199,61 @@ chmod +x "$sb/bin/git"
 payload=$(jq -n --arg c "$(make_cmd Feature 'ORBIT slice: slice-demo-o1')" '{tool_name:"Bash",tool_input:{command:$c}}')
 (cd "$sb" && printf '%s' "$payload" | PATH="$sb/bin:$PATH" /bin/bash .claude/hooks/require-orbit-slice-for-ticket.sh) > "$sb/out" 2> "$sb/err"
 if [ "$?" -ne 2 ]; then echo 'FAIL git_missing'; fail=1; else echo 'PASS git_missing'; fi
+# Hide jq with a curated PATH. Do not use PATH=/bin: on Ubuntu /bin → /usr/bin,
+# so jq in /usr/bin stays visible and this case false-passes on Linux CI.
+jq_hide=$(mktemp -d "$sb/jq-hide.XXXXXX") || exit 1
+for tool in bash sh git awk sed grep egrep fgrep tr cat head cut dirname mkdir printf env; do
+  tool_path=$(type -P "$tool" 2>/dev/null) || continue
+  ln -sf "$tool_path" "$jq_hide/$tool"
+done
+if type -P jq >/dev/null 2>&1 && [ -e "$jq_hide/jq" ]; then
+  echo 'FAIL jq_missing setup: jq must not be linked into the hide dir' >&2
+  fail=1
+fi
 payload=$(jq -n --arg c "$(make_cmd Feature 'ORBIT slice: slice-demo-o1')" '{tool_name:"Bash",tool_input:{command:$c}}')
-(cd "$sb" && printf '%s' "$payload" | PATH=/bin /bin/bash .claude/hooks/require-orbit-slice-for-ticket.sh) > "$sb/out" 2> "$sb/err"
-if [ "$?" -ne 2 ]; then echo 'FAIL jq_missing'; fail=1; else echo 'PASS jq_missing'; fi
+(cd "$sb" && printf '%s' "$payload" | PATH="$jq_hide" /bin/bash .claude/hooks/require-orbit-slice-for-ticket.sh) > "$sb/out" 2> "$sb/err"
+if [ "$?" -ne 2 ] || ! grep -q 'jq is unavailable' "$sb/err"; then
+  echo "FAIL jq_missing: expected exit 2 with jq-unavailable message: $(cat "$sb/err")"
+  fail=1
+else
+  echo 'PASS jq_missing'
+fi
+# Sanity: with jq present, the same valid create is allowed (not a false jq miss).
+check jq_present_sanity 0 "$(make_cmd Feature 'ORBIT slice: slice-demo-o1')"
+# Repo spellings gh accepts — all must resolve to the registered slug.
+check repo_upper 2 "gh issue $verb --repo DEMO-ORG/DEMO --title '[Feature] Demo' --body 'plain body'"
+check repo_upper_valid 0 "gh issue $verb --repo DEMO-ORG/DEMO --title '[Feature] Demo' --body 'ORBIT slice: slice-demo-o1'"
+check repo_https 2 "gh issue $verb --repo https://github.com/demo-org/demo --title '[Feature] Demo' --body 'plain body'"
+check repo_https_valid 0 "gh issue $verb --repo https://github.com/demo-org/demo --title '[Feature] Demo' --body 'ORBIT slice: slice-demo-o1'"
+check repo_https_git 2 "gh issue $verb --repo https://github.com/demo-org/demo.git --title '[Feature] Demo' --body 'plain body'"
+check repo_host 2 "gh issue $verb --repo github.com/demo-org/demo --title '[Feature] Demo' --body 'plain body'"
+check repo_host_valid 0 "gh issue $verb --repo github.com/demo-org/demo --title '[Feature] Demo' --body 'ORBIT slice: slice-demo-o1'"
+check repo_ssh 2 "gh issue $verb --repo git@github.com:demo-org/demo.git --title '[Feature] Demo' --body 'plain body'"
+check repo_ssh_valid 0 "gh issue $verb --repo git@github.com:demo-org/demo.git --title '[Feature] Demo' --body 'ORBIT slice: slice-demo-o1'"
+# Inline repos: […] and block-list items with trailing comments (example shapes).
+cat > "$sb/apexyard.projects.yaml" <<'YAML'
+projects:
+  - name: demo
+    repos: [demo-org/demo]
+    workspace: workspace/demo
+    orbit:
+      default_planning: true
+YAML
+check inline_repos_missing 2 "gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body 'plain body'"
+check inline_repos_valid 0 "gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body 'ORBIT slice: slice-demo-o1'"
+check inline_repos_upper 2 "gh issue $verb --repo DEMO-ORG/DEMO --title '[Feature] Demo' --body 'plain body'"
+cat > "$sb/apexyard.projects.yaml" <<'YAML'
+projects:
+  - name: demo
+    repos:
+      - demo-org/demo  # primary service
+    workspace: workspace/demo
+    orbit:
+      default_planning: true
+YAML
+check repos_comment_missing 2 "gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body 'plain body'"
+check repos_comment_valid 0 "gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body 'ORBIT slice: slice-demo-o1'"
+check repos_comment_https 2 "gh issue $verb --repo https://github.com/demo-org/demo --title '[Feature] Demo' --body 'plain body'"
 printf '{"orbit":{"default_planning":false}}\n' > "$sb/.claude/project-config.json"
 awk '!/    orbit:/ && !/      default_planning: true/' "$sb/apexyard.projects.yaml" > "$sb/registry.tmp"
 mv "$sb/registry.tmp" "$sb/apexyard.projects.yaml"
