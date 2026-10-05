@@ -117,6 +117,10 @@ for current_slice in "$orbit_root"/slices/*.json; do
   fi
 done
 
+# Bash 3.2 treats an empty array as unset under set -u; no valid Plan means
+# nothing to check.
+[ "${#selected_plans[@]}" -gt 0 ] || exit 0
+
 for current_plan in "${selected_plans[@]}"; do
 
   if [ -n "$reconciliation_file" ]; then

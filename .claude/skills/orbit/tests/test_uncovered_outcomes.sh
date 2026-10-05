@@ -20,7 +20,7 @@ slice="$orbit_root/slices/slice-demo-o1.json"
 check_warning() {
   label="$1"
   expected="$2"
-  output=$("$HELPER" --orbit-root "$orbit_root" --plan "$plan" \
+  output=$("$BASH" "$HELPER" --orbit-root "$orbit_root" --plan "$plan" \
     --reconciliation "$reconciliation" 2>&1)
   rc=$?
   count=$(printf '%s\n' "$output" | grep -c '^WARNING: ORBIT outcome o1-demo' || true)
@@ -43,7 +43,7 @@ if [ "$?" -ne 0 ] || ! printf '%s\n' "$zero_output" | grep -q '^WARNING: ORBIT o
   echo "FAIL: Bash 3.2 zero-slice case lost its warning: $zero_output"
   fail=1
 fi
-output=$("$HELPER" --orbit-root "$orbit_root" 2>&1)
+output=$("$BASH" "$HELPER" --orbit-root "$orbit_root" 2>&1)
 if [ "$?" -ne 0 ] || ! printf '%s' "$output" | grep -q '^WARNING: ORBIT outcome o1-demo'; then
   echo 'FAIL: record-set validation mode missed the uncovered outcome'
   fail=1
@@ -61,7 +61,7 @@ jq '.planRevision = 2 | .id = "reconciliation-demo-widget-r2"' \
 jq '.basedOn.planRevision = 2 | .basedOn.reconciliationId = "reconciliation-demo-widget-r2"' \
   "$sb/revision-one-slice.json" > "$sb/revision-two-slice.json"
 mv "$sb/revision-two-slice.json" "$orbit_root/slices/slice-demo-o1.json"
-output=$("$HELPER" --orbit-root "$orbit_root" 2>&1)
+output=$("$BASH" "$HELPER" --orbit-root "$orbit_root" 2>&1)
 if [ "$?" -ne 0 ] || printf '%s\n' "$output" | grep -q '^WARNING:'; then
   echo "FAIL: validate warned for a superseded Plan revision: $output"
   fail=1
@@ -74,7 +74,7 @@ jq '.id = "plan-other-widget" |
 other_reconciliation="$orbit_root/reconciliations/reconciliation-other-widget-r1.json"
 jq '.id = "reconciliation-other-widget-r1" | .planId = "plan-other-widget"' \
   "$reconciliation" > "$other_reconciliation"
-output=$("$HELPER" --orbit-root "$orbit_root" 2>&1)
+output=$("$BASH" "$HELPER" --orbit-root "$orbit_root" 2>&1)
 if [ "$?" -ne 0 ] ||
    ! printf '%s\n' "$output" | grep -q 'outcome o3-demo.*Plan plan-other-widget revision 1' ||
    printf '%s\n' "$output" | grep -q 'outcome o1-demo'; then
@@ -85,7 +85,7 @@ revision_two_tie="$orbit_root/plans/plan-demo-widget.r2z.json"
 jq '.outcomes = [{"id":"o2-demo","title":"Second outcome"}] |
   .acceptanceCriteria = [{"id":"ac2-1","outcomeId":"o2-demo","statement":"Second criterion."}]' \
   "$revision_two" > "$revision_two_tie"
-output=$("$HELPER" --orbit-root "$orbit_root" 2>&1)
+output=$("$BASH" "$HELPER" --orbit-root "$orbit_root" 2>&1)
 if [ "$?" -ne 0 ] ||
    ! printf '%s\n' "$output" | grep -q 'tied Plan plan-demo-widget revision 2' ||
    ! printf '%s\n' "$output" | grep -q 'outcome o2-demo.*Plan plan-demo-widget revision 2' ||
@@ -107,7 +107,7 @@ jq '.outcomes += [{"id":"o2-demo","title":"Second outcome"}] |
 mv "$sb/expanded-plan.json" "$plan"
 bad_slice="$orbit_root/slices/slice-broken.json"
 printf '{broken\n' > "$bad_slice"
-output=$("$HELPER" --orbit-root "$orbit_root" 2>&1)
+output=$("$BASH" "$HELPER" --orbit-root "$orbit_root" 2>&1)
 rc=$?
 bad_count=$(printf '%s\n' "$output" | grep -cF "invalid slice record: $bad_slice" || true)
 if [ "$rc" -ne 0 ] || [ "$bad_count" -ne 1 ] ||
@@ -147,7 +147,7 @@ jq '.id = "reconciliation-demo-widget-offset" |
   .reconciledAt = "2026-09-28T03:30:00+03:00" |
   .criterionAssessments[0].status = "not-verified"' \
   "$reconciliation" > "$orbit_root/reconciliations/reconciliation-demo-widget-offset.json"
-output=$("$HELPER" --orbit-root "$orbit_root" 2>&1)
+output=$("$BASH" "$HELPER" --orbit-root "$orbit_root" 2>&1)
 if [ "$?" -ne 0 ] ||
    ! printf '%s\n' "$output" | grep -q 'outcome o1-demo.*Plan plan-demo-widget revision 1'; then
   echo "FAIL: newer offset Reconciliation did not beat older Z timestamp: $output"
@@ -164,21 +164,21 @@ rm "$slice"
 newer="$orbit_root/reconciliations/reconciliation-demo-widget-r1-newer.json"
 jq '.reconciledAt = "2026-09-28T00:00:00.370Z" | .criterionAssessments[0].status = "achieved"' \
   "$reconciliation" > "$newer"
-output=$("$HELPER" --orbit-root "$orbit_root" 2>&1)
+output=$("$BASH" "$HELPER" --orbit-root "$orbit_root" 2>&1)
 if printf '%s\n' "$output" | grep -q '^WARNING:'; then
   echo "FAIL: latest achieved Reconciliation should suppress warning: $output"
   fail=1
 fi
 jq '.criterionAssessments[0].status = "not-verified"' "$newer" > "$sb/new-reconciliation.json"
 mv "$sb/new-reconciliation.json" "$newer"
-output=$("$HELPER" --orbit-root "$orbit_root" 2>&1)
+output=$("$BASH" "$HELPER" --orbit-root "$orbit_root" 2>&1)
 if ! printf '%s\n' "$output" | grep -q '^WARNING: ORBIT outcome o1-demo'; then
   echo "FAIL: latest unmet Reconciliation should warn: $output"
   fail=1
 fi
 tie="$orbit_root/reconciliations/reconciliation-demo-widget-r1-z-tie.json"
 jq '.criterionAssessments[0].status = "achieved"' "$newer" > "$tie"
-output=$("$HELPER" --orbit-root "$orbit_root" 2>&1)
+output=$("$BASH" "$HELPER" --orbit-root "$orbit_root" 2>&1)
 if ! printf '%s\n' "$output" | grep -q 'tied Reconciliations' || \
    printf '%s\n' "$output" | grep -q '^WARNING:'; then
   echo "FAIL: tied latest records need a diagnostic and filename-order winner: $output"
@@ -200,7 +200,7 @@ check_warning 'achieved criterion without slice' 0
 
 printf '{broken\n' > "$plan"
 check_warning 'malformed Plan has no warning flood' 0
-output=$("$HELPER" --orbit-root "$orbit_root" --plan "$plan" \
+output=$("$BASH" "$HELPER" --orbit-root "$orbit_root" --plan "$plan" \
   --reconciliation "$reconciliation" 2>&1)
 case "$output" in
   *'invalid Plan record'*) ;;
@@ -208,7 +208,7 @@ case "$output" in
 esac
 
 rm "$plan"
-output=$("$HELPER" --orbit-root "$orbit_root" --plan "$plan" \
+output=$("$BASH" "$HELPER" --orbit-root "$orbit_root" --plan "$plan" \
   --reconciliation "$reconciliation" 2>&1)
 if [ "$?" -ne 0 ] || ! printf '%s' "$output" | grep -q 'no Plan record found'; then
   echo "FAIL: missing Plan needs a clear, nonblocking message"
