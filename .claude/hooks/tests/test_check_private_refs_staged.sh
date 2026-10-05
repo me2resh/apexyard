@@ -12,6 +12,8 @@ ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 HOOK_SRC="$ROOT/.claude/hooks/check-private-refs-staged.sh"
 RUNTIME_SRC="$ROOT/.claude/hooks/check-private-refs-runtime.sh"
 PARSER_LIB_SRC="$ROOT/.claude/hooks/_lib-registry-parser.sh"
+MATCH_LIB_SRC="$ROOT/.claude/hooks/_lib-private-refs-match.sh"
+VIS_LIB_SRC="$ROOT/.claude/hooks/_lib-leak-remote-visibility.sh"
 PRE_COMMIT_SRC="$ROOT/.githooks/pre-commit"
 
 PASS=0
@@ -20,6 +22,14 @@ FAIL=0
 pass() { printf '  ok   %s\n' "$1"; PASS=$((PASS + 1)); }
 fail() { printf '  FAIL %s: %s\n' "$1" "$2" >&2; FAIL=$((FAIL + 1)); }
 
+# #1528 — staged scan sources the shared matcher + visibility libs.
+install_staged_leak_libs() {
+  local sandbox="$1"
+  cp "$PARSER_LIB_SRC" "$sandbox/.claude/hooks/_lib-registry-parser.sh"
+  cp "$MATCH_LIB_SRC" "$sandbox/.claude/hooks/_lib-private-refs-match.sh"
+  cp "$VIS_LIB_SRC" "$sandbox/.claude/hooks/_lib-leak-remote-visibility.sh"
+}
+
 make_sandbox() {
   local sandbox
   sandbox=$(mktemp -d)
@@ -27,7 +37,7 @@ make_sandbox() {
   cp "$HOOK_SRC" "$sandbox/.claude/hooks/check-private-refs-staged.sh"
   cp "$RUNTIME_SRC" "$sandbox/.claude/hooks/check-private-refs-runtime.sh"
   cp "$PRE_COMMIT_SRC" "$sandbox/.githooks/pre-commit"
-  cp "$PARSER_LIB_SRC" "$sandbox/.claude/hooks/_lib-registry-parser.sh"
+  install_staged_leak_libs "$sandbox"
   chmod +x "$sandbox/.claude/hooks/check-private-refs-staged.sh" "$sandbox/.claude/hooks/check-private-refs-runtime.sh" "$sandbox/.githooks/pre-commit"
   cat > "$sandbox/apexyard.projects.yaml" <<'YAML'
 projects:
@@ -167,7 +177,7 @@ make_sandbox_with_remotes() {
   cp "$HOOK_SRC" "$sandbox/.claude/hooks/check-private-refs-staged.sh"
   cp "$RUNTIME_SRC" "$sandbox/.claude/hooks/check-private-refs-runtime.sh"
   cp "$PRE_COMMIT_SRC" "$sandbox/.githooks/pre-commit"
-  cp "$PARSER_LIB_SRC" "$sandbox/.claude/hooks/_lib-registry-parser.sh"
+  install_staged_leak_libs "$sandbox"
   chmod +x "$sandbox/.claude/hooks/check-private-refs-staged.sh" "$sandbox/.claude/hooks/check-private-refs-runtime.sh" "$sandbox/.githooks/pre-commit"
   printf '%s' "$registry_yaml" > "$sandbox/apexyard.projects.yaml"
   (

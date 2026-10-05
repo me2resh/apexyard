@@ -24,6 +24,8 @@ ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 STAGED_HOOK_SOURCE=${STAGED_HOOK_SOURCE:-$ROOT/.claude/hooks/check-private-refs-staged.sh}
 RUNTIME_HOOK_SOURCE=${RUNTIME_HOOK_SOURCE:-$ROOT/.claude/hooks/check-private-refs-runtime.sh}
 PARSER_SOURCE="$ROOT/.claude/hooks/_lib-registry-parser.sh"
+MATCH_SOURCE="$ROOT/.claude/hooks/_lib-private-refs-match.sh"
+VIS_SOURCE="$ROOT/.claude/hooks/_lib-leak-remote-visibility.sh"
 CONFIG_SOURCE="$ROOT/.claude/hooks/_lib-read-config.sh"
 
 PASS=0
@@ -63,6 +65,8 @@ make_sandbox() {
   cp "$STAGED_HOOK_SOURCE" "$sandbox/.claude/hooks/check-private-refs-staged.sh"
   cp "$RUNTIME_HOOK_SOURCE" "$sandbox/.claude/hooks/check-private-refs-runtime.sh"
   cp "$PARSER_SOURCE" "$sandbox/.claude/hooks/_lib-registry-parser.sh"
+  cp "$MATCH_SOURCE" "$sandbox/.claude/hooks/_lib-private-refs-match.sh"
+  cp "$VIS_SOURCE" "$sandbox/.claude/hooks/_lib-leak-remote-visibility.sh"
   chmod +x "$sandbox/.claude/hooks/check-private-refs-staged.sh" \
     "$sandbox/.claude/hooks/check-private-refs-runtime.sh"
   printf '%s\n' "$registry_yaml" > "$sandbox/apexyard.projects.yaml"

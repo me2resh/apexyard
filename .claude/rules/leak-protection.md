@@ -100,13 +100,28 @@ check reads the index rather than a rendered net diff. An add-then-remove
 sequence cannot hide the first commit because the first commit is blocked.
 The diagnostic names the file and withholds the matched identifier.
 
+**Origin-private skip and push-time scan (#1528, AgDR-0220):** when `origin`
+is confirmed private, the staged scan exits 0, because a local commit leaks
+nothing. The protected-branch guard in `.githooks/pre-commit` still runs.
+`check-private-refs-push.sh`, called from `.githooks/pre-push`, scans every
+new blob, commit and tag object (message and author headers), file and
+directory name, and pushed ref name, including binary files and merge
+resolutions. It trusts only the remote sha git reports and tips it already
+scanned clean for the same registry; remote-tracking refs are never trusted. It skips only
+a remote that is confirmed private. Public-class remotes (the
+`public_framework_repos` list, the `upstream` remote, a registry entry with
+`public: true`), an unknown or failed visibility lookup, and non-GitHub hosts
+all scan. Visibility comes from `gh api repos/<slug> --jq .private`, cached
+24 hours in local git config (a failed lookup for 10 minutes). Skipping hooks on push skips this scan like any
+git hook. There is no dedicated skip variable.
+
 The tracker adapters also run `check-private-refs-runtime.sh` after resolving
 their arguments. This covers `tracker_create`, `tracker_review_submit`, and
 `tracker_pr_merge` when their repository or body-file argument comes from a
 shell variable. The command-text hook still protects direct `gh` calls.
 
 Git's `--no-verify` option and a clone without `core.hooksPath=.githooks`
-can bypass the staged-content gate. The command-layer hook remains a backstop
+can bypass the staged-content and push-time gates. The command-layer hook remains a backstop
 for agent-driven writes. Treat either bypass as reduced protection, not as a
 reason to commit private identifiers.
 
@@ -191,7 +206,8 @@ The leak-protection hook is a **sibling to `check-secrets.sh`** — both scan ou
 |------|----------|------|
 | `check-secrets.sh` | API keys, passwords, tokens | `git commit` time (staged diff) |
 | `block-private-refs-in-public-repos.sh` | Project names, repo slugs, workspace paths | `gh` tracker-write time (issue/PR title + body, review body, merge-commit subject/body) |
-| `check-private-refs-staged.sh` | Project names, repo slugs, workspace paths in complete files | Git-native `pre-commit` time (staged blobs) |
+| `check-private-refs-staged.sh` | Project names, repo slugs, workspace paths in complete files | Git-native `pre-commit` time (staged blobs); skipped when origin is confirmed private |
+| `check-private-refs-push.sh` | Same identifiers in new blobs and messages of pushed objects | Git-native `pre-push` time; skipped only for a confirmed-private remote |
 
 Both are backstops against routine-but-damaging leaks. Self-discipline is the primary defence; the hook catches the cases where the agent had the private information right in front of it while writing the upstream content and didn't actively suppress it.
 

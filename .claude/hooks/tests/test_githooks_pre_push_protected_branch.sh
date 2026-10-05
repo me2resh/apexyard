@@ -65,6 +65,10 @@ ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 REAL_PRE_PUSH="$ROOT/.githooks/pre-push"
 REAL_PROTECTED_LIB="$ROOT/.claude/hooks/_lib-protected-branches.sh"
 REAL_READ_CONFIG_LIB="$ROOT/.claude/hooks/_lib-read-config.sh"
+REAL_PUSH_LEAK_HOOK="$ROOT/.claude/hooks/check-private-refs-push.sh"
+REAL_MATCH_LIB="$ROOT/.claude/hooks/_lib-private-refs-match.sh"
+REAL_VIS_LIB="$ROOT/.claude/hooks/_lib-leak-remote-visibility.sh"
+REAL_PARSER_LIB="$ROOT/.claude/hooks/_lib-registry-parser.sh"
 
 PASS=0
 FAIL=0
@@ -137,6 +141,13 @@ build_sandbox() {
   mkdir -p "$work/.claude/hooks"
   cp "$REAL_PROTECTED_LIB" "$work/.claude/hooks/_lib-protected-branches.sh"
   cp "$REAL_READ_CONFIG_LIB" "$work/.claude/hooks/_lib-read-config.sh"
+  # #1528 — pre-push requires the push leak scan to be present and executable.
+  # No registry in this sandbox → the scan exits 0 (nothing to enforce).
+  cp "$REAL_PUSH_LEAK_HOOK" "$work/.claude/hooks/check-private-refs-push.sh"
+  cp "$REAL_MATCH_LIB" "$work/.claude/hooks/_lib-private-refs-match.sh"
+  cp "$REAL_VIS_LIB" "$work/.claude/hooks/_lib-leak-remote-visibility.sh"
+  cp "$REAL_PARSER_LIB" "$work/.claude/hooks/_lib-registry-parser.sh"
+  chmod +x "$work/.claude/hooks/check-private-refs-push.sh"
 
   mkdir -p "$work/bin"
   printf '#!/bin/bash\nexit 0\n' > "$work/bin/run-pre-push-checks.sh"

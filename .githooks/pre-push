@@ -181,6 +181,28 @@ fi
 # is safe; neither script ever expected it.
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# PUSH-TIME LEAK SCAN (#1528 / AgDR-0220)
+# ---------------------------------------------------------------------------
+# Runs BEFORE the lint/format pre-push checks so the `<!-- pre-push: skip -->`
+# marker in run-pre-push-checks.sh cannot bypass leak protection. The only
+# bypass is skipping git hooks entirely (`git push --no-verify` or unset
+# core.hooksPath). Classification + matching live in
+# check-private-refs-push.sh; this block only hands it git's remote args and
+# the already-buffered ref lines.
+# ---------------------------------------------------------------------------
+LEAK_PUSH_HOOK="$REPO_ROOT/.claude/hooks/check-private-refs-push.sh"
+if [ ! -x "$LEAK_PUSH_HOOK" ]; then
+  echo "BLOCKED: $LEAK_PUSH_HOOK is missing or not executable. Restore the push private-reference gate before pushing." >&2
+  exit 2
+fi
+# shellcheck disable=SC2086  # intentional: empty STDIN_REFS is a no-op scan
+printf '%s\n' "$STDIN_REFS" | "$LEAK_PUSH_HOOK" "${1:-}" "${2:-}"
+LEAK_RC=$?
+if [ "$LEAK_RC" -ne 0 ]; then
+  exit "$LEAK_RC"
+fi
+
 RUNNER="$REPO_ROOT/bin/run-pre-push-checks.sh"
 if [ -f "$RUNNER" ]; then
   bash "$RUNNER"

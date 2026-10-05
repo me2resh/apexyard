@@ -20,6 +20,8 @@ ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 STAGED_SRC="$ROOT/.claude/hooks/check-private-refs-staged.sh"
 RUNTIME_SRC="$ROOT/.claude/hooks/check-private-refs-runtime.sh"
 TRACKER_SRC="$ROOT/.claude/hooks/block-private-refs-in-public-repos.sh"
+MATCH_SRC="$ROOT/.claude/hooks/_lib-private-refs-match.sh"
+VIS_SRC="$ROOT/.claude/hooks/_lib-leak-remote-visibility.sh"
 
 PASS=0
 FAIL=0
@@ -32,6 +34,10 @@ echo "== Fail closed when the shared registry parser is missing (apexyard#1457)"
 sandbox=$(mktemp -d)
 mkdir -p "$sandbox/.claude/hooks"
 cp "$STAGED_SRC" "$sandbox/.claude/hooks/check-private-refs-staged.sh"
+# #1528 — staged scan sources the shared matcher. Copy it so the fail-closed
+# path reaches the missing-parser check inside private_refs_match_init.
+cp "$MATCH_SRC" "$sandbox/.claude/hooks/_lib-private-refs-match.sh"
+cp "$VIS_SRC" "$sandbox/.claude/hooks/_lib-leak-remote-visibility.sh"
 chmod +x "$sandbox/.claude/hooks/check-private-refs-staged.sh"
 # Deliberately NOT copying _lib-registry-parser.sh.
 cat > "$sandbox/apexyard.projects.yaml" <<'YAML'
