@@ -33,17 +33,27 @@ The Plan has no criterion status field. The helper reads
 `criterionAssessments[].status` from the Reconciliation. Only `achieved`
 counts as met. A missing assessment does not establish achievement. A slice
 covers an outcome when its `contributesTo` list names that outcome ID or one
-of its criterion IDs. The slice must match the Plan ID and revision.
+of its criterion IDs. A string `contributesTo` is one exact ID, not a
+substring search. The slice must match the Plan ID and revision.
 
-When several Reconciliations match a Plan ID and revision, the helper uses
-the latest `reconciledAt` UTC timestamp. Equal timestamps select the last
-filename in lexical order and produce a tie diagnostic on stderr. Records
-without a usable timestamp rank below timestamped records and use filename
-order among themselves.
-The selected record still receives the coverage check.
+For `orbit validate`, the helper checks only the highest `revision` in each
+Plan ID's record set. It reads each Plan record's `revision` field, not its
+filename. Equal highest revisions select the last filename in lexical order.
+The helper reports the tie on stderr. For `orbit reconcile`, it checks the
+specified Plan revision. Every coverage warning names its Plan ID and revision.
 
-The helper emits a diagnostic for an unreadable record set and does not emit
-coverage warnings from that set. It always exits zero.
+When several Reconciliations match a Plan ID and revision, the helper selects
+the latest `reconciledAt` instant. It converts `Z` and timezone-offset
+timestamps to UTC seconds, then compares fractional seconds. Equal instants
+select the last filename in lexical order and produce a tie diagnostic on
+stderr. Records without a usable timestamp rank below timestamped records and
+use filename order among themselves. The selected record still receives the
+coverage check.
+
+The helper skips each malformed slice file with one stderr diagnostic naming
+the file. It still checks the Plan with the remaining slices. An unreadable
+Plan or Reconciliation has a diagnostic and no coverage warnings. The helper
+always exits zero.
 The adapter reports CLI failures separately and preserves the CLI exit status.
 
 The skill also defines slice IDs as existing only with a slice record. Agents

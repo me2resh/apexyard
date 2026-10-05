@@ -28,6 +28,11 @@ check_warning() {
     echo "FAIL: $label (exit $rc, warnings $count): $output"
     fail=1
   fi
+  if [ "$expected" -gt 0 ] && ! printf '%s\n' "$output" |
+    grep -q 'Plan plan-demo-widget revision 1'; then
+    echo "FAIL: $label omitted Plan ID and revision: $output"
+    fail=1
+  fi
 }
 
 rm "$slice"
@@ -44,7 +49,115 @@ if [ "$?" -ne 0 ] || ! printf '%s' "$output" | grep -q '^WARNING: ORBIT outcome 
   fail=1
 fi
 
+# Validate checks the latest Plan revision, even when an older file is first.
 orbit_root=$(fixtures_write_orbit_root "$sb")
+cp "$slice" "$sb/revision-one-slice.json"
+rm "$slice"
+revision_two="$orbit_root/plans/plan-demo-widget.a-r2.json"
+jq '.revision = 2' "$plan" > "$revision_two"
+revision_two_reconciliation="$orbit_root/reconciliations/reconciliation-demo-widget-r2.json"
+jq '.planRevision = 2 | .id = "reconciliation-demo-widget-r2"' \
+  "$reconciliation" > "$revision_two_reconciliation"
+jq '.basedOn.planRevision = 2 | .basedOn.reconciliationId = "reconciliation-demo-widget-r2"' \
+  "$sb/revision-one-slice.json" > "$sb/revision-two-slice.json"
+mv "$sb/revision-two-slice.json" "$orbit_root/slices/slice-demo-o1.json"
+output=$("$HELPER" --orbit-root "$orbit_root" 2>&1)
+if [ "$?" -ne 0 ] || printf '%s\n' "$output" | grep -q '^WARNING:'; then
+  echo "FAIL: validate warned for a superseded Plan revision: $output"
+  fail=1
+fi
+other_plan="$orbit_root/plans/plan-other-widget.r1.json"
+jq '.id = "plan-other-widget" |
+  .outcomes = [{"id":"o3-demo","title":"Other outcome"}] |
+  .acceptanceCriteria = [{"id":"ac3-1","outcomeId":"o3-demo","statement":"Other criterion."}]' \
+  "$plan" > "$other_plan"
+other_reconciliation="$orbit_root/reconciliations/reconciliation-other-widget-r1.json"
+jq '.id = "reconciliation-other-widget-r1" | .planId = "plan-other-widget"' \
+  "$reconciliation" > "$other_reconciliation"
+output=$("$HELPER" --orbit-root "$orbit_root" 2>&1)
+if [ "$?" -ne 0 ] ||
+   ! printf '%s\n' "$output" | grep -q 'outcome o3-demo.*Plan plan-other-widget revision 1' ||
+   printf '%s\n' "$output" | grep -q 'outcome o1-demo'; then
+  echo "FAIL: validate did not check the latest revision of each Plan: $output"
+  fail=1
+fi
+revision_two_tie="$orbit_root/plans/plan-demo-widget.r2z.json"
+jq '.outcomes = [{"id":"o2-demo","title":"Second outcome"}] |
+  .acceptanceCriteria = [{"id":"ac2-1","outcomeId":"o2-demo","statement":"Second criterion."}]' \
+  "$revision_two" > "$revision_two_tie"
+output=$("$HELPER" --orbit-root "$orbit_root" 2>&1)
+if [ "$?" -ne 0 ] ||
+   ! printf '%s\n' "$output" | grep -q 'tied Plan plan-demo-widget revision 2' ||
+   ! printf '%s\n' "$output" | grep -q 'outcome o2-demo.*Plan plan-demo-widget revision 2' ||
+   printf '%s\n' "$output" | grep -q 'outcome o1-demo'; then
+  echo "FAIL: tied latest Plan needs a diagnostic and filename-order winner: $output"
+  fail=1
+fi
+rm "$revision_two_tie"
+rm "$revision_two" "$revision_two_reconciliation" "$other_plan" "$other_reconciliation"
+
+# A malformed slice is diagnosed once; other slices still cover their outcomes.
+orbit_root=$(fixtures_write_orbit_root "$sb/malformed-slice")
+plan="$orbit_root/plans/plan-demo-widget.r1.json"
+reconciliation="$orbit_root/reconciliations/reconciliation-demo-widget-r1.json"
+slice="$orbit_root/slices/slice-demo-o1.json"
+jq '.outcomes += [{"id":"o2-demo","title":"Second outcome"}] |
+  .acceptanceCriteria += [{"id":"ac2-1","outcomeId":"o2-demo","statement":"Second criterion."}]' \
+  "$plan" > "$sb/expanded-plan.json"
+mv "$sb/expanded-plan.json" "$plan"
+bad_slice="$orbit_root/slices/slice-broken.json"
+printf '{broken\n' > "$bad_slice"
+output=$("$HELPER" --orbit-root "$orbit_root" 2>&1)
+rc=$?
+bad_count=$(printf '%s\n' "$output" | grep -cF "invalid slice record: $bad_slice" || true)
+if [ "$rc" -ne 0 ] || [ "$bad_count" -ne 1 ] ||
+   ! printf '%s\n' "$output" | grep -q 'outcome o2-demo.*Plan plan-demo-widget revision 1' ||
+   printf '%s\n' "$output" | grep -q 'outcome o1-demo'; then
+  echo "FAIL: malformed slice suppressed another slice or outcome: $output"
+  fail=1
+fi
+
+# A string reference is one ID, never a substring match.
+orbit_root=$(fixtures_write_orbit_root "$sb/string-reference")
+plan="$orbit_root/plans/plan-demo-widget.r1.json"
+reconciliation="$orbit_root/reconciliations/reconciliation-demo-widget-r1.json"
+slice="$orbit_root/slices/slice-demo-o1.json"
+jq '.contributesTo = "o1-demo-extra"' "$slice" > "$sb/string-slice.json"
+mv "$sb/string-slice.json" "$slice"
+check_warning 'longer string outcome ID does not cover' 1
+jq '.contributesTo = "o1-demo"' "$slice" > "$sb/string-slice.json"
+mv "$sb/string-slice.json" "$slice"
+check_warning 'exact string outcome ID covers' 0
+jq '.contributesTo = "ac1-1-extra"' "$slice" > "$sb/string-slice.json"
+mv "$sb/string-slice.json" "$slice"
+check_warning 'longer string criterion ID does not cover' 1
+jq '.contributesTo = "ac1-1"' "$slice" > "$sb/string-slice.json"
+mv "$sb/string-slice.json" "$slice"
+check_warning 'exact string criterion ID covers' 0
+
+# Select Reconciliations by instant, including a timezone offset.
+orbit_root=$(fixtures_write_orbit_root "$sb/offset-time")
+plan="$orbit_root/plans/plan-demo-widget.r1.json"
+reconciliation="$orbit_root/reconciliations/reconciliation-demo-widget-r1.json"
+slice="$orbit_root/slices/slice-demo-o1.json"
+rm "$slice"
+jq '.criterionAssessments[0].status = "achieved"' "$reconciliation" > "$sb/older-z.json"
+mv "$sb/older-z.json" "$reconciliation"
+jq '.id = "reconciliation-demo-widget-offset" |
+  .reconciledAt = "2026-09-28T03:30:00+03:00" |
+  .criterionAssessments[0].status = "not-verified"' \
+  "$reconciliation" > "$orbit_root/reconciliations/reconciliation-demo-widget-offset.json"
+output=$("$HELPER" --orbit-root "$orbit_root" 2>&1)
+if [ "$?" -ne 0 ] ||
+   ! printf '%s\n' "$output" | grep -q 'outcome o1-demo.*Plan plan-demo-widget revision 1'; then
+  echo "FAIL: newer offset Reconciliation did not beat older Z timestamp: $output"
+  fail=1
+fi
+
+orbit_root=$(fixtures_write_orbit_root "$sb")
+plan="$orbit_root/plans/plan-demo-widget.r1.json"
+reconciliation="$orbit_root/reconciliations/reconciliation-demo-widget-r1.json"
+slice="$orbit_root/slices/slice-demo-o1.json"
 check_warning 'criterion reference covers outcome' 0
 
 rm "$slice"
