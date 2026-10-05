@@ -68,6 +68,21 @@
 # The helper leaves a symlink at the final component unchanged. Both
 # exemptions below also check target components for symlinks.
 _RATC_HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Stale-hook notice (#1449). Advisory: appended to the refusal below when
+# upstream's copy of this gate or a `_lib-*.sh` it sources has changed since
+# the fork's version, so a fork owner does not debug or report a hook that may
+# already be fixed. Degrades to silence if the helper is missing, exactly like
+# every other failure path inside it.
+if [ -f "$_RATC_HOOK_DIR/_lib-hook-drift.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$_RATC_HOOK_DIR/_lib-hook-drift.sh"
+fi
+_ratc_stale_hook_notice() {
+  command -v hook_drift_notice_for_gate >/dev/null 2>&1 || return 0
+  hook_drift_notice_for_gate "$_RATC_HOOK_DIR/require-active-ticket.sh" 2>/dev/null || true
+}
+
 if [ -f "$_RATC_HOOK_DIR/_lib-path-resolve.sh" ]; then
   # shellcheck source=/dev/null
   . "$_RATC_HOOK_DIR/_lib-path-resolve.sh"
@@ -712,6 +727,7 @@ $([ -n "$PER_PROJECT_MARKER" ] && echo "  per-project:  $PER_PROJECT_MARKER")
 Target: ${FILE_PATH:-<unextractable Bash write target>}
 ${QUOTED_HINT}
 Exempt paths (no ticket required): .claude/, docs/, projects/*/docs/, *.md
+$(_ratc_stale_hook_notice)
 MSG
   return 2
 }
