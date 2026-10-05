@@ -110,7 +110,8 @@ rm -f "$TMP/.claude/session/current-ticket"
 mkdir -p "$TMP/.claude/hooks"
 for file in require-active-ticket.sh _lib-detect-bash-write.sh \
   _lib-command-scrub.sh _lib-mask-quoted.sh _lib-read-config.sh \
-  _lib-path-resolve.sh _lib-active-ticket.sh _lib-ops-root.sh; do
+  _lib-path-resolve.sh _lib-active-ticket.sh _lib-ticket-path-exemptions.sh \
+  _lib-ops-root.sh; do
   [ -f "$HOOKS/$file" ] && cp "$HOOKS/$file" "$TMP/.claude/hooks/$file"
 done
 cp "$ROOT/.claude/project-config.defaults.json" "$TMP/.claude/project-config.defaults.json"

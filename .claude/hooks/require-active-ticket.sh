@@ -127,6 +127,14 @@ else
   }
 fi
 
+# Path exemptions (AgDR-0219 / #1531). Sourced after _lib-path-resolve.sh so
+# ticket_path_is_meta_exempt can reuse _resolve_real_path for /var vs
+# /private/var prefix compares.
+if [ -f "$_RATC_HOOK_DIR/_lib-ticket-path-exemptions.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$_RATC_HOOK_DIR/_lib-ticket-path-exemptions.sh"
+fi
+
 # ------------------------------------------------------------------------------
 # _ratc_quoted_origin_hint TOOL_NAME
 #
@@ -308,7 +316,12 @@ _ratc_evaluate_target() {
   #      back to the legacy CWD-based git rev-parse — same behaviour as before.
   #   3. FILE_PATH is empty (Bash command, no extractable target): CWD-based
   #      fallback as before.
-  local REPO_ROOT="" _fp_dir _wt_gd _wt_gcd _main_root REL_PATH
+  # REPO_ROOT drives ops-root / marker resolution. For a LINKED worktree,
+  # AgDR-0141 still rewrites REPO_ROOT to the main-checkout root so the
+  # walk-up finds the real ops fork. Path exemptions below MUST NOT use
+  # that rewritten root — they match against the file's OWN toplevel via
+  # ticket_path_is_meta_exempt (AgDR-0219 / #1531).
+  local REPO_ROOT="" _fp_dir _wt_gd _wt_gcd _main_root
   if [ -n "$FILE_PATH" ]; then
     case "$FILE_PATH" in
       /*)
@@ -351,12 +364,6 @@ _ratc_evaluate_target() {
   if [ -z "$REPO_ROOT" ]; then
     REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
   fi
-  REL_PATH="$FILE_PATH"
-  if [ -n "$REPO_ROOT" ] && [ -n "$FILE_PATH" ]; then
-    case "$FILE_PATH" in
-      "$REPO_ROOT"/*) REL_PATH="${FILE_PATH#$REPO_ROOT/}" ;;
-    esac
-  fi
 
   # NOTE: the narrow "Bash absolute path outside REPO_ROOT" exemption that
   # used to live here (#569) has been superseded by the out-of-governance
@@ -365,33 +372,25 @@ _ratc_evaluate_target() {
   # governance boundaries (ops root + registered workspaces) rather than
   # just "outside the nearest git repo". See that block for the full design.
 
-  # Exempt paths.
+  # Exempt paths (AgDR-0219 / #1531).
   #
-  # Each path-prefix exemption is matched in both REL_PATH (repo-relative)
-  # and absolute (*/path/*) forms. Absolute-path fallthrough happens when
-  # FILE_PATH points outside REPO_ROOT (e.g. agent worktrees whose
-  # git-toplevel differs from the outer apexyard tree); in that case the
-  # strip above is a no-op and REL_PATH stays absolute. The existing
-  # `*.md` pattern already crosses `/`, so absolute-match via a `*/…`
-  # prefix is a known-good shape — #56 extends the same trick to the
-  # path-prefix exemptions.
+  # Match against the file's OWN worktree top via the shared helper — not
+  # against REPO_ROOT after the AgDR-0141 main-clone rewrite. Absolute
+  # */.claude/* and */docs/* arms apply only when the path was not stripped
+  # (out-of-repo / no git root), preserving projects/*/docs/ and bare
+  # absolute meta paths. See _lib-ticket-path-exemptions.sh.
   #
   # Skipped entirely when FILE_PATH is empty (Bash command writes to an
   # unextractable target — e.g. `python -c '...write...'`). Those fall
   # through to the ticket gate; the bootstrap-skill exemption below covers
   # the legitimate use case (/setup writing to fork-root files via Bash).
-  if [ -n "$REL_PATH" ]; then
-    case "$REL_PATH" in
-      .claude/*|.claude|*/.claude/*|*/.claude) return 0 ;;
-      docs/*|docs|*/docs/*|*/docs) return 0 ;;
-      TODO.md|README.md|MEMORY.md|CLAUDE.md) return 0 ;;
-    esac
-    # Note: `projects/*/docs/*` is subsumed by `*/docs/*` above (shell case `*`
-    # crosses `/`), so no separate arm needed. Per-project apexyard docs are
-    # matched by the generic docs-in-any-subtree pattern.
-    case "$REL_PATH" in
-      *.md) return 0 ;;
-    esac
+  if [ -n "$FILE_PATH" ] && command -v ticket_path_is_meta_exempt >/dev/null 2>&1; then
+    if ticket_path_is_meta_exempt "$FILE_PATH"; then
+      return 0
+    fi
+  elif [ -n "$FILE_PATH" ]; then
+    # Lib missing (partial checkout): fail closed — do not path-exempt.
+    :
   fi
 
   # Discover the ops root. Walk up from REPO_ROOT looking for either the

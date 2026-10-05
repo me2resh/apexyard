@@ -55,7 +55,8 @@ setup_ticket_sandbox() {
   cp "$CONFIG_DEFAULTS" "$dest/.claude/project-config.defaults.json"
   for file in require-active-ticket.sh _lib-detect-bash-write.sh \
     _lib-command-scrub.sh _lib-mask-quoted.sh _lib-read-config.sh \
-    _lib-path-resolve.sh _lib-active-ticket.sh _lib-ops-root.sh; do
+    _lib-path-resolve.sh _lib-active-ticket.sh _lib-ticket-path-exemptions.sh \
+    _lib-ops-root.sh; do
     [ -f "$hooks_src/$file" ] && cp "$hooks_src/$file" "$dest/.claude/hooks/$file"
   done
   # No active ticket — writes to src/app.ts must block.

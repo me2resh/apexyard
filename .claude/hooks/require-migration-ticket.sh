@@ -44,17 +44,41 @@
 # every migration-shaped target independently (apexyard#1182), so a command
 # can name several projects without one representative authorising the rest.
 
+# Hook dir + shared libs. Sourced before the first meta-exempt check so
+# Write/Edit targets and Bash targets use the same helpers (AgDR-0219).
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# _resolve_real_path (#1181): shared realpath -m helper. Sourced early so
+# path exemptions can canonicalize before /var vs /private/var compares.
+if [ -f "$HOOK_DIR/_lib-path-resolve.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-path-resolve.sh"
+else
+  # Deliberate degrade — see the longer comment near the former late-source
+  # site below. Empty resolve fails closed for exemptions (gated, not exempt).
+  _resolve_real_path() { return 0; }
+fi
+
+if [ -f "$HOOK_DIR/_lib-ticket-path-exemptions.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-ticket-path-exemptions.sh"
+fi
+
 # Exempt meta / docs / example files — these never need a migration
 # ticket regardless of path. Applied PER TARGET (not just once against
 # the first extracted target) so a meta-exempt target can't shadow a
 # genuinely migration-shaped target named later in the same command.
+#
+# Uses the shared helper so exemptions match the file's OWN worktree top
+# (AgDR-0219 / #1531), same as require-active-ticket.sh. Absolute
+# */.claude/* arms must not fire on a path that still contains a linked
+# worktree prefix under the main clone.
 _rmt_is_meta_exempt() {
-  case "$1" in
-    */.claude/*|*/.claude|*/docs/*|*/docs) return 0 ;;
-    *.md|*.example) return 0 ;;
-  esac
-  # Note: `*/projects/*/docs/*` is subsumed by `*/docs/*` above (shell case
-  # `*` crosses `/`), so no separate arm is needed.
+  if command -v ticket_path_is_meta_exempt >/dev/null 2>&1; then
+    ticket_path_is_meta_exempt "$1" migration
+    return $?
+  fi
+  # Lib missing (partial checkout): fail closed — do not path-exempt.
   return 1
 }
 
@@ -92,7 +116,6 @@ if [ "$TOOL_NAME" = "Bash" ]; then
   COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
   [ -z "$COMMAND" ] && exit 0
 
-  HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
   if [ -f "$HOOK_DIR/_lib-detect-bash-write.sh" ]; then
     # shellcheck source=/dev/null
     . "$HOOK_DIR/_lib-detect-bash-write.sh"
@@ -125,29 +148,8 @@ if [ "$TOOL_NAME" != "Bash" ]; then
 fi
 
 # --------- Discover ops root ---------
-HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
-
-# _resolve_real_path (#1181): shared realpath -m helper, composed after the
-# lexical collapse in _rmt_normalise_target below, and used again to
-# canonicalise the WORKSPACE_DIR/OPS_ROOT anchors further down. Sourced from
-# the single shared definition (Rex finding on PR #1087) rather than a
-# private copy -- require-active-ticket.sh already sources the same file.
-if [ -f "$HOOK_DIR/_lib-path-resolve.sh" ]; then
-  # shellcheck source=/dev/null
-  . "$HOOK_DIR/_lib-path-resolve.sh"
-else
-  # Deliberate degrade, mirroring require-active-ticket.sh's own handling of
-  # the same missing-lib case: this should not happen in a normal clone,
-  # since the file is tracked right next to this one. Returning empty here
-  # is read by TWO callers, each with its own fallback: the composed
-  # _rmt_normalise_target falls back to its lexical-only result, and the
-  # OPS_ROOT_REAL/WORKSPACE_DIR_REAL anchor block further down falls back to
-  # the raw, uncanonicalised OPS_ROOT/WORKSPACE_DIR (its own `|| ANCHOR="$RAW"`
-  # line, not this one). Both degrades land on exactly this gate's pre-#1181
-  # behaviour, rather than crashing the hook or exempting a write it should
-  # still gate.
-  _resolve_real_path() { return 0; }
-fi
+# HOOK_DIR and _lib-path-resolve.sh were sourced at the top of this file
+# (before the first meta-exempt check). Reuse them here.
 
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 OPS_ROOT=""

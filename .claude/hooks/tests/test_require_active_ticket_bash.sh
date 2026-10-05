@@ -26,6 +26,7 @@ LIB_BASH="$SRC_ROOT/.claude/hooks/_lib-detect-bash-write.sh"
 LIB_CFG="$SRC_ROOT/.claude/hooks/_lib-read-config.sh"
 LIB_PATH_RESOLVE="$SRC_ROOT/.claude/hooks/_lib-path-resolve.sh"
 LIB_ACTIVE_TICKET="$SRC_ROOT/.claude/hooks/_lib-active-ticket.sh"
+LIB_TICKET_PATH_EXEMPT="$SRC_ROOT/.claude/hooks/_lib-ticket-path-exemptions.sh"
 LIB_MASK="$SRC_ROOT/.claude/hooks/_lib-mask-quoted.sh"
 DEFAULTS="$SRC_ROOT/.claude/project-config.defaults.json"
 
@@ -33,7 +34,7 @@ DEFAULTS="$SRC_ROOT/.claude/project-config.defaults.json"
 # raw-command fallback when a partial install lacks the shared parser. The
 # installed-parser verdicts live in test_command_scrub_regressions.sh.
 
-for f in "$HOOK_SRC" "$LIB_BASH" "$LIB_CFG" "$LIB_PATH_RESOLVE" "$LIB_ACTIVE_TICKET" "$LIB_MASK" "$DEFAULTS"; do
+for f in "$HOOK_SRC" "$LIB_BASH" "$LIB_CFG" "$LIB_PATH_RESOLVE" "$LIB_ACTIVE_TICKET" "$LIB_TICKET_PATH_EXEMPT" "$LIB_MASK" "$DEFAULTS"; do
   if [ ! -f "$f" ]; then
     echo "FAIL: required source missing: $f" >&2
     exit 1
@@ -63,6 +64,7 @@ make_sandbox() {
   cp "$LIB_CFG"  "$sb/.claude/hooks/_lib-read-config.sh"
   cp "$LIB_PATH_RESOLVE" "$sb/.claude/hooks/_lib-path-resolve.sh"
   cp "$LIB_ACTIVE_TICKET" "$sb/.claude/hooks/_lib-active-ticket.sh"
+  cp "$LIB_TICKET_PATH_EXEMPT" "$sb/.claude/hooks/_lib-ticket-path-exemptions.sh"
   cp "$LIB_MASK" "$sb/.claude/hooks/_lib-mask-quoted.sh"
   cp "$DEFAULTS" "$sb/.claude/project-config.defaults.json"
   chmod +x "$sb/.claude/hooks/require-active-ticket.sh"
@@ -93,6 +95,7 @@ make_sandbox_no_pathresolve() {
   cp "$LIB_BASH" "$sb/.claude/hooks/_lib-detect-bash-write.sh"
   cp "$LIB_CFG"  "$sb/.claude/hooks/_lib-read-config.sh"
   cp "$LIB_ACTIVE_TICKET" "$sb/.claude/hooks/_lib-active-ticket.sh"
+  cp "$LIB_TICKET_PATH_EXEMPT" "$sb/.claude/hooks/_lib-ticket-path-exemptions.sh"
   cp "$LIB_MASK" "$sb/.claude/hooks/_lib-mask-quoted.sh"
   # NOTE: _lib-path-resolve.sh intentionally NOT copied here.
   cp "$DEFAULTS" "$sb/.claude/project-config.defaults.json"
@@ -462,6 +465,7 @@ cp "$LIB_BASH"  "$_t30_ops/.claude/hooks/_lib-detect-bash-write.sh"
 cp "$LIB_CFG"   "$_t30_ops/.claude/hooks/_lib-read-config.sh"
 cp "$LIB_PATH_RESOLVE" "$_t30_ops/.claude/hooks/_lib-path-resolve.sh"
 cp "$LIB_ACTIVE_TICKET" "$_t30_ops/.claude/hooks/_lib-active-ticket.sh"
+cp "$LIB_TICKET_PATH_EXEMPT" "$_t30_ops/.claude/hooks/_lib-ticket-path-exemptions.sh"
 cp "$DEFAULTS"  "$_t30_ops/.claude/project-config.defaults.json"
 [ -f "$LIB_OPS_SRC" ]  && cp "$LIB_OPS_SRC"  "$_t30_ops/.claude/hooks/_lib-ops-root.sh"
 [ -f "$LIB_PORT_SRC" ] && cp "$LIB_PORT_SRC" "$_t30_ops/.claude/hooks/_lib-portfolio-paths.sh"

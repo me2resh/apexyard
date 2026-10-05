@@ -65,7 +65,8 @@ make_sandbox() {
   cp "$HOOKS_DIR/$hook" "$sb/.claude/hooks/$hook"
   chmod +x "$sb/.claude/hooks/$hook"
   for lib in _lib-read-config.sh _lib-tracker.sh _lib-extract-pr.sh _lib-pr-repo.sh \
-             _lib-active-ticket.sh _lib-ops-root.sh _lib-detect-bash-write.sh \
+             _lib-active-ticket.sh _lib-ticket-path-exemptions.sh _lib-ops-root.sh \
+             _lib-detect-bash-write.sh \
              _lib-portfolio-paths.sh _lib-review-markers.sh; do
     if [ -f "$SRC_ROOT/.claude/hooks/$lib" ]; then
       cp "$SRC_ROOT/.claude/hooks/$lib" "$sb/.claude/hooks/$lib"
