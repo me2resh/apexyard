@@ -46,14 +46,25 @@ _ticket_path_canonicalize() {
       return 0
     fi
   fi
-  dir=$(_ticket_path_existing_dir "$(dirname "$joined")")
-  if [ -n "$dir" ]; then
-    dir=$(cd "$dir" 2>/dev/null && pwd -P) || dir=""
+  # Local fallback: resolve the deepest existing directory physically and
+  # keep every component below it, including directories that do not exist
+  # yet. Dropping them would collapse .claude/worktrees/<new>/src/a.ts to
+  # .claude/a.ts and make it exempt.
+  local anc="" rest="" real_anc=""
+  anc=$(_ticket_path_existing_dir "$(dirname "$joined")")
+  if [ -n "$anc" ]; then
+    real_anc=$(cd "$anc" 2>/dev/null && pwd -P) || real_anc=""
   fi
-  if [ -n "$dir" ]; then
-    printf '%s/%s' "$dir" "$(basename "$joined")"
-  else
+  if [ -z "$real_anc" ]; then
     printf '%s' "$joined"
+    return 0
+  fi
+  rest="${joined#"$anc"}"
+  rest="${rest#/}"
+  if [ "$real_anc" = "/" ]; then
+    printf '/%s' "$rest"
+  else
+    printf '%s/%s' "$real_anc" "$rest"
   fi
 }
 

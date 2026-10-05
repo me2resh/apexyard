@@ -42,6 +42,16 @@ Rules:
 - A path table of 17 rows asserts each expected exit code. Only the linked-worktree source row differs from the pre-fix gate. The test needs no git remote; the pre-fix comparison is recorded in the PR.
 - If the helper library is missing, the gates do not path-exempt anything (fail closed).
 
+## Known limits
+
+From the code review (Rex) and security review (Hakim) of PR #1573. None blocks the fix.
+
+- **Symlinks are judged by their target.** A `.claude/` or `docs/` path that is a symlink to source is gated, which closes a hole that was open before. A side effect: a script reached through a symlinked `.claude/skills/<name>/` directory (a split-portfolio custom skill) needs a ticket. Its `SKILL.md` stays exempt, and the same file by its real path already needed one.
+- **A missing helper library blocks every path-exempt write.** If `_lib-ticket-path-exemptions.sh` is missing, the gates exempt nothing. This is the safe direction, but `/start-ticket` cannot write its marker either. To recover, restore the file from git in a shell outside the session (`git checkout -- .claude/hooks/_lib-ticket-path-exemptions.sh`). No normal adopter flow ships the gates without the helper: `/update` and the harness adapters copy the whole tree.
+- **A missing `_lib-path-resolve.sh` uses a local resolver.** It resolves the deepest existing directory and keeps the components below it, including ones that do not exist yet. It does not resolve a symlink in the final component.
+- **Git environment variables.** `GIT_DIR`, `GIT_WORK_TREE` and `GIT_CEILING_DIRECTORIES` in the hook's environment change what `git rev-parse --show-toplevel` reports. Only the operator can set them for the hook process.
+- **Cost.** The helper adds about 15–20 ms per write target (one `git rev-parse` and one path resolution).
+
 ## Architecture evolution
 
 ### Before

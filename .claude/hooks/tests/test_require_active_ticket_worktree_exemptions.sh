@@ -361,6 +361,17 @@ if [ "$rc" = "2" ]; then
 else
   record_fail "A1 no-resolve: worktree src still gated" "got rc=$rc"
 fi
+# L-1: no resolver lib AND no .claude/worktrees/ dir yet. The fallback must
+# keep the not-yet-existing directories, or the path collapses to .claude/a.ts.
+rm -rf "$SB/.claude/worktrees"
+rc=0
+run_active "$SB/.claude/hooks/require-active-ticket.sh" "$SB" \
+  "$SB/.claude/worktrees/w/src/a.ts" || rc=$?
+if [ "$rc" = "2" ]; then
+  record_pass "L-1 no-resolve: not-yet-created .claude/worktrees/w/src gated"
+else
+  record_fail "L-1 no-resolve: not-yet-created .claude/worktrees/w/src gated" "got rc=$rc"
+fi
 rm -rf "$SB"
 
 # A2: a worktree whose name has a space. Target extraction cuts the path at
