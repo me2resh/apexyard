@@ -414,6 +414,44 @@ else
 fi
 rm -rf "$SB"
 
+# H-2 (security review): ".." inside a not-yet-created exempt folder must
+# not exempt a write that lands in source.
+SB=$(make_ops_with_worktrees)
+install_hook "$SB" "$HOOK_ACTIVE" "require-active-ticket.sh"
+for label_path in \
+  "docs/new/../../src|$SB/docs/new/../../src/a.ts" \
+  ".claude/new/../../src|$SB/.claude/new/../../src/a.ts" \
+  "worktree docs/new/../../src|$SB/.claude/worktrees/feat-x/docs/new/../../src/a.ts"
+do
+  label="${label_path%%|*}"
+  path="${label_path#*|}"
+  rc=0
+  run_active "$SB/.claude/hooks/require-active-ticket.sh" "$SB" "$path" || rc=$?
+  if [ "$rc" = "2" ]; then
+    record_pass "H-2 Write: $label → exit 2"
+  else
+    record_fail "H-2 Write: $label → exit 2" "got rc=$rc"
+  fi
+done
+rc=0
+run_active "$SB/.claude/hooks/require-active-ticket.sh" "$SB" \
+  "mkdir -p docs/new && echo x > docs/new/../../src/a.ts" Bash || rc=$?
+if [ "$rc" = "2" ]; then
+  record_pass "H-2 Bash: mkdir + write through docs/new/../../src → exit 2"
+else
+  record_fail "H-2 Bash: mkdir + write through docs/new/../../src → exit 2" "got rc=$rc"
+fi
+# ".." that stays inside an exempt folder is still exempt.
+rc=0
+run_active "$SB/.claude/hooks/require-active-ticket.sh" "$SB" \
+  "$SB/docs/new/../other/x.json" || rc=$?
+if [ "$rc" = "0" ]; then
+  record_pass "H-2 Write: docs/new/../other stays exempt"
+else
+  record_fail "H-2 Write: docs/new/../other stays exempt" "got rc=$rc"
+fi
+rm -rf "$SB"
+
 # --- AC4: migration hook same exemption verdicts ---------------------------
 # Meta paths → allow (0). Migration-shaped worktree path without ticket → 2.
 SB=$(make_ops_with_worktrees)

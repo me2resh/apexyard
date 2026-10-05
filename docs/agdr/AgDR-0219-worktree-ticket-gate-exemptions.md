@@ -26,7 +26,7 @@ Shared helper: `_lib-ticket-path-exemptions.sh` (`ticket_path_is_meta_exempt`).
 
 Rules:
 
-1. Canonicalize the write target (resolve relative paths against CWD, follow directory links with `_resolve_real_path` / `pwd -P`). This keeps `/var` and `/private/var` prefixes aligned on macOS.
+1. Canonicalize the write target (resolve relative paths against CWD, follow directory links with `_resolve_real_path` / `pwd -P`). This keeps `/var` and `/private/var` prefixes aligned on macOS. Then collapse any `.` and `..` left in the part that does not exist yet, so the gate judges where the write lands: `docs/new/../../src/a.ts` is `src/a.ts`.
 2. Resolve own top with `git -C <file dir> rev-parse --show-toplevel`. Do not rewrite to the main clone.
 3. When the path strips against that top, match only relative forms (`.claude/*`, `docs/*`, `*/docs/*` for `projects/*/docs/`, `*.md`).
 4. Apply absolute `*/.claude/*` and `*/docs/*` only when the path was not stripped. That keeps out-of-repo meta paths.

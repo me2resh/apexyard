@@ -23,9 +23,34 @@ _ticket_path_existing_dir() {
   [ -d "$dir" ] && printf '%s' "$dir"
 }
 
+# Collapse "." and ".." segments of an absolute path lexically. Callers pass
+# a path whose existing part is already physically resolved, so any ".."
+# left belongs to directories that do not exist yet; collapsing gives the
+# path the write will land on (docs/new/../../src/a.ts → src/a.ts).
+_ticket_path_collapse_dots() {
+  local p="$1" out="" seg rest
+  case "$p" in
+    /*) ;;
+    *) printf '%s' "$p"; return 0 ;;
+  esac
+  rest="${p#/}"
+  while [ -n "$rest" ]; do
+    case "$rest" in
+      */*) seg="${rest%%/*}"; rest="${rest#*/}" ;;
+      *) seg="$rest"; rest="" ;;
+    esac
+    case "$seg" in
+      ''|.) ;;
+      ..) out="${out%/*}" ;;
+      *) out="$out/$seg" ;;
+    esac
+  done
+  printf '%s' "${out:-/}"
+}
+
 # Physically resolve PATH for prefix compares (/var vs /private/var on macOS).
 # Prefer shared _resolve_real_path when already sourced; else a local fallback.
-_ticket_path_canonicalize() {
+_ticket_path_canonicalize_raw() {
   local p="$1" joined="" dir=""
   [ -n "$p" ] || return 0
 
@@ -66,6 +91,15 @@ _ticket_path_canonicalize() {
   else
     printf '%s/%s' "$real_anc" "$rest"
   fi
+}
+
+# Canonical form used for every exemption decision: physical resolution of
+# the existing part, then lexical collapse of the rest.
+_ticket_path_canonicalize() {
+  local raw=""
+  raw=$(_ticket_path_canonicalize_raw "$1")
+  [ -n "$raw" ] || return 0
+  _ticket_path_collapse_dots "$raw"
 }
 
 # Own worktree top for FILE_PATH. Does NOT rewrite linked worktrees to the
