@@ -98,29 +98,45 @@ The snapshot is evidence only. It does not claim that a criterion is achieved.
 Build a Reconciliation from the selected Plan and Snapshot:
 
 ```bash
+reconciliation_file="$orbit_root/reconciliations/reconciliation-<timestamp>.json"
 "$ORBIT_BIN" reconcile \
   --plan "$plan_file" \
   --snapshot "$snapshot_file" \
-  --output "$orbit_root/reconciliations/reconciliation-<timestamp>.json"
+  --output "$reconciliation_file"
+cli_status=$?
+if [ "$cli_status" -eq 0 ]; then
+  if ! "$(git rev-parse --show-toplevel)/.claude/skills/orbit/lib/warn-uncovered-outcomes.sh" \
+    --orbit-root "$orbit_root" --plan "$plan_file" \
+    --reconciliation "$reconciliation_file"; then
+    echo "ORBIT coverage check failed; reconcile status is unchanged." >&2
+  fi
+fi
+(exit "$cli_status")
 ```
 
 The first CLI implementation marks criteria `not-verified` until explicit evidence is supplied. Do not upgrade a status from inference.
+Report each `WARNING` line. If the CLI fails, report its failure.
 
 ### `/orbit slice --project <name> --plan <file> --reconciliation <file>`
 
-Ask for the bounded objective, outcome, reason, included work, and excluded work. Then create the slice with the plan revision and reconciliation ID as provenance:
+Ask for the bounded objective, outcome, reason, included work, excluded work, and the outcome or criterion IDs this slice advances. Pass those selected Plan IDs to `--contributes` as a comma-separated list. Then create the slice with the plan revision and reconciliation ID as provenance:
 
 ```bash
 "$ORBIT_BIN" slice \
   --plan "$plan_file" \
   --reconciliation "$reconciliation_file" \
   --outcome "<outcome-id>" \
+  --contributes "<outcome-id>,<criterion-id>" \
   --objective "<bounded objective>" \
   --why "<evidence-based reason>" \
   --include "<item>,<item>" \
   --exclude "<item>,<item>" \
   --output "$orbit_root/slices/slice-<timestamp>.json"
 ```
+
+Read the generated `contributesTo` array. Confirm it contains the selected
+Plan outcome or criterion IDs before handoff. Correct the record and rerun
+validation if the CLI leaves the array empty or omits a selected ID.
 
 Read the generated `id`, require the `slice-` prefix and lowercase letters,
 digits, and single hyphen separators, then rename the file to
@@ -129,6 +145,11 @@ file the issue while the record exists only on a working branch. Have the
 record PR reviewed and merged, then run the handoff steps below. `/orbit slice`
 is complete when the issue URL is reported. ApexYard's normal build, review,
 QA, and deployment gates still apply.
+
+A slice ID exists only when its record exists. Never reserve a slice number in
+prose. When work is planned, create the slice record. Set `contributesTo` to
+the Plan outcome ID or the criterion IDs that the slice advances. A slice with
+an empty `contributesTo` list does not cover an outcome.
 
 ### `/orbit validate --project <name>`
 
@@ -139,9 +160,18 @@ Validate the complete ORBIT record set before handoff:
   cd "$orbit_root"
   "$ORBIT_BIN" validate --all --root "$orbit_root"
 )
+cli_status=$?
+if [ "$cli_status" -eq 0 ]; then
+  if ! "$(git rev-parse --show-toplevel)/.claude/skills/orbit/lib/warn-uncovered-outcomes.sh" \
+    --orbit-root "$orbit_root"; then
+    echo "ORBIT coverage check failed; validate status is unchanged." >&2
+  fi
+fi
+(exit "$cli_status")
 ```
 
 Return the CLI exit status. A non-zero result blocks the handoff until the record or provenance is corrected.
+Report each `WARNING` line after successful validation.
 
 ### `/orbit handoff --project <name> --slice <file>`
 

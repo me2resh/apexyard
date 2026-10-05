@@ -6,7 +6,7 @@ The adapter keeps responsibilities separate:
 
 - ORBIT owns record shapes, provenance fields, lifecycle commands, and validation.
 - ApexYard owns ticket-first editing, AgDRs, review, QA, deployment, and project resolution.
-- The adapter does not create external issues or execute code.
+- The adapter can create one issue for a validated slice on confirmed handoff. It does not execute slice work.
 
 ## Lifecycle workflow
 
@@ -36,3 +36,17 @@ Example:
 The validation step passes the managed project's `docs/orbit/` directory to
 `orbit validate --all --root <directory>`. The pilot is opt-in. Existing
 planning skills continue to work independently.
+
+After successful reconcile and validate calls, the adapter checks the local
+Plan, Reconciliation, and slice records. It warns for each outcome with an
+unachieved criterion and no slice reference. A slice covers an outcome when
+`contributesTo` names its outcome ID or one of its criterion IDs. The warning
+does not change the CLI exit status.
+
+A slice ID exists only with its slice record. Create the record when planning
+work. Do not reserve slice numbers in prose.
+
+The external `orbit-spec` CLI owns `orbit validate` output, `PROGRESS.md`, and
+the status pane. Its follow-up must add the same advisory warning to CLI
+reconcile and validate, then mark uncovered outcomes `no slice` in both views.
+The adapter does not generate or edit those views.
