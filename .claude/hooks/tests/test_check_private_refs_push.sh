@@ -12,11 +12,15 @@
 #   - multiple refs in one push; commit-message leak; public:true exempt
 #   - protected-branch guard still fires when origin is private
 #   - visibility cache: fresh private → no lookup; stale → lookup again
+#   - destination refs (ls-remote of push URL): history already on the dest
+#     is excluded for a new-branch push; a new leak still blocks; ls-remote
+#     failure fails closed; a missing local sha is ignored; B1/B2 still block
 #
 # Remotes use GitHub-form URLs. A local bare repo is the real transport via
 # `url.<bare>.insteadOf`. Visibility is stubbed with
 # APEXYARD_LEAK_VISIBILITY_CMD (test-only; see _lib-leak-remote-visibility.sh).
-# No network. No SKIP lines.
+# Destination ls-remote uses the real local bare path ($2); failure is stubbed
+# with APEXYARD_LEAK_LS_REMOTE_CMD when needed. No network. No SKIP lines.
 #
 set -u
 
@@ -970,6 +974,152 @@ if [ "$third_n" = "$total" ]; then
 else
   fail "clean-scan record: a registry change invalidates it (full rescan)" "third=$third_n total=$total"
 fi
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# Destination refs (exclusion c): ls-remote of the push URL (#1528 follow-up)
+# ---------------------------------------------------------------------------
+echo "== Destination refs from ls-remote"
+
+# 1. Destination already holds a leaking commit (e.g. on its own main/dev).
+# A NEW branch from that history with only clean new commits must be allowed —
+# without exclusion (c) the all-zero remote sha would scan the whole history.
+d=$(mktemp -d)
+build_pair "$d" "$PUBLIC_FRAMEWORK_SLUG" false
+git -C "$d/work" config core.hooksPath /dev/null
+git -C "$d/work" checkout -q -b feature/seed-leak
+printf 'Private reference: amber-lantern\n' > "$d/work/old-leak.md"
+git -C "$d/work" add old-leak.md
+git -C "$d/work" commit -q -m 'feat: already on dest names amber-lantern'
+with_vis_env "$d" git -C "$d/work" push -q origin feature/seed-leak:refs/heads/dev
+git -C "$d/work" checkout -q -b feature/new-clean feature/seed-leak
+printf 'clean new work\n' > "$d/work/clean.md"
+git -C "$d/work" add clean.md
+git -C "$d/work" commit -q -m 'feat: clean only'
+git -C "$d/work" config core.hooksPath .githooks
+out=$(with_vis_env "$d" git -C "$d/work" push -u origin HEAD 2>&1)
+rc=$?
+if [ "$rc" -eq 0 ]; then
+  pass "dest already has a leak: new clean branch push is allowed"
+else
+  fail "dest already has a leak: new clean branch push is allowed" "rc=$rc out=$out"
+fi
+rm -rf "$d"
+
+# 2. Same setup, but the new branch adds a leaking commit → blocked.
+d=$(mktemp -d)
+build_pair "$d" "$PUBLIC_FRAMEWORK_SLUG" false
+git -C "$d/work" config core.hooksPath /dev/null
+git -C "$d/work" checkout -q -b feature/seed-leak2
+printf 'Private reference: amber-lantern\n' > "$d/work/old-leak.md"
+git -C "$d/work" add old-leak.md
+git -C "$d/work" commit -q -m 'feat: already on dest names amber-lantern'
+with_vis_env "$d" git -C "$d/work" push -q origin feature/seed-leak2:refs/heads/dev
+git -C "$d/work" checkout -q -b feature/new-leak feature/seed-leak2
+printf 'new leak: amber-lantern\n' > "$d/work/new-leak.md"
+git -C "$d/work" add new-leak.md
+git -C "$d/work" commit -q -m 'feat: new leak'
+git -C "$d/work" config core.hooksPath .githooks
+out=$(with_vis_env "$d" git -C "$d/work" push -u origin HEAD 2>&1)
+rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qF 'private portfolio reference' \
+  && printf '%s' "$out" | grep -qF 'file: new-leak.md' \
+  && ! printf '%s' "$out" | grep -qF 'amber-lantern'; then
+  pass "dest already has a leak: new leaking commit still blocks"
+else
+  fail "dest already has a leak: new leaking commit still blocks" "rc=$rc out=$out"
+fi
+rm -rf "$d"
+
+# 3. ls-remote fails → full scan → blocked when history contains a match,
+# with the stderr note.
+d=$(mktemp -d)
+build_pair "$d" "$PUBLIC_FRAMEWORK_SLUG" false
+git -C "$d/work" config core.hooksPath /dev/null
+git -C "$d/work" checkout -q -b feature/ls-fail
+printf 'Private reference: amber-lantern\n' > "$d/work/old-leak.md"
+git -C "$d/work" add old-leak.md
+git -C "$d/work" commit -q -m 'feat: already on dest names amber-lantern'
+with_vis_env "$d" git -C "$d/work" push -q origin feature/ls-fail:refs/heads/dev
+git -C "$d/work" checkout -q -b feature/ls-fail-clean feature/ls-fail
+printf 'clean\n' > "$d/work/clean.md"
+git -C "$d/work" add clean.md
+git -C "$d/work" commit -q -m 'feat: clean only'
+git -C "$d/work" config core.hooksPath .githooks
+fail_ls="$d/fail-ls-remote.sh"
+printf '#!/bin/bash\nexit 1\n' > "$fail_ls"
+chmod +x "$fail_ls"
+out=$(APEXYARD_LEAK_LS_REMOTE_CMD="$fail_ls" with_vis_env "$d" \
+  git -C "$d/work" push -u origin HEAD 2>&1)
+rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qF 'private portfolio reference' \
+  && printf '%s' "$out" | grep -qF "could not read the destination's refs" \
+  && ! printf '%s' "$out" | grep -qF 'amber-lantern'; then
+  pass "ls-remote failure: full scan blocks and prints the stderr note"
+else
+  fail "ls-remote failure: full scan blocks and prints the stderr note" "rc=$rc out=$out"
+fi
+rm -rf "$d"
+
+# 4. Destination advertises a sha not present locally → ignored, no error.
+d=$(mktemp -d)
+build_pair "$d" "$PUBLIC_FRAMEWORK_SLUG" false
+# Create a commit only on the bare (via a throwaway clone), so work lacks it.
+oc=$(mktemp -d)
+git clone -q "$d/remote.git" "$oc/c"
+(
+  cd "$oc/c" || exit 1
+  git -c user.email=t@e -c user.name=T checkout -q -b feature/remote-only
+  echo only-on-dest > only.txt
+  git add only.txt
+  git -c user.email=t@e -c user.name=T commit -q -m 'only on dest'
+  git push -q origin feature/remote-only:refs/heads/feature/remote-only
+)
+rm -rf "$oc"
+git -C "$d/work" checkout -q -b feature/local-clean
+printf 'No private identifiers here.\n' > "$d/work/clean.md"
+git -C "$d/work" add clean.md
+with_vis_env "$d" git -C "$d/work" commit -q -m 'feat: clean' --no-verify
+out=$(with_vis_env "$d" git -C "$d/work" push -u origin HEAD 2>&1)
+rc=$?
+if [ "$rc" -eq 0 ]; then
+  pass "dest ref sha missing locally is ignored (clean push allowed)"
+else
+  fail "dest ref sha missing locally is ignored (clean push allowed)" "rc=$rc out=$out"
+fi
+rm -rf "$d"
+
+# 5. B1 and B2 still blocked: ls-remote of the *push* destination (empty /
+# unrelated) must not be replaced by stale refs/remotes/*.
+d=$(mktemp -d)
+build_pair "$d" "$PRIVATE_ORIGIN_SLUG" true
+git -C "$d/work" checkout -q -b feature/repoint2
+printf 'Private reference: amber-lantern\n' > "$d/work/leak.md"
+git -C "$d/work" add leak.md
+with_vis_env "$d" git -C "$d/work" commit -q -m 'feat: leak on private'
+with_vis_env "$d" git -C "$d/work" push -q -u origin HEAD 2>/dev/null
+git init -q --bare "$d/newpub2.git"
+git -C "$d/work" remote set-url origin https://github.com/adopter/new-public-2.git
+git -C "$d/work" config "url.$d/newpub2.git.insteadOf" https://github.com/adopter/new-public-2.git
+printf 'false\n' > "$(cat "$d/stub_dir_path")/by-slug/adopter_new-public-2"
+out=$(with_vis_env "$d" git -C "$d/work" push origin feature/repoint2 2>&1)
+assert_blocked "B1 (dest ls-remote): origin repointed private to public still blocks" $? "$out"
+rm -rf "$d"
+
+d=$(mktemp -d)
+build_pair "$d" "$PRIVATE_ORIGIN_SLUG" true
+git -C "$d/work" checkout -q -b feature/tri2
+printf 'Private reference: amber-lantern\n' > "$d/work/leak.md"
+git -C "$d/work" add leak.md
+with_vis_env "$d" git -C "$d/work" commit -q -m 'feat: leak on private'
+with_vis_env "$d" git -C "$d/work" push -q -u origin HEAD 2>/dev/null
+git -C "$d/work" fetch -q origin
+git init -q --bare "$d/tri2.git"
+git -C "$d/work" config remote.origin.pushurl https://github.com/adopter/tri-public-2.git
+git -C "$d/work" config "url.$d/tri2.git.insteadOf" https://github.com/adopter/tri-public-2.git
+printf 'false\n' > "$(cat "$d/stub_dir_path")/by-slug/adopter_tri-public-2"
+out=$(with_vis_env "$d" git -C "$d/work" push origin feature/tri2 2>&1)
+assert_blocked "B2 (dest ls-remote): private url with public pushurl still blocks" $? "$out"
 rm -rf "$d"
 
 echo

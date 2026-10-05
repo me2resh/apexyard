@@ -20,11 +20,15 @@
 # diff is parsed and no pathspec is built.
 #
 # "Known" means (a) the pushed ref's current remote sha from the pre-push
-# stdin, when that commit exists locally, and (b) tips this hook already
-# scanned CLEAN for the same registry content (a local record keyed by a hash
-# of every matcher input). Remote-tracking refs are never trusted: they
-# describe the fetch URL's old state, not what this destination holds. When
-# nothing is known, everything reachable from the pushed tip is scanned.
+# stdin, when that commit exists locally, (b) tips this hook already scanned
+# CLEAN for the same registry content (a local record keyed by a hash of every
+# matcher input), and (c) every commit the destination itself currently
+# advertises (git ls-remote --heads --tags of $2) that also exists locally.
+# Those objects are already on the destination, so re-scanning them does not
+# protect anything. Remote-tracking refs are never trusted: they describe the
+# fetch URL's old state, not what this destination holds. When nothing is
+# known, everything reachable from the pushed tip is scanned. If ls-remote
+# fails or times out, (c) adds nothing (fail closed: full scan).
 #
 # Also matched: file and directory names, the pushed ref names, and whole
 # commit and tag objects (author, committer, tagger headers and message).
@@ -177,6 +181,58 @@ if [ -f "$REC_FILE" ]; then
   cut -d' ' -f1 "$TMP/records.keep" > "$TMP/records" || fail_closed "cut failed"
 fi
 
+# Destination refs (exclusion c). Ask the URL git is pushing to — never
+# refs/remotes/* — what commits it already holds. Feed as ^sha lines via
+# stdin to rev-list (never as argv) so a large ref list stays under the
+# Linux argv limit. Missing local objects are ignored. Failure / timeout
+# adds nothing (full scan).
+#
+# TEST ONLY: APEXYARD_LEAK_LS_REMOTE_CMD — invoked as
+#   $APEXYARD_LEAK_LS_REMOTE_CMD <dest-url>
+# Must print git ls-remote --heads --tags style lines on stdout. Used by
+# hook tests to force a failure; production uses git ls-remote.
+_LS_REMOTE_TIMEOUT_SECONDS=5
+: > "$TMP/dest_not"
+_collect_dest_exclusions() {
+  local dest="$1" out rc line sha secs
+  [ -n "$dest" ] || return 0
+  secs="$_LS_REMOTE_TIMEOUT_SECONDS"
+  case "${APEXYARD_LEAK_LS_REMOTE_TIMEOUT:-}" in
+    ''|*[!0-9]*) ;;
+    *) secs="$APEXYARD_LEAK_LS_REMOTE_TIMEOUT" ;;
+  esac
+
+  if [ -n "${APEXYARD_LEAK_LS_REMOTE_CMD:-}" ]; then
+    # TEST ONLY — see comment above. Word-splitting the command is intended.
+    # shellcheck disable=SC2086
+    out=$(_leak_run_limited "$secs" $APEXYARD_LEAK_LS_REMOTE_CMD "$dest")
+  else
+    out=$(_leak_run_limited "$secs" git ls-remote --heads --tags "$dest")
+  fi
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "note: could not read the destination's refs; scanning the full history reachable from each tip." >&2
+    return 0
+  fi
+
+  # ls-remote lines: "<sha>\t<ref>" (and peeled "<sha>\t<ref>^{}" for
+  # annotated tags). Keep only shas that resolve to a local commit.
+  # Pipe (not argv) so a large ref list never hits the Linux argv limit.
+  printf '%s\n' "$out" | while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    sha=${line%%[ 	]*}
+    case "$sha" in
+      [0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) ;;
+      *) continue ;;
+    esac
+    if git cat-file -e "${sha}^{commit}" 2>/dev/null; then
+      printf '^%s\n' "$sha"
+    fi
+  done >> "$TMP/dest_not"
+}
+
+_collect_dest_exclusions "$REMOTE_URL"
+
 # Print "<sha> <path>" lines of the new objects for one ref update.
 _new_objects() {
   local local_sha="$1" remote_sha="$2"
@@ -189,6 +245,8 @@ _new_objects() {
     fi
     # Tips this hook already scanned clean for the same registry content.
     sed 's/^/^/' "$TMP/records"
+    # Commits the destination itself currently advertises (ls-remote).
+    cat "$TMP/dest_not"
   } > "$TMP/revin" || return 1
   git rev-list --objects --stdin < "$TMP/revin"
 }
