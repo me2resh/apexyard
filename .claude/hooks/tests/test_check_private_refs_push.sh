@@ -15,6 +15,10 @@
 #   - destination refs (ls-remote of push URL): history already on the dest
 #     is excluded for a new-branch push; a new leak still blocks; ls-remote
 #     failure fails closed; a missing local sha is ignored; B1/B2 still block
+#   - clean-scan records: only full-history-clean tips are recorded (Rex B-1);
+#     a mirror push that used dest exclusions must not let a private tip
+#     through to a public remote; a no-exclusion push still records and
+#     reuses; a dest-exclusion push writes no record line for that tip
 #
 # Remotes use GitHub-form URLs. A local bare repo is the real transport via
 # `url.<bare>.insteadOf`. Visibility is stubbed with
@@ -189,6 +193,18 @@ reset_lookups() {
   local stub_dir
   stub_dir=$(cat "$dir/stub_dir_path")
   : > "$stub_dir/lookups.log"
+}
+
+# True when tip is present in any clean-scan record under the work repo.
+tip_in_clean_record() {
+  local work="$1" tip="$2" common
+  common=$(git -C "$work" rev-parse --git-common-dir)
+  case "$common" in
+    /*) ;;
+    *) common=$(CDPATH="" cd "$work/$common" && pwd) ;;
+  esac
+  [ -d "$common/apexyard-leak-scanned" ] || return 1
+  grep -qxF "$tip" "$common/apexyard-leak-scanned/"* 2>/dev/null
 }
 
 
@@ -973,6 +989,105 @@ if [ "$third_n" = "$total" ]; then
   pass "clean-scan record: a registry change invalidates it (full rescan)"
 else
   fail "clean-scan record: a registry change invalidates it (full rescan)" "third=$third_n total=$total"
+fi
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# Rex B-1: record only full-history-clean tips (no destination exclusions)
+# ---------------------------------------------------------------------------
+echo "== Rex B-1: full-history clean records only"
+
+# 1. Private origin holds a leak. A filesystem mirror of that bare repo has
+# the same history (visibility unknown → scan). A clean tip pushed to the
+# mirror uses dest exclusions and must NOT be recorded. Pushing that tip to
+# a public remote must then BLOCK (without the mirror step it already does).
+d=$(mktemp -d)
+build_pair "$d" "$PRIVATE_ORIGIN_SLUG" true
+git -C "$d/work" checkout -q -b feature/b1-mirror
+printf 'Private reference: amber-lantern\n' > "$d/work/leak.md"
+git -C "$d/work" add leak.md
+with_vis_env "$d" git -C "$d/work" commit -q -m 'feat: leak on private'
+with_vis_env "$d" git -C "$d/work" push -q -u origin HEAD 2>/dev/null
+cp -a "$d/remote.git" "$d/mirror.git"
+git -C "$d/work" remote add mirror "https://github.com/adopter/unknown-mirror.git"
+git -C "$d/work" config "url.$d/mirror.git.insteadOf" "https://github.com/adopter/unknown-mirror.git"
+printf 'fail\n' > "$(cat "$d/stub_dir_path")/by-slug/adopter_unknown-mirror"
+printf 'clean\n' > "$d/work/clean.md"
+git -C "$d/work" add clean.md
+with_vis_env "$d" git -C "$d/work" commit -q -m 'feat: clean'
+mirror_tip=$(git -C "$d/work" rev-parse HEAD)
+with_vis_env "$d" git -C "$d/work" push -q mirror feature/b1-mirror:refs/heads/feature/b1-mirror 2>/dev/null
+if tip_in_clean_record "$d/work" "$mirror_tip"; then
+  fail "B-1 mirror path: clean tip after dest-exclusion push is not recorded" \
+    "tip $mirror_tip was recorded"
+else
+  pass "B-1 mirror path: clean tip after dest-exclusion push is not recorded"
+fi
+add_remote "$d" pubb1 someone/pub-b1
+out=$(with_vis_env "$d" git -C "$d/work" push pubb1 feature/b1-mirror:refs/heads/feature/b1-mirror 2>&1)
+assert_blocked "B-1: private tip via unknown mirror still blocks on public push" $? "$out"
+rm -rf "$d"
+
+# 2. A push with no destination exclusion still writes a record; a second
+# push of the same clean tip to another public remote scans 0 objects.
+d=$(mktemp -d)
+build_pair "$d" "$PRIVATE_ORIGIN_SLUG" true
+add_remote "$d" pub1b someone/pub-one-b
+add_remote "$d" pub2b someone/pub-two-b
+trace="$d/trace-b1.log"
+: > "$trace"
+git -C "$d/work" checkout -q -b feature/rec-full main
+echo clean > "$d/work/rec-full.md"
+git -C "$d/work" add rec-full.md
+git -C "$d/work" commit -q --no-verify -m rec-full
+full_tip=$(git -C "$d/work" rev-parse HEAD)
+APEXYARD_LEAK_PUSH_TRACE="$trace" with_vis_env "$d" git -C "$d/work" push -q pub1b feature/rec-full:refs/heads/feature/rec-full 2>/dev/null
+first_n=$(sed -n '1p' "$trace" | sed 's/.*objects=//')
+if tip_in_clean_record "$d/work" "$full_tip" && [ -n "$first_n" ] && [ "$first_n" -gt 0 ]; then
+  pass "B-1: no-dest-exclusion push writes a full-history clean record"
+else
+  fail "B-1: no-dest-exclusion push writes a full-history clean record" \
+    "recorded=$(tip_in_clean_record "$d/work" "$full_tip" && echo yes || echo no) first=$first_n"
+fi
+APEXYARD_LEAK_PUSH_TRACE="$trace" with_vis_env "$d" git -C "$d/work" push -q pub2b feature/rec-full:refs/heads/feature/rec-full 2>/dev/null
+second_n=$(sed -n '2p' "$trace" | sed 's/.*objects=//')
+if [ "$second_n" = "0" ]; then
+  pass "B-1: recorded full-history tip reused on another public remote (0 objects)"
+else
+  fail "B-1: recorded full-history tip reused on another public remote (0 objects)" \
+    "second=$second_n"
+fi
+rm -rf "$d"
+
+# 3. A push that used destination exclusions writes NO record for that tip.
+d=$(mktemp -d)
+build_pair "$d" "$PUBLIC_FRAMEWORK_SLUG" false
+git -C "$d/work" config core.hooksPath /dev/null
+git -C "$d/work" checkout -q -b feature/seed-for-rec
+printf 'Private reference: amber-lantern\n' > "$d/work/old-leak.md"
+git -C "$d/work" add old-leak.md
+git -C "$d/work" commit -q -m 'feat: already on dest'
+with_vis_env "$d" git -C "$d/work" push -q origin feature/seed-for-rec:refs/heads/dev
+git -C "$d/work" checkout -q -b feature/clean-no-rec feature/seed-for-rec
+printf 'clean new work\n' > "$d/work/clean.md"
+git -C "$d/work" add clean.md
+git -C "$d/work" commit -q -m 'feat: clean only'
+no_rec_tip=$(git -C "$d/work" rev-parse HEAD)
+git -C "$d/work" config core.hooksPath .githooks
+# Clear any prior records so we only assert this push's effect.
+common=$(git -C "$d/work" rev-parse --git-common-dir)
+case "$common" in
+  /*) ;;
+  *) common=$(CDPATH="" cd "$d/work/$common" && pwd) ;;
+esac
+rm -rf "$common/apexyard-leak-scanned"
+out=$(with_vis_env "$d" git -C "$d/work" push -u origin HEAD 2>&1)
+rc=$?
+if [ "$rc" -eq 0 ] && ! tip_in_clean_record "$d/work" "$no_rec_tip"; then
+  pass "B-1: dest-exclusion push writes no clean-scan record for that tip"
+else
+  fail "B-1: dest-exclusion push writes no clean-scan record for that tip" \
+    "rc=$rc recorded=$(tip_in_clean_record "$d/work" "$no_rec_tip" && echo yes || echo no) out=$out"
 fi
 rm -rf "$d"
 

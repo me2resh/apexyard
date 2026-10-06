@@ -21,12 +21,15 @@
 #
 # "Known" means (a) the pushed ref's current remote sha from the pre-push
 # stdin, when that commit exists locally, (b) tips this hook already scanned
-# CLEAN for the same registry content (a local record keyed by a hash of every
-# matcher input), and (c) every commit the destination itself currently
-# advertises (git ls-remote --heads --tags of $2) that also exists locally.
-# Those objects are already on the destination, so re-scanning them does not
-# protect anything. Remote-tracking refs are never trusted: they describe the
-# fetch URL's old state, not what this destination holds. When nothing is
+# CLEAN over their full reachable history for the same registry content (a
+# local record keyed by a hash of every matcher input), and (c) every commit
+# the destination itself currently advertises (git ls-remote --heads --tags
+# of $2) that also exists locally. (a) and (c) are destination-derived: they
+# are safe for the current push but must not be used to write a clean record.
+# A tip is recorded only when its scan covered the full reachable history
+# apart from tips that are themselves already full-history-clean records
+# (Rex B-1 / #1528). Remote-tracking refs are never trusted: they describe
+# the fetch URL's old state, not what this destination holds. When nothing is
 # known, everything reachable from the pushed tip is scanned. If ls-remote
 # fails or times out, (c) adds nothing (fail closed: full scan).
 #
@@ -159,12 +162,15 @@ MSG
   exit 2
 }
 
-# Clean-scan records. A scan result does not depend on the destination, so a
-# tip scanned clean once need not be scanned again for another remote. The
-# record is keyed by a hash of every matcher input (registry tokens, flags,
-# identity, matcher version): a registry change makes the old record unused.
-# Remote-tracking refs are NOT used: they describe the fetch URL's old state,
-# not what this destination holds.
+# Clean-scan records. A tip is recorded only when the scan covered its full
+# reachable history apart from tips that are themselves already
+# full-history-clean records. Destination-derived exclusions (stdin remote
+# sha, ls-remote) stay in the scan for this push but must not produce a
+# record: that tip is only known-clean relative to what that destination
+# already held (Rex B-1). A recorded tip is then safe to reuse for any
+# remote. The record is keyed by a hash of every matcher input (registry
+# tokens, flags, identity, matcher version): a registry change makes the
+# old record unused. Remote-tracking refs are NOT used.
 FINGERPRINT=$(private_refs_match_fingerprint) || fail_closed "cannot fingerprint the match inputs"
 [ -n "$FINGERPRINT" ] || fail_closed "empty match fingerprint"
 GIT_COMMON=$(git rev-parse --git-common-dir 2>/dev/null) || fail_closed "cannot resolve the git directory"
@@ -233,6 +239,18 @@ _collect_dest_exclusions() {
 
 _collect_dest_exclusions "$REMOTE_URL"
 
+# True when this ref's exclusion list used a destination-derived exclusion
+# (stdin remote sha that exists locally, or any ls-remote commit). Such a
+# scan must not write a clean record for the tip.
+_used_dest_exclusion() {
+  local remote_sha="$1"
+  if [ "$remote_sha" != "$ALL_ZERO_SHA" ] \
+    && git cat-file -e "${remote_sha}^{commit}" 2>/dev/null; then
+    return 0
+  fi
+  [ -s "$TMP/dest_not" ]
+}
+
 # Print "<sha> <path>" lines of the new objects for one ref update.
 _new_objects() {
   local local_sha="$1" remote_sha="$2"
@@ -243,7 +261,7 @@ _new_objects() {
       && git cat-file -e "${remote_sha}^{commit}" 2>/dev/null; then
       printf '^%s\n' "$remote_sha"
     fi
-    # Tips this hook already scanned clean for the same registry content.
+    # Tips this hook already scanned clean (full history) for this registry.
     sed 's/^/^/' "$TMP/records"
     # Commits the destination itself currently advertises (ls-remote).
     cat "$TMP/dest_not"
@@ -402,10 +420,14 @@ while IFS=' ' read -r local_ref local_sha remote_ref remote_sha; do
   [ "$local_sha" = "$ALL_ZERO_SHA" ] && continue
   _check_ref_names "$local_ref" "$remote_ref"
   _scan_ref "$local_sha" "${remote_sha:-$ALL_ZERO_SHA}"
-  printf '%s\n' "$local_sha" >> "$TMP/tips"
+  # Record only full-history-clean tips (no destination-derived exclusions).
+  if ! _used_dest_exclusion "${remote_sha:-$ALL_ZERO_SHA}"; then
+    printf '%s\n' "$local_sha" >> "$TMP/tips"
+  fi
 done
 
-# Every ref scanned clean: record the tips for the same registry content.
+# Tips whose scan covered full history (minus prior full-history-clean
+# records): persist them for reuse on any destination.
 if [ -s "$TMP/tips" ]; then
   mkdir -p "$REC_DIR" 2>/dev/null || exit 0
   for _old in "$REC_DIR"/*; do
