@@ -18,13 +18,20 @@
 #   state unknown (a failed lookup): fresh for 10 min, so an offline or
 #   hanging lookup does not repeat on every commit. unknown means SCAN.
 #
-# TEST-ONLY override (never set in production):
+# TEST-ONLY overrides (never set in production):
+#   APEXYARD_LEAK_TEST_MODE=1 — required to honour any command override below.
+#     Without it, APEXYARD_LEAK_VISIBILITY_CMD is ignored (real `gh` is used).
 #   APEXYARD_LEAK_VISIBILITY_CMD — command invoked as
 #     $APEXYARD_LEAK_VISIBILITY_CMD <owner/name>
 #   Must print `true` (private) or `false` (public) on stdout and exit 0.
 #   Any other result is a failed lookup → SCAN. Used only by hook tests
 #   with a stub; production uses `gh api repos/<slug> --jq .private`.
+#   Answers from this override are NEVER written to the visibility cache
+#   (even in test mode). Cache tests plant entries directly.
 #   APEXYARD_LEAK_VISIBILITY_TIMEOUT — lookup timeout seconds (tests only).
+#     Shortening it only fails closed (SCAN); it cannot skip the scan.
+#   APEXYARD_LEAK_FORCE_WATCHDOG — forces the bash-native timeout path;
+#     does not change the verdict.
 
 # shellcheck disable=SC2034  # sourced library; callers use the functions
 
@@ -138,7 +145,10 @@ _leak_visibility_lookup() {
     *) secs="$APEXYARD_LEAK_VISIBILITY_TIMEOUT" ;;
   esac
 
-  if [ -n "${APEXYARD_LEAK_VISIBILITY_CMD:-}" ]; then
+  # Honour the command override only when APEXYARD_LEAK_TEST_MODE=1.
+  # Without the flag, ignore the override silently and use real `gh`.
+  if [ "${APEXYARD_LEAK_TEST_MODE:-}" = "1" ] \
+    && [ -n "${APEXYARD_LEAK_VISIBILITY_CMD:-}" ]; then
     # TEST ONLY — see file header. Word-splitting the command is intended.
     # shellcheck disable=SC2086
     out=$(_leak_run_limited "$secs" $APEXYARD_LEAK_VISIBILITY_CMD "$slug")
@@ -154,6 +164,13 @@ _leak_visibility_lookup() {
     false) printf 'public\n'; return 0 ;;
     *) return 1 ;;
   esac
+}
+
+# True when the live lookup would use APEXYARD_LEAK_VISIBILITY_CMD (test mode).
+# Override answers must not be written to the visibility cache.
+_leak_visibility_lookup_uses_override() {
+  [ "${APEXYARD_LEAK_TEST_MODE:-}" = "1" ] \
+    && [ -n "${APEXYARD_LEAK_VISIBILITY_CMD:-}" ]
 }
 
 # Return 0 when slug is public-class (must always scan).
@@ -235,15 +252,22 @@ leak_remote_is_confirmed_private() {
   looked=$(_leak_visibility_lookup "$slug" 2>/dev/null || true)
   case "$looked" in
     private)
-      _leak_visibility_cache_set "$slug" "private"
+      # Never cache an answer that came from the test-only command override.
+      if ! _leak_visibility_lookup_uses_override; then
+        _leak_visibility_cache_set "$slug" "private"
+      fi
       return 0
       ;;
     public)
-      _leak_visibility_cache_set "$slug" "public"
+      if ! _leak_visibility_lookup_uses_override; then
+        _leak_visibility_cache_set "$slug" "public"
+      fi
       return 1
       ;;
     *)
-      _leak_visibility_cache_set "$slug" "unknown"
+      if ! _leak_visibility_lookup_uses_override; then
+        _leak_visibility_cache_set "$slug" "unknown"
+      fi
       return 1
       ;;
   esac

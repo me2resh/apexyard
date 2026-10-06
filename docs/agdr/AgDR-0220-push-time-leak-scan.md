@@ -42,7 +42,7 @@ Chosen: **pre-push scan plus a commit-time skip for a confirmed-private origin**
 4. The commit-time scan exits 0 only when origin is confirmed private by the same classification. Public, unknown, and failed-lookup origins, and the #1477 offline-proof path, still scan. The protected-branch guard runs in every case.
 5. No new skip variable. Skipping hooks on push skips the scan like any git hook.
 
-Tests stub the lookup with `APEXYARD_LEAK_VISIBILITY_CMD`, shorten its timeout with `APEXYARD_LEAK_VISIBILITY_TIMEOUT`, force the watchdog with `APEXYARD_LEAK_FORCE_WATCHDOG`, and may stub destination ls-remote with `APEXYARD_LEAK_LS_REMOTE_CMD` (or shorten it with `APEXYARD_LEAK_LS_REMOTE_TIMEOUT`). None of these variables is for production use. Local bare remotes exercise real `git ls-remote <path>`.
+Tests stub the lookup with `APEXYARD_LEAK_VISIBILITY_CMD` (honoured only when `APEXYARD_LEAK_TEST_MODE=1`), shorten its timeout with `APEXYARD_LEAK_VISIBILITY_TIMEOUT`, force the watchdog with `APEXYARD_LEAK_FORCE_WATCHDOG`, and may stub destination ls-remote with `APEXYARD_LEAK_LS_REMOTE_CMD` (also requires `APEXYARD_LEAK_TEST_MODE=1`; or shorten it with `APEXYARD_LEAK_LS_REMOTE_TIMEOUT`). Without the test-mode flag, command overrides are ignored and the real `gh` / `git ls-remote` run. Override answers are never written to the visibility cache; cache tests plant entries directly. Timeout and trace variables only fail closed or append debug — they cannot skip the scan. None of these variables is for production use. Local bare remotes exercise real `git ls-remote <path>`.
 
 ## Consequences
 
@@ -51,6 +51,7 @@ Tests stub the lookup with `APEXYARD_LEAK_VISIBILITY_CMD`, shorten its timeout w
 - Known limits:
   - Visibility can change after caching. A repo made public stays "private" for up to 24 hours.
   - A push through another tool, or with hooks skipped, is not scanned.
+  - Setting the test-only override variables (`APEXYARD_LEAK_TEST_MODE` plus a command stub) on a push is a one-off skip equivalent to running the push with another hooks path (`git -c core.hooksPath=...`), which this framework does not block either; it no longer persists via the visibility cache.
   - A clean-scan record is local state. Someone with write access to `.git` can forge one. The hook does not defend against that.
   - The registry file is exempt by path, the same as the commit-time scan. A push of a single-fork ops repo to a public remote therefore carries the registry blob unscanned. Blocking it outright was considered and not done: the registry is committed in every single-fork repo, so an adopter whose origin is a non-GitHub or unknown host (always scanned, never confirmed private) would be blocked on every push. The split-portfolio public half has no registry file, so it is unaffected either way. Revisit with a per-remote opt-out if adopters ask.
   - A byte-identical copy of the registry under another path is listed once by `rev-list`. When the registry path is reported first, the copy is skipped too.
@@ -62,7 +63,7 @@ Tests stub the lookup with `APEXYARD_LEAK_VISIBILITY_CMD`, shorten its timeout w
 
 ## Architecture evolution
 
-### Before
+### Before (Rex B-1 clean-scan records)
 
 Clean-scan records assumed a tip scanned clean once was reusable for every
 destination. The scan still excluded what the *current* destination already
@@ -71,7 +72,7 @@ later pushes treated its whole reachable history as clean, including private
 commits that had only been excluded because another remote already had them
 (Rex B-1 on the #1528 follow-up).
 
-### After
+### After (Rex B-1)
 
 Destination exclusions stay in the scan for the current push. A tip is
 recorded only when that ref's exclusion list used none of them — full
@@ -80,6 +81,23 @@ full-history-clean records. Records then mean "full history clean for this
 registry content" and stay safe to reuse for any destination. Reasoning:
 keep the incremental-scan speed for remotes that already hold history,
 without inventing a cross-remote "clean" claim the scan never proved.
+
+### Before (M-1 test-override persistence)
+
+`APEXYARD_LEAK_VISIBILITY_CMD` and `APEXYARD_LEAK_LS_REMOTE_CMD` were
+honoured in any environment. A push with the visibility stub printing
+`true` skipped the scan and wrote `apexyard-leak.<slug>.state = private`
+for 24 hours, so later pushes and commits skipped without the stub. The
+same class of risk applied to a malicious ls-remote stub for one push.
+
+### After (M-1)
+
+Command overrides require `APEXYARD_LEAK_TEST_MODE=1`. Without it they are
+ignored. Override answers are never cached; cache tests plant entries
+directly. Timeouts and `APEXYARD_LEAK_PUSH_TRACE` stay ungated because they
+only fail closed or append debug. Reasoning: a one-off env override is
+equivalent to swapping `core.hooksPath` for that push; persistence via the
+local visibility cache is what turned a test knob into a lasting bypass.
 
 ## Artifacts
 

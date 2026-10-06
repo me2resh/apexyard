@@ -195,8 +195,12 @@ fi
 #
 # TEST ONLY: APEXYARD_LEAK_LS_REMOTE_CMD — invoked as
 #   $APEXYARD_LEAK_LS_REMOTE_CMD <dest-url>
-# Must print git ls-remote --heads --tags style lines on stdout. Used by
-# hook tests to force a failure; production uses git ls-remote.
+# Must print git ls-remote --heads --tags style lines on stdout. Honoured
+# only when APEXYARD_LEAK_TEST_MODE=1; without the flag the override is
+# ignored and real `git ls-remote` runs. Used by hook tests to force a
+# failure; production uses git ls-remote.
+# APEXYARD_LEAK_LS_REMOTE_TIMEOUT — shortens the limit (fail closed: no
+# exclusions). APEXYARD_LEAK_PUSH_TRACE — append-only debug; no verdict change.
 _LS_REMOTE_TIMEOUT_SECONDS=5
 : > "$TMP/dest_not"
 _collect_dest_exclusions() {
@@ -208,7 +212,8 @@ _collect_dest_exclusions() {
     *) secs="$APEXYARD_LEAK_LS_REMOTE_TIMEOUT" ;;
   esac
 
-  if [ -n "${APEXYARD_LEAK_LS_REMOTE_CMD:-}" ]; then
+  if [ "${APEXYARD_LEAK_TEST_MODE:-}" = "1" ] \
+    && [ -n "${APEXYARD_LEAK_LS_REMOTE_CMD:-}" ]; then
     # TEST ONLY — see comment above. Word-splitting the command is intended.
     # shellcheck disable=SC2086
     out=$(_leak_run_limited "$secs" $APEXYARD_LEAK_LS_REMOTE_CMD "$dest")

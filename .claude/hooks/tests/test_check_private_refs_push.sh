@@ -22,9 +22,10 @@
 #
 # Remotes use GitHub-form URLs. A local bare repo is the real transport via
 # `url.<bare>.insteadOf`. Visibility is stubbed with
-# APEXYARD_LEAK_VISIBILITY_CMD (test-only; see _lib-leak-remote-visibility.sh).
-# Destination ls-remote uses the real local bare path ($2); failure is stubbed
-# with APEXYARD_LEAK_LS_REMOTE_CMD when needed. No network. No SKIP lines.
+# APEXYARD_LEAK_VISIBILITY_CMD under APEXYARD_LEAK_TEST_MODE=1 (see
+# _lib-leak-remote-visibility.sh). Destination ls-remote uses the real local
+# bare path ($2); failure is stubbed with APEXYARD_LEAK_LS_REMOTE_CMD when
+# needed (also requires TEST_MODE). No network. No SKIP lines.
 #
 set -u
 
@@ -167,12 +168,14 @@ build_pair() {
 
 with_vis_env() {
   # Usage: with_vis_env DIR command...
+  # Always sets APEXYARD_LEAK_TEST_MODE=1 so the visibility stub is honoured.
   local dir="$1"
   shift
   local stub stub_dir
   stub_dir=$(cat "$dir/stub_dir_path")
   stub=$(cat "$dir/stub_path")
-  env APEXYARD_LEAK_VISIBILITY_CMD="$stub" \
+  env APEXYARD_LEAK_TEST_MODE=1 \
+    APEXYARD_LEAK_VISIBILITY_CMD="$stub" \
     APEXYARD_LEAK_VIS_STUB_DIR="$stub_dir" \
     "$@"
 }
@@ -541,9 +544,12 @@ build_pair "$d" "$PRIVATE_ORIGIN_SLUG" true
 git -C "$d/work" checkout -q -b feature/cache
 printf 'Private reference: amber-lantern\n' > "$d/work/notes.md"
 git -C "$d/work" add notes.md
-# First commit: live lookup (no cache yet) → private → skip scan → allow.
+# First commit: live lookup via override (no cache yet) → private → skip scan.
+# Override answers are not cached; plant a fresh private entry for the next step.
 with_vis_env "$d" git -C "$d/work" commit -q -m 'feat: first'
 first_lookups=$(lookup_count "$d")
+now=$(date +%s)
+git -C "$d/work" config --local "apexyard-leak.${PRIVATE_ORIGIN_SLUG}.state" "private ${now}"
 reset_lookups "$d"
 # Second commit: fresh private cache → no lookup.
 printf 'More: amber-lantern\n' > "$d/work/notes2.md"
@@ -765,6 +771,9 @@ git -C "$d/work" checkout -q -b feature/a3
 echo clean > "$d/work/a.md"
 git -C "$d/work" add a.md
 with_vis_env "$d" git -C "$d/work" commit -q -m 'feat: one'
+# Override answers are not cached; plant a fresh private entry.
+now=$(date +%s)
+git -C "$d/work" config --local "apexyard-leak.adopter/2024_ops.state" "private ${now}"
 echo clean2 > "$d/work/b.md"
 git -C "$d/work" add b.md
 with_vis_env "$d" git -C "$d/work" commit -q -m 'feat: two'
@@ -782,6 +791,7 @@ cls() {
     # shellcheck source=/dev/null
     . .claude/hooks/_lib-leak-remote-visibility.sh
     APEXYARD_LEAK_VIS_STUB_DIR=$(cat "$d/stub_dir_path")
+    export APEXYARD_LEAK_TEST_MODE=1
     export APEXYARD_LEAK_VIS_STUB_DIR APEXYARD_LEAK_VISIBILITY_CMD
     APEXYARD_LEAK_VISIBILITY_CMD=$(cat "$d/stub_path")
     if leak_remote_is_confirmed_private "$1"; then echo private; else echo scan; fi
@@ -827,6 +837,9 @@ git -C "$d/work" checkout -q -b feature/a2
 echo clean > "$d/work/a.md"
 git -C "$d/work" add a.md
 with_vis_env "$d" git -C "$d/work" commit -q -m 'feat: one'
+# Override answers are not cached; plant a fresh unknown entry.
+now=$(date +%s)
+git -C "$d/work" config --local "apexyard-leak.${PRIVATE_ORIGIN_SLUG}.state" "unknown ${now}"
 echo clean2 > "$d/work/b.md"
 git -C "$d/work" add b.md
 with_vis_env "$d" git -C "$d/work" commit -q -m 'feat: two'
@@ -1164,7 +1177,7 @@ git -C "$d/work" config core.hooksPath .githooks
 fail_ls="$d/fail-ls-remote.sh"
 printf '#!/bin/bash\nexit 1\n' > "$fail_ls"
 chmod +x "$fail_ls"
-out=$(APEXYARD_LEAK_LS_REMOTE_CMD="$fail_ls" with_vis_env "$d" \
+out=$(APEXYARD_LEAK_TEST_MODE=1 APEXYARD_LEAK_LS_REMOTE_CMD="$fail_ls" with_vis_env "$d" \
   git -C "$d/work" push -u origin HEAD 2>&1)
 rc=$?
 if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qF 'private portfolio reference' \
@@ -1235,6 +1248,125 @@ git -C "$d/work" config "url.$d/tri2.git.insteadOf" https://github.com/adopter/t
 printf 'false\n' > "$(cat "$d/stub_dir_path")/by-slug/adopter_tri-public-2"
 out=$(with_vis_env "$d" git -C "$d/work" push origin feature/tri2 2>&1)
 assert_blocked "B2 (dest ls-remote): private url with public pushurl still blocks" $? "$out"
+rm -rf "$d"
+
+# ---------------------------------------------------------------------------
+# M-1: test overrides require APEXYARD_LEAK_TEST_MODE; override answers
+# are never written to the visibility cache.
+# ---------------------------------------------------------------------------
+echo "== M-1: test-mode gate for leak overrides"
+
+# (fails before) VISIBILITY_CMD without TEST_MODE must be ignored → scan → block.
+# PATH stub gh exits 1 so an ignored override never reaches the network.
+d=$(mktemp -d)
+build_pair "$d" "adopter/looks-private-m1" fail
+git -C "$d/work" checkout -q -b feature/m1-vis-no-test
+printf 'Private reference: amber-lantern\n' > "$d/work/leak.md"
+git -C "$d/work" add leak.md
+git -C "$d/work" commit -q -m 'feat: leak' --no-verify
+ghbin=$(mktemp -d)
+printf '#!/bin/bash\nexit 1\n' > "$ghbin/gh"
+chmod +x "$ghbin/gh"
+# Executable stub (not a bare `printf` argv) so the override is unambiguous.
+priv_stub="$d/print-true.sh"
+printf '#!/bin/bash\nprintf true\n' > "$priv_stub"
+chmod +x "$priv_stub"
+# Unset TEST_MODE (isolation may export it after the fix). Honouring
+# VISIBILITY_CMD alone must not skip the scan.
+out=$(
+  env -u APEXYARD_LEAK_TEST_MODE \
+    APEXYARD_LEAK_VISIBILITY_CMD="$priv_stub" \
+    PATH="$ghbin:$PATH" \
+    git -C "$d/work" push -u origin HEAD 2>&1
+)
+rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qF 'private portfolio reference' \
+  && ! printf '%s' "$out" | grep -qF 'amber-lantern'; then
+  pass "M-1: VISIBILITY_CMD without TEST_MODE is ignored (push still blocked)"
+else
+  fail "M-1: VISIBILITY_CMD without TEST_MODE is ignored (push still blocked)" \
+    "rc=$rc out=$out"
+fi
+rm -rf "$d" "$ghbin"
+
+# (fails before) TEST_MODE + private VISIBILITY_CMD must not write apexyard-leak.* cache.
+d=$(mktemp -d)
+build_pair "$d" "$PRIVATE_ORIGIN_SLUG" true
+git -C "$d/work" checkout -q -b feature/m1-no-cache
+printf 'Private reference: amber-lantern\n' > "$d/work/notes.md"
+git -C "$d/work" add notes.md
+with_vis_env "$d" git -C "$d/work" commit -q -m 'feat: private ok'
+# Clear any seed cache, then push (another lookup via override).
+git -C "$d/work" config --local --get-regexp '^apexyard-leak\.' 2>/dev/null \
+  | while read -r key _; do git -C "$d/work" config --local --unset "$key" 2>/dev/null || true; done
+with_vis_env "$d" git -C "$d/work" push -q -u origin HEAD 2>/dev/null
+cache_keys=$(git -C "$d/work" config --local --get-regexp '^apexyard-leak\.' 2>/dev/null || true)
+if [ -z "$cache_keys" ]; then
+  pass "M-1: override private answer does not write apexyard-leak.* cache"
+else
+  fail "M-1: override private answer does not write apexyard-leak.* cache" \
+    "keys=$cache_keys"
+fi
+rm -rf "$d"
+
+# (fails before) LS_REMOTE_CMD without TEST_MODE must be ignored → real
+# ls-remote against the local bare → leak still scanned → blocked.
+d=$(mktemp -d)
+build_pair "$d" "$PUBLIC_FRAMEWORK_SLUG" false
+git -C "$d/work" checkout -q -b feature/m1-ls-no-test
+printf 'Private reference: amber-lantern\n' > "$d/work/leak.md"
+git -C "$d/work" add leak.md
+git -C "$d/work" commit -q -m 'feat: leak' --no-verify
+tip=$(git -C "$d/work" rev-parse HEAD)
+mal_ls="$d/mal-ls-remote.sh"
+# Stub advertises the tip as already on the dest (would exclude the leak).
+cat > "$mal_ls" <<EOF
+#!/bin/bash
+printf '%s\trefs/heads/fake\n' '$tip'
+EOF
+chmod +x "$mal_ls"
+out=$(
+  env -u APEXYARD_LEAK_TEST_MODE \
+    APEXYARD_LEAK_LS_REMOTE_CMD="$mal_ls" \
+    APEXYARD_LEAK_VISIBILITY_CMD="$(cat "$d/stub_path")" \
+    APEXYARD_LEAK_VIS_STUB_DIR="$(cat "$d/stub_dir_path")" \
+    git -C "$d/work" push -u origin HEAD 2>&1
+)
+rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qF 'private portfolio reference' \
+  && ! printf '%s' "$out" | grep -qF 'amber-lantern'; then
+  pass "M-1: LS_REMOTE_CMD without TEST_MODE is ignored (push still blocked)"
+else
+  fail "M-1: LS_REMOTE_CMD without TEST_MODE is ignored (push still blocked)" \
+    "rc=$rc out=$out"
+fi
+rm -rf "$d"
+
+# With TEST_MODE the LS_REMOTE stub is honoured (symmetric to the gate).
+d=$(mktemp -d)
+build_pair "$d" "$PUBLIC_FRAMEWORK_SLUG" false
+git -C "$d/work" checkout -q -b feature/m1-ls-with-test
+printf 'Private reference: amber-lantern\n' > "$d/work/leak.md"
+git -C "$d/work" add leak.md
+git -C "$d/work" commit -q -m 'feat: leak' --no-verify
+tip=$(git -C "$d/work" rev-parse HEAD)
+ok_ls="$d/ok-ls-remote.sh"
+cat > "$ok_ls" <<EOF
+#!/bin/bash
+printf '%s\trefs/heads/fake\n' '$tip'
+EOF
+chmod +x "$ok_ls"
+out=$(
+  APEXYARD_LEAK_TEST_MODE=1 APEXYARD_LEAK_LS_REMOTE_CMD="$ok_ls" \
+    with_vis_env "$d" git -C "$d/work" push -u origin HEAD 2>&1
+)
+rc=$?
+if [ "$rc" -eq 0 ]; then
+  pass "M-1: LS_REMOTE_CMD with TEST_MODE is honoured (stub excludes tip)"
+else
+  fail "M-1: LS_REMOTE_CMD with TEST_MODE is honoured (stub excludes tip)" \
+    "rc=$rc out=$out"
+fi
 rm -rf "$d"
 
 echo
