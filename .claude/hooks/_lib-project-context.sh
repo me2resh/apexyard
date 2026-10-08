@@ -355,7 +355,20 @@ _projctx_read_safe() {  # $1=file $2=real workspace $3=bytes
     if [ -e /dev/fd/3 ]; then
       links=$(stat -L -c '%h' /dev/fd/3 2>/dev/null || stat -L -f '%l' /dev/fd/3 2>/dev/null) || exit 1
       [ "$links" = 1 ] || exit 1
-      _projctx_safe_file "$1" "$2" && [ "$1" -ef /dev/fd/3 ] || exit 1
+      _projctx_safe_file "$1" "$2" || exit 1
+      if [ "$1" -ef /dev/fd/3 ]; then
+        :
+      else
+        # macOS /dev/fd reports a synthetic device number. BSD stat with
+        # no path uses fstat on stdin, which identifies the opened file.
+        # Use the system BSD stat even when GNU stat is first in PATH.
+        local opened current
+        opened=$(/usr/bin/stat -f '%d:%i:%l' <&3 2>/dev/null) || exit 1
+        current=$(/usr/bin/stat -f '%d:%i:%l' "$1" 2>/dev/null) || exit 1
+        case "$opened" in *[!0123456789:]*|'' ) exit 1 ;; esac
+        case "$opened" in *:1) ;; *) exit 1 ;; esac
+        [ "$opened" = "$current" ] || exit 1
+      fi
       head -c "$3" <&3 2>/dev/null
     else
       # No /dev/fd: read, then run the full path check again. This narrows

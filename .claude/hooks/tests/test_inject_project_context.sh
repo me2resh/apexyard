@@ -35,6 +35,10 @@ fail_case() { echo "FAIL: $1" >&2; [ -n "${2:-}" ] && echo "   $2" >&2; FAIL=$((
 
 SB=$(mktemp -d -t projctx-test.XXXXXX)
 OUTSIDE=$(mktemp -d -t projctx-outside.XXXXXX)
+# Match the hook's physical paths (macOS /var and /tmp are symlinks).
+# The swap shims and worktree header assertions compare these paths literally.
+SB=$(cd "$SB" && pwd -P)
+OUTSIDE=$(cd "$OUTSIDE" && pwd -P)
 trap 'rm -rf "$SB" "$OUTSIDE" "$MARKER_DIR"' EXIT
 
 FORK="$SB/fork"
