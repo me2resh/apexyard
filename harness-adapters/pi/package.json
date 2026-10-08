@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "^1.0.1"
+    "@earendil-works/pi-coding-agent": "^1.0.4"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
