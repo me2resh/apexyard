@@ -31,15 +31,16 @@ Ship `.claude/migrations/v5.7.0-to-v5.8.0.sh`. It prints the files that still se
 
 ## Rollback Plan
 
-1. Delete `.claude/migrations/v5.7.0-to-v5.8.0.sh` in a follow-up PR.
-2. No adopter data changes, so no adopter step is needed.
+1. Keep `.claude/migrations/v5.7.0-to-v5.8.0.sh`. Never delete a shipped migration script: a fork still on v5.7.0 needs it as the first link of every later upgrade chain.
+2. To roll back, replace the script body with a plain no-op that prints one line and exits 0, in a follow-up PR.
+3. No adopter data changes, so no adopter step is needed.
 
 **Rollback tested against**: not needed. The script writes nothing.
 **Rollback window**: unlimited.
 
 ## Cross-Service Consumers
 
-`/update` and `_lib-migration-chain.sh` read the script name. No other consumer.
+`_lib-migration-chain.sh` finds the script by name and `/update` runs it. No other consumer.
 
 ## Testing Plan
 
@@ -48,7 +49,7 @@ Ship `.claude/migrations/v5.7.0-to-v5.8.0.sh`. It prints the files that still se
 
 ## Observability
 
-The script prints one line per finding during `/update`. `APEXYARD_MIGRATION_QUIET=1` silences it.
+The script prints a fixed status line, one line for each file that still sets `mcp_search`, and a note about the worktree gate during `/update`. `APEXYARD_MIGRATION_QUIET=1` silences it.
 
 ## Consequences
 
