@@ -9,6 +9,7 @@ Behaviour changes:
 - With ORBIT on, slice tickets need a slice record first (#1565), and a run warns about outcomes with unmet criteria and no slice (#1570).
 - The merge gate blocks a fork PR whose workflow runs wait for approval (#1519), and checks the head workflow runs on every merge (#1536).
 - Pushes are scanned for private project references (#1528).
+- ORBIT `default_planning` in the registry now accepts the YAML spellings `True`, `yes` and `On` as on. An unknown value warns and uses the global default. Before, those values turned the slice gate off.
 
 ### Added (feat)
 
@@ -29,6 +30,9 @@ Behaviour changes:
 
 ### Fixed (fix)
 
+- (#1581) accept GitHub Enterprise `host/owner/repo` values in the red-CI gate — 70e80b40
+- (#1581) pass a raw 0x1E byte through the legacy JSON-escape decoder — 70e80b40
+- (#1581) read YAML boolean spellings for ORBIT default_planning — bb6e36a1
 - (#1580) pass the #1182 parity case when the parent hook predates #1182 — 21808e5a
 - (#1575) scan for private references at push time — b312ca86
 - (#1573) gate worktree source writes under .claude/worktrees/ — a83d5c1f
