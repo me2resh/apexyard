@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "^1.18.30"
+    "@opencode-ai/plugin": "^1.18.34"
   },
   "overrides": {
     "toml": "^4.2.0"
