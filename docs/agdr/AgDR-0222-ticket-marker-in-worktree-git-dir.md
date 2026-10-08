@@ -78,7 +78,7 @@ When a tree fails any of these checks, only its `apexyard-ticket` file stops bei
 | `core.worktree` cannot move the tree | The tree is the directory that holds `.git`. |
 | Only the ops fork or a registered clone has a trusted new marker | The common dir is matched on every call. |
 | A planted `.git`, `gitdir` or `commondir` is refused | The common dir must be registered, and the back-pointers must agree. |
-| The `.git` write exemption covers only the marker | `active_ticket_is_marker_target` accepts the exact marker and its temporary file. |
+| The `.git` write exemption covers only the marker | `active_ticket_is_marker_target` accepts the exact marker and its temporary file. The exemption refuses a hard-linked target. |
 | The library's own functions and state cannot be planted by a parent process | Functions are redefined on every source. The one-time state reset is guarded by the process id in an array element. The context names are internal and unexported. |
 | A marker cannot carry one project's ticket into another tree | The writer and the lookup check that `repo=` is bound to the tree. |
 | A failed check never trusts the new marker | Every failure discards the tree's `apexyard-ticket`. The old resolution then decides, as it did before the move. |
@@ -192,7 +192,7 @@ Two other follow-up tasks relate to the transition (follow-up: to be filed):
 
 ### Places where the new hooks differ from the old ones
 
-- A write to `.git/apexyard-ticket` or its temporary file passes with no ticket. The old hooks blocked it. `/start-ticket` needs that write.
+- A write to `.git/apexyard-ticket` or its temporary file passes with no ticket. The old hooks blocked it. `/start-ticket` needs that write. The exemption refuses a hard-linked target.
 - The spike exemption reads the marker that governs the tree, not any marker in the session dir. This is the cross-project spike-leak fix. An old `current-ticket` still exempts a project that has no marker of its own, as in the ticket gate.
 - The ambient tracker guard reads every old marker, as before, and the new markers on top. It can block more than before, never less.
 - `active_ticket_init` falls back to `resolve_ops_root "$PWD"` when the start directory has no ops root. The old spike exemption did not.

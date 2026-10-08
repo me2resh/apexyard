@@ -24,7 +24,8 @@
 #   3. Otherwise, block with instructions.
 #
 # The one write into a .git directory that this gate allows is the marker
-# itself and its temporary file (active_ticket_is_marker_target).
+# itself and its temporary file (active_ticket_is_marker_target), and only
+# when that path is missing or has a single link.
 #
 # Ops root is the apexyard fork root (has both onboarding.yaml and
 # apexyard.projects.yaml at the top level). It's discovered by walking
@@ -698,28 +699,36 @@ _ratc_evaluate_target() {
     # shellcheck source=/dev/null
     . "$ACTIVE_TICKET_LIB"
   fi
-  local MARKER="" LOOKUP_RC=1
+  local MARKER="" LOOKUP_RC=1 marker_link_refused=0
   if command -v active_ticket_lookup >/dev/null 2>&1; then
     active_ticket_set_context "$OPS_ROOT" "$TREE_WS" "$MARKER_HOME" "$WORKSPACE_DIR"
     # The only write into a .git directory that needs no ticket is the
     # marker itself and its temporary file. Each target must pass on its own.
+    # ln is not a write, so a hard link of another file onto the marker name
+    # must not exempt a later write through that name. An unreadable link
+    # count is refused too, and that refusal does not fall through to lookup.
     case "$FILE_PATH" in
       */.git/*|.git/*)
         if active_ticket_is_marker_target "$FILE_PATH"; then
-          return 0
+          if active_ticket_marker_single_link "$FILE_PATH"; then
+            return 0
+          fi
+          marker_link_refused=1
         fi
         ;;
     esac
-    if [ -z "$FILE_PATH" ]; then
-      # An unextractable Bash target is judged against the working directory
-      # of the hook. Without a marker there, the session-level old-layout
-      # marker still counts for it.
-      active_ticket_lookup_cwd
-    else
-      active_ticket_lookup "$FILE_PATH"
+    if [ "$marker_link_refused" != 1 ]; then
+      if [ -z "$FILE_PATH" ]; then
+        # An unextractable Bash target is judged against the working directory
+        # of the hook. Without a marker there, the session-level old-layout
+        # marker still counts for it.
+        active_ticket_lookup_cwd
+      else
+        active_ticket_lookup "$FILE_PATH"
+      fi
+      LOOKUP_RC=$?
+      [ "$LOOKUP_RC" != 0 ] || MARKER="$REPLY"
     fi
-    LOOKUP_RC=$?
-    [ "$LOOKUP_RC" != 0 ] || MARKER="$REPLY"
   fi
   if [ -n "$MARKER" ]; then
     return 0
@@ -741,7 +750,10 @@ _ratc_evaluate_target() {
   fi
   QUOTED_HINT=$(_ratc_quoted_origin_hint "$TOOL_NAME")
   [ -n "$QUOTED_HINT" ] && QUOTED_HINT=$'\n'"$QUOTED_HINT"$'\n'
-  if [ -n "${AT_REASON:-}" ]; then
+  if [ "$marker_link_refused" = 1 ]; then
+    WHY_LINE="The path has more than one hard link, or its link count cannot be read. The marker-write exemption does not apply."
+    TREE_LINE="  this tree:    $FILE_PATH"
+  elif [ -n "${AT_REASON:-}" ]; then
     WHY_LINE="A marker in the git dir of the target's tree is not read ($AT_REASON). Old-layout markers under .claude/session/ still count."
     TREE_LINE="  this tree:    not read ($AT_REASON)"
   else

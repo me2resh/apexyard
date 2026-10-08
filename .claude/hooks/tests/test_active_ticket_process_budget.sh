@@ -150,7 +150,7 @@ NOPATH="$RESULT"
 PATH="$REAL_PATH"
 hash -r
 # Normalise the baseline stderr count the same way.
-BASE_CMP=$(printf '%s' "$BASE_NORM" | sed -E 's/err=[0-9]+/err=X/')
+BASE_CMP=$(printf '%s' "$BASE_NORM" | sed -E 's/err= *[0-9]+/err=X/')
 NOPATH_CMP=$(printf '%s' "$NOPATH" | sed -E 's/err=[^ ]*/err=X/')
 if [ "$BASE_CMP" = "$NOPATH_CMP" ]; then
   ok "1a lookup functions give the same result with PATH=/nonexistent"

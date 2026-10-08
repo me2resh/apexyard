@@ -7,6 +7,7 @@
 # Cases:
 #   1  writes into .git other than the marker are blocked
 #   2  the marker and its temporary file can be written with no ticket
+#   2d a hard-linked marker is blocked; a single link and a missing file stay exempt
 #   3  the marker exemption does not cover a second, ordinary target
 #   4  a planted nested .git is blocked even with an ops marker
 #   5  GIT_DIR and GIT_WORK_TREE in the hook environment change nothing
@@ -100,6 +101,26 @@ for tree in "$SB/workspace/p1" "$SB/wt1"; do
   hook "$SB" "$(bash_json "printf x > $G/apexyard-ticket.tmp.Ab3dE9")"; expect "2b ($label) write of the temporary marker is allowed" 0
   hook "$SB" "$(bash_json "mv $G/apexyard-ticket.tmp.Ab3dE9 $G/apexyard-ticket")"; expect "2c ($label) mv of the temporary file onto the marker is allowed" 0
 done
+rm -rf "$SB"
+
+# --- 2d. a hard link is not exempt; one link and a missing file are -------
+# ln is not a write. Linking .git/config onto the marker name must not let a
+# later write through that name pass with no ticket.
+SB=$(make_sb)
+G="$(gdir "$SB/workspace/p1")"
+ln "$G/config" "$G/apexyard-ticket"
+hook "$SB" "$(bash_json "printf x > $G/apexyard-ticket")"
+expect "2f a hard-linked marker is blocked with no ticket" 2 BLOCKED
+rm -f "$G/apexyard-ticket"
+printf 'repo=org/p1\nnumber=1\n' > "$G/apexyard-ticket"
+hook "$SB" "$(bash_json "printf x > $G/apexyard-ticket")"
+expect "2d an existing single-link marker is allowed with no ticket" 0
+rm -f "$G/apexyard-ticket"
+hook "$SB" "$(bash_json "printf x > $G/apexyard-ticket")"
+expect "2e a marker that does not exist yet is allowed" 0
+ln "$G/config" "$G/apexyard-ticket.tmp.Ab3dE9"
+hook "$SB" "$(bash_json "printf x > $G/apexyard-ticket.tmp.Ab3dE9")"
+expect "2g a hard-linked temporary marker is blocked with no ticket" 2 BLOCKED
 rm -rf "$SB"
 
 # --- 3. one exempt target does not exempt another -------------------------

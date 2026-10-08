@@ -28,7 +28,8 @@
 # static test (test_active_ticket_process_budget.sh) fails when a
 # lookup function gains a command substitution, a pipe, a subshell or an
 # external command. The functions that fork on purpose are
-# active_ticket_init, the writers and the old-layout resolution (_atd_*).
+# active_ticket_init, active_ticket_marker_single_link, the writers and the
+# old-layout resolution (_atd_*).
 #
 # VALIDATION (docs/agdr/AgDR-0222-ticket-marker-in-worktree-git-dir.md):
 #   - the git dir must belong to the ops fork or to a registered clone, matched
@@ -1053,7 +1054,9 @@ active_ticket_marker_for_path() {
 }
 
 # True when <path> names the marker file or its temporary file in the git dir
-# of a registered tree. The only write the gates allow into a .git directory.
+# of a registered tree. A symlink is refused. A hard link is not checked
+# here: the link count needs stat, and this function cannot fork. The gate
+# calls active_ticket_marker_single_link before it exempts the write.
 active_ticket_is_marker_target() {
   local L P base T p G
   _at_lex "$1" || return 1
@@ -1103,6 +1106,32 @@ active_ticket_read_field() {
 # ---------------------------------------------------------------------------
 # Functions that may fork (outside the lookup budget)
 # ---------------------------------------------------------------------------
+
+# 0 when <path> is missing or has exactly one link. 1 when the link count is
+# above 1 or cannot be read. The marker-write exemption calls this so a hard
+# link cannot stand in for the marker. A missing file is the first write and
+# stays exempt. The count is GNU stat -c %h, then BSD stat -f %l, then
+# find -links +1. Any of those may fork, so this stays outside the lookup
+# budget. An unreadable count is a refusal.
+active_ticket_marker_single_link() {
+  local f n
+  _at_lex "$1" || return 1
+  f="$REPLY"
+  if [ -L "$f" ]; then return 1; fi
+  if [ ! -e "$f" ]; then return 0; fi
+  n=$(stat -c %h "$f" 2>/dev/null) || n=""
+  case "$n" in ''|*[!0-9]*) n=$(stat -f %l "$f" 2>/dev/null) || n="" ;; esac
+  case "$n" in
+    ''|*[!0-9]*)
+      if ! n=$(find "$f" -prune -links +1 -print 2>/dev/null); then
+        return 1
+      fi
+      [ -z "$n" ]
+      return
+      ;;
+  esac
+  [ "$n" = 1 ]
+}
 
 # Fill every empty context value once per process. A caller that has no
 # resolved context uses this. The start directory defaults to the working
