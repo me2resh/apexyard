@@ -422,15 +422,29 @@ GATE_OWNER_REPO="$CMD_REPO"
 if [ -z "$GATE_OWNER_REPO" ]; then
   GATE_OWNER_REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null)
 fi
-if [[ ! "$GATE_OWNER_REPO" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] ||
-   [[ "$GATE_OWNER_REPO" == ./* || "$GATE_OWNER_REPO" == ../* ||
-      "$GATE_OWNER_REPO" == */. || "$GATE_OWNER_REPO" == */.. ]]; then
-  echo "BLOCKED: PR #${PR_NUMBER} has an invalid owner/repo: ${GATE_OWNER_REPO:-<empty>}. Use a literal owner/repo and retry." >&2
+# gh accepts [HOST/]OWNER/REPO for --repo (GitHub Enterprise). `gh pr`
+# takes the full value. `gh api` paths take OWNER/REPO, with the host in
+# --hostname.
+GATE_HOST=""
+GATE_API_REPO="$GATE_OWNER_REPO"
+if [[ "$GATE_OWNER_REPO" == */*/* ]]; then
+  GATE_HOST="${GATE_OWNER_REPO%%/*}"
+  GATE_API_REPO="${GATE_OWNER_REPO#*/}"
+fi
+if [[ ! "$GATE_API_REPO" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] ||
+   [[ "$GATE_API_REPO" == ./* || "$GATE_API_REPO" == ../* ||
+      "$GATE_API_REPO" == */. || "$GATE_API_REPO" == */.. ]] ||
+   { [ -n "$GATE_HOST" ] && [[ ! "$GATE_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]]; }; then
+  echo "BLOCKED: PR #${PR_NUMBER} has an invalid owner/repo: ${GATE_OWNER_REPO:-<empty>}. Use a literal [host/]owner/repo and retry." >&2
   exit 2
 fi
 REPO_ARGS=()
 if [ -n "$CMD_REPO" ]; then
   REPO_ARGS=(--repo "$GATE_OWNER_REPO")
+fi
+API_HOST_ARGS=()
+if [ -n "$GATE_HOST" ]; then
+  API_HOST_ARGS=(--hostname "$GATE_HOST")
 fi
 
 # Query checks. gh pr checks returns text output; we check both the exit
@@ -474,7 +488,7 @@ fi
 WORKFLOW_COUNT=""
 WORKFLOW_ERROR=""
 if [ "$NO_CHECKS" = "1" ]; then
-  WORKFLOWS_JSON=$(gh api "repos/${GATE_OWNER_REPO}/actions/workflows?per_page=100" 2>/dev/null)
+  WORKFLOWS_JSON=$(gh api ${API_HOST_ARGS[@]+"${API_HOST_ARGS[@]}"} "repos/${GATE_API_REPO}/actions/workflows?per_page=100" 2>/dev/null)
   WORKFLOW_RC=$?
   if [ "$WORKFLOW_RC" -ne 0 ]; then
     WORKFLOW_ERROR="workflow query failed"
@@ -495,7 +509,7 @@ fi
 # One head-filtered request per merge. A partial page cannot prove that
 # every run passed, so refuse a merge if the response reports more runs
 # than this request returned.
-RUNS_JSON=$(gh api "repos/${GATE_OWNER_REPO}/actions/runs?head_sha=${GATE_HEAD_SHA}&per_page=100" 2>/dev/null)
+RUNS_JSON=$(gh api ${API_HOST_ARGS[@]+"${API_HOST_ARGS[@]}"} "repos/${GATE_API_REPO}/actions/runs?head_sha=${GATE_HEAD_SHA}&per_page=100" 2>/dev/null)
 RUNS_RC=$?
 RUNS_ERROR=""
 if [ "$RUNS_RC" -ne 0 ]; then
