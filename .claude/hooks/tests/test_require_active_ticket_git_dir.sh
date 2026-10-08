@@ -123,6 +123,37 @@ hook "$SB" "$(bash_json "printf x > $G/apexyard-ticket.tmp.Ab3dE9")"
 expect "2g a hard-linked temporary marker is blocked with no ticket" 2 BLOCKED
 rm -rf "$SB"
 
+# --- 2h. refused links cannot use an active ticket ------------------------
+SB=$(make_sb)
+G="$(gdir "$SB/workspace/p1")"
+put_marker "$SB/workspace/p1"
+mkdir -p "$SB/.claude/session/tickets"
+mv "$G/apexyard-ticket" "$SB/.claude/session/tickets/p1"
+hook "$SB" "$(edit_json "$SB/workspace/p1/src/a.ts")"
+expect "2h the old-layout ticket covers p1" 0
+for name in apexyard-ticket apexyard-ticket.tmp.Ab3dE9; do
+  ln "$G/config" "$G/$name"
+  hook "$SB" "$(bash_json "printf x > $G/$name")"
+  expect "2i ($name) a hard link is blocked with an active ticket" 2 "more than one hard link"
+  rm -f "$G/$name"
+  rm -f "$SB/.claude/session/tickets/p1"
+  put_marker "$SB/workspace/p1"
+  hook "$SB" "$(edit_json "$SB/workspace/p1/src/a.ts")"
+  expect "2j ($name) the new-layout ticket covers p1" 0
+  if [ "$name" = apexyard-ticket ]; then
+    mv "$G/apexyard-ticket" "$SB/ticket"
+    ln -s "$SB/ticket" "$G/$name"
+  else
+    ln -s "$G/config" "$G/$name"
+  fi
+  hook "$SB" "$(bash_json "printf x > $G/$name")"
+  expect "2j ($name) a symlink is blocked with an active ticket" 2 BLOCKED
+  rm -f "$G/$name"
+  put_marker "$SB/workspace/p1"
+  mv "$G/apexyard-ticket" "$SB/.claude/session/tickets/p1"
+done
+rm -rf "$SB"
+
 # --- 3. one exempt target does not exempt another -------------------------
 SB=$(make_sb)
 G="$(gdir "$SB/workspace/p1")"

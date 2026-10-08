@@ -103,7 +103,7 @@ This AgDR partly supersedes AgDR-0066 and AgDR-0141, and amends AgDR-0168 and Ag
 
 - Each working tree can have its own ticket. Removing a worktree removes its new marker.
 - The fixes of this AgDR apply only in a tree with a trusted new marker. They are no last-writer-wins collision between parallel sessions, no `GIT_*` redirect of the lookup, and no cross-project wrong-ticket pass. A tree without one behaves as it did before the move.
-- No target that passed the old hooks is blocked by the new ones. Every session keeps its ticket through `/update` and through a rollback.
+- No target that passed the old hooks is blocked by the new ones. Every session keeps its ticket through `/update` and through a rollback. A marker path whose link count exceeds 1 or cannot be read is blocked even with an active ticket, without falling through to ticket lookup.
 - Unregistered repos, submodules, nested repos, symlinked roots and repos owned by another user get no trusted new marker. They use the old resolution.
 - Once the context is filled, a lookup that finds a new marker makes 0 forks. Without one, the old resolution keeps its old cost, including its git calls. The first lookup in a workspace clone may resolve the registry path once per process, and that step can fork. A test fails when a lookup function gains a command substitution, a pipe, a subshell or an external command.
 - A hook-level test fails when a gated write makes more processes than before.
