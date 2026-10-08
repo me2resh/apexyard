@@ -110,7 +110,7 @@ This AgDR partly supersedes AgDR-0066 and AgDR-0141, and amends AgDR-0168 and Ag
 
 ## Backward compatibility
 
-On 2026-10-08 Nagy, the issue author, reversed D1 and chose full backward compatibility. The upstream maintainer has not confirmed this decision yet. The review of the PR asks for that confirmation on me2resh/apexyard#1576. Until it comes, the amended rows below are the issue author's proposal.
+On 2026-10-08 Nagy, the issue author, reversed D1 and chose full backward compatibility. The upstream maintainer confirmed this decision on 2026-10-08 on me2resh/apexyard#1576. A tree with a trusted new marker is strict; a tree without one falls back to the `dev` resolution. The old fallback is removed in v6.0.0, as an explicit breaking change with an upgrade note.
 
 The first build replaced the old lookup instead of extending it, and real sessions broke. Linked worktrees, unregistered repos, nested repos and forks without the portfolio library lost their ticket.
 
@@ -121,7 +121,7 @@ The breakage had two kinds of cause.
 
 ### Amended acceptance criteria
 
-The decision amends four acceptance-criteria rows of me2resh/apexyard#1576. The issue author posted the amended rows on the issue. QA verifies against them after the upstream maintainer confirms them.
+The decision amends four acceptance-criteria rows of me2resh/apexyard#1576. The issue author posted the amended rows on the issue. The upstream maintainer confirmed them on 2026-10-08. QA verifies against the amended rows.
 
 | Original row | Amended row |
 |---|---|
