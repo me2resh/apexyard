@@ -114,7 +114,6 @@ Behaviour changes:
 - Closes #1336
 - Closes #1341
 - Closes #1343
-- Closes #1356
 - Closes #1359
 - Closes #1362
 - Closes #1363

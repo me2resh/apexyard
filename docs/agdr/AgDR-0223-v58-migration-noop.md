@@ -49,3 +49,16 @@ Ship `.claude/migrations/v5.7.0-to-v5.8.0.sh`. It prints the files that still se
 ## Observability
 
 The script prints one line per finding during `/update`. `APEXYARD_MIGRATION_QUIET=1` silences it.
+
+## Consequences
+
+- The `/update` chain stays walkable across v5.7.0 for every later upgrade.
+- Adopters learn which config keys are now unused, without an automatic edit to their config.
+- Each release keeps the cost of one small script, even when nothing moves.
+
+## Artifacts
+
+- Ticket: #1581
+- Commits / PRs: #1582
+- Staging-run log: not applicable. The script was run locally with and without an `mcp_search` key, and in quiet mode.
+- Post-apply dashboard snapshot: not applicable
