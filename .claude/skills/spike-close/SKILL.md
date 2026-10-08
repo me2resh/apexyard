@@ -44,7 +44,7 @@ Defaults match today's single-fork layout. See `docs/multi-project.md`.
 Two paths:
 
 - If `$ARGUMENTS` includes a number (e.g. `--promote 142` or `--discard owner/repo#142`), use that.
-- Otherwise read the active-ticket marker (`.claude/session/current-ticket` or `.claude/session/tickets/<project>`) and use the ticket recorded there. If neither resolves, ask:
+- Otherwise read the active-ticket marker of the working tree you are in (see `/start-ticket` "Read the active ticket") and use the ticket recorded there. If no marker resolves, ask:
 
 ```
 Which spike are you closing? Pass --promote <number> or --discard <number>,

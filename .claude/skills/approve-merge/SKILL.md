@@ -516,6 +516,32 @@ If `MERGE_RC` = 3 (`tracker.kind: none`, no host CLI configured):
 ✓ CEO approval recorded for PR #<pr>. No tracker CLI is configured (tracker.kind: none) — merge <pr> manually on the host; the marker on disk covers the approval, no further /approve-merge invocation needed.
 ```
 
+### 9a. Optional: offer to remove the merged PR's worktree
+
+Skip this step when `MERGE_RC` is not 0, and when `--no-merge` was passed.
+
+A merged PR often leaves a linked worktree on disk. Removing it also removes its ticket marker, because the marker lives in the worktree's git dir. Offer the removal. Never do it without a yes.
+
+1. Find the local clone of the PR's repo, the **source tree**. For a registered project it is `workspace/<name>/`, or the `workspace:` path of its registry entry. For a PR on the ops fork it is the ops root.
+2. List the candidates with the helper. The head branch is the merged PR's head branch:
+
+   ```bash
+   .claude/skills/approve-merge/remove-worktree.sh list "<source-tree>" "<head-branch>"
+   ```
+
+   The helper takes candidates only from `git worktree list --porcelain -z`, run with `-C` on the validated common dir. The `-z` option needs git 2.36 or later. With an older git, the helper lists no worktree, prints an error and removes nothing. Tell the user that the worktree stays on disk. The helper prints `ok` or `refused (<reason>)` for each worktree that holds the branch, and the ignored files of each `ok` worktree. It refuses the main worktree, a locked worktree, the session's own tree, and any path that equals or contains the ops root.
+3. If there is an `ok` worktree, ask with `AskUserQuestion`. Show the path and the ignored files the helper listed, because `git worktree remove` deletes them. Offer "Remove it" and "Keep it".
+4. On "Remove it", run:
+
+   ```bash
+   .claude/skills/approve-merge/remove-worktree.sh remove "<source-tree>" "<path>" "<head-branch>"
+   ```
+
+   The helper first re-checks that the worktree still holds the merged head branch and passes every refusal rule. It runs `git worktree remove` with no `--force`. A dirty worktree stops the step. Report the helper's message, and leave the worktree for the user.
+5. On "Keep it", do nothing. Do not ask again.
+
+Never remove a path that the helper did not list. Never pass `--force`.
+
 ### 10. Optional: post-merge child-issue closure
 
 If the PR's merge commit / PR body contains `Closes <owner/repo>#<N>` references that GitHub's auto-closer didn't catch (squash merges with cross-repo refs sometimes silently miss), you can offer to close them with a comment. This is **out of scope for the default flow** — only do it if the user explicitly asks. Don't auto-close child issues; that's another externally-visible action that needs its own per-issue confirmation.

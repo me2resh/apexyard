@@ -44,7 +44,9 @@ make_fork() {
   # Canonicalize so paths match what `pwd -P` / dirname produce on macOS.
   sb=$(cd "$sb" && pwd -P)
 
-  # Marker files for "this is an apexyard fork".
+  # Marker files for "this is an apexyard fork". The fork is a git repo with
+  # the hook libraries, so the resolver can find the ticket marker in its git
+  # dir.
   : > "$sb/onboarding.yaml"
   cat > "$sb/apexyard.projects.yaml" <<YAML
 version: 1
@@ -52,6 +54,16 @@ projects:
   - name: example
     repo: example/example
 YAML
+  if [ -n "$workspace_name" ]; then
+    printf '  - name: %s\n    repo: owner/%s\n' "$workspace_name" "$workspace_name" >> "$sb/apexyard.projects.yaml"
+  fi
+  git init -q "$sb"
+  mkdir -p "$sb/.claude/hooks"
+  local lib
+  for lib in _lib-active-ticket.sh _lib-portfolio-paths.sh _lib-ops-root.sh _lib-read-config.sh _lib-resolution-cache.sh; do
+    cp "$SRC_ROOT/.claude/hooks/$lib" "$sb/.claude/hooks/$lib"
+  done
+  cp "$SRC_ROOT/.claude/project-config.defaults.json" "$sb/.claude/project-config.defaults.json"
 
   # Copy the helper into the same relative path the real fork uses, so
   # the shim's "find helper at \$ops_root/.claude/skills/status/briefing.sh"
@@ -77,19 +89,21 @@ YAML
 }
 
 # ---------------------------------------------------------------------------
-# write_marker: drop a key=value ticket marker.
-#   $1 — sandbox root
-#   $2 — marker filename relative to .claude/session/ (e.g.
-#        "current-ticket" or "tickets/<workspace>")
-#   $3 — repo (e.g. "owner/repo")
-#   $4 — number
-#   $5 — title
+# write_marker: drop a key=value ticket marker into a working tree's git dir.
+#   $1 - sandbox root
+#   $2 - "current-ticket" for the ops fork, or "tickets/<workspace>" for the
+#        main clone of that workspace project
+#   $3 - repo (e.g. "owner/repo")
+#   $4 - number
+#   $5 - title
 # ---------------------------------------------------------------------------
 write_marker() {
-  local sb="$1" rel="$2" repo="$3" number="$4" title="$5"
-  local path="$sb/.claude/session/$rel"
-  mkdir -p "$(dirname "$path")"
-  cat > "$path" <<EOF
+  local sb="$1" rel="$2" repo="$3" number="$4" title="$5" gd
+  case "$rel" in
+    tickets/*) gd=$(git -C "$sb/workspace/${rel#tickets/}" rev-parse --absolute-git-dir) ;;
+    *) gd="$sb/.git" ;;
+  esac
+  cat > "$gd/apexyard-ticket" <<EOF
 repo=$repo
 number=$number
 title=$title
@@ -181,7 +195,7 @@ run_case "unknown-cwd" "$sb" "$unrelated_dir" "" \
 rm -rf "$unrelated_dir"
 
 # ---------------------------------------------------------------------------
-# 4. ops-fallback ticket marker — read from .claude/session/current-ticket
+# 4. ops fork ticket marker — read from the fork git dir
 # ---------------------------------------------------------------------------
 sb=$(make_fork)
 write_marker "$sb" "current-ticket" "me2resh/apexyard" "182" "[Feature] briefing slide"

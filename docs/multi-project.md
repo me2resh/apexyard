@@ -902,7 +902,7 @@ Branch:            feature/GH-42-csv-export
 Role set:          backend
 ```
 
-The same output appears when you run `/status --briefing` (or `/status -b`) inside Claude Code. The four fields all infer themselves: workspace from cwd, ticket from the per-project marker (`<ops_root>/.claude/session/tickets/<name>`) or the ops fallback (`<ops_root>/.claude/session/current-ticket`), branch from `git branch --show-current`, role from the active ticket's labels. Where any of those is unknown, the briefing prints an explicit `(none)` / `(unknown)` / `<none — inferred per task>` placeholder so the four-line shape is constant regardless of state.
+The same output appears when you run `/status --briefing` (or `/status -b`) inside Claude Code. The four fields all infer themselves. The workspace comes from cwd, and the ticket from the marker of the working tree you are in (`apexyard-ticket` in its git dir). The branch comes from `git branch --show-current`, and the role from the active ticket's labels. Where any of those is unknown, the briefing prints an explicit `(none)` / `(unknown)` / `<none — inferred per task>` placeholder so the four-line shape is constant regardless of state.
 
 Default `/status` (no flags) still produces the long per-project breakdown — `--briefing` only opts into the compact form.
 

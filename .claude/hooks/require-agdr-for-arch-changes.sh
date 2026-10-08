@@ -100,6 +100,26 @@ if [ -z "$TOUCHED_ARCH" ]; then
   exit 0
 fi
 
+# True when the marker that governs REPO_ROOT names a [Spike] or [Prototype]
+# ticket: the marker in its tree's git dir, else the old-layout marker for
+# that path. A spike in one project cannot exempt a change in another project
+# or tree.
+spike_marker_exempt() {
+  local hook_dir
+  hook_dir="$(cd "$(dirname "$0")" && pwd)"
+  [ -n "${REPO_ROOT:-}" ] && [ -f "$hook_dir/_lib-active-ticket.sh" ] || return 1
+  # shellcheck source=/dev/null
+  . "$hook_dir/_lib-active-ticket.sh"
+  # Without an ops root, the old-layout markers under REPO_ROOT still count.
+  active_ticket_init "$REPO_ROOT" || active_ticket_set_context "" "" "$REPO_ROOT"
+  active_ticket_lookup "$REPO_ROOT" || return 1
+  active_ticket_read_field "$REPLY" title || return 1
+  case "$REPLY" in
+    '[Spike]'*|'[Prototype]'*) return 0 ;;
+  esac
+  return 1
+}
+
 # ---------------------------------------------------------------------------
 # Spike + prototype exemption (apexyard#180, #673).
 #
@@ -108,51 +128,13 @@ fi
 # these write disposition memos instead. Exempt the commit-time AgDR check if
 # ANY of:
 #
-#   (a) the active ticket marker references a `[Spike]` or `[Prototype]` ticket
+#   (a) the marker of the working tree names a `[Spike]` or `[Prototype]` ticket
 #   (b) the current branch is named `spike/<TICKET-ID>-...` or `prototype/...`
 #
 # See .claude/rules/workflow-gates.md § Spike work.
 # ---------------------------------------------------------------------------
 spike_commit_exempt() {
-  # Walk up from REPO_ROOT to find the ops root. Honours both the v2
-  # `.apexyard-fork` marker and the legacy v1 anchor.
-  local marker_home="$REPO_ROOT"
-  local hook_dir
-  hook_dir="$(cd "$(dirname "$0")" && pwd)"
-  if [ -f "$hook_dir/_lib-ops-root.sh" ]; then
-    # shellcheck source=/dev/null
-    . "$hook_dir/_lib-ops-root.sh"
-    local resolved
-    resolved=$(resolve_ops_root "$REPO_ROOT")
-    [ -n "$resolved" ] && marker_home="$resolved"
-  else
-    local r="$REPO_ROOT"
-    while [ -n "$r" ] && [ "$r" != "/" ]; do
-      if [ -f "$r/.apexyard-fork" ]; then
-        marker_home="$r"
-        break
-      fi
-      if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; then
-        marker_home="$r"
-        break
-      fi
-      parent=$(dirname "$r"); [ "$parent" = "$r" ] && break; r="$parent"
-    done
-  fi
-
-  if [ -f "$marker_home/.claude/session/current-ticket" ]; then
-    if grep -qE '^title=\[(Spike|Prototype)\]' "$marker_home/.claude/session/current-ticket" 2>/dev/null; then
-      return 0
-    fi
-  fi
-  if [ -d "$marker_home/.claude/session/tickets" ]; then
-    for marker in "$marker_home/.claude/session/tickets"/*; do
-      [ -f "$marker" ] || continue
-      if grep -qE '^title=\[(Spike|Prototype)\]' "$marker" 2>/dev/null; then
-        return 0
-      fi
-    done
-  fi
+  spike_marker_exempt && return 0
 
   local branch
   branch=$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null)

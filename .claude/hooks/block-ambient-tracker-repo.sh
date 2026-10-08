@@ -154,18 +154,79 @@ fi
 OPS_ROOT=$(resolve_ops_root "$PWD")
 [ -n "$OPS_ROOT" ] || exit 0
 
-# Read the repo pins from active ticket markers. A marker without repo= is the
-# legacy/framework fallback and cannot establish a managed-project target.
-MARKER_DIR="$OPS_ROOT/.claude/session"
+if [ -f "$HOOK_DIR/_lib-active-ticket.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-active-ticket.sh"
+fi
+
+# Every old-layout marker under <ops_root>/.claude/session/ pins its repo, as
+# before markers moved into the git dir. The new markers add to that set, so
+# this guard blocks at least everything it blocked before.
 REPOS=""
-for marker in "$MARKER_DIR/current-ticket" "$MARKER_DIR/tickets"/* "$MARKER_DIR/tickets"/*/*; do
-  [ -f "$marker" ] || continue
-  repo=$(sed -n 's/^repo=//p' "$marker" | head -1)
-  [ -n "$repo" ] && REPOS="${REPOS}${repo}\n"
-done
+if command -v active_ticket_legacy_markers >/dev/null 2>&1; then
+  active_ticket_set_context "$OPS_ROOT" "" "$OPS_ROOT"
+  if active_ticket_legacy_markers; then
+    while IFS= read -r marker; do
+      [ -n "$marker" ] || continue
+      repo=$(sed -n 's/^repo=//p' "$marker" | head -1)
+      [ -n "$repo" ] && REPOS="${REPOS}${repo}"$'\n'
+    done <<< "$REPLY"
+  fi
+  active_ticket_set_context "" ""
+else
+  # Without the resolver library, read the old-layout markers inline, as the
+  # guard did before the library existed. A partial install must not make
+  # this guard weaker than it was: a missing helper library fails closed.
+  for marker in "$OPS_ROOT/.claude/session/current-ticket" "$OPS_ROOT/.claude/session/tickets"/* "$OPS_ROOT/.claude/session/tickets"/*/*; do
+    [ -f "$marker" ] || continue
+    repo=$(sed -n 's/^repo=//p' "$marker" | head -1)
+    [ -n "$repo" ] && REPOS="${REPOS}${repo}"$'\n'
+  done
+fi
+
+# The new repo pins come from the marker of the working tree that runs the
+# command. A project tree is judged by its own marker only. From the ops fork,
+# which has no marker of its own for a project ticket, the markers of the
+# registered workspace clones and their linked worktrees count too.
+# A tree that fails validation, such as a scratch clone or an isolated build
+# clone outside the ops fork, has no marker that the resolver will read. The
+# session pin can still find the ops root from there, so that case reads the
+# ops fork's own marker and every project marker. This guard only adds
+# blocks, so reading more markers is safe. A tree with no marker, or a marker
+# without repo=, cannot establish a managed-project target.
+if command -v active_ticket_init >/dev/null 2>&1 && active_ticket_init "$PWD" && active_ticket_lookup_cwd; then
+  if active_ticket_read_field "$REPLY" repo && [ -n "$REPLY" ]; then
+    REPOS="${REPOS}${REPLY}"$'\n'
+  fi
+fi
+CWD_GITDIR="${AT_GITDIR:-}"
+CWD_PROJECT="${AT_PROJECT:-}"
+HAVE_LIB=0
+command -v active_ticket_project_markers >/dev/null 2>&1 && HAVE_LIB=1
+# The lookup does not trust a marker whose repo is not bound to its tree. This
+# guard only adds blocks, so it reads such a marker file directly as well.
+if [ -n "$CWD_GITDIR" ] && [ -f "$CWD_GITDIR/apexyard-ticket" ] && [ ! -L "$CWD_GITDIR/apexyard-ticket" ]; then
+  if active_ticket_read_field "$CWD_GITDIR/apexyard-ticket" repo && [ -n "$REPLY" ]; then
+    REPOS="${REPOS}${REPLY}"$'\n'
+  fi
+fi
+if [ "$HAVE_LIB" = 1 ] && [ -z "$CWD_GITDIR" ] && active_ticket_gitdir "$OPS_ROOT" \
+  && [ -f "$REPLY/apexyard-ticket" ] && [ ! -L "$REPLY/apexyard-ticket" ]; then
+  if active_ticket_read_field "$REPLY/apexyard-ticket" repo && [ -n "$REPLY" ]; then
+    REPOS="${REPOS}${REPLY}"$'\n'
+  fi
+fi
+if [ "$HAVE_LIB" = 1 ] && { [ -z "$CWD_GITDIR" ] || [ -z "$CWD_PROJECT" ]; } && active_ticket_project_markers; then
+  while IFS= read -r marker; do
+    [ -n "$marker" ] || continue
+    if active_ticket_read_field "$marker" repo && [ -n "$REPLY" ]; then
+      REPOS="${REPOS}${REPLY}"$'\n'
+    fi
+  done <<< "$REPLY"
+fi
 [ -n "$REPOS" ] || exit 0
 
-UNIQUE_REPOS=$(printf '%b' "$REPOS" | sed '/^$/d' | sort -u)
+UNIQUE_REPOS=$(printf '%s' "$REPOS" | sed '/^$/d' | sort -u)
 COUNT=$(printf '%s\n' "$UNIQUE_REPOS" | sed '/^$/d' | wc -l | tr -d ' ')
 
 # If exactly one active target matches the checkout's origin, ambient gh is

@@ -42,6 +42,10 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq jq
 
+      - name: Install strace (the hook-level process count test)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y -qq strace
+
       - name: Install jq 1.8.2
         if: matrix.label == 'linux jq-1.8'
         run: |

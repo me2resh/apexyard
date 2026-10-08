@@ -224,7 +224,7 @@ rm -rf "$sb"
 sb=$(make_sandbox "require-migration-ticket.sh")
 install_failing_gh "$sb"
 mkdir -p "$sb/.claude/session"
-printf 'repo=fork-org/apexyard\nnumber=4242\ntitle=t\nurl=u\n' > "$sb/.claude/session/current-ticket"
+printf 'repo=fork-org/apexyard\nnumber=4242\ntitle=t\nurl=u\n' > "$sb/.git/apexyard-ticket"
 # This gate fires on Edit/Write, so the payload carries a file_path rather
 # than a Bash command. The default patterns are anchored with a leading `*/`,
 # so the target must be absolute for `db/migrate/*.rb` to match.

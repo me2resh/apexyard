@@ -153,7 +153,7 @@ tracker — GitHub, GitLab, or a `custom` CLI. For a GitHub adopter this runs
 resolved for you. Determine it **once**, before the loop, the same way the other
 creator skills (`/feature`, `/bug`, `/task`) do:
 
-Read `.claude/session/current-ticket` to determine which repo we're working in.
+Read the active-ticket marker of the working tree you are in to determine which repo we're working in. The marker is the `apexyard-ticket` file in the git dir of that tree. See `/start-ticket` "Read the active ticket".
 If no active ticket, check `apexyard.projects.yaml` for managed projects. If only
 one project, use it. If multiple, ask:
 

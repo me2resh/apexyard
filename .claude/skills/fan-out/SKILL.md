@@ -63,7 +63,7 @@ Recommend `general-purpose` first. Split the list across wizard questions. Use t
 
 If a task obviously needs editing (verbs like *implement*, *add*, *fix*, *refactor*, *migrate*, *write*), reject any read-only agent type and suggest `general-purpose`.
 
-**Isolation** — fan-out writers always use `worktree`, regardless of the ops-fork setting `build.isolation`.
+**Isolation** — fan-out writers always use a `worktree`, regardless of the ops-fork setting `build.isolation`. Step 6 creates each writer worktree from the task's source tree, so a managed-project task never gets a worktree of the ops fork.
 Use `shared` only when all agents are read-only research.
 Infer from the task verb.
 Ask only when ambiguous.
@@ -80,15 +80,16 @@ See `.claude/rules/isolated-builds.md` and AgDR-0210.
 
 ### 3. Active-ticket safety check
 
-For every task that involves code edits (not pure research), verify a ticket marker exists:
+Do this for every task that involves code edits, not pure research. Find the working tree the task belongs to, and verify that the tree has a ticket marker:
 
-- Per-project: `<ops_root>/.claude/session/tickets/<project>` if the task targets a managed project's `workspace/<name>/`
-- Fallback: `<ops_root>/.claude/session/current-ticket` for ops-fork edits
+- A task on a managed project uses its clone as its **source tree**: `<ops_root>/workspace/<name>/`, or the `workspace:` path of its registry entry.
+- A task on the ops fork uses `<ops_root>` as its source tree.
+- The marker lives in the source tree's git dir (AgDR-0222). During the move, an old-layout marker under `.claude/session/` also counts. Check both with `active_ticket_lookup <source-tree>` from `.claude/hooks/_lib-active-ticket.sh`. With `--from-tickets`, the task's own ticket is used instead.
 
-If missing, **refuse the entire fan-out** and tell the user:
+If a source tree has no marker, **refuse the entire fan-out** and tell the user:
 
 ```
-Cannot fan out — task "<task>" needs an active ticket. Run:
+Cannot fan out — task "<task>" needs an active ticket in <source tree>. Run, from that tree:
   /start-ticket <ref>
 …then re-run /fan-out.
 ```
@@ -125,7 +126,22 @@ Print a table:
 
 Wait for the user's `yes` / `confirm` / `go` before spawning. Edits to the plan in this step are fine — re-print the table and re-ask.
 
-### 6. Spawn — ALL CALLS IN A SINGLE ASSISTANT MESSAGE
+### 6. Prepare the writer worktrees, then spawn
+
+For every task with `isolation: worktree`, create the worktree and its marker **before** the spawn, with the helper `.claude/skills/fan-out/prepare-worktree.sh`:
+
+```bash
+.claude/skills/fan-out/prepare-worktree.sh "<source-tree>" "<ops_root>/.claude/worktrees/<type>-<ticket>-<slug>" "<branch>"
+```
+
+- The ticket gates check source writes under `<ops_root>/.claude/worktrees/` (AgDR-0219). A writer there needs the markers that the helper writes.
+- The helper runs `git -C <source-tree> worktree add <path> -b <branch>`. A managed-project task therefore gets a worktree of its own clone, not of the ops fork.
+- The helper writes `apexyard-ticket` into the git dir of the new worktree, with the ticket of the source tree. The ticket's repo must belong to that clone's registry entry. Otherwise only the old-layout marker is written. It also writes the old-layout per-worktree marker, so the hooks from before the move see the ticket. When the new worktree fails validation, it writes only the old marker and prints a note. Pass the ticket fields as extra arguments to give a task its own ticket (`--from-tickets`).
+- The helper never uses `--force`. If it writes no marker at all, it removes the worktree and branch it created. Stop the whole fan-out and report its message.
+- Do not pass `isolation: worktree` to the `Agent` call for these tasks. The worktree exists already. Tell the agent to work only under the worktree path and to run `git` and every edit there.
+- If the spawn itself fails, remove each worktree this step created with `git -C <source-tree> worktree remove <path>` (no `--force`).
+
+### 7. Spawn — ALL CALLS IN A SINGLE ASSISTANT MESSAGE
 
 This is the only step where parallelism actually happens. Emit a SINGLE assistant message containing N `Agent` tool calls (one per task). Looping `Agent` invocations across multiple messages serialises them — the second agent will not start until the first returns.
 
@@ -144,10 +160,11 @@ Each agent's prompt must be **self-contained** — sub-agents do not inherit the
 - The expected output format (what to return to the parent)
 - The isolation mode selected by the orchestrator at spawn time
 - Constraints inherited from the parent (e.g. "don't push", "use specific git add")
+- For a writer: the worktree path and branch from step 6, and the instruction to edit only under that path
 
-For tasks with `isolation: worktree`, pass `isolation: worktree` in the Agent call. For long-running tasks with `mode: background`, pass `run_in_background: true`.
+For tasks with `isolation: worktree`, put the prepared worktree path in the prompt and leave `isolation` unset, because step 6 created the worktree. For long-running tasks with `mode: background`, pass `run_in_background: true`.
 
-### 7. Collect results
+### 8. Collect results
 
 Foreground tasks return inline — wait for all of them. Background tasks return asynchronously — note their IDs and tell the user how to check on them later.
 
@@ -159,7 +176,7 @@ For each returned result, capture:
 - Summary of what the agent did
 - Any follow-ups the agent flagged
 
-### 8. Worktree merge-back
+### 9. Worktree merge-back
 
 If any agents used `worktree` isolation, list the branches they created. Then offer to sequence the merge-back:
 
@@ -181,7 +198,7 @@ For each branch in turn:
 
 Each project owns one merge-back attempt. If the user wants to skip a branch (e.g. open as its own PR instead), record that and continue.
 
-### 9. Final report
+### 10. Final report
 
 ```
 Fan-out complete (N tasks, M succeeded, K background still running).
@@ -197,14 +214,14 @@ Background tasks running: <ids>. They'll surface results when done.
 ## Rules
 
 1. **All `Agent` tool calls for a single fan-out MUST be in the SAME assistant message.** Multi-message loops do not get concurrency — they serialise. This is the most important rule in this skill.
-2. **Use `isolation: worktree` whenever any agent will write files.** Required to prevent file-level races between agents sharing one working directory. This overrides `build.isolation` — even when the ops fork sets `"build": {"isolation": "branch"}`, fan-out writers still get worktrees.
+2. **Give every writer its own worktree, created from its source tree by `prepare-worktree.sh`.** This prevents file-level races between agents that share one working directory. It also gives each writer its own ticket marker. This overrides `build.isolation` — even when the ops fork sets `"build": {"isolation": "branch"}`, fan-out writers still get worktrees.
 3. **Refuse fan-out when tasks share file write targets.** Serialise instead — the merge-back conflict cost outweighs any concurrency win.
 4. **Refuse fan-out when tasks have sequential dependencies.** If task B reads task A's output, they cannot run in parallel.
 5. **Cap at 5 concurrent agents per invocation.** If the user wants more, ask them to split into batches. Beyond 5, returns diminish (review fatigue, merge-back queue) and risk grows (rate limits, context dilution).
 6. **Each agent's prompt must be self-contained** — sub-agents do not see the parent conversation. Include task description, reference paths, expected output format, and any inherited constraints inline.
 7. **Background mode only for >2-minute estimated work.** For short tasks, foreground is faster end-to-end (no async overhead).
 8. **Refuse a read-only agent type for an editing task.** `Explore`, `code-reviewer`, `security-reviewer`, and `Plan` cannot write. If the task verb says "implement" / "fix" / "add" / "refactor", suggest `general-purpose`.
-9. **Active-ticket check happens at step 3, not step 6.** Failing at plan-time is kinder than failing mid-spawn.
+9. **Active-ticket check happens at step 3, not step 7.** Failing at plan-time is kinder than failing mid-spawn.
 10. **Pause on merge-back conflict — never auto-resolve.** The user owns the merge.
 
 ---

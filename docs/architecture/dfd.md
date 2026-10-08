@@ -28,10 +28,10 @@ flowchart LR
         reviewer_agent["Reviewer sub-agent<br/>(Rex / Hakim / Tariq)"]
     end
 
-    subgraph local_state ["Local Session State (.claude/session/** — gitignored, filesystem-writable by any tool call)"]
+    subgraph local_state ["Local Session State (.claude/session/** and each tree's git dir — untracked, filesystem-writable by any tool call)"]
         review_markers[("Review markers<br/>*-rex/-security/-architecture/-ceo.approved")]
         active_reviewer[("active-reviewer marker<br/>owner/repo#pr:kind")]
-        ticket_markers[("Ticket markers<br/>current-ticket / tickets/&lt;project&gt;")]
+        ticket_markers[("Ticket markers<br/>apexyard-ticket in each tree's git dir")]
         proj_config[("project-config.json<br/>untracked, per-fork overrides")]
     end
 

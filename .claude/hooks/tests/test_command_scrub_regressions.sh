@@ -69,8 +69,8 @@ check 'adjacent redirects yield both targets' '/tmp/x,src/app.ts' \
 mkdir -p "$TMP/.claude/session"
 : > "$TMP/onboarding.yaml"
 : > "$TMP/apexyard.projects.yaml"
-printf 'repo=acme-org/example\n' > "$TMP/.claude/session/current-ticket"
 (cd "$TMP" && git init -q --template=)
+printf 'repo=acme-org/example\n' > "$TMP/.git/apexyard-ticket"
 export APEXYARD_OPS_DISABLE_PIN=1
 unset CLAUDE_CODE_SESSION_ID || true
 tracker_result() {
@@ -106,7 +106,7 @@ check 'real PR command triggers review' 2 "$(review_result 'gh pr create --title
 
 # The ticket gate must evaluate an unextractable write even when another
 # redirect names an exempt scratch target.
-rm -f "$TMP/.claude/session/current-ticket"
+rm -f "$TMP/.git/apexyard-ticket"
 mkdir -p "$TMP/.claude/hooks"
 for file in require-active-ticket.sh _lib-detect-bash-write.sh \
   _lib-command-scrub.sh _lib-mask-quoted.sh _lib-read-config.sh \

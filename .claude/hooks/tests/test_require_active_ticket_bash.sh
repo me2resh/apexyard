@@ -6,7 +6,7 @@
 #   - builds an isolated sandbox containing onboarding.yaml, an empty
 #     registry, the hook script, the two libs it sources, and the shipped
 #     project-config defaults
-#   - optionally writes a current-ticket marker and/or active-bootstrap
+#   - optionally writes a ticket marker into the sandbox git dir and/or an active-bootstrap
 #     marker to flip the gate
 #   - pipes a synthetic PreToolUse JSON (Edit or Bash tool) to the hook
 #   - asserts exit code (0=pass-through, 2=blocked) and stderr regex
@@ -103,6 +103,36 @@ make_sandbox_no_pathresolve() {
   echo "$sb"
 }
 
+# Register a managed project as a real git clone under workspace/ and list it
+# in the sandbox registry.
+add_project() {
+  local sb="$1" name="$2"
+  mkdir -p "$sb/workspace"
+  git init -q "$sb/workspace/$name"
+  git -C "$sb/workspace/$name" config user.email "test@example.com"
+  git -C "$sb/workspace/$name" config user.name "test"
+  git -C "$sb/workspace/$name" commit -q --allow-empty -m init
+  printf 'projects:\n  - name: %s\n    repo: me2resh/%s\n' "$name" "$name" > "$sb/apexyard.projects.yaml"
+  # The registry path comes from the portfolio libraries. Only the cases that
+  # need a registered project pay for them.
+  cp "$SRC_ROOT/.claude/hooks/_lib-portfolio-paths.sh" "$SRC_ROOT/.claude/hooks/_lib-ops-root.sh" \
+     "$SRC_ROOT/.claude/hooks/_lib-resolution-cache.sh" "$sb/.claude/hooks/"
+}
+
+# Write a ticket marker into the git dir of the working tree at <dir>. The
+# marker names the repo of the tree it lands in, as the writer requires: a
+# clone of workspace/<name> gets me2resh/<name>, and the ops fork gets
+# me2resh/apexyard.
+write_marker() {
+  local dir="$1" gd cd repo="me2resh/apexyard" n
+  gd=$(git -C "$dir" rev-parse --absolute-git-dir)
+  cd=$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir)
+  case "$cd" in
+    */workspace/*/.git) n="${cd%/.git}"; repo="me2resh/${n##*/}" ;;
+  esac
+  printf 'repo=%s\nnumber=%s\ntitle=test\n' "$repo" "${2:-1}" > "$gd/apexyard-ticket"
+}
+
 run_case() {
   local label="$1" want_rc="$2" want_stderr_regex="$3" input="$4" sb="$5"
   local got_stderr got_rc
@@ -194,9 +224,9 @@ run_case "edit blocked when bootstrap marker is empty" 2 "BLOCKED" "$in" "$sb"
 
 # --- Active-ticket marker still works (regression for the legacy path) -
 
-# 12. Edit src/foo.ts with a current-ticket marker → allowed
+# 12. Edit src/foo.ts with a marker in the ops fork git dir → allowed
 sb=$(make_sandbox)
-cat > "$sb/.claude/session/current-ticket" <<EOF
+cat > "$sb/.git/apexyard-ticket" <<EOF
 repo=me2resh/apexyard
 number=999
 title=test
@@ -205,71 +235,56 @@ EOF
 in=$(jq -nc --arg p "$sb/src/foo.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
 run_case "edit allowed with active ticket marker" 0 "" "$in" "$sb"
 
-# --- Per-worktree marker tier (#513) -----------------------------------
+# --- Per-tree markers in the git dir -----------------------------------
 
-# NOTE: PROJECT resolution compares FILE_PATH against the hook's resolved
-# OPS_ROOT (from `git rev-parse`, which canonicalises symlinks). On macOS
-# mktemp returns a /var/... path that git reports as /private/var/..., so the
-# file_path must use the realpath of the sandbox or the workspace prefix won't
-# match. rsb = canonical sandbox path.
+# NOTE: the sandbox path must be physical (rsb) so the file_path matches the
+# path the library resolves on macOS, where mktemp returns /var/... and git
+# reports /private/var/...
 
-# 13. per-worktree marker present + matching branch → allowed
+# 13. a linked worktree of a registered project holds its own marker → allowed
 sb=$(make_sandbox)
 rsb=$(cd "$sb" && pwd -P)
-mkdir -p "$sb/.claude/session/tickets/myproj"
-cat > "$sb/.claude/session/tickets/myproj/feature__x" <<EOF
-repo=me2resh/apexyard
-number=513
-title=worktree A
-EOF
-in=$(jq -nc --arg p "$rsb/workspace/myproj/src/foo.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
-export CLAUDE_WORKTREE_BRANCH="feature/x"
-run_case "per-worktree marker honored on matching branch" 0 "" "$in" "$sb"
-unset CLAUDE_WORKTREE_BRANCH
+add_project "$sb" myproj
+git -C "$sb/workspace/myproj" worktree add -q "$rsb/wt-x" -b feature/x
+write_marker "$rsb/wt-x" 513
+in=$(jq -nc --arg p "$rsb/wt-x/src/foo.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "linked worktree marker honored" 0 "" "$in" "$sb"
 
-# 14. per-worktree isolation: marker exists for branch A, agent on branch B,
-#     no per-project file, no current-ticket → BLOCKED (proves no collision)
+# 14. isolation: worktree A has a marker, worktree B has none → B is BLOCKED
 sb=$(make_sandbox)
 rsb=$(cd "$sb" && pwd -P)
-mkdir -p "$sb/.claude/session/tickets/myproj"
-cat > "$sb/.claude/session/tickets/myproj/feature__a" <<EOF
-repo=me2resh/apexyard
-number=513
-title=worktree A
-EOF
-in=$(jq -nc --arg p "$rsb/workspace/myproj/src/foo.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
-export CLAUDE_WORKTREE_BRANCH="feature/b"
-run_case "per-worktree isolation: branch B not satisfied by branch A marker" 2 "BLOCKED" "$in" "$sb"
-unset CLAUDE_WORKTREE_BRANCH
+add_project "$sb" myproj
+git -C "$sb/workspace/myproj" worktree add -q "$rsb/wt-a" -b feature/a
+git -C "$sb/workspace/myproj" worktree add -q "$rsb/wt-b" -b feature/b
+write_marker "$rsb/wt-a" 513
+in=$(jq -nc --arg p "$rsb/wt-b/src/foo.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "worktree isolation: worktree B not satisfied by worktree A marker" 2 "BLOCKED" "$in" "$sb"
 
-# 15. per-project FILE marker still works under a workspace path with no
-#     worktree branch detected (single-agent regression)
+# 14b. the main clone of the same project does not see a worktree's marker
 sb=$(make_sandbox)
 rsb=$(cd "$sb" && pwd -P)
-mkdir -p "$sb/.claude/session/tickets"
-cat > "$sb/.claude/session/tickets/myproj" <<EOF
-repo=me2resh/apexyard
-number=513
-title=single agent
-EOF
+add_project "$sb" myproj
+git -C "$sb/workspace/myproj" worktree add -q "$rsb/wt-a" -b feature/a
+write_marker "$rsb/wt-a" 513
 in=$(jq -nc --arg p "$rsb/workspace/myproj/src/foo.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
-run_case "per-project file marker still works (no worktree)" 0 "" "$in" "$sb"
+run_case "main clone not satisfied by a worktree marker" 2 "BLOCKED" "$in" "$sb"
 
-# 16. git linked-worktree detection (NO env var): a real linked worktree at
-#     workspace/myproj on branch wt-x is detected via absolute git-dir vs
-#     common-dir, tier-0 marker honored. Exercises the write/read-symmetric
-#     detection path, not just the CLAUDE_WORKTREE_BRANCH shortcut.
+# 15. the main clone holds its own marker → allowed
+sb=$(make_sandbox)
+rsb=$(cd "$sb" && pwd -P)
+add_project "$sb" myproj
+write_marker "$rsb/workspace/myproj" 513
+in=$(jq -nc --arg p "$rsb/workspace/myproj/src/foo.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "main clone marker honored" 0 "" "$in" "$sb"
+
+# 16. a linked worktree of the ops fork itself, placed at workspace/myproj,
+#     holds its own marker → allowed
 sb=$(make_sandbox)
 rsb=$(cd "$sb" && pwd -P)
 ( cd "$sb" && git worktree add -q workspace/myproj -b wt-x >/dev/null 2>&1 )
-mkdir -p "$sb/.claude/session/tickets/myproj"
-cat > "$sb/.claude/session/tickets/myproj/wt-x" <<EOF
-repo=me2resh/apexyard
-number=513
-title=worktree via git detection
-EOF
+write_marker "$rsb/workspace/myproj" 513
 in=$(jq -nc --arg p "$rsb/workspace/myproj/foo.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
-run_case "per-worktree via git linked-worktree detection (no env var)" 0 "" "$in" "$sb"
+run_case "ops-fork linked worktree marker honored" 0 "" "$in" "$sb"
 
 # --- #569: bash-write path-exemption fixes ------------------------------
 # These cases prove the over-blocking described in #569 is gone, while
@@ -347,9 +362,9 @@ sb=$(make_sandbox)
 in=$(jq -nc --arg c 'cat > "${marker}"' '{tool_name:"Bash", tool_input:{command:$c}}')
 run_case "bash redirect to bare \${marker} exempt" 0 "" "$in" "$sb"
 
-# 26. All #569 cases pass through when a current-ticket marker IS present (regression)
+# 26. All #569 cases pass through when a ticket marker IS present (regression)
 sb=$(make_sandbox)
-cat > "$sb/.claude/session/current-ticket" <<EOF
+cat > "$sb/.git/apexyard-ticket" <<EOF
 repo=me2resh/apexyard
 number=569
 title=test
@@ -401,13 +416,9 @@ run_case_cwd() {
 #     by walking up from the workspace dir, and the marker is found → exit 0.
 sb=$(make_sandbox)
 rsb=$(cd "$sb" && pwd -P)
+add_project "$sb" myproj
 mkdir -p "$sb/workspace/myproj/src"
-mkdir -p "$sb/.claude/session/tickets"
-cat > "$sb/.claude/session/tickets/myproj" <<EOF
-repo=me2resh/myproj
-number=744
-title=anchor fix test
-EOF
+write_marker "$rsb/workspace/myproj" 744
 in=$(jq -nc --arg p "$rsb/workspace/myproj/src/x.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
 run_case_cwd "#744 core: file in workspace, valid marker, CWD=/tmp → exempt" 0 "" "$in" "$sb" "/tmp"
 
@@ -481,16 +492,15 @@ cat > "$_t30_ops/.claude/project-config.json" <<EOF
 }
 EOF
 
-# Per-project marker in ops fork
-mkdir -p "$_t30_ops/.claude/session/tickets"
-cat > "$_t30_ops/.claude/session/tickets/myproj" <<EOF
-repo=me2resh/myproj
-number=745
-title=split-portfolio anchor fix
-EOF
-
-# Project dir in sibling workspace
+# The project is a real clone in the sibling workspace, registered in the ops
+# fork, with its marker in its own git dir.
 mkdir -p "$_t30_ws/myproj/src"
+git init -q "$_t30_ws/myproj"
+git -C "$_t30_ws/myproj" config user.email "test@example.com"
+git -C "$_t30_ws/myproj" config user.name "test"
+git -C "$_t30_ws/myproj" commit -q --allow-empty -m init
+printf 'projects:\n  - name: myproj\n    repo: me2resh/myproj\n' > "$_t30_ops/apexyard.projects.yaml"
+printf 'repo=me2resh/myproj\nnumber=745\ntitle=split-portfolio anchor fix\n' > "$_t30_ws/myproj/.git/apexyard-ticket"
 
 # Write a session pin so resolve_ops_root finds ops_fork from CWD=/tmp.
 # Use a HERMETIC temp pin dir (not the real $HOME/.claude/apexyard) so the test
@@ -586,13 +596,13 @@ in=$(jq -nc --arg p "$home_sim/link-into-repo/src/app.ts" '{tool_name:"Edit", to
 run_case "#883 symlink into governed repo does NOT bypass gate" 2 "BLOCKED" "$in" "$sb"
 rm -rf "$home_sim"
 
-# 36. Symlink case WITH an active ticket → allowed (proves the symlink IS
-#     correctly resolved to governed content, and the normal ticket-gate
-#     logic — not the out-of-governance exemption — is what applies).
+# 36. Symlink case WITH an active ticket is still refused: the gate refuses a
+#     symlink in the path between the target and the tree root, whatever
+#     ticket exists. The block message names the link.
 sb=$(make_sandbox)
 rsb=$(cd "$sb" && pwd -P)
 mkdir -p "$sb/src"
-cat > "$sb/.claude/session/current-ticket" <<EOF
+cat > "$sb/.git/apexyard-ticket" <<EOF
 repo=me2resh/apexyard
 number=883
 title=symlink test
@@ -600,7 +610,7 @@ EOF
 home_sim=$(mktemp -d)
 ln -s "$rsb" "$home_sim/link-into-repo"
 in=$(jq -nc --arg p "$home_sim/link-into-repo/src/app.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
-run_case "#883 symlink into governed repo allowed WITH active ticket" 0 "" "$in" "$sb"
+run_case "#883 symlink into governed repo refused even WITH active ticket" 2 "symlink in marker path" "$in" "$sb"
 rm -rf "$home_sim"
 
 # 37. Workspace-project write (governed, even without its own .git) still
@@ -648,23 +658,21 @@ run_case "#885 symlinked-out non-git workspace project still blocked w/o ticket"
 rm -rf "$external"
 
 # 40. Same symlinked-out workspace project, WITH an active ticket marker
-#     → ALLOWED. Keeps the existing "symlink governed content works with
-#     a ticket" behaviour coherent: the raw-containment check correctly
-#     routes this through the normal ticket-gate logic (not the
-#     out-of-governance exemption), and the ticket marker satisfies it.
+#     -> still BLOCKED. A symlinked workspace entry is not a registered clone,
+#     so no marker is read for it.
 sb=$(make_sandbox)
 rsb=$(cd "$sb" && pwd -P)
 mkdir -p "$sb/workspace"
 external=$(mktemp -d)
 mkdir -p "$external/src"
 ln -s "$external" "$sb/workspace/proj"
-cat > "$sb/.claude/session/current-ticket" <<EOF
+cat > "$sb/.git/apexyard-ticket" <<EOF
 repo=me2resh/apexyard
 number=885
 title=symlinked-out workspace project test
 EOF
 in=$(jq -nc --arg p "$rsb/workspace/proj/src/x.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
-run_case "#885 symlinked-out non-git workspace project allowed WITH active ticket" 0 "" "$in" "$sb"
+run_case "#885 symlinked-out non-git workspace project blocked even WITH active ticket" 2 "BLOCKED" "$in" "$sb"
 rm -rf "$external"
 
 # --- #886: judge ALL bash write targets, not just the first ------------
@@ -684,7 +692,7 @@ run_case "#886 multi-target (out-of-repo then in-repo) blocked w/o ticket" 2 "BL
 # 42. Same multi-target command, WITH an active ticket → ALLOWED (every
 #     target independently clears the gate).
 sb=$(make_sandbox)
-cat > "$sb/.claude/session/current-ticket" <<EOF
+cat > "$sb/.git/apexyard-ticket" <<EOF
 repo=me2resh/apexyard
 number=886
 title=multi-target bash write test
@@ -730,7 +738,7 @@ run_case "#886 no-space ';' then redirect blocked w/o ticket" 2 "BLOCKED" "$in" 
 
 # 47. Same command, WITH an active ticket → ALLOWED (both targets clear).
 sb=$(make_sandbox)
-cat > "$sb/.claude/session/current-ticket" <<EOF
+cat > "$sb/.git/apexyard-ticket" <<EOF
 repo=me2resh/apexyard
 number=886
 title=no-space redirection bypass test
@@ -774,7 +782,7 @@ run_case "#886 '&>' redirect-both-streams blocked w/o ticket" 2 "BLOCKED" "$in" 
 
 # 53. Same command, WITH an active ticket → ALLOWED.
 sb=$(make_sandbox)
-cat > "$sb/.claude/session/current-ticket" <<EOF
+cat > "$sb/.git/apexyard-ticket" <<EOF
 repo=me2resh/apexyard
 number=886
 title=redirect-both-streams operator test
@@ -797,7 +805,7 @@ run_case "#886 '>|' force-clobber blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
 
 # 56. Same command, WITH an active ticket → ALLOWED (both targets clear).
 sb=$(make_sandbox)
-cat > "$sb/.claude/session/current-ticket" <<EOF
+cat > "$sb/.git/apexyard-ticket" <<EOF
 repo=me2resh/apexyard
 number=886
 title=force-clobber operator test
@@ -850,7 +858,7 @@ for c in "echo x >&src/app.ts" "echo x >& src/app.ts" \
   run_case "#1414 blocked w/o ticket: $c" 2 "BLOCKED" "$in" "$sb"
 
   sb=$(make_sandbox)
-  cat > "$sb/.claude/session/current-ticket" <<EOF
+  cat > "$sb/.git/apexyard-ticket" <<EOF
 repo=me2resh/apexyard
 number=1414
 title=detector misses test
@@ -912,7 +920,7 @@ run_case "#886 no-space '>' (Hakim repro) blocked w/o ticket" 2 "BLOCKED" "$in" 
 
 # 62. Same command, WITH an active ticket → ALLOWED.
 sb=$(make_sandbox)
-cat > "$sb/.claude/session/current-ticket" <<EOF
+cat > "$sb/.git/apexyard-ticket" <<EOF
 repo=me2resh/apexyard
 number=886
 title=no-whitespace redirect operator test
@@ -974,7 +982,7 @@ run_case "#886 '||>' after false blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
 
 # 70. Same command, WITH an active ticket → ALLOWED.
 sb=$(make_sandbox)
-cat > "$sb/.claude/session/current-ticket" <<EOF
+cat > "$sb/.git/apexyard-ticket" <<EOF
 repo=me2resh/apexyard
 number=886
 title=pipe-adjacent redirect operator test
@@ -1184,19 +1192,26 @@ in=$(jq -nc --arg p "$home_sim/.zshrc" '{tool_name:"Edit", tool_input:{file_path
 run_case "#1089 fail-closed: out-of-repo dotfile GATED when lib missing" 2 "BLOCKED" "$in" "$sb"
 rm -rf "$home_sim"
 
-# 77. Same scenario, WITH an active ticket marker present → the ordinary
-#     ticket-gate path still passes (proves the degrade only removes the
-#     EXEMPTION, not the hook's ability to function once a ticket exists).
+# 77. Same lib-missing sandbox, WITH an active ticket marker present, and a
+#     target inside the ops fork -> the ordinary ticket-gate path still
+#     passes (proves the degrade only removes the EXEMPTION, not the hook's
+#     ability to function once a ticket exists). An out-of-tree target stays
+#     blocked, because no ticket can authorise a path outside a registered tree.
 sb=$(make_sandbox_no_pathresolve)
+rsb=$(cd "$sb" && pwd -P)
 home_sim=$(mktemp -d)
-cat > "$sb/.claude/session/current-ticket" <<EOF
+cat > "$sb/.git/apexyard-ticket" <<EOF
 repo=me2resh/apexyard
 number=1089
 title=test
 url=https://example.com
 EOF
+sb2=$(make_sandbox_no_pathresolve)
+cp "$sb/.git/apexyard-ticket" "$sb2/.git/apexyard-ticket"
+in=$(jq -nc --arg p "$rsb/src/app.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "#1089 fail-closed: in-repo target ALLOWED with an active ticket, lib still missing" 0 "" "$in" "$sb"
 in=$(jq -nc --arg p "$home_sim/.zshrc" '{tool_name:"Edit", tool_input:{file_path:$p}}')
-run_case "#1089 fail-closed: same target ALLOWED with an active ticket, lib still missing" 0 "" "$in" "$sb"
+run_case "#1089 fail-closed: out-of-tree target stays blocked even with an active ticket" 2 "BLOCKED" "$in" "$sb2"
 rm -rf "$home_sim"
 
 # 78. Bash write to a plainly in-repo path, no ticket, LIB MISSING →
@@ -1209,17 +1224,15 @@ run_case "#1089 fail-closed: in-repo write still BLOCKED when lib missing" 2 "BL
 
 # --- #1396: honor the active ticket for an unextractable Bash target ---
 #
-# active_ticket_marker_for_path used to return an empty marker as soon as
-# the target path could not be resolved (`[ -n "$resolved" ] || return 0`),
-# BEFORE it ever looked at current-ticket. The gate then blocked the write
-# even though a ticket was active. The fix: skip only the per-worktree and
-# per-project tiers when the target is unknown (there is no project to
-# resolve), and still check the ops-level current-ticket fallback.
+# A target the detector cannot extract has no path to resolve, so the gate
+# judges it against the working directory of the hook. The marker in that
+# tree's git dir must therefore still allow the write, and a marker kept for
+# another tree must not.
 
 # 79. python3 -c with a COMPUTED path (no literal string) → unextractable
-#     target, but a current-ticket marker IS active → allowed (#1396 repro).
+#     target, but a ticket marker IS active in the working tree → allowed (#1396 repro).
 sb=$(make_sandbox)
-cat > "$sb/.claude/session/current-ticket" <<EOF
+cat > "$sb/.git/apexyard-ticket" <<EOF
 repo=me2resh/apexyard
 number=1396
 title=test
@@ -1236,30 +1249,23 @@ in=$(jq -nc --arg c 'python3 -c "import pathlib; p = compute_path(); pathlib.Pat
   '{tool_name:"Bash", tool_input:{command:$c}}')
 run_case "#1396 unextractable target still blocked w/o any ticket" 2 "BLOCKED" "$in" "$sb"
 
-# 81. Same command, a per-project marker exists for a DIFFERENT project but
-#     no current-ticket fallback → still BLOCKED (the per-project/per-
-#     worktree tiers are correctly skipped for an unknown target — they
-#     require a resolved project, which an unextractable target never has —
-#     and skipping them must not accidentally fall back to granting one of
-#     their markers).
+# 81. Same command, a marker exists in a registered project clone but the
+#     working directory is the ops fork, which has none → still BLOCKED. The
+#     marker of another tree must not answer for this tree.
 sb=$(make_sandbox)
-mkdir -p "$sb/.claude/session/tickets"
-cat > "$sb/.claude/session/tickets/myproj" <<EOF
-repo=me2resh/apexyard
-number=513
-title=unrelated project ticket
-EOF
+add_project "$sb" myproj
+write_marker "$sb/workspace/myproj" 513
 in=$(jq -nc --arg c 'python3 -c "import pathlib; p = compute_path(); pathlib.Path(p).write_text(x)"' \
   '{tool_name:"Bash", tool_input:{command:$c}}')
-run_case "#1396 unextractable target ignores an unrelated per-project marker" 2 "BLOCKED" "$in" "$sb"
+run_case "#1396 unextractable target ignores a marker kept for a project clone" 2 "BLOCKED" "$in" "$sb"
 
 # 82. The #1396 issue's own reported repro: an in-place `sed -i` edit on a
 #     path held in a shell variable, not the python3 shape cases 79-81 use.
 #     bash_extract_write_targets does not extract a sed -i target at all, so
-#     this is the same unextractable-target class — a current-ticket marker
-#     IS active → allowed.
+#     this is the same unextractable-target class, and a ticket marker IS
+#     active in the working tree → allowed.
 sb=$(make_sandbox)
-cat > "$sb/.claude/session/current-ticket" <<EOF
+cat > "$sb/.git/apexyard-ticket" <<EOF
 repo=me2resh/apexyard
 number=1396
 title=test
@@ -1284,7 +1290,7 @@ for c in 'git log --output=src/app.ts' 'git log --output src/app.ts' \
   run_case "#1480 blocked w/o ticket: $c" 2 "BLOCKED" "$in" "$sb"
 
   sb=$(make_sandbox)
-  cat > "$sb/.claude/session/current-ticket" <<EOF
+  cat > "$sb/.git/apexyard-ticket" <<EOF
 repo=me2resh/apexyard
 number=1480
 title=write detector gaps

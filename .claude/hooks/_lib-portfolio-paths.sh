@@ -48,6 +48,11 @@
 # _lib-resolution-cache.sh's header for the full design. Falls through to
 # the unchanged per-process logic on any miss; never changes what gets
 # computed, only how often.
+#
+# The per-process caches reset only on the first source in a process, not
+# on every source. A long-lived interactive shell that re-sources this
+# library after a config change keeps the old values. Call
+# _portfolio_reset_caches, or start a new shell, to pick up the change.
 
 # ------------------------------------------------------------------------------
 # Load _lib-ops-root.sh (for resolve_ops_root, consulted by _portfolio_root
@@ -79,12 +84,96 @@ if ! command -v resolve_ops_root >/dev/null 2>&1 || ! command -v _resolution_cac
 fi
 
 # ------------------------------------------------------------------------------
+# Per-process state. A hook re-sources this library for each write target, so
+# the state is reset only on the first source in a process. Function
+# definitions are never skipped. The guard value is the process id, held in
+# element 1 of an indexed array. Bash cannot import an array from the
+# environment, so a parent process cannot plant it. A child bash has a new
+# process id, so it always resets. A test that needs fresh caches calls
+# _portfolio_reset_caches.
+# ------------------------------------------------------------------------------
+_portfolio_reset_caches() {
+  _PORTFOLIO_ROOT_CACHE=""
+  _PORTFOLIO_REGISTRY_CACHE=""
+  _PORTFOLIO_PROJECTS_DIR_CACHE=""
+  _PORTFOLIO_IDEAS_BACKLOG_CACHE=""
+  _PORTFOLIO_ONBOARDING_CACHE=""
+  _PORTFOLIO_WORKSPACE_DIR_CACHE=""
+  _PORTFOLIO_CUSTOM_SKILLS_DIR_CACHE=""
+  _PORTFOLIO_CUSTOM_HANDBOOKS_DIR_CACHE=""
+  _PORTFOLIO_AGENT_ROUTING_CACHE=""
+  _PP_FP=""
+  _PP_WS=""
+  _PP_REG=""
+  export -n _PP_FP _PP_WS _PP_REG
+}
+
+# ------------------------------------------------------------------------------
+# Public: portfolio_resolve_into_vars
+#   Fills _PP_WS (the workspace dir) in the current shell, with no command
+#   substitution around the call. It computes the config fingerprint once per
+#   process. It reads the session cache files with shell builtins and falls
+#   back to portfolio_workspace_dir on a miss, which also writes the cache.
+#   It fills _PP_REG (the registry path) only from the session cache. Use
+#   portfolio_resolve_registry_into_var when the registry is needed, so a
+#   caller that never reads the registry never pays for resolving it.
+#
+#   The outputs are lib-internal and unexported. These functions never read
+#   WORKSPACE_DIR, PORTFOLIO_WORKSPACE_DIR or PORTFOLIO_REGISTRY from the
+#   environment.
+# ------------------------------------------------------------------------------
+_portfolio_pp_cached() {
+  # $1 = cache name. Sets REPLY from the session cache file, or returns 1.
+  local f l1="" l2=""
+  REPLY=""
+  [ -z "${APEXYARD_DISABLE_RESOLUTION_CACHE:-}" ] && [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] || return 1
+  [ "$_PP_FP" != "UNKNOWN" ] || return 1
+  f="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/resolve-cache-${CLAUDE_CODE_SESSION_ID}-$1"
+  [ -f "$f" ] || return 1
+  { IFS= read -r l1; IFS= read -r l2; } < "$f" 2>/dev/null
+  [ -n "$l2" ] && [ "$l1" = "$_PP_FP" ] || return 1
+  REPLY="$l2"
+}
+
+portfolio_resolve_into_vars() {
+  [ -z "$_PP_FP" ] || return 0
+  local fp="UNKNOWN"
+  if command -v _resolution_cache_current_fingerprint >/dev/null 2>&1; then
+    fp=$(_resolution_cache_current_fingerprint)
+  fi
+  _PP_FP="${fp:-UNKNOWN}"
+  if _portfolio_pp_cached portfolio-workspace-dir; then
+    _PP_WS="$REPLY"
+  else
+    _PP_WS=$(portfolio_workspace_dir 2>/dev/null)
+  fi
+  if _portfolio_pp_cached portfolio-registry; then
+    _PP_REG="$REPLY"
+  fi
+}
+
+portfolio_resolve_registry_into_var() {
+  [ -z "$_PP_REG" ] || return 0
+  portfolio_resolve_into_vars
+  [ -z "$_PP_REG" ] || return 0
+  _PP_REG=$(portfolio_registry 2>/dev/null)
+}
+
+case "${_PP_GUARD[1]:-}" in
+  "$$") ;;
+  *)
+    unset _PP_GUARD
+    _portfolio_reset_caches
+    _PP_GUARD=(x "$$")
+    ;;
+esac
+
+# ------------------------------------------------------------------------------
 # Internal: resolve the ops-fork root. Walks up from the git toplevel
 # looking for the v2 marker (`.apexyard-fork`) first, falling back to
 # the legacy v1 anchor (onboarding.yaml + apexyard.projects.yaml).
 # Falls back to git toplevel if not inside an apexyard fork.
 # ------------------------------------------------------------------------------
-_PORTFOLIO_ROOT_CACHE=""
 _portfolio_root() {
   if [ -n "$_PORTFOLIO_ROOT_CACHE" ]; then
     echo "$_PORTFOLIO_ROOT_CACHE"
@@ -375,7 +464,10 @@ _portfolio_resolve_with_session_cache() {
 
   local fp cached
   if command -v _resolution_cache_current_fingerprint >/dev/null 2>&1; then
-    fp=$(_resolution_cache_current_fingerprint)
+    # portfolio_resolve_into_vars has already computed the fingerprint of this
+    # process. Reuse it instead of computing it again.
+    fp="${_PP_FP:-}"
+    [ -n "$fp" ] || fp=$(_resolution_cache_current_fingerprint)
     if [ "$fp" != "UNKNOWN" ]; then
       if cached=$(_resolution_cache_read "$cache_name" "$fp" 2>/dev/null) && [ -n "$cached" ]; then
         printf '%s' "$cached"
@@ -400,7 +492,6 @@ _portfolio_resolve_with_session_cache() {
 # Cached per-process, and (me2resh/apexyard#1013) cross-process via
 # _portfolio_resolve_with_session_cache above.
 # ------------------------------------------------------------------------------
-_PORTFOLIO_REGISTRY_CACHE=""
 portfolio_registry() {
   if [ -n "$_PORTFOLIO_REGISTRY_CACHE" ]; then
     echo "$_PORTFOLIO_REGISTRY_CACHE"
@@ -410,7 +501,6 @@ portfolio_registry() {
   echo "$_PORTFOLIO_REGISTRY_CACHE"
 }
 
-_PORTFOLIO_PROJECTS_DIR_CACHE=""
 portfolio_projects_dir() {
   if [ -n "$_PORTFOLIO_PROJECTS_DIR_CACHE" ]; then
     echo "$_PORTFOLIO_PROJECTS_DIR_CACHE"
@@ -420,7 +510,6 @@ portfolio_projects_dir() {
   echo "$_PORTFOLIO_PROJECTS_DIR_CACHE"
 }
 
-_PORTFOLIO_IDEAS_BACKLOG_CACHE=""
 portfolio_ideas_backlog() {
   if [ -n "$_PORTFOLIO_IDEAS_BACKLOG_CACHE" ]; then
     echo "$_PORTFOLIO_IDEAS_BACKLOG_CACHE"
@@ -438,7 +527,6 @@ portfolio_ideas_backlog() {
 #
 #   Default: ./onboarding.yaml (relative to ops-fork root)
 # ------------------------------------------------------------------------------
-_PORTFOLIO_ONBOARDING_CACHE=""
 portfolio_onboarding_path() {
   if [ -n "$_PORTFOLIO_ONBOARDING_CACHE" ]; then
     echo "$_PORTFOLIO_ONBOARDING_CACHE"
@@ -457,7 +545,6 @@ portfolio_onboarding_path() {
 #
 #   Default: ./workspace (relative to ops-fork root)
 # ------------------------------------------------------------------------------
-_PORTFOLIO_WORKSPACE_DIR_CACHE=""
 portfolio_workspace_dir() {
   if [ -n "$_PORTFOLIO_WORKSPACE_DIR_CACHE" ]; then
     echo "$_PORTFOLIO_WORKSPACE_DIR_CACHE"
@@ -481,7 +568,6 @@ portfolio_workspace_dir() {
 #
 #   Default: ./custom-skills (relative to ops-fork root)
 # ------------------------------------------------------------------------------
-_PORTFOLIO_CUSTOM_SKILLS_DIR_CACHE=""
 portfolio_custom_skills_dir() {
   if [ -n "$_PORTFOLIO_CUSTOM_SKILLS_DIR_CACHE" ]; then
     echo "$_PORTFOLIO_CUSTOM_SKILLS_DIR_CACHE"
@@ -500,7 +586,6 @@ portfolio_custom_skills_dir() {
 #
 #   Default: ./custom-handbooks (relative to ops-fork root)
 # ------------------------------------------------------------------------------
-_PORTFOLIO_CUSTOM_HANDBOOKS_DIR_CACHE=""
 portfolio_custom_handbooks_dir() {
   if [ -n "$_PORTFOLIO_CUSTOM_HANDBOOKS_DIR_CACHE" ]; then
     echo "$_PORTFOLIO_CUSTOM_HANDBOOKS_DIR_CACHE"
@@ -536,7 +621,6 @@ portfolio_custom_handbooks_dir() {
 #
 #   Default: ./agent-routing.yaml (relative to ops-fork root)
 # ------------------------------------------------------------------------------
-_PORTFOLIO_AGENT_ROUTING_CACHE=""
 portfolio_agent_routing() {
   if [ -n "$_PORTFOLIO_AGENT_ROUTING_CACHE" ]; then
     echo "$_PORTFOLIO_AGENT_ROUTING_CACHE"

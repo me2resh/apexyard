@@ -33,15 +33,28 @@ run_case() {
 
 make_repo() {
   local root="$1" origin="$2"
-  mkdir -p "$root/.claude/session/tickets"
+  mkdir -p "$root"
   : > "$root/.apexyard-fork"
   git init -q --template= "$root"
   git -C "$root" remote add origin "$origin"
 }
 
+# add_project <ops-root> <name> <repo>: registers a project, clones it under
+# workspace/<name>/ and writes its ticket marker into the clone's git dir, as
+# /start-ticket does. Run from the ops root, the marker lives in the project's
+# clone, not in the ops fork.
+add_project() {
+  local root="$1" name="$2" repo="$3"
+  [ -f "$root/apexyard.projects.yaml" ] || printf 'projects:\n' > "$root/apexyard.projects.yaml"
+  printf '  - name: %s\n    repo: %s\n' "$name" "$repo" >> "$root/apexyard.projects.yaml"
+  mkdir -p "$root/workspace"
+  git init -q --template= "$root/workspace/$name"
+  printf '%s\n' "repo=$repo" > "$root/workspace/$name/.git/apexyard-ticket"
+}
+
 root="$TMP/different"
 make_repo "$root" "git@github.com:owner/framework.git"
-printf '%s\n' 'repo=owner/project' > "$root/.claude/session/tickets/demo"
+add_project "$root" demo owner/project
 run_case 'unqualified issue lookup is blocked for a different active repo' 2 'gh issue view 42' "$root"
 run_case 'environment-prefixed issue lookup is blocked' 2 'FOO=bar gh issue view 42' "$root"
 run_case 'timeout-prefixed issue lookup is blocked' 2 'timeout 5 gh issue view 42' "$root"
@@ -80,7 +93,7 @@ run_case 'explicit short repo flag is allowed' 0 'gh pr list -R owner/project' "
 
 matching="$TMP/matching"
 make_repo "$matching" "git@github.com:owner/project.git"
-printf '%s\n' 'repo=owner/project' > "$matching/.claude/session/tickets/demo"
+add_project "$matching" demo owner/project
 run_case 'matching checkout origin keeps ambient lookup available' 0 'gh issue view 42' "$matching"
 
 empty="$TMP/empty"
@@ -89,9 +102,14 @@ run_case 'no active repo marker leaves unrelated commands unchanged' 0 'gh issue
 
 multiple="$TMP/multiple"
 make_repo "$multiple" "git@github.com:owner/framework.git"
-printf '%s\n' 'repo=owner/project-a' > "$multiple/.claude/session/tickets/a"
-printf '%s\n' 'repo=owner/project-b' > "$multiple/.claude/session/tickets/b"
+add_project "$multiple" a owner/project-a
+add_project "$multiple" b owner/project-b
 run_case 'multiple active repos require an explicit target' 2 'gh pr list' "$multiple"
+multi_msg=$(cd "$multiple" && printf '%s' "{\"tool_input\":{\"command\":\"gh pr list\"}}" | "$HOOK" 2>&1 >/dev/null)
+case "$multi_msg" in
+  *"multiple repositories"*) echo "PASS: the multiple-repository message is restored"; PASS=$((PASS + 1)) ;;
+  *) echo "FAIL: the multiple-repository message is missing: $multi_msg" >&2; FAIL=$((FAIL + 1)) ;;
+esac
 run_case 'repository flag on a continued line is explicit' 0 \
   "$(printf 'gh issue view 42 \\\n  --repo owner/project-a')" "$multiple"
 run_case 'short repository flag on a continued line is explicit' 0 \
@@ -204,6 +222,109 @@ else
   echo "FAIL: many continuations took ${elapsed}s (limit 1s)" >&2
   FAIL=$((FAIL + 1))
 fi
+
+# Each working tree is judged by its own marker. A linked worktree with a
+# marker for another repo does not change the main clone's verdict.
+iso="$TMP/isolated"
+make_repo "$iso" "git@github.com:owner/framework.git"
+printf '%s\n' 'repo=owner/framework' > "$iso/.git/apexyard-ticket"
+git -C "$iso" -c user.name=t -c user.email=t@example.com commit -q --allow-empty -m init
+git -C "$iso" worktree add -q "$TMP/isolated-wt" -b wt
+printf '%s\n' 'repo=owner/project-z' > "$(git -C "$TMP/isolated-wt" rev-parse --absolute-git-dir)/apexyard-ticket"
+mkdir -p "$TMP/none"
+run_case 'the main clone ignores a worktree marker for another repo' 0 'gh issue view 42' "$iso"
+run_case 'the worktree is judged by its own marker' 2 'gh issue view 42' "$TMP/isolated-wt"
+run_case 'a directory with no tree and no marker is not pinned' 0 'gh issue view 42' "$TMP/none"
+
+# A project ticket written from the ops root lives in the project's clone. The
+# guard run from the ops root must still see it, and a project tree is judged
+# by its own marker only.
+proj="$TMP/proj"
+make_repo "$proj" "git@github.com:owner/framework.git"
+add_project "$proj" p1 owner/p1
+add_project "$proj" p2 owner/p2
+rm -f "$proj/workspace/p2/.git/apexyard-ticket"
+git -C "$proj/workspace/p1" -c user.name=t -c user.email=t@example.com commit -q --allow-empty -m init
+git -C "$proj/workspace/p1" worktree add -q "$TMP/proj-p1-wt" -b wt
+run_case 'ops root sees a project marker kept in workspace/p1/.git' 2 'gh issue view 42' "$proj"
+run_case 'ops root with the explicit repo is allowed' 0 'gh issue view 42 --repo owner/p1' "$proj"
+run_case 'project tree p2 with no marker is not pinned by p1' 0 'gh issue view 42' "$proj/workspace/p2"
+printf '%s\n' 'repo=owner/p3' > "$(git -C "$TMP/proj-p1-wt" rev-parse --absolute-git-dir)/apexyard-ticket"
+multi=$(cd "$proj" && printf '%s' "{\"tool_input\":{\"command\":\"gh issue view 42\"}}" | "$HOOK" 2>&1 >/dev/null)
+case "$multi" in
+  *"multiple repositories"*) echo "PASS: ops root also reads a linked worktree marker of a project"; PASS=$((PASS + 1)) ;;
+  *) echo "FAIL: ops root did not read the project worktree marker: $multi" >&2; FAIL=$((FAIL + 1)) ;;
+esac
+
+# After an update an adopter has old-layout files and no new marker yet. The
+# guard run from the ops root must still see them.
+oldl="$TMP/oldlayout"
+make_repo "$oldl" "git@github.com:owner/framework.git"
+printf 'projects:\n  - name: p1\n    repo: owner/p1\n' > "$oldl/apexyard.projects.yaml"
+mkdir -p "$oldl/workspace" "$oldl/.claude/session/tickets"
+git init -q --template= "$oldl/workspace/p1"
+printf 'repo=owner/p1\nnumber=3\n' > "$oldl/.claude/session/tickets/p1"
+run_case 'old tickets/p1 file alone still pins the ops root' 2 'gh issue view 42' "$oldl"
+run_case 'old tickets/p1 file with the explicit repo is allowed' 0 'gh issue view 42 --repo owner/p1' "$oldl"
+rm -f "$oldl/.claude/session/tickets/p1"
+printf 'repo=owner/p1\nnumber=3\n' > "$oldl/.claude/session/current-ticket"
+run_case 'old current-ticket naming owner/p1 alone still pins the ops root' 2 'gh issue view 42' "$oldl"
+rm -f "$oldl/.claude/session/current-ticket"
+printf 'repo=owner/unregistered\nnumber=3\n' > "$oldl/.claude/session/tickets/zzz"
+# Every old-layout file pins its repo, as before markers moved, so the guard
+# blocks at least what it blocked before.
+run_case 'an old tickets file for an unregistered name still pins, as before' 2 'gh issue view 42' "$oldl"
+rm -f "$oldl/.claude/session/tickets/zzz"
+# The old per-branch form: tickets/<name>/<branch>.
+mkdir -p "$oldl/.claude/session/tickets/p1"
+printf 'repo=owner/p1\nnumber=3\n' > "$oldl/.claude/session/tickets/p1/feature__x"
+run_case 'an old per-branch tickets/p1/feature__x file alone still pins the ops root' 2 'gh issue view 42' "$oldl"
+
+
+# A partial install without the resolver library must still block. The guard
+# then reads the old-layout markers inline.
+nolib="$TMP/nolib-hooks"
+mkdir -p "$nolib"
+cp "$HOOKS"/*.sh "$nolib/"
+rm -f "$nolib/_lib-active-ticket.sh"
+saved_hook="$HOOK"
+HOOK="$nolib/block-ambient-tracker-repo.sh"
+run_case 'without the resolver library an old per-branch marker still pins' 2 'gh issue view 42' "$oldl"
+rm -f "$oldl/.claude/session/tickets/p1/feature__x"
+printf 'repo=owner/p1\nnumber=3\n' > "$oldl/.claude/session/current-ticket"
+run_case 'without the resolver library current-ticket still pins' 2 'gh issue view 42' "$oldl"
+run_case 'without the resolver library the explicit repo is allowed' 0 'gh issue view 42 --repo owner/p1' "$oldl"
+rm -f "$oldl/.claude/session/current-ticket"
+run_case 'without the resolver library and with no marker the guard allows' 0 'gh issue view 42' "$oldl"
+HOOK="$saved_hook"
+
+# A scratch clone or an isolated build clone outside the ops fork is not a
+# registered tree, so it has no marker of its own. The session pin still finds
+# the ops root. The guard must then read the ops fork's marker and every
+# project marker, so an unqualified tracker command stays blocked when the
+# active ticket names a different repo.
+pinops="$TMP/pinops"
+make_repo "$pinops" "git@github.com:owner/framework.git"
+mkdir -p "$pinops/.claude/hooks" "$TMP/pins"
+add_project "$pinops" demo owner/project
+printf '%s\n' "$pinops" > "$TMP/pins/ops-root-ambient-test"
+scratch="$TMP/scratch-clone"
+make_repo "$scratch" "git@github.com:owner/other.git"
+rm -f "$scratch/.apexyard-fork"
+scratch_match="$TMP/scratch-match"
+make_repo "$scratch_match" "git@github.com:owner/project.git"
+rm -f "$scratch_match/.apexyard-fork"
+pinned_case() {
+  APEXYARD_OPS_DISABLE_PIN='' CLAUDE_CODE_SESSION_ID=ambient-test APEXYARD_OPS_PIN_DIR="$TMP/pins" \
+    run_case "$@"
+}
+pinned_case 'unregistered clone sees a project marker through the pinned ops root' 2 'gh issue view 42' "$scratch"
+pinned_case 'unregistered clone with the explicit repo is allowed' 0 'gh issue view 42 --repo owner/project' "$scratch"
+pinned_case 'unregistered clone whose origin matches the ticket repo is allowed' 0 'gh issue view 42' "$scratch_match"
+rm -f "$pinops/workspace/demo/.git/apexyard-ticket"
+pinned_case 'unregistered clone with no ticket anywhere is not pinned' 0 'gh issue view 42' "$scratch"
+printf '%s\n' 'repo=owner/project' > "$pinops/.git/apexyard-ticket"
+pinned_case 'unregistered clone sees the ops fork marker through the pinned ops root' 2 'gh issue view 42' "$scratch"
 
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

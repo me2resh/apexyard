@@ -79,6 +79,8 @@ version: 1
 projects:
   - name: example
     repo: example/example
+  - name: other
+    repo: example/other
 YAML
     mkdir -p .claude/hooks migrations
     for f in _lib-tracker.sh _lib-read-config.sh _lib-portfolio-paths.sh _lib-ops-root.sh _lib-detect-bash-write.sh _lib-path-resolve.sh _lib-active-ticket.sh _lib-ticket-path-exemptions.sh; do
@@ -106,7 +108,27 @@ EOF
 set_marker() {
   local sb="$1" repo="$2" num="$3"
   mkdir -p "$sb/.claude/session"
-  printf 'repo=%s\nnumber=%s\n' "$repo" "$num" > "$sb/.claude/session/current-ticket"
+  printf 'repo=%s\nnumber=%s\n' "$repo" "$num" > "$sb/.git/apexyard-ticket"
+}
+
+# Give a registered project a real clone under workspace/ and write its ticket
+# marker into the clone's git dir. The marker names the repo of the project's
+# own registry entry (example/<name>), because a marker for another repo is
+# not trusted in that clone. The mocked tracker answers by number only, so the
+# repo argument of the callers is kept for readability and not written.
+set_project_marker() {
+  local sb="$1" name="$2" repo num="$4" dir gd
+  repo="example/$name"
+  dir="${5:-$sb/workspace}/$name"
+  if [ ! -e "$dir/.git" ]; then
+    mkdir -p "$dir"
+    git init -q "$dir"
+    git -C "$dir" config user.email "test@example.com"
+    git -C "$dir" config user.name "test"
+    git -C "$dir" commit -q --allow-empty -m init
+  fi
+  gd=$(git -C "$dir" rev-parse --absolute-git-dir)
+  printf 'repo=%s\nnumber=%s\n' "$repo" "$num" > "$gd/apexyard-ticket"
 }
 
 # Run the hook (Write tool) against a target path; check exit code.
@@ -196,8 +218,8 @@ rm -rf "$SB"
 SB=$(make_fork)
 mkdir -p "$SB/workspace/example/migrations" "$SB/workspace/other/migrations" "$SB/.claude/session/tickets"
 set_marker "$SB" "test-org/test-repo" 42
-printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$SB/.claude/session/tickets/example"
-printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 77 > "$SB/.claude/session/tickets/other"
+set_project_marker "$SB" example "test-org/test-repo" 99
+set_project_marker "$SB" other "test-org/test-repo" 77
 install_mock "$SB" gh 'case "$*" in
   *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
   *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;
@@ -212,8 +234,8 @@ rm -rf "$SB"
 SB=$(make_fork)
 mkdir -p "$SB/workspace/example/migrations" "$SB/workspace/other/migrations" "$SB/.claude/session/tickets"
 set_marker "$SB" "test-org/test-repo" 42
-printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$SB/.claude/session/tickets/example"
-printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$SB/.claude/session/tickets/other"
+set_project_marker "$SB" example "test-org/test-repo" 99
+set_project_marker "$SB" other "test-org/test-repo" 99
 install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
 if run_hook_bash "$SB" "cat > $SB/workspace/example/$MIG; cat > $SB/workspace/other/$MIG" 0; then
   record_pass "#1182 two projects with one ticket domain both allow"
@@ -234,26 +256,32 @@ fi
 rm -rf "$SB"
 
 SB=$(make_fork)
-mkdir -p "$SB/workspace/example/migrations" "$SB/.claude/session/tickets/example"
-printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$SB/.claude/session/tickets/example/feature__1182"
+set_project_marker "$SB" example "test-org/test-repo" 42
+git -C "$SB/workspace/example" worktree add -q "$SB/wt-example" -b feature/1182
+mkdir -p "$SB/wt-example/migrations"
+wt_gd=$(git -C "$SB/wt-example" rev-parse --absolute-git-dir)
+printf 'repo=%s\nnumber=%s\n' "example/example" 99 > "$wt_gd/apexyard-ticket"
 install_mock "$SB" gh 'case "$*" in
   *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
   *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;
 esac'
-export CLAUDE_WORKTREE_BRANCH=feature/1182
-if run_hook_bash "$SB" "cat > $SB/workspace/example/$MIG" 0; then
-  record_pass "#1182 tier-0 worktree marker wins for migration writes"
+if run_hook_bash "$SB" "cat > $SB/wt-example/$MIG" 0; then
+  record_pass "#1182 linked worktree marker wins for migration writes"
 else
-  record_fail "#1182 tier-0 worktree marker wins for migration writes"
+  record_fail "#1182 linked worktree marker wins for migration writes"
 fi
-unset CLAUDE_WORKTREE_BRANCH
+if run_hook_bash "$SB" "cat > $SB/workspace/example/$MIG" 2; then
+  record_pass "#1182 main clone does not use the linked worktree marker"
+else
+  record_fail "#1182 main clone does not use the linked worktree marker"
+fi
 rm -rf "$SB"
 
 SB=$(make_fork)
 mkdir -p "$SB/workspace/example"
 set_marker "$SB" "test-org/test-repo" 42
 mkdir -p "$SB/.claude/session/tickets"
-printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$SB/.claude/session/tickets/example"
+set_project_marker "$SB" example "test-org/test-repo" 99
 install_mock "$SB" gh 'case "$*" in
   *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
   *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;
@@ -619,7 +647,7 @@ SB=$(make_fork)
 # stop the injected `touch` from running is the caller-side shape guard.
 install_mock "$SB" gh "$GH_OPEN_OK"
 mkdir -p "$SB/.claude/session"
-printf 'repo=test-org/test-repo\nnumber=42; touch %s/PWNED_NUM ;\n' "$SB" > "$SB/.claude/session/current-ticket"
+printf 'repo=test-org/test-repo\nnumber=42; touch %s/PWNED_NUM ;\n' "$SB" > "$SB/.git/apexyard-ticket"
 if run_hook "$SB" "$SB/$MIG" 2 && [ ! -e "$SB/PWNED_NUM" ]; then
   record_pass "injection: metachar number= blocked (exit 2) and not executed"
 else
@@ -634,7 +662,7 @@ rm -rf "$SB"
 SB=$(make_fork)
 install_mock "$SB" gh "$GH_OPEN_OK"
 mkdir -p "$SB/.claude/session"
-printf 'repo=x/y; touch %s/PWNED_REPO #\nnumber=42\n' "$SB" > "$SB/.claude/session/current-ticket"
+printf 'repo=x/y; touch %s/PWNED_REPO #\nnumber=42\n' "$SB" > "$SB/.git/apexyard-ticket"
 if run_hook "$SB" "$SB/$MIG" 2 && [ ! -e "$SB/PWNED_REPO" ]; then
   record_pass "injection: metachar repo= blocked (exit 2) and not executed"
 else
@@ -652,7 +680,7 @@ rm -rf "$SB"
 SB=$(make_fork)
 install_mock "$SB" gh "$GH_OPEN_OK"
 mkdir -p "$SB/.claude/session"
-printf 'repo=test-org/test-repo\nnumber=#42\n' > "$SB/.claude/session/current-ticket"
+printf 'repo=test-org/test-repo\nnumber=#42\n' > "$SB/.git/apexyard-ticket"
 if run_hook "$SB" "$SB/$MIG" 0; then
   record_pass "guard: #-prefixed number passes and is shell-safe (printf %q escapes #)"
 else
@@ -884,7 +912,7 @@ rm -rf "$SB"
 SB=$(make_fork)
 mkdir -p "$SB/workspace/example/migrations" "$SB/.claude/session/tickets"
 set_marker "$SB" "test-org/test-repo" 42
-printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$SB/.claude/session/tickets/example"
+set_project_marker "$SB" example "test-org/test-repo" 99
 install_mock "$SB" gh 'case "$*" in
   *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
   *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;
@@ -977,7 +1005,7 @@ for shape in 'dot-segment' 'double-slash'; do
   set_marker "$SB" "test-org/test-repo" 42
   # Per-project marker: migration-labelled + AgDR -> allows.
   mkdir -p "$SB/.claude/session/tickets"
-  printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$SB/.claude/session/tickets/example"
+  set_project_marker "$SB" example "test-org/test-repo" 99
   install_mock "$SB" gh 'case "$*" in
   *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
   *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;
@@ -1006,8 +1034,7 @@ mk_opposing_fixture() {           # echoes the sandbox path
   local sb; sb=$(make_fork)
   mkdir -p "$sb/workspace/example/migrations"
   set_marker "$sb" "test-org/test-repo" 42
-  mkdir -p "$sb/.claude/session/tickets"
-  printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$sb/.claude/session/tickets/example"
+  set_project_marker "$sb" example "test-org/test-repo" 99
   install_mock "$sb" gh 'case "$*" in
   *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
   *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;
@@ -1201,8 +1228,8 @@ rm -rf "$SB"
 SB=$(make_fork)
 mkdir -p "$SB/workspace/example/migrations" "$SB/workspace/other/migrations"
 mkdir -p "$SB/.claude/session/tickets"
-printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$SB/.claude/session/tickets/example"
-printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 77 > "$SB/.claude/session/tickets/other"
+set_project_marker "$SB" example "test-org/test-repo" 99
+set_project_marker "$SB" other "test-org/test-repo" 77
 set_marker "$SB" "test-org/test-repo" 77
 install_mock "$SB" gh 'case "$*" in
   *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
@@ -1396,10 +1423,10 @@ SB=$(mk_opposing_fixture)
 rm -f "$SB/.claude/hooks/_lib-portfolio-paths.sh" "$SB/.claude/hooks/_lib-read-config.sh"
 mv "$SB/workspace" "$SB/real_workspace"
 ln -s "$SB/real_workspace" "$SB/workspace"
-if run_hook_bash "$SB" "cat > $SB/real_workspace/example/$MIG" 0 "$SB"; then
-  record_pass "#1181 workspace anchor canonicalised: a target spelled around the workspace/ symlink still reaches the project marker"
+if run_hook_bash "$SB" "cat > $SB/real_workspace/example/$MIG" 2 "$SB"; then
+  record_pass "#1181 a workspace root that is a symlink is refused, not read through"
 else
-  record_fail "#1181 workspace anchor canonicalised: a target spelled around the workspace/ symlink still reaches the project marker"
+  record_fail "#1181 a workspace root that is a symlink is refused, not read through"
 fi
 rm -rf "$SB"
 
@@ -1446,8 +1473,6 @@ mk_opposing_fixture_external_ws() {
 { "portfolio": { "workspace_dir": "../$(basename "$ws_parent")/workspace" } }
 JSON
   set_marker "$sb" "test-org/test-repo" 42
-  mkdir -p "$sb/.claude/session/tickets"
-  printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$sb/.claude/session/tickets/example"
   install_mock "$sb" gh 'case "$*" in
   *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
   *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;
@@ -1465,10 +1490,11 @@ esac'
 # PROJECT resolves to empty, and the tier-2 ops marker (#42, unlabelled)
 # answers instead: rc=2. Discriminates a full revert of the anchor fix.
 read -r SB WS_DIR <<<"$(mk_opposing_fixture_external_ws)"
+set_project_marker "$SB" example "test-org/test-repo" 99 "$WS_DIR"
 if run_hook_bash "$SB" "cat > $WS_DIR/example/$MIG" 0 "$SB"; then
-  record_pass "#1198 B1: absent workspace anchor still reaches the project marker (Bash)"
+  record_pass "#1198 B1: workspace outside the ops root reaches the project marker (Bash)"
 else
-  record_fail "#1198 B1: absent workspace anchor still reaches the project marker (Bash)"
+  record_fail "#1198 B1: workspace outside the ops root reaches the project marker (Bash)"
 fi
 rm -rf "$SB" "$(dirname "$WS_DIR")"
 
@@ -1480,10 +1506,11 @@ rm -rf "$SB" "$(dirname "$WS_DIR")"
 # literal path already matches WORKSPACE_DIR_REAL byte-for-byte once the
 # anchor resolves correctly.
 read -r SB WS_DIR <<<"$(mk_opposing_fixture_external_ws)"
+set_project_marker "$SB" example "test-org/test-repo" 99 "$WS_DIR"
 if run_hook "$SB" "$WS_DIR/example/$MIG" 0; then
-  record_pass "#1198 B1: absent workspace anchor still reaches the project marker (Write)"
+  record_pass "#1198 B1: workspace outside the ops root reaches the project marker (Write)"
 else
-  record_fail "#1198 B1: absent workspace anchor still reaches the project marker (Write)"
+  record_fail "#1198 B1: workspace outside the ops root reaches the project marker (Write)"
 fi
 rm -rf "$SB" "$(dirname "$WS_DIR")"
 
@@ -1497,10 +1524,10 @@ rm -rf "$SB" "$(dirname "$WS_DIR")"
 read -r SB WS_DIR <<<"$(mk_opposing_fixture_external_ws)"
 mkdir -p "$(dirname "$WS_DIR")"
 ln -s "$(dirname "$WS_DIR")/does-not-exist" "$WS_DIR"
-if run_hook_bash "$SB" "cat > $WS_DIR/example/$MIG" 0 "$SB"; then
-  record_pass "#1198 B1: dangling-symlink workspace anchor still reaches the project marker (Bash)"
+if run_hook_bash "$SB" "cat > $WS_DIR/example/$MIG" 2 "$SB"; then
+  record_pass "#1198 B1: dangling-symlink workspace anchor fails closed (Bash)"
 else
-  record_fail "#1198 B1: dangling-symlink workspace anchor still reaches the project marker (Bash)"
+  record_fail "#1198 B1: dangling-symlink workspace anchor fails closed (Bash)"
 fi
 rm -rf "$SB" "$(dirname "$WS_DIR")"
 
@@ -1509,10 +1536,10 @@ rm -rf "$SB" "$(dirname "$WS_DIR")"
 read -r SB WS_DIR <<<"$(mk_opposing_fixture_external_ws)"
 mkdir -p "$(dirname "$WS_DIR")"
 ln -s "$(dirname "$WS_DIR")/does-not-exist" "$WS_DIR"
-if run_hook "$SB" "$WS_DIR/example/$MIG" 0; then
-  record_pass "#1198 B1: dangling-symlink workspace anchor still reaches the project marker (Write)"
+if run_hook "$SB" "$WS_DIR/example/$MIG" 2; then
+  record_pass "#1198 B1: dangling-symlink workspace anchor fails closed (Write)"
 else
-  record_fail "#1198 B1: dangling-symlink workspace anchor still reaches the project marker (Write)"
+  record_fail "#1198 B1: dangling-symlink workspace anchor fails closed (Write)"
 fi
 rm -rf "$SB" "$(dirname "$WS_DIR")"
 
@@ -1578,7 +1605,7 @@ mk_inverted_fixture() {   # echoes the sandbox path
   set_marker "$sb" "test-org/test-repo" 42
   # Project's own marker: OPEN but NOT migration-labelled -> would BLOCK.
   mkdir -p "$sb/.claude/session/tickets"
-  printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$sb/.claude/session/tickets/example"
+  set_project_marker "$sb" example "test-org/test-repo" 99
   install_mock "$sb" gh 'case "$*" in
   *42*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
   *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;

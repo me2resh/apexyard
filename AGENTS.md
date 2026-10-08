@@ -156,7 +156,7 @@ The rest of this file is for an agent extending **apexyard itself** — its hook
 ### Rate limits / constraints
 
 - **Two-marker merge gate** — every merge requires Rex (code-reviewer agent) AND explicit per-PR CEO approval. Plan-level "go" does NOT authorize a merge. Mechanically enforced by `block-unreviewed-merge.sh`.
-- **Ticket-first hook** — code edits are blocked without an active ticket marker at `.claude/session/current-ticket`. Bootstrap-class skills (`/setup`, `/handover`, `/update`, `/split-portfolio`) are exempt.
+- **Ticket-first hook** — code edits are blocked unless the working tree holds a ticket marker (`apexyard-ticket` in the tree's git dir, written by `/start-ticket`). Bootstrap-class skills (`/setup`, `/handover`, `/update`, `/split-portfolio`) are exempt.
 - **AgDR required for architectural decisions** — `require-agdr-for-arch-changes.sh` and `require-agdr-for-arch-pr.sh` block PRs that touch architecture without a matching `docs/agdr/AgDR-NNNN-*.md` reference.
 - **No direct pushes to `main`** — every change goes through a PR. Enforced by `block-main-push.sh`.
 - **No `git add -A`** — staging must be explicit. Enforced by `block-git-add-all.sh`.

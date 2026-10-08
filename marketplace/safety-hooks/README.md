@@ -57,7 +57,7 @@ Honest list of what stays in the full framework:
 
 - **The two-marker merge gate** (`block-unreviewed-merge.sh`) — requires the Rex code-reviewer agent + the per-PR CEO approval pattern. Both depend on framework session-state at `.claude/session/reviews/` that doesn't make sense as a standalone hook.
 - **The migration gate** (`require-migration-ticket.sh`) — requires a labelled tracker issue + AgDR pattern that depends on the framework's `/migration` skill and AgDR memory.
-- **The active-ticket gate** (`require-active-ticket.sh`) — requires the framework's `/start-ticket` flow and the per-session current-ticket marker.
+- **The active-ticket gate** (`require-active-ticket.sh`) — requires the framework's `/start-ticket` flow and the per-working-tree ticket marker in the git dir.
 - **Leak protection** (`block-private-refs-in-public-repos.sh`) — requires the portfolio registry (`apexyard.projects.yaml`) to know what counts as "private project name".
 - **Audit hooks family** — see the sibling `apexyard/audit-pack` plugin.
 

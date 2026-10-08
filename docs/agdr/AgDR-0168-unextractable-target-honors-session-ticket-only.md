@@ -12,6 +12,8 @@ category: security
 # Unextractable Bash write target honors only the session ticket
 
 > The ticket-gate hook `require-active-ticket.sh` blocked an unextractable Bash write target, even with an active ticket. I decided to check only the ops-level `current-ticket` marker for that target, skipping the per-worktree and per-project tiers. An active session ticket now gates the write. No new exemption exists. The target still cannot use a per-project or per-worktree marker, because it carries no project to resolve them against.
+>
+> **Amended by AgDR-0222.** The gate first judges an unextractable target against the marker in the git dir of the hook's working tree. Without a trusted marker there, the ops-level `current-ticket` file still answers it, as this AgDR decided. That holds until a breaking release removes the old resolution.
 
 ## Context
 

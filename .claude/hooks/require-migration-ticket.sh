@@ -181,18 +181,21 @@ MARKER_HOME="${MARKER_HOME:-.}"
 # Used by the sourced shared marker resolver below.
 # shellcheck disable=SC2034
 WORKSPACE_DIR="$OPS_ROOT/workspace"
+# The tree validation takes an absolute workspace dir only.
+TREE_WS="$OPS_ROOT/workspace"
 
 if [ -n "$OPS_ROOT" ] && [ -f "$HOOK_DIR/_lib-portfolio-paths.sh" ] && [ -f "$HOOK_DIR/_lib-read-config.sh" ]; then
   # shellcheck source=/dev/null
   . "$HOOK_DIR/_lib-read-config.sh"
   # shellcheck source=/dev/null
   . "$HOOK_DIR/_lib-portfolio-paths.sh"
-  resolved_ws=$(portfolio_workspace_dir 2>/dev/null)
-  if [ -n "$resolved_ws" ]; then
-    # Used by the sourced shared marker resolver below.
-    # shellcheck disable=SC2034
-    WORKSPACE_DIR="$resolved_ws"
-  fi
+  portfolio_resolve_into_vars
+  # shellcheck disable=SC2034
+  [ -z "${_PP_WS:-}" ] || WORKSPACE_DIR="$_PP_WS"
+  # A relative value means the hook runs outside the fork. Keep the default.
+  case "${_PP_WS:-}" in
+    /*) TREE_WS="$_PP_WS" ;;
+  esac
 fi
 
 # Marker resolution is shared with require-active-ticket.sh. Load it only after
@@ -200,6 +203,8 @@ fi
 if [ -f "$HOOK_DIR/_lib-active-ticket.sh" ]; then
   # shellcheck source=/dev/null
   . "$HOOK_DIR/_lib-active-ticket.sh"
+  # The roots are resolved above, so the library needs no init of its own.
+  active_ticket_set_context "$OPS_ROOT" "$TREE_WS" "$MARKER_HOME" "$WORKSPACE_DIR"
 fi
 
 # --------- Load project-config overrides ---------

@@ -22,7 +22,7 @@ bash_entries=$(jq '[.hooks.SessionStart[].hooks[]] | length' "$SETTINGS")
 dispatcher_command=$(jq -r '[.hooks.SessionStart[].hooks[].command][0]' "$SETTINGS")
 grep -q 'dispatch-session-start.sh' <<<"$dispatcher_command"
 
-scripts='pin-ops-root.sh onboarding-check.sh check-upstream-drift.sh check-jq-installed.sh check-git-hooks-installed.sh check-portfolio-config.sh clear-bootstrap-marker.sh clear-active-reviewer-marker.sh clear-onboarding-depth-mode-marker.sh clear-onboarding-glossary-seen-marker.sh clear-issue-skill-marker.sh link-custom-skills.sh apply-agent-routing.sh print-portfolio-primer.sh warn-unqualified-review-marker.sh'
+scripts='pin-ops-root.sh onboarding-check.sh check-upstream-drift.sh check-jq-installed.sh check-git-hooks-installed.sh check-portfolio-config.sh clear-bootstrap-marker.sh clear-active-reviewer-marker.sh clear-onboarding-depth-mode-marker.sh clear-onboarding-glossary-seen-marker.sh clear-issue-skill-marker.sh link-custom-skills.sh apply-agent-routing.sh print-portfolio-primer.sh warn-unqualified-review-marker.sh warn-legacy-ticket-markers.sh'
 for script in $scripts; do
   grep -q "APEXYARD_SESSION_START_HOOK: $script" "$DISPATCHER"
 done

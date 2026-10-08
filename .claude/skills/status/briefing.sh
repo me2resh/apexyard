@@ -116,12 +116,16 @@ if [ -n "$ops_root" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 3. Active ticket — read marker.
+# 3. Active ticket: read the marker of the working tree you are in.
 #
-# Per apexyard#41: per-project marker first if workspace is a real name,
-# then fall back to the ops-level current-ticket. Each marker is a
-# key=value file written by /start-ticket; we only need `number` and
-# `title` here.
+# Each working tree keeps its own marker in its git dir (AgDR-0222). The
+# shared resolver finds and validates it. Each marker is a key=value file
+# written by /start-ticket; we only need `number`, `title` and `repo` here.
+#
+# During the move to that layout, a tree without a new marker shows what the
+# old briefing showed: the per-project marker for the workspace, then the
+# ops-level one, the first that has a number. That part does not need the
+# resolver, so it also works in a fork without the hooks.
 # ---------------------------------------------------------------------------
 read_marker_field() {
   # Reads `key=value` lines, tolerating trailing CR. Outputs the value
@@ -145,9 +149,22 @@ read_marker_field() {
 ticket=""
 ticket_repo=""
 ticket_number=""
+marker_paths=()
+
+if [ -n "$ops_root" ] && [ -f "$ops_root/.claude/hooks/_lib-active-ticket.sh" ]; then
+  # The portfolio paths resolve against the process working directory, so the
+  # lookup runs from the ops root. The subshell keeps this script in place.
+  # Only a marker in a validated tree's git dir is taken here.
+  m=$(cd "$ops_root" 2>/dev/null \
+    && . "$ops_root/.claude/hooks/_lib-active-ticket.sh" \
+    && active_ticket_init "$ops_root" \
+    && active_ticket_lookup "$cwd" \
+    && [ "$AT_SOURCE" = tree ] \
+    && printf '%s' "$REPLY") || m=""
+  [ -z "$m" ] || marker_paths+=("$m")
+fi
 
 if [ -n "$ops_root" ]; then
-  marker_paths=()
   case "$workspace" in
     "(ops)"|"(unknown)"|"")
       ;;

@@ -60,7 +60,7 @@ setup_ticket_sandbox() {
     [ -f "$hooks_src/$file" ] && cp "$hooks_src/$file" "$dest/.claude/hooks/$file"
   done
   # No active ticket — writes to src/app.ts must block.
-  rm -f "$dest/.claude/session/current-ticket"
+  rm -f "$dest/.git/apexyard-ticket"
   seed_git_repo "$dest"
 }
 

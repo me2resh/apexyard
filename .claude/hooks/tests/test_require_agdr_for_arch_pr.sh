@@ -266,8 +266,7 @@ spike_marker_setup() {
     cd "$dir" || exit 1
     echo "version: 1
 projects: []" > apexyard.projects.yaml
-    mkdir -p .claude/session
-    cat > .claude/session/current-ticket <<'EOF'
+    cat > .git/apexyard-ticket <<'EOF'
 repo=test/repo
 number=180
 title=[Spike] active-marker exemption test
@@ -311,14 +310,75 @@ run_case "prototype branch name (arch change, no AgDR, non-prototype PR title) �
   "$DIR" 0 "spike/prototype PR detected" \
   "gh pr create --base main --title 'feat(#673): tweak domain' --body 'just exploring UX'"
 
-# Prototype signal (b): active-ticket marker referencing a [Prototype] ticket
-# is supported by the hook (see require-agdr-for-arch-pr.sh — the marker grep
-# matches `^title=\[(Spike|Prototype)\]`). It is NOT asserted here because it
-# shares the same in-sandbox ops-root resolution limitation as the pre-existing
-# "spike active-ticket marker" case above (the marker fixture's ops root isn't
-# resolved inside the test sandbox). Signals (a) PR-title-type and (c)
-# branch-name — both exercised above — give the prototype exemption equivalent
-# coverage to the spike exemption's reliably-green signals.
+# Prototype signal (b): the tree's own marker names a [Prototype] ticket.
+prototype_marker_setup() {
+  local dir
+  dir=$(spike_marker_setup)
+  sed -i.bak 's/^title=.*/title=[Prototype] active-marker exemption test/' "$dir/.git/apexyard-ticket"
+  rm -f "$dir/.git/apexyard-ticket.bak"
+  echo "$dir"
+}
+
+DIR=$(prototype_marker_setup)
+run_case "prototype active-ticket marker (arch change, non-prototype branch + title) → PASS via marker signal" \
+  "$DIR" 0 "spike/prototype PR detected" \
+  "gh pr create --base main --title 'feat(#673): tweak domain' --body 'no AgDR'"
+
+# A spike marker in one project must not exempt a change in another project.
+# The ops fork registers projects a and b. Project a holds the spike marker.
+# The PR change is in project b, which has no marker of its own.
+spike_cross_project_setup() {
+  local mode="${1:-new}" ops b a
+  ops=$(mktemp -d -t agdr-pr-ops.XXXXXX)
+  b=$(setup_repo c1_base c1_feat)
+  (
+    cd "$ops" || exit 1
+    git init -q -b main
+    git config user.email t@t.test
+    git config user.name test
+    : > .apexyard-fork
+    : > onboarding.yaml
+    printf 'projects:\n  - name: a\n    repo: test/a\n  - name: b\n    repo: test/b\n' > apexyard.projects.yaml
+    git add .apexyard-fork onboarding.yaml apexyard.projects.yaml
+    git commit -q -m init
+    mkdir -p workspace
+  )
+  mv "$b" "$ops/workspace/b"
+  a="$ops/workspace/a"
+  git init -q -b main "$a"
+  git -C "$a" config user.email t@t.test
+  git -C "$a" config user.name test
+  git -C "$a" commit -q --allow-empty -m init
+  # Where project a's spike ticket lives. The two old locations are the ones
+  # the merge base scanned for any [Spike] title, whatever the project.
+  mkdir -p "$ops/.claude/session/tickets"
+  case "$mode" in
+    old-tickets) printf 'repo=test/a\nnumber=1\ntitle=[Spike] other project\n' > "$ops/.claude/session/tickets/a" ;;
+    old-current) printf 'repo=test/a\nnumber=1\ntitle=[Spike] other project\n' > "$ops/.claude/session/current-ticket" ;;
+    old-current-b) printf 'repo=test/a\nnumber=1\ntitle=[Spike] other project\n' > "$ops/.claude/session/current-ticket"
+      printf 'repo=test/b\nnumber=2\ntitle=Plain b ticket\n' > "$ops/.claude/session/tickets/b" ;;
+    *) printf 'repo=test/a\nnumber=1\ntitle=[Spike] other project\n' > "$a/.git/apexyard-ticket" ;;
+  esac
+  echo "$ops/workspace/b"
+}
+
+for mode in new old-tickets old-current-b; do
+  DIR=$(spike_cross_project_setup "$mode")
+  run_case "spike_marker_in_project_a_does_not_exempt_project_b ($mode marker, arch change in b) → BLOCK" \
+    "$DIR" 2 "AgDR" \
+    "gh pr create --base main --title 'feat(#180): tweak domain' --body 'no AgDR'"
+done
+# The old current-ticket is the marker that governs b when b has no marker
+# of its own, as in the ticket gate. Its spike title then exempts b.
+DIR=$(spike_cross_project_setup old-current)
+run_case "an old current-ticket that governs b exempts b → PASS" \
+  "$DIR" 0 "spike/prototype PR detected" \
+  "gh pr create --base main --title 'feat(#180): tweak domain' --body 'no AgDR'"
+DIR=$(spike_cross_project_setup)
+printf 'repo=test/b\nnumber=2\ntitle=[Spike] own marker\n' > "$DIR/.git/apexyard-ticket"
+run_case "project b with its own spike marker → PASS" \
+  "$DIR" 0 "spike/prototype PR detected" \
+  "gh pr create --base main --title 'feat(#180): tweak domain' --body 'no AgDR'"
 
 # ---------------------------------------------------------------------------
 # Regression: embedded-quote truncation bug (apexyard#461).

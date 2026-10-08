@@ -28,11 +28,11 @@ These four hooks make the SDLC mechanical instead of advisory. Each enforces a r
 
 **Event:** `PreToolUse` on `Edit | Write | MultiEdit`.
 
-**What it does:** blocks edits to any code path unless a session marker exists. Resolution is three-tier (#41 + #513): (0) per-worktree marker at `<ops_root>/.claude/session/tickets/<project>/<safe-branch>` when the edited file's repo is on a git-worktree branch — lets parallel agents on the *same* project hold independent tickets; (1) per-project marker at `<ops_root>/.claude/session/tickets/<project>` (a FILE) when `FILE_PATH` is under `<ops_root>/workspace/<project>/`; (2) fallback `<ops_root>/.claude/session/current-ticket`. Exempts `.claude/`, `docs/`, `projects/*/docs/`, and any `*.md` file so framework / doc / meta work is still fluid.
+**What it does:** blocks edits to any code path unless the working tree holds a ticket marker. Each tree keeps its marker in its own git dir. That is `<repo>/.git/apexyard-ticket`, or `<repo>/.git/worktrees/<id>/apexyard-ticket` for a linked worktree. So parallel sessions on one project never share a ticket. `_lib-active-ticket.sh` finds and validates the git dir with shell builtins and no git process (AgDR-0222). It trusts that marker only for the ops fork and registered clones. A registered clone is `workspace/<project>/` or the `workspace:` path of its registry entry. Symlinks, forged `.git` files and repos owned by another user are not trusted. The one write into a `.git` directory that needs no ticket is the marker and its temporary file. When no trusted marker exists, the hook uses the old-layout markers under `.claude/session/`, with the rules it used before the move. `/start-ticket` still writes them, and a SessionStart notice lists them (AgDR-0222, Backward compatibility). Exempts `.claude/`, `docs/`, `projects/*/docs/`, and any `*.md` file so framework / doc / meta work is still fluid.
 
 **Enforces:** the Pre-Build Gate in `.claude/rules/workflow-gates.md` — "do not start coding until the ticket exists, has acceptance criteria, and is broken into tasks."
 
-**Unblock:** run `/start-ticket <issue>`. The skill verifies the issue via `gh issue view`, resolves the project from the ticket's tracker repo via the portfolio registry, and writes either the per-project or fallback marker.
+**Unblock:** run `/start-ticket <issue>`. The skill verifies the issue via `gh issue view`, and writes the marker into the git dir of the tree you run it in. It also writes the old-layout marker: per-worktree or per-project for a registered repo, else the fallback marker.
 
 ### 1a. Migration ticket-first — `require-migration-ticket.sh`
 
@@ -338,9 +338,6 @@ These were already in place before the enforcement layer and remain unchanged (e
 ```
 .claude/session/
 ├── onboarded                     # created by /onboard, read by onboarding-check
-├── tickets/<project>             # per-project ticket marker (FILE) — #41
-├── tickets/<project>/<branch>    # per-worktree ticket marker — #513 (DIR form; parallel agents)
-├── current-ticket                # created by /start-ticket, read by require-active-ticket (fallback)
 ├── pending-reviews/<pr>          # created by auto-code-review, tracks PRs awaiting Rex
 ├── reviews/<owner>__<repo>__<pr>-rex.approved           # created by code-reviewer agent, read by merge-gate
 ├── reviews/<owner>__<repo>__<pr>-ceo.approved           # created by /approve-merge, read by merge-gate

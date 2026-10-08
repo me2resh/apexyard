@@ -67,7 +67,7 @@ The `clear-issue-skill-marker.sh` SessionStart hook sweeps stale markers from ki
 
 ### 1. Resolve the target project
 
-Read `.claude/session/current-ticket` to determine the active project context. Then:
+Read the active-ticket marker of the working tree you are in to determine the active project context. The marker is the `apexyard-ticket` file in the git dir of that tree. See `/start-ticket` "Read the active ticket". Then:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"

@@ -19,6 +19,7 @@ INPUT=$(cat)
 # APEXYARD_SESSION_START_HOOK: apply-agent-routing.sh
 # APEXYARD_SESSION_START_HOOK: print-portfolio-primer.sh
 # APEXYARD_SESSION_START_HOOK: warn-unqualified-review-marker.sh
+# APEXYARD_SESSION_START_HOOK: warn-legacy-ticket-markers.sh
 
 run_direct() {
   local script="$1" rc=0
@@ -47,6 +48,7 @@ scripts=(
   apply-agent-routing.sh
   print-portfolio-primer.sh
   warn-unqualified-review-marker.sh
+  warn-legacy-ticket-markers.sh
 )
 
 # Pinning is the one ordering dependency. Run it before the remaining hooks.
