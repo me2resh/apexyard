@@ -1,0 +1,17 @@
+{
+  "name": "apexyard",
+  "owner": {
+    "name": "me2resh",
+    "url": "https://github.com/me2resh"
+  },
+  "plugins": [
+    {
+      "name": "orbit",
+      "source": {
+        "source": "github",
+        "repo": "me2resh/orbit-spec"
+      },
+      "description": "ORBIT planning lifecycle: plan, snapshot, reconcile, slice, progress"
+    }
+  ]
+}

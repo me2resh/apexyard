@@ -50,3 +50,12 @@ The external `orbit-spec` CLI owns `orbit validate` output, `PROGRESS.md`, and
 the status pane. Its follow-up must add the same advisory warning to CLI
 reconcile and validate, then mark uncovered outcomes `no slice` in both views.
 The adapter does not generate or edit those views.
+
+## Install the ORBIT plugin
+
+The ORBIT plugin is standalone. It works in any repository. The ApexYard `/orbit` skill is the adapter that adds ApexYard governance.
+
+```text
+/plugin marketplace add me2resh/apexyard
+/plugin install orbit@apexyard
+```
