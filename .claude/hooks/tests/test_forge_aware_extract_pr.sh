@@ -52,6 +52,7 @@ make_sandbox() {
   mkdir -p "$sb/.claude/hooks" "$sb/bin"
   touch "$sb/onboarding.yaml"
   cp "$EXTRACT_LIB"   "$sb/.claude/hooks/_lib-extract-pr.sh"
+  cp "$(dirname "$EXTRACT_LIB")/_lib-awk-fallback.sh" "$sb/.claude/hooks/_lib-awk-fallback.sh"
   cp "$TRACKER_LIB"   "$sb/.claude/hooks/_lib-tracker.sh"
   cp "$CONFIG_LIB"    "$sb/.claude/hooks/_lib-read-config.sh"
   cp "$PORTFOLIO_LIB" "$sb/.claude/hooks/_lib-portfolio-paths.sh"

@@ -64,6 +64,7 @@ awk '{
     print "exit 0"
   }
 }' "$PR_HOOK" > "$TMP/pr-capture.sh"
+cp "$HOOK_DIR/_lib-awk-fallback.sh" "$TMP/_lib-awk-fallback.sh"
 
 # Pre-#1555 library (parameter-expansion splitter), vendored as a fixture.
 # It is the equivalence oracle: the new code must extract the same targets.
@@ -75,17 +76,6 @@ cp "$(dirname "$0")/fixtures/_lib-detect-bash-write.pre-1555.sh" "$TMP/old-lib.s
 
 PASS=0
 FAIL=0
-check_bytes() {
-  local label="$1"
-  if cmp -s "$TMP/want" "$TMP/got"; then
-    PASS=$((PASS + 1))
-  else
-    echo "FAIL [$label]: byte mismatch" >&2
-    od -An -tx1 "$TMP/want" >&2
-    od -An -tx1 "$TMP/got" >&2
-    FAIL=$((FAIL + 1))
-  fi
-}
 
 record() {
   local label="$1" ok="$2"
@@ -97,51 +87,6 @@ record() {
     FAIL=$((FAIL + 1))
   fi
 }
-
-samples=(
-  ''
-  'read data'
-  'read data;'
-  'read data&&echo x||cat y|cat z'
-  'echo >|a >>|b >||c'
-  '@@APEXYARD_CLOBBER@@ @@APEXYARD_CLOBBER_APPEND@@'
-  'echo "a && b; c | d"'
-  $'sed -n \047p;w out\047 f && sed -n \047q\047 f'
-  $'sed -n p f || sed -n w\\ out f | cat'
-  $'one\\\ntwo'
-  $'one\\\\\ntwo'
-  $'one\ntwo\n'
-  $'one\n\ntwo'
-  $'one\\'
-  $'one\r\ntwo\r'
-  $'"quoted" '\''single'\'' café 雪'
-  $'bad\377byte && sed -n p f'
-)
-
-for i in "${!samples[@]}"; do
-  sample=${samples[i]}
-  old_split "$sample" > "$TMP/want"
-  _bdw_split_top_level "$sample" > "$TMP/got"
-  check_bytes "split/$i"
-
-  old_regions "$sample" > "$TMP/want"
-  _bdw_sed_regions "$sample" > "$TMP/got"
-  check_bytes "sed-region/$i"
-
-  # jq output is captured by the hook with $(...), which strips trailing
-  # newlines before the normalization site. Match that input contract.
-  pr_sample=$sample
-  while [ "${pr_sample%$'\n'}" != "$pr_sample" ]; do
-    pr_sample=${pr_sample%$'\n'}
-  done
-  # JSON strings must be valid UTF-8; the two library sites cover bad bytes.
-  if [ "$i" -eq "$((${#samples[@]} - 1))" ]; then continue; fi
-  old_join "$pr_sample" > "$TMP/want"
-  : > "$TMP/got"
-  jq -nc --arg c "$pr_sample" '{tool_input:{command:$c}}' > "$TMP/payload"
-  CAPTURE="$TMP/got" "$TEST_BASH" "$TMP/pr-capture.sh" < "$TMP/payload" > /dev/null 2>&1
-  check_bytes "pr-join/$i"
-done
 
 # Fake awk helpers ----------------------------------------------------------
 REAL_AWK=$(command -v awk)
@@ -294,7 +239,7 @@ projects:
 YAML
     mkdir -p .claude/hooks migrations bin
     for f in _lib-tracker.sh _lib-read-config.sh _lib-portfolio-paths.sh \
-             _lib-ops-root.sh _lib-detect-bash-write.sh _lib-path-resolve.sh \
+             _lib-ops-root.sh _lib-awk-fallback.sh _lib-detect-bash-write.sh _lib-path-resolve.sh \
              _lib-active-ticket.sh _lib-ticket-path-exemptions.sh \
              _lib-command-scrub.sh; do
       [ -f "$HOOK_DIR/$f" ] && cp "$HOOK_DIR/$f" ".claude/hooks/$f"

@@ -77,6 +77,29 @@ if ! grep -q 'urgent repair' "$sb/err"; then echo 'FAIL exception reason log'; f
 check none_ascii 0 "$(make_cmd Feature 'ORBIT slice: none -- urgent repair')"
 check bug 0 "$(make_cmd Bug 'plain body')"
 check spike 0 "$(make_cmd Spike 'plain body')"
+check default_enhancement 0 "$(make_cmd Enhancement 'plain body')"
+printf '{"orbit":{"governed_prefixes":["Feature","Task","Slice","Enhancement"]}}\n' > "$sb/.claude/project-config.json"
+check fork_missing 2 "$(make_cmd Enhancement 'plain body')"
+check fork_valid 0 "$(make_cmd Enhancement 'ORBIT slice: slice-demo-o1')"
+check fork_ungoverned 0 "$(make_cmd Improvement 'plain body')"
+check fork_bug 0 "$(make_cmd Bug 'plain body')"
+check fork_spike 0 "$(make_cmd Spike 'plain body')"
+check fork_mixed_case 2 "$(make_cmd eNhAnCeMeNt 'plain body')"
+check fork_fullwidth 2 "gh issue $verb --repo demo-org/demo --title '［ENHANCEMENT］ Demo' --body 'plain body'"
+check fork_cjk 2 "gh issue $verb --repo demo-org/demo --title '【Enhancement】 Demo' --body 'plain body'"
+for value in '[]' '[""]' 'null' '"unreadable"'; do
+  printf '{"orbit":{"governed_prefixes":%s}}\n' "$value" > "$sb/.claude/project-config.json"
+  for prefix in Feature Task Slice; do
+    check "fallback_${value}_${prefix}" 2 "$(make_cmd "$prefix" 'plain body')"
+  done
+done
+jq 'del(.orbit.governed_prefixes)' "$sb/.claude/project-config.defaults.json" > "$sb/defaults.tmp"
+mv "$sb/defaults.tmp" "$sb/.claude/project-config.defaults.json"
+printf '{}\n' > "$sb/.claude/project-config.json"
+for prefix in Feature Task Slice; do
+  check "fallback_missing_$prefix" 2 "$(make_cmd "$prefix" 'plain body')"
+done
+cp "$src/.claude/project-config.defaults.json" "$sb/.claude/"
 check traversal_parent 2 "$(make_cmd Feature 'ORBIT slice: ../x')"
 check traversal_slash 2 "$(make_cmd Task 'ORBIT slice: a/b')"
 printf 'ORBIT slice: slice-demo-o1\n' > "$body_file"

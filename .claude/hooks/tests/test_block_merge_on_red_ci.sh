@@ -83,6 +83,7 @@ make_sandbox() {
   mkdir -p "$sb/.claude/hooks" "$sb/bin"
   cp "$HOOK_SRC" "$sb/.claude/hooks/block-merge-on-red-ci.sh"
   cp "$LIB_PR"   "$sb/.claude/hooks/_lib-extract-pr.sh"
+  cp "$(dirname "$LIB_PR")/_lib-awk-fallback.sh" "$sb/.claude/hooks/_lib-awk-fallback.sh"
   chmod +x "$sb/.claude/hooks/block-merge-on-red-ci.sh"
 
   cat > "$sb/bin/gh" <<EOF
@@ -719,6 +720,7 @@ make_sandbox_wrapper() {
   mkdir -p "$sb/.claude/hooks" "$sb/bin"
   cp "$HOOK_SRC"      "$sb/.claude/hooks/block-merge-on-red-ci.sh"
   cp "$LIB_PR"        "$sb/.claude/hooks/_lib-extract-pr.sh"
+  cp "$(dirname "$LIB_PR")/_lib-awk-fallback.sh" "$sb/.claude/hooks/_lib-awk-fallback.sh"
   cp "$TRACKER_LIB"   "$sb/.claude/hooks/_lib-tracker.sh"
   cp "$CONFIG_LIB"    "$sb/.claude/hooks/_lib-read-config.sh"
   cp "$PORTFOLIO_LIB" "$sb/.claude/hooks/_lib-portfolio-paths.sh"
@@ -833,6 +835,7 @@ make_sandbox_wrapper_gh_no_yaml_tools() {
   mkdir -p "$sb/.claude/hooks" "$sb/bin"
   cp "$HOOK_SRC"      "$sb/.claude/hooks/block-merge-on-red-ci.sh"
   cp "$LIB_PR"        "$sb/.claude/hooks/_lib-extract-pr.sh"
+  cp "$(dirname "$LIB_PR")/_lib-awk-fallback.sh" "$sb/.claude/hooks/_lib-awk-fallback.sh"
   cp "$TRACKER_LIB"   "$sb/.claude/hooks/_lib-tracker.sh"
   cp "$CONFIG_LIB"    "$sb/.claude/hooks/_lib-read-config.sh"
   cp "$PORTFOLIO_LIB" "$sb/.claude/hooks/_lib-portfolio-paths.sh"

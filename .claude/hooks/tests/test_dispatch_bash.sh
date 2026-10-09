@@ -26,6 +26,7 @@ reviewer_entries=$(jq '[.hooks.PreToolUse[] | select(.matcher == "Bash") | .hook
 
 mkdir -p "$TMP/hooks"
 cp "$ROOT/dispatch-bash.sh" "$TMP/hooks/dispatch-bash.sh"
+cp "$(dirname "$ROOT/dispatch-bash.sh")/_lib-awk-fallback.sh" "$TMP/hooks/_lib-awk-fallback.sh"
 cp "$ROOT/_lib-extract-pr.sh" "$TMP/hooks/_lib-extract-pr.sh"
 cp "$ROOT/_lib-command-scrub.sh" "$TMP/hooks/_lib-command-scrub.sh"
 chmod +x "$TMP/hooks/dispatch-bash.sh"
@@ -231,49 +232,18 @@ run_json() {
     | DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh"
 }
 
-# Capture the first whole-command grep input. A here-string adds one newline,
-# so compare with the old substitution plus that same newline. The wrapper
-# delegates grep itself to the original executable to keep routing unchanged.
-scan_grep="$(command -v grep)"
-cat > "$TMP/bin/grep" <<'EOF'
-#!/usr/bin/env bash
-if [ "${1:-}" = -qE ] && [ -n "${SCAN_CAPTURE:-}" ] && [ ! -e "$SCAN_CAPTURE" ]; then
-  cat > "$SCAN_CAPTURE"
-  exec "$SCAN_GREP" "$@" < "$SCAN_CAPTURE"
-fi
-exec "$SCAN_GREP" "$@"
-EOF
-chmod +x "$TMP/bin/grep"
-
-join_cases=(
-  ''
-  'echo ok'
-  $'a\\\nb'
-  $'a\\\nb\\\nc'
-  $'a\\'
-  $'a\\b'
-  $'a\nb'
-  $'a\\\\\nb'
-  $'a\\\n\nb'
-)
-for command in "${join_cases[@]}"; do
-  # jq extraction in dispatch-bash.sh uses command substitution, which
-  # removes trailing newlines before the join. These cases retain any
-  # plain newline internally so the captured input is unambiguous.
-  old_scan=${command//$'\\\n'/ }
-  rm -f "$TMP/scan-capture"
-  printf '%s\n' "$old_scan" > "$TMP/scan-expected"
-  jq -nc --arg c "$command" '{tool_name:"Bash",tool_input:{command:$c}}' \
-    | DISPATCH_LOG="$TMP/log" SCAN_CAPTURE="$TMP/scan-capture" SCAN_GREP="$scan_grep" \
-      "$TMP/hooks/dispatch-bash.sh"
-  if ! cmp -s "$TMP/scan-expected" "$TMP/scan-capture"; then
-    echo 'FAIL: whole-command join differs from the old substitution' >&2
-    od -An -tx1 "$TMP/scan-expected" >&2
-    od -An -tx1 "$TMP/scan-capture" >&2
-    exit 1
-  fi
+# broad-space retains older routing, even where Bash removes the pair.
+# Prefix routing cannot see these later verbs, so this exercises the join.
+for command in $'echo ok; git\\\npush' $"echo 'git"$'\\\n'$"push'"; do
+  : > "$TMP/log"
+  run_json "$command"
+  [ "$(grep -c '^block-main-push.sh$' "$TMP/log")" -eq 1 ]
 done
-rm -f "$TMP/bin/grep"
+for command in $'echo ok; git\\\ncommit' $'echo # git\\\ncommit'; do
+  : > "$TMP/log"
+  run_json "$command"
+  [ "$(grep -c '^validate-commit-format.sh$' "$TMP/log")" -eq 1 ]
+done
 
 # A failed or unavailable awk must route both gate groups. Construct the
 # subcommand at runtime so this test does not submit one to live hooks.

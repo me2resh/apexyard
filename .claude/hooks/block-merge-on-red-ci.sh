@@ -135,7 +135,9 @@ _require_lib() {
 # the jq-independent fallback detector when the parse can't be trusted —
 # see #965.
 _require_lib "$(dirname "$0")/_lib-extract-pr.sh" \
-  is_merge_command is_merge_command_raw _scrub_merge_command _normalize_json_escapes \
+  is_merge_command is_merge_command_raw \
+  _run_awk_or_fallback join_shell_continuations _join_shell_continuations_fallback \
+  _scrub_merge_command _normalize_json_escapes \
   has_conflicting_repo_flags merge_command_uses_variable extract_pr_number resolve_merge_repo \
   resolve_ci_status_glab
 # Leading cd-target recovery for shared merge-repo resolution (#687/#1151).

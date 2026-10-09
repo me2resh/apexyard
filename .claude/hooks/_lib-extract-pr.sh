@@ -1,4 +1,6 @@
 #!/bin/bash
+# shellcheck source=/dev/null
+. "${BASH_SOURCE[0]%/*}/_lib-awk-fallback.sh"
 # Shared PR and repo extraction for merge-gate hooks. The hooks are:
 # block-unreviewed-merge.sh, require-design-review-for-ui.sh,
 # require-architecture-review.sh, and block-merge-on-red-ci.sh.
@@ -244,15 +246,7 @@ _extract_wrapper_arg() {
 # file header (#973) for why mixing this into the jq-present path would be
 # unsafe.
 _normalize_json_escapes() {
-  local decoded sentinel=$'\034'
-  # Append a sentinel so awk can distinguish a final input newline from an
-  # unterminated final record. Append another sentinel to its output so
-  # command substitution preserves trailing newlines. Remove only that final
-  # byte; an identical byte already in the input passes through unchanged.
-  # Keep partial awk output private. If awk fails or produces no sentinel,
-  # use the correct legacy decoder. It is slow on huge input under Bash 3.2,
-  # but runs only when the tool fails.
-  if decoded=$(printf '%s\034' "$1" | LC_ALL=C awk '
+  LC_ALL=C _run_awk_or_fallback "$1" _normalize_json_escapes_legacy '
     function decode(s,    i, n, six, two) {
       n = length(s)
       for (i = 1; i <= n;) {
@@ -270,13 +264,8 @@ _normalize_json_escapes() {
     }
     NR > 1 { decode(previous); printf "\n" }
     { previous = $0 }
-    END { if (NR) decode(substr(previous, 1, length(previous) - 1)); printf "\034" }
-  '); then
-    case "$decoded" in
-      *"$sentinel") printf '%s' "${decoded%"$sentinel"}"; return 0 ;;
-    esac
-  fi
-  _normalize_json_escapes_legacy "$1"
+    END { if (NR) decode(substr(previous, 1, length(previous) - 1)) }
+  '
 }
 
 # Pre-#1550 decoder with #1564 `\\` handling, retained for awk failure.
@@ -365,83 +354,7 @@ _normalize_json_escapes_legacy_piece() {
 # newlines to spaces. This fallback only broadens detection because the
 # original text is also scanned.
 _join_shell_continuations() {
-  local joined
-  if joined=$(printf '%s\n.' "$1" | LC_ALL=C awk '
-    BEGIN {
-      sq = sprintf("%c", 39)
-      dq = sprintf("%c", 34)
-      in_sq = 0
-      in_dq = 0
-    }
-    function is_word_boundary_prev(prev) {
-      # Bash starts a comment when `#` begins a token (start / whitespace /
-      # shell metacharacters), not when it sits inside a word like `foo#bar`.
-      return prev == "" || prev == " " || prev == "\t" || \
-             prev == ";" || prev == "|" || prev == "&" || \
-             prev == "(" || prev == ")" || prev == "<" || prev == ">" || \
-             prev == "`" || prev == "\n"
-    }
-    function emit(line,    i, n, c, out, bs, prev, in_comment) {
-      n = length(line); out = ""; bs = 0; prev = ""; in_comment = 0
-      for (i = 1; i <= n; i++) {
-        c = substr(line, i, 1)
-        if (in_comment) {
-          out = out c
-          bs = 0
-          prev = c
-          continue
-        }
-        if (in_sq) {
-          out = out c
-          if (c == sq) in_sq = 0
-          bs = 0
-          prev = c
-          continue
-        }
-        if (in_dq) {
-          if (c == "\\") { out = out c; bs++; prev = c; continue }
-          out = out c
-          if (c == dq && (bs % 2) == 0) in_dq = 0
-          bs = 0
-          prev = c
-          continue
-        }
-        if (c == sq && (bs % 2) == 0) { out = out c; in_sq = 1; bs = 0; prev = c; continue }
-        if (c == dq && (bs % 2) == 0) { out = out c; in_dq = 1; bs = 0; prev = c; continue }
-        if (c == "#" && is_word_boundary_prev(prev)) {
-          # Comment to EOL — trailing backslash must not join (#1568).
-          out = out c
-          in_comment = 1
-          bs = 0
-          prev = c
-          continue
-        }
-        if (c == "\\") { out = out c; bs++; prev = c; continue }
-        out = out c
-        bs = 0
-        prev = c
-      }
-      # Bash continues inside double quotes; only single quotes and
-      # `#` comments suppress continuation (#1564 / #1568).
-      if (!in_sq && !in_comment && (bs % 2) == 1) {
-        # Drop the continuing backslash; next record appends immediately.
-        printf "%s", substr(out, 1, length(out) - 1)
-        return
-      }
-      printf "%s\n", out
-    }
-    NR == 1 { prev = $0; next }
-    {
-      if (NR > 2) emit(before)
-      before = prev
-      prev = $0
-    }
-    END { if (NR > 1) printf "%s", before }
-  '); then
-    printf '%s' "$joined"
-    return 0
-  fi
-  printf '%s' "$1" | LC_ALL=C tr '\\\n' '  '
+  join_shell_continuations "$1"
 }
 
 # Merge-only scrub decision (AgDR-0196, AgDR-0204). The general command
@@ -758,18 +671,15 @@ _has_argv_merge() {
 # calls quadratic on a long statement (#1552 round 3).
 # Same statement + xargs = opaque (no character window). The argv -c form
 # still requires the merge within 200 characters after '-c'. On awk failure,
-# fail closed when a merge phrase is present.
+# fail closed because the whole-input classifier is unavailable.
 _has_opaque_merge_wrapper() {
+  _has_opaque_merge_wrapper_fallback() {
+    # Without the whole-input parser, split-line phrases and malformed
+    # quotes cannot be ruled out. Raw 0x1c must also remain opaque.
+    printf opaque
+  }
   local result
-  if ! command -v awk >/dev/null 2>&1; then
-    if printf '%s\n' "$1" | grep -qE '\b(gh[[:space:]]+pr[[:space:]]+merge|glab[[:space:]]+mr[[:space:]]+merge)\b'; then
-      return 0
-    fi
-    return 1
-  fi
-  # Bash printf streams the command without an exec argv or environment string.
-  # The final record separator exposes even a separator at the end of input.
-  result=$(printf '%s\034' "$1" | awk '
+  result=$(_run_awk_or_fallback "$1" _has_opaque_merge_wrapper_fallback '
     function wb_before(t, p) {
       return p <= 1 || substr(t, p - 1, 1) !~ /[A-Za-z0-9_]/
     }
@@ -817,12 +727,12 @@ _has_opaque_merge_wrapper() {
     BEGIN { RS = sprintf("%c", 28) }
     { if (NR == 1) s = $0; else multiple = 1 }
     END {
-      if (multiple) { print "opaque"; exit }
+      opaque = multiple
       n = length(s)
       sq = sprintf("%c", 39); dq = sprintf("%c", 34); bs = sprintf("%c", 92)
-      in_sq = 0; in_dq = 0; opaque = 0; st = 1; escaped_prev = 0
+      in_sq = 0; in_dq = 0; st = 1; escaped_prev = 0
       n = split(s, ch, "")
-      for (i = 1; i <= n; i++) {
+      for (i = 1; i <= n && !opaque; i++) {
         c = ch[i]
         nx = (i < n) ? ch[i + 1] : ""
         was_escaped = escaped_prev; escaped_prev = 0
@@ -849,18 +759,13 @@ _has_opaque_merge_wrapper() {
       if (opaque) print "opaque"
       else print "clear"
     }
-  ' 2>/dev/null) || result=""
-  if [ "$result" = "opaque" ]; then
-    return 0
-  fi
-  if [ "$result" = "clear" ]; then
-    return 1
-  fi
-  # awk missing output or failed — never fewer blocks than a working check.
-  if printf '%s\n' "$1" | grep -qE '\b(gh[[:space:]]+pr[[:space:]]+merge|glab[[:space:]]+mr[[:space:]]+merge)\b'; then
-    return 0
-  fi
-  return 1
+  ')
+  case "$result" in
+    opaque) return 0 ;;
+    clear) return 1 ;;
+  esac
+  # Missing classifier output remains fail closed.
+  [ "$(_has_opaque_merge_wrapper_fallback "$1")" = opaque ]
 }
 
 # Raw scan for the unparseable JSON fallback. Do not scrub the encoded payload:

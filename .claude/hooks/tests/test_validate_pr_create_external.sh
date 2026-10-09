@@ -66,7 +66,7 @@ make_sandbox() {
   # the hook exit 2 with "review validator unavailable" before any title or
   # exemption assertion can succeed (same requirement as head/upstream tests).
   # _lib-pr-repo.sh is the canonical --repo / --head / cd-target parser.
-  for lib in validate-pr-create.sh _lib-read-config.sh _lib-tracker.sh \
+  for lib in _lib-awk-fallback.sh validate-pr-create.sh _lib-read-config.sh _lib-tracker.sh \
              _lib-ops-root.sh _lib-portfolio-paths.sh _lib-extract-pr.sh \
              _lib-multi-repo-trace.sh _lib-review-markers.sh _lib-pr-repo.sh; do
     [ -f "$SRC_ROOT/.claude/hooks/$lib" ] && cp "$SRC_ROOT/.claude/hooks/$lib" "$sb/.claude/hooks/$lib"

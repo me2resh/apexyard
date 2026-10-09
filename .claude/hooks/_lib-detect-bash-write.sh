@@ -1,4 +1,6 @@
 #!/bin/bash
+# shellcheck source=/dev/null
+. "${BASH_SOURCE[0]%/*}/_lib-awk-fallback.sh"
 # _lib-detect-bash-write.sh — detect whether a Bash command writes to a file.
 
 _bdw_lib_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -345,30 +347,22 @@ _bdw_split_top_level_legacy() {
 _bdw_split_top_level() {
   local cmd="$1"
   [ -z "$cmd" ] && return 0
-
-  local split
-  # One external pass preserves the original substitution order, including
-  # collisions with literal placeholder text in the command. An added input
-  # newline and the output sentinel preserve every original trailing newline
-  # across both awk's records and Bash command substitution.
-  if split=$(printf '%s\n' "$cmd" | LC_ALL=C awk '
-      {
-        gsub(/>>\|/, "@@APEXYARD_CLOBBER_APPEND@@")
-        gsub(/>\|/, "@@APEXYARD_CLOBBER@@")
-        gsub(/&&/, "\n")
-        gsub(/\|\|/, "\n")
-        gsub(/;/, "\n")
-        gsub(/\|/, "\n")
-        gsub(/@@APEXYARD_CLOBBER_APPEND@@/, ">>|")
-        gsub(/@@APEXYARD_CLOBBER@@/, ">|")
-        printf "%s\n", $0
+  LC_ALL=C _run_awk_or_fallback "$cmd" _bdw_split_top_level_legacy '
+      function emit(line) {
+        gsub(/>>\|/, "@@APEXYARD_CLOBBER_APPEND@@", line)
+        gsub(/>\|/, "@@APEXYARD_CLOBBER@@", line)
+        gsub(/&&/, "\n", line)
+        gsub(/\|\|/, "\n", line)
+        gsub(/;/, "\n", line)
+        gsub(/\|/, "\n", line)
+        gsub(/@@APEXYARD_CLOBBER_APPEND@@/, ">>|", line)
+        gsub(/@@APEXYARD_CLOBBER@@/, ">|", line)
+        printf "%s\n", line
       }
-    ' && printf '\001'); then
-    printf '%s' "${split%?}"
-  else
-    # Correct-but-slow legacy path, used only on tool failure.
-    _bdw_split_top_level_legacy "$cmd"
-  fi
+      NR > 1 { emit(previous) }
+      { previous = $0 }
+      END { emit(substr(previous, 1, length(previous) - 1)) }
+    '
 }
 
 # ------------------------------------------------------------------------------
@@ -492,22 +486,19 @@ _BDW_SED_WRITE_POS='([;{][[:space:]]*|['"'"'"][[:space:]]*|[/|#!$0-9,:@%][gpiIeM
 # It splits only on separators with a space on each side, because sed
 # scripts hold bare `;` and `|` (`p;w f`, `s|a|b|w f`).
 _bdw_sed_regions() {
-  local s="$1"
-  local regions
-  if regions=$(printf '%s\n' "$s" | LC_ALL=C awk '
-      {
-        gsub(/ && /, "\n")
-        gsub(/ \|\| /, "\n")
-        gsub(/ \| /, "\n")
-        printf "%s\n", $0
+  _bdw_sed_regions_fallback() { printf '%s\n' "$1"; }
+  # Unsplit fallback retains every sed region, including later writes.
+  LC_ALL=C _run_awk_or_fallback "$1" _bdw_sed_regions_fallback '
+      function emit(line) {
+        gsub(/ && /, "\n", line)
+        gsub(/ \|\| /, "\n", line)
+        gsub(/ \| /, "\n", line)
+        printf "%s\n", line
       }
-    ' && printf '\001'); then
-    printf '%s' "${regions%?}" | grep -oE '\bsed\b.*'
-  else
-    # Keeping the unsplit text exposes every sed region to the matcher;
-    # it may match more text, but cannot discard a later sed write.
-    printf '%s\n' "$s" | grep -oE '\bsed\b.*'
-  fi
+      NR > 1 { emit(previous) }
+      { previous = $0 }
+      END { emit(substr(previous, 1, length(previous) - 1)) }
+    ' | grep -oE '\bsed\b.*'
 }
 
 _bdw_match_sed_write() {

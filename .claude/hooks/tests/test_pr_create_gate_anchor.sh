@@ -77,6 +77,7 @@ make_sandbox() {
   )
   mkdir -p "$sb/.claude/hooks"
   cp "$HOOK_SRC" "$sb/.claude/hooks/validate-pr-create.sh"
+  cp "$(dirname "$HOOK_SRC")/_lib-awk-fallback.sh" "$sb/.claude/hooks/_lib-awk-fallback.sh"
   cp "$(dirname "$HOOK_SRC")/_lib-review-markers.sh" "$sb/.claude/hooks/"
   chmod +x "$sb/.claude/hooks/validate-pr-create.sh"
   [ -f "$LIB_CFG" ]     && cp "$LIB_CFG"     "$sb/.claude/hooks/_lib-read-config.sh"
@@ -162,6 +163,11 @@ run_case 'a genuine gh pr create still validates and PASSES with a conforming ti
 
 run_case 'a genuine gh pr create with a malformed title still BLOCKS' \
   "gh pr create --repo me2resh/apexyard --title 'no ticket id here' --head fix/GH-900-test --body-file $BF_OK" \
+  2 "doesn't match format"
+
+# Keep the pre-existing broader match for a continuation inside the verb.
+run_case 'broad-space continued PR verb still blocks a malformed title' \
+  $'gh pr\\\ncreate'" --repo me2resh/apexyard --title 'no ticket id here' --head fix/GH-900-test --body-file $BF_OK" \
   2 "doesn't match format"
 
 run_case 'a leading cd prefix before a genuine gh pr create still validates' \
