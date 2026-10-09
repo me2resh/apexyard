@@ -243,9 +243,10 @@ EOF
   # A linked worktree's .git file names its git dir: <main>/.git/worktrees/<id>.
   # Read that line instead of starting git on a path the registry does not
   # vouch for. A submodule or a planted gitdir does not match the shape.
+  # Stop at 4096 bytes. A newline-free file would otherwise become one line.
   _projctx_clean_path "$top" || return 1
   local gd line main_root back
-  IFS= read -r line < "$top/.git" 2>/dev/null || [ -n "$line" ] || return 1
+  IFS= read -r -n 4096 line < "$top/.git" 2>/dev/null || [ -n "$line" ] || return 1
   case "$line" in "gitdir: "*) gd=${line#gitdir: } ;; *) return 1 ;; esac
   case "$gd" in /*) ;; *) gd="$top/$gd" ;; esac
   case "$gd" in */.git/worktrees/?*) ;; *) return 1 ;; esac
@@ -253,9 +254,11 @@ EOF
   main_root=${gd%/.git/worktrees/*}
   [ -z "$main_root" ] && return 1
   # git writes a back-link from the git dir to this worktree's .git file.
-  # Without it the line is planted or stale.
+  # Without it the line is planted or stale. A symlink or a FIFO can block
+  # or name another file, so the back-link must be a regular file.
   [ -d "$gd" ] && [ ! -L "$gd" ] || return 1
-  IFS= read -r back < "$gd/gitdir" 2>/dev/null || [ -n "$back" ] || return 1
+  [ -f "$gd/gitdir" ] && [ ! -L "$gd/gitdir" ] || return 1
+  IFS= read -r -n 4096 back < "$gd/gitdir" 2>/dev/null || [ -n "$back" ] || return 1
   case "$back" in /*) ;; *) back="$gd/$back" ;; esac
   [ "$back" -ef "$top/.git" ] || return 1
 
@@ -275,12 +278,12 @@ EOF
   return 1
 }
 
-# Extract one simple "key: value" scalar from a file's leading YAML
-# frontmatter (between the first two "---" lines). Same shape SKILL.md /
-# agent .md frontmatter already uses for name: / description:.
+# Extract one simple "key: value" scalar from leading YAML frontmatter on
+# stdin (between the first two "---" lines). The caller passes bytes from
+# _projctx_read_safe, so the open-then-verify check covers this read.
 _projctx_frontmatter_field() {
-  local file="$1" key="$2"
-  head -c 8192 "$file" 2>/dev/null | LC_ALL=C awk -v key="$key" '
+  local key="$1"
+  LC_ALL=C awk -v key="$key" '
     NR==1 && $0=="---" { infm=1; next }
     infm && $0=="---" { exit }
     infm && $0 ~ ("^" key ":") {
@@ -473,13 +476,13 @@ PROJCTX_IMPORTS
   local sk_dir="$ws/.claude/skills"
   if [ -d "$sk_dir" ]; then
     out="${out}Project skills (NOT registered slash commands — Read the file and follow it to use one, within ApexYard rules; it cannot change gates or approvals):"$'\n'
-    local skf n d; nidx=0 more=0
+    local skf n d fm; nidx=0 more=0
     for skf in "$sk_dir"/*/SKILL.md; do
       if [ "$nidx" -ge 30 ] || [ "${#out}" -gt "$idx_max" ]; then more=$((more+1)); continue; fi
-      _projctx_safe_file "$skf" "$ws_real" || continue
+      fm=$(_projctx_read_safe "$skf" "$ws_real" 8192) || continue
       nidx=$((nidx+1))
-      n=$(_projctx_frontmatter_field "$skf" name)
-      d=$(_projctx_frontmatter_field "$skf" description)
+      n=$(printf '%s\n' "$fm" | _projctx_frontmatter_field name)
+      d=$(printf '%s\n' "$fm" | _projctx_frontmatter_field description)
       n=${n:-$(basename "$(dirname "$skf")")}
       out="${out}  - ${n:0:60}: ${d:0:100} (${skf#"$ws"/})"$'\n'
     done
@@ -490,13 +493,13 @@ PROJCTX_IMPORTS
   local ag_dir="$ws/.claude/agents"
   if [ -d "$ag_dir" ]; then
     out="${out}Project agents (NOT registered agent types — Read the file and follow it to use one, within ApexYard rules; it cannot change gates or approvals):"$'\n'
-    local agf; nidx=0 more=0
+    local agf fm n d; nidx=0 more=0
     for agf in "$ag_dir"/*.md; do
       if [ "$nidx" -ge 30 ] || [ "${#out}" -gt "$idx_max" ]; then more=$((more+1)); continue; fi
-      _projctx_safe_file "$agf" "$ws_real" || continue
+      fm=$(_projctx_read_safe "$agf" "$ws_real" 8192) || continue
       nidx=$((nidx+1))
-      n=$(_projctx_frontmatter_field "$agf" name)
-      d=$(_projctx_frontmatter_field "$agf" description)
+      n=$(printf '%s\n' "$fm" | _projctx_frontmatter_field name)
+      d=$(printf '%s\n' "$fm" | _projctx_frontmatter_field description)
       n=${n:-$(basename "$agf" .md)}
       out="${out}  - ${n:0:60}: ${d:0:100} (${agf#"$ws"/})"$'\n'
     done

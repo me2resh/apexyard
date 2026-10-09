@@ -130,6 +130,18 @@ invoke() {
     printf '%s' "$stdin_json" | "$BASH" "$FORK/.claude/hooks/inject-project-context.sh" )
 }
 
+# Write $2 KiB of 'A' with no newline. Larger than the 4096-byte gitdir read.
+write_newline_free() {
+  local dest="$1" kb="$2" chunk i
+  : > "$dest"
+  chunk=$(printf '%1024s' '' | tr ' ' 'A')
+  i=0
+  while [ "$i" -lt "$kb" ]; do
+    printf '%s' "$chunk" >> "$dest"
+    i=$((i + 1))
+  done
+}
+
 # --- (a) matching path → emits additionalContext with CLAUDE.md, rule handling, skill index
 OUT=$(invoke "$(payload s1 "" "" "$WS/src/index.ts")")
 EXIT=$?
@@ -1105,6 +1117,111 @@ if ! printf '%s' "$OUT_LNK" | grep -q FORGED_LINKED_ROOT_TEXT \
   pass_case "(reg14) symlinked .git is refused and a non-conservative worktree path is not named"
 else
   fail_case "(reg14) worktree root naming" "linked_leak=$(printf '%s' "$OUT_LNK" | grep -c FORGED_LINKED_ROOT_TEXT) space_len=${#OUT_SP} space_leak=$(printf '%s' "$OUT_SP" | grep -c FORGED_SPACE_TEXT)"
+fi
+rm -rf "$MARKER_DIR"
+
+# --- (reg17) a newline-free .git or gitdir larger than the 4096-byte read is refused quickly
+# 256 KB and no newline. An unbounded read would store the whole line.
+HUGE_DIR="$OUTSIDE/huge-git"
+mkdir -p "$HUGE_DIR"
+write_newline_free "$HUGE_DIR/.git" 256
+: > "$HUGE_DIR/x.txt"
+HUGE_SZ=$(wc -c < "$HUGE_DIR/.git" | tr -d ' ')
+HUGE_NL=$(wc -l < "$HUGE_DIR/.git" | tr -d ' ')
+SECONDS=0
+OUT_HUGE=$(invoke "$(payload reg17a "" "" "$HUGE_DIR/x.txt")")
+EL_HUGE=$SECONDS
+rm -rf "$MARKER_DIR"
+
+GD_WT="$OUTSIDE/huge-gitdir-wt"
+git -C "$WS" worktree add -q -b projctx-test-hugegd "$GD_WT" 2>/dev/null
+GD_PATH=$(sed -n 's/^gitdir: //p' "$GD_WT/.git" 2>/dev/null || true)
+EL_GD=99
+OUT_GD="unset"
+GD_SZ=0
+GD_NL=1
+if [ -n "$GD_PATH" ] && [ -f "$GD_PATH/gitdir" ] && [ ! -L "$GD_PATH/gitdir" ]; then
+  write_newline_free "$GD_PATH/gitdir" 256
+  GD_SZ=$(wc -c < "$GD_PATH/gitdir" | tr -d ' ')
+  GD_NL=$(wc -l < "$GD_PATH/gitdir" | tr -d ' ')
+  : > "$GD_WT/x.txt"
+  SECONDS=0
+  OUT_GD=$(invoke "$(payload reg17b "" "" "$GD_WT/x.txt")")
+  EL_GD=$SECONDS
+fi
+rm -rf "$MARKER_DIR"
+if [ "$HUGE_NL" = 0 ] && [ "$HUGE_SZ" -ge 262144 ] && [ -z "$OUT_HUGE" ] && [ "$EL_HUGE" -lt 2 ] \
+   && [ "$GD_NL" = 0 ] && [ "$GD_SZ" -ge 262144 ] && [ -z "$OUT_GD" ] && [ "$EL_GD" -lt 2 ]; then
+  pass_case "(reg17) oversized newline-free .git and gitdir are refused in under 2s"
+else
+  fail_case "(reg17) oversized git reads" "git_sz=$HUGE_SZ git_nl=$HUGE_NL git_el=${EL_HUGE}s git_out=${#OUT_HUGE} gd_sz=$GD_SZ gd_nl=$GD_NL gd_el=${EL_GD}s gd_out=${#OUT_GD}"
+fi
+
+# --- (reg18) a symlink gitdir, or a FIFO gitdir, is refused before the read
+LINK_WT="$OUTSIDE/link-gitdir-wt"
+git -C "$WS" worktree add -q -b projctx-test-linkgd "$LINK_WT" 2>/dev/null
+LINK_GD=$(sed -n 's/^gitdir: //p' "$LINK_WT/.git" 2>/dev/null || true)
+if [ -z "$LINK_GD" ] || [ ! -f "$LINK_GD/gitdir" ]; then
+  fail_case "(reg18) non-regular gitdir" "git worktree add failed"
+else
+  : > "$LINK_WT/x.txt"
+  rm -rf "$MARKER_DIR"
+  OUT_OK=$(invoke "$(payload reg18ok "" "" "$LINK_WT/x.txt")")
+  cp "$LINK_GD/gitdir" "$OUTSIDE/gitdir-body"
+  rm -f "$LINK_GD/gitdir"
+  ln -s "$OUTSIDE/gitdir-body" "$LINK_GD/gitdir"
+  LINK_IS_SYMLINK=0
+  [ -L "$LINK_GD/gitdir" ] && LINK_IS_SYMLINK=1
+  rm -rf "$MARKER_DIR"
+  OUT_LINK=$(invoke "$(payload reg18a "" "" "$LINK_WT/x.txt")")
+  rm -f "$LINK_GD/gitdir"
+  mkfifo "$LINK_GD/gitdir"
+  rm -rf "$MARKER_DIR"
+  OUT_FIFO_FILE="$SB/reg18-fifo.out"
+  : > "$OUT_FIFO_FILE"
+  reg18_json=$(payload reg18b "" "" "$LINK_WT/x.txt")
+  printf '%s' "$reg18_json" > "$SB/reg18-payload.json"
+  SECONDS=0
+  ( cd "$FORK" && unset CLAUDE_CODE_SESSION_ID 2>/dev/null
+    exec "$BASH" "$FORK/.claude/hooks/inject-project-context.sh" < "$SB/reg18-payload.json" > "$OUT_FIFO_FILE" ) &
+  FPID=$!
+  i=0
+  while kill -0 "$FPID" 2>/dev/null && [ "$i" -lt 20 ]; do
+    sleep 0.1
+    i=$((i + 1))
+  done
+  if kill -0 "$FPID" 2>/dev/null; then
+    kill -KILL "$FPID" 2>/dev/null
+    wait "$FPID" 2>/dev/null
+    fail_case "(reg18) non-regular gitdir" "fifo gitdir still blocked after 2s"
+  else
+    wait "$FPID" 2>/dev/null
+    FIFO_RC=$?
+    OUT_FIFO=$(cat "$OUT_FIFO_FILE")
+    EL_FIFO=$SECONDS
+    if printf '%s' "$OUT_OK" | grep -q CANARY_CLAUDE_MD_MARKER \
+       && [ "$LINK_IS_SYMLINK" = 1 ] && [ -z "$OUT_LINK" ] \
+       && [ -z "$OUT_FIFO" ] && [ "$FIFO_RC" = 0 ] && [ "$EL_FIFO" -lt 2 ]; then
+      pass_case "(reg18) symlink and FIFO gitdir are refused in under 2s"
+    else
+      fail_case "(reg18) non-regular gitdir" "ok_len=${#OUT_OK} link=$LINK_IS_SYMLINK link_len=${#OUT_LINK} fifo_len=${#OUT_FIFO} fifo_el=${EL_FIFO}s"
+    fi
+  fi
+fi
+rm -rf "$MARKER_DIR"
+
+# --- (reg19) skill frontmatter swapped to a link and back around the open is not read
+SKILL_MD="$WS/.claude/skills/deploy/SKILL.md"
+cp "$SKILL_MD" "$SKILL_MD.bak"
+printf '%s\n' '---' 'name: leaked' 'description: SECRET_SKILL_FRONTMATTER' '---' > "$SECRET_FILE"
+OUT=$(SWAP_FILE="$SKILL_MD" SWAP_BACKUP="$SKILL_MD.bak" PATH="$SWSHIM:$PATH" invoke "$(payload reg19 "" "" "$WS/src/a.ts")")
+rm -f "$SKILL_MD" "$SKILL_MD.swapped"
+mv "$SKILL_MD.bak" "$SKILL_MD"
+if printf '%s' "$OUT" | grep -q CANARY_CLAUDE_MD_MARKER \
+   && ! printf '%s' "$OUT" | grep -q SECRET_SKILL_FRONTMATTER; then
+  pass_case "(reg19) skill frontmatter swapped around the open is not read"
+else
+  fail_case "(reg19) swapped skill frontmatter" "secret=$(printf '%s' "$OUT" | grep -c SECRET_SKILL_FRONTMATTER) out_len=${#OUT}"
 fi
 rm -rf "$MARKER_DIR"
 
