@@ -56,6 +56,21 @@ assert_equal unsupported '\u0021\u000B\r\b\"'
 assert_equal trailing_backslash 'ends\'
 assert_equal literal_newlines $'a\nb\n'
 assert_equal sentinel_byte $'a\034b\034\n'
+# The legacy decoder uses 0x1E as its backslash sentinel. A raw 0x1E in the
+# input must pass through unchanged, not become a backslash.
+assert_equal raw_record_separator $'g\036h pr merge'
+assert_equal record_separator_with_escapes $'a\036\\\\\\n\036\\t\036\036\n'
+assert_equal backslash_before_record_separator $'x\\\036n\\'
+
+_normalize_json_escapes_legacy $'g\036h' > "$tmp_dir/old"
+printf 'g\036h' > "$tmp_dir/want"
+if cmp -s "$tmp_dir/old" "$tmp_dir/want"; then
+  printf 'PASS legacy keeps a raw 0x1E byte\n'
+  pass=$((pass + 1))
+else
+  printf 'FAIL legacy keeps a raw 0x1E byte\n' >&2
+  fail=$((fail + 1))
+fi
 assert_equal escaped_and_literal_newlines $'a\\n\n\\u0009\n'
 assert_equal invalid_utf8 $'before\377\\t\\/after'
 

@@ -282,7 +282,33 @@ _normalize_json_escapes() {
 # Pre-#1550 decoder with #1564 `\\` handling, retained for awk failure.
 # Bash 3.2 global substitutions are slow on huge input, so the normal path
 # uses awk above.
+#
+# The piece decoder below uses the byte 0x1E as a backslash sentinel. A raw
+# 0x1E in the input would also become a backslash, so split the input on
+# raw 0x1E bytes and decode each piece alone. No escape contains 0x1E, so
+# the output is the same as the awk path, and a raw 0x1E passes through
+# unchanged. Print each piece directly: command substitution would strip
+# a trailing newline from a piece.
 _normalize_json_escapes_legacy() {
+  local text="$1"
+  local rs=$'\036'
+  while :; do
+    case "$text" in
+      *"$rs"*)
+        _normalize_json_escapes_legacy_piece "${text%%"$rs"*}"
+        printf '%s' "$rs"
+        text="${text#*"$rs"}"
+        ;;
+      *)
+        _normalize_json_escapes_legacy_piece "$text"
+        return 0
+        ;;
+    esac
+  done
+}
+
+# Decode one piece that contains no raw 0x1E byte.
+_normalize_json_escapes_legacy_piece() {
   local text="$1"
   local tab=$'\t'
   local nl=$'\n'
