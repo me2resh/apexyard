@@ -1,5 +1,5 @@
 #!/bin/bash
-# Require a merged ORBIT slice for Feature, Task, and ORBIT Slice issues.
+# Require a merged ORBIT slice for governed ticket prefixes.
 # Use the same command matcher as require-skill-for-issue-create.sh.
 
 set -u
@@ -358,10 +358,23 @@ fi
 # Treat malformed bracketed variants as governed tickets too. Otherwise a
 # leading space or changed case skips this gate.
 lower_title=$(printf '%s' "$title" | LC_ALL=C tr '[:upper:]' '[:lower:]')
+governed_prefixes=$(config_get '.orbit.governed_prefixes[]' 2>/dev/null)
+if [ -z "$(printf '%s' "$governed_prefixes" | tr -d '[:space:]')" ]; then
+  governed_prefixes=$(printf 'Feature\nTask\nSlice')
+fi
+governed=0
+while IFS= read -r prefix; do
+  [ -n "$prefix" ] || continue
+  prefix=$(printf '%s' "$prefix" | LC_ALL=C tr '[:upper:]' '[:lower:]')
+  case "$lower_title" in
+    *"[${prefix}]"*|*"［${prefix}］"*|*"【${prefix}】"*) governed=1; break ;;
+  esac
+done <<EOF
+$governed_prefixes
+EOF
 case "$lower_title" in
-  *'[feature]'*|*'[task]'*|*'[slice]'*|*'［feature］'*|*'［task］'*|*'［slice］'*|*'【feature】'*|*'【task】'*|*'【slice】'*) : ;;
   '') : ;; # An interactive title cannot prove this is a Bug or Spike.
-  *) exit 0 ;;
+  *) [ "$governed" -eq 1 ] || exit 0 ;;
 esac
 if [ -z "$title" ]; then
   echo 'BLOCKED: ORBIT ticket title cannot be read.' >&2
@@ -469,7 +482,7 @@ case "$directive" in
     fi ;;
 esac
 if ! printf '%s' "$directive" | LC_ALL=C grep -Eq '^slice-[a-z0-9]+(-[a-z0-9]+)*$'; then
-  echo "BLOCKED: [Feature], [Task], and [Slice] tickets for $project need ORBIT slice: <id> or ORBIT slice: none — <reason>. Run /orbit slice." >&2
+  echo "BLOCKED: Governed tickets for $project need ORBIT slice: <id> or ORBIT slice: none — <reason>. Run /orbit slice." >&2
   exit 2
 fi
 
