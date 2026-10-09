@@ -47,7 +47,7 @@ install_libs() {
   local defaults_dest
   mkdir -p "$dest"
   local f
-  for f in _lib-detect-bash-write.sh _lib-path-resolve.sh _lib-ops-root.sh \
+  for f in _lib-awk-fallback.sh _lib-detect-bash-write.sh _lib-path-resolve.sh _lib-ops-root.sh \
            _lib-active-ticket.sh _lib-ticket-path-exemptions.sh \
            _lib-read-config.sh _lib-portfolio-paths.sh _lib-mask-quoted.sh \
            _lib-tracker.sh _lib-fail-closed-json.sh; do

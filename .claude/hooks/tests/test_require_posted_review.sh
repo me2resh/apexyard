@@ -71,6 +71,7 @@ make_sandbox() {
   mkdir -p "$sb/.claude/hooks" "$sb/.claude/session/reviews" "$sb/bin"
   cp "$HOOK_SRC"    "$sb/.claude/hooks/block-unreviewed-merge.sh"
   cp "$LIB_PR"      "$sb/.claude/hooks/_lib-extract-pr.sh"
+  cp "$(dirname "$LIB_PR")/_lib-awk-fallback.sh" "$sb/.claude/hooks/_lib-awk-fallback.sh"
   cp "$LIB_MARKERS" "$sb/.claude/hooks/_lib-review-markers.sh"
   cp "$LIB_TRACKER" "$sb/.claude/hooks/_lib-tracker.sh"
   cp "$LIB_BEHIND"  "$sb/.claude/hooks/_lib-merge-behind.sh"

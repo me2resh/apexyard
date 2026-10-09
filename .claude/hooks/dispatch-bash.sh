@@ -263,8 +263,16 @@ esac
 # The option list accepts `-C`, `-c` and the long options that take a
 # separate-word value, plus any `-x`, `--opt` or `--opt=value`.
 _scan_failed=0
-if _scan_cmd=$(printf '%sX' "$COMMAND" | LC_ALL=C awk '{ if (sub(/\\$/, "")) printf "%s ", $0; else printf "%s\n", $0 }'); then
-  _scan_cmd=${_scan_cmd%X}
+# Preserve broad routing for git\<newline>push and quoted/commented pairs.
+# Bash removal could hide verbs that the existing dispatcher routes.
+_dispatch_join_failure() { return 1; }
+if [ -r "$HOOK_DIR/_lib-awk-fallback.sh" ]; then
+  . "$HOOK_DIR/_lib-awk-fallback.sh"
+  if _scan_cmd=$(join_shell_continuations "$COMMAND" broad-space _dispatch_join_failure); then
+    :
+  else
+    _scan_failed=1
+  fi
 else
   _scan_failed=1
 fi

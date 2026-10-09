@@ -65,7 +65,7 @@ projects:
     repos: [org/p4a, "org/p4b"]
 YAML
   mkdir -p "$sb/.claude/hooks" "$sb/.claude/session/tickets" "$sb/workspace"
-  for f in require-active-ticket.sh warn-legacy-ticket-markers.sh dispatch-session-start.sh _lib-detect-bash-write.sh _lib-read-config.sh \
+  for f in require-active-ticket.sh warn-legacy-ticket-markers.sh dispatch-session-start.sh _lib-awk-fallback.sh _lib-detect-bash-write.sh _lib-read-config.sh \
            _lib-path-resolve.sh _lib-active-ticket.sh _lib-mask-quoted.sh _lib-ticket-path-exemptions.sh _lib-portfolio-paths.sh \
            _lib-ops-root.sh _lib-resolution-cache.sh; do
     cp "$HOOKS/$f" "$sb/.claude/hooks/$f"

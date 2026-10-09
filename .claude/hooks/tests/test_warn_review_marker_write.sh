@@ -195,6 +195,7 @@ make_sandbox() {
   cp "$HOOK_SRC" "$sb/.claude/hooks/warn-review-marker-write.sh"
   cp "$LIB_OPS_ROOT" "$sb/.claude/hooks/_lib-ops-root.sh"
   cp "$LIB_BDW" "$sb/.claude/hooks/_lib-detect-bash-write.sh"
+  cp "$(dirname "$LIB_BDW")/_lib-awk-fallback.sh" "$sb/.claude/hooks/_lib-awk-fallback.sh"
   chmod +x "$sb/.claude/hooks/warn-review-marker-write.sh"
   echo "$sb"
 }

@@ -75,6 +75,7 @@ YAML
     cp "$TRACKER_LIB"   .claude/hooks/_lib-tracker.sh
     cp "$CONFIG_LIB"    .claude/hooks/_lib-read-config.sh
     cp "$PR_CREATE_HOOK"   .claude/hooks/validate-pr-create.sh
+    cp "$(dirname "$PR_CREATE_HOOK")/_lib-awk-fallback.sh" .claude/hooks/_lib-awk-fallback.sh
     cp "$(dirname "$PR_CREATE_HOOK")/_lib-review-markers.sh" .claude/hooks/
     cp "$COMMIT_REFS_HOOK" .claude/hooks/verify-commit-refs.sh
     cp "$BRANCH_NAME_HOOK" .claude/hooks/validate-branch-name.sh

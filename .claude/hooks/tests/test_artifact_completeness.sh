@@ -27,6 +27,7 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/repo/.claude/hooks"
 cp "$HOOK" "$TMP/repo/.claude/hooks/validate-pr-create.sh"
+cp "$(dirname "$HOOK")/_lib-awk-fallback.sh" "$TMP/repo/.claude/hooks/_lib-awk-fallback.sh"
 cp "$LIB" "$TMP/repo/.claude/hooks/_lib-review-markers.sh"
 cp "$SRC_ROOT/.claude/hooks/_lib-pr-repo.sh" "$TMP/repo/.claude/hooks/"
 cp "$SRC_ROOT/.claude/hooks/_lib-read-config.sh" "$TMP/repo/.claude/hooks/"
