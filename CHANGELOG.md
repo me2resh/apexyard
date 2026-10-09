@@ -1,3 +1,186 @@
+## [v5.8.0] — 2026-10-08
+
+Minor release — 14 features, 50 fixes, 26 improvements.
+
+Behaviour changes:
+
+- The optional search MCP integration is removed (#1537). `grep` and `Read` are the one documented search path. Any `mcp_search` keys in your config are now unused; the migration script lists them.
+- Edits under `.claude/worktrees/` now need an active ticket, like any other source edit (#1531).
+- With ORBIT on, slice tickets need a slice record first (#1565), and a run warns about outcomes with unmet criteria and no slice (#1570).
+- The merge gate blocks a fork PR whose workflow runs wait for approval (#1519), and checks the head workflow runs on every merge (#1536).
+- Pushes are scanned for private project references (#1528).
+- ORBIT `default_planning` in the registry now accepts the YAML spellings `True`, `yes` and `On` as on. An unknown value warns and uses the global default. Before, those values turned the slice gate off.
+
+### Added (feat)
+
+- (#1574) warn about ORBIT outcomes with unmet criteria and no slice — accc5111
+- (#1451) exempt repos you contribute to but do not govern from the PR-title gate — e0429d0d
+- (#1571) require an ORBIT slice record before slice tickets — 226b7741
+- (#1450) tell a fork owner when the hook that blocked them is stale — b48db2f6
+- (#1442) add a Rex MISS corpus entry for PR #1289 — 6c05fcb8
+- (#1444) report tracker_list completeness so a short read is never zero — 7544b9e1
+- (#1500) check PR bodies, Tariq reviews and AgDRs for completeness — 483639ae
+- (#1499) add a build.isolation setting and keep worktrees as the default — 1c09d097
+- (#1498) offer a QA run after Rex approves and before merge — 12a319af
+- (#1469) audit Python dependencies alongside npm — 449a6ef7
+- (#1463) present operator choices through the AskUserQuestion wizard — 8c6f52cd
+- (#1454) add /orbit handoff for one issue per slice — 250c9b99
+- (#1443) carry Rex approval across a clean base merge, skip refresh when nothing overlaps — 9ac9d9eb
+- (#1429) add an advisory writing-profile check to the pre-push hook — 6a4b89e7
+
+### Fixed (fix)
+
+- (#1581) accept GitHub Enterprise `host/owner/repo` values in the red-CI gate — 70e80b40
+- (#1581) pass a raw 0x1E byte through the legacy JSON-escape decoder — 70e80b40
+- (#1581) read YAML boolean spellings for ORBIT default_planning — bb6e36a1
+- (#1580) pass the #1182 parity case when the parent hook predates #1182 — 21808e5a
+- (#1575) scan for private references at push time — b312ca86
+- (#1573) gate worktree source writes under .claude/worktrees/ — a83d5c1f
+- (#1569) read the PR target from the continuation-joined command — edff499e
+- (#1567) isolate hook tests from the live session pin and caches — 259344bf
+- (#1566) join backslash-newline continuations on the jq-failure path — 27f75650
+- (#1554) decode merge-gate fallback escapes in one awk pass — cc6aaa90
+- (#1557) process long commands linearly in the write detector and PR gate — fa095d0a
+- (#1560) block a partial runs page even when validation fails — a9a87b9c
+- (#1548) join dispatcher continuations with awk under bash 3.2 — 29a97791
+- (#1546) detect argv-list merges and align the merge variable check — 7548833f
+- (#1545) check head workflow runs on every merge — ae7f4dee
+- (#1544) keep the badge test out of the real global git config — 196c16e8
+- (#1520) block the merge when a fork PR's workflow is waiting for approval — 837b0c40
+- (#1530) route push and commit gates for compound commands — dc0ee1dc
+- (#1524) match the whole no-checks message in the red-CI gate — e901e2fc
+- (#1522) close split-word and comment-join gaps in the tracker-repo gate — 6342331b
+- (#1518) allow a literal reviewer worktree add outside governed trees — b7c78296
+- (#1516) see versioned Python writes and fail closed when a here-doc cannot be read — 3956e92f
+- (#1493) read a repository flag on a continued line in the tracker gate — 339dd4a1
+- (#1485) detect --output, sort -o, yq -i and bundled python -c writes — e119968c
+- (#1487) match a relative migrations/ path with or without a leading ./ — 0b77d006
+- (#1484) let a sanctioned reviewer write inside a temporary scratch clone — c94059d0
+- (#1482) exempt origin only when it is provably public, and catch URL-form slugs — 53888fa8
+- (#1486) let the tracker gate read allowlisted data as data — f3457d60
+- (#1475) stop Cursor listing a framework skill and its override twice — 114ecad1
+- (#1473) treat the search MCP as optional and describe the fallback — 860df293
+- (#1474) isolate each tracker config read from an inherited reader — 337ce458
+- (#1476) catch private slugs in URLs and align the runtime exemptions — fe74f868
+- (#1471) guard POSIX-sourced libraries against bash-only syntax — 88dbdc5b
+- (#1470) scan staged files bytewise so non-UTF-8 lines are not skipped — 52879147
+- (#1472) skip must-block fail-before proofs when a snapshot is absent — c9af4e55
+- (#1466) stop the write detector reading quoted and heredoc text as commands — b60bc689
+- (#1467) print the legacy-marker advisory only for git mutations — 9dd5d088
+- (#1365) stop flagging override-only config keys as deprecated — 35217ead
+- (#1375) match the python open() mode token instead of any char in the call — bb447a9a
+- (#1374) pin markdownlint-cli2 to the version CI uses — 1310296a
+- (#1462) close leak-hook over-blocking and inherited gaps — 58795fea
+- (#1465) isolate the carry-over check from local git state — 0947570a
+- (#1457) let registered projects marked public pass the leak hooks — 75c768db
+- (#1453) remove old private project references from framework docs and fixtures — 2482e73e
+- (#1357) name the quoted origin of a fabricated write target — 378623ed
+- (#1371) surface tracker CLI errors at hook call sites — 2a2c2761
+- (#1415) detect >&word redirects and the sed write forms — d3aa5cd1
+- (#1364) exempt dependency-bot branches from the branch-name gate — 6dcbdee7
+- (#1412) escape the backticks on generate-mermaid.sh line 93 — 4eeeefb5
+- (#1413) warn on an empty DFD snapshot section, and drop the unused template claim — 40de4068
+- (#1411) fence the DFD snapshot's Mermaid block once — 1ab0bef2
+- (#1432) exempt the upstream repo and owner forms in the staged leak check — abcfc2d7
+- (#1428) run pre-push commands from the git-native hook against the pushed repo — 9e3b2d90
+
+### Changed (refactor / chore / docs)
+
+- (#1556) close the remaining argv-merge detection gaps — e13a2116
+- (#1563) move the pi adapter to pi-coding-agent 1.x — 671888b6
+- (#1562) run the hook test suite across jq 1.7/1.8 and on macOS — 981c880f
+- (#1553) harden the red-CI gate per the #1545 security advisories — c7854866
+- (#1542) fix the undici alerts in the pi adapter — 70764fc7
+- (#1539) remove the optional search MCP integration — dee2265c
+- (#1517) keep the raw merge scan for three more execution shapes — 50cceed7
+- (#1515) say the earlier origin proof stays when gh is missing — b6a683a2
+- (#1514) compare the pre-push session pin by file identity — 246f9b6c
+- (#1513) time-limit the release PR-body lookup and warn on a scoped commit with no PR — a51c1520
+- (#1512) pin the CI snapshot proofs by full SHA and check them after the fetch — 637a5a46
+- (#1511) fail closed on tracker continuations the join does not model — 95f0fc54
+- (#1510) use a synthetic repo name in the search-config test fixture — ced51b39
+- (#1497) read merge words in data as data, and fail closed on an empty library — d863f74e
+- (#1495) close only issues the PR body closes, and list lines a release removes from main — ef1c6382
+- (#1496) run fail-before proofs in CI, harden the drift test, widen the POSIX check — b09f2563
+- (#1494) give install advice only for a valid pin and handle linked worktrees — b6ad9385
+- (#1481) apply the docs follow-ups from the #1419, #1420 and #1422 reviews — 5c1ebc49
+- (#1488) hash-pin the dependency audit tools and close the PR #1469 advisories — f86eec3d
+- (#1468) pin the staged leak check on empty registry lists — b84dd8a4
+- (#1464) record the Jev routing spike as discarded — 7a86bfcf
+- (#1447) record the ORBIT plan for building with ORBIT in ApexYard — 0c9f3688
+- (#1430) design dependency audit ecosystem dispatch — b9e3a22a
+- (#1139) bump the codeql-action group across 1 directory with 3 updates — 545b4492
+- (#1143) bump DavidAnson/markdownlint-cli2-action from 24.1.0 to 24.2.0 — 6dc28e12
+- (#1427) restore two contributor rows and correct the skill count — 81ae7eed
+
+### Closes
+
+- Closes #1336
+- Closes #1341
+- Closes #1343
+- Closes #1359
+- Closes #1362
+- Closes #1363
+- Closes #1366
+- Closes #1372
+- Closes #1377
+- Closes #1379
+- Closes #1381
+- Closes #1383
+- Closes #1402
+- Closes #1403
+- Closes #1407
+- Closes #1408
+- Closes #1418
+- Closes #1431
+- Closes #1434
+- Closes #1436
+- Closes #1456
+- Closes #1459
+- Closes #1460
+- Closes #1461
+- Closes #1477
+- Closes #1478
+- Closes #1479
+- Closes #1480
+- Closes #1483
+- Closes #1489
+- Closes #1490
+- Closes #1491
+- Closes #1492
+- Closes #1501
+- Closes #1502
+- Closes #1503
+- Closes #1504
+- Closes #1505
+- Closes #1506
+- Closes #1507
+- Closes #1508
+- Closes #1509
+- Closes #1521
+- Closes #1523
+- Closes #1526
+- Closes #1527
+- Closes #1528
+- Closes #1531
+- Closes #1536
+- Closes #1537
+- Closes #1540
+- Closes #1543
+- Closes #1547
+- Closes #1549
+- Closes #1550
+- Closes #1551
+- Closes #1552
+- Closes #1555
+- Closes #1558
+- Closes #1559
+- Closes #1564
+- Closes #1565
+- Closes #1568
+- Closes #1570
+- Closes #1577
+
 ## [v5.7.0] — 2026-09-27
 
 Minor release — 2 features, 9 fixes, 1 improvement.

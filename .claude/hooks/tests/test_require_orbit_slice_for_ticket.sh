@@ -254,6 +254,31 @@ YAML
 check repos_comment_missing 2 "gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body 'plain body'"
 check repos_comment_valid 0 "gh issue $verb --repo demo-org/demo --title '[Feature] Demo' --body 'ORBIT slice: slice-demo-o1'"
 check repos_comment_https 2 "gh issue $verb --repo https://github.com/demo-org/demo --title '[Feature] Demo' --body 'plain body'"
+# YAML 1.1 boolean spellings in the per-project override must not turn the
+# gate off. An unknown value warns and falls back to the global default.
+set_override() {
+  cat > "$sb/apexyard.projects.yaml" <<YAML
+projects:
+  - name: demo
+    repo: demo-org/demo
+    workspace: workspace/demo
+    orbit:
+      default_planning: $1
+YAML
+}
+for spelling in True TRUE '"True"' yes On; do
+  set_override "$spelling"
+  check "override_$spelling" 2 "$(make_cmd Feature 'plain body')"
+done
+set_override False
+check override_False 0 "$(make_cmd Feature 'plain body')"
+set_override maybe
+printf '{"orbit":{"default_planning":true}}\n' > "$sb/.claude/project-config.json"
+check override_unknown_global_on 2 "$(make_cmd Feature 'plain body')"
+if ! grep -q 'unknown value' "$sb/err"; then echo 'FAIL unknown override warning'; fail=1; fi
+printf '{"orbit":{"default_planning":false}}\n' > "$sb/.claude/project-config.json"
+check override_unknown_global_off 0 "$(make_cmd Feature 'plain body')"
+set_override true
 printf '{"orbit":{"default_planning":false}}\n' > "$sb/.claude/project-config.json"
 awk '!/    orbit:/ && !/      default_planning: true/' "$sb/apexyard.projects.yaml" > "$sb/registry.tmp"
 mv "$sb/registry.tmp" "$sb/apexyard.projects.yaml"

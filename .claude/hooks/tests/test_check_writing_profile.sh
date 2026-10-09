@@ -220,7 +220,10 @@ assert_exit_zero "$?" "running outside a git repository still exits 0"
 # (a `shift 2` that silently does nothing when only one argument is
 # left). Prove it now returns promptly, with a hard kill as a backstop —
 # a plain `wait` would itself hang forever if the bug had come back.
-RANGE_RC=$(run_with_timeout 8 bash "$SCRIPT" --range)
+# Run it in Test 4's small repo, not the live checkout: with no value the
+# script checks HEAD~1..HEAD, which on a release PR's merge commit is the
+# whole release diff and can take longer than the 8s limit.
+RANGE_RC=$(cd "$REPO_DIR" && run_with_timeout 8 bash "$SCRIPT" --range)
 if [ "$RANGE_RC" = "TIMEOUT" ]; then
   red "  FAIL: --range with no value still hangs (killed after 8s)"
   FAIL=$((FAIL + 1))

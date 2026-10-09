@@ -88,7 +88,11 @@ make_sandbox() {
   cat > "$sb/bin/gh" <<EOF
 #!/bin/bash
 printf '%s\n' "\$*" >> "$sb/gh-calls"
-if [ "\$1" = "api" ]; then echo "\$2" >> "$sb/api-calls"; fi
+# The API path is the first repos/ argument. A GHE call puts
+# --hostname <host> before it.
+api_path=""
+for a in "\$@"; do case "\$a" in repos/*) api_path="\$a"; break ;; esac; done
+if [ "\$1" = "api" ]; then echo "\$api_path" >> "$sb/api-calls"; fi
 case "\$*" in
   *"pr checks"*)
     case "$gh_mode" in
@@ -137,7 +141,7 @@ case "\$*" in
   *"actions/runs"*)
     # The exact head filter is part of the contract. An unfiltered query
     # fails here, so the failure-run cases cannot pass without that filter.
-    case "\$2" in
+    case "\$api_path" in
       "repos/$TEST_REPO/actions/runs?head_sha=$TEST_SHA&per_page=100") ;;
       *) exit 1 ;;
     esac
@@ -503,13 +507,38 @@ run_case "#1559 B-3: jq run selection failure blocks" 2 "cannot evaluate the hea
 
 sb=$(make_sandbox green "" action_required)
 run_case "#1536 N3: invalid repo -> blocks before API path" 2 "invalid.*owner/repo" "$sb" \
-  "gh pr merge 1536 --repo bad/repo/extra --squash" "" 1 "" 1
+  "gh pr merge 1536 --repo bad/repo/extra/more --squash" "" 1 "" 1
 
-for malformed_repo in ./x x/.. ../x; do
+for malformed_repo in ./x x/.. ../x .ghe/o/r ghe/./r ghe/o/..; do
   sb=$(make_sandbox green "" action_required)
   run_case "#1551 A2/A4: malformed repo $malformed_repo blocks before any gh call" 2 "invalid.*owner/repo" "$sb" \
     "gh pr merge 1551 --repo $malformed_repo --squash" "" 1 "" 1
 done
+
+# gh documents --repo as [HOST/]OWNER/REPO. A GitHub Enterprise target
+# must reach the CI checks: `gh pr` gets the full value, `gh api` gets
+# OWNER/REPO in the path and the host in --hostname.
+sb=$(make_sandbox green "")
+run_case "GHE host/owner/repo with green CI -> allows" 0 "" "$sb" \
+  "gh pr merge 1550 --repo ghe.example.com/$TEST_REPO --squash" "invalid.*owner/repo"
+
+sb=$(make_sandbox green "" action_required)
+run_case "GHE host/owner/repo with gated run -> blocks" 2 "Build PR.*action_required" "$sb" \
+  "gh pr merge 1550 --repo ghe.example.com/$TEST_REPO --squash"
+
+sb=$(make_sandbox green "")
+(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" "$BASH" .claude/hooks/block-merge-on-red-ci.sh \
+  <<< "$(jq -nc --arg c "gh pr merge 1550 --repo ghe.example.com/$TEST_REPO --squash" '{tool_name:"Bash", tool_input:{command:$c}}')" >/dev/null 2>&1)
+if grep -qF "pr checks 1550 --repo ghe.example.com/$TEST_REPO" "$sb/gh-calls" &&
+   grep -qF "api --hostname ghe.example.com repos/$TEST_REPO/actions/runs?" "$sb/gh-calls"; then
+  echo "PASS [GHE: pr gets full repo, api gets --hostname and owner/repo path]"
+  PASS=$((PASS+1))
+else
+  echo "FAIL [GHE: pr gets full repo, api gets --hostname and owner/repo path]" >&2
+  sed 's/^/    gh: /' "$sb/gh-calls" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}GHE-argv "
+fi
+rm -rf "$sb"
 
 sb=$(make_sandbox green "" bad_sha)
 run_case "#1536: invalid head SHA -> blocks" 2 "invalid.*head SHA" "$sb" \
