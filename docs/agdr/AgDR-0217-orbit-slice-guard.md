@@ -103,6 +103,21 @@ Linux CI and macOS share one hide mechanism. Reasoning: keep ORBIT fail-closed
 for governed creates, restore non-ORBIT skill workflows, and close the
 fail-open spelling and registry gaps Rex named on PR #1571.
 
+## Amendment — 2026-10-09, #1585
+
+`orbit.governed_prefixes` selects the bare ticket prefix names governed when
+`orbit.default_planning` is on. Its default is `["Feature", "Task", "Slice"]`.
+Missing, empty, or unreadable values retain those three prefixes.
+The hook matches names case-insensitively in ASCII, full-width, and CJK brackets.
+
+A separate key avoids governing every name in `ticket.prefix_whitelist`.
+That whitelist includes Bug, Spike, Chore, and other names that this gate must
+not govern. It also lacks Task.
+A fork adds `Enhancement` to `orbit.governed_prefixes` alongside the defaults
+to require slice references for its Enhancement tickets. A fork list replaces the
+default list, so it must name Feature, Task, and Slice too, or those prefixes
+stop being governed.
+
 ## Artifacts
 
 - Issue #1565
