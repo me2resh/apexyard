@@ -16,43 +16,25 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
-# Normalize backslash line-continuation sequences so multi-line gh commands
-# parse as a single logical line for all subsequent flag extraction.
-# Replaces every '\<newline>' pair with a single space.
-# Fixes apexyard#743 Bug 2: without normalization, a --repo value split onto
-# its own continuation line could be mis-extracted (the trailing '\' captured
-# instead of the repo slug, yielding garbled TRACKER_REPO like "(hook)").
-# A one-line lookahead joins each backslash-newline pair in one linear awk
-# pass. The extra final record marks the artificial newline added by printf;
-# it is never emitted. The C locale accepts invalid UTF-8 on macOS awk.
+# Keep the older broad scan: gh pr\<newline>create must remain visible,
+# including pairs inside quoted data. Removal would hide the create verb.
+. "$(dirname "${BASH_SOURCE[0]}")/_lib-awk-fallback.sh"
+for fn in _run_awk_or_fallback join_shell_continuations _join_shell_continuations_fallback; do
+  if ! declare -F "$fn" >/dev/null 2>&1; then
+    printf 'BLOCKED: missing required awk helper %s. Restore _lib-awk-fallback.sh and retry.\n' "$fn" >&2
+    exit 2
+  fi
+done
+_vpc_join_fallback() {
+  _join_shell_continuations_fallback "$1" broad-space
+  return 1
+}
 _vpc_join_failed=0
-if _vpc_joined=$(printf '%s\n.' "$COMMAND" | LC_ALL=C awk '
-    function emit_line(line) {
-      if (sub(/\\$/, " ", line)) printf "%s", line
-      else printf "%s\n", line
-    }
-    NR == 1 { previous = $0; next }
-    {
-      if (NR > 2) emit_line(before)
-      before = previous
-      previous = $0
-    }
-    END { if (NR > 1) printf "%s", before }
-  '); then
+if _vpc_joined=$(join_shell_continuations "$COMMAND" broad-space _vpc_join_fallback); then
   COMMAND=$_vpc_joined
 else
   _vpc_join_failed=1
-  # A failed awk must not let a continued PR verb bypass validation.
-  # Replacing every backslash and newline with a space is broader than the
-  # normal join, so a PR verb remains visible to the gate.
-  if _vpc_joined=$(printf '%s' "$COMMAND" | LC_ALL=C tr '\\\n' '  '); then
-    COMMAND=$_vpc_joined
-  else
-    # Core utilities are unavailable: keep the exact old behavior as a
-    # final fail-safe, even though this rare path is slower on Bash 3.2.
-    _vpc_nl=$'\n'; COMMAND="${COMMAND//\\$_vpc_nl/ }"
-    unset _vpc_nl
-  fi
+  COMMAND=$_vpc_joined
 fi
 unset _vpc_joined
 

@@ -48,6 +48,7 @@ make_sandbox() {
   )
   mkdir -p "$sb/.claude/hooks"
   cp "$HOOK_SRC" "$sb/.claude/hooks/validate-pr-create.sh"
+  cp "$(dirname "$HOOK_SRC")/_lib-awk-fallback.sh" "$sb/.claude/hooks/_lib-awk-fallback.sh"
   cp "$(dirname "$HOOK_SRC")/_lib-review-markers.sh" "$sb/.claude/hooks/"
   chmod +x "$sb/.claude/hooks/validate-pr-create.sh"
   local src_root

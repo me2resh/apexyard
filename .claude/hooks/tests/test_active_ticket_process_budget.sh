@@ -445,7 +445,7 @@ hook_count_case() {
   : > "$sb/onboarding.yaml"
   printf 'projects:\n  - name: p1\n    repo: org/p1\n' > "$sb/apexyard.projects.yaml"
   mkdir -p "$sb/.claude/hooks" "$sb/.claude/session" "$sb/workspace"
-  for f in require-active-ticket.sh require-migration-ticket.sh _lib-detect-bash-write.sh _lib-read-config.sh \
+  for f in require-active-ticket.sh require-migration-ticket.sh _lib-awk-fallback.sh _lib-detect-bash-write.sh _lib-read-config.sh \
            _lib-path-resolve.sh _lib-active-ticket.sh _lib-mask-quoted.sh _lib-ticket-path-exemptions.sh _lib-portfolio-paths.sh \
            _lib-ops-root.sh _lib-resolution-cache.sh _lib-tracker.sh; do
     cp "$HOOKSDIR/$f" "$sb/.claude/hooks/$f"
@@ -520,7 +520,7 @@ legacy_count_case() {
   : > "$sb/onboarding.yaml"
   printf 'projects:\n  - name: p1\n    repo: org/p1\n  - name: p2\n    repo: org/p2\n' > "$sb/apexyard.projects.yaml"
   mkdir -p "$sb/.claude/hooks" "$sb/.claude/session/tickets/p2" "$sb/workspace"
-  for f in require-active-ticket.sh require-migration-ticket.sh _lib-detect-bash-write.sh _lib-read-config.sh \
+  for f in require-active-ticket.sh require-migration-ticket.sh _lib-awk-fallback.sh _lib-detect-bash-write.sh _lib-read-config.sh \
            _lib-path-resolve.sh _lib-active-ticket.sh _lib-mask-quoted.sh _lib-ticket-path-exemptions.sh _lib-portfolio-paths.sh \
            _lib-ops-root.sh _lib-resolution-cache.sh _lib-tracker.sh; do
     cp "$HOOKSDIR/$f" "$sb/.claude/hooks/$f"

@@ -40,6 +40,17 @@ if [ -e "$HOOK_DIR/_lib-extract-pr.sh" ] && [ ! -r "$HOOK_DIR/_lib-extract-pr.sh
   echo "permissions on the file and retry." >&2
   exit 2
 fi
+# The merge parser and continuation router require the shared awk helper.
+if [ ! -r "$HOOK_DIR/_lib-awk-fallback.sh" ] || ! . "$HOOK_DIR/_lib-awk-fallback.sh"; then
+  echo "BLOCKED: dispatcher cannot load _lib-awk-fallback.sh. Restore the library and retry." >&2
+  exit 2
+fi
+for fn in _run_awk_or_fallback join_shell_continuations _join_shell_continuations_fallback; do
+  if ! declare -F "$fn" >/dev/null 2>&1; then
+    printf 'BLOCKED: dispatcher missing required awk helper %s. Restore the library and retry.\n' "$fn" >&2
+    exit 2
+  fi
+done
 if [ -r "$HOOK_DIR/_lib-extract-pr.sh" ]; then
   # shellcheck source=/dev/null
   . "$HOOK_DIR/_lib-extract-pr.sh"
@@ -263,8 +274,16 @@ esac
 # The option list accepts `-C`, `-c` and the long options that take a
 # separate-word value, plus any `-x`, `--opt` or `--opt=value`.
 _scan_failed=0
-if _scan_cmd=$(printf '%sX' "$COMMAND" | LC_ALL=C awk '{ if (sub(/\\$/, "")) printf "%s ", $0; else printf "%s\n", $0 }'); then
-  _scan_cmd=${_scan_cmd%X}
+# Preserve broad routing for git\<newline>push and quoted/commented pairs.
+# Bash removal could hide verbs that the existing dispatcher routes.
+_dispatch_join_failure() { return 1; }
+if [ -r "$HOOK_DIR/_lib-awk-fallback.sh" ]; then
+  . "$HOOK_DIR/_lib-awk-fallback.sh"
+  if _scan_cmd=$(join_shell_continuations "$COMMAND" broad-space _dispatch_join_failure); then
+    :
+  else
+    _scan_failed=1
+  fi
 else
   _scan_failed=1
 fi

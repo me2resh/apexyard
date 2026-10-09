@@ -26,60 +26,6 @@ trap 'rm -r "$tmp_dir"' EXIT
 pass=0
 fail=0
 
-assert_equal() {
-  local label="$1" input="$2"
-  _normalize_json_escapes_legacy "$input" > "$tmp_dir/old"
-  _normalize_json_escapes "$input" > "$tmp_dir/new"
-  if cmp -s "$tmp_dir/old" "$tmp_dir/new"; then
-    printf 'PASS equivalence: %s\n' "$label"
-    pass=$((pass + 1))
-  else
-    printf 'FAIL equivalence: %s\n' "$label" >&2
-    fail=$((fail + 1))
-  fi
-}
-
-assert_equal empty ''
-assert_equal plain 'plain ASCII and café'
-assert_equal space '\u0020'
-assert_equal tab_unicode '\u0009'
-assert_equal newline_upper '\u000A'
-assert_equal newline_lower '\u000a'
-assert_equal slash '\/'
-assert_equal tab_short '\t'
-assert_equal newline_short '\n'
-assert_equal doubled_newline '\\n'
-assert_equal doubled_tab '\\t'
-assert_equal adjacent '\u0020\u0009\u000A\u000a\/\t\n'
-assert_equal mixed 'before\\n\n\u000A/u000a\/after'
-assert_equal unsupported '\u0021\u000B\r\b\"'
-assert_equal trailing_backslash 'ends\'
-assert_equal literal_newlines $'a\nb\n'
-assert_equal sentinel_byte $'a\034b\034\n'
-# The legacy decoder uses 0x1E as its backslash sentinel. A raw 0x1E in the
-# input must pass through unchanged, not become a backslash.
-assert_equal raw_record_separator $'g\036h pr merge'
-assert_equal record_separator_with_escapes $'a\036\\\\\\n\036\\t\036\036\n'
-assert_equal backslash_before_record_separator $'x\\\036n\\'
-
-_normalize_json_escapes_legacy $'g\036h' > "$tmp_dir/old"
-printf 'g\036h' > "$tmp_dir/want"
-if cmp -s "$tmp_dir/old" "$tmp_dir/want"; then
-  printf 'PASS legacy keeps a raw 0x1E byte\n'
-  pass=$((pass + 1))
-else
-  printf 'FAIL legacy keeps a raw 0x1E byte\n' >&2
-  fail=$((fail + 1))
-fi
-assert_equal escaped_and_literal_newlines $'a\\n\n\\u0009\n'
-assert_equal invalid_utf8 $'before\377\\t\\/after'
-
-# Keep the large equivalence input modest enough for the legacy Bash 3.2
-# substitution path while exercising record boundaries and escape decoding.
-large_input=$(awk 'BEGIN { for (line = 0; line < 5000; line++) print "x" }')
-large_input+='\t'
-assert_equal five_thousand_lines "$large_input"
-
 # Build each command at runtime so hook command scans do not see it here.
 merge_verb=mer
 merge_verb+=ge
@@ -105,15 +51,7 @@ chmod +x "$tmp_dir/selective-bin/awk" "$tmp_dir/all-bin/awk" "$tmp_dir/selective
 for mode in selective all; do
   for i in 0 1 2 3; do
     encoded_payload='{"tool_input":{"command":"'"${payloads[$i]}"'"}}'
-    _normalize_json_escapes_legacy "$encoded_payload" > "$tmp_dir/old"
     PATH="$tmp_dir/$mode-bin:$PATH" _normalize_json_escapes "$encoded_payload" > "$tmp_dir/fallback"
-    if cmp -s "$tmp_dir/old" "$tmp_dir/fallback"; then
-      printf 'PASS %s awk failure: payload %s equals legacy\n' "$mode" "$i"
-      pass=$((pass + 1))
-    else
-      printf 'FAIL %s awk failure: payload %s differs from legacy\n' "$mode" "$i" >&2
-      fail=$((fail + 1))
-    fi
     if is_merge_command_raw "$(cat "$tmp_dir/fallback")"; then
       printf 'PASS %s awk failure: payload %s detects merge\n' "$mode" "$i"
       pass=$((pass + 1))

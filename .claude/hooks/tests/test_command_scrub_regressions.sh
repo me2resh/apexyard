@@ -108,7 +108,7 @@ check 'real PR command triggers review' 2 "$(review_result 'gh pr create --title
 # redirect names an exempt scratch target.
 rm -f "$TMP/.git/apexyard-ticket"
 mkdir -p "$TMP/.claude/hooks"
-for file in require-active-ticket.sh _lib-detect-bash-write.sh \
+for file in require-active-ticket.sh _lib-awk-fallback.sh _lib-detect-bash-write.sh \
   _lib-command-scrub.sh _lib-mask-quoted.sh _lib-read-config.sh \
   _lib-path-resolve.sh _lib-active-ticket.sh _lib-ticket-path-exemptions.sh \
   _lib-ops-root.sh; do

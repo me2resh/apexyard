@@ -53,7 +53,7 @@ setup_ticket_sandbox() {
   : > "$dest/onboarding.yaml"
   : > "$dest/apexyard.projects.yaml"
   cp "$CONFIG_DEFAULTS" "$dest/.claude/project-config.defaults.json"
-  for file in require-active-ticket.sh _lib-detect-bash-write.sh \
+  for file in require-active-ticket.sh _lib-awk-fallback.sh _lib-detect-bash-write.sh \
     _lib-command-scrub.sh _lib-mask-quoted.sh _lib-read-config.sh \
     _lib-path-resolve.sh _lib-active-ticket.sh _lib-ticket-path-exemptions.sh \
     _lib-ops-root.sh; do
@@ -77,6 +77,7 @@ setup_dispatch_sandbox() {
   rm -rf "$dest"
   mkdir -p "$dest/hooks"
   cp "$hooks_src/dispatch-bash.sh" "$dest/hooks/dispatch-bash.sh"
+  cp "$(dirname "$hooks_src/dispatch-bash.sh")/_lib-awk-fallback.sh" "$dest/hooks/_lib-awk-fallback.sh"
   [ -f "$hooks_src/_lib-extract-pr.sh" ] && cp "$hooks_src/_lib-extract-pr.sh" "$dest/hooks/_lib-extract-pr.sh"
   [ -f "$hooks_src/_lib-command-scrub.sh" ] && cp "$hooks_src/_lib-command-scrub.sh" "$dest/hooks/_lib-command-scrub.sh"
   # _lib-extract-pr.sh sources the tracker library. Copy it so the sandbox

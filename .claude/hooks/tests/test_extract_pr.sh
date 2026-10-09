@@ -74,7 +74,7 @@ FAILED_CASES=""
 # The wrapper scanner must stream the command to awk. Linux rejects one
 # environment or argv string above 128 KB, before awk can scan it.
 wrapper_awk=$(sed -n '/^_has_opaque_merge_wrapper() {/,/^}/p' "$LIB_SRC")
-if printf '%s\n' "$wrapper_awk" | grep -Fq "printf '%s\\034' \"\$1\" | awk" \
+if printf '%s\n' "$wrapper_awk" | grep -Fq "_run_awk_or_fallback" \
     && ! printf '%s\n' "$wrapper_awk" | grep -Eq 'ENVIRON|OPAQUE_MERGE_CMD|awk[[:space:]]+-v'; then
   echo "PASS [wrapper awk receives command on stdin]"
   PASS=$((PASS+1))

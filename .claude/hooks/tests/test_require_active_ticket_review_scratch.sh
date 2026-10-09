@@ -34,7 +34,7 @@ git -C "$TMP/unrelated" init -q
 git -C "$ops" worktree add -q -b linked-review "$TMP/linked"
 
 cp "$HOOK_SOURCE" "$ops/.claude/hooks/require-active-ticket.sh"
-for lib in _lib-detect-bash-write.sh _lib-path-resolve.sh _lib-ops-root.sh \
+for lib in _lib-awk-fallback.sh _lib-detect-bash-write.sh _lib-path-resolve.sh _lib-ops-root.sh \
   _lib-review-markers.sh _lib-active-ticket.sh _lib-ticket-path-exemptions.sh \
   _lib-read-config.sh \
   _lib-mask-quoted.sh _lib-fail-closed-json.sh; do

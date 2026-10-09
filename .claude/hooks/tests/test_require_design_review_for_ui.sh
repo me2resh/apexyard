@@ -122,6 +122,7 @@ make_sandbox() {
   git -C "$sb" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
   mkdir -p "$sb/.claude/hooks" "$sb/.claude/session/reviews"
   cp "$SRC_ROOT/.claude/hooks/_lib-extract-pr.sh" "$sb/.claude/hooks/_lib-extract-pr.sh"
+  cp "$(dirname "$SRC_ROOT/.claude/hooks/_lib-extract-pr.sh")/_lib-awk-fallback.sh" "$sb/.claude/hooks/_lib-awk-fallback.sh"
   cp "$SRC_ROOT/.claude/hooks/_lib-review-markers.sh" "$sb/.claude/hooks/_lib-review-markers.sh"
   cp "$SRC_ROOT/.claude/hooks/_lib-pr-repo.sh" "$sb/.claude/hooks/_lib-pr-repo.sh"
   cp "$SRC_ROOT/.claude/hooks/_lib-ui-paths.sh" "$sb/.claude/hooks/_lib-ui-paths.sh"
@@ -589,6 +590,7 @@ for lib in _lib-extract-pr.sh _lib-review-markers.sh _lib-pr-repo.sh; do
     mkdir -p "$sb/.claude/hooks"
     cp "$HOOK_SRC" "$sb/.claude/hooks/require-design-review-for-ui.sh"
     cp "$SRC_ROOT/.claude/hooks/_lib-extract-pr.sh" "$sb/.claude/hooks/_lib-extract-pr.sh"
+    cp "$(dirname "$SRC_ROOT/.claude/hooks/_lib-extract-pr.sh")/_lib-awk-fallback.sh" "$sb/.claude/hooks/_lib-awk-fallback.sh"
     cp "$SRC_ROOT/.claude/hooks/_lib-review-markers.sh" "$sb/.claude/hooks/_lib-review-markers.sh"
     cp "$SRC_ROOT/.claude/hooks/_lib-pr-repo.sh" "$sb/.claude/hooks/_lib-pr-repo.sh"
     chmod +x "$sb/.claude/hooks/require-design-review-for-ui.sh"

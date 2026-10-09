@@ -202,6 +202,7 @@ make_validate_sandbox() {
   # Copy hook + libs into the sandbox so it can run self-contained.
   mkdir -p "$sb/.claude/hooks"
   cp "$VALIDATE_HOOK" "$sb/.claude/hooks/validate-pr-create.sh"
+  cp "$(dirname "$VALIDATE_HOOK")/_lib-awk-fallback.sh" "$sb/.claude/hooks/_lib-awk-fallback.sh"
   cp "$(dirname "$VALIDATE_HOOK")/_lib-review-markers.sh" "$sb/.claude/hooks/"
   chmod +x "$sb/.claude/hooks/validate-pr-create.sh"
   for lib in \
