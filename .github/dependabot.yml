@@ -33,6 +33,12 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    # Group minor and patch updates per adapter, leaving major updates separate. #1601.
+    groups:
+      pi-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
     commit-message:
       prefix: "chore"
     labels:
@@ -45,6 +51,12 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    # Group minor and patch updates per adapter, leaving major updates separate. #1601.
+    groups:
+      opencode-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
     commit-message:
       prefix: "chore"
     labels:
