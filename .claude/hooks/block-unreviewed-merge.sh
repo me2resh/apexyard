@@ -108,7 +108,7 @@ _require_lib() {
 # see #965.
 _require_lib "$(dirname "$0")/_lib-extract-pr.sh" \
   is_merge_command is_merge_command_raw _scrub_merge_command _normalize_json_escapes \
-  merge_command_uses_variable extract_pr_number resolve_merge_repo \
+  has_conflicting_repo_flags merge_command_uses_variable extract_pr_number resolve_merge_repo \
   resolve_pr_head resolve_pr_head_branch
 # Repo-qualified marker path helper (#485).
 _require_lib "$(dirname "$0")/_lib-review-markers.sh" \
@@ -184,6 +184,11 @@ fi
 
 if ! is_merge_command "$COMMAND"; then
   exit 0
+fi
+
+if has_conflicting_repo_flags "$COMMAND"; then
+  echo "BLOCKED: merge command has conflicting repo flags. Re-run with one repo value." >&2
+  exit 2
 fi
 
 if merge_command_uses_variable "$COMMAND"; then
