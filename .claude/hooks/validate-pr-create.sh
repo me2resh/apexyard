@@ -19,6 +19,12 @@ fi
 # Keep the older broad scan: gh pr\<newline>create must remain visible,
 # including pairs inside quoted data. Removal would hide the create verb.
 . "$(dirname "${BASH_SOURCE[0]}")/_lib-awk-fallback.sh"
+for fn in _run_awk_or_fallback join_shell_continuations _join_shell_continuations_fallback; do
+  if ! declare -F "$fn" >/dev/null 2>&1; then
+    printf 'BLOCKED: missing required awk helper %s. Restore _lib-awk-fallback.sh and retry.\n' "$fn" >&2
+    exit 2
+  fi
+done
 _vpc_join_fallback() {
   _join_shell_continuations_fallback "$1" broad-space
   return 1

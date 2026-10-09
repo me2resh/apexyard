@@ -1,4 +1,6 @@
 #!/bin/bash
+# shellcheck source=/dev/null
+. "${BASH_SOURCE[0]%/*}/_lib-awk-fallback.sh"
 # _lib-detect-bash-write.sh — detect whether a Bash command writes to a file.
 
 _bdw_lib_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -345,9 +347,6 @@ _bdw_split_top_level_legacy() {
 _bdw_split_top_level() {
   local cmd="$1"
   [ -z "$cmd" ] && return 0
-  if ! declare -F _run_awk_or_fallback >/dev/null 2>&1; then
-    . "${BASH_SOURCE[0]%/*}/_lib-awk-fallback.sh"
-  fi
   LC_ALL=C _run_awk_or_fallback "$cmd" _bdw_split_top_level_legacy '
       function emit(line) {
         gsub(/>>\|/, "@@APEXYARD_CLOBBER_APPEND@@", line)
@@ -487,9 +486,6 @@ _BDW_SED_WRITE_POS='([;{][[:space:]]*|['"'"'"][[:space:]]*|[/|#!$0-9,:@%][gpiIeM
 # It splits only on separators with a space on each side, because sed
 # scripts hold bare `;` and `|` (`p;w f`, `s|a|b|w f`).
 _bdw_sed_regions() {
-  if ! declare -F _run_awk_or_fallback >/dev/null 2>&1; then
-    . "${BASH_SOURCE[0]%/*}/_lib-awk-fallback.sh"
-  fi
   _bdw_sed_regions_fallback() { printf '%s\n' "$1"; }
   # Unsplit fallback retains every sed region, including later writes.
   LC_ALL=C _run_awk_or_fallback "$1" _bdw_sed_regions_fallback '

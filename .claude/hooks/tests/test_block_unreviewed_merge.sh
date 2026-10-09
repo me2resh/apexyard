@@ -388,6 +388,13 @@ run_case_custom_cmd() {
   PASS=$((PASS+1))
 }
 
+# #1587: only the API target has approvals. Raw 0x1c must remain opaque.
+sb=$(make_sandbox)
+write_rex_marker "$sb" 7 "$FIXED_SHA"
+write_ceo_marker_structured "$sb" 7 "$FIXED_SHA"
+run_case_custom_cmd "1587 split-line qw with raw sentinel blocks" 2 "" "$sb" \
+  $'gh api repos/me2resh/apexyard/pulls/7/merge -X PUT; perl -e \'system qw(gh\npr merge 5)\'; # \034'
+
 # B1: the branch PR is fully approved. An argv merge targets another PR, so
 # using the branch PR's approvals would authorize the wrong merge.
 for argv_target in "'5'" "os.environ['PR']"; do

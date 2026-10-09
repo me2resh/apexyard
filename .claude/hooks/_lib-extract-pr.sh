@@ -1,4 +1,6 @@
 #!/bin/bash
+# shellcheck source=/dev/null
+. "${BASH_SOURCE[0]%/*}/_lib-awk-fallback.sh"
 # Shared PR and repo extraction for merge-gate hooks. The hooks are:
 # block-unreviewed-merge.sh, require-design-review-for-ui.sh,
 # require-architecture-review.sh, and block-merge-on-red-ci.sh.
@@ -244,9 +246,6 @@ _extract_wrapper_arg() {
 # file header (#973) for why mixing this into the jq-present path would be
 # unsafe.
 _normalize_json_escapes() {
-  if ! declare -F _run_awk_or_fallback >/dev/null 2>&1; then
-    . "${BASH_SOURCE[0]%/*}/_lib-awk-fallback.sh"
-  fi
   LC_ALL=C _run_awk_or_fallback "$1" _normalize_json_escapes_legacy '
     function decode(s,    i, n, six, two) {
       n = length(s)
@@ -355,9 +354,6 @@ _normalize_json_escapes_legacy_piece() {
 # newlines to spaces. This fallback only broadens detection because the
 # original text is also scanned.
 _join_shell_continuations() {
-  if ! declare -F _run_awk_or_fallback >/dev/null 2>&1; then
-    . "${BASH_SOURCE[0]%/*}/_lib-awk-fallback.sh"
-  fi
   join_shell_continuations "$1"
 }
 
@@ -675,17 +671,12 @@ _has_argv_merge() {
 # calls quadratic on a long statement (#1552 round 3).
 # Same statement + xargs = opaque (no character window). The argv -c form
 # still requires the merge within 200 characters after '-c'. On awk failure,
-# fail closed when a merge phrase is present.
+# fail closed because the whole-input classifier is unavailable.
 _has_opaque_merge_wrapper() {
-  if ! declare -F _run_awk_or_fallback >/dev/null 2>&1; then
-    . "${BASH_SOURCE[0]%/*}/_lib-awk-fallback.sh"
-  fi
   _has_opaque_merge_wrapper_fallback() {
-    if printf '%s\n' "$1" | grep -qE '\b(gh[[:space:]]+pr[[:space:]]+merge|glab[[:space:]]+mr[[:space:]]+merge)\b'; then
-      printf opaque
-    else
-      printf clear
-    fi
+    # Without the whole-input parser, split-line phrases and malformed
+    # quotes cannot be ruled out. Raw 0x1c must also remain opaque.
+    printf opaque
   }
   local result
   result=$(_run_awk_or_fallback "$1" _has_opaque_merge_wrapper_fallback '
@@ -736,12 +727,12 @@ _has_opaque_merge_wrapper() {
     BEGIN { RS = sprintf("%c", 28) }
     { if (NR == 1) s = $0; else multiple = 1 }
     END {
-      if (multiple) { print "opaque"; exit }
+      opaque = multiple
       n = length(s)
       sq = sprintf("%c", 39); dq = sprintf("%c", 34); bs = sprintf("%c", 92)
-      in_sq = 0; in_dq = 0; opaque = 0; st = 1; escaped_prev = 0
+      in_sq = 0; in_dq = 0; st = 1; escaped_prev = 0
       n = split(s, ch, "")
-      for (i = 1; i <= n; i++) {
+      for (i = 1; i <= n && !opaque; i++) {
         c = ch[i]
         nx = (i < n) ? ch[i + 1] : ""
         was_escaped = escaped_prev; escaped_prev = 0
@@ -773,7 +764,7 @@ _has_opaque_merge_wrapper() {
     opaque) return 0 ;;
     clear) return 1 ;;
   esac
-  # Missing classifier output remains fail closed on a merge phrase.
+  # Missing classifier output remains fail closed.
   [ "$(_has_opaque_merge_wrapper_fallback "$1")" = opaque ]
 }
 

@@ -155,5 +155,21 @@ for i in "${!join_inputs[@]}"; do
   join_shell_continuations "${join_inputs[i]}" > "$TMP/got"
   check "bash-join/$i"
 done
+# A raw record separator must classify split-line merges as opaque.
+opaque_input=$'perl -e \'system qw(gh\npr merge 5)\'; # \034'
+printf opaque > "$TMP/want"
+if _has_opaque_merge_wrapper "$opaque_input"; then printf opaque; else printf clear; fi > "$TMP/got"
+check opaque-raw-sentinel
+PATH="$TMP/bin:$PATH" AWK_MODE=missing _has_opaque_merge_wrapper "$opaque_input" && printf opaque > "$TMP/got" || printf clear > "$TMP/got"
+check opaque-fallback-raw-sentinel
+
+# Awk failure must retain token joins and the older broad-space scan.
+printf 'gh pr merge 5\ngh p  r merge 5' > "$TMP/want"
+PATH="$TMP/bin:$PATH" AWK_MODE=missing join_shell_continuations $'gh p\\\nr merge 5' > "$TMP/got"
+check fallback-retains-token-join
+PATH="$TMP/bin:$PATH" AWK_MODE=missing _has_opaque_merge_wrapper $'perl -e \'system qw(gh\npr merge 5)\'' && printf opaque > "$TMP/got" || printf clear > "$TMP/got"
+printf opaque > "$TMP/want"
+check opaque-fallback-split-line
+
 printf 'shared awk table: %s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

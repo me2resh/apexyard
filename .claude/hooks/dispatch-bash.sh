@@ -40,6 +40,17 @@ if [ -e "$HOOK_DIR/_lib-extract-pr.sh" ] && [ ! -r "$HOOK_DIR/_lib-extract-pr.sh
   echo "permissions on the file and retry." >&2
   exit 2
 fi
+# The merge parser and continuation router require the shared awk helper.
+if [ ! -r "$HOOK_DIR/_lib-awk-fallback.sh" ] || ! . "$HOOK_DIR/_lib-awk-fallback.sh"; then
+  echo "BLOCKED: dispatcher cannot load _lib-awk-fallback.sh. Restore the library and retry." >&2
+  exit 2
+fi
+for fn in _run_awk_or_fallback join_shell_continuations _join_shell_continuations_fallback; do
+  if ! declare -F "$fn" >/dev/null 2>&1; then
+    printf 'BLOCKED: dispatcher missing required awk helper %s. Restore the library and retry.\n' "$fn" >&2
+    exit 2
+  fi
+done
 if [ -r "$HOOK_DIR/_lib-extract-pr.sh" ]; then
   # shellcheck source=/dev/null
   . "$HOOK_DIR/_lib-extract-pr.sh"

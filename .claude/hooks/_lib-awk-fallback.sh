@@ -2,6 +2,9 @@
 # Shared streaming awk path. Caller programs consume an appended 0x1c byte.
 # Remove only the final output marker, preserving identical bytes in input.
 # Fallback functions receive the original input and any remaining arguments.
+# Caller programs must reach every END block. Never exit from END or use
+# an early exit that prevents consuming the appended input byte.
+# Each fallback must be at least as strict as its awk path (#1611).
 # Callers choose the locale, preserving each existing scanner's character rules.
 _run_awk_or_fallback() {
   local input="$1" fallback="$2" program="$3" output sentinel=$'\034'
@@ -98,8 +101,11 @@ join_shell_continuations() {
 }
 
 _join_shell_continuations_fallback() {
-  local joined nl=$'\n'
+  local joined input="$1" nl=$'\n'
   if [ "${2:-bash}" = bash ]; then
+    # Keep removal as well as broad spacing: p\<newline>r becomes pr.
+    # Removing pairs inside quotes/comments can only broaden this scan.
+    printf '%s\n' "${input//\\$nl/}"
     printf '%s' "$1" | LC_ALL=C tr '\\\n' '  '
     return $?
   fi

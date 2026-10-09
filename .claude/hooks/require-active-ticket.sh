@@ -844,6 +844,12 @@ if [ "$TOOL_NAME" = "Bash" ]; then
   fi
   # shellcheck source=/dev/null
   . "$HOOK_DIR/_lib-detect-bash-write.sh"
+  for fn in _run_awk_or_fallback join_shell_continuations _join_shell_continuations_fallback; do
+    if ! declare -F "$fn" >/dev/null 2>&1; then
+      printf 'BLOCKED: missing required awk helper %s. Restore _lib-awk-fallback.sh and retry.\n' "$fn" >&2
+      exit 2
+    fi
+  done
 
   if ! bash_command_appears_to_write "$COMMAND"; then
     # Read-only command — no gate.

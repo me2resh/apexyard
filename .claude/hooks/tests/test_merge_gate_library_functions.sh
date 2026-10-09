@@ -59,6 +59,10 @@ for gate in block-unreviewed-merge.sh block-merge-on-red-ci.sh require-architect
   check "$gate" _lib-extract-pr.sh empty is_merge_command
   check "$gate" _lib-extract-pr.sh truncated is_merge_command_raw
   check "$gate" _lib-extract-pr.sh missing-function _scrub_merge_command
+  check "$gate" _lib-awk-fallback.sh empty _run_awk_or_fallback
+  check "$gate" _lib-awk-fallback.sh missing-function _run_awk_or_fallback
+  check "$gate" _lib-awk-fallback.sh missing-function join_shell_continuations
+  check "$gate" _lib-awk-fallback.sh missing-function _join_shell_continuations_fallback
 done
 for gate in block-unreviewed-merge.sh require-architecture-review.sh require-design-review-for-ui.sh; do
   check "$gate" _lib-review-markers.sh empty review_marker_path
