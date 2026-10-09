@@ -50,3 +50,24 @@ The architecture and UI gates should also reject merge commands containing unexp
 - Implementation anchor: `.claude/hooks/_lib-extract-pr.sh` centralizes `resolve_merge_repo`.
 - Gate callers: `.claude/hooks/block-unreviewed-merge.sh`, `.claude/hooks/block-merge-on-red-ci.sh`, `.claude/hooks/require-architecture-review.sh`, `.claude/hooks/require-design-review-for-ui.sh`.
 - Regression coverage: `.claude/hooks/tests/test_extract_pr.sh`, `.claude/hooks/tests/test_forge_aware_extract_pr.sh`, `.claude/hooks/tests/test_require_architecture_review.sh`, `.claude/hooks/tests/test_require_design_review_for_ui.sh`, `.claude/hooks/tests/test_block_unreviewed_merge.sh`, `.claude/hooks/tests/test_block_merge_on_red_ci.sh`.
+
+## Amendment — 2026-10-09, #1588
+
+The explicit CLI repo target now uses the **last repo flag in the merge span**, matching gh.
+A merge span is the command text from `gh pr merge` or `glab mr merge` to the next shell separator.
+The supported spellings are `--repo VALUE`, `--repo=VALUE`, `-R VALUE`, `-R=VALUE`, and `-RVALUE`.
+
+All four merge gates block a merge span whose repo flags name different values, with exit code 2.
+A mismatch is never a legitimate merge target.
+The gates are `block-unreviewed-merge.sh`, `block-merge-on-red-ci.sh`, `require-architecture-review.sh`, and `require-design-review-for-ui.sh`.
+
+The conflict check compares values as raw text.
+Consequently, `--repo "o/r" -R o/r` is blocked even though both values name the same repository.
+The operator must pass one repo flag to avoid this block.
+
+Two pre-existing parser gaps remain unchanged:
+
+- Combined short flags such as `-sR owner/repo` are not recognized as repo flags.
+- A quoted `;`, `&`, or `|` inside an argument cuts the merge span short.
+
+Regression coverage: `.claude/hooks/tests/test_merge_repo_flags.sh`.

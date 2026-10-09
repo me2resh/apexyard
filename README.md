@@ -251,6 +251,7 @@ Thanks to everyone who contributes code, documentation, bug reports, ideas, and 
 <a href="https://github.com/a-abdellatif98" title="a-abdellatif98"><img src="https://github.com/a-abdellatif98.png?size=100" width="64" height="64" alt="a-abdellatif98"></a>
 <a href="https://github.com/AhmedTheGeek" title="AhmedTheGeek"><img src="https://github.com/AhmedTheGeek.png?size=100" width="64" height="64" alt="AhmedTheGeek"></a>
 <a href="https://github.com/MohammedEl-sayedAhmed" title="MohammedEl-sayedAhmed"><img src="https://github.com/MohammedEl-sayedAhmed.png?size=100" width="64" height="64" alt="MohammedEl-sayedAhmed"></a>
+<a href="https://github.com/NagyWesley" title="NagyWesley"><img src="https://github.com/NagyWesley.png?size=100" width="64" height="64" alt="NagyWesley"></a>
 </p>
 
 ### Issue contributors

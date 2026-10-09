@@ -1336,6 +1336,40 @@ resolve_ci_status_glab() {
   esac
 }
 
+# Echoes repo flag values in command order, limited to CLI merge spans.
+# One match preserves command order across separated and attached spellings.
+# Keep separators first so -R=VALUE strips the equals sign.
+_merge_repo_flag_values() {
+  local cmd
+  cmd=$(_join_shell_continuations "$1")
+  echo "$cmd" | grep -oE '\b(gh\s+pr|glab\s+mr)\s+merge\b[^|;&]*' \
+    | grep -oE '[[:space:]]((--repo|-R)(=|[[:space:]]+)[^[:space:]]+|-R[^=[:space:]][^[:space:]]*)' \
+    | sed -E 's/^[[:space:]]+((--repo|-R)(=|[[:space:]]+)|-R)//'
+}
+
+# Conflicting repo declarations are never a legitimate merge target.
+has_conflicting_repo_flags() {
+  local cmd spans span values first value
+  cmd=$(_join_shell_continuations "$1")
+  spans=$(echo "$cmd" | grep -oE '\b(gh\s+pr|glab\s+mr)\s+merge\b[^|;&]*')
+  while IFS= read -r span; do
+    values=$(_merge_repo_flag_values "$span")
+    first=""
+    while IFS= read -r value; do
+      [ -n "$value" ] || continue
+      if [ -n "$first" ] && [ "$value" != "$first" ]; then
+        return 0
+      fi
+      first="$value"
+    done <<EOF
+$values
+EOF
+  done <<EOF
+$spans
+EOF
+  return 1
+}
+
 # Echoes an owner/repo EXPLICITLY named in the merge command, or empty when
 # the command carries no literal repo. This intentionally excludes ambient
 # forge/CWD fallbacks so callers can apply the precedence "explicit command
@@ -1348,9 +1382,14 @@ extract_explicit_repo_from_command() {
 
   # 1. --repo/-R on the merge-command span only. A flag is the clearest
   # explicit declaration and therefore outranks any URL text elsewhere.
-  local mspan
+  local mspan span
   mspan=$(echo "$cmd" | grep -oE '\b(gh\s+pr|glab\s+mr)\s+merge\b[^|;&]*')
-  repo=$(echo "$mspan" | sed -nE 's/.*(--repo|-R)[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
+  while IFS= read -r span; do
+    repo=$(_merge_repo_flag_values "$span" | tail -1)
+    [ -n "$repo" ] && break
+  done <<EOF
+$mspan
+EOF
 
   # 2. gh api path extraction.
   if [ -z "$repo" ]; then
