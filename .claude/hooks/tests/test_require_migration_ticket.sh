@@ -1517,44 +1517,80 @@ fi
 rm -rf "$SB" "$(dirname "$WS_DIR")"
 
 # --- Selection parity: compare the raw target selected by dev and this hook --
-# The baseline is the parent commit, not a copied predicate. If the checkout
-# cannot provide it, the test fails instead of silently skipping.
-_parity_base=$(git rev-parse HEAD^ 2>/dev/null || true)
-_parity_fail=0
-if [ -z "$_parity_base" ]; then
-  record_fail "#1182 selection parity baseline is available"
-else
-  _parity_baseline=$(mktemp "$HOOK_DIR/.baseline-1182.XXXXXX")
-  if ! git show "$_parity_base:.claude/hooks/require-migration-ticket.sh" >"$_parity_baseline" 2>/dev/null; then
-    record_fail "#1182 selection parity baseline can be read"
-    _parity_fail=1
+# The baseline is the parent commit, not a copied predicate. Missing or
+# unreadable baselines fail. Parents before #1182 receive a labelled N/A pass.
+# APEXYARD_PARITY_BASELINE_FILE overrides the baseline file for tests only.
+check_selection_parity() {
+  _parity_base=$(git rev-parse --short HEAD^ 2>/dev/null || true)
+  _parity_fail=0
+  if [ -z "${APEXYARD_PARITY_BASELINE_FILE:-}" ] && [ -z "$_parity_base" ]; then
+    record_fail "#1182 selection parity baseline is available"
   else
-    # Instrument only the baseline's first-match selector. The current hook's
-    # explicit selection-test branch emits the same raw spelling before gating.
-    _parity_instrumented=$(mktemp "$HOOK_DIR/.baseline-1182-instrumented.XXXXXX")
-    awk '
-      /if is_migration_path "\$_tgt"; then/ && !done { print; print "      if [ \"${APEXYARD_SELECTION_TEST:-}\" = \"1\" ]; then printf \"%s\\n\" \"$_tgt\"; exit 0; fi"; done=1; next }
-      { print }
-    ' "$_parity_baseline" >"$_parity_instrumented"
-    for _payload_target in "/tmp/migrations/001.sql" "/tmp/db/002.sql"; do
-      _payload=$(jq -nc --arg c "cat > $_payload_target" '{tool_name:"Bash",tool_input:{command:$c}}')
-      _current=$(APEXYARD_SELECTION_TEST=1 bash "$HOOK_SCRIPT" <<<"$_payload" 2>/dev/null || true)
-      _baseline=$(APEXYARD_SELECTION_TEST=1 bash "$_parity_instrumented" <<<"$_payload" 2>/dev/null || true)
-      if [ "$_current" != "$_baseline" ]; then
-        _parity_fail=1
-        echo "FAIL: #1182 selection parity for $_payload_target (current='$_current' baseline='$_baseline')"
-      fi
-    done
-    rm -f "$_parity_instrumented"
-    if [ "$_parity_fail" -eq 0 ]; then
-      record_pass "#1182 selection parity compares current and parent implementations"
+    _parity_baseline=$(mktemp "$HOOK_DIR/.baseline-1182.XXXXXX")
+    if [ -n "${APEXYARD_PARITY_BASELINE_FILE:-}" ]; then
+      _parity_read=0
+      [ -f "$APEXYARD_PARITY_BASELINE_FILE" ] &&
+        cat "$APEXYARD_PARITY_BASELINE_FILE" >"$_parity_baseline" 2>/dev/null || _parity_read=1
     else
-      FAIL=$((FAIL + 1))
-      FAILED_CASES="$FAILED_CASES\n  - #1182 selection parity compares current and parent implementations"
+      git show "$_parity_base:.claude/hooks/require-migration-ticket.sh" >"$_parity_baseline" 2>/dev/null
+      _parity_read=$?
     fi
+    if [ "$_parity_read" -ne 0 ]; then
+      record_fail "#1182 selection parity baseline can be read"
+      _parity_fail=1
+    elif ! grep -Fq 'if is_migration_path "$_tgt"; then' "$_parity_baseline" &&
+         ! grep -Fq 'APEXYARD_SELECTION_TEST' "$_parity_baseline"; then
+      record_pass "#1182 selection parity N/A: parent hook ($_parity_base) predates #1182"
+    else
+      # Instrument only the baseline's first-match selector. The current hook's
+      # explicit selection-test branch emits the same raw spelling before gating.
+      _parity_instrumented=$(mktemp "$HOOK_DIR/.baseline-1182-instrumented.XXXXXX")
+      awk '
+        /if is_migration_path "\$_tgt"; then/ && !done { print; print "      if [ \"${APEXYARD_SELECTION_TEST:-}\" = \"1\" ]; then printf \"%s\\n\" \"$_tgt\"; exit 0; fi"; done=1; next }
+        { print }
+      ' "$_parity_baseline" >"$_parity_instrumented"
+      for _payload_target in "/tmp/migrations/001.sql" "/tmp/db/002.sql"; do
+        _payload=$(jq -nc --arg c "cat > $_payload_target" '{tool_name:"Bash",tool_input:{command:$c}}')
+        _current=$(APEXYARD_SELECTION_TEST=1 bash "$HOOK_SCRIPT" <<<"$_payload" 2>/dev/null || true)
+        _baseline=$(APEXYARD_SELECTION_TEST=1 bash "$_parity_instrumented" <<<"$_payload" 2>/dev/null || true)
+        if [ "$_current" != "$_baseline" ]; then
+          _parity_fail=1
+          echo "FAIL: #1182 selection parity for $_payload_target (current='$_current' baseline='$_baseline')"
+        fi
+      done
+      rm -f "$_parity_instrumented"
+      if [ "$_parity_fail" -eq 0 ]; then
+        record_pass "#1182 selection parity compares current and parent implementations"
+      else
+        record_fail "#1182 selection parity compares current and parent implementations"
+      fi
+    fi
+    rm -f "$_parity_baseline"
   fi
-  rm -f "$_parity_baseline"
+}
+check_selection_parity
+
+# Exercise the same parity block without relying on the real parent commit.
+_parity_fixture=$(mktemp)
+printf '#!/bin/bash\nexit 0\n' >"$_parity_fixture"
+_parity_out=$(APEXYARD_PARITY_BASELINE_FILE="$_parity_fixture" check_selection_parity)
+if [[ "$_parity_out" == *"PASS: #1182 selection parity N/A: parent hook ("* ]] &&
+   [[ "$_parity_out" == *") predates #1182"* ]] &&
+   [[ "$_parity_out" != *"FAIL:"* ]]; then
+  record_pass "#1577 pre-#1182 baseline receives a labelled N/A pass"
+else
+  record_fail "#1577 pre-#1182 baseline receives a labelled N/A pass" "$_parity_out"
 fi
+
+cp "$HOOK_SCRIPT" "$_parity_fixture"
+_parity_out=$(APEXYARD_PARITY_BASELINE_FILE="$_parity_fixture" check_selection_parity)
+if [[ "$_parity_out" == *"PASS: #1182 selection parity compares current and parent implementations"* ]] &&
+   [[ "$_parity_out" != *"N/A"* ]] && [[ "$_parity_out" != *"FAIL:"* ]]; then
+  record_pass "#1577 post-#1182 baseline still compares selections"
+else
+  record_fail "#1577 post-#1182 baseline still compares selections" "$_parity_out"
+fi
+rm -f "$_parity_fixture"
 
 # =============================================================================
 # Cases 45-47 (H1, Hakim's security review on PR #1404). Cases 39-41 above

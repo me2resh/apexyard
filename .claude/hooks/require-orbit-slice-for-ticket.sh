@@ -334,7 +334,16 @@ fields=$(awk -v want="$project" '
   END { emit() }
 ' "$registry" | head -1)
 workspace=$(printf '%s' "$fields" | cut -f1)
-enabled=$(printf '%s' "$fields" | cut -f2)
+enabled=$(printf '%s' "$fields" | cut -f2 | LC_ALL=C tr '[:upper:]' '[:lower:]')
+# The registry is hand-edited YAML. Accept the YAML 1.1 boolean spellings,
+# so that "True" or "yes" does not turn the gate off without notice.
+case "$enabled" in
+  true|yes|on) enabled=true ;;
+  false|no|off|'') : ;;
+  *)
+    echo "WARNING: orbit.default_planning for '$project' has an unknown value '$enabled'. The global default applies." >&2
+    enabled= ;;
+esac
 [ -n "$enabled" ] || enabled=$(config_get '.orbit.default_planning' 2>/dev/null)
 [ "$enabled" = true ] || exit 0
 case "$norm" in
