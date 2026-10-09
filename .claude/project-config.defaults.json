@@ -15,7 +15,8 @@
   ],
 
   "orbit": {
-    "default_planning": false
+    "default_planning": false,
+    "governed_prefixes": ["Feature", "Task", "Slice"]
   },
 
   "ticket": {
