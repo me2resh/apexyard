@@ -61,28 +61,15 @@ case "$matched" in
     esac ;;
 esac
 
-# Extract one shell flag value. This follows validate-issue-structure.sh's
-# quoted flag handling and keeps multiline bodies on stdin, not argv.
-flag_value() {
-  printf '%s' "$command" | awk -v flag="$1" -v sq="'" '
-    { s = s (NR == 1 ? "" : "\n") $0 }
-    END {
-      re = "(" flag ")[[:space:]]+\"(.*)\"([[:space:]]+-{1,2}[a-zA-Z]|[[:space:]]*$)"
-      if (match(s, re)) {
-        v=substr(s,RSTART,RLENGTH); sub("^(" flag ")[[:space:]]+\"","",v)
-        sub("\"([[:space:]]+-{1,2}[a-zA-Z].*)?$","",v); sub("\"[[:space:]]*$","",v)
-        print v; exit
-      }
-      re = "(" flag ")[[:space:]]+" sq "(.*)" sq "([[:space:]]+-{1,2}[a-zA-Z]|[[:space:]]*$)"
-      if (match(s, re)) {
-        v=substr(s,RSTART,RLENGTH); sub("^(" flag ")[[:space:]]+" sq,"",v)
-        sub(sq "([[:space:]]+-{1,2}[a-zA-Z].*)?$","",v); sub(sq "[[:space:]]*$","",v)
-        print v; exit
-      }
-      re = "(" flag ")[[:space:]]+[^[:space:]]+"
-      if (match(s, re)) { v=substr(s,RSTART,RLENGTH); sub("^(" flag ")[[:space:]]+","",v); print v }
-    }'
-}
+# Quoted flag values. Same anchor as validate-issue-structure.sh (`either`):
+# a single-dash follower closes the value. See _lib-flag-value.sh.
+flag_lib="$hook_dir/_lib-flag-value.sh"
+if [ ! -r "$flag_lib" ]; then
+  echo 'BLOCKED: _lib-flag-value.sh is missing. Cannot read ORBIT ticket flags.' >&2
+  exit 2
+fi
+# shellcheck source=./_lib-flag-value.sh
+. "$flag_lib"
 
 # tracker_create takes repo, title, body_file as positional arguments.
 tracker_arg() {
@@ -192,8 +179,8 @@ if [ "$repo_flags" -gt 1 ]; then
   echo 'BLOCKED: ORBIT ticket has ambiguous repo flags.' >&2
   exit 2
 fi
-repo=$(flag_value '--repo|-R')
-title=$(flag_value '--title|-t')
+repo=$(extract_flag_value '--repo|-R' "$command" sub either)
+title=$(extract_flag_value '--title|-t' "$command" sub either)
 if [ "$repo_flags" -gt 0 ]; then repo=$repo_from_words; fi
 if [ "$title_flags" -gt 0 ]; then title=$title_from_words; fi
 if [ "$matched" = tracker_create ]; then
@@ -417,8 +404,8 @@ if [ "$body_sources" -gt 1 ]; then
   exit 2
 fi
 
-body=$(flag_value '--body|-b')
-body_file=$(flag_value '--body-file')
+body=$(extract_flag_value '--body|-b' "$command" sub either)
+body_file=$(extract_flag_value '--body-file' "$command" sub either)
 if [ "$is_issue_create" -eq 1 ]; then
   body=$body_from_words
   body_file=$body_file_from_words
@@ -434,7 +421,7 @@ case "$matched" in
     ;;
 esac
 if [ -z "$body_file" ]; then
-  body_file=$(flag_value '-F')
+  body_file=$(extract_flag_value '-F' "$command" sub either)
   case "$body_file" in *=*) body_file="" ;; esac
 fi
 if [ -n "$body_file" ]; then

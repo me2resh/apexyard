@@ -59,18 +59,20 @@ TMPDIR=$(mktemp -d -t flag-extractor.XXXXXX)
 trap 'rm -rf "$TMPDIR"' EXIT
 
 # ---------------------------------------------------------------------------
-# Part 1 — the two extractors, driven directly out of the hook source.
+# Part 1 — the two extractors, driven directly.
 #
-# Pulling the functions out rather than invoking the whole hook keeps these
-# cases pinned to the parsing contract itself, independent of the diff
-# inspection and git state the hook otherwise needs.
+# The content parser is sourced from _lib-flag-value.sh. The path parser
+# still lives in the hook. Driving them directly keeps these cases pinned
+# to the parsing contract, independent of the diff inspection and git
+# state the hook otherwise needs.
 #
 # There are TWO extractors on purpose, and the split is the fix:
 #   extract_path_flag  — non-greedy, for --body-file (a path; no quotes in it)
 #   extract_flag_value — greedy, for --title / --body (content; anything in it)
 # ---------------------------------------------------------------------------
 
-eval "$(awk '/^extract_flag_value\(\) \{/,/^\}/' "$AGDR_HOOK")"
+# shellcheck source=/dev/null
+. "$REPO_ROOT/.claude/hooks/_lib-flag-value.sh"
 eval "$(awk '/^extract_path_flag\(\) \{/,/^\}/' "$AGDR_HOOK")"
 
 for fn in extract_flag_value extract_path_flag; do

@@ -46,6 +46,7 @@ YAML
 # Copy the real defaults + lib so the hook reads real schema.
 cp "$REPO_ROOT/.claude/project-config.defaults.json" "$TMPDIR/fork/.claude/project-config.defaults.json"
 cp "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" "$TMPDIR/fork/.claude/hooks/_lib-read-config.sh"
+cp "$REPO_ROOT/.claude/hooks/_lib-flag-value.sh" "$TMPDIR/fork/.claude/hooks/_lib-flag-value.sh"
 
 # Build a JSON tool_input payload.
 make_payload() {

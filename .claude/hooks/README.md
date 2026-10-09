@@ -291,6 +291,7 @@ Helpers that implement this convention:
 |--------|---------|----------------|
 | `_lib-extract-pr.sh` | `block-unreviewed-merge.sh`, `require-design-review-for-ui.sh`, `block-merge-on-red-ci.sh` | PR number from `gh pr merge` and `gh api .../pulls/<N>/merge` |
 | `_lib-extract-push-ref.sh` | `validate-branch-name.sh` | Source ref from `git push origin <ref>` (and refspec / -u / --set-upstream / --force-with-lease variants) |
+| `_lib-flag-value.sh` | `validate-issue-structure.sh`, `require-agdr-for-arch-pr.sh`, `block-private-refs-in-public-repos.sh`, `require-orbit-slice-for-ticket.sh` | Quoted flag value from a command string. Callers pass the trim and the dash anchor their previous copy used. |
 
 When you add a new hook that depends on git state, ask first: "is the answer
 already in the command string?" If yes, parse it from there. If no, falling
