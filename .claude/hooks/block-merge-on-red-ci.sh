@@ -138,7 +138,7 @@ _require_lib "$(dirname "$0")/_lib-extract-pr.sh" \
   is_merge_command is_merge_command_raw \
   _run_awk_or_fallback join_shell_continuations _join_shell_continuations_fallback \
   _scrub_merge_command _normalize_json_escapes \
-  merge_command_uses_variable extract_pr_number resolve_merge_repo \
+  has_conflicting_repo_flags merge_command_uses_variable extract_pr_number resolve_merge_repo \
   resolve_ci_status_glab
 # Leading cd-target recovery for shared merge-repo resolution (#687/#1151).
 # Optional only for standalone hook-test sandboxes that copy a minimal lib set.
@@ -298,6 +298,11 @@ fi
 
 if ! is_merge_command "$COMMAND"; then
   exit 0
+fi
+
+if has_conflicting_repo_flags "$COMMAND"; then
+  echo "BLOCKED: merge command has conflicting repo flags. Re-run with one repo value." >&2
+  exit 2
 fi
 
 # Variable-substituted merge (#643): if the PR arg or --repo value is an

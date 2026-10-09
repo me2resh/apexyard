@@ -249,6 +249,14 @@ run_case() {
   if [ -f "$sb/gh-calls" ]; then
     gh_calls=$(wc -l < "$sb/gh-calls")
   fi
+  case "$label" in
+    '#1588:'*)
+      if ! grep -q "pr checks 42 --repo $TEST_REPO" "$sb/gh-calls"; then
+        echo "FAIL [$label]: forge query did not target $TEST_REPO" >&2
+        FAIL=$((FAIL+1)); rm -rf "$sb"; return
+      fi
+      ;;
+  esac
   rm -rf "$sb"
 
   if [ "$got_rc" != "$want_rc" ]; then
@@ -280,6 +288,18 @@ run_case() {
   echo "PASS [$label]"
   PASS=$((PASS+1))
 }
+
+# #1588: each spelling and every ordered pair with identical values allow.
+for repo_a in '-R ' '--repo ' '--repo=' '-R='; do
+  sb=$(make_sandbox green "")
+  run_case "#1588: single $repo_a" 0 "" "$sb" \
+    "gh pr merge 42 ${repo_a}$TEST_REPO --squash"
+  for repo_b in '-R ' '--repo ' '--repo=' '-R='; do
+    sb=$(make_sandbox green "")
+    run_case "#1588: same value $repo_a / $repo_b" 0 "" "$sb" \
+      "gh pr merge 42 ${repo_a}$TEST_REPO ${repo_b}$TEST_REPO --squash"
+  done
+done
 
 # B1: the current branch PR has green checks, but argv targets PR 5 or a
 # runtime value. Neither may inherit the branch PR's green result.
