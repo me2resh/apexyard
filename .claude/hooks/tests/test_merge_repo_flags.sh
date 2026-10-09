@@ -26,9 +26,9 @@ check_repo() {
     FAIL=$((FAIL+1))
   fi
 }
-for a in '-R ' '--repo ' '--repo=' '-R='; do
+for a in '-R ' '--repo ' '--repo=' '-R=' '-R'; do
   check_repo "gh pr merge 42 ${a}owner/repo" owner/repo
-  for b in '-R ' '--repo ' '--repo=' '-R='; do
+  for b in '-R ' '--repo ' '--repo=' '-R=' '-R'; do
     check_repo "gh pr merge 42 ${a}owner/repo ${b}owner/repo" owner/repo
     if command -v has_conflicting_repo_flags >/dev/null 2>&1 &&
         ! has_conflicting_repo_flags "gh pr merge 42 ${a}owner/repo ${b}owner/repo"; then
@@ -38,7 +38,12 @@ for a in '-R ' '--repo ' '--repo=' '-R='; do
       FAIL=$((FAIL+1))
     fi
     cmd="gh pr merge 42 ${a}other/repo ${b}owner/repo"
-    check_repo "$cmd" owner/repo
+    if [ "$a" = '-R' ] && [ "$b" = '-R ' ]; then
+      cmd='gh pr merge 42 -Rowner/repo -R other/repo'
+      check_repo "$cmd" other/repo
+    else
+      check_repo "$cmd" owner/repo
+    fi
     input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash",tool_input:{command:$c}}')
     for gate in block-unreviewed-merge block-merge-on-red-ci require-design-review-for-ui require-architecture-review; do
       stderr=$(cd "$SB" && APEXYARD_OPS_DISABLE_PIN=1 bash ".claude/hooks/$gate.sh" <<< "$input" 2>&1 >/dev/null)
@@ -52,6 +57,10 @@ for a in '-R ' '--repo ' '--repo=' '-R='; do
     done
   done
 done
+# Only standalone repo flags count, not long prefixes or embedded flag text.
+check_repo 'gh pr merge 42 --repository=other/repo -Rowner/repo' owner/repo
+check_repo 'gh pr merge 42 --subject=prefix-Rother/repo -Rowner/repo' owner/repo
+check_repo 'gh pr merge 42 --subject=-Rother/repo --repo owner/repo' owner/repo
 # Separate merge statements keep their own repo declarations (#1568).
 if command -v has_conflicting_repo_flags >/dev/null 2>&1 &&
     ! has_conflicting_repo_flags 'gh pr merge 5 -R a/a; gh pr merge 7 --repo=b/b'; then

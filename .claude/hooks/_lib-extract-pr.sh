@@ -1337,13 +1337,14 @@ resolve_ci_status_glab() {
 }
 
 # Echoes repo flag values in command order, limited to CLI merge spans.
-# Both separators share one match so mixed spellings keep last-flag order.
+# One match preserves command order across separated and attached spellings.
+# Keep separators first so -R=VALUE strips the equals sign.
 _merge_repo_flag_values() {
   local cmd
   cmd=$(_join_shell_continuations "$1")
   echo "$cmd" | grep -oE '\b(gh\s+pr|glab\s+mr)\s+merge\b[^|;&]*' \
-    | grep -oE '[[:space:]](--repo|-R)(=|[[:space:]]+)[^[:space:]]+' \
-    | sed -E 's/^[[:space:]]+(--repo|-R)(=|[[:space:]]+)//'
+    | grep -oE '[[:space:]]((--repo|-R)(=|[[:space:]]+)[^[:space:]]+|-R[^=[:space:]][^[:space:]]*)' \
+    | sed -E 's/^[[:space:]]+((--repo|-R)(=|[[:space:]]+)|-R)//'
 }
 
 # Conflicting repo declarations are never a legitimate merge target.
