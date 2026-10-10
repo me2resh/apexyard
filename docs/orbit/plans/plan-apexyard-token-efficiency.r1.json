@@ -141,7 +141,7 @@
     {
       "id": "ac6-3",
       "outcomeId": "o6-skill-bodies-lean",
-      "statement": "The Writing rule preamble and the ops-root resolution block appear in each skill as one line that names the shared file. Today they repeat 45 and 53 times. Shown by: a grep test that finds 0 repeats."
+      "statement": "The Writing rule preamble and the ops-root resolution block appear in each skill as one line that names the shared file. Today they repeat 45 times each. Shown by: a grep test that finds 0 repeats."
     },
     {
       "id": "ac6-4",
