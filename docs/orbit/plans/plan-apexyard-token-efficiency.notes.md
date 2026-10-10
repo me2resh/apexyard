@@ -12,6 +12,8 @@ A token-cost debug on 2026-10-10 measured one 10-day session (5,762 API turns, 1
 - 29% of Rex rounds add no information. The largest class is a round after a base-branch refresh with an unchanged patch (31 rounds in the session), not wording blocks.
 - 469 CI-wait turns inside 195 reviewer runs cost 5.5 hours and 2.6M uncached tokens; 27 of 30 waits of 5 minutes or more expired the prompt cache.
 
+Counting rule for ac6-3: the preamble is a `## Writing rule` heading, and the inline ops-root block is a walk-up that names `.apexyard-fork`.
+
 The five most-invoked skills in the baseline (ac6-2): `/approve-merge` 209, `/approve-design` 18, `/code-review` 15, `/task` 12, `/start-ticket` 4.
 
 ## Constraints
@@ -33,7 +35,30 @@ The five most-invoked skills in the baseline (ac6-2): `/approve-merge` 209, `/ap
 
 ## Naqid's challenge (2026-10-10)
 
-Verdict: proceed-with-changes. Applied: step 5 of `/approve-merge` stays inline and a test proves the script has no `approved_by` (ac6-1); C1 restated and the carry-over changes tied to AgDR-0178; the docs-only advisory carry-over dropped, because 3 of 11 wording rewrites added errors; the o7 rail moved out of the merge gate; docs paths named by prompts are Full; a Tariq corpus and five delta entries precede the prompt cuts; `omitClaudeMd` limited to review and audit agents; the reviewer wait lines named; ac3-4 restated; the banner edit merged into o4 and the compact line into o6; context size given its own outcome with a spike; the order starts with the harness o4 slice.
+Verdict: proceed-with-changes. Applied (Naqid's ten numbered changes, listed by part): step 5 of `/approve-merge` stays inline and a test proves the script has no `approved_by` (ac6-1); C1 restated and the carry-over changes tied to AgDR-0178; the docs-only advisory carry-over dropped, because 3 of 11 wording rewrites added errors; the o7 rail moved out of the merge gate; docs paths named by prompts are Full; a Tariq corpus and five delta entries precede the prompt cuts; `omitClaudeMd` limited to review and audit agents; the reviewer wait lines named; ac3-4 restated; the banner edit merged into o4 and the compact line into o6; context size given its own outcome with a spike; the order starts with the harness o4 slice.
+
+## Prompt-cache TTL (2026-10-10)
+
+Facts, verified in Claude Code CLI 2.1.296:
+
+- The main conversation (`promptCacheTtl`) is 1 hour automatically on a subscription within its usage limits, and 5 minutes on an API key, Bedrock, Vertex or Foundry. The setting text limits the automatic 1 hour to a subscription within its limits. Bedrock needs `ENABLE_PROMPT_CACHING_1H_BEDROCK` for a 1-hour TTL; confirm support for each other provider.
+- Subagents, workflows, background and helper requests (`subagentPromptCacheTtl`) default to 5 minutes on every plan. An agent file can set `experimental.cacheTtl`; "1h" there is ignored in overage. An explicit setting or environment variable takes precedence and is not overage-gated.
+- 1-hour cache writes bill at a higher rate. On the API, a 1-hour write costs 2x base input, a 5-minute write 1.25x, and a read 0.1x.
+- Usage records carry `cache_creation.ephemeral_5m_input_tokens` and `ephemeral_1h_input_tokens`, so the TTL of each request is measurable from the transcript.
+
+Measured on the subagent runs of the baseline session, counting an expiry only after a pause of at least 5 minutes:
+
+- 55 cache expiries (median pause 10 minutes) re-wrote 4.76M tokens: 13.0% of 36.5M cache writes. Two full cache losses after short pauses are excluded.
+- Causes: 14 reviewer resumes for a delta (7 Rex, 4 Hakim, 3 Tariq; contexts 55k to 180k), 6 "CI is now green" messages to reviewers, 4 build-agent resumes, and 31 other pauses, mostly CI waits inside reviewers and long test or poll loops. o4 removes the CI waits and the CI-green messages.
+- At API prices, a 1-hour subagent TTL pays off only when re-writes exceed 39.5% of writes. Naqid's re-measurement adds about 4.0M tokens of shared-prompt rewrites at new spawns, which puts re-writes at 22 to 25% (Rex about 30%). Below the line either way: a 1-hour subagent TTL would add roughly 10M to 18M input-equivalents per session at API prices.
+- For the main loop on a 5-minute TTL, re-writes would be about 90% of its writes (Naqid's estimate), because the orchestrator waits for CI under o4.
+
+Decisions:
+
+- The framework does not ship a 1-hour subagent TTL. o4 removes the CI waits and the CI-green messages, and ac7-6 removes the review-delta rebuilds, at no extra write cost.
+- ac7-6 resumes a reviewer when its hand-back is under 5 minutes old or its context is under 80k tokens: below 80k, a rebuild costs about the same as a fresh spawn at 49k and keeps the reviewer's memory. Above it, a fresh reviewer is cheaper. Its brief lists each earlier blocking finding and the old..new commit range, and it re-checks each finding before it approves, so a fresh delta cannot skip a finding. It reuses the ac5-3 delta agent and its zero-flip check.
+- o4 depends on a warm main cache while the orchestrator waits for CI. A subscription within its limits has it by default. Other adopters set `promptCacheTtl` to 1h where their provider supports it (ac4-5).
+- Owner trial: `subagentPromptCacheTtl` "1h" in the owner's user settings from 2026-10-10 to 2026-10-17, because subscription accounting for 1-hour writes is not public. It took effect in the running session. Keep it only if weekly usage does not rise against the week before. The o1 script reads the TTL of each request and reports 1-hour runs apart, so the trial does not hide the effect of ac7-6 or o4.
 
 ## Order
 
@@ -43,7 +68,7 @@ The harness o4 slice first, because o1 reuses its measurement script. Then o1. T
 
 - `slice-harness-o4-review-agent-token-trim` (plan-apexyard-harness-golden-path r3).
 - AgDR-0116 (ceremony tiers; Option 4 extended with a scripted tier), AgDR-0172 (two-round cap), AgDR-0178 (`rex_approval_carries_over`, #1437, #1456), AgDR-0104 (decide on exit codes and tree equality, never on parsed diff text), AgDR-0044 (skill token-efficiency waves), AgDR-0050 and AgDR-0074 (reviewers on Opus).
-- Harness assumptions to verify in the first slices: `omitClaudeMd` exists for custom agents (CLI 2.1.271 and later); that it also drops the memory index was measured on Explore spawns only, so the harness o4 baseline confirms it for Rex; the per-agent reasoning effort field is undocumented, so ac5-3 starts with a spike; the Monitor wait exists in Claude Code; the prompt-cache TTL in this session is one hour, so a CI wait under one hour does not rebuild the main-loop cache (ac4-4 reports rebuilds to check this).
+- Harness assumptions to verify in the first slices: `omitClaudeMd` exists for custom agents (CLI 2.1.271 and later); that it also drops the memory index was measured on Explore spawns only, so the harness o4 baseline confirms it for Rex; the per-agent reasoning effort field is undocumented, so ac5-3 starts with a spike; the Monitor wait exists in Claude Code; the main-loop cache stays warm during a CI wait only with a 1-hour main TTL (see "Prompt-cache TTL"; ac4-4 reports rebuilds to check this).
 
 ## What stays as is
 

@@ -46,7 +46,7 @@
     {
       "id": "ac1-2",
       "outcomeId": "o1-cost-measured",
-      "statement": "The same script reads subagent transcripts and reports, per reviewer, the first-turn context, total tokens, tool calls and CI-wait turns. It reads the forge for Rex rounds per PR and hours from open to merge. Shown by: a dated baseline file under docs/perf/ with the 2026-10-10 numbers."
+      "statement": "The same script reads subagent transcripts and reports, per reviewer, the first-turn context, total tokens, tool calls, CI-wait turns, cache rebuilds and cache TTL. It reads the forge for Rex rounds per PR and hours from open to merge. Shown by: a dated baseline file under docs/perf/ with the 2026-10-10 numbers."
     },
     {
       "id": "ac1-3",
@@ -96,7 +96,7 @@
     {
       "id": "ac4-1",
       "outcomeId": "o4-reviewers-do-not-wait",
-      "statement": "The auto-code-review banner is at most 300 bytes and keeps exit 2 and the pending-review marker. It tells the orchestrator to wait for green CI with a Monitor, then spawn Rex. The /code-review skill says the same. Shown by: the hook text, the skill text and a test."
+      "statement": "The auto-code-review hook prints at most 300 bytes and keeps exit 2 and the pending-review marker. It tells the orchestrator to wait for green CI with a Monitor, then spawn Rex. The /code-review skill says the same. Shown by: the hook text, the skill text and a test."
     },
     {
       "id": "ac4-2",
@@ -114,9 +114,14 @@
       "statement": "CI-wait turns per reviewer run are 0 beyond the one check, from 469 turns across 195 runs. Main-loop cache rebuilds during a wait and hours from open to merge are reported beside it. Shown by: the o1 script on the next 40 PRs."
     },
     {
+      "id": "ac4-5",
+      "outcomeId": "o4-reviewers-do-not-wait",
+      "statement": "The o4 rule and the getting-started docs tell adopters outside a subscription's limits to set promptCacheTtl to 1h where their provider supports it. Without it, an idle CI wait over 5 minutes rebuilds the main context. Shown by: the docs text and the rule text."
+    },
+    {
       "id": "ac5-1",
       "outcomeId": "o5-subagents-start-lean",
-      "statement": "The seven review and audit agent files set omitClaudeMd and carry the 8-line floor block, and a static test fails when one is missing. Build agents keep CLAUDE.md. Shown by: the test and the o1 first-turn context per agent type."
+      "statement": "Seven review and audit agents set omitClaudeMd and carry the 8-line floor block: code-reviewer, security-reviewer, solution-architect, contrarian, qa-engineer, dependency-auditor and penetration-tester. A static test fails when one is missing. Build agents keep CLAUDE.md. Shown by: the test and the o1 first-turn context per agent type."
     },
     {
       "id": "ac5-2",
@@ -141,7 +146,7 @@
     {
       "id": "ac6-3",
       "outcomeId": "o6-skill-bodies-lean",
-      "statement": "The Writing rule preamble and the ops-root resolution block appear in each skill as one line that names the shared file. Today they repeat 45 times each. Shown by: a grep test that finds 0 repeats."
+      "statement": "The Writing rule preamble and the ops-root resolution block appear in each skill as one line that names the shared file. Today the preamble repeats in 45 skills and the inline walk-up in 24. Shown by: a grep test that finds 0 repeats."
     },
     {
       "id": "ac6-4",
@@ -177,6 +182,11 @@
       "id": "ac7-5",
       "outcomeId": "o7-depth-by-tier-and-round",
       "statement": "Tokens per Rex review on a Lean PR fall by at least 35% against the o1 baseline mean of 83.7k. Shown by: the o1 script."
+    },
+    {
+      "id": "ac7-6",
+      "outcomeId": "o7-depth-by-tier-and-round",
+      "statement": "The three review skills resume a reviewer only when its hand-back is under 5 minutes old or its context is under 80k tokens. Otherwise they spawn a fresh reviewer with a brief that lists each earlier blocking finding and the commit range, and it re-checks each finding. Shown by: the skill text, zero flips on the delta corpus entries, and at most 1 resume rebuild per 100 reviewer runs, from 4.0."
     }
   ]
 }

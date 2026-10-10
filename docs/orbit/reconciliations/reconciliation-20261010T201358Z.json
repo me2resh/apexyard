@@ -8,7 +8,7 @@
   "observations": [
     "Observed me2resh/apexyard at bace9dbccf5b0af2204d6a89f3d9d81bb52905f0.",
     "Baseline from the 2026-10-10 token-cost debug (one 10-day session): main context mean 490k tokens per turn, p90 853k, 18 compactions; the /approve-merge body injected 209 times at 34 KB; every Rex spawn starts at 49k tokens; 469 CI-wait turns inside 195 reviewer runs; 31 pure-refresh Rex rounds; Rex rounds per PR 2.38 on the framework.",
-    "Static state at this commit: 0 of 23 agent files set omitClaudeMd; code-reviewer.md is 73,140 bytes, security-reviewer.md 21,570, solution-architect.md 22,858; approve-merge SKILL.md is 39,285 bytes; of the other four most-invoked skills, approve-design (11,861), code-review (13,359) and task (10,216) are under 16,000 bytes and start-ticket (18,909) is not; 45 of 71 skills carry the Writing rule preamble; docs/eval-agents/corpus has rex.json (10 entries) and hakim.json (4), no Tariq corpus; docs/perf/ holds only hook-test-profile-2026-10.md.",
+    "Static state at this commit: 0 of 23 agent files set omitClaudeMd; code-reviewer.md is 73,140 bytes, security-reviewer.md 21,570, solution-architect.md 22,858; approve-merge SKILL.md is 39,285 bytes; of the other four most-invoked skills, approve-design (11,861), code-review (13,359) and task (10,216) are under 16,000 bytes and start-ticket (18,909) is not; 45 of 67 skills carry the Writing rule preamble; docs/eval-agents/corpus has rex.json (10 entries) and hakim.json (4), no Tariq corpus; docs/perf/ holds only hook-test-profile-2026-10.md.",
     "pr-workflow.md lines 88 and 89 (step 3) ask for a Rex re-review after a branch update, and line 111 documents the carry-over exception for the CEO marker (AgDR-0178, #1437, #1456). code-reviewer.md line 161 tells Rex to wait for CI, and line 165 forbids an APPROVED verdict on pending CI. test_block_merge_on_red_ci.sh line 372 covers a queued head run, and the hook decides on CI status only (lines 101 and 102). orbit SKILL.md line 272 runs Naqid after every draft."
   ],
   "criterionAssessments": [
@@ -57,10 +57,11 @@
       "criterionId": "ac2-3",
       "status": "not-verified",
       "evidence": [
-        "parallel-work.md (64 lines) and fan-out SKILL.md cover worktree isolation only; neither covers a fork against a fresh spawn",
+        "fan-out SKILL.md lines 156 and 221 require a self-contained prompt for each agent",
+        "Neither parallel-work.md nor fan-out SKILL.md sets a rule for a fork against a fresh spawn",
         "Baseline: two forks inherited 281k and 581k of context and billed 17.8M tokens"
       ],
-      "explanation": "Missing: the fresh-spawn default and the fork rule. Next: the o2 slice."
+      "explanation": "Missing: a rule in parallel-work.md and fan-out that makes a fresh spawn the default and names when a fork is allowed. Next: the o2 slice. fan-out already requires a self-contained prompt for each agent, which is the written-brief half of the criterion."
     },
     {
       "criterionId": "ac2-4",
@@ -131,7 +132,7 @@
         "block-merge-on-red-ci.sh lines 101 and 102: the gate does not source _lib-review-markers.sh and decides on CI status (AgDR-0213)",
         "test_block_merge_on_red_ci.sh line 372: run states action_required, queued, in_progress, startup_failure, failure and cancelled each block"
       ],
-      "explanation": "The red-CI gate decides on CI status only and reads no approval marker, so a valid Rex marker cannot change its result. Its test covers a queued head run. A PR with queued checks therefore blocks at merge today."
+      "explanation": "The red-CI gate decides on CI status only and reads no approval marker, so a valid Rex marker cannot change its result. Its test covers a queued head run. A PR with queued checks therefore blocks at merge today. One documented limit stays: when the GitHub Actions API call fails, the gate fails open with an unverified-CI note (AgDR-0213)."
     },
     {
       "criterionId": "ac4-4",
@@ -140,6 +141,15 @@
         "Baseline: 469 turns across 195 runs; 27 of 30 waits of 300 s or more expired the prompt cache"
       ],
       "explanation": "Missing: the measurement after o4. Next: the o1 script on the next 40 PRs."
+    },
+    {
+      "criterionId": "ac4-5",
+      "status": "not-verified",
+      "explanation": "Missing: no framework doc or rule names promptCacheTtl. Next: the o4 slice adds it to the o4 rule and to docs/getting-started.md.",
+      "evidence": [
+        "No match for promptCacheTtl or PROMPT_CACHE_TTL in docs/, .claude/rules, .claude/skills or .claude/agents outside docs/orbit/",
+        "CLI 2.1.296 setting text: main conversation 1 hour on a subscription within its limits, 5 minutes on an API key, Bedrock, Vertex or Foundry"
+      ]
     },
     {
       "criterionId": "ac5-1",
@@ -183,16 +193,16 @@
       "evidence": [
         "wc -c on the five skill files at this commit"
       ],
-      "explanation": "Missing: approve-merge is 39,285 bytes and start-ticket is 18,909, and no cap test exists. Next: the o6 slice. Met: approve-design 11,861, code-review 13,359 and task 10,216 bytes are under the cap."
+      "explanation": "Missing: approve-merge is 39,285 bytes and start-ticket is 18,909, and no body-size cap test exists. Next: the o6 slice. Met: approve-design 11,861, code-review 13,359 and task 10,216 bytes are under the cap."
     },
     {
       "criterionId": "ac6-3",
       "status": "not-verified",
       "evidence": [
-        "grep for the Writing rule heading: 45 of 71 skills",
-        "grep for the .apexyard-fork anchor: 24 skills; the baseline signature counts 45"
+        "grep for the \"## Writing rule\" heading: 45 of 67 skills",
+        "grep for the .apexyard-fork walk-up anchor: 24 skills"
       ],
-      "explanation": "Missing: 45 skills carry the Writing rule preamble, and the ops-root block repeats in 45 skills by the baseline signature (24 by the .apexyard-fork anchor string). Next: the o6 slice."
+      "explanation": "Missing: 45 of 67 skills carry the Writing rule preamble, and 24 carry the inline ops-root walk-up anchored on .apexyard-fork. Next: the o6 slice."
     },
     {
       "criterionId": "ac6-4",
@@ -224,7 +234,7 @@
       "status": "not-verified",
       "evidence": [
         "code-reviewer.md: Reduced-Scope Review section and the round-up rail, neither tied to a scripted tier",
-        "rex.json: 10 entries, none docs-only"
+        "rex.json: 10 entries. rex-677 is labelled docs-only, but its PR changed .claude/agents, .claude/rules and docs/agdr files, which ac7-1 classifies as Full. No entry exercises a Lean procedure."
       ],
       "explanation": "Missing: the fixed Lean procedure tied to the scripted tier, the ESCALATE verdict and docs-only corpus entries. The current Reduced-Scope section is what this criterion replaces. Next: the o7 slice."
     },
@@ -251,12 +261,23 @@
         "Baseline: eligible Lean runs averaged 83.7k tokens"
       ],
       "explanation": "Missing: the measurement after o7. Next: the o1 script."
+    },
+    {
+      "criterionId": "ac7-6",
+      "status": "not-verified",
+      "explanation": "Missing: no review skill gives a resume window or a fresh-spawn brief for a delta re-review. Next: the o7 slice.",
+      "evidence": [
+        "No resume or SendMessage guidance in the code-review, security-review or design-review skill, or in pr-workflow.md",
+        "Baseline: 14 review-delta resumes rebuilt their cache in 350 reviewer runs, 4.0 per 100 (7 Rex, 4 Hakim, 3 Tariq; contexts 55k to 180k)",
+        "Six more rebuilds were \"CI is now green\" messages to reviewers, which o4 removes"
+      ]
     }
   ],
   "discoveries": [
     "The measurement scripts of the debug exist only in a session scratchpad. o1 brings a maintained version into the repo, and the harness o4 slice ships the per-review part first.",
     "The dispatch hook blocked two read-only commands during this planning session because their text named a tracker command inside a heredoc or a grep pattern. The debug counted 88 hook blocks on reviewers, 43 of them heredoc false positives. This is not in the plan; it is a candidate for a bug ticket or the next revision.",
-    "The first draft of this record measured the static facts in the ops fork at v5.8.0 with local skills, not at this commit; Naqid caught it, and every static fact was re-measured at bace9db. The ops-root block count in the debug (53) included 8 local skills; at this commit it is 45 by the baseline signature and 24 by the .apexyard-fork anchor string. The o6 slice fixes the counting rule in its grep test.",
-    "The harness o4 slice record is on dev and has no issue yet. An open issue that quotes its slice ID in backticks makes the handoff duplicate check exit 12; the #1619 ticket body was corrected on 2026-10-10 so that /orbit handoff can file it."
+    "The first draft of this record measured the static facts in the ops fork at v5.8.0 with local skills, not at this commit; Naqid caught it, and every static fact was re-measured at bace9db. The debug counted 53 skills with an ops-root block in the ops fork, with an unrecorded signature. At this commit, 24 of 67 skills carry the inline walk-up anchored on .apexyard-fork. The o6 grep test uses that anchor as its signature.",
+    "The harness o4 slice record is on dev and has no issue yet. An open issue that quotes its slice ID in backticks makes the handoff duplicate check exit 12; the #1619 ticket body was corrected on 2026-10-10 so that /orbit handoff can file it.",
+    "Subagent prompt-cache expiries in the baseline: 55 after a pause of at least 5 minutes, re-writing 4.76M tokens (13.0% of 36.5M writes). Subagents default to a 5-minute TTL on every plan. The causes are CI waits and CI-green messages inside reviewers (o4 removes them), 14 review-delta resumes (ac7-6), build-agent resumes and long loops. The plan notes record the TTL facts and the owner trial."
   ]
 }
