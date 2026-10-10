@@ -46,84 +46,25 @@ if ! echo "$COMMAND" | grep -qE '\bgh\s+issue\s+create\b'; then
 fi
 
 # ---------------------------------------------------------------------------
-# Arg extraction — lifted from block-private-refs-in-public-repos.sh so that
-# quoting / spacing variants are handled consistently across the gh hooks.
+# Arg extraction. Shared parser in _lib-flag-value.sh. This hook passes
+# anchor `either` so a single-dash follower (`-F`, `-t`) closes the value
+# (me2resh/apexyard#695).
 # ---------------------------------------------------------------------------
 
-extract_flag_value() {
-  # $1 = python-flag regex (e.g. --title|-t). Matches (possibly multi-line):
-  #   --title "value"
-  #   --title 'value'
-  #   --title value
-  #
-  # Agents commonly pass `--body "…literal newlines…"`, so the extractor
-  # must handle multi-line values. Portable awk doesn't have a reliable way
-  # to consume stdin as a single record (`RS="\0"` triggers paragraph mode
-  # on BSD awk), so we build up one big string line-by-line in awk and run
-  # match() against it in END.
-  #
-  # Quoted-value regex is GREEDY and anchored on the next flag boundary
-  # (whitespace + `--<letter>`) or end-of-string. The earlier non-greedy
-  # form `"([^"]*)"` truncated values at the first embedded double quote
-  # (me2resh/apexyard#227), so bodies that quoted prose like "admin notice"
-  # in a `## Scope` bullet lost every `##` heading that lived past the
-  # first internal `"`. Greedy + boundary anchor matches the closing `"`
-  # of the FLAG argument, not the first internal `"` inside the body.
-  # Backslash-escaped quotes (`\"...\"`) are not detected — they pass
-  # through as content, which is fine because shell-quoted heredoc bodies
-  # (the `$(cat <<'EOF' ... EOF)` shape Claude generates) don't produce
-  # backslash escapes.
-  local flag_re="$1"
-  local cmd="$2"
-  printf '%s' "$cmd" | awk -v FLAG_RE="$flag_re" -v SQ="'" '
-    { buf = (NR == 1 ? $0 : buf "\n" $0) }
-    END {
-      s = buf
-      # Double-quoted value: greedy `(.*)` anchored on next flag or EOS.
-      # Boundary matches single-dash (`-F`, `-f`, `-t`) OR double-dash
-      # (`--field`, `--body-file`) flags. The earlier `--[a-zA-Z]`-only anchor
-      # failed when a single-dash flag followed a quoted value — e.g.
-      # `--title "[Feature] F" -F body=@file` parsed the title as `"[Feature]`
-      # via the unquoted fallback, so the bracketed prefix never resolved and
-      # the gh-api body-file shape silently bypassed validation
-      # (me2resh/apexyard#695).
-      re = "(" FLAG_RE ")[[:space:]]+\"(.*)\"([[:space:]]+-{1,2}[a-zA-Z]|[[:space:]]*$)"
-      if (match(s, re)) {
-        chunk = substr(s, RSTART, RLENGTH)
-        sub("^(" FLAG_RE ")[[:space:]]+\"", "", chunk)
-        sub("\"([[:space:]]+-{1,2}[a-zA-Z].*)?$", "", chunk)
-        sub("\"[[:space:]]*$", "", chunk)
-        print chunk
-        exit
-      }
-      # Single-quoted value: same greedy + anchor treatment.
-      re = "(" FLAG_RE ")[[:space:]]+" SQ "(.*)" SQ "([[:space:]]+-{1,2}[a-zA-Z]|[[:space:]]*$)"
-      if (match(s, re)) {
-        chunk = substr(s, RSTART, RLENGTH)
-        sub("^(" FLAG_RE ")[[:space:]]+" SQ, "", chunk)
-        sub(SQ "([[:space:]]+-{1,2}[a-zA-Z].*)?$", "", chunk)
-        sub(SQ "[[:space:]]*$", "", chunk)
-        print chunk
-        exit
-      }
-      # Unquoted value: single token, embedded quotes irrelevant.
-      re = "(" FLAG_RE ")[[:space:]]+[^[:space:]]+"
-      if (match(s, re)) {
-        chunk = substr(s, RSTART, RLENGTH)
-        sub("^(" FLAG_RE ")[[:space:]]+", "", chunk)
-        print chunk
-        exit
-      }
-    }
-  '
-}
+flag_lib="$(dirname "$0")/_lib-flag-value.sh"
+if [ ! -r "$flag_lib" ]; then
+  echo "BLOCKED: _lib-flag-value.sh is missing. Cannot read issue flags." >&2
+  exit 2
+fi
+# shellcheck source=./_lib-flag-value.sh
+. "$flag_lib"
 
-TITLE=$(extract_flag_value '--title|-t' "$COMMAND")
-BODY=$(extract_flag_value '--body|-b' "$COMMAND")
+TITLE=$(extract_flag_value '--title|-t' "$COMMAND" sub either)
+BODY=$(extract_flag_value '--body|-b' "$COMMAND" sub either)
 
 # --body-file <path> / -F <path> (only when -F's value is NOT a key=val pair,
 # because some gh shapes reuse -F for field values).
-BODY_FILE=$(extract_flag_value '--body-file' "$COMMAND")
+BODY_FILE=$(extract_flag_value '--body-file' "$COMMAND" sub either)
 if [ -z "$BODY_FILE" ]; then
   F_VAL=$(echo "$COMMAND" | sed -nE "s/.*(^|[[:space:]])-F[[:space:]]+\"([^\"]*)\".*/\2/p" | head -1)
   if [ -z "$F_VAL" ]; then

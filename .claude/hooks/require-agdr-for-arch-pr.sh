@@ -44,61 +44,17 @@ fi
 
 # ---------------------------------------------------------------------------
 # 1. Extract --title, --body, --body-file, -F <path> from the command.
-#    Same parser shape as block-private-refs-in-public-repos.sh — lifted here
-#    to avoid creating a shared extractor library solely for one new caller.
+#    Quoted content flags come from _lib-flag-value.sh. Default trim `sub`
+#    and anchor `double` (`--<letter>` only) are this hook's previous parser.
 # ---------------------------------------------------------------------------
 
-extract_flag_value() {
-  # $1 = flag regex (e.g. --title | -t). Matches:
-  #   --title "value with spaces"
-  #   --title 'value with spaces'
-  #   --title value
-  #
-  # The original sed form used `[^"]*` which truncated at the first embedded
-  # double-quote inside the body value — false-blocking PRs whose body contained
-  # a `"` before the AgDR reference (me2resh/apexyard#461). The fix mirrors the
-  # already-corrected extractor in block-private-refs-in-public-repos.sh
-  # (me2resh/apexyard#227): awk with a greedy `(.*)` match anchored on the next
-  # recognised flag boundary (whitespace + `--<letter>`) or end-of-string. This
-  # captures the full quoted span, including any embedded quotes, without
-  # bleeding past the start of the next flag.
-  local flag_re="$1"
-  local cmd="$2"
-  printf '%s' "$cmd" | awk -v FLAG_RE="$flag_re" -v SQ="'" '
-    { buf = (NR == 1 ? $0 : buf "\n" $0) }
-    END {
-      s = buf
-      # Double-quoted value: greedy `(.*)` anchored on next flag or EOS.
-      re = "(" FLAG_RE ")[[:space:]]+\"(.*)\"([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
-      if (match(s, re)) {
-        chunk = substr(s, RSTART, RLENGTH)
-        sub("^(" FLAG_RE ")[[:space:]]+\"", "", chunk)
-        sub("\"([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
-        sub("\"[[:space:]]*$", "", chunk)
-        print chunk
-        exit
-      }
-      # Single-quoted value: same greedy + anchor treatment.
-      re = "(" FLAG_RE ")[[:space:]]+" SQ "(.*)" SQ "([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
-      if (match(s, re)) {
-        chunk = substr(s, RSTART, RLENGTH)
-        sub("^(" FLAG_RE ")[[:space:]]+" SQ, "", chunk)
-        sub(SQ "([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
-        sub(SQ "[[:space:]]*$", "", chunk)
-        print chunk
-        exit
-      }
-      # Unquoted value: single token, embedded quotes irrelevant.
-      re = "(" FLAG_RE ")[[:space:]]+[^[:space:]]+"
-      if (match(s, re)) {
-        chunk = substr(s, RSTART, RLENGTH)
-        sub("^(" FLAG_RE ")[[:space:]]+", "", chunk)
-        print chunk
-        exit
-      }
-    }
-  '
-}
+flag_lib="$(dirname "$0")/_lib-flag-value.sh"
+if [ ! -r "$flag_lib" ]; then
+  echo "BLOCKED: _lib-flag-value.sh is missing. Cannot read PR flags." >&2
+  exit 2
+fi
+# shellcheck source=./_lib-flag-value.sh
+. "$flag_lib"
 
 # extract_path_flag FLAG_RE COMMAND  (me2resh/apexyard#1038)
 #
@@ -108,7 +64,8 @@ extract_flag_value() {
 #   CONTENT (--title / --body): may contain anything — quotes, pipes,
 #     semicolons, markdown tables. Extraction must be GREEDY and terminate
 #     only on a real flag boundary, or an embedded quote truncates the value.
-#     extract_flag_value above is therefore left exactly as #227 wrote it.
+#     The content parser in _lib-flag-value.sh is therefore left on the
+#     #227 trim (default `sub`) and the `--<letter>` anchor (default).
 #
 #   PATH (--body-file / -F): a filesystem path, which never contains a quote.
 #     Extraction must be NON-GREEDY — stop at the FIRST closing quote. The
@@ -118,7 +75,7 @@ extract_flag_value() {
 #     read, and the `<!-- agdr: not-applicable -->` marker inside it was
 #     never seen — blocking the PR for a missing AgDR that WAS declared.
 #
-# An earlier attempt widened extract_flag_value's anchor to accept shell
+# An earlier attempt widened the content parser's anchor to accept shell
 # operators. That fixed the path case and broke the content case: `sub()` is
 # leftmost-first and each alternative ended in `.*`, so a body containing a
 # quote followed by ` |` truncated there. In the sibling leak hook that same

@@ -13,6 +13,7 @@ PUBLIC_HOOK_SOURCE=${PUBLIC_HOOK_SOURCE:-$ROOT/.claude/hooks/block-private-refs-
 RUNTIME_HOOK_SOURCE=${RUNTIME_HOOK_SOURCE:-$ROOT/.claude/hooks/check-private-refs-runtime.sh}
 PARSER_SOURCE="$ROOT/.claude/hooks/_lib-registry-parser.sh"
 CONFIG_SOURCE="$ROOT/.claude/hooks/_lib-read-config.sh"
+FLAG_SOURCE="$ROOT/.claude/hooks/_lib-flag-value.sh"
 
 PASS=0
 FAIL=0
@@ -22,7 +23,7 @@ trap 'rm -rf "$SANDBOX"' EXIT
 mkdir -p "$SANDBOX/.claude/hooks" "$SANDBOX/child"
 cp "$PUBLIC_HOOK_SOURCE" "$SANDBOX/.claude/hooks/block-private-refs-in-public-repos.sh"
 cp "$RUNTIME_HOOK_SOURCE" "$SANDBOX/.claude/hooks/check-private-refs-runtime.sh"
-cp "$PARSER_SOURCE" "$CONFIG_SOURCE" "$SANDBOX/.claude/hooks/"
+cp "$PARSER_SOURCE" "$CONFIG_SOURCE" "$FLAG_SOURCE" "$SANDBOX/.claude/hooks/"
 chmod +x "$SANDBOX/.claude/hooks/block-private-refs-in-public-repos.sh" \
   "$SANDBOX/.claude/hooks/check-private-refs-runtime.sh"
 printf 'company: synthetic\n' > "$SANDBOX/onboarding.yaml"
