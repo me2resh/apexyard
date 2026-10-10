@@ -94,8 +94,7 @@ Enabled caches retain their signatures, freshness checks, and same-second write 
 New regressions check disabled fingerprints, root scope across working directories, and POSIX error status.
 Existing cache tests still check invalidation and enabled-cache reuse.
 
-These library changes are implementation choices for the operator's AgDR decision.
-This patch adds no AgDR.
+AgDR-0120 records both library changes in its "Update (#1613)" section.
 It changes no gate matcher, approval rule, or allow/block branch.
 It adds no library and requires no new sandbox dependency.
 It leaves `.github/workflows/tests.yml` and `bin/run-hook-tests.sh` unchanged.

@@ -35,6 +35,12 @@
 #       frozen `date` shim (no real-time race) through the REAL wired
 #       path (portfolio_workspace_dir) -- fails on unfixed code, passes
 #       once the write-time-settled guard is in place
+#   11. (#1613) A disabled cache returns UNKNOWN without resolving the
+#       config paths
+#   12. (#1613) The per-load config root does not persist into a later
+#       load or another working directory
+#   13. (#1613) An unresolved config root keeps the original shell exit
+#       status, with and without POSIX mode
 #
 # Exit 0 if all cases pass; 1 on first failure.
 
