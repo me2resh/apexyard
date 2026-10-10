@@ -1,0 +1,37 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-harness-o1-fail-closed-gates",
+  "planId": "plan-apexyard-harness-golden-path",
+  "outcomeId": "o1-gates-fail-closed-measured",
+  "basedOn": {
+    "planRevision": 3,
+    "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261010T145545Z",
+    "repositories": {}
+  },
+  "objective": "Make the dispatch-bash.sh and ticket-first gates fail closed with timeouts taken from a recorded per-hook timing profile, document and test the disableAllHooks launch override as the escape hatch, and validate the plugin marketplace in CI.",
+  "why": "The reconciliation finds all four o1 criteria not-verified. No hook entry in .claude/settings.json sets onFailure and only line 107 sets a timeout, so a crashed or hung gate lets the tool call through. Inside dispatch-bash.sh run_hook (lines 59-80) turns any sub-gate exit other than 2 into a WARN, so a crashed ticket-first gate also fails open there. The four merge gates already fail closed through run_merge_gate_hook (#1403). .claude-plugin/marketplace.json has no description, so claude plugin validate --strict fails today, and no workflow runs it. o2 and o3 add more gates, so the gate failure mode must be fixed first.",
+  "contributesTo": [
+    "ac1-1",
+    "ac1-2",
+    "ac1-3",
+    "ac1-4"
+  ],
+  "scope": {
+    "include": [
+      "Profile 50 or more dispatch-bash.sh and ticket-first calls with claude --debug and record p50 p95 and max in docs/perf/",
+      "Set onFailure block on the dispatch-bash.sh and require-active-ticket.sh entries with a timeout of at least 5 x p95 and never under 10 s",
+      "Route ticket-first inside dispatch-bash.sh through the fail-closed path the merge gates use",
+      "Record the minimum Claude Code version for onFailure (v2.1.295) and what older clients do with the field",
+      "Document claude --settings with disableAllHooks true as the operator escape hatch and add a CI test that hooks are on by default and off under the override",
+      "Add the missing description to .claude-plugin/marketplace.json",
+      "Add a CI step with a pinned Claude Code version that runs claude plugin validate --strict on .claude-plugin/marketplace.json"
+    ],
+    "exclude": [
+      "onFailure changes on hooks other than dispatch-bash.sh and ticket-first",
+      "The settings.json wrapper exit 0 when no .claude/hooks directory is found (deliberate for non-ApexYard directories)",
+      "A new escape-hatch environment variable",
+      "Hook speed-ups (tracked in #1613)",
+      "Codex and Cursor adapters (o2 and o3)"
+    ]
+  }
+}

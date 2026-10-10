@@ -1,0 +1,147 @@
+{
+  "specVersion": "0.1",
+  "id": "plan-apexyard-harness-golden-path",
+  "revision": 2,
+  "project": {
+    "id": "apexyard"
+  },
+  "title": "Harden the gates across harnesses and set golden-path standards for logging and DDD boundaries",
+  "intent": "ApexYard gates fail closed without locking the operator out, their cost is measured, and they run natively in every harness the framework builds with (Claude Code, Codex, Cursor), using the hook features those CLIs shipped in September and October 2026. Review agents cost measurably fewer tokens without losing review quality. Managed TypeScript projects get one mechanically enforced set of DDD layer rules (dependency-cruiser), shipped as copyable golden-path files; CI is the enforcement point and the clean-architecture handbook stays advisory and says so. Logging is not tied to one library: the framework states what good logging must provide, recommends @aws-lambda-powertools/logger behind a swappable Logger port, and Rex flags missing logging and blocks PII or secrets in logs.",
+  "outcomes": [
+    {
+      "id": "o1-gates-fail-closed-measured",
+      "title": "Hook cost is measured per hook, the dispatcher and ticket-first gates fail closed with measured timeouts and a tested escape hatch, and CI validates the plugin marketplace."
+    },
+    {
+      "id": "o2-cursor-gate-coverage",
+      "title": "It is known, with evidence, which ApexYard gates fire inside cursor-agent, and the Cursor adapter and docs match that evidence."
+    },
+    {
+      "id": "o3-codex-native-gates",
+      "title": "The ApexYard gates run natively inside Codex as trusted managed hooks, including on apply_patch edits."
+    },
+    {
+      "id": "o4-review-agent-token-trim",
+      "title": "The Rex and Hakim review agents use measurably fewer input tokens per review with no review-quality drop beyond run-to-run variance."
+    },
+    {
+      "id": "o5-ddd-boundaries-enforced",
+      "title": "dependency-cruiser enforces the DDD layer rules from a golden-path config, and code-quality.yml runs it whenever a project has that config."
+    },
+    {
+      "id": "o6-logging-standard",
+      "title": "The framework defines what application logging must provide and recommends a library without mandating one, and Rex flags missing logging and blocks PII or secrets in log statements."
+    },
+    {
+      "id": "o7-offload-result-schema",
+      "title": "Codex and Cursor build offloads return a structured result that a named ApexYard artifact validates against a schema before a build is reported as done."
+    }
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "ac1-1",
+      "outcomeId": "o1-gates-fail-closed-measured",
+      "statement": "A per-hook timing profile from claude --debug for one representative session is recorded in the repo before any onFailure change, and it sets the timeout for each hook that ac1-2 changes."
+    },
+    {
+      "id": "ac1-2",
+      "outcomeId": "o1-gates-fail-closed-measured",
+      "statement": "The dispatch-bash.sh entry and the ticket-first entry in .claude/settings.json set onFailure to block, each with an explicit timeout taken from the ac1-1 profile."
+    },
+    {
+      "id": "ac1-3",
+      "outcomeId": "o1-gates-fail-closed-measured",
+      "statement": "A named escape hatch (an environment variable or a settings override) lets the operator recover when a fail-closed hook is broken, it is documented, and a CI test proves it works and that it is off by default."
+    },
+    {
+      "id": "ac1-4",
+      "outcomeId": "o1-gates-fail-closed-measured",
+      "statement": "CI runs claude plugin validate --strict on .claude-plugin/marketplace.json and fails on an invalid manifest."
+    },
+    {
+      "id": "ac2-1",
+      "outcomeId": "o2-cursor-gate-coverage",
+      "statement": "A recorded test shows, gate by gate, which .claude/settings.json hooks fire under cursor-agent -p and which do not, including the Shell and Write tool mappings."
+    },
+    {
+      "id": "ac2-2",
+      "outcomeId": "o2-cursor-gate-coverage",
+      "statement": "The Cursor adapter and its docs state the tested coverage, and each uncovered gate has a ticket or a documented reason."
+    },
+    {
+      "id": "ac3-1",
+      "outcomeId": "o3-codex-native-gates",
+      "statement": "bin/sync-codex-adapter.sh emits the hooks in Codex managed-hook form, and its existing drift test still passes."
+    },
+    {
+      "id": "ac3-2",
+      "outcomeId": "o3-codex-native-gates",
+      "statement": "An apply_patch shim gives the file-path gates the paths changed by a Codex patch, so ticket-first and leak gates block a Codex edit the same way they block a Claude edit."
+    },
+    {
+      "id": "ac3-3",
+      "outcomeId": "o3-codex-native-gates",
+      "statement": "No ApexYard flow passes --dangerously-bypass-hook-trust."
+    },
+    {
+      "id": "ac3-4",
+      "outcomeId": "o3-codex-native-gates",
+      "statement": "A test runs the Edit-matcher hooks in parallel and gets the same decisions as running them in order."
+    },
+    {
+      "id": "ac4-1",
+      "outcomeId": "o4-review-agent-token-trim",
+      "statement": "The Rex and Hakim agent files set omitClaudeMd and autoCompactWindow, and load the rules they enforce from one shared rules file instead of copies."
+    },
+    {
+      "id": "ac4-2",
+      "outcomeId": "o4-review-agent-token-trim",
+      "statement": "Measured input tokens per review drop by a stated percentage against a recorded baseline for both agents."
+    },
+    {
+      "id": "ac4-3",
+      "outcomeId": "o4-review-agent-token-trim",
+      "statement": "The Hakim eval corpus has enough entries to detect a one-defect miss, and k repeated /eval-agents runs show no quality drop beyond the observed baseline variance."
+    },
+    {
+      "id": "ac5-1",
+      "outcomeId": "o5-ddd-boundaries-enforced",
+      "statement": "golden-paths/typescript/ ships a dependency-cruiser config that forbids domain imports outside the domain, application imports of infrastructure, and circular dependencies."
+    },
+    {
+      "id": "ac5-2",
+      "outcomeId": "o5-ddd-boundaries-enforced",
+      "statement": "golden-paths/pipelines/code-quality.yml runs dependency-cruiser when the config file is present, skips the step when it is absent, and a fixture proves each rule fires."
+    },
+    {
+      "id": "ac5-3",
+      "outcomeId": "o5-ddd-boundaries-enforced",
+      "statement": "handbooks/architecture/clean-architecture-layers.md stays advisory and states that CI enforces the layer rules when the dependency-cruiser config is present."
+    },
+    {
+      "id": "ac6-1",
+      "outcomeId": "o6-logging-standard",
+      "statement": ".claude/rules/code-standards.md states what application logging must provide (structured output, levels, a correlation ID, log entries on error paths and external calls, no PII or secrets) and recommends @aws-lambda-powertools/logger for TypeScript backends without mandating it."
+    },
+    {
+      "id": "ac6-2",
+      "outcomeId": "o6-logging-standard",
+      "statement": "handbooks/general/logging.md, marked ENFORCEMENT: blocking and loaded by Rex for application-code diffs, has Rex request changes when a log statement passes a raw request or entity object, req, body, headers, a token, a password, or a named PII field to a logger, and flag missing logging on error paths and external calls as advisory; labeled fixtures prove one blocked case, one allowed ID-only case, and one advisory case."
+    },
+    {
+      "id": "ac6-3",
+      "outcomeId": "o6-logging-standard",
+      "statement": "golden-paths/typescript/ ships a Logger port in the application layer and a Powertools adapter in infrastructure as a swappable example, with a test, and the adapter passes the ac5-1 dependency-cruiser rules."
+    },
+    {
+      "id": "ac7-1",
+      "outcomeId": "o7-offload-result-schema",
+      "statement": "A result JSON schema and a named wrapper script run codex exec or cursor-agent with structured output, validate the result against the schema, and exit non-zero on a schema failure."
+    },
+    {
+      "id": "ac7-2",
+      "outcomeId": "o7-offload-result-schema",
+      "statement": "The offload guidance points builds at the wrapper, and a test proves an invalid result is rejected."
+    }
+  ]
+}

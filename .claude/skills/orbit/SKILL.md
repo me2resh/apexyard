@@ -119,14 +119,15 @@ Report each `WARNING` line. If the CLI fails, report its failure.
 
 ### `/orbit slice --project <name> --plan <file> --reconciliation <file>`
 
-Ask for the bounded objective, outcome, reason, included work, excluded work, and the outcome or criterion IDs this slice advances. Pass those selected Plan IDs to `--contributes` as a comma-separated list. Then create the slice with the plan revision and reconciliation ID as provenance:
+Ask for the bounded objective, outcome, reason, included work, excluded work, and the acceptance criterion IDs this slice advances. Pass those criterion IDs to `--contributes` as a comma-separated list. The validator accepts criterion IDs only, and each must belong to the slice's `--outcome`. Pass `--id` with a lowercase slice ID; the CLI default ID contains uppercase timestamp letters. Then create the slice with the plan revision and reconciliation ID as provenance:
 
 ```bash
 "$ORBIT_BIN" slice \
   --plan "$plan_file" \
   --reconciliation "$reconciliation_file" \
   --outcome "<outcome-id>" \
-  --contributes "<outcome-id>,<criterion-id>" \
+  --id "slice-<lowercase-name>" \
+  --contributes "<criterion-id>,<criterion-id>" \
   --objective "<bounded objective>" \
   --why "<evidence-based reason>" \
   --include "<item>,<item>" \
@@ -135,7 +136,7 @@ Ask for the bounded objective, outcome, reason, included work, excluded work, an
 ```
 
 Read the generated `contributesTo` array. Confirm it contains the selected
-Plan outcome or criterion IDs before handoff. Correct the record and rerun
+criterion IDs before handoff. Correct the record and rerun
 validation if the CLI leaves the array empty or omits a selected ID.
 
 Read the generated `id`, require the `slice-` prefix and lowercase letters,
@@ -148,7 +149,7 @@ QA, and deployment gates still apply.
 
 A slice ID exists only when its record exists. Never reserve a slice number in
 prose. When work is planned, create the slice record. Set `contributesTo` to
-the Plan outcome ID or the criterion IDs that the slice advances. A slice with
+the criterion IDs that the slice advances. A slice with
 an empty `contributesTo` list does not cover an outcome.
 
 ### `/orbit validate --project <name>`

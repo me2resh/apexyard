@@ -1,0 +1,33 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-harness-o2-cursor-gate-coverage",
+  "planId": "plan-apexyard-harness-golden-path",
+  "outcomeId": "o2-cursor-gate-coverage",
+  "basedOn": {
+    "planRevision": 3,
+    "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261010T145545Z",
+    "repositories": {}
+  },
+  "objective": "Capture the hook payloads cursor-agent sends once and replay them offline through the real gates, so a test records gate by gate whether each gate blocks under Cursor, and make the Cursor adapter and docs state that tested coverage.",
+  "why": "ac2-1 and ac2-2 are not-verified. docs/harnesses/cursor.md line 15 says cursor-agent ignores hooks.json, while the Cursor CLI changelog (v2026.08.11) and its third-party-hooks page say Claude settings.json hooks load. A hook that fires is not a hook that blocks: Cursor names its tools Shell and Write, and require-active-ticket.sh line 302 allows a non-Bash call with no file_path. No recorded test settles which gates block. o3 and o7 depend on knowing what Cursor enforces.",
+  "contributesTo": [
+    "ac2-1",
+    "ac2-2"
+  ],
+  "scope": {
+    "include": [
+      "A capture hook that logs the raw stdin of every hook event",
+      "One manual cursor-agent -p --trust run in a sandbox fork that triggers each gate (ticket-first on write and edit; dispatch-bash on shell; leak; merge gate) with a gh stub on PATH so no real PR can merge",
+      "The captured payloads committed with the Cursor CLI version and the third-party-hooks setting and the date",
+      "An offline test that replays each payload through the real hooks and asserts the exit code and decision (block or allow) and runs in CI without Cursor credentials",
+      "A coverage table in docs/harnesses/ plus matching updates to docs/harnesses/cursor.md and docs/harnesses/README.md and docs/cursor-adapter.md and the setup and handover skills and the bin/install-cursor-adapter.sh line 161 message",
+      "A ticket or a documented reason for each gate that does not block"
+    ],
+    "exclude": [
+      "Code changes that add coverage for gates that do not block (each gets its own ticket)",
+      "Running cursor-agent itself in CI",
+      "The Cursor IDE overlay",
+      "Codex (o3)"
+    ]
+  }
+}

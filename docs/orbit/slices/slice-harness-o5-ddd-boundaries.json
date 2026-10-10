@@ -1,0 +1,38 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-harness-o5-ddd-boundaries",
+  "planId": "plan-apexyard-harness-golden-path",
+  "outcomeId": "o5-ddd-boundaries-enforced",
+  "basedOn": {
+    "planRevision": 3,
+    "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261010T145545Z",
+    "repositories": {}
+  },
+  "objective": "Ship a golden-path dependency-cruiser config that enforces the layer rules of handbooks/architecture/clean-architecture-layers.md, run it in code-quality.yml only when a project has the config, test it in a dedicated Node CI job, and make the handbook state that CI enforces it.",
+  "why": "ac5-1 to ac5-3 are not-verified. golden-paths/ holds only pipelines/, code-quality.yml has no dependency-cruiser step, and the handbook is advisory with no mention of CI. Rex reads diffs, not the import graph. The handbook bans SDK imports such as @aws-sdk in domain (line 39) and allows type-only imports across layers (line 43), so the rules must match both. o6 ac6-3 needs these rules.",
+  "contributesTo": [
+    "ac5-1",
+    "ac5-2",
+    "ac5-3"
+  ],
+  "scope": {
+    "include": [
+      "golden-paths/typescript/.dependency-cruiser.cjs with rules for domain importing outside domain (including npm packages except an allowlist of pure libraries) and application importing infrastructure and circular dependencies",
+      "Exempt type-only imports from all three rules with dependencyTypesNot type-only",
+      "Resolve TypeScript path aliases through options.tsConfig",
+      "Match layer folders with (^|/)domain/ style paths and document how to adapt them",
+      "A step-level hashFiles condition in code-quality.yml that runs dependency-cruiser when the config is present and prints a notice when it skips and does not treat a skipped step as a failure",
+      "The same step in golden-paths/pipelines/ci.yml",
+      "A shared skip-check script that both workflows and the test call",
+      "A fixture project with one violation per rule plus an aliased import and a type-only import and a clean case",
+      "A dedicated Ubuntu CI job with Node and a pinned tool lock that runs the fixture test",
+      "A line in clean-architecture-layers.md that keeps it advisory and states that CI enforces the layer rules when the config is present"
+    ],
+    "exclude": [
+      "Boundary tools for other languages",
+      "Making the handbook blocking",
+      "Adding the config to existing managed projects",
+      "Logging (o6)"
+    ]
+  }
+}

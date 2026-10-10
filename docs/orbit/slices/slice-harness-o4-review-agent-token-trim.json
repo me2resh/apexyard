@@ -1,0 +1,35 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-harness-o4-review-agent-token-trim",
+  "planId": "plan-apexyard-harness-golden-path",
+  "outcomeId": "o4-review-agent-token-trim",
+  "basedOn": {
+    "planRevision": 3,
+    "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261010T145545Z",
+    "repositories": {}
+  },
+  "objective": "Cut the input tokens per review for Rex and Hakim against a recorded baseline by setting omitClaudeMd with a short floor-rules block and trimming the Rex prompt, with no per-entry review-quality change beyond the measured run-to-run variance.",
+  "why": "ac4-1 to ac4-3 are not-verified. Neither agent sets omitClaudeMd. .claude/agents/code-reviewer.md is about 73 KB and CLAUDE.md about 22 KB. code-reviewer.md does not repeat the always-on floor rules (ticket vocabulary and 80% coverage and git add rules) it enforces from CLAUDE.md. /eval-agents records no token usage, and docs/eval-agents/corpus/hakim.json has 4 entries. Every PR pays for at least one Rex review, so the saving repeats on every merge.",
+  "contributesTo": [
+    "ac4-1",
+    "ac4-2",
+    "ac4-3"
+  ],
+  "scope": {
+    "include": [
+      "Define and script the token measurement: per-message usage from the subagent transcript with cache-read tokens counted separately",
+      "Mine Hakim CHANGES REQUESTED rounds to grow the Hakim corpus to at least 10 entries that follow docs/eval-agents/SCHEMA.md",
+      "Record a baseline of tokens per review and k /eval-agents runs for Rex and Hakim before any change",
+      "Set omitClaudeMd in both agent files and add a short block with the always-on floor rules each agent enforces",
+      "Trim the Rex prompt without removing a check the corpus exercises",
+      "Re-measure tokens and re-run k evals and report per-entry verdict flips and the token drop in docs/eval-agents/reports/"
+    ],
+    "exclude": [
+      "autoCompactWindow (not a subagent setting)",
+      "A shared rules file for both agents (saves no tokens per review)",
+      "Changes to what Rex or Hakim block on",
+      "Other agents",
+      "The logging handbook (o6)"
+    ]
+  }
+}

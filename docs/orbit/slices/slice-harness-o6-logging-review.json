@@ -1,0 +1,35 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-harness-o6-logging-review",
+  "planId": "plan-apexyard-harness-golden-path",
+  "outcomeId": "o6-logging-standard",
+  "basedOn": {
+    "planRevision": 3,
+    "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261010T145545Z",
+    "repositories": {}
+  },
+  "objective": "State what application logging must provide, recommend a logger without mandating it, add a blocking logging handbook that Rex reliably loads for logger changes, and ship a swappable Logger port example tested in the o5 Node CI job.",
+  "why": "ac6-1 to ac6-3 are not-verified. code-standards.md has no logging section and no rule covers PII or secrets in log statements. handbooks/README.md line 18 says general handbooks always load, but code-reviewer.md lines 375 and 402-407 make them candidates subject to topic judgment, so a blocking handbook could silently not load. The repo has no package.json and tests.yml has no Node, so ac6-3 depends on the o5 Node CI job. A portfolio survey on 2026-10-10 found one project on Powertools.",
+  "contributesTo": [
+    "ac6-1",
+    "ac6-2",
+    "ac6-3"
+  ],
+  "scope": {
+    "include": [
+      "A logging section in .claude/rules/code-standards.md (structured output and levels and a correlation ID and log entries on error paths and external calls and no PII or secrets) that recommends @aws-lambda-powertools/logger for TypeScript backends",
+      "handbooks/general/logging.md marked ENFORCEMENT: blocking with an explicit Scope line (any diff that adds or changes a logger call in application code)",
+      "The narrowed block trigger in the handbook: a raw request or entity object or req or body or headers or a token or a password or a field from a listed set of PII field names passed to a logger",
+      "Advisory findings for missing logging on error paths and external calls",
+      "Make handbooks/README.md agree with the Rex discovery rule for general handbooks",
+      "Three committed fixture commits with matching /eval-agents rex.json entries (blocked and allowed ID-only and advisory) and k recorded runs",
+      "A Logger port in the application layer and a Powertools adapter pinned to an exact version in infrastructure under golden-paths/typescript/ with a test in the o5 Node CI job that passes the o5 dependency-cruiser rules"
+    ],
+    "exclude": [
+      "An ESLint no-console rule",
+      "Mandating any logging library",
+      "Edits to the Rex or Hakim agent files",
+      "Retrofitting logging in managed projects"
+    ]
+  }
+}
