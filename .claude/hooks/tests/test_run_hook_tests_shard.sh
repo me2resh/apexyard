@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Runner discovery and round-robin shard coverage (me2resh/apexyard#1612).
 set -euo pipefail
+# Isolate from live session pins and caches.
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
@@ -26,7 +29,7 @@ list() {
   "$BASH" "$1" "${@:2}" --list | sed '/^(/d'
 }
 list "$RUNNER" > "$TMP/all"
-find "$TMP/tree/.claude" -type f -name '*.sh' | sed "s|$TMP/tree/||" | sort > "$TMP/expected"
+find "$TMP/tree/.claude" -type f -name '*.sh' | sed "s|$TMP/tree/||" | LC_ALL=C sort > "$TMP/expected"
 check cmp "$TMP/all" "$TMP/expected"
 for n in 1 2 3 4 5; do
   : > "$TMP/union"
@@ -36,9 +39,9 @@ for n in 1 2 3 4 5; do
     check cmp "$TMP/shard" "$TMP/expected"
     cat "$TMP/shard" >> "$TMP/union"
   done
-  sort "$TMP/union" > "$TMP/sorted"
+  LC_ALL=C sort "$TMP/union" > "$TMP/sorted"
   check cmp "$TMP/all" "$TMP/sorted"
-  sort "$TMP/union" | uniq -d > "$TMP/duplicates"
+  LC_ALL=C sort "$TMP/union" | uniq -d > "$TMP/duplicates"
   check test ! -s "$TMP/duplicates"
 done
 for value in 0/4 1/0 5/4 -1/4 1/-4 x/4 1/x 1.5/4 1/2/3 /4 1/ 0/0; do
@@ -65,7 +68,7 @@ list "$ROOT/bin/run-hook-tests.sh" > "$TMP/real"
 for i in 1 2 3 4; do
   list "$ROOT/bin/run-hook-tests.sh" --shard "$i/4" >> "$TMP/union"
 done
-sort "$TMP/union" > "$TMP/sorted"
+LC_ALL=C sort "$TMP/union" > "$TMP/sorted"
 check cmp "$TMP/real" "$TMP/sorted"
 # Exercise execution, summary, diagnostics, and concurrent runner isolation.
 "$BASH" "$RUNNER" > "$TMP/run"

@@ -127,7 +127,7 @@ while IFS= read -r _t; do
   [ -n "$_t" ] && TESTS+=("$_t")
 done < <(
   find .claude/hooks/tests .claude/agents/tests .claude/skills \
-       -type f \( -name 'test_*.sh' -o -name '*.test.sh' \) 2>/dev/null | sort
+       -type f \( -name 'test_*.sh' -o -name '*.test.sh' \) 2>/dev/null | LC_ALL=C sort
 )
 
 SELECTED=()
@@ -136,7 +136,8 @@ for ((k=0; k<${#TESTS[@]}; k++)); do
     SELECTED+=("${TESTS[$k]}")
   fi
 done
-TESTS=("${SELECTED[@]}")
+# bash 3.2 treats an empty "${arr[@]}" as unbound under set -u.
+TESTS=(${SELECTED[@]+"${SELECTED[@]}"})
 
 if [ "$LIST" -eq 1 ]; then
   [ "${#TESTS[@]}" -gt 0 ] && printf '%s\n' "${TESTS[@]}"
@@ -150,7 +151,7 @@ pass=0 fail=0 skip=0
 FAILED=()
 
 test_index=0
-for t in "${TESTS[@]}"; do
+for t in ${TESTS[@]+"${TESTS[@]}"}; do
   output="$OUTPUT_DIR/$test_index.out"
   test_index=$((test_index+1))
   if is_quarantined "$t"; then
