@@ -287,6 +287,8 @@ _config_load() {
   local defaults overrides
   # Keep one root lookup for this load, including its cache fingerprint.
   # A local cache cannot outlive this load or follow a caller into another cwd.
+  # The functions this load calls must not change directory, or the cached
+  # root would no longer match the working directory.
   local _CONFIG_ROOT_CACHE="$_CONFIG_ROOT_CACHE" _CONFIG_ROOT_CACHE_SET=""
   [ -n "$_CONFIG_ROOT_CACHE" ] || _CONFIG_ROOT_CACHE=$(_config_repo_root)
   _CONFIG_ROOT_CACHE_SET=1

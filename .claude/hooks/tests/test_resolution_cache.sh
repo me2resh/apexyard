@@ -694,6 +694,7 @@ case_11() {
   local name="disabled fingerprints skip path resolution" result
   result=$(
     exec 2>&1
+    # shellcheck source=/dev/null
     . "$RC_LIB"
     _config_defaults_file() { printf 'unexpected defaults lookup\n' >&2; return 1; }
     _config_overrides_file() { printf 'unexpected overrides lookup\n' >&2; return 1; }
