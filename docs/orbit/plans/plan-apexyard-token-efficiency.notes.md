@@ -1,0 +1,61 @@
+# Notes for plan-apexyard-token-efficiency (current: revision 1)
+
+These notes sit beside the Plan record because the ORBIT v0.1 Plan schema has no fields for constraints, decisions, dependencies or evidence. The Plan record stays valid ORBIT.
+
+## Where the plan comes from
+
+A token-cost debug on 2026-10-10 measured one 10-day session (5,762 API turns, 18 compactions), 386 subagent transcripts and 65 merged PRs, then re-measured each finding under two adversarial lenses. The synthesis is the evidence for every number in the Plan intent. The main findings:
+
+- 78% of spend is the main loop, and 83.6% of that is cache re-reads of a context that averaged 490k tokens per turn. Context size is the largest lever, so it has its own outcome (o2).
+- About half of what the main loop re-reads is framework text: skill bodies (25%, of which `/approve-merge` alone 21.5%), skill re-injection after compaction (10%), subagent reports (6%), CLAUDE.md plus the memory index (5%), hook banners (2.4%).
+- Every Rex spawn starts at 49k tokens of prompt before it reads the diff: 53% of a review's context and 60% of its cache reads.
+- 29% of Rex rounds add no information. The largest class is a round after a base-branch refresh with an unchanged patch (31 rounds in the session), not wording blocks.
+- 469 CI-wait turns inside 195 reviewer runs cost 5.5 hours and 2.6M uncached tokens; 27 of 30 waits of 5 minutes or more expired the prompt cache.
+
+The five most-invoked skills in the baseline (ac6-2): `/approve-merge` 209, `/approve-design` 18, `/code-review` 15, `/task` 12, `/start-ticket` 4.
+
+## Constraints
+
+- **C1. The merge gates keep their fail-closed defaults and exit codes.** `block-unreviewed-merge.sh` and `block-merge-on-red-ci.sh` are not edited by this plan; a slice may add tests beside them. A change to what `rex_approval_carries_over` accepts (ac3-2, ac3-3) is an amendment to AgDR-0178 and ships with a paired adversarial bypass test. No slice adds a wrapper around `tracker_pr_merge`, `gh pr merge` or `glab mr merge`: four wrapper shapes were tested and each bypassed both gates.
+- **C2. Reviewers stay on Opus** (AgDR-0050, AgDR-0074; `block-agent-routing-drift.sh` pins the model). A lower reasoning effort is allowed only for a delta re-review with a prior marker, through a separate agent file (ac5-3).
+- **C3. Measure before and after.** Each slice names the o1 metric it moves and records both numbers in its PR.
+- **C4. Zero verdict flips.** A change to a reviewer prompt ships only after k repeated `/eval-agents` runs show no per-entry verdict flip beyond the baseline variance. The corpus grows before the prompt shrinks: a Tariq corpus and at least five Rex delta entries exist before ac5-2 and ac5-3.
+- **C5. Prose moves, it is not deleted.** Rationale, history and anti-pattern text removed from an execution path goes under `docs/` behind a one-line pointer, because adopters read it. A docs path that a prompt file names is part of the prompt layer and is reviewed in Full (ac7-1).
+- **C6. One slice, one ticket, one PR.** Each outcome has one slice. A fault found inside a slice is a step in that slice.
+- **C7. The CEO marker is written only by the inline step 5 of the human-invoked `/approve-merge`.** No script writes `approved_by=user` (ac6-1).
+
+## Decisions
+
+- **CI sequencing (2026-10-10):** the orchestrator waits for green CI without model turns (a Monitor), then spawns Rex. The rule "do not approve while CI is pending" in `code-reviewer.md` stays as written; lines that tell a reviewer to wait are edited (ac4-2). The alternative, an APPROVED verdict conditional on green CI, was not chosen. This applies to the Claude Code harness; Codex and Cursor adapters are covered by plan-apexyard-harness-golden-path o2 and o3.
+- **Relation to plan-apexyard-harness-golden-path o4 (2026-10-10):** that plan stays at revision 3 and its o4 slice (`slice-harness-o4-review-agent-token-trim`) runs first. It owns `omitClaudeMd` and the floor block for Rex and Hakim, the Rex prompt trim, the per-review token measurement and the Hakim corpus. This plan's o5 is the increment: the other five review and audit agents, the Hakim and Tariq prompt trims and the lower effort on delta re-reviews. o1 reuses the o4 measurement script and adds the session and forge views. Build agents keep CLAUDE.md and the memory index, because their lessons (for example, no non-ASCII in AWS strings) live there and no check would detect the loss.
+- **Tier by script (o7)** follows AgDR-0116 Option 4: depth changes inside the review, the merge gate is untouched, and the tier is computed by a script in the spawn path (`auto-code-review.sh` and `/code-review`). An AgDR-0116 evolution entry records it. The lean procedure runs on Opus; a smaller model was considered and rejected.
+- **Targets:** ac3-4 counts pure-refresh rounds against refresh events, not rounds per PR, so that it cannot be met by blocking less. ac7-5 is a percentage against the o1 baseline, because an absolute number for a trimmed Opus prompt is not known yet.
+
+## Naqid's challenge (2026-10-10)
+
+Verdict: proceed-with-changes. Applied: step 5 of `/approve-merge` stays inline and a test proves the script has no `approved_by` (ac6-1); C1 restated and the carry-over changes tied to AgDR-0178; the docs-only advisory carry-over dropped, because 3 of 11 wording rewrites added errors; the o7 rail moved out of the merge gate; docs paths named by prompts are Full; a Tariq corpus and five delta entries precede the prompt cuts; `omitClaudeMd` limited to review and audit agents; the reviewer wait lines named; ac3-4 restated; the banner edit merged into o4 and the compact line into o6; context size given its own outcome with a spike; the order starts with the harness o4 slice.
+
+## Order
+
+The harness o4 slice first, because o1 reuses its measurement script. Then o1. Then o2 (the spike), o3 and o4, which are independent. Then o5, o6, o7. o7 lands after o5 and after the harness o4 trim, because the Lean procedure is measured against the trimmed Rex prompt. Reviewer prompt edits are batched: o4 edits one line each in two agent files; o5 and o7 each run one eval cycle.
+
+## Dependencies
+
+- `slice-harness-o4-review-agent-token-trim` (plan-apexyard-harness-golden-path r3).
+- AgDR-0116 (ceremony tiers; Option 4 extended with a scripted tier), AgDR-0172 (two-round cap), AgDR-0178 (`rex_approval_carries_over`, #1437, #1456), AgDR-0104 (decide on exit codes and tree equality, never on parsed diff text), AgDR-0044 (skill token-efficiency waves), AgDR-0050 and AgDR-0074 (reviewers on Opus).
+- Harness assumptions to verify in the first slices: `omitClaudeMd` exists for custom agents (CLI 2.1.271 and later); that it also drops the memory index was measured on Explore spawns only, so the harness o4 baseline confirms it for Rex; the per-agent reasoning effort field is undocumented, so ac5-3 starts with a spike; the Monitor wait exists in Claude Code; the prompt-cache TTL in this session is one hour, so a CI wait under one hour does not rebuild the main-loop cache (ac4-4 reports rebuilds to check this).
+
+## What stays as is
+
+- The delta re-review after a blocking fix: in 3 of 11 wording fixes the rewrite introduced a new wrong statement, and one delta on a commit described as advisory found a new blocking bug.
+- Hakim full scope on hook PRs, including the command-injection section: HIGH findings on 2 of 8 hook-only PRs (#1425, #1524).
+- Rex's `gh issue view --comments` on every linked issue: acceptance criteria were amended in comments on #1576 and #1458.
+- Rex's round-up of prompt-layer Markdown to Full (#1463).
+- Blocking on a misstated count or evidence statement.
+- The CEO per-PR nod through a human-typed `/approve-merge`.
+
+## Upstream gaps
+
+- me2resh/orbit-spec#21: one Plan revision per record root; superseded revisions go to `docs/orbit/history/`.
+- The Plan schema has no field for a criterion's proof, so each statement ends with a short "Shown by:" clause (me2resh/apexyard#1618 proposes the rule).
+- Harness requests under ac2-4 are filed with Claude Code, not in this repo; the links go here when they exist.

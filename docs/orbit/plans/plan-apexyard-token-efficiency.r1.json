@@ -1,0 +1,182 @@
+{
+  "specVersion": "0.1",
+  "id": "plan-apexyard-token-efficiency",
+  "revision": 1,
+  "project": {
+    "id": "apexyard"
+  },
+  "title": "Cut the framework's token spend and review time without losing the defects it catches",
+  "intent": "Every token the framework injects or spends must pay for a defect caught or a gate enforced. The framework measures its own token and time cost from transcripts and the forge, and each change proves its effect against a recorded baseline. The merge gates keep their fail-closed defaults and exit codes. Reviewers keep their verdicts: a prompt change ships only with zero verdict flips on the eval corpus, and reviewers stay on Opus. Review depth follows a tier computed by script from the changed paths, never a self-declared tier. This plan depends on outcome o4 of plan-apexyard-harness-golden-path for the Rex and Hakim trim and adds everything else. Baseline, 2026-10-10 session: main context mean 490k tokens per turn with 18 compactions; the /approve-merge body injected 209 times at 34 KB; every Rex spawn starts at 49k tokens before it reads the diff; 469 CI-wait turns inside 195 reviewer runs; 31 Rex rounds followed a base-branch refresh with an unchanged patch.",
+  "outcomes": [
+    {
+      "id": "o1-cost-measured",
+      "title": "One framework script measures token and time cost per session, per review and per PR, and a dated baseline exists."
+    },
+    {
+      "id": "o2-context-bounded",
+      "title": "The main context stays small: compaction is tuned and prompted, workers start fresh instead of forking, and harness requests are filed with measurements."
+    },
+    {
+      "id": "o3-refresh-rounds-stopped",
+      "title": "A base-branch refresh or a same-SHA reopen with an unchanged patch costs no Rex round."
+    },
+    {
+      "id": "o4-reviewers-do-not-wait",
+      "title": "Reviewers never wait for CI. The orchestrator waits without model turns and spawns Rex after CI is green."
+    },
+    {
+      "id": "o5-subagents-start-lean",
+      "title": "Review and audit agents start without CLAUDE.md and the memory index, the Hakim and Tariq prompts are lean, and a delta re-review uses less reasoning."
+    },
+    {
+      "id": "o6-skill-bodies-lean",
+      "title": "Skill bodies on the execution path are short, shared blocks appear once, and ceremony text in skills matches where it finds faults."
+    },
+    {
+      "id": "o7-depth-by-tier-and-round",
+      "title": "Review depth follows a tier computed by script and the review round, with the rail in the spawn path and the merge gate untouched."
+    }
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "ac1-1",
+      "outcomeId": "o1-cost-measured",
+      "statement": "A framework script reads a session transcript and reports context tokens per turn, context share by category, skill injections and compactions. Shown by: the script path and its output on the 2026-10-10 transcript."
+    },
+    {
+      "id": "ac1-2",
+      "outcomeId": "o1-cost-measured",
+      "statement": "The same script reads subagent transcripts and reports, per reviewer, the first-turn context, total tokens, tool calls and CI-wait turns. It reads the forge for Rex rounds per PR and hours from open to merge. Shown by: a dated baseline file under docs/perf/ with the 2026-10-10 numbers."
+    },
+    {
+      "id": "ac1-3",
+      "outcomeId": "o1-cost-measured",
+      "statement": "Every later outcome names the metric it moves, and its reconciliation evidence cites the script output before and after the change. Shown by: the reconciliation records of this plan."
+    },
+    {
+      "id": "ac2-1",
+      "outcomeId": "o2-context-bounded",
+      "statement": "A spike reports, with numbers, whether the auto-compaction threshold setting bounds the context on 1M-context Opus, and the framework docs state the recommended setting. Shown by: the spike memo under docs/."
+    },
+    {
+      "id": "ac2-2",
+      "outcomeId": "o2-context-bounded",
+      "statement": "The mean context per turn in the next measured session is at most 300k tokens, from 490k. The recommended setting and the compact prompt are in place. Shown by: the o1 script."
+    },
+    {
+      "id": "ac2-3",
+      "outcomeId": "o2-context-bounded",
+      "statement": "parallel-work.md and /fan-out default to a fresh role-appropriate spawn with a written brief. A fork is used only when the needed facts are not yet in a file. Shown by: the rule text and the skill text."
+    },
+    {
+      "id": "ac2-4",
+      "outcomeId": "o2-context-bounded",
+      "statement": "Four harness requests are filed with the measured numbers. They cover skill-body dedupe inside one window, and a fork from a compacted parent or with a context budget. They also cover re-injection as names only, and no skill listing for agents without the Skill tool. Shown by: the issue links in the plan notes."
+    },
+    {
+      "id": "ac3-1",
+      "outcomeId": "o3-refresh-rounds-stopped",
+      "statement": "After a base-branch refresh, pr-workflow.md step 3 runs rex_approval_carries_over first and asks for a Rex delta only when it returns false. Shown by: the rule text and a test in which a merge commit with a smuggled hunk still blocks."
+    },
+    {
+      "id": "ac3-2",
+      "outcomeId": "o3-refresh-rounds-stopped",
+      "statement": "Carry-over covers chained refreshes when git range-diff is empty and the merge tree equals an isolated merge-tree result. It fails closed otherwise. Shown by: an AgDR-0178 amendment and new cases in test_lib_merge_behind.sh."
+    },
+    {
+      "id": "ac3-3",
+      "outcomeId": "o3-refresh-rounds-stopped",
+      "statement": "A reopen under a new PR number with the same head SHA, base and ticket carries the Rex marker forward with carried_from=<sha>. A CHANGES REQUESTED verdict never carries, and an advisory fix always gets a delta. Shown by: hook tests and the marker field."
+    },
+    {
+      "id": "ac3-4",
+      "outcomeId": "o3-refresh-rounds-stopped",
+      "statement": "Over the next 40 merged framework PRs, pure-refresh Rex rounds are 0 out of the refresh events counted, from 31 in the baseline. Shown by: the o1 script."
+    },
+    {
+      "id": "ac4-1",
+      "outcomeId": "o4-reviewers-do-not-wait",
+      "statement": "The auto-code-review banner is at most 300 bytes and keeps exit 2 and the pending-review marker. It tells the orchestrator to wait for green CI with a Monitor, then spawn Rex. The /code-review skill says the same. Shown by: the hook text, the skill text and a test."
+    },
+    {
+      "id": "ac4-2",
+      "outcomeId": "o4-reviewers-do-not-wait",
+      "statement": "code-reviewer.md and security-reviewer.md tell a reviewer to run gh pr checks once and never wait. A hook blocks gh pr checks --watch, gh run watch and sleep of 60 seconds or more for review-class agents. Shown by: the agent text, the hook and its test."
+    },
+    {
+      "id": "ac4-3",
+      "outcomeId": "o4-reviewers-do-not-wait",
+      "statement": "A PR with queued checks and a valid Rex marker still blocks at merge. Shown by: a test beside block-merge-on-red-ci.sh."
+    },
+    {
+      "id": "ac4-4",
+      "outcomeId": "o4-reviewers-do-not-wait",
+      "statement": "CI-wait turns per reviewer run are 0 beyond the one check, from 469 turns across 195 runs. Main-loop cache rebuilds during a wait and hours from open to merge are reported beside it. Shown by: the o1 script on the next 40 PRs."
+    },
+    {
+      "id": "ac5-1",
+      "outcomeId": "o5-subagents-start-lean",
+      "statement": "The seven review and audit agent files set omitClaudeMd and carry the 8-line floor block, and a static test fails when one is missing. Build agents keep CLAUDE.md. Shown by: the test and the o1 first-turn context per agent type."
+    },
+    {
+      "id": "ac5-2",
+      "outcomeId": "o5-subagents-start-lean",
+      "statement": "security-reviewer.md and solution-architect.md are each at most 12,000 bytes, with their rationale under docs/agents/ and their ops-root and marker text as one line. A Tariq corpus exists before the cut. Shown by: wc -c, the text-pin tests and zero verdict flips."
+    },
+    {
+      "id": "ac5-3",
+      "outcomeId": "o5-subagents-start-lean",
+      "statement": "A spike confirms the per-agent reasoning effort field. A delta re-review with a prior Rex marker then runs through a lean-effort agent file with the same prompt, on Opus. Zero flips on at least five delta corpus entries. Shown by: the spike memo, an AgDR and an /eval-agents report."
+    },
+    {
+      "id": "ac6-1",
+      "outcomeId": "o6-skill-bodies-lean",
+      "statement": "approve-merge SKILL.md is at most 14,000 bytes. Steps 3a, 4 and 6 live in scripts/approve-merge.sh, which prints one line of JSON. Step 5 and the bare tracker_pr_merge line stay inline. Shown by: wc -c, and a test that the script contains no merge command and no approved_by."
+    },
+    {
+      "id": "ac6-2",
+      "outcomeId": "o6-skill-bodies-lean",
+      "statement": "The five most-invoked skills in the baseline are each at most 16,000 bytes, with their rationale moved under docs/skills/. Shown by: a 16 KB cap in the wave-1 test."
+    },
+    {
+      "id": "ac6-3",
+      "outcomeId": "o6-skill-bodies-lean",
+      "statement": "The Writing rule preamble and the ops-root resolution block appear in each skill as one line that names the shared file. Today they repeat 45 and 53 times. Shown by: a grep test that finds 0 repeats."
+    },
+    {
+      "id": "ac6-4",
+      "outcomeId": "o6-skill-bodies-lean",
+      "statement": "The /approve-merge report ends with a one-line /compact suggestion after a successful merge. Shown by: the skill text."
+    },
+    {
+      "id": "ac6-5",
+      "outcomeId": "o6-skill-bodies-lean",
+      "statement": "The orbit skill runs Naqid by default on Plan and Slice drafts, and on a Reconciliation only when a status changes or the operator asks. Shown by: the skill text."
+    },
+    {
+      "id": "ac7-1",
+      "outcomeId": "o7-depth-by-tier-and-round",
+      "statement": "A script in the spawn path computes the ceremony tier from the PR file list with a positive allowlist for Lean. Full covers .claude/, CLAUDE.md, handbooks/, roles/, workflows/, templates/, .github/ and docs/agdr/. Full also covers any JSON a hook reads and any docs path a prompt file names. Shown by: the script, its tests and an AgDR-0116 evolution entry."
+    },
+    {
+      "id": "ac7-2",
+      "outcomeId": "o7-depth-by-tier-and-round",
+      "statement": "On the Lean tier, Rex runs a fixed short procedure that keeps the linked issue read with its comments. Rex posts ESCALATE with no marker when the allowlist does not hold. Shown by: the agent text and three docs-only corpus entries with zero flips."
+    },
+    {
+      "id": "ac7-3",
+      "outcomeId": "o7-depth-by-tier-and-round",
+      "statement": "A PR that looks docs-only but changes a hook or a prompt file is reviewed in Full, and block-unreviewed-merge.sh is unchanged. Shown by: a paired adversarial test and the gate's diff."
+    },
+    {
+      "id": "ac7-4",
+      "outcomeId": "o7-depth-by-tier-and-round",
+      "statement": "A reviewer's hand-back to the orchestrator is at most 300 tokens, and a delta round posts a short format instead of the 13-section body. Shown by: the agent text and a test on a posted delta review."
+    },
+    {
+      "id": "ac7-5",
+      "outcomeId": "o7-depth-by-tier-and-round",
+      "statement": "Tokens per Rex review on a Lean PR fall by at least 35% against the o1 baseline mean of 83.7k. Shown by: the o1 script."
+    }
+  ]
+}
