@@ -112,7 +112,7 @@
       "status": "not-verified",
       "evidence": [
         "auto-code-review.sh",
-        "Baseline: the hook's own text is 3,917 to 3,922 bytes per PR creation; with the harness prefix, the injected banner is about 4,394 bytes (143 banners in the baseline session)"
+        "Baseline: the hook's own text, from AUTO CODE REVIEW REQUIRED to the end of its message, is about 3.9 KB per PR creation and varies by less than 20 bytes with the PR number. With the harness prefix, the injected banner is about 4.4 KB (143 banners in the baseline session)."
       ],
       "explanation": "Missing: the hook prints about 3.9 KB and names no CI sequencing, and /code-review does not tell the orchestrator to wait. Next: the o4 slice."
     },
