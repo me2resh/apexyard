@@ -62,7 +62,7 @@ record_fail() {
 # -----------------------------------------------------------------------------
 # make_fork: an isolated apexyard fork sandbox with the hook + its libs.
 # -----------------------------------------------------------------------------
-make_fork() {
+make_fork_template() {
   local sb
   sb=$(mktemp -d)
   sb=$(cd "$sb" && pwd -P)
@@ -92,6 +92,18 @@ YAML
     git add -A
     git commit -q -m "test fixture"
   )
+  echo "$sb"
+}
+
+# Copy a pristine fixture. Each case keeps independent files and Git state.
+FIXTURE_TEMPLATE=$(make_fork_template) || exit 1
+trap 'rm -rf "$FIXTURE_TEMPLATE"' EXIT
+
+make_fork() {
+  local sb
+  sb=$(mktemp -d) || return 1
+  sb=$(cd "$sb" && pwd -P) || return 1
+  cp -R "$FIXTURE_TEMPLATE/." "$sb" || return 1
   echo "$sb"
 }
 

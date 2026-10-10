@@ -45,7 +45,7 @@ PASS=0
 FAIL=0
 FAILED_CASES=""
 
-make_sandbox() {
+make_sandbox_template() {
   local sb
   sb=$(mktemp -d)
   (
@@ -72,6 +72,17 @@ make_sandbox() {
   echo "$sb"
 }
 
+# Copy a pristine fixture. Each case keeps independent files and Git state.
+FIXTURE_TEMPLATE=$(make_sandbox_template) || exit 1
+trap 'rm -rf "$FIXTURE_TEMPLATE"' EXIT
+
+make_sandbox() {
+  local sb
+  sb=$(mktemp -d) || return 1
+  cp -R "$FIXTURE_TEMPLATE/." "$sb" || return 1
+  echo "$sb"
+}
+
 # Same as make_sandbox but DELIBERATELY OMITS _lib-path-resolve.sh — used
 # to pin the #1089 fail-closed degraded-mode behaviour (closing #1087's
 # LOW-2): with the lib missing, _resolve_real_path is undefined/stubbed to
@@ -80,28 +91,8 @@ make_sandbox() {
 # "#1089 fail-closed" cases below.
 make_sandbox_no_pathresolve() {
   local sb
-  sb=$(mktemp -d)
-  (
-    cd "$sb" || exit 1
-    git init -q
-    git config user.email "test@example.com"
-    git config user.name "test"
-    : > onboarding.yaml
-    : > apexyard.projects.yaml
-    git add onboarding.yaml apexyard.projects.yaml
-    git commit -q -m "init"
-  )
-  mkdir -p "$sb/.claude/hooks" "$sb/.claude/session"
-  cp "$HOOK_SRC" "$sb/.claude/hooks/require-active-ticket.sh"
-  cp "$LIB_BASH" "$sb/.claude/hooks/_lib-detect-bash-write.sh"
-  cp "$(dirname "$LIB_BASH")/_lib-awk-fallback.sh" "$sb/.claude/hooks/_lib-awk-fallback.sh"
-  cp "$LIB_CFG"  "$sb/.claude/hooks/_lib-read-config.sh"
-  cp "$LIB_ACTIVE_TICKET" "$sb/.claude/hooks/_lib-active-ticket.sh"
-  cp "$LIB_TICKET_PATH_EXEMPT" "$sb/.claude/hooks/_lib-ticket-path-exemptions.sh"
-  cp "$LIB_MASK" "$sb/.claude/hooks/_lib-mask-quoted.sh"
-  # NOTE: _lib-path-resolve.sh intentionally NOT copied here.
-  cp "$DEFAULTS" "$sb/.claude/project-config.defaults.json"
-  chmod +x "$sb/.claude/hooks/require-active-ticket.sh"
+  sb=$(make_sandbox) || return 1
+  rm -f "$sb/.claude/hooks/_lib-path-resolve.sh"
   echo "$sb"
 }
 

@@ -70,6 +70,7 @@ _CR=$(printf '\r')
 _CONFIG_CACHE=""
 _CONFIG_WARNED_NO_JQ=""
 _CONFIG_ROOT_CACHE=""
+_CONFIG_ROOT_CACHE_SET=""
 
 # _config_repo_root: resolve the directory that holds .claude/project-config.*.
 #
@@ -91,7 +92,7 @@ _CONFIG_ROOT_CACHE=""
 # Result is cached per-process — the walk is cheap but called by every
 # config_get invocation, so caching matches the _CONFIG_CACHE pattern.
 _config_repo_root() {
-  if [ -n "$_CONFIG_ROOT_CACHE" ]; then
+  if [ -n "$_CONFIG_ROOT_CACHE" ] || [ "${_CONFIG_ROOT_CACHE_SET:-}" = 1 ]; then
     echo "$_CONFIG_ROOT_CACHE"
     return 0
   fi
@@ -284,6 +285,11 @@ _config_load() {
   fi
 
   local defaults overrides
+  # Keep one root lookup for this load, including its cache fingerprint.
+  # A local cache cannot outlive this load or follow a caller into another cwd.
+  local _CONFIG_ROOT_CACHE="$_CONFIG_ROOT_CACHE" _CONFIG_ROOT_CACHE_SET=""
+  [ -n "$_CONFIG_ROOT_CACHE" ] || _CONFIG_ROOT_CACHE=$(_config_repo_root)
+  _CONFIG_ROOT_CACHE_SET=1
   defaults=$(_config_defaults_file)
   overrides=$(_config_overrides_file)
 
