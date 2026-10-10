@@ -1,0 +1,37 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-harness-o3-codex-native-gates",
+  "planId": "plan-apexyard-harness-golden-path",
+  "outcomeId": "o3-codex-native-gates",
+  "basedOn": {
+    "planRevision": 3,
+    "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261010T145545Z",
+    "repositories": {}
+  },
+  "objective": "Make the ApexYard gates run inside Codex after a guided one-time trust step per user, warn when trust is missing or stale, block Codex apply_patch edits the same way as Claude edits, remove the hook-trust bypass flag from all guidance, and prove the Edit-matcher hooks give the same decisions when Codex runs them in parallel.",
+  "why": "ac3-1 ac3-2 and ac3-4 are not-verified and ac3-3 is partially-verified. Codex skips untrusted hooks without a warning, so Codex builds may run with no gates today. Managed hooks need a machine-wide sudo install, so the operator chose per-user trust only. Codex passes apply_patch with tool_name apply_patch and only the patch text, and with no file_path require-active-ticket.sh line 302 allows the call, so the ticket-first gate fails open on patches. Codex runs matching hooks in parallel.",
+  "contributesTo": [
+    "ac3-1",
+    "ac3-2",
+    "ac3-3",
+    "ac3-4"
+  ],
+  "scope": {
+    "include": [
+      "A setup step that walks the user through the Codex hook trust step for the generated hooks",
+      "A check that warns when the ApexYard hooks are untrusted or their trust is stale after a hook change",
+      "Verify that the CI path that seeds ~/.codex at the pinned Codex version still gets trusted hooks and record the result",
+      "An apply_patch shim in the Codex adapter that extracts every Add and Update and Delete and Move path from the patch and blocks when any path blocks",
+      "A test that a Codex patch touching a code path without an active ticket is blocked and a docs-only patch is allowed",
+      "Replace --dangerously-bypass-hook-trust in docs/harnesses/codex.md and docs/harnesses/README.md and both setup and handover skill copies and docs/spike-848/findings.md with the per-user trust step",
+      "A test that runs the Edit-matcher hooks in parallel many times and in order and compares the decisions"
+    ],
+    "exclude": [
+      "A machine-wide or sudo install of Codex managed hooks",
+      "Changes to the Claude Code hook path",
+      "Cursor (o2)",
+      "The offload result wrapper (o7)",
+      "Codex cloud tasks"
+    ]
+  }
+}

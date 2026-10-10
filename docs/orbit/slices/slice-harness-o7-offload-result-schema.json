@@ -1,0 +1,34 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-harness-o7-offload-result-schema",
+  "planId": "plan-apexyard-harness-golden-path",
+  "outcomeId": "o7-offload-result-schema",
+  "basedOn": {
+    "planRevision": 3,
+    "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261010T145545Z",
+    "repositories": {}
+  },
+  "objective": "Make Codex and Cursor build offloads return a structured result that a named wrapper validates against a JSON schema and then verifies against the repository before a build is reported as done.",
+  "why": "ac7-1 and ac7-2 are not-verified. No wrapper or result schema exists in bin/, and builds are reported from the build agent's own text. A schema checks shape only: past misreports (a contaminated diff and a hidden red CI and a branch on the wrong base) would pass it. So the wrapper must also check the claims against git. Codex exec supports --output-schema. cursor-agent JSON output wraps free text and has no schema option, so the wrapper's own check is the only check on that path.",
+  "contributesTo": [
+    "ac7-1",
+    "ac7-2"
+  ],
+  "scope": {
+    "include": [
+      "A JSON schema for the offload result (status and files changed and checks run with results and commit SHA and base branch and open issues)",
+      "A bin/ wrapper that runs codex exec with --output-schema or cursor-agent with JSON output and validates the result with jq assertions",
+      "A drift test that keeps the jq assertions in line with the schema file",
+      "Independent checks: the commit SHA exists and git diff --name-only from the base to the SHA matches files changed and the merge-base matches the expected base",
+      "Run the repository's own configured checks and never a command taken from the agent output",
+      "Separate exit codes for CLI failure and schema failure and verification failure",
+      "Tests for an invalid shape and for a valid shape with a commit SHA that does not exist",
+      "Offload guidance in docs/harnesses/ that points builds at the wrapper"
+    ],
+    "exclude": [
+      "Codex native gates (o3)",
+      "Cursor coverage (o2)",
+      "Running offloads automatically from skills"
+    ]
+  }
+}

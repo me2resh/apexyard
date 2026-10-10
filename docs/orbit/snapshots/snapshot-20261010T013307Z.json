@@ -1,0 +1,15 @@
+{
+  "specVersion": "0.1",
+  "id": "snapshot-apexyard-20261010T013307Z",
+  "project": {
+    "id": "apexyard"
+  },
+  "observedAt": "2026-10-10T01:33:07.286Z",
+  "repositories": [
+    {
+      "repositoryId": "me2resh/apexyard",
+      "branch": "docs/orbit-harness-golden-path",
+      "commit": "53f0baeac19dd7855a59a38762c6696016e5092f"
+    }
+  ]
+}

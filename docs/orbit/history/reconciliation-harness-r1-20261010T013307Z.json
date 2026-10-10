@@ -1,0 +1,181 @@
+{
+  "specVersion": "0.1",
+  "id": "reconciliation-plan-apexyard-harness-golden-path-20261010T013317Z",
+  "planId": "plan-apexyard-harness-golden-path",
+  "planRevision": 1,
+  "projectSnapshotId": "snapshot-apexyard-20261010T013307Z",
+  "reconciledAt": "2026-10-10T01:33:17.094Z",
+  "observations": [
+    "Observed me2resh/apexyard at 53f0baeac19dd7855a59a38762c6696016e5092f."
+  ],
+  "criterionAssessments": [
+    {
+      "criterionId": "ac1-1",
+      "status": "not-verified",
+      "evidence": [
+        "No per-hook timing profile exists in the repo at 53f0bae."
+      ],
+      "explanation": "The profile has not been taken."
+    },
+    {
+      "criterionId": "ac1-2",
+      "status": "not-verified",
+      "evidence": [
+        "grep -n onFailure .claude/settings.json returns nothing.",
+        "Only one hook sets a timeout today: .claude/settings.json line 107 (3 s, the context injector)."
+      ],
+      "explanation": "No hook sets onFailure; a crashed hook fails open. Timeouts must come from the ac1-1 profile."
+    },
+    {
+      "criterionId": "ac1-3",
+      "status": "not-verified",
+      "evidence": [
+        "No escape-hatch variable or settings override for fail-closed hooks is documented or tested."
+      ],
+      "explanation": "Depends on ac1-2."
+    },
+    {
+      "criterionId": "ac1-4",
+      "status": "not-verified",
+      "evidence": [
+        ".claude-plugin/marketplace.json exists on dev (from #1608).",
+        "grep -rln 'plugin validate' .github/workflows returns nothing."
+      ],
+      "explanation": "The manifest exists, but CI does not validate it."
+    },
+    {
+      "criterionId": "ac2-1",
+      "status": "not-verified",
+      "evidence": [
+        "docs/harnesses/cursor.md line 15 says cursor-agent ignores hooks.json (Cursor's own file); docs/cursor-adapter.md line 131 records a 2026-09-16 check.",
+        "docs/harnesses/README.md line 29 and both setup skills say more broadly that the CLI ignores hooks.",
+        "The Cursor CLI changelog (https://cursor.com/docs/cli/changelog, v2026.08.11) and https://cursor.com/docs/reference/third-party-hooks say Claude settings.json and plugin hooks load.",
+        "bin/quality-regression.sh line 198 already runs cursor-agent -p --trust, so a test harness exists."
+      ],
+      "explanation": "No recorded test artifact shows, gate by gate, whether .claude/settings.json hooks fire under cursor-agent -p. The repo claim is about hooks.json; the broader 'ignores hooks' wording is unproven."
+    },
+    {
+      "criterionId": "ac2-2",
+      "status": "not-verified",
+      "evidence": [
+        "bin/install-cursor-adapter.sh line 161 prints that cursor-agent is NOT covered."
+      ],
+      "explanation": "The docs state a claim with no recorded test artifact; they change after ac2-1."
+    },
+    {
+      "criterionId": "ac3-1",
+      "status": "not-verified",
+      "evidence": [
+        "bin/sync-codex-adapter.sh generates .codex/hooks.json from .claude/settings.json, with test_sync_codex_adapter.sh (AgDR-0088, #730).",
+        "grep -n 'managed|requirements.toml' bin/sync-codex-adapter.sh returns nothing."
+      ],
+      "explanation": "The generator and its drift test exist as a base, but the managed-hook form, the criterion's main clause, is absent. The drift test was not run for this reconciliation."
+    },
+    {
+      "criterionId": "ac3-2",
+      "status": "not-verified",
+      "evidence": [
+        "grep -n apply_patch bin/sync-codex-adapter.sh returns nothing."
+      ],
+      "explanation": "No shim maps apply_patch patch text to file paths."
+    },
+    {
+      "criterionId": "ac3-3",
+      "status": "partially-verified",
+      "evidence": [
+        "No executable path passes the flag: .github/workflows/conformance.yml lines 194-198 seed ~/.codex/hooks.json instead, and bin/quality-regression.sh line 199 omits it.",
+        "Docs and skills offer the flag as one of three ways to grant hook trust: docs/harnesses/codex.md lines 3 and 52, docs/harnesses/README.md lines 28 and 51, .claude/skills/setup/SKILL.md line 509, .claude/skills/handover/SKILL.md line 245, .agents/skills/setup/SKILL.md line 500, .agents/skills/handover/SKILL.md line 270, docs/spike-848/findings.md line 154."
+      ],
+      "explanation": "Scripts and workflows already avoid the flag; guidance still offers it, so the remaining work is docs and skills only."
+    },
+    {
+      "criterionId": "ac3-4",
+      "status": "not-verified",
+      "evidence": [
+        "No test runs the Edit-matcher hooks in parallel."
+      ],
+      "explanation": "Not tested."
+    },
+    {
+      "criterionId": "ac4-1",
+      "status": "not-verified",
+      "evidence": [
+        "The Rex and Hakim agent files do not set omitClaudeMd or autoCompactWindow at 53f0bae."
+      ],
+      "explanation": "Not started."
+    },
+    {
+      "criterionId": "ac4-2",
+      "status": "not-verified",
+      "evidence": [
+        "No recorded input-token baseline per review exists."
+      ],
+      "explanation": "Not started."
+    },
+    {
+      "criterionId": "ac4-3",
+      "status": "not-verified",
+      "evidence": [
+        "docs/eval-agents/corpus/rex.json has 10 entries; docs/eval-agents/corpus/hakim.json has 4."
+      ],
+      "explanation": "The Hakim corpus is too small to detect a one-defect miss."
+    },
+    {
+      "criterionId": "ac5-1",
+      "status": "not-verified",
+      "evidence": [
+        "golden-paths/ contains only pipelines/; no dependency-cruiser config exists in the repo."
+      ],
+      "explanation": "Not started."
+    },
+    {
+      "criterionId": "ac5-2",
+      "status": "not-verified",
+      "evidence": [
+        "golden-paths/pipelines/code-quality.yml has no dependency-cruiser step."
+      ],
+      "explanation": "Not started."
+    },
+    {
+      "criterionId": "ac5-3",
+      "status": "not-verified",
+      "evidence": [
+        "handbooks/architecture/clean-architecture-layers.md line 4 reads Enforcement: advisory.",
+        "The handbook does not mention CI enforcement."
+      ],
+      "explanation": "Advisory already, but the CI statement would be false until ac5-2 lands. Blocked by ac5-2."
+    },
+    {
+      "criterionId": "ac6-1",
+      "status": "not-verified",
+      "evidence": [
+        "grep for aws-lambda-powertools in .claude/rules and golden-paths returns nothing."
+      ],
+      "explanation": "Not started. Portfolio survey on 2026-10-10: one managed project uses Powertools."
+    },
+    {
+      "criterionId": "ac6-2",
+      "status": "not-verified",
+      "evidence": [
+        "No Logger port or adapter exists under golden-paths/."
+      ],
+      "explanation": "Not started."
+    },
+    {
+      "criterionId": "ac7-1",
+      "status": "not-verified",
+      "evidence": [
+        "No wrapper script or result schema for codex exec or cursor-agent exists in bin/."
+      ],
+      "explanation": "Builds are reported from the build agent's own text today."
+    },
+    {
+      "criterionId": "ac7-2",
+      "status": "not-verified",
+      "evidence": [
+        "No offload guidance points at a wrapper."
+      ],
+      "explanation": "Depends on ac7-1."
+    }
+  ]
+}
