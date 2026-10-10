@@ -35,6 +35,12 @@
 #       frozen `date` shim (no real-time race) through the REAL wired
 #       path (portfolio_workspace_dir) -- fails on unfixed code, passes
 #       once the write-time-settled guard is in place
+#   11. (#1613) A disabled cache returns UNKNOWN without resolving the
+#       config paths
+#   12. (#1613) The per-load config root does not persist into a later
+#       load or another working directory
+#   13. (#1613) An unresolved config root keeps the original shell exit
+#       status, with and without POSIX mode
 #
 # Exit 0 if all cases pass; 1 on first failure.
 
@@ -689,8 +695,87 @@ JSON
   return 1
 }
 
+# Disabled caching must not resolve paths just to produce an unusable key.
+case_11() {
+  local name="disabled fingerprints skip path resolution" result
+  result=$(
+    exec 2>&1
+    # shellcheck source=/dev/null
+    . "$RC_LIB"
+    _config_defaults_file() { printf 'unexpected defaults lookup\n' >&2; return 1; }
+    _config_overrides_file() { printf 'unexpected overrides lookup\n' >&2; return 1; }
+    export CLAUDE_CODE_SESSION_ID="case11-$$"
+    export APEXYARD_DISABLE_RESOLUTION_CACHE=1
+    _resolution_cache_current_fingerprint
+    printf '\n'
+    unset APEXYARD_DISABLE_RESOLUTION_CACHE CLAUDE_CODE_SESSION_ID
+    _resolution_cache_current_fingerprint
+  )
+  if [ "$result" = $'UNKNOWN\nUNKNOWN' ]; then
+    mark_pass "$name"
+    return 0
+  fi
+  mark_fail "$name" "got: $result"
+  return 1
+}
+
+# A load-local root must not persist after a miss or a later cwd change.
+case_12() {
+  local name="config loads do not retain another working directory" a b missing result
+  a=$(make_fork)
+  b=$(make_fork)
+  missing=$(mktemp -d)
+  printf '%s\n' '{"tracker":{"kind":"gh"}}' > "$a/.claude/project-config.defaults.json"
+  printf '%s\n' '{"tracker":{"kind":"glab"}}' > "$b/.claude/project-config.defaults.json"
+  result=$(
+    . "$a/.claude/hooks/_lib-read-config.sh"
+    cd "$missing" || exit 1
+    _config_load > "$missing/result"
+    cat "$missing/result"
+    cd "$a" || exit 1
+    _config_load > "$missing/result"
+    jq -r '.tracker.kind' "$missing/result"
+    cd "$b" || exit 1
+    _config_load > "$missing/result"
+    jq -r '.tracker.kind' "$missing/result"
+    printf 'root=%s' "$_CONFIG_ROOT_CACHE"
+  )
+  rm -rf "$a" "$b" "$missing"
+  if [ "$result" = $'{}\ngh\nglab\nroot=' ]; then
+    mark_pass "$name"
+    return 0
+  fi
+  mark_fail "$name" "got: $result"
+  return 1
+}
+
+# Keep the original empty-path failure under POSIX errexit.
+case_13() {
+  local name="unresolved config preserves shell exit status" mode result rc want
+  for mode in default posix; do
+    result=$("$BASH" -ec '
+      case "$2" in default) set +o posix ;; posix) set -o posix ;; esac
+      . "$1"
+      _config_repo_root() { printf ""; }
+      config_get .
+      echo reached
+    ' root-miss-check "$CONFIG_LIB" "$mode")
+    rc=$?
+    want=0
+    [ "$mode" = posix ] && want=1
+    if [ "$rc" -ne "$want" ] ||
+       { [ "$mode" = default ] && [ "$result" != $'{}\nreached' ]; } ||
+       { [ "$mode" = posix ] && [ -n "$result" ]; }; then
+      mark_fail "$name" "$mode: rc=$rc output='$result'"
+      return 1
+    fi
+  done
+  mark_pass "$name"
+  return 0
+}
+
 echo "Running resolution-cache tests..."
-for fn in case_1 case_2 case_3 case_4 case_5 case_6 case_7 case_8 case_9 case_10; do
+for fn in case_1 case_2 case_3 case_4 case_5 case_6 case_7 case_8 case_9 case_10 case_11 case_12 case_13; do
   run_case "$fn"
 done
 

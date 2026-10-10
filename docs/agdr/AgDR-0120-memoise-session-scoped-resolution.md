@@ -34,7 +34,7 @@ Chosen: **a session-scoped cache FILE per cached value, self-describing (fingerp
 |---|---|---|
 | The merged `project-config` JSON text (`_config_load`'s output) | Individual `config_get <filter>` results | Unbounded caller-supplied filter strings — see Options Considered |
 | Each of the 8 `portfolio_*` resolvers' final absolute path (registry, projects_dir, ideas_backlog, onboarding, workspace_dir, custom_skills_dir, custom_handbooks_dir, agent_routing) | — | — |
-| (Implicitly, via reuse) ops-root resolution | A second ops-root resolver/cache | `resolve_ops_root()` already has one (#381); adding a second, differently-shaped cache for the same fact is exactly the "two hand-maintained resolvers that silently disagree" failure this issue's own Risks section cites (apexyard-premium#537) as a warning from a different codebase |
+| (Implicitly, via reuse) ops-root resolution | A second ops-root resolver/cache | `resolve_ops_root()` already has one (#381); adding a second, differently-shaped cache for the same fact is exactly the "two hand-maintained resolvers that silently disagree" failure this issue's own Risks section cites (a related downstream issue) as a warning from a different codebase |
 | — | GH API / CI / PR-review state read by other hooks | Out of scope by design — this is `project-config` + portfolio-path resolution ONLY, never dynamic forge state; caching that would be the actual "confidently wrong" gate-relevant failure the issue warns about |
 
 ### Staleness model — "correct-or-cold, never confidently-wrong"
@@ -76,7 +76,7 @@ New file `.claude/hooks/_lib-resolution-cache.sh`, sourced by `_lib-read-config.
 
 - Cross-process cost for the merged config JSON and the 8 portfolio path resolvers drops from "redone every hook process" to "computed once per session generation, read cheaply thereafter" — measured before/after numbers are in the PR description (48-hook sequential-pass benchmark, matching the issue's own methodology).
 - `config_get <filter>`'s own per-call `jq` spawn is **unchanged** — still one `jq` process per filter, per call, regardless of this cache. The win here is narrower than "no more `jq` calls anywhere"; it's specifically "the disk-read + merge that produces the JSON those filters run against is no longer redone 48 times," plus the much larger portfolio-path canonicalization chains (multiple subshells per resolver) collapsing to a cache read.
-- `_portfolio_root()` now converges with `resolve_ops_root()`'s answer whenever a pin is available, removing one instance of the "two independently-maintained resolvers for the same fact" pattern this issue's own Related section warns about (apexyard-premium#537) — a side benefit, not the primary ask, and scoped narrowly (only short-circuits on a hit; the existing walk-up fallback for un-anchored managed-project clones is untouched).
+- `_portfolio_root()` now converges with `resolve_ops_root()`'s answer whenever a pin is available, removing one instance of the "two independently-maintained resolvers for the same fact" pattern this issue's own Related section warns about (a related downstream issue) — a side benefit, not the primary ask, and scoped narrowly (only short-circuits on a hit; the existing walk-up fallback for un-anchored managed-project clones is untouched).
 - New escape hatch `APEXYARD_DISABLE_RESOLUTION_CACHE=1`, independent of the existing `APEXYARD_OPS_DISABLE_PIN`.
 - New session-scoped files accumulate under `${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}` with no automatic cleanup — same pre-existing limitation the ops-root pin already has (nothing sweeps `ops-root-<session>` files either). Not addressed here; out of scope for this issue, and no worse than the status quo.
 - No hook's gating decision changes: every value this AgDR caches (ops root, project-config, portfolio paths) is config/filesystem-derived, never forge state (CI status, PR review state, merge eligibility) — those remain live-read by every hook, exactly as before.
@@ -107,3 +107,23 @@ Code review on the landing PR (#1127) raised two findings against the mechanism 
 **What did NOT change:** the accepted symlink residual risk (portfolio-path canonicalization under a mid-session symlink swap, described above) is untouched and still honestly documented as the one remaining narrow residual — it is orthogonal to both F1 and F2. The fail-safe posture (no session id, disable flag, unwritable dir, cold/invalidated cache) is unchanged; the write-time guard adds one more fail-CLOSED case ("now" undeterminable → treat as unsettled, refuse the write) to that same list, consistent with the existing "when in doubt, don't cache" rail. `shellcheck --severity=warning` clean; full `bin/run-hook-tests.sh` green aside from one pre-existing, unrelated flake (`test_lib_self_location_cwd_anchor.sh`, a documented BASE_REF zsh-vs-bash timing artifact) and one pre-existing, unrelated failure (`test_workspace_tracker_resolution.sh`, confirmed to fail identically against base HEAD before this follow-up's changes — a separate, already-existing gap in workspace-clone tracker resolution, not touched by this fix).
 
 - PR: fix(#1013) — close the mtime-second cache staleness window + drop the dead ops-root fingerprint input
+
+## Update (me2resh/apexyard#1613) — one config root per load, and no fingerprint work when the cache is off
+
+Profiling the slowest hook tests (`docs/perf/hook-test-profile-2026-10.md`) found that one `_config_load` call walked up the directory tree for the config root up to three times: once for the defaults file, once for the overrides file, and once for the cache fingerprint. Each walk ran in a command substitution, so the per-process `$_CONFIG_ROOT_CACHE` that `_config_repo_root` sets never reached the caller (the same subshell effect that F2 above describes). Two changes remove that repeated work. Neither changes what a gate reads or decides.
+
+**Per-load root cache.** `_config_load` now declares `local _CONFIG_ROOT_CACHE` and `local _CONFIG_ROOT_CACHE_SET`, resolves the root once, and sets the flag. Bash's dynamic scoping passes these locals into every function and command substitution the load calls, so `_config_defaults_file`, `_config_overrides_file`, and the fingerprint all reuse the one result. The flag also caches an empty result, so a load that finds no config root does not walk again. When the load returns, the locals go away, and the global cache stays as it was.
+
+Options considered:
+
+- **Set the global cache once per process.** Rejected. A caller that changes directory between two loads would read the first directory's config. That is exactly the cross-directory error this record's staleness model exists to prevent.
+- **Pass the root as an argument to each path helper.** Rejected. It changes the signature of helpers that other libraries call, for the same saving.
+- **Per-load local cache (chosen).** It cannot outlive the load or follow the caller into another directory. `test_resolution_cache.sh` case 12 checks this: it loads from a directory with no config, then from two forks with different trackers, and asserts that each load reads its own config and that the global cache stays empty.
+
+**Invariant.** No function that `_config_load` calls may change directory. If one did, the cached root would no longer match the working directory. A comment at the cache declaration in `_lib-read-config.sh` states this rule.
+
+**Early `UNKNOWN` fingerprint.** `_resolution_cache_current_fingerprint` now returns `UNKNOWN` at once when `_resolution_cache_enabled` is false: the disable flag is set, or no session id exists. Every cache read and write already refuses to run in that state, and `UNKNOWN` is never a valid key, so the change only skips path resolution for a key that nothing uses. Case 11 checks that a disabled cache makes no defaults or overrides lookup. With the cache on, the fingerprint is unchanged.
+
+Case 13 checks that an unresolved root keeps the original exit status, with and without POSIX mode.
+
+- PR: perf(#1613) — profile the slowest hook tests and cut redundant work (#1615)

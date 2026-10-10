@@ -39,7 +39,7 @@
 # the two inputs to the fingerprint below, rather than re-deriving or
 # re-caching it a second way. Two independently-maintained resolvers for
 # the same fact is exactly the failure mode named in this issue's own
-# "Related" section (apexyard-premium#537) — this file avoids adding a
+# "Related" section (a related downstream issue) — this file avoids adding a
 # second one.
 #
 # Per-filter config_get() reads (e.g. `config_get '.tracker.kind'`) are also
@@ -266,6 +266,11 @@ _resolution_cache_config_fingerprint() {
 #   recompute," never to "guess."
 # ------------------------------------------------------------------------------
 _resolution_cache_current_fingerprint() {
+  # Disabled caches cannot read or write entries. Avoid resolving their inputs.
+  if ! _resolution_cache_enabled; then
+    printf 'UNKNOWN'
+    return 0
+  fi
   if ! command -v _config_defaults_file >/dev/null 2>&1 || ! command -v _config_overrides_file >/dev/null 2>&1; then
     printf 'UNKNOWN'
     return 0

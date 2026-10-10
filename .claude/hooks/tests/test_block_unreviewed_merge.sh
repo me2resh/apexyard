@@ -44,7 +44,7 @@ FAILED_CASES=""
 FIXED_SHA="abcdef1234567890abcdef1234567890abcdef12"
 WRONG_SHA="0000000000000000000000000000000000000000"
 
-make_sandbox() {
+make_sandbox_template() {
   local sb
   sb=$(mktemp -d)
   # Sandbox blocks creating a path named ".git". Use an explicit gitdir.
@@ -110,6 +110,17 @@ exit 0
 EOF
   chmod +x "$sb/bin/gh"
 
+  echo "$sb"
+}
+
+# Copy a pristine fixture. Each case keeps independent files and Git state.
+FIXTURE_TEMPLATE=$(make_sandbox_template) || exit 1
+trap 'rm -rf "$FIXTURE_TEMPLATE"' EXIT
+
+make_sandbox() {
+  local sb
+  sb=$(mktemp -d) || return 1
+  cp -R "$FIXTURE_TEMPLATE/." "$sb" || return 1
   echo "$sb"
 }
 
