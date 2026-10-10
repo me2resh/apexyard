@@ -1,0 +1,262 @@
+{
+  "specVersion": "0.1",
+  "id": "reconciliation-plan-apexyard-token-efficiency-20261010T201358Z",
+  "planId": "plan-apexyard-token-efficiency",
+  "planRevision": 1,
+  "projectSnapshotId": "snapshot-apexyard-20261010T201358Z",
+  "reconciledAt": "2026-10-10T20:13:58.214Z",
+  "observations": [
+    "Observed me2resh/apexyard at bace9dbccf5b0af2204d6a89f3d9d81bb52905f0.",
+    "Baseline from the 2026-10-10 token-cost debug (one 10-day session): main context mean 490k tokens per turn, p90 853k, 18 compactions; the /approve-merge body injected 209 times at 34 KB; every Rex spawn starts at 49k tokens; 469 CI-wait turns inside 195 reviewer runs; 31 pure-refresh Rex rounds; Rex rounds per PR 2.38 on the framework.",
+    "Static state at this commit: 0 of 23 agent files set omitClaudeMd; code-reviewer.md is 73,140 bytes, security-reviewer.md 21,570, solution-architect.md 22,858; approve-merge SKILL.md is 37,280 bytes; the other four most-invoked skills are 10,077 to 15,427 bytes; 45 skills carry the Writing rule preamble; docs/eval-agents/corpus has rex.json (10 entries) and hakim.json (4), no Tariq corpus; docs/perf/ holds only hook-test-profile-2026-10.md.",
+    "pr-workflow.md line 111 documents the carry-over exception (AgDR-0178, #1437, #1456), and step 3 still asks for a Rex re-review after a branch update. code-reviewer.md line 161 tells Rex to wait for CI, and line 165 forbids an APPROVED verdict on pending CI. test_block_merge_on_red_ci.sh has a pending case. orbit SKILL.md line 271 runs Naqid after every draft."
+  ],
+  "criterionAssessments": [
+    {
+      "criterionId": "ac1-1",
+      "status": "not-verified",
+      "evidence": [
+        "docs/perf/ on dev holds only hook-test-profile-2026-10.md",
+        "The debug scripts live in a session scratchpad, not in the repository"
+      ],
+      "explanation": "Missing: the measurement script in the framework. Next: the harness o4 slice ships the per-review measurement, then the o1 slice adds the session view."
+    },
+    {
+      "criterionId": "ac1-2",
+      "status": "not-verified",
+      "evidence": [
+        "The baseline numbers exist only in the debug synthesis of 2026-10-10"
+      ],
+      "explanation": "Missing: the reviewer and forge views and the dated baseline file. Next: the o1 slice."
+    },
+    {
+      "criterionId": "ac1-3",
+      "status": "not-verified",
+      "evidence": [
+        "This record"
+      ],
+      "explanation": "Missing: this is the first reconciliation, so no outcome has moved yet. Next: each slice PR records the metric before and after."
+    },
+    {
+      "criterionId": "ac2-1",
+      "status": "not-verified",
+      "evidence": [
+        "No autocompact mention in docs/*.md or .claude/rules/*.md"
+      ],
+      "explanation": "Missing: the spike and the documented setting. Next: the o2 slice."
+    },
+    {
+      "criterionId": "ac2-2",
+      "status": "not-verified",
+      "evidence": [
+        "Baseline: mean 490k, p90 853k, 18 compactions at about 968k"
+      ],
+      "explanation": "Missing: the measured drop. Next: after the o2 spike and ac6-4, the o1 script."
+    },
+    {
+      "criterionId": "ac2-3",
+      "status": "not-verified",
+      "evidence": [
+        "parallel-work.md lines 66 and 200 cover worktree isolation, not fork against fresh spawn",
+        "fan-out SKILL.md has no fork guidance",
+        "Baseline: two forks inherited 281k and 581k of context and billed 17.8M tokens"
+      ],
+      "explanation": "Missing: the fresh-spawn default and the fork rule. Next: the o2 slice."
+    },
+    {
+      "criterionId": "ac2-4",
+      "status": "not-verified",
+      "evidence": [
+        "No harness request filed"
+      ],
+      "explanation": "Missing: the four requests. Next: the o2 slice files them with the measured numbers."
+    },
+    {
+      "criterionId": "ac3-1",
+      "status": "partially-verified",
+      "evidence": [
+        "_lib-merge-behind.sh: rex_approval_carries_over (AgDR-0178, #1437, #1456)",
+        "pr-workflow.md line 111",
+        "test_lib_merge_behind.sh covers a clean merge, a one-parent commit, an octopus merge and a wrong first parent"
+      ],
+      "explanation": "Missing: step 3 of pr-workflow.md still asks for a Rex re-review after a branch update, and no test covers a smuggled hunk in a merge commit. Next: the o3 slice. Met: rex_approval_carries_over exists and pr-workflow.md line 111 documents the carry-over."
+    },
+    {
+      "criterionId": "ac3-2",
+      "status": "not-verified",
+      "evidence": [
+        "Baseline: 31 pure-refresh rounds in the session, 22 in the 65-PR sample"
+      ],
+      "explanation": "Missing: chained refreshes are not covered; the check verifies one two-parent merge. Next: the o3 slice, as an AgDR-0178 amendment."
+    },
+    {
+      "criterionId": "ac3-3",
+      "status": "not-verified",
+      "evidence": [
+        "Markers are keyed by repository and PR number (AgDR-0060)",
+        "Baseline: one same-SHA reopen cost 178k tokens (#1580)"
+      ],
+      "explanation": "Missing: a same-SHA marker lookup across PR numbers and the carried_from field. Next: the o3 slice."
+    },
+    {
+      "criterionId": "ac3-4",
+      "status": "not-verified",
+      "evidence": [
+        "Baseline: 31 pure-refresh rounds in the session; 15 in the 40-PR framework sample"
+      ],
+      "explanation": "Missing: the count on the next 40 merged PRs. Next: the o1 script after o3 lands."
+    },
+    {
+      "criterionId": "ac4-1",
+      "status": "not-verified",
+      "evidence": [
+        "auto-code-review.sh",
+        "Baseline: 143 banners at 4,394 bytes each"
+      ],
+      "explanation": "Missing: the banner is about 4.4 KB and names no CI sequencing, and /code-review does not tell the orchestrator to wait. Next: the o4 slice."
+    },
+    {
+      "criterionId": "ac4-2",
+      "status": "not-verified",
+      "evidence": [
+        "code-reviewer.md lines 161 and 165",
+        "Baseline: 469 wait turns in 195 reviewer runs"
+      ],
+      "explanation": "Missing: code-reviewer.md line 161 tells Rex to wait for CI, and no hook blocks a watch or a sleep for review agents. Next: the o4 slice."
+    },
+    {
+      "criterionId": "ac4-3",
+      "status": "partially-verified",
+      "evidence": [
+        "block-merge-on-red-ci.sh (AgDR-0213)",
+        "test_block_merge_on_red_ci.sh: pending case"
+      ],
+      "explanation": "Missing: confirmation that the existing case covers queued check-runs with a valid Rex marker, or a new case. Next: the o4 slice names or adds it. Met: block-merge-on-red-ci.sh blocks a pending result, and its test has a pending case."
+    },
+    {
+      "criterionId": "ac4-4",
+      "status": "not-verified",
+      "evidence": [
+        "Baseline: 469 turns across 195 runs; 27 of 30 waits of 300 s or more expired the prompt cache"
+      ],
+      "explanation": "Missing: the measurement after o4. Next: the o1 script on the next 40 PRs."
+    },
+    {
+      "criterionId": "ac5-1",
+      "status": "not-verified",
+      "evidence": [
+        "0 of 23 agent files set omitClaudeMd"
+      ],
+      "explanation": "Missing: no agent file sets omitClaudeMd. Next: the harness o4 slice for Rex and Hakim, then the o5 slice for the other five review and audit agents."
+    },
+    {
+      "criterionId": "ac5-2",
+      "status": "not-verified",
+      "evidence": [
+        "wc -c on security-reviewer.md and solution-architect.md",
+        "docs/eval-agents/corpus: rex.json and hakim.json only"
+      ],
+      "explanation": "Missing: the two files are 21,570 and 22,858 bytes, and no Tariq corpus exists. Next: the o5 slice, corpus first."
+    },
+    {
+      "criterionId": "ac5-3",
+      "status": "not-verified",
+      "evidence": [
+        "rex.json has 10 entries and no delta entry",
+        "Baseline: 98 delta re-reviews at a mean of 77k tokens"
+      ],
+      "explanation": "Missing: the effort spike, the lean-effort agent file and the delta corpus entries. Next: the o5 slice."
+    },
+    {
+      "criterionId": "ac6-1",
+      "status": "not-verified",
+      "evidence": [
+        "wc -c on approve-merge SKILL.md",
+        "Baseline: 209 injections",
+        "test_merge_invocation_not_substituted.sh pins the bare tracker_pr_merge line"
+      ],
+      "explanation": "Missing: the body is 37,280 bytes and no script exists. Next: the o6 slice."
+    },
+    {
+      "criterionId": "ac6-2",
+      "status": "partially-verified",
+      "evidence": [
+        "wc -c on the five skill files"
+      ],
+      "explanation": "Missing: approve-merge is 37,280 bytes, and no cap test exists. Next: the o6 slice. Met: approve-design 11,861, code-review 13,359, task 10,077 and start-ticket 15,427 bytes are under the cap."
+    },
+    {
+      "criterionId": "ac6-3",
+      "status": "not-verified",
+      "evidence": [
+        "grep for the Writing rule heading: 45 files",
+        "grep for the .apexyard-fork anchor: 24 files"
+      ],
+      "explanation": "Missing: 45 skills carry the Writing rule preamble, and the ops-root block repeats in 24 files by one count and 53 by another. Next: the o6 slice."
+    },
+    {
+      "criterionId": "ac6-4",
+      "status": "not-verified",
+      "evidence": [
+        "approve-merge SKILL.md has no compact mention"
+      ],
+      "explanation": "Missing: no compact line. Next: the o6 slice."
+    },
+    {
+      "criterionId": "ac6-5",
+      "status": "not-verified",
+      "evidence": [
+        "Baseline: 6 of 17 Naqid runs were reconciliation challenges; the largest was 98,934 tokens"
+      ],
+      "explanation": "Missing: orbit SKILL.md line 271 runs Naqid after every draft. Next: the o6 slice."
+    },
+    {
+      "criterionId": "ac7-1",
+      "status": "not-verified",
+      "evidence": [
+        "right-size-ceremony.md and AgDR-0116",
+        "Baseline: 12 of 43 docs-only Rex runs were behavioural text; #1463 was rounded up to Full"
+      ],
+      "explanation": "Missing: no tier script; the tier is self-declared. Next: the o7 slice."
+    },
+    {
+      "criterionId": "ac7-2",
+      "status": "partially-verified",
+      "evidence": [
+        "code-reviewer.md: Reduced-Scope Review",
+        "rex.json: 10 entries, none docs-only"
+      ],
+      "explanation": "Missing: the fixed procedure tied to the scripted tier, the ESCALATE verdict and docs-only corpus entries. Next: the o7 slice. Met: code-reviewer.md has a Reduced-Scope Review section and the round-up rail."
+    },
+    {
+      "criterionId": "ac7-3",
+      "status": "not-verified",
+      "evidence": [
+        "block-unreviewed-merge.sh unchanged; 117 of 117 gate tests pass"
+      ],
+      "explanation": "Missing: the paired adversarial test. Next: the o7 slice."
+    },
+    {
+      "criterionId": "ac7-4",
+      "status": "not-verified",
+      "evidence": [
+        "Baseline: 508 task notifications at a mean of 3,543 bytes; one delta round posted 3,411 bytes for a one-word fix"
+      ],
+      "explanation": "Missing: hand-backs average 3.5 KB, and delta rounds post the 13-section body. Next: the o7 slice."
+    },
+    {
+      "criterionId": "ac7-5",
+      "status": "not-verified",
+      "evidence": [
+        "Baseline: eligible Lean runs averaged 83.7k tokens"
+      ],
+      "explanation": "Missing: the measurement after o7. Next: the o1 script."
+    }
+  ],
+  "discoveries": [
+    "The measurement scripts of the debug exist only in a session scratchpad. o1 brings a maintained version into the repo, and the harness o4 slice ships the per-review part first.",
+    "The dispatch hook blocked two read-only commands during this planning session because their text named a tracker command inside a heredoc or a grep pattern. The debug counted 88 such blocks on reviewers. This is not in the plan; it is a candidate for a bug ticket or the next revision.",
+    "The ops-root block count depends on the signature: 53 by the baseline count, 24 files by the .apexyard-fork anchor string. The o6 slice fixes the counting rule in its grep test.",
+    "The harness o4 slice is the first dependency and has no issue yet; /orbit handoff files it after the record set is on dev."
+  ]
+}
