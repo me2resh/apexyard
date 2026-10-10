@@ -226,9 +226,9 @@ The resolution-cache test passes 13 cases with zero failures.
 
 The broad run is not wholly green:
 
-- `test_dependency_audit_ecosystems.sh`: Python 3.9 lacks `tomllib`; 57 cases pass and 11 fail. The unchanged snapshot produces the same result. With installed Python 3.13, all 68 cases pass.
+- `test_dependency_audit_ecosystems.sh`: Python 3.9 lacks `tomllib`. 57 cases pass and 11 fail. The unchanged snapshot produces the same result. With installed Python 3.13, all 68 cases pass.
 - `test_lib_self_location_cwd_anchor.sh`: seven historical BASE assertions fail because BASE defaults to HEAD, which already contains the fixes. Current-code assertions pass. The historical assertions read unchanged committed files through `git show`. An older BASE reference recovers six assertions but still fails the block-main-push historical assertion.
-- `test_token_efficiency_wave1.sh`: the SessionStart banner exceeds 600 characters. The unchanged snapshot also fails this invariant (1124 characters); the working tree reports 1096. A standalone rerun still fails.
+- `test_token_efficiency_wave1.sh`: the SessionStart banner exceeds 600 characters. The unchanged snapshot also fails this invariant (1124 characters). The working tree reports 1096. A standalone rerun still fails.
 
 Exact diagnostic and rerun commands:
 
@@ -239,11 +239,20 @@ APEXYARD_TEST_BASE_REF=6d7d3f9c^ /bin/bash .claude/hooks/tests/test_lib_self_loc
 ```
 
 The temporary `python-bin/python3` symlink points to `/opt/homebrew/bin/python3.13`.
-The Python rerun passes; the other two commands still fail.
+The Python rerun passes. The other two commands still fail.
 The scratch directory is removed after reporting.
 Final known file outcomes, including the Python rerun, are 201 pass and 2 fail.
-The all-tests-pass requirement and the 30% performance target remain unmet.
 No unrelated test or production gate was edited to clear these failures.
+
+### Verification outside the sandbox
+
+The orchestrator reran the edited and related suites outside the Codex sandbox on 2026-10-10.
+The run used macOS `/bin/bash` 3.2 with the session pin and resolution cache disabled.
+These files pass: `test_resolution_cache.sh`, `test_block_unreviewed_merge.sh`, `test_require_active_ticket_bash.sh`, `test_require_migration_ticket.sh`, `test_require_orbit_slice_for_ticket.sh`, `test_config_merge_semantics.sh`, `test_config_build_isolation.sh`, `test_posix_sourced_libs.sh`, and `test_token_efficiency_wave1.sh`.
+`test_token_efficiency_wave1.sh` also passes on the unchanged base. Its sandbox failure came from the sandbox environment, not from this patch.
+`bin/run-hook-tests.sh` already quarantines `test_lib_self_location_cwd_anchor.sh`.
+The dependency-audit failure needs Python 3.11 or later and does not depend on this patch.
+The 30% performance target remains unmet.
 
 <details>
 <summary>Exact initial regression commands and file results (200 pass, 3 fail)</summary>
