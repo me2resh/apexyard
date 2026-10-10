@@ -31,7 +31,17 @@ jobs:
           - os: ubuntu-latest
             label: linux jq-1.8
           - os: macos-latest
-            label: macos bash-3.2
+            label: macos bash-3.2 (1/4)
+            shard: 1/4
+          - os: macos-latest
+            label: macos bash-3.2 (2/4)
+            shard: 2/4
+          - os: macos-latest
+            label: macos bash-3.2 (3/4)
+            shard: 3/4
+          - os: macos-latest
+            label: macos bash-3.2 (4/4)
+            shard: 4/4
     steps:
       - name: Checkout
         with:
@@ -67,6 +77,8 @@ jobs:
           git config --global init.defaultBranch main
 
       - name: Run the hook test suite
+        env:
+          HOOK_TEST_MATRIX_SHARD: ${{ matrix.shard }}
         run: |
           if [ "$RUNNER_OS" = macOS ]; then
             # Override only bash and jq. Putting /usr/bin first on PATH would
@@ -108,8 +120,12 @@ jobs:
               exit 1
             fi
           done
+          shard_args=()
+          if [ "$RUNNER_OS" = macOS ]; then
+            shard_args=(--shard "$HOOK_TEST_MATRIX_SHARD")
+          fi
           APEXYARD_SNAPSHOT_REPO="$snapshot_repo" REQUIRE_SNAPSHOTS=1 \
-            /bin/bash bin/run-hook-tests.sh
+            /bin/bash bin/run-hook-tests.sh "${shard_args[@]}"
 
   # The dev ruleset requires "hook test suite". Matrix jobs have distinct names.
   # This final job fails unless every leg passes, preserving the required check.

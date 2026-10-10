@@ -9,6 +9,8 @@
 # Usage:
 #   bin/run-hook-tests.sh            # run the whole suite
 #   bin/run-hook-tests.sh --list     # list discovered tests, run nothing
+#   bin/run-hook-tests.sh --shard 1/4 # run one round-robin shard
+#   HOOK_TEST_SHARD=1 HOOK_TEST_SHARDS=4 bin/run-hook-tests.sh
 #
 # Quarantine: tests that genuinely cannot run headless (or are known-failing
 # and tracked for a fix) are listed in QUARANTINE below, each with a reason.
@@ -16,6 +18,41 @@
 # and every entry must cite why.
 
 set -uo pipefail
+
+LIST=0
+SHARD=${HOOK_TEST_SHARD-}
+SHARDS=${HOOK_TEST_SHARDS-}
+shard_error() {
+  echo "Invalid shard: use --shard I/N or HOOK_TEST_SHARD=I HOOK_TEST_SHARDS=N (1 <= I <= N)." >&2
+  exit 2
+}
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --list) LIST=1; shift ;;
+    --shard)
+      [ "$#" -ge 2 ] || shard_error
+      case "$2" in */*) ;; *) shard_error ;; esac
+      SHARD=${2%%/*}
+      SHARDS=${2#*/}
+      shift 2
+      ;;
+    *) echo "Unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+if [ -n "$SHARD$SHARDS" ] || [ "${HOOK_TEST_SHARD+x}${HOOK_TEST_SHARDS+x}" != "" ]; then
+  case "$SHARD:$SHARDS" in *[!0-9:]*|:*|*:) shard_error ;; esac
+  # Strip leading zeroes before arithmetic (bash otherwise interprets octal).
+  SHARD=$(printf '%s' "$SHARD" | sed 's/^0*//')
+  SHARDS=$(printf '%s' "$SHARDS" | sed 's/^0*//')
+  [ -n "$SHARD" ] && [ -n "$SHARDS" ] || shard_error
+  # Keep arithmetic within the signed integer range on supported hosts.
+  [ "${#SHARD}" -le 18 ] && [ "${#SHARDS}" -le 18 ] || shard_error
+  [ "$SHARD" -le "$SHARDS" ] || shard_error
+else
+  SHARD=1
+  SHARDS=1
+fi
+START_SECONDS=$SECONDS
 
 # Test isolation (#528 + #1549): many hooks resolve their ops-root via
 # _lib-ops-root.sh, which inside a live Claude Code session honours the session
@@ -48,7 +85,11 @@ SUITE_PIN_DIR=$(mktemp -d "${TMPDIR:-/tmp}/apexyard-hook-suite-pins.XXXXXX") || 
 # full run does not leave ~N mktemp directories behind; remove on EXIT.
 export _APEXYARD_TEST_PIN_DIR="$SUITE_PIN_DIR"
 export APEXYARD_OPS_PIN_DIR="$SUITE_PIN_DIR"
-trap 'rm -rf "$SUITE_PIN_DIR"' EXIT
+OUTPUT_DIR=$(mktemp -d "${TMPDIR:-/tmp}/apexyard-hook-suite-output.XXXXXX") || {
+  rm -rf "$SUITE_PIN_DIR"
+  exit 1
+}
+trap 'rm -rf "$SUITE_PIN_DIR" "$OUTPUT_DIR"' EXIT
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT" || exit 1
@@ -89,16 +130,29 @@ done < <(
        -type f \( -name 'test_*.sh' -o -name '*.test.sh' \) 2>/dev/null | sort
 )
 
-if [ "${1:-}" = "--list" ]; then
+SELECTED=()
+for ((k=0; k<${#TESTS[@]}; k++)); do
+  if [ "$((k % SHARDS))" -eq "$((SHARD - 1))" ]; then
+    SELECTED+=("${TESTS[$k]}")
+  fi
+done
+TESTS=("${SELECTED[@]}")
+
+if [ "$LIST" -eq 1 ]; then
   [ "${#TESTS[@]}" -gt 0 ] && printf '%s\n' "${TESTS[@]}"
   echo "(${#TESTS[@]} tests discovered)"
   exit 0
 fi
 
+printf 'hook tests: shard %s/%s, %s tests\n' "$SHARD" "$SHARDS" "${#TESTS[@]}"
+
 pass=0 fail=0 skip=0
 FAILED=()
 
+test_index=0
 for t in "${TESTS[@]}"; do
+  output="$OUTPUT_DIR/$test_index.out"
+  test_index=$((test_index+1))
   if is_quarantined "$t"; then
     reason=""
     for entry in "${QUARANTINE[@]}"; do
@@ -117,10 +171,10 @@ for t in "${TESTS[@]}"; do
       APEXYARD_DISABLE_RESOLUTION_CACHE=1 \
       APEXYARD_OPS_PIN_DIR="$SUITE_PIN_DIR" \
       _APEXYARD_TEST_PIN_DIR="$SUITE_PIN_DIR" \
-      $TIMEOUT_BIN bash "$t" </dev/null >/tmp/_hooktest.out 2>&1; then
-    if grep -q '^SKIP' /tmp/_hooktest.out; then
+      $TIMEOUT_BIN bash "$t" </dev/null >"$output" 2>&1; then
+    if grep -q '^SKIP' "$output"; then
       printf '  diagnostics from %s:\n' "$t"
-      grep '^SKIP' /tmp/_hooktest.out | sed 's/^/    /'
+      grep '^SKIP' "$output" | sed 's/^/    /'
       skip=$((skip+1))
       printf 'FAIL %s  (suite reported a skipped case)\n' "$t"
       fail=$((fail+1))
@@ -132,7 +186,7 @@ for t in "${TESTS[@]}"; do
   else
     rc=$?
     printf 'FAIL %s  (rc=%s)\n' "$t" "$rc"
-    tail -n 15 /tmp/_hooktest.out | sed 's/^/      | /'
+    tail -n 15 "$output" | sed 's/^/      | /'
     fail=$((fail+1))
     FAILED+=("$t")
   fi
@@ -142,6 +196,7 @@ echo
 echo "============================================================"
 echo "  hook test suite: PASS=$pass  FAIL=$fail  SKIP(quarantined)=$skip  TOTAL=${#TESTS[@]}"
 echo "============================================================"
+printf 'Wall-clock: %s seconds\n' "$((SECONDS - START_SECONDS))"
 if [ "$fail" -gt 0 ]; then
   printf 'FAILED:\n'; printf '  - %s\n' "${FAILED[@]}"
   exit 1
