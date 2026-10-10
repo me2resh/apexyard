@@ -6,7 +6,7 @@
     "id": "apexyard"
   },
   "title": "Cut the framework's token spend and review time without losing the defects it catches",
-  "intent": "Every token the framework injects or spends must pay for a defect caught or a gate enforced. The framework measures its own token and time cost from transcripts and the forge, and each change proves its effect against a recorded baseline. The merge gates keep their fail-closed defaults and exit codes. Reviewers keep their verdicts: a prompt change ships only with zero verdict flips on the eval corpus, and reviewers stay on Opus. Review depth follows a tier computed by script from the changed paths, never a self-declared tier. This plan depends on outcome o4 of plan-apexyard-harness-golden-path for the Rex and Hakim trim and adds everything else. Baseline, 2026-10-10 session: main context mean 490k tokens per turn with 18 compactions; the /approve-merge body injected 209 times at 34 KB; every Rex spawn starts at 49k tokens before it reads the diff; 469 CI-wait turns inside 195 reviewer runs; 31 Rex rounds followed a base-branch refresh with an unchanged patch.",
+  "intent": "Every token the framework injects or spends must pay for a defect caught or a gate enforced. The framework measures its own token and time cost from transcripts and the forge, and each change proves its effect against a recorded baseline. The merge gates keep their fail-closed defaults and exit codes. Reviewers keep their verdicts: a prompt change ships only with zero verdict flips on the eval corpus, and reviewers stay on Opus. Review depth follows a tier computed by script from the changed paths, never a self-declared tier. This plan depends on outcome o4 of plan-apexyard-harness-golden-path for the Rex and Hakim trim and adds everything else. Baseline, 2026-10-10 session: main context mean 490k tokens per turn with 18 compactions; the /approve-merge body injected 209 times at 34 KB; every Rex spawn starts at 49k tokens before it reads the diff; 469 CI-wait turns in 195 of 350 reviewer runs; 31 Rex rounds followed a base-branch refresh with an unchanged patch.",
   "outcomes": [
     {
       "id": "o1-cost-measured",
@@ -111,7 +111,7 @@
     {
       "id": "ac4-4",
       "outcomeId": "o4-reviewers-do-not-wait",
-      "statement": "CI-wait turns per reviewer run are 0 beyond the one check, from 469 turns across 195 runs. Main-loop cache rebuilds during a wait and hours from open to merge are reported beside it. Shown by: the o1 script on the next 40 PRs."
+      "statement": "CI-wait turns per reviewer run are 0 beyond the one check, from 469 turns in 195 of 350 reviewer runs. Main-loop cache rebuilds during a wait and hours from open to merge are reported beside it. Shown by: the o1 script on the next 40 PRs."
     },
     {
       "id": "ac4-5",
@@ -146,7 +146,7 @@
     {
       "id": "ac6-3",
       "outcomeId": "o6-skill-bodies-lean",
-      "statement": "The Writing rule preamble and the ops-root resolution block appear in each skill as one line that names the shared file. Today the preamble repeats in 45 skills and the inline walk-up in 24. Shown by: a grep test that finds 0 repeats."
+      "statement": "The Writing rule preamble and the ops-root resolution block appear in each skill as one line that names the shared file. Today the preamble repeats in 45 skills and the walk-up test in 18. Shown by: a grep test that finds 0 repeats."
     },
     {
       "id": "ac6-4",

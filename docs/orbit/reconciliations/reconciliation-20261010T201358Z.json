@@ -7,7 +7,7 @@
   "reconciledAt": "2026-10-10T20:13:58.214Z",
   "observations": [
     "Observed me2resh/apexyard at bace9dbccf5b0af2204d6a89f3d9d81bb52905f0.",
-    "Baseline from the 2026-10-10 token-cost debug (one 10-day session): main context mean 490k tokens per turn, p90 853k, 18 compactions; the /approve-merge body injected 209 times at 34 KB; every Rex spawn starts at 49k tokens; 469 CI-wait turns inside 195 reviewer runs; 31 pure-refresh Rex rounds; Rex rounds per PR 2.38 on the framework.",
+    "Baseline from the 2026-10-10 token-cost debug (one 10-day session): main context mean 490k tokens per turn, p90 853k, 18 compactions; the /approve-merge body injected 209 times at 34 KB; every Rex spawn starts at 49k tokens; 469 CI-wait turns in 195 of 350 reviewer runs; 31 pure-refresh Rex rounds; Rex rounds per PR 2.38 on the framework.",
     "Static state at this commit: 0 of 23 agent files set omitClaudeMd; code-reviewer.md is 73,140 bytes, security-reviewer.md 21,570, solution-architect.md 22,858; approve-merge SKILL.md is 39,285 bytes; of the other four most-invoked skills, approve-design (11,861), code-review (13,359) and task (10,216) are under 16,000 bytes and start-ticket (18,909) is not; 45 of 67 skills carry the Writing rule preamble; docs/eval-agents/corpus has rex.json (10 entries) and hakim.json (4), no Tariq corpus; docs/perf/ holds only hook-test-profile-2026-10.md.",
     "pr-workflow.md lines 88 and 89 (step 3) ask for a Rex re-review after a branch update, and line 111 documents the carry-over exception for the CEO marker (AgDR-0178, #1437, #1456). code-reviewer.md line 161 tells Rex to wait for CI, and line 165 forbids an APPROVED verdict on pending CI. test_block_merge_on_red_ci.sh line 372 covers a queued head run, and the hook decides on CI status only (lines 101 and 102). orbit SKILL.md line 272 runs Naqid after every draft."
   ],
@@ -112,16 +112,16 @@
       "status": "not-verified",
       "evidence": [
         "auto-code-review.sh",
-        "Baseline: 143 banners at 4,394 bytes each"
+        "Baseline: the hook's own text is 3,917 to 3,922 bytes per PR creation; with the harness prefix, the injected banner is about 4,394 bytes (143 banners in the baseline session)"
       ],
-      "explanation": "Missing: the banner is about 4.4 KB and names no CI sequencing, and /code-review does not tell the orchestrator to wait. Next: the o4 slice."
+      "explanation": "Missing: the hook prints about 3.9 KB and names no CI sequencing, and /code-review does not tell the orchestrator to wait. Next: the o4 slice."
     },
     {
       "criterionId": "ac4-2",
       "status": "not-verified",
       "evidence": [
         "code-reviewer.md lines 161 and 165",
-        "Baseline: 469 wait turns in 195 reviewer runs"
+        "Baseline: 469 wait turns in 195 of 350 reviewer runs"
       ],
       "explanation": "Missing: code-reviewer.md line 161 tells Rex to wait for CI, security-reviewer.md has no rule against waiting, and no hook blocks a watch or a sleep for review agents. Next: the o4 slice."
     },
@@ -138,7 +138,7 @@
       "criterionId": "ac4-4",
       "status": "not-verified",
       "evidence": [
-        "Baseline: 469 turns across 195 runs; 27 of 30 waits of 300 s or more expired the prompt cache"
+        "Baseline: 469 turns in 195 of 350 reviewer runs; 27 of 30 waits of 300 s or more expired the prompt cache"
       ],
       "explanation": "Missing: the measurement after o4. Next: the o1 script on the next 40 PRs."
     },
@@ -200,9 +200,9 @@
       "status": "not-verified",
       "evidence": [
         "grep for the \"## Writing rule\" heading: 45 of 67 skills",
-        "grep for the .apexyard-fork walk-up anchor: 24 skills"
+        "grep for the walk-up test $r/.apexyard-fork: 18 skills; 6 more name .apexyard-fork in prose or write the marker file (mutation-test, setup, split-portfolio, start-ticket, status, update)"
       ],
-      "explanation": "Missing: 45 of 67 skills carry the Writing rule preamble, and 24 carry the inline ops-root walk-up anchored on .apexyard-fork. Next: the o6 slice."
+      "explanation": "Missing: 45 of 67 skills carry the Writing rule preamble, and 18 carry the inline ops-root walk-up test $r/.apexyard-fork. Next: the o6 slice."
     },
     {
       "criterionId": "ac6-4",
@@ -276,7 +276,7 @@
   "discoveries": [
     "The measurement scripts of the debug exist only in a session scratchpad. o1 brings a maintained version into the repo, and the harness o4 slice ships the per-review part first.",
     "The dispatch hook blocked two read-only commands during this planning session because their text named a tracker command inside a heredoc or a grep pattern. The debug counted 88 hook blocks on reviewers, 43 of them heredoc false positives. This is not in the plan; it is a candidate for a bug ticket or the next revision.",
-    "The first draft of this record measured the static facts in the ops fork at v5.8.0 with local skills, not at this commit; Naqid caught it, and every static fact was re-measured at bace9db. The debug counted 53 skills with an ops-root block in the ops fork, with an unrecorded signature. At this commit, 24 of 67 skills carry the inline walk-up anchored on .apexyard-fork. The o6 grep test uses that anchor as its signature.",
+    "The first draft of this record measured the static facts in the ops fork at v5.8.0 with local skills, not at this commit; Naqid caught it, and every static fact was re-measured at bace9db. The debug counted 53 skills with an ops-root block in the ops fork, with an unrecorded signature. At this commit, 18 of 67 skills carry the walk-up test $r/.apexyard-fork, and 6 more name the marker in prose or write it. The o6 grep test uses $r/.apexyard-fork as its signature.",
     "The harness o4 slice record is on dev and has no issue yet. An open issue that quotes its slice ID in backticks makes the handoff duplicate check exit 12; the #1619 ticket body was corrected on 2026-10-10 so that /orbit handoff can file it.",
     "Subagent prompt-cache expiries in the baseline: 55 after a pause of at least 5 minutes, re-writing 4.76M tokens (13.0% of 36.5M writes). Subagents default to a 5-minute TTL on every plan. The causes are CI waits and CI-green messages inside reviewers (o4 removes them), 14 review-delta resumes (ac7-6), build-agent resumes and long loops. The plan notes record the TTL facts and the owner trial."
   ]

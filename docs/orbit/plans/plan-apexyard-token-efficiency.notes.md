@@ -10,9 +10,9 @@ A token-cost debug on 2026-10-10 measured one 10-day session (5,762 API turns, 1
 - About half of what the main loop re-reads is framework text: skill bodies (25%, of which `/approve-merge` alone 21.5%), skill re-injection after compaction (10%), subagent reports (6%), CLAUDE.md plus the memory index (5%), hook banners (2.4%).
 - Every Rex spawn starts at 49k tokens of prompt before it reads the diff: 53% of a review's context and 60% of its cache reads.
 - 29% of Rex rounds add no information. The largest class is a round after a base-branch refresh with an unchanged patch (31 rounds in the session), not wording blocks.
-- 469 CI-wait turns inside 195 reviewer runs cost 5.5 hours and 2.6M uncached tokens; 27 of 30 waits of 5 minutes or more expired the prompt cache.
+- 469 CI-wait turns in 195 of the 350 reviewer runs cost 5.5 hours and 2.6M uncached tokens; 27 of 30 waits of 5 minutes or more expired the prompt cache.
 
-Counting rule for ac6-3: the preamble is a `## Writing rule` heading, and the inline ops-root block is a walk-up that names `.apexyard-fork`.
+Counting rule for ac6-3: the preamble is a `## Writing rule` heading, and the inline ops-root block is a walk-up that contains the test `$r/.apexyard-fork` (18 skills). Six more skills name the marker in prose or write the marker file; they are not repeats.
 
 The five most-invoked skills in the baseline (ac6-2): `/approve-merge` 209, `/approve-design` 18, `/code-review` 15, `/task` 12, `/start-ticket` 4.
 
@@ -41,7 +41,7 @@ Verdict: proceed-with-changes. Applied (Naqid's ten numbered changes, listed by 
 
 Facts, verified in Claude Code CLI 2.1.296:
 
-- The main conversation (`promptCacheTtl`) is 1 hour automatically on a subscription within its usage limits, and 5 minutes on an API key, Bedrock, Vertex or Foundry. The setting text limits the automatic 1 hour to a subscription within its limits. Bedrock needs `ENABLE_PROMPT_CACHING_1H_BEDROCK` for a 1-hour TTL; confirm support for each other provider.
+- The main conversation (`promptCacheTtl`) is 1 hour automatically on a subscription within its usage limits, and 5 minutes on an API key, Bedrock, Vertex or Foundry. The setting text limits the automatic 1 hour to a subscription within its limits. Without a setting, Bedrock selects a 1-hour TTL only with `ENABLE_PROMPT_CACHING_1H_BEDROCK` or `ENABLE_PROMPT_CACHING_1H`. Either flag also moves subagent requests to 1 hour. An explicit `promptCacheTtl` of "1h" changes only the main conversation. Whether each provider accepts a 1-hour TTL is not verified here.
 - Subagents, workflows, background and helper requests (`subagentPromptCacheTtl`) default to 5 minutes on every plan. An agent file can set `experimental.cacheTtl`; "1h" there is ignored in overage. An explicit setting or environment variable takes precedence and is not overage-gated.
 - 1-hour cache writes bill at a higher rate. On the API, a 1-hour write costs 2x base input, a 5-minute write 1.25x, and a read 0.1x.
 - Usage records carry `cache_creation.ephemeral_5m_input_tokens` and `ephemeral_1h_input_tokens`, so the TTL of each request is measurable from the transcript.
@@ -56,7 +56,7 @@ Measured on the subagent runs of the baseline session, counting an expiry only a
 Decisions:
 
 - The framework does not ship a 1-hour subagent TTL. o4 removes the CI waits and the CI-green messages, and ac7-6 removes the review-delta rebuilds, at no extra write cost.
-- ac7-6 resumes a reviewer when its hand-back is under 5 minutes old or its context is under 80k tokens: below 80k, a rebuild costs about the same as a fresh spawn at 49k and keeps the reviewer's memory. Above it, a fresh reviewer is cheaper. Its brief lists each earlier blocking finding and the old..new commit range, and it re-checks each finding before it approves, so a fresh delta cannot skip a finding. It reuses the ac5-3 delta agent and its zero-flip check.
+- ac7-6 resumes a reviewer when its hand-back is under 5 minutes old or its context is under 80k tokens: below 80k, a rebuild costs about the same as a fresh spawn at 49k and keeps the reviewer's memory. Above it, a fresh reviewer is cheaper. Its brief lists each earlier blocking finding and the old..new commit range, and it re-checks each finding before it approves, so a fresh delta cannot skip a finding. It uses the full-effort Rex: the lower-effort agent of ac5-3 needs a prior approval marker (C2), and a delta after a blocking finding has none. The delta corpus entries give the zero-flip check.
 - o4 depends on a warm main cache while the orchestrator waits for CI. A subscription within its limits has it by default. Other adopters set `promptCacheTtl` to 1h where their provider supports it (ac4-5).
 - Owner trial: `subagentPromptCacheTtl` "1h" in the owner's user settings from 2026-10-10 to 2026-10-17, because subscription accounting for 1-hour writes is not public. It took effect in the running session. Keep it only if weekly usage does not rise against the week before. The o1 script reads the TTL of each request and reports 1-hour runs apart, so the trial does not hide the effect of ac7-6 or o4.
 
