@@ -20,6 +20,7 @@ ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 STAGED_SRC="$ROOT/.claude/hooks/check-private-refs-staged.sh"
 RUNTIME_SRC="$ROOT/.claude/hooks/check-private-refs-runtime.sh"
 TRACKER_SRC="$ROOT/.claude/hooks/block-private-refs-in-public-repos.sh"
+FLAG_SRC="$ROOT/.claude/hooks/_lib-flag-value.sh"
 MATCH_SRC="$ROOT/.claude/hooks/_lib-private-refs-match.sh"
 VIS_SRC="$ROOT/.claude/hooks/_lib-leak-remote-visibility.sh"
 
@@ -89,6 +90,7 @@ rm -rf "$sandbox"
 sandbox=$(mktemp -d)
 mkdir -p "$sandbox/.claude/hooks"
 cp "$TRACKER_SRC" "$sandbox/.claude/hooks/block-private-refs-in-public-repos.sh"
+cp "$FLAG_SRC" "$sandbox/.claude/hooks/_lib-flag-value.sh"
 chmod +x "$sandbox/.claude/hooks/block-private-refs-in-public-repos.sh"
 cat > "$sandbox/apexyard.projects.yaml" <<'YAML'
 projects:

@@ -90,10 +90,6 @@ REMOTE_URL="${2:-}"
 # visibility lookup (and never calls gh).
 private_refs_match_init
 init_rc=$?
-case "$PRIVATE_REFS_MATCH_INIT_RC" in
-  1) exit 0 ;;
-  2) exit 2 ;;
-esac
 [ "$init_rc" -eq 1 ] && exit 0
 [ "$init_rc" -eq 2 ] && exit 2
 
