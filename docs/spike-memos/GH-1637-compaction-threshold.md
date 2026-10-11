@@ -71,9 +71,9 @@ The `/autocompact` command saves the per-model entry in your user settings.
 ## Findings
 
 1. **The setting bounds the context.** The maximum context stayed below the window in every run.
-   The maximum was 30,000 to 42,000 tokens below the window at 100K to 400K.
+   The maximum was 30,000 to 43,000 tokens below the window at 100K to 400K.
    Claude Code recorded each compaction 19,000 to 33,000 tokens below the window.
-   In this task, the maximum context was therefore the window minus a margin of about 30,000 to 42,000 tokens.
+   In this task, the maximum context was therefore the window minus a margin of about 30,000 to 43,000 tokens.
 2. **The window moves the mean with the cap.** The mean was 0.44 to 0.64 of the maximum in every row. The ratio fell as the window grew.
 3. **Cost did not fall.** The cost per run stayed between 4.13 and 4.99 USD for every value.
    One-time cache writes of the file text (about 435,000 to 475,000 tokens) dominate this task.
@@ -87,7 +87,7 @@ The `/autocompact` command saves the per-model entry in your user settings.
 
 - **Scale.** The task reached 460,000 tokens at most. The default compaction point of about 967,000 was not reached.
   A full-scale run costs about four times as much per session and was outside the budget.
-- **Extrapolation.** The 500,000 recommendation uses the measured rule that the maximum is the window minus 30,000 to 42,000 tokens.
+- **Extrapolation.** The 500,000 recommendation uses the measured rule that the maximum is the window minus 30,000 to 43,000 tokens.
   It also uses the measured ratio of mean to maximum of 0.44 to 0.5 for windows of 300,000 and above.
   No session ran at 500,000.
 - **Headless sessions.** The runs used `claude -p`. Interactive sessions were not tested.
