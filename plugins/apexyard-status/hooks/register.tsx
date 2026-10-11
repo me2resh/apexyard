@@ -8,14 +8,12 @@ import type { Band } from '../types'
 import {
   countBuilds,
   findOpsRoot,
-  gitDirFromFile,
   lockLabel,
   markerRef,
-  newestTicket,
   newMarkers,
-  parentDir,
   rexMarkers,
   safeSessionId,
+  ticketLabel,
   waitingFrom,
   waitingText,
 } from './band'
@@ -52,47 +50,23 @@ async function exists($: EngineInterface, path: string): Promise<boolean> {
   }
 }
 
-// The per-tree ticket marker (AgDR-0222) of the working tree that holds `cwd`.
-async function treeTicket($: EngineInterface, cwd: string): Promise<string | null> {
-  let dir: string | null = cwd
-  while (dir) {
-    const dotGit = `${dir}/.git`
-    if (await exists($, dotGit)) {
-      let gitDir: string | null = dotGit
-      try {
-        const st = await $.fs.stat(dotGit)
-        if (st.kind === 'file') gitDir = gitDirFromFile((await readText($, dotGit)) ?? '', dir)
-      } catch {
-        gitDir = null
-      }
-      return gitDir ? readText($, `${gitDir}/apexyard-ticket`) : null
-    }
-    dir = parentDir(dir)
-  }
-  return null
-}
+// The resolver command. It sources the framework's ticket-marker resolver
+// (_lib-active-ticket.sh, AgDR-0222) from the ops fork and prints the marker
+// that governs the working directory. The resolver applies the location rules
+// (the marker in the git dir of the working tree first, then the old layout)
+// and validates the tree. Read only: init and lookup write nothing.
+export const RESOLVE_TICKET =
+  '. "$1/.claude/hooks/_lib-active-ticket.sh" && active_ticket_init "$2" && active_ticket_lookup "$2" && cat "$REPLY"'
 
-// The old-layout markers under <ops>/.claude/session/: current-ticket and tickets/**.
-async function legacyTickets($: EngineInterface, session: string): Promise<string[]> {
-  const texts: string[] = []
-  const current = await readText($, `${session}/current-ticket`)
-  if (current) texts.push(current)
+// The text of the ticket marker that governs `cwd`, or null.
+async function resolvedTicket($: EngineInterface, root: string, cwd: string): Promise<string | null> {
+  if (!(await exists($, `${root}/.claude/hooks/_lib-active-ticket.sh`))) return null
   try {
-    for (const p of await $.fs.list(`${session}/tickets`)) {
-      const path = `${session}/tickets/${p.name}`
-      if (p.kind === 'file') {
-        const t = await readText($, path)
-        if (t) texts.push(t)
-      } else if (p.kind === 'dir') {
-        for (const b of await $.fs.list(path)) {
-          if (b.kind !== 'file') continue
-          const t = await readText($, `${path}/${b.name}`)
-          if (t) texts.push(t)
-        }
-      }
-    }
-  } catch {}
-  return texts
+    const r = await $.process.run(['bash', '-c', RESOLVE_TICKET, '_', root, cwd], { cwd, timeoutMs: 5000 })
+    return r.exitCode === 0 && r.stdout.trim() ? r.stdout : null
+  } catch {
+    return null
+  }
 }
 
 type Seen = { rex: Set<string> | null; builds: number | null }
@@ -126,8 +100,8 @@ async function refreshOnce($: EngineInterface) {
   }
   const session = `${root}/.claude/session`
 
-  const own = await treeTicket($, cwd)
-  const ticket = newestTicket(own ? [own] : []) ?? newestTicket(await legacyTickets($, session))
+  const marker = await resolvedTicket($, root, cwd)
+  const ticket = marker ? ticketLabel(marker) : null
 
   let waiting: string[] = []
   let rexNow = new Set<string>()

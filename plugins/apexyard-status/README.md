@@ -17,7 +17,7 @@ The plugin shows a toast when a new Rex marker appears and when a build process 
 
 ## Rules
 
-- Display only. The plugin reads files. It never writes a file. It never replaces a shell hook. All gates stay in `.claude/hooks/`.
+- Display only. The plugin reads files. It runs two read-only commands: the ticket resolver and, when you set a pattern, `ps`. It never writes a file. It never replaces a shell hook. All gates stay in `.claude/hooks/`.
 - No network calls.
 - Fork only. Outside an ops fork, the plugin draws nothing.
 
@@ -52,7 +52,7 @@ Set these in `/plugin configure apexyard-status@apexyard`, or with `--config KEY
 | Item | Source |
 |------|--------|
 | Ops fork | The session pin `~/.claude/apexyard/ops-root-<session>` (or `$APEXYARD_OPS_PIN_DIR`). If the pin is missing or stale, a walk up from the working directory to a `.apexyard-fork` file, or to `onboarding.yaml` and `apexyard.projects.yaml` together. |
-| Active ticket | The marker in the git dir of the working tree (`apexyard-ticket`, AgDR-0222). If none, the newest old-layout marker under `.claude/session/` (`current-ticket`, `tickets/**`). |
+| Active ticket | The framework ticket-marker resolver, `.claude/hooks/_lib-active-ticket.sh` (AgDR-0222). The plugin runs `active_ticket_lookup` for the working directory and shows the marker that the resolver returns. The resolver applies the location rules, so the band shows the same ticket that the hooks use. |
 | Waiting PRs | `.claude/session/reviews/<owner>__<repo>__<pr>-rex.approved` with no matching `-ceo.approved` file (AgDR-0060 names). |
 | Reviewer lock | `.claude/session/active-reviewer.<session>` (`active_reviewer_marker_path`). |
 | Build count | `ps -axo command=`, only when `build_process_pattern` is set. |

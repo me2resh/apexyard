@@ -67,18 +67,6 @@ export function ticketLabel(text: string): string | null {
   return short ? `${repo}#${f.number} ${short}` : `${repo}#${f.number}`
 }
 
-// The label of the marker with the newest started_at value.
-export function newestTicket(texts: string[]): string | null {
-  let best: { label: string; at: string } | null = null
-  for (const text of texts) {
-    const label = ticketLabel(text)
-    if (!label) continue
-    const at = parseFields(text).started_at ?? ''
-    if (!best || at > best.at) best = { label, at }
-  }
-  return best ? best.label : null
-}
-
 // The parent directory of an absolute path, or null at the root.
 export function parentDir(path: string): string | null {
   const p = path.replace(/\/+$/, '')
@@ -108,14 +96,6 @@ export async function findOpsRoot(
     dir = parentDir(dir)
   }
   return null
-}
-
-// The git dir named by a linked worktree's ".git" file ("gitdir: <path>").
-export function gitDirFromFile(text: string, worktree: string): string | null {
-  const m = text.match(/^gitdir:\s*(.+)$/m)
-  const raw = m?.[1]?.trim()
-  if (!raw) return null
-  return raw.startsWith('/') ? raw : `${worktree}/${raw}`
 }
 
 // Same character rule as active_reviewer_marker_path in _lib-review-markers.sh.

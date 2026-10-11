@@ -3,10 +3,8 @@ import { describe, expect, test } from 'claude-code/testing'
 import {
   countBuilds,
   findOpsRoot,
-  gitDirFromFile,
   lockLabel,
   markerRef,
-  newestTicket,
   newMarkers,
   parentDir,
   rexMarkers,
@@ -15,7 +13,7 @@ import {
   waitingFrom,
   waitingText,
 } from './band'
-import { readSettings } from './register'
+import { readSettings, RESOLVE_TICKET } from './register'
 
 const DAY = 24 * 60 * 60 * 1000
 
@@ -76,19 +74,6 @@ describe('active ticket', () => {
   test('a marker without repo or number gives null', async () => {
     expect(ticketLabel('started_at=now\n')).toBe(null)
   })
-
-  test('the newest started_at wins', async () => {
-    const old = 'repo=a/old\nnumber=1\ntitle=Old\nstarted_at=2026-10-01T08:00:00Z\n'
-    const neu = 'repo=a/new\nnumber=2\ntitle=New\nstarted_at=2026-10-02T08:00:00Z\n'
-    expect(newestTicket([old, neu])).toBe('new#2 New')
-    expect(newestTicket([])).toBe(null)
-  })
-
-  test('a linked worktree .git file names its git dir', async () => {
-    expect(gitDirFromFile('gitdir: /r/.git/worktrees/gh1\n', '/w/gh1')).toBe('/r/.git/worktrees/gh1')
-    expect(gitDirFromFile('gitdir: ../r/.git/worktrees/x\n', '/w')).toBe('/w/../r/.git/worktrees/x')
-    expect(gitDirFromFile('nonsense', '/w')).toBe(null)
-  })
 })
 
 describe('ops-fork discovery', () => {
@@ -134,6 +119,15 @@ describe('reviewer lock and builds', () => {
   test('the build count is the number of matching command lines', async () => {
     const ps = 'codex exec -C /w/a\n/bin/zsh\ncodex exec -C /w/b\n\n'
     expect(countBuilds(ps, '^codex exec')).toBe(2)
+  })
+})
+
+describe('ticket resolver', () => {
+  test('the ticket comes from the framework resolver, not from a marker path', async () => {
+    expect(RESOLVE_TICKET).toContain('_lib-active-ticket.sh')
+    expect(RESOLVE_TICKET).toContain('active_ticket_lookup')
+    expect(RESOLVE_TICKET).not.toContain('apexyard-ticket')
+    expect(RESOLVE_TICKET).not.toContain('.claude/session')
   })
 })
 
