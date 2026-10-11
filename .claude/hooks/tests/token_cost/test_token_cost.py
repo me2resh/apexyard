@@ -316,6 +316,21 @@ class TokenCostTests(unittest.TestCase):
         self.assertEqual(data['by_day']['2030-01-01']['total'], 3)
         self.assertEqual(data['transcripts'], 2)
 
+    def test_git_subcommands_are_fast_and_exact(self):
+        import time
+        flags = ' '.join('-c k%d=v' % i for i in range(100)) + ' ' + ' '.join('--flag%d' % i for i in range(100))
+        started = time.time()
+        found = tc.git_subcommands('git ' + flags + ' ' + 'commit -m x')
+        self.assertLess(time.time() - started, 1)
+        self.assertEqual(found, ['commit'])
+        long_miss = 'git ' + ' '.join('-x%d' % i for i in range(200)) + ' status'
+        started = time.time()
+        self.assertEqual(tc.git_subcommands(long_miss), ['status'])
+        self.assertLess(time.time() - started, 1)
+        self.assertEqual(tc.git_subcommands('cd r && git -C r ' + 'push origin x; echo git commit'), ['push'])
+        self.assertEqual(tc.git_subcommands('echo "git commit"'), [])
+        self.assertEqual(tc.git_subcommands('GIT_AUTHOR_NAME=a git ' + 'commit -m x'), ['commit'])
+
     def test_compare_cli_change_pct(self):
         with tempfile.TemporaryDirectory() as directory:
             paths = [Path(directory) / name for name in ('before.json', 'after.json')]

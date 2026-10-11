@@ -7,6 +7,7 @@ import {
   findOpsRoot,
   ghArgv,
   lockLabel,
+  lockLabels,
   markerRef,
   markerSha,
   newMarkers,
@@ -231,6 +232,12 @@ describe('reviewer lock and builds', () => {
   test('the lock reads owner/repo#N:role', async () => {
     expect(lockLabel('me2resh/apexyard#12:rex\n')).toBe('me2resh/apexyard#12 (rex)')
     expect(lockLabel('  \n')).toBe(null)
+  })
+
+  test('the lock joins every review marker and keeps the legacy file', async () => {
+    expect(lockLabels(['a/b#1:rex\n', 'a/b#2:security\n', null])).toBe('a/b#1 (rex), a/b#2 (security)')
+    expect(lockLabels(['a/b#1:rex', 'a/b#1:rex'])).toBe('a/b#1 (rex)')
+    expect(lockLabels([null, '  \n'])).toBe(null)
   })
 
   test('the session id is sanitised like active_reviewer_marker_path', async () => {

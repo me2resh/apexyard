@@ -57,6 +57,13 @@ The session-wide marker locked every caller in the session. On 2026-10-11 it hel
 5. **Replaced consequence.** The line that made the orchestrator wait for the reviewer is replaced. Reviews, builds and orchestrator work now run at the same time. A shared-tree race is avoided because a reviewer works in a scratch clone and cannot mutate the repository.
 6. **A typed non-review agent gets no grant from the marker.** `warn-review-marker-write.sh` and the scratch-clone exemption in `require-active-ticket.sh` no longer treat a build agent as the sanctioned reviewer.
 
+### Requirement on Claude Code
+
+The lock needs a Claude Code build that sends `agent_type` in hook input. We verified this on 2.1.296. We did not test older builds and state no earliest version.
+On a build that sends neither `agent_type` nor `agent_id`, a review agent cannot be told from the main thread, so the lock does not block it. The merge gates still hold.
+A session-start warning for an old build is not possible: a hook cannot read the version from its input or a trusted variable.
+The review skills spawn the reviewer only by its own agent type. If the shared helper file is missing, the mutation hook still blocks a payload whose `agent_type` is a review agent, and blocks any caller while a marker exists.
+
 ### What does not change
 
 - `block-unreviewed-merge.sh` and `block-merge-on-red-ci.sh` are unchanged (constraint C1). An approval for a stale head commit still blocks at the merge gate.

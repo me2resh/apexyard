@@ -258,8 +258,20 @@ fi
 # while this session has an active-reviewer marker. An unreadable payload
 # fails closed while a marker exists.
 CALLER_CLASS=main
+LIB_MISSING=0
 if command -v review_caller_class >/dev/null 2>&1; then
   CALLER_CLASS=$(review_caller_class "$INPUT" "$ROOT")
+else
+  # The lib is missing. Fail closed (me2resh/apexyard#1649, review of PR 1651):
+  # a payload whose top-level agent_type is a review agent is treated as a
+  # reviewer and locked even with no marker. Any other caller keeps the old
+  # behaviour: locked while any marker exists.
+  LIB_MISSING=1
+  CALLER_CLASS=unparsable
+  _brrm_type=$(printf '%s' "$INPUT" | jq -r '.agent_type // empty' 2>/dev/null || true)
+  case "$_brrm_type" in
+    code-reviewer|security-reviewer|solution-architect) CALLER_CLASS=reviewer ;;
+  esac
 fi
 case "$CALLER_CLASS" in
   reviewer|unparsable) ;;
@@ -277,6 +289,15 @@ fi
 # True when this session has any active-reviewer marker: one per review, or
 # the legacy single file kept readable during the transition.
 _brrm_has_marker() {
+  if [ "$LIB_MISSING" -eq 1 ]; then
+    [ "$CALLER_CLASS" = reviewer ] && return 0
+    [ -f "$ACTIVE" ] && return 0
+    local _f
+    for _f in "$ROOT"/.claude/session/active-reviewer.* "$ROOT"/.claude/session/active-reviewers/*/*; do
+      [ -f "$_f" ] && return 0
+    done
+    return 1
+  fi
   if command -v active_reviewer_any_marker >/dev/null 2>&1; then
     active_reviewer_any_marker "$ROOT"
   else

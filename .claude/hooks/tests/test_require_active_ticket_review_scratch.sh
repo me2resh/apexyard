@@ -68,6 +68,9 @@ bash_input() {
 edit_input() {
   jq -nc --arg file_path "$1" '{tool_name:"Edit",tool_input:{file_path:$file_path}}'
 }
+typed_edit_input() {
+  jq -nc --arg file_path "$1" --arg t "$2" '{agent_type:$t,agent_id:"a1",tool_name:"Edit",tool_input:{file_path:$file_path}}'
+}
 write_input() {
   jq -nc --arg file_path "$1" '{tool_name:"Write",tool_input:{file_path:$file_path,content:"fixture"}}'
 }
@@ -84,6 +87,22 @@ run_case 'solution architect may write in a scratch clone' 0 "$ops" \
   "$(bash_input "echo fixture > $scratch/architecture.txt")"
 
 printf '%s\n' 'sample/project#42:rex' > "$ops/.claude/session/active-reviewer.session-a"
+# me2resh/apexyard#1649: the scratch-clone exemption belongs to a review agent
+# or the orchestrator. A typed build agent is denied, even with a marker.
+run_case 'typed build agent is denied the scratch-clone exemption' 2 "$ops" \
+  "$(typed_edit_input "$scratch/fixture.txt" backend-engineer)"
+run_case 'typed code-reviewer keeps the scratch-clone exemption' 0 "$ops" \
+  "$(typed_edit_input "$scratch/fixture.txt" code-reviewer)"
+mkdir -p "$ops/.claude/session/active-reviewers/session-a"
+printf '%s\n' 'sample/project#42:rex' > "$ops/.claude/session/active-reviewers/session-a/sample__project__42-rex"
+mv "$ops/.claude/session/active-reviewer.session-a" "$TMP/legacy-hold"
+run_case 'per-review marker grants the scratch-clone exemption to a reviewer' 0 "$ops" \
+  "$(typed_edit_input "$scratch/fixture.txt" code-reviewer)"
+run_case 'per-review marker does not grant a typed build agent' 2 "$ops" \
+  "$(typed_edit_input "$scratch/fixture.txt" platform-engineer)"
+rm -rf "$ops/.claude/session/active-reviewers"
+mv "$TMP/legacy-hold" "$ops/.claude/session/active-reviewer.session-a"
+
 run_case 'reviewer cannot write into the ops fork' 2 "$ops" \
   "$(edit_input "$ops/source.txt")"
 run_case 'reviewer cannot write into managed workspace' 2 "$ops" \

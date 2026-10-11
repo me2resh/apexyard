@@ -701,8 +701,32 @@ def measure_session(path, window, skills_tracked, digest=None):
 # attribution: the text is fixed in block-reviewer-repo-mutation.sh.
 HOOK_ERROR_RE = re.compile(r"\s*PreToolUse:\w+ hook error")
 LOCK_BLOCK_RE = re.compile(r"BLOCKED: review-class agent (?:is read-only while an active review|cannot )")
-GIT_COMMIT_RE = re.compile(r"(?:^|[\s;&|(])git\s+(?:-\S+\s+\S+\s+|-\S+\s+)*commit\b")
-GIT_PUSH_RE = re.compile(r"(?:^|[\s;&|(])git\s+(?:-\S+\s+\S+\s+|-\S+\s+)*push\b")
+SEGMENT_SPLIT_RE = re.compile(r"[;&|()\n]+")
+# Git options that take their value as the next word.
+GIT_VALUE_OPTIONS = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env"}
+
+
+def git_subcommands(command):
+    """Return the git subcommand of each command segment, in order.
+
+    The scan is a single pass over the words of each segment, so a command
+    with hundreds of options costs linear time. A regular expression with a
+    nested quantifier over the option list backtracks badly instead.
+    """
+    found = []
+    for segment in SEGMENT_SPLIT_RE.split(command):
+        words = segment.split()
+        index = 0
+        while index < len(words) and "=" in words[index] and not words[index].startswith("-"):
+            index += 1  # a leading VAR=value assignment
+        if index >= len(words) or words[index] != "git":
+            continue
+        index += 1
+        while index < len(words) and words[index].startswith("-"):
+            index += 2 if words[index] in GIT_VALUE_OPTIONS else 1
+        if index < len(words):
+            found.append(words[index])
+    return found
 
 
 def measure_lock_blocks(paths, window):
@@ -740,9 +764,10 @@ def measure_lock_blocks(paths, window):
                         continue
                     seen.add(tool_id)
                     command = commands.get(tool_id, "")
-                    if GIT_COMMIT_RE.search(command):
+                    subcommands = git_subcommands(command)
+                    if "commit" in subcommands:
                         kind = "git_commit"
-                    elif GIT_PUSH_RE.search(command):
+                    elif "push" in subcommands:
                         kind = "git_push"
                     else:
                         kind = "other"

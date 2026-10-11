@@ -142,6 +142,29 @@ else
   check "SessionStart clears this session's set and spares another session" no "mine=$([ -f "$M1" ] && echo kept || echo cleared) other=$([ -f "$OTHER" ] && echo kept || echo cleared)"
 fi
 
+# --- 8. The lib is missing: fail closed ---------------------------------------
+NOLIB=$(mktemp -d "${TMPDIR:-/tmp}/apexyard-review-nolib.XXXXXX")
+trap 'rm -rf "$TMP" "$NOLIB"' EXIT
+mkdir -p "$NOLIB/.claude/session" "$NOLIB/.claude/hooks"
+touch "$NOLIB/.apexyard-fork"
+git -C "$NOLIB" init -q
+cp "$HOOKS/block-reviewer-repo-mutation.sh" "$HOOKS/_lib-strip-heredoc.sh" "$NOLIB/.claude/hooks/"
+run_nolib() { # name json expected
+  local out rc
+  out=$(cd "$NOLIB" && printf '%s' "$2" | "$NOLIB/.claude/hooks/block-reviewer-repo-mutation.sh" 2>&1)
+  rc=$?
+  if [ "$3" = blocked ] && [ "$rc" -eq 2 ]; then check "$1" ok
+  elif [ "$3" = allowed ] && [ "$rc" -eq 0 ]; then check "$1" ok
+  else check "$1" no "rc=$rc out=$out"; fi
+}
+run_nolib "lib missing, reviewer type, no marker: commit blocked" "$(payload code-reviewer a1 'git commit -m x')" blocked
+run_nolib "lib missing, solution-architect type: push blocked" "$(payload solution-architect a1 'git push origin x')" blocked
+run_nolib "lib missing, build agent, no marker: commit allowed" "$(payload backend-engineer a1 'git commit -m x')" allowed
+run_nolib "lib missing, orchestrator, no marker: commit allowed" "$(payload '' '' 'git commit -m x')" allowed
+printf '%s\n' 'acme/app#9:rex' > "$NOLIB/.claude/session/active-reviewer"
+run_nolib "lib missing, any caller with a marker: commit blocked (old behaviour)" "$(payload backend-engineer a1 'git commit -m x')" blocked
+rm -f "$NOLIB/.claude/session/active-reviewer"
+
 echo
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

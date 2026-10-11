@@ -56,7 +56,7 @@ Set these in `/plugin configure apexyard-status@apexyard`, or with `--config KEY
 | Ops fork | The session pin `~/.claude/apexyard/ops-root-<session>` (or `$APEXYARD_OPS_PIN_DIR`). `APEXYARD_OPS_DISABLE_PIN=1` ignores the pin, as in the hooks. If the pin is missing or stale, a walk up from the working directory to a `.apexyard-fork` file, or to `onboarding.yaml` and `apexyard.projects.yaml` together. |
 | Active ticket | The framework ticket-marker resolver, `.claude/hooks/_lib-active-ticket.sh` (AgDR-0222). The plugin runs `active_ticket_lookup` for the working directory and shows the marker that the resolver returns. The resolver applies the location rules, so the band shows the same ticket that the hooks use. |
 | Waiting PRs | Candidates: `.claude/session/reviews/<owner>__<repo>__<pr>-rex.approved` (AgDR-0060 names) with no matching `-ceo.approved` file, inside the waiting window. A candidate waits for `/approve-merge` only if the PR is open and its head is the SHA in the Rex marker. An open PR with another head needs re-review. A merged or closed PR is dropped. A marker stays after a PR merges outside `/approve-merge`, so the markers alone show stale requests. |
-| Reviewer lock | `.claude/session/active-reviewer.<session>` (`active_reviewer_marker_path`). |
+| Reviewer lock | One file per review in `.claude/session/active-reviewers/<session>/` (`active_reviewer_marker_path`). The band lists every review. The plugin also reads the legacy `.claude/session/active-reviewer.<session>` file during the transition. |
 | Build count | `ps -axo command=`, only when `build_process_pattern` is set. |
 
 ## Tests
