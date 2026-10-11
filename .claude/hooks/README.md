@@ -54,9 +54,9 @@ If any gate fails, blocks with a message pointing at the `/migration` skill. If 
 
 **Event:** `PostToolUse` on `Bash(gh pr create *)`.
 
-**What it does:** parses the PR URL from the `gh` output, writes a pending-review marker at `.claude/session/pending-reviews/<pr>`, and emits a banner of at most 300 bytes (me2resh/apexyard#1625). The banner tells a build agent to report the PR and stop. It tells the orchestrator to wait for green CI with a Monitor, then run `/code-review`. Not a tool error — the PR is created fine. The hook just pushes the next step into the conversation so it can't be forgotten.
+**What it does:** parses the PR URL from the `gh` output and writes a pending-review marker at `.claude/session/pending-reviews/<pr>`. It then emits a banner of at most 300 bytes (me2resh/apexyard#1625). The banner tells a build agent to report the PR and stop. It tells the orchestrator to wait for green CI with a Monitor, then run `/code-review`. Not a tool error — the PR is created fine. The hook just pushes the next step into the conversation so it can't be forgotten.
 
-Companion control: `block-reviewer-ci-wait.sh` (PreToolUse, through `dispatch-bash.sh`). For review agents only, it blocks `gh pr checks --watch`, `gh run watch`, `sleep` of 60 seconds or more, and a second `gh pr checks` in one review run. It names a review agent from the `agent_type` field of the hook input, with the active-reviewer marker as the fallback for a sub-agent that has no type. The orchestrator is never blocked.
+Companion control: `block-reviewer-ci-wait.sh` (PreToolUse, through `dispatch-bash.sh`). For review agents only, it blocks `gh pr checks --watch`, `gh run watch`, `sleep` of 60 seconds or more, and a second `gh pr checks` in one review run. It finds a review agent from the `agent_type` field of the hook input. For a sub-agent that has no type, it uses the active-reviewer marker. The orchestrator is never blocked.
 
 **Enforces:** the "After `gh pr create` → Invoke Code Reviewer agent" section of `.claude/rules/pr-workflow.md` and the Code Review phase of `workflows/sdlc.md`.
 
