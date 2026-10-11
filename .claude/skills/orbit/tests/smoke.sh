@@ -23,4 +23,14 @@ grep -q 'gh issue create' "$skill"
 grep -q 'active-issue-skill' "$skill"
 grep -q 'Remove the marker on' "$skill"
 
+# AgDR-0225 (apexyard#1626): lint, cycle PR, change-only reconcile, status.
+grep -q 'records-lint.sh' "$skill"
+grep -q 'stops on the first fault' "$skill"
+grep -q 'Planning cycle: one records PR' "$skill"
+grep -q 'record-check.sh' "$skill"
+grep -q 'checked, no change' "$skill"
+grep -q 'status-live.sh' "$skill"
+grep -q 'writes no record' "$skill"
+for f in records-lint.sh record-check.sh status-live.sh; do test -x "$skill_dir/lib/$f"; done
+
 echo "orbit skill smoke test passed"

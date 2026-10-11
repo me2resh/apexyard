@@ -1,7 +1,7 @@
 ---
 name: orbit
 description: Run the opt-in ORBIT planning lifecycle for one managed project without replacing ApexYard governance.
-argument-hint: "<plan|snapshot|reconcile|slice|validate|handoff> --project <name> [--no-challenge]"
+argument-hint: "<plan|snapshot|reconcile|slice|validate|lint|status|handoff> --project <name> [--no-challenge]"
 allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion
 ---
 
@@ -117,6 +117,17 @@ fi
 The first CLI implementation marks criteria `not-verified` until explicit evidence is supplied. Do not upgrade a status from inference.
 Report each `WARNING` line. If the CLI fails, report its failure.
 
+**Write a record only when a status changes (AgDR-0225).** Write the CLI output to a scratch file, not to `$orbit_root/reconciliations/`. Then compare it with the newest Reconciliation of the same Plan:
+
+```bash
+"$(git rev-parse --show-toplevel)/.claude/skills/orbit/lib/record-check.sh" \
+  --previous "$previous_reconciliation" --candidate "$scratch_reconciliation" \
+  --notes "$orbit_root/plans/<plan-id>.notes.md" --commit "$(git -C "$project_root" rev-parse --short HEAD)"
+```
+
+- `changed: <ids>`: a criterion status changed. Move the scratch file to `$orbit_root/reconciliations/reconciliation-<timestamp>.json` and add it to the next cycle PR.
+- `unchanged`: the script deletes the scratch file and adds one line to the `## Checks` section of the Plan notes: `- <date>, <commit>: checked, no change.` Add no record. The next cycle PR carries the line.
+
 ### `/orbit slice --project <name> --plan <file> --reconciliation <file>`
 
 Ask for the bounded objective, outcome, reason, included work, excluded work, and the acceptance criterion IDs this slice advances. Pass those criterion IDs to `--contributes` as a comma-separated list. The validator accepts criterion IDs only, and each must belong to the slice's `--outcome`. Pass `--id` with a lowercase slice ID; the CLI default ID contains uppercase timestamp letters. Then create the slice with the plan revision and reconciliation ID as provenance:
@@ -173,6 +184,41 @@ fi
 
 Return the CLI exit status. A non-zero result blocks the handoff until the record or provenance is corrected.
 Report each `WARNING` line after successful validation.
+
+### `/orbit lint --project <name>`
+
+Lint the records before a records PR (AgDR-0225). `/orbit` runs this step itself before it asks to open a records PR. Do not open the PR when the lint fails. Resolve `project_repo` as in `handoff`.
+
+```bash
+"$(git rev-parse --show-toplevel)/.claude/skills/orbit/lib/records-lint.sh" \
+  --orbit-root "$orbit_root" --repo "$project_repo"
+```
+
+The script checks the record files changed against `origin/dev`. Pass `--base <ref>` to change the base. Pass `--all` to check every record file. It runs five checks in order and stops on the first fault:
+
+1. `orbit validate --all`. Exit 10.
+2. The leak scrub, `check-private-refs-runtime.sh`. Exit 11.
+3. The sentence check: no sentence of a record text field has more than 25 words. Exit 12.
+4. The `Missing: ... Next: ...` rule: a criterion that is not `achieved` has an explanation in this form. Exit 13.
+5. The local-path check: no record or notes file holds an absolute local path. Exit 14.
+
+The message names the check, the file, and the fault. Fix the fault, then run the lint again. Report the exit code and message when the lint stops.
+
+### `/orbit status --project <name> --plan <plan-id>`
+
+Show the live state of a Plan. This operation writes no record, no file, and no notes line.
+
+```bash
+"$(git rev-parse --show-toplevel)/.claude/skills/orbit/lib/status-live.sh" \
+  --orbit-root "$orbit_root" --plan "<plan-id>" --repo-path "$project_root"
+```
+
+The output has two parts:
+
+- The `orbit progress` output for the Plan: outcome progress and criterion statuses as recorded.
+- The commits since the observed snapshot commit of the newest Reconciliation of the Plan.
+
+Recorded statuses do not change. A status changes only through `/orbit reconcile`, and the record ships in a cycle PR.
 
 ### `/orbit handoff --project <name> --slice <file>`
 
@@ -254,9 +300,23 @@ When the operator asks for the full lifecycle, run these stages in order. Do not
 
 1. **Plan.** Ask for the project intent, desired outcomes, acceptance criteria, constraints, and assumptions. Draft the Plan JSON in the project record directory. Preserve the operator's wording. Validate it with `orbit plan --input <file> --output <file>`. Do not invent outcomes or criteria.
 2. **Snapshot.** Capture the current branch and commit with `/orbit snapshot`. Treat the result as observed evidence, not as a claim that the Plan is achieved.
-3. **Reconcile.** Read the Plan and Snapshot. For every acceptance criterion, inspect the repository evidence and ask for or record a factual status: `not-verified`, `partially-verified`, `achieved`, or `contradicted`. The CLI creates a `not-verified` scaffold. Fill in evidence and explanations before handoff, then run `orbit validate`.
+3. **Reconcile.** Write a record only when a status changes (see `reconcile`). Read the Plan and Snapshot. For every acceptance criterion, inspect the repository evidence and ask for or record a factual status: `not-verified`, `partially-verified`, `achieved`, or `contradicted`. The CLI creates a `not-verified` scaffold. Fill in evidence and explanations before handoff, then run `orbit validate`.
 4. **Slice.** Ask which one bounded outcome should be advanced, why the evidence justifies it, what is included, and what is excluded. Create the Execution Slice with `/orbit slice`. Keep the Plan revision, Reconciliation ID, and repository commits unchanged.
-5. **Validate and hand off.** Run `/orbit validate`. Merge the slice record, then run `/orbit handoff` to file its issue. Report the records, provenance, and issue URL. Hand the issue to the normal ApexYard build gate; do not execute it from this skill.
+5. **Validate and hand off.** Run `/orbit validate` and `/orbit lint`. Merge the slice record, then run `/orbit handoff` to file its issue. Report the records, provenance, and issue URL. Hand the issue to the normal ApexYard build gate; do not execute it from this skill.
+
+### Planning cycle: one records PR
+
+One planning cycle ships one records PR (AgDR-0225). Run these steps in order:
+
+1. Write the Plan revision, with the old revision in `docs/orbit/history/`.
+2. Capture the Snapshot.
+3. Run `/orbit reconcile`. Keep the Reconciliation only when a status changes. Otherwise the `## Checks` line is the record.
+4. Cut every slice of the cycle with `/orbit slice`. Each slice uses this Plan revision and this Reconciliation.
+5. Run `/orbit lint`. Stop on the first fault.
+6. Ask the operator to open one PR with all records of the cycle. Follow the normal ApexYard review and merge gates. This flow adds no gate exemption.
+7. After the merge, run `/orbit handoff` for each slice.
+
+A slice found in the middle of a cycle waits for the next cycle PR. It gets its own PR only when its build cannot wait. Count that PR as an exception PR.
 
 If a required input is missing, stop at that stage and report the missing evidence. Do not silently create a partial Plan or treat an unverified criterion as achieved.
 

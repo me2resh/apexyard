@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+# records-lint.sh — lint ORBIT records before a records PR (AgDR-0225, ac8-1).
+#
+# Runs five checks in order and stops on the first fault:
+#   1. orbit validate --all
+#   2. leak scrub (check-private-refs-runtime.sh) on record text
+#   3. sentence check: at most 25 words in a sentence of a record text field
+#   4. "Missing: ... Next:" rule for a non-achieved explanation
+#   5. local-path check
+# Checks 2 to 5 read the record files changed against --base (default
+# origin/dev), or every record file with --all.
+#
+# Usage: records-lint.sh --orbit-root <dir> [--repo <owner/name>] [--base <ref>] [--all]
+# Exit: 0 clean; 10 validate; 11 leak scrub; 12 sentence; 13 Missing/Next;
+#       14 local path; 20 usage or missing tool.
+
+set -u
+
+MAX_WORDS=25
+orbit_root=""
+repo="me2resh/apexyard"
+base="origin/dev"
+check_all=0
+
+usage() {
+  echo "Usage: records-lint.sh --orbit-root <dir> [--repo <owner/name>] [--base <ref>] [--all]" >&2
+  exit 20
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --orbit-root) [ $# -ge 2 ] || usage; orbit_root="$2"; shift 2 ;;
+    --repo) [ $# -ge 2 ] || usage; repo="$2"; shift 2 ;;
+    --base) [ $# -ge 2 ] || usage; base="$2"; shift 2 ;;
+    --all) check_all=1; shift ;;
+    *) usage ;;
+  esac
+done
+[ -d "$orbit_root" ] || { echo "records-lint: record directory not found: $orbit_root" >&2; exit 20; }
+command -v jq >/dev/null 2>&1 || { echo "records-lint: jq is required." >&2; exit 20; }
+
+ORBIT_BIN="${ORBIT_BIN:-orbit}"
+command -v "$ORBIT_BIN" >/dev/null 2>&1 || {
+  echo "records-lint: ORBIT CLI not found. Install orbit-spec or set ORBIT_BIN." >&2
+  exit 20
+}
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+leak_scrub="$script_dir/../../../hooks/check-private-refs-runtime.sh"
+[ -f "$leak_scrub" ] || { echo "records-lint: leak scrub not found at $leak_scrub" >&2; exit 20; }
+
+fail() { # code check file message
+  echo "records-lint: FAIL [$2] ${3:+$3: }$4" >&2
+  exit "$1"
+}
+
+# 1. Validate.
+if ! out=$("$ORBIT_BIN" validate --all --root "$orbit_root" 2>&1); then
+  fail 10 validate "" "orbit validate --all failed: $out"
+fi
+
+# Select the files for checks 2 to 5.
+files=()
+if [ "$check_all" -eq 0 ] && git -C "$orbit_root" rev-parse --verify -q "$base" >/dev/null 2>&1; then
+  top=$(git -C "$orbit_root" rev-parse --show-toplevel)
+  while IFS= read -r f; do
+    [ -n "$f" ] && [ -f "$top/$f" ] && files+=("$top/$f")
+  done < <({ git -C "$orbit_root" diff --name-only "$base" -- .
+             git -C "$orbit_root" ls-files --others --exclude-standard --full-name -- .; } | sort -u)
+else
+  while IFS= read -r f; do files+=("$f"); done < <(find "$orbit_root" -type f \( -name '*.json' -o -name '*.md' \) | sort)
+fi
+# Keep records and notes, drop everything else.
+sel=()
+for f in ${files[@]+"${files[@]}"}; do
+  case "$f" in */history/*) continue ;; esac  # frozen Plan revisions
+  case "$f" in *.json|*.md) sel+=("$f") ;; esac
+done
+if [ "${#sel[@]}" -eq 0 ]; then
+  echo "records-lint: OK (validate passed; no changed record files)"
+  exit 0
+fi
+
+# Text fields of a record: every string except identifiers, provenance and dates.
+text_fields() {
+  jq -r '
+    . as $r
+    | [paths(type == "string")]
+    | .[]
+    | select(all(.[]; tostring | test("^(id|specVersion|status|basedOn|repositories|repositoryId|commit|branch|url|observedAt|reconciledAt|outcomeId|criterionId|planId|planRevision|projectSnapshotId|contributesTo)$|Id$") | not))
+    | . as $p | $r | getpath($p)
+  ' "$1" 2>/dev/null
+}
+
+# 2. Leak scrub, one pass per file over its text.
+for f in "${sel[@]}"; do
+  tmp=$(mktemp "${TMPDIR:-/tmp}/records-lint.XXXXXX") || fail 20 leak-scrub "$f" "cannot create a temp file"
+  case "$f" in
+    *.json) text_fields "$f" > "$tmp" ;;
+    *) cp "$f" "$tmp" ;;
+  esac
+  if ! out=$("$leak_scrub" "$repo" "records" "$tmp" 2>&1); then
+    rm -f "$tmp"
+    fail 11 leak-scrub "$f" "the leak scrub blocked this text. $out"
+  fi
+  rm -f "$tmp"
+done
+
+# 3. Sentence length, record JSON only. Notes are prose, a person reads them.
+for f in "${sel[@]}"; do
+  case "$f" in *.json) ;; *) continue ;; esac
+  long=$(text_fields "$f" | awk -v max="$MAX_WORDS" '
+    { gsub(/[.!?]+[ \t]+/, "&\n"); n = split($0, parts, "\n")
+      for (i = 1; i <= n; i++) { w = split(parts[i], words, /[ \t]+/); c = 0
+        for (j = 1; j <= w; j++) if (words[j] != "") c++
+        if (c > max) { print c ": " substr(parts[i], 1, 60) "..."; exit } } }')
+  [ -z "$long" ] || fail 12 sentence "$f" "a sentence has more than $MAX_WORDS words ($long)"
+done
+
+# 4. Missing and Next rule, reconciliation records only.
+for f in "${sel[@]}"; do
+  case "$f" in *.json) ;; *) continue ;; esac
+  [ "$(jq -r '.criterionAssessments | type' "$f" 2>/dev/null)" = "array" ] || continue
+  bad=$(jq -r '.criterionAssessments[]
+    | select(.status != "achieved")
+    | select((.explanation // "") | test("^Missing: .+ Next: .+") | not)
+    | .criterionId' "$f" | head -1)
+  [ -z "$bad" ] || fail 13 missing-next "$f" "criterion $bad is not achieved. Its explanation must read \"Missing: <what>. Next: <action>.\""
+done
+
+# 5. Local paths, records and notes.
+pattern='(/Users/|/home/[A-Za-z]|/private/tmp|/var/folders/|/tmp/|[A-Za-z]:\\\\|~/)'
+for f in "${sel[@]}"; do
+  hit=$(grep -nE "$pattern" "$f" | head -1)
+  [ -z "$hit" ] || fail 14 local-path "$f" "a local path appears at line ${hit%%:*}. Use a repository-relative path."
+done
+
+echo "records-lint: OK (${#sel[@]} file(s) checked)"
