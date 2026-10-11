@@ -9,7 +9,7 @@
     "repositories": {}
   },
   "objective": "Reviewers check CI once and never wait. The orchestrator waits for green CI with a Monitor and then spawns Rex.",
-  "why": "ac4-1 ac4-2 and ac4-5 are not-verified. The baseline has 469 CI-wait turns in 195 of 350 reviewer runs. The hook banner is about 3.9 KB and names no CI order. code-reviewer.md line 161 tells Rex to wait.",
+  "why": "ac4-1 ac4-2 and ac4-5 are not-verified, and ac4-4 needs the after count. The baseline has 469 CI-wait turns in 195 of 350 reviewer runs. The hook banner is about 3.9 KB and names no CI order. code-reviewer.md line 161 tells Rex to wait.",
   "contributesTo": [
     "ac4-1",
     "ac4-2",
@@ -21,10 +21,10 @@
       "Cut the auto-code-review banner to at most 300 bytes. It keeps exit 2 and the pending-review marker and says: wait with a Monitor; then spawn Rex",
       "Say the same in the /code-review skill",
       "A hook that blocks gh pr checks --watch and gh run watch and sleep of 60 seconds or more for review agents; it also blocks a second gh pr checks in one review run",
-      "The hook names review agents by an allowlist of agent slugs. It reads the agent type from hook input when the harness gives it; else it uses the active-reviewer marker; else it allows the command",
+      "The hook names review agents by an allowlist of agent slugs in hook input. It uses the active-reviewer marker only when the input names a subagent with no type. Otherwise it allows the command, so the orchestrator is never blocked",
       "Hook tests for the banner size and each blocked command and an allowed single gh pr checks and an orchestrator command that is not blocked",
       "A first step that confirms what agent identity the hook input carries and records it in the PR",
-      "The promptCacheTtl advice for adopters outside the limits of a subscription in the o4 rule and docs/getting-started.md (ac4-5)",
+      "The promptCacheTtl advice for adopters outside the limits of a subscription in pr-workflow.md and docs/getting-started.md (ac4-5)",
       "Record the before numbers from the baseline in the PR and name the o1 metric for the after numbers (C3)"
     ],
     "exclude": [
@@ -33,7 +33,7 @@
       "The reviewer hand-back format and resume rules (o7)",
       "The cache TTL trial",
       "The measurement script itself (o1)",
-      "The reviewer-text lines in code-reviewer.md and security-reviewer.md (harness o4 eval cycle, C4)"
+      "The reviewer-text lines in code-reviewer.md and security-reviewer.md (harness o4 eval cycle, token plan C4)"
     ]
   }
 }

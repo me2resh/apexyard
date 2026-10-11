@@ -9,7 +9,7 @@ status: accepted
 
 # Light ceremony for ORBIT records
 
-> In the context of ORBIT records PRs that each take a full Rex review, facing about 200k tokens and one round trip per review round, I decided to batch records into one PR per planning cycle, to stop committing reconciliations that change no status, and to lint records before the PR, to achieve one short review per cycle, accepting that records PRs keep a Rex review and that a status change still needs a PR.
+> In the context of ORBIT records PRs that each take a full Rex review, facing 80k to 120k tokens and one round trip per review round, I decided to batch records into one PR per planning cycle, to stop committing reconciliations that change no status, and to lint records before the PR, to achieve one short review per cycle, accepting that records PRs keep a Rex review and that a status change still needs a PR.
 
 ## Context
 
@@ -24,7 +24,7 @@ status: accepted
 
 | Option | Pros | Cons |
 |--------|------|------|
-| A. Full Rex review on every records PR (today) | No change | About 200k tokens per round |
+| A. Full Rex review on every records PR (today) | No change | 80k to 120k tokens per Rex round (PRs #1621 and #1622) |
 | B. Reduced-scope Rex on records PRs, with a lint in `/orbit` before the PR | No gate edit; uses an existing mode | Still one Rex spawn per PR |
 | C. A script runs the lint and writes the Rex marker | No gate edit | A script-written approval records a review that did not happen |
 | D. The merge gate skips the Rex marker when the forge file list matches a records allowlist and a required check is green | No Rex spawn | Edits the gate; see "Why not D" |
@@ -48,7 +48,7 @@ status: accepted
 
 Chosen: **B + F + I**, because together they cut the review count to one short pass per cycle with no gate edit.
 
-- **B.** `/orbit` runs a records lint before it opens a PR. The lint covers `orbit validate --all`, the leak scrub, the 25-word check, the `Missing: … Next:` rule and the local-path check. Rex reviews records PRs in reduced scope, so it reads the prose and checks numbers against their evidence.
+- **B.** `/orbit` runs a records lint before it opens a PR. The lint covers `orbit validate --all`, the leak scrub, the 25-word check, the `Missing: … Next:` rule and the local-path check. Rex reviews a records PR in reduced scope when it meets the eligibility rules in `code-reviewer.md` § "Reduced-Scope Review". Otherwise Rex reviews it in full.
 - **F.** Cut the slices of a cycle with the Plan revision, then open one PR. A slice found mid-cycle may still get its own PR when its build cannot wait.
 - **I.** The live view shows recorded statuses, commits since the last reconciliation, and criteria a script can check. `/orbit reconcile` writes a record only when a status changes. When a check changes nothing, the next cycle PR adds one append-only "checked, no change" line, with the date and commit.
 

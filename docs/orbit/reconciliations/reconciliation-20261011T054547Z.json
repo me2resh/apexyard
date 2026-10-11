@@ -4,7 +4,7 @@
   "planId": "plan-apexyard-token-efficiency",
   "planRevision": 2,
   "projectSnapshotId": "snapshot-apexyard-20261011T054547Z",
-  "reconciledAt": "2026-10-11T05:40:00.354Z",
+  "reconciledAt": "2026-10-11T06:05:44.000Z",
   "criterionAssessments": [
     {
       "criterionId": "ac1-1",
@@ -23,7 +23,7 @@
         "The baseline numbers exist only in the debug synthesis of 2026-10-10",
         "slice-plan-apexyard-token-efficiency-20261011T051806Z is on dev (PR #1621) and has no issue yet"
       ],
-      "explanation": "Missing: the reviewer view of the measurement script. Next: the o1 slice, which runs before the harness o4 slice."
+      "explanation": "Missing: the reviewer and forge views and the dated baseline file. Next: the o1 slice, which runs before the harness o4 slice."
     },
     {
       "criterionId": "ac1-3",
@@ -32,7 +32,7 @@
         "This record",
         "slice-plan-apexyard-token-efficiency-20261011T051806Z is on dev (PR #1621) and has no issue yet"
       ],
-      "explanation": "Missing: this is the first reconciliation, so no outcome has moved yet. Next: each slice PR records the metric before and after."
+      "explanation": "Missing: no slice has merged its change yet, so no outcome has moved. Next: each slice PR records the metric before and after."
     },
     {
       "criterionId": "ac2-1",
@@ -109,7 +109,7 @@
       "status": "not-verified",
       "evidence": [
         "auto-code-review.sh",
-        "Baseline: the hook's own text, from AUTO CODE REVIEW REQUIRED to the end of its message, is about 3.9 KB per PR creation and varies by less than 20 bytes with the PR number. With the harness prefix, the injected banner is about 4.4 KB (143 banners in the baseline session)."
+        "Baseline: the hook's own text, from AUTO CODE REVIEW REQUIRED to the end of its message, is about 3.9 KB per PR creation. It varies by less than 20 bytes with the PR number and the repository slug. With the full harness prefix, the model receives about 5.0 KB per banner (143 banners in the baseline session)."
       ],
       "explanation": "Missing: the hook prints about 3.9 KB and names no CI sequencing, and /code-review does not tell the orchestrator to wait. Next: the o4 slice."
     },
@@ -142,7 +142,7 @@
     {
       "criterionId": "ac4-5",
       "status": "not-verified",
-      "explanation": "Missing: no framework doc or rule names promptCacheTtl. Next: the o4 slice adds it to the o4 rule and to docs/getting-started.md.",
+      "explanation": "Missing: no framework doc or rule names promptCacheTtl. Next: the o4 slice adds it to pr-workflow.md and docs/getting-started.md.",
       "evidence": [
         "No match for promptCacheTtl or PROMPT_CACHE_TTL in docs/, .claude/rules, .claude/skills or .claude/agents outside docs/orbit/",
         "CLI 2.1.296 setting text: main conversation 1 hour on a subscription within its limits, 5 minutes on an API key, Bedrock, Vertex or Foundry"
@@ -312,7 +312,7 @@
   ],
   "observations": [
     "Observed me2resh/apexyard at 692c17e889a75211870e0480c495c4516dbe2a05, the dev head after PR #1621.",
-    "Revision 2 adds o8 for AgDR-0225. Outcomes o1 to o7 and their criteria are unchanged, so their statuses carry over from the revision 1 reconciliation.",
+    "Revision 2 adds o8 for AgDR-0225. Only the ac4-5 statement changed in o1 to o7: it now names pr-workflow.md, and its status holds. The o1 to o7 statuses carry over from the revision 1 reconciliation.",
     "git diff bace9db and this commit changes only files under docs/orbit/, so the r1 evidence for o1 to o7 holds at this commit.",
     "Baseline from the 2026-10-10 token-cost debug (one 10-day session): main context mean 490k tokens per turn, p90 853k, 18 compactions; the /approve-merge body injected 209 times at 34 KB; every Rex spawn starts at 49k tokens; 469 CI-wait turns in 195 of 350 reviewer runs; 31 pure-refresh Rex rounds; Rex rounds per PR 2.38 on the framework.",
     "Static state at this commit: 0 of 23 agent files set omitClaudeMd; code-reviewer.md is 73,140 bytes, security-reviewer.md 21,570, solution-architect.md 22,858; approve-merge SKILL.md is 39,285 bytes; of the other four most-invoked skills, approve-design (11,861), code-review (13,359) and task (10,216) are under 16,000 bytes and start-ticket (18,909) is not; 45 of 67 skills carry the Writing rule preamble; docs/eval-agents/corpus has rex.json (10 entries) and hakim.json (4), no Tariq corpus; docs/perf/ holds only hook-test-profile-2026-10.md.",

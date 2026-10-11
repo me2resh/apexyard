@@ -22,8 +22,8 @@
       "A records lint script that stops on the first fault. It runs validate; the leak scrub; the sentence check; the Missing and Next rule; the local-path check",
       "/orbit runs the lint before it opens a records PR",
       "The cycle flow in the /orbit skill: cut the slices of a cycle with the Plan revision and open one PR",
-      "The reconcile-only-on-change rule: a check that changes no status adds one dated line to a Checks section in the plan notes file in the next cycle PR",
-      "An /orbit status operation that shows recorded statuses and commits since the last reconciliation and writes no record",
+      "Reconcile only on a status change. Otherwise the next cycle PR adds one dated line to the Checks section of the plan notes",
+      "An /orbit status operation that shows the orbit progress output plus the commits since the observed snapshot commit and writes no record",
       "Tests for the lint on a faulty fixture and for the change-only rule"
     ],
     "exclude": [

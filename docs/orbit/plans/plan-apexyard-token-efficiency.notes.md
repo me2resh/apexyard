@@ -89,8 +89,10 @@ o1 first, because every later change and the harness o4 slice measure with its s
 
 - Adds o8-records-light for AgDR-0225: one linted records PR per planning cycle, a reconciliation only when a status changes, and an /orbit status view. Records PRs keep a reduced-scope Rex review.
 - Naqid challenged AgDR-0225 twice. The first challenge dropped a records-only gate exemption, because a check status can be spoofed and Plan history files fall outside any records allowlist.
-- Naqid challenged the r2 cycle. Applied: the o4 hook detects review agents from hook input or the active-reviewer marker and fails open; the reviewer-text lines move to the harness o4 eval cycle (C4); ac4-5 names pr-workflow.md; ac8-4 builds on orbit progress; ac8-5 counts exception PRs apart and targets 1 round; the o1 slice gains a records-PR classifier and stops counting the one allowed CI check as a wait.
-- The o1 slice now points at the revision 2 reconciliation. o1 to o7 and their criteria did not change.
+- Naqid challenged the r2 cycle. Applied: the o4 hook detects review agents from hook input and fails open; the reviewer-text lines move to the harness o4 eval cycle (C4); ac4-5 names pr-workflow.md; ac8-4 builds on orbit progress; ac8-5 counts exception PRs apart and targets 1 round; the o1 slice gains a records-PR classifier and stops counting the one allowed CI check as a wait.
+- The o1 slice now points at the revision 2 reconciliation. In o1 to o7, only the ac4-5 statement changed: it names pr-workflow.md.
+- Rex on PR #1622: the o4 hook uses the active-reviewer marker only for a subagent with no type, because the marker covers the whole session. The orchestrator is never blocked.
+- Correction to the message of commit 3bf5e52 (PR #1620): the wrong range came from a faulty first parse, not from the four most common sizes. In a correct parse the most common sizes are 3,925 to 3,930 bytes.
 
 ## Checks
 
