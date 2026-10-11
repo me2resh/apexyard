@@ -14,10 +14,12 @@ Behaviour change: the active ticket now lives in each working tree's git dir (#1
 
 ### Added
 
+- The Bash dispatcher and the ticket-first gate fail closed (#1623, AgDR-0228). The `dispatch-bash.sh` and `require-active-ticket.sh` entries in `.claude/settings.json` set `onFailure` to `block` with timeouts of 20 and 10 seconds, taken from the profile in `docs/perf/hook-fail-closed-profile-2026-10.md`. `onFailure` needs Claude Code 2.1.295 or later. An older client ignores the field. `docs/hooks-fail-closed.md` describes the behavior, the `claude --settings '{"disableAllHooks": true}'` escape hatch, and the version finding. `bin/hook-timing-profile.py` measures hook timing. `bin/check-escape-hatch.sh` tests the escape hatch. A new workflow runs `claude plugin validate --strict` on the marketplace with a pinned Claude Code version.
 - `bin/token-cost.py` reports the token and time cost of a session (#1624). It has a session view, a reviewer view and a forge view of me2resh/apexyard PRs. `docs/perf/token-cost.md` gives the usage and the counting rules. The 2026-10-10 baseline is in `docs/perf/token-cost-baseline-2026-10-10.md`.
 
 ### Changed
 
+- Inside `dispatch-bash.sh`, a crashed or killed `require-active-ticket.sh` now blocks the Bash call, as the merge gates do. It warned before. `block-reviewer-ci-wait.sh` stays fail open on purpose, because it is a cost guard (#1623).
 - The ticket gate, the migration gate, the AgDR spike exemptions, the tracker-repo guard and `/status` read the marker through one resolver. It finds a marker in a validated tree's git dir without a git process, so `GIT_DIR` and git config cannot redirect that lookup. The old-layout resolution keeps its old git calls until the breaking release.
 - A marker in a git dir counts only for the ops fork and registered clones. A registered clone sits under the workspace dir, or at the `workspace:` path of its registry entry. Other trees use the old markers, as before.
 - The marker's repo must belong to its tree. A project clone takes only a ticket of its own registry entry, and the ops fork takes no ticket of a registered project. `/start-ticket` stops when the project's clone does not exist.

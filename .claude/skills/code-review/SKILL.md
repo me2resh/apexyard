@@ -57,6 +57,15 @@ Do not write a process transcript.
 
 The orchestrator waits for green CI with a Monitor, then spawns Rex. Do not spawn Rex while CI is still running. Rex checks CI once and never waits. A review agent that runs `gh pr checks --watch`, `gh run watch`, or `sleep` of 60 seconds or more is blocked by `block-reviewer-ci-wait.sh`.
 
+### After a base-branch refresh: run the carry-over check first (me2resh/apexyard#1638)
+
+Do not spawn Rex after a base-branch refresh before you run the carry-over check.
+The check is `rex_approval_carries_over` in `.claude/hooks/_lib-merge-behind.sh`.
+`.claude/rules/pr-workflow.md` § "Carry-over check after a refresh" gives the command and what the check accepts.
+
+- `true`: do not spawn Rex. The merge gate accepts the existing Rex marker at the new HEAD.
+- `false` or `unknown`: spawn Rex for a delta re-review of the new merge commit.
+
 ### 0. Write the active-reviewer marker (REQUIRED — me2resh/apexyard#843)
 
 Before spawning the Code Reviewer agent (Rex), write the active-reviewer session marker. It records that this review pass is the sanctioned one, and suppresses `warn-review-marker-write.sh`'s advisory warning on Rex's `*-rex.approved` write (that hook warns and never blocks since #1026 — AgDR-0111). The marker is scoped to THIS Claude Code session (me2resh/apexyard#1376) — resolve its path through `active_reviewer_marker_path`, never write the bare `.claude/session/active-reviewer` path directly, or a concurrent session's review would read or clobber it. At skill entry:
@@ -160,7 +169,8 @@ Use a scratch checkout or a test deployment built from that SHA.
 Give Salim the linked ticket and comments.
 Salim must verify each acceptance criterion and return evidence for every result.
 If the ticket has no acceptance criteria, report INCOMPLETE.
-If the PR HEAD changes during QA, discard the result and run Rex again before another QA attempt.
+If the PR HEAD changes during QA, discard the result.
+Run Rex again before another QA attempt, unless the carry-over check returns `true` for the new HEAD.
 
 Post Salim's result on the PR with `tracker_review_submit <owner/repo> <pr> comment <body_file>`.
 Use the `comment` verdict, never `approve`.

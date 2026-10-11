@@ -220,15 +220,14 @@ evidence the PR is up to date.
     commits touch a file this PR shares. Before this can merge:
       1. Update the branch: gh pr update-branch <pr> --repo <owner/repo>
       2. Wait for green CI on the updated branch.
-      3. Get a short Rex re-review of the new merge commit — OR, if the
-         merge is a clean replay of the base with no conflicts
-         (`rex_approval_carries_over` returns true: forge-verified
-         two-parent merge whose tree matches an isolated
-         `git merge-tree --write-tree` of the parents), the merge gate
-         carries the existing Rex approval forward on its own. See
-         block-unreviewed-merge.sh's rex_approval_carries_over check
-         (me2resh/apexyard#1437, hardened in #1456) — no marker to write
-         by hand either way.
+      3. Run the carry-over check first (rex_approval_carries_over, see
+         .claude/rules/pr-workflow.md "Carry-over check after a refresh").
+         On true, the merge gate carries the existing Rex approval over
+         (forge-verified two-parent merge whose tree matches an isolated
+         `git merge-tree --write-tree` of the parents, me2resh/apexyard#1437,
+         hardened in #1456). Ask for a short Rex delta re-review of the
+         new merge commit only when the check does not return true. Write
+         no marker by hand either way.
       4. Run /approve-merge <pr> again.
     ```
 
