@@ -6,7 +6,7 @@ Produced by `bin/token-cost.py report`. Aggregate numbers only.
 |---|---|
 | Window | start to 2026-10-10T23:59:59Z |
 | Transcript SHA-256 (measured prefix) | `27f9dba0d56aad869ad2238544ad513a5d4e6018faa78232e81d99c67c605534` |
-| Script commit | `db8ebe78d9f02a4eb8520c9b17e44b7d1554f5af` |
+| Script commit | `194b31c0833e3dc9c7bd65b8f8c1a8a6421d132c` |
 | Claude Code CLI versions in the transcript | 2.1.285, 2.1.289, 2.1.290, 2.1.291 |
 
 Command:
@@ -32,7 +32,7 @@ python3 bin/token-cost.py report \
 | Compaction mean pre / post tokens | 800,830 / 53,732 |
 | Input / cache creation / cache read / output | 14,972 / 28,269,343 / 2,865,406,148 / 4,348,220 |
 | Main-loop cache rebuilds (after compaction) | 31 (17) |
-| Main-loop CI-wait turns / cache rebuilds during a CI wait | 229 / 0 |
+| Main-loop CI-wait turns / cache rebuilds during a CI wait | 228 / 0 |
 | Requests with 1-hour / 5-minute cache writes | 5,902 / 0 |
 | AUTO CODE REVIEW banners | 144 |
 | Wall hours / summed turn hours | 254.03 / 99.50 |
@@ -84,8 +84,8 @@ Skill injections (untracked or private skills are grouped as `other`):
 | Total tokens per review (median) | 89,199 | 93,744 | 100,762 | 62,105 |
 | Cache-read tokens | 489,362,704 | 359,538,455 | 98,993,605 | 30,830,644 |
 | Tool calls per review (mean) | 18.40 | 19.70 | 20.30 | 11.00 |
-| CI-wait turns | 384 | 343 | 39 | 2 |
-| Runs with a CI-wait turn | 171 | 150 | 20 | 1 |
+| CI-wait turns | 420 | 375 | 43 | 2 |
+| Runs with a CI-wait turn | 185 | 161 | 23 | 1 |
 | CI waits of 300 s or more | 32 | 30 | 2 | 0 |
 | Of those, followed by a cache rebuild | 29 | 27 | 2 | 0 |
 | Cache rebuilds | 59 | 45 | 11 | 3 |
@@ -99,8 +99,8 @@ Runs by cache TTL (a run with any 1-hour cache write is a 1-hour run):
 
 | TTL | Runs | First-turn context (median) | Total tokens | Cache rebuilds | CI-wait turns |
 |---|---|---|---|---|---|
-| 5m | 384 | 48,851 | 38,924,240 | 58 | 382 |
-| 1h | 4 | 47,620 | 1,436,034 | 1 | 2 |
+| 5m | 384 | 48,851 | 38,924,240 | 58 | 419 |
+| 1h | 4 | 47,620 | 1,436,034 | 1 | 1 |
 
 Other agent types:
 
