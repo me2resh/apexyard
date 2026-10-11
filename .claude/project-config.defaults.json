@@ -176,6 +176,8 @@
   },
 
   "review_markers": {
+    "extra_review_agents": [],
+    "_comment_extra_review_agents": "me2resh/apexyard#1653 — Add exact review agent types. Built-in types stay fixed. No patterns. See AgDR-0145.",
     "on_stale": "warn",
     "human_approver_title": "CEO",
     "require_posted_review": false,
