@@ -86,6 +86,28 @@ protection from the settings file.
 The dispatcher still blocks a crashed ticket-first or merge gate on any version,
 because that code is in the shell script.
 
+## Review agent detection needs `agent_type`
+
+The reviewer lock finds a review agent by the `agent_type` field in the hook
+input (me2resh/apexyard#1649, AgDR-0145 amendment).
+Claude Code sets this field on every tool call that a sub-agent makes.
+A call from the main thread has no `agent_type` and no `agent_id`.
+
+You need a Claude Code build that sends `agent_type` in hook input.
+We verified this on Claude Code 2.1.296 (`claude --version`).
+We did not test older builds, so we state no earliest version.
+
+On a build that sends neither field, a review agent looks like the main thread.
+The lock then does not block it.
+The merge gates do not depend on this field and stay in force.
+A hook cannot read the Claude Code version cheaply: the hook input has no
+version field, and `CLAUDE_CODE_EXECPATH` can name the parent process.
+So the framework gives no version warning at session start.
+
+The `/code-review`, `/security-review` and `/design-review` skills spawn the
+reviewer with its own agent type: `code-reviewer`, `security-reviewer` or
+`solution-architect`. Do not spawn a review with `general-purpose`.
+
 ## Operator escape hatch
 
 If a gate blocks all work, for example after a bad hook edit, start Claude

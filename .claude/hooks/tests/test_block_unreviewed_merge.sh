@@ -302,6 +302,17 @@ write_rex_marker "$sb" 208 "$WRONG_SHA"
 write_ceo_marker_structured "$sb" 208
 run_case "rex sha mismatch → blocks" 2 "Code-reviewer approved commit" "$sb" 208
 
+# 9b. me2resh/apexyard#1649 (C1): per-review active-reviewer markers never
+# loosen the merge gate. A Rex approval for a stale head commit still blocks
+# while two active-reviewer markers exist. The gate hook is unchanged.
+sb=$(make_sandbox)
+write_rex_marker "$sb" 218 "$WRONG_SHA"
+write_ceo_marker_structured "$sb" 218
+mkdir -p "$sb/.claude/session/active-reviewers/sess-A"
+printf '%s\n' 'me2resh/apexyard#218:rex' > "$sb/.claude/session/active-reviewers/sess-A/me2resh__apexyard__218-rex"
+printf '%s\n' 'me2resh/apexyard#219:security' > "$sb/.claude/session/active-reviewers/sess-A/me2resh__apexyard__219-security"
+run_case "stale-head rex marker still blocks with per-review markers active" 2 "Code-reviewer approved commit" "$sb" 218
+
 # 10. Non-merge command (e.g. gh pr view) → no-op exit 0
 sb=$(make_sandbox)
 input=$(jq -nc --arg c "gh pr view 209 --repo me2resh/apexyard" '{tool_name:"Bash", tool_input:{command:$c}}')

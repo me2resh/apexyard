@@ -119,7 +119,7 @@ review_marker_path() {
 # that SAME session — never granting, and never blocking, mutations in any
 # other session.
 #
-# active_reviewer_marker_path [marker_home] [session_id]
+# active_reviewer_marker_path [marker_home] [session_id] [repo pr kind]
 #
 # Args:
 #   marker_home — the ops-fork root (or "." when unresolved). Defaults to ".".
@@ -128,18 +128,33 @@ review_marker_path() {
 #                 pre-#1376 FIXED path (no session suffix). This is the safe
 #                 fallback for callers that legitimately have no Claude Code
 #                 session at all — a standalone git-native hook, CI, or a
-#                 bare test-harness invocation. This function makes no claim
-#                 about how many such processes act on a given ops fork at
-#                 once; the fixed path is exactly as safe (or unsafe) as it
-#                 was before this function existed, and every caller that
-#                 never set the env var (the pre-#1376 test suite included)
-#                 keeps working unchanged.
+#                 bare test-harness invocation.
+#   repo pr kind — optional (me2resh/apexyard#1649, AgDR-0145 amendment).
+#                 When all three are given, the function returns the
+#                 PER-REVIEW marker path:
+#                   <home>/.claude/session/active-reviewers/<sid>/<repo>__<pr>-<kind>
+#                 One file per review, so two reviews in one session never
+#                 overwrite each other and each review clears only its own.
+#                 With fewer than three, the function returns the legacy
+#                 single-file path, which readers still honour during the
+#                 transition (see active_reviewer_any_marker).
 #
 # Output (stdout): the absolute marker path.
 active_reviewer_marker_path() {
   local marker_home="${1:-.}"
   local sid="${2:-${CLAUDE_CODE_SESSION_ID:-}}"
+  local repo="${3:-}" pr="${4:-}" kind="${5:-}"
   local base="${marker_home}/.claude/session/active-reviewer"
+
+  if [ -n "$repo" ] && [ -n "$pr" ] && [ -n "$kind" ]; then
+    local d safe_repo safe_kind safe_pr
+    d=$(active_reviewers_dir "$marker_home" "$sid")
+    safe_repo=$(printf '%s' "$repo" | sed 's#/#__#' | tr -c 'A-Za-z0-9._-' '_')
+    safe_pr=$(printf '%s' "$pr" | tr -c '0-9' '_')
+    safe_kind=$(printf '%s' "$kind" | tr -c 'A-Za-z0-9._-' '_')
+    printf '%s/%s__%s-%s' "$d" "$safe_repo" "$safe_pr" "$safe_kind"
+    return 0
+  fi
 
   if [ -z "$sid" ]; then
     printf '%s' "$base"
@@ -149,13 +164,100 @@ active_reviewer_marker_path() {
   # Sanitise: a session id is expected to already be a safe token (the
   # harness's own id), but never trust it as a bare path component. Collapse
   # anything outside [A-Za-z0-9._-] to '_' so the result can never contain a
-  # '/' (or other separator) and escape the .claude/session/ directory this
-  # marker lives in (NOT the .claude/session/reviews/ directory — the
-  # active-reviewer marker and the *.approved review markers are siblings,
-  # not the same directory).
+  # '/' (or other separator) and escape the .claude/session/ directory.
   local safe_sid
   safe_sid=$(printf '%s' "$sid" | tr -c 'A-Za-z0-9._-' '_')
   printf '%s.%s' "$base" "$safe_sid"
+}
+
+# active_reviewers_dir [marker_home] [session_id]
+# The directory that holds this session's per-review markers.
+active_reviewers_dir() {
+  local marker_home="${1:-.}"
+  local sid="${2:-${CLAUDE_CODE_SESSION_ID:-}}"
+  local safe_sid
+  safe_sid=$(printf '%s' "${sid:-nosession}" | tr -c 'A-Za-z0-9._-' '_')
+  printf '%s/.claude/session/active-reviewers/%s' "$marker_home" "$safe_sid"
+}
+
+# active_reviewer_marker_files [marker_home] [session_id]
+# Prints every active-reviewer marker file for this session, one per line:
+# the per-review files first, then the legacy single file when it exists.
+active_reviewer_marker_files() {
+  local marker_home="${1:-.}" sid="${2:-${CLAUDE_CODE_SESSION_ID:-}}"
+  local d f legacy
+  d=$(active_reviewers_dir "$marker_home" "$sid")
+  if [ -d "$d" ]; then
+    for f in "$d"/*; do
+      [ -f "$f" ] && printf '%s\n' "$f"
+    done
+  fi
+  legacy=$(active_reviewer_marker_path "$marker_home" "$sid")
+  [ -f "$legacy" ] && printf '%s\n' "$legacy"
+  return 0
+}
+
+# active_reviewer_any_marker [marker_home] [session_id]
+# Exit 0 when this session has at least one active-reviewer marker (per-review
+# or legacy single file).
+active_reviewer_any_marker() {
+  local first
+  first=$(active_reviewer_marker_files "$@" | head -n 1)
+  [ -n "$first" ]
+}
+
+# review_agent_slug_match <agent_type>
+# Exit 0 when the agent type is a review agent. Add a slug to
+# REVIEW_AGENT_SLUGS when a new review-class agent is created.
+REVIEW_AGENT_SLUGS="code-reviewer security-reviewer solution-architect"
+review_agent_slug_match() {
+  local t="${1:-}" slug
+  [ -n "$t" ] || return 1
+  for slug in $REVIEW_AGENT_SLUGS; do
+    [ "$t" = "$slug" ] && return 0
+  done
+  return 1
+}
+
+# review_caller_class <hook_input_json> [marker_home]
+#
+# Trust root (AgDR-0145 amendment, me2resh/apexyard#1649): the harness sets
+# agent_type on every tool call made inside a sub-agent, and sets neither
+# agent_type nor agent_id on a main-thread call. The values were captured
+# live; see tests/fixtures/pretooluse-payloads/.
+#
+# Prints one word:
+#   reviewer      agent_type is in the review allowlist, or the call is from a
+#                 sub-agent with NO type and this session has an active marker
+#   other-agent   a typed sub-agent that is not a review agent (build agent,
+#                 general-purpose, ...); never blocked by the review lock
+#   untyped-agent a sub-agent with no type and no active marker in this session
+#   main          the orchestrator (neither agent_type nor agent_id)
+#   unparsable    no jq, or the payload is not JSON. The mutation lock fails
+#                 closed here when a marker exists; other hooks treat it as main.
+review_caller_class() {
+  local input="${1:-}" home="${2:-}" atype aid sid
+  if ! command -v jq >/dev/null 2>&1 || ! printf '%s' "$input" | jq -e . >/dev/null 2>&1; then
+    printf 'unparsable'
+    return 0
+  fi
+  atype=$(printf '%s' "$input" | jq -r '.agent_type // empty' 2>/dev/null || true)
+  aid=$(printf '%s' "$input" | jq -r '.agent_id // empty' 2>/dev/null || true)
+  if [ -n "$atype" ]; then
+    if review_agent_slug_match "$atype"; then printf 'reviewer'; else printf 'other-agent'; fi
+    return 0
+  fi
+  if [ -n "$aid" ]; then
+    sid="${CLAUDE_CODE_SESSION_ID:-}"
+    [ -n "$sid" ] || sid=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null || true)
+    if [ -n "$home" ] && active_reviewer_any_marker "$home" "$sid"; then
+      printf 'reviewer'
+    else
+      printf 'untyped-agent'
+    fi
+    return 0
+  fi
+  printf 'main'
 }
 
 # pr_base_repo <pr> <repo>

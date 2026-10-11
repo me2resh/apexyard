@@ -83,6 +83,21 @@ if [ -f "$MARKER" ]; then
   echo "ApexYard: cleared stale active-reviewer marker (was: $stale_value) from a previous session." >&2
 fi
 
+# me2resh/apexyard#1649: clear this session's per-review markers. Only the
+# directory for THIS session id is swept; another session's set is untouched.
+if command -v active_reviewers_dir >/dev/null 2>&1; then
+  SET_DIR=$(active_reviewers_dir "$ROOT")
+  if [ -d "$SET_DIR" ]; then
+    for _f in "$SET_DIR"/*; do
+      [ -f "$_f" ] || continue
+      stale_value=$(tr -d '[:space:]' < "$_f" 2>/dev/null || echo "(unreadable)")
+      rm -f "$_f"
+      echo "ApexYard: cleared stale active-reviewer marker (was: $stale_value) from a previous session." >&2
+    done
+    rmdir "$SET_DIR" 2>/dev/null || true
+  fi
+fi
+
 # me2resh/apexyard#1408: sessions with an id never read the pre-#1376 shared
 # path. A leftover file there is orphaned stale state — sweep it on SessionStart
 # so it cannot spam the legacy-marker advisory forever. Never remove it when

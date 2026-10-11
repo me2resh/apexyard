@@ -17,12 +17,13 @@ touch "$TMP/.apexyard-fork"
 git -C "$TMP" init -q
 cp "$HOOK" "$TMP/.claude/hooks/"
 cp "$SRC_ROOT/.claude/hooks/_lib-strip-heredoc.sh" "$TMP/.claude/hooks/"
+cp "$SRC_ROOT/.claude/hooks/_lib-review-markers.sh" "$TMP/.claude/hooks/"
 printf '%s\n' 'me2resh/apexyard#1233:rex' > "$TMP/.claude/session/active-reviewer"
 
 run_case() {
   local name="$1" command="$2" expected="$3"
   local input output rc
-  input=$(jq -cn --arg command "$command" '{tool_input:{command:$command}}')
+  input=$(jq -cn --arg command "$command" '{agent_type:"code-reviewer",agent_id:"a1",tool_input:{command:$command}}')
   output=$(cd "$TMP" && printf '%s' "$input" | "$TMP/.claude/hooks/block-reviewer-repo-mutation.sh" 2>&1)
   rc=$?
   if [ "$expected" = blocked ] && [ "$rc" -eq 2 ] && printf '%s' "$output" | grep -q 'BLOCKED:'; then
@@ -126,7 +127,7 @@ cp "$SRC_ROOT/.claude/hooks/_lib-review-markers.sh" "$SESS_TMP/.claude/hooks/"
 run_case_sess() {
   local name="$1" sess="$2" command="$3" expected="$4"
   local input output rc
-  input=$(jq -cn --arg command "$command" '{tool_input:{command:$command}}')
+  input=$(jq -cn --arg command "$command" '{agent_type:"code-reviewer",agent_id:"a1",tool_input:{command:$command}}')
   output=$(
     cd "$SESS_TMP" || exit 1
     if [ -n "$sess" ]; then export CLAUDE_CODE_SESSION_ID="$sess"; else unset CLAUDE_CODE_SESSION_ID; fi
@@ -192,7 +193,7 @@ run_case_sess '#1376: legacy shared-path marker does not block a session that ha
 # advisory added for that gap: the command must still succeed (rc=0, the
 # lock is genuinely not armed for sess-C), but stderr must name the legacy
 # marker path so the state is visible instead of silent.
-input=$(jq -cn --arg command 'git commit -m "advisory should not block"' '{tool_input:{command:$command}}')
+input=$(jq -cn --arg command 'git commit -m "advisory should not block"' '{agent_type:"code-reviewer",agent_id:"a1",tool_input:{command:$command}}')
 output=$(
   cd "$SESS_TMP" || exit 1
   export CLAUDE_CODE_SESSION_ID="sess-D"
@@ -211,7 +212,7 @@ fi
 # (7) me2resh/apexyard#1408 — the #1400 advisory must not print on every Bash
 # call. A read-only command such as `ls` stays silent even when a legacy shared
 # marker file is still on disk.
-input=$(jq -cn --arg command 'ls' '{tool_input:{command:$command}}')
+input=$(jq -cn --arg command 'ls' '{agent_type:"code-reviewer",agent_id:"a1",tool_input:{command:$command}}')
 output=$(
   cd "$SESS_TMP" || exit 1
   export CLAUDE_CODE_SESSION_ID="sess-E"
