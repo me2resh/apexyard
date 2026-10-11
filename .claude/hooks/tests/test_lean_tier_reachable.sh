@@ -239,7 +239,7 @@ fi
 
 # =============================================================================
 # Case 9: auto-code-review.sh keeps the unconditional Rex-on-every-PR
-# instruction AND adds the tier-aware role-chain note.
+# instruction AND records the tier-aware role-chain note in the header comment.
 # =============================================================================
 # The banner shrank to 300 bytes (me2resh/apexyard#1625). It still sends the
 # orchestrator to /code-review with no tier condition, and the header comment
@@ -251,9 +251,9 @@ else
   record_fail "case9a: auto-code-review.sh no longer states the unconditional Rex-on-every-PR instruction"
 fi
 if grep -qi 'TIER-AWARE NOTE' "$AUTO_REVIEW_HOOK" && grep -qi 'Security Auditor' "$AUTO_REVIEW_HOOK"; then
-  record_pass "case9b: auto-code-review.sh's banner adds the tier-aware role-chain note"
+  record_pass "case9b: auto-code-review.sh's header comment records the tier-aware role-chain note"
 else
-  record_fail "case9b: auto-code-review.sh's banner is missing the tier-aware role-chain note"
+  record_fail "case9b: auto-code-review.sh's header comment is missing the tier-aware role-chain note"
 fi
 
 # =============================================================================
