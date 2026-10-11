@@ -12,6 +12,10 @@ Behaviour change: the active ticket now lives in each working tree's git dir (#1
 - The SessionStart notice lists only old markers that no marker in the same tree's git dir shadows.
 - A later, explicitly breaking release stops reading and writing the old markers. Its upgrade notes will say so.
 
+### Added
+
+- `bin/token-cost.py` reports the token and time cost of a session (#1624). It has a session view, a reviewer view and a forge view of me2resh/apexyard PRs. `docs/perf/token-cost.md` gives the usage and the counting rules. The 2026-10-10 baseline is in `docs/perf/token-cost-baseline-2026-10-10.md`.
+
 ### Changed
 
 - The ticket gate, the migration gate, the AgDR spike exemptions, the tracker-repo guard and `/status` read the marker through one resolver. It finds a marker in a validated tree's git dir without a git process, so `GIT_DIR` and git config cannot redirect that lookup. The old-layout resolution keeps its old git calls until the breaking release.
