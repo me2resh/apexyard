@@ -80,7 +80,7 @@
         "test_block_unreviewed_merge.sh CO4 (line 1632): a hand-resolved conflict merge is refused",
         "pr-workflow.md line 124 records the CEO-marker side of the same exception"
       ],
-      "explanation": "Missing: step 3 of pr-workflow.md (lines 88 and 89) still asks for a Rex re-review after a branch update. Next: the o3 slice rewrites the step. Met: the merge gate carries the Rex marker over a clean base merge, and the smuggled-hunk test exists."
+      "explanation": "Missing: step 3 of pr-workflow.md (lines 101 and 102) still asks for a Rex re-review after a branch update. Next: the o3 slice rewrites the step. Met: the merge gate carries the Rex marker over a clean base merge, and the smuggled-hunk test exists."
     },
     {
       "criterionId": "ac3-2",
@@ -197,7 +197,7 @@
       "evidence": [
         "wc -c on the five skill files at this commit"
       ],
-      "explanation": "Missing: approve-merge is 39,285 bytes and start-ticket is 18,909, and no body-size cap test exists. Next: the o6 slice. Met: approve-design 11,861, code-review 13,359 and task 10,216 bytes are under the cap."
+      "explanation": "Missing: approve-merge is 39,285 bytes and start-ticket is 18,909, and no body-size cap test exists. Next: the o6 slice. Met: approve-design 11,861, code-review 13,713 and task 10,216 bytes are under the cap."
     },
     {
       "criterionId": "ac6-3",
@@ -222,7 +222,7 @@
       "evidence": [
         "Baseline: 6 of 17 Naqid runs were reconciliation challenges; the largest was 98,934 tokens"
       ],
-      "explanation": "Missing: orbit SKILL.md line 272 runs Naqid after every draft. Next: the o6 slice."
+      "explanation": "Missing: orbit SKILL.md line 332 runs Naqid after every draft. Next: the o6 slice."
     },
     {
       "criterionId": "ac7-1",
@@ -335,7 +335,7 @@
     "Observed me2resh/apexyard at 919081a7b3348bfbd4258ecef2059eae28205770 (dev).",
     "Merged since 692c17e: #1622, #1628, #1629, #1630 (o8), #1631, #1633 (o1) and #1634 (o4).",
     "Revision 3 adds o9 and ac9-1 and corrects the ac4-4 baseline to the o1 script figure. Other criteria are unchanged.",
-    "Statuses of o2, o3, o5, o6 and o7 carry over. The merged PRs touch none of their files, except #1634, which added the prompt-cache section of pr-workflow.md at lines 60-65.",
+    "Statuses of o2, o3, o5, o6 and o7 carry over, with no status change. The merged PRs moved some cited lines. #1634 edited pr-workflow.md (step 3 is now lines 101-102) and code-review SKILL.md (now 13,713 bytes). #1630 edited orbit SKILL.md (the Naqid rule is now line 332).",
     "The 2026-10-10 baseline numbers are in docs/perf/token-cost-baseline-2026-10-10.md, measured with the o1 script.",
     "The static measurements of revision 1 at bace9db stay in the history records of revisions 1 and 2."
   ],
