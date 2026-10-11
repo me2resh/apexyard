@@ -9,7 +9,7 @@
     "repositories": {}
   },
   "objective": "Make the skill bodies on the execution path short. Move steps 3a, 4 and 6 of /approve-merge into a fail-closed script, put each shared block in one file, and move rationale under docs/skills/.",
-  "why": "ac6-1 to ac6-5 are not-verified. On dev at 425a4ab, approve-merge SKILL.md is 39,268 bytes against the 14,000-byte target, and it is 21.5% of main-loop skill re-reads in the o1 baseline. The Writing rule preamble repeats in 45 skills and the ops-root walk-up in 18. The /approve-merge report has no /compact line. The orbit skill runs Naqid on every Reconciliation draft. o9 merged (#1651), so builds and reviews now run at the same time.",
+  "why": "ac6-1 and ac6-3 to ac6-5 are not-verified, and ac6-2 is partially-verified. On dev at 425a4ab, approve-merge SKILL.md is 39,268 bytes against the 14,000-byte target, and it is 21.5% of main-loop skill re-reads in the o1 baseline. The Writing rule preamble repeats in 45 skills and the ops-root walk-up in 18. The /approve-merge report has no /compact line. The orbit skill runs Naqid on every Reconciliation draft. o9 merged (#1651), so builds and reviews now run at the same time.",
   "contributesTo": [
     "ac6-1",
     "ac6-2",
