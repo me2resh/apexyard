@@ -34,7 +34,33 @@ Full rationale: [AgDR-0089](../../../docs/agdr/AgDR-0089-eval-agents-methodology
 
 `<agent>` is one of `rex`, `hakim`, `tariq` — the three review agents that produce a verdict over a diff and share the `APPROVED / CHANGES REQUESTED / COMMENT` vocabulary. **Naqid is out of scope for v1** (it challenges premises, not diffs — no defect-set structure to score against; see AgDR-0089 § Decision point 7).
 
-**`--suggest-entries` is not implemented.** #833 scoped an optional corpus-growth-assist mode that would mine `gh` PR/review history for re-review disagreements and escaped-bug patterns (the same shape `docs/eval-agents/README.md` § "Growing the corpus" describes doing by hand) and propose candidate entries for human confirmation. Investigating this against #833's "keep it small or split it out" instruction: `docs/spike-825/judge_calibration.py` — the file #833 named as the source to lift mining logic from — turns out to hold a hand-curated data table of 19 review units the spike's author read and classified manually, not a reusable scan/detect routine; there is no existing mining logic to lift. Building a real one (walking PR review threads via `gh api`, correlating approve→later-CHANGES_REQUESTED and merge→next-commit-touches-same-files patterns, then shaping matches into draft `ground_truth_defects`) is a genuine new feature, not a hardening follow-up, so it's left for a separate ticket rather than folded in here.
+**`--suggest-entries` is not a mode of this skill.** #833 left corpus mining for a separate ticket. #1440 adds it as a separate, read-only script. See "Mining candidate entries" below.
+
+## Mining candidate entries
+
+`lib/mine_disagreements.py` finds candidate Rex MISS entries in the review history of merged PRs. It prints candidates for a human to adjudicate. It never writes a corpus file.
+
+```
+python3 .claude/skills/eval-agents/lib/mine_disagreements.py --repo <owner/repo> [--limit 60] [--format json|markdown]
+```
+
+The script mines one shape:
+
+- Rex returned APPROVED on a commit.
+- Hakim or Tariq returned CHANGES REQUESTED or BLOCKING on the identical commit.
+
+That shape is the `independent_review` oracle (AgDR-0089). The script does not mine the reverse shape (Hakim or Tariq APPROVED, Rex CHANGES). Rex's scope is a superset of Hakim's scope, because Rex also enforces the writing standard. So the reverse shape mostly shows two reviewers that do different jobs. The #1440 hand adjudication found zero Hakim misses in five reverse-shape candidates.
+
+How the script reads a review:
+
+1. It gets the reviewer from the section header (`## Code Review`, `## Security Review`, `## Design Review`). All agents post under one account, so the GitHub author does not identify the agent.
+2. It reads the verdict only from the `### Verdict` section. When no such heading exists, it reads a `**Verdict**:` line. It never searches the full body, because recap prose caused all false positives in the #1440 probe.
+3. It gets the reviewed commit from the `Reviewed commit:` footer or the `**Commit**:` line. When the body names no commit, it uses the API `commit_id`.
+4. It groups the reviews by commit and reports each commit that has the mined shape.
+
+Each candidate has a partial `draft_entry` and an `evidence` block with links to the approval and the challenge. The draft has no `ground_truth_defects` and no `recorded_verdict.was_justified`. Thus `validate-corpus.sh` rejects a raw paste. To promote a candidate, follow `docs/eval-agents/README.md` § "Growing the corpus".
+
+The script uses only read calls: one PR list call and one GET call to the reviews API for each PR. It reads PR reviews only. It does not read PR conversation comments.
 
 ## Safety — the agent-under-test never touches a live PR
 
@@ -375,6 +401,8 @@ Override per-project in `.claude/project-config.json` (shallow-merge — overrid
 | `.claude/skills/eval-agents/lib/snapshot-diff.sh` | Filesystem snapshot/check pair — the Step 3c/3e contamination backstop (#833) |
 | `.claude/skills/eval-agents/tests/smoke.sh` | Validator smoke tests |
 | `.claude/skills/eval-agents/tests/test-snapshot-diff.sh` | Snapshot-diff smoke tests (#833) |
+| `.claude/skills/eval-agents/lib/mine_disagreements.py` | Read-only candidate miner (#1440): Rex APPROVED vs. Hakim or Tariq CHANGES on one commit |
+| `.claude/skills/eval-agents/tests/test_mine_disagreements.sh` | Miner tests: Python unit tests, a fake `gh` read-only check, and a draft-rejection check (#1440) |
 | `docs/eval-agents/README.md` | Corpus directory overview, what's seeded, how to grow it |
 | `docs/eval-agents/SCHEMA.md` | Field-by-field corpus format |
 | `docs/eval-agents/corpus/rex.json` | Starter corpus — 6 entries |

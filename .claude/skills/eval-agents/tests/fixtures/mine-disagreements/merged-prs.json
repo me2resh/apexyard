@@ -1,0 +1,212 @@
+{
+  "repo": "example-org/example-repo",
+  "prs": [
+    {
+      "number": 101,
+      "url": "https://github.com/example-org/example-repo/pull/101",
+      "reviews": [
+        {
+          "id": 1011,
+          "state": "COMMENTED",
+          "body": "## Code Review: PR #0\n\n**Commit**: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n**Scope**: `Full`\n\n### Summary\nThe change looks fine.\n\n### Verdict\n**APPROVED**\nThe findings support this verdict.\n\n---\nReviewed by Rex (Code Reviewer Agent)\nReviewed commit: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n",
+          "commit_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "submitted_at": "2026-09-01T10:00:00Z",
+          "html_url": "https://github.com/example-org/example-repo/pull/101#pullrequestreview-1011",
+          "user": {
+            "login": "example-bot"
+          }
+        },
+        {
+          "id": 1012,
+          "state": "COMMENTED",
+          "body": "## Security Review: PR #0\n\n**Commit**: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n\n### Summary\nHIGH: the prefix skip fails open.\n\n### Security Issues Found\nSee below.\n\n### Verdict\n**CHANGES REQUESTED**\n\n---\nReviewed by Hakim (Security Auditor)\nReviewed commit: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\n",
+          "commit_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "submitted_at": "2026-09-01T10:10:00Z",
+          "html_url": "https://github.com/example-org/example-repo/pull/101#pullrequestreview-1012",
+          "user": {
+            "login": "example-bot"
+          }
+        },
+        {
+          "id": 1013,
+          "state": "APPROVED",
+          "body": "",
+          "commit_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "submitted_at": "2026-09-01T11:00:00Z",
+          "html_url": "https://github.com/example-org/example-repo/pull/101#pullrequestreview-1013",
+          "user": {
+            "login": "example-bot"
+          }
+        }
+      ]
+    },
+    {
+      "number": 102,
+      "url": "https://github.com/example-org/example-repo/pull/102",
+      "reviews": [
+        {
+          "id": 1021,
+          "state": "COMMENTED",
+          "body": "## Security Review: PR #0\n\n**Commit**: `bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb`\n\n### Summary\nSummary text.\n\n### Security Issues Found\nSee below.\n\n### Verdict\n**APPROVED**\n\n---\nReviewed by Hakim (Security Auditor)\nReviewed commit: `bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb`\n",
+          "commit_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "submitted_at": "2026-09-02T10:00:00Z",
+          "html_url": "https://github.com/example-org/example-repo/pull/102#pullrequestreview-1021",
+          "user": {
+            "login": "example-bot"
+          }
+        },
+        {
+          "id": 1022,
+          "state": "COMMENTED",
+          "body": "## Code Review: PR #0\n\n**Commit**: `bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb`\n**Scope**: `Full`\n\n### Summary\nThe change looks fine.\n\n### Verdict\n**CHANGES REQUESTED**\nThe findings support this verdict.\n\n---\nReviewed by Rex (Code Reviewer Agent)\nReviewed commit: `bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb`\n",
+          "commit_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "submitted_at": "2026-09-02T10:05:00Z",
+          "html_url": "https://github.com/example-org/example-repo/pull/102#pullrequestreview-1022",
+          "user": {
+            "login": "example-bot"
+          }
+        }
+      ]
+    },
+    {
+      "number": 103,
+      "url": "https://github.com/example-org/example-repo/pull/103",
+      "reviews": [
+        {
+          "id": 1031,
+          "state": "COMMENTED",
+          "body": "## Code Review: PR #0\n\n**Commit**: `cccccccccccccccccccccccccccccccccccccccc`\n**Scope**: `Full`\n\n### Summary\nThe change looks fine.\n\n### Verdict\n**APPROVED**\nThe findings support this verdict.\n\n---\nReviewed by Rex (Code Reviewer Agent)\nReviewed commit: `cccccccccccccccccccccccccccccccccccccccc`\n",
+          "commit_id": "cccccccccccccccccccccccccccccccccccccccc",
+          "submitted_at": "2026-09-03T10:00:00Z",
+          "html_url": "https://github.com/example-org/example-repo/pull/103#pullrequestreview-1031",
+          "user": {
+            "login": "example-bot"
+          }
+        },
+        {
+          "id": 1032,
+          "state": "COMMENTED",
+          "body": "## Security Review: PR #0\n\n**Commit**: `cccccccccccccccccccccccccccccccccccccccc`\n\n### Summary\nRound 1 was CHANGES REQUESTED. All four BLOCKING findings are fixed.\n\n### Security Issues Found\nSee below.\n\n### Verdict\n**APPROVED**\n\n---\nReviewed by Hakim (Security Auditor)\nReviewed commit: `cccccccccccccccccccccccccccccccccccccccc`\n",
+          "commit_id": "cccccccccccccccccccccccccccccccccccccccc",
+          "submitted_at": "2026-09-03T10:05:00Z",
+          "html_url": "https://github.com/example-org/example-repo/pull/103#pullrequestreview-1032",
+          "user": {
+            "login": "example-bot"
+          }
+        }
+      ]
+    },
+    {
+      "number": 104,
+      "url": "https://github.com/example-org/example-repo/pull/104",
+      "reviews": [
+        {
+          "id": 1041,
+          "state": "COMMENTED",
+          "body": "## Code Review: PR #0\n\n**Commit**: `dddddddddddddddddddddddddddddddddddddddd`\n**Scope**: `Full`\n\n### Summary\nThe change looks fine.\n\n### Verdict\n**APPROVED**\nThe findings support this verdict.\n\n---\nReviewed by Rex (Code Reviewer Agent)\nReviewed commit: `dddddddddddddddddddddddddddddddddddddddd`\n",
+          "commit_id": "dddddddddddddddddddddddddddddddddddddddd",
+          "submitted_at": "2026-09-04T10:00:00Z",
+          "html_url": "https://github.com/example-org/example-repo/pull/104#pullrequestreview-1041",
+          "user": {
+            "login": "example-bot"
+          }
+        },
+        {
+          "id": 1042,
+          "state": "COMMENTED",
+          "body": "## Security Review: PR #0\n\n**Commit**: `eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee`\n\n### Summary\nSummary text.\n\n### Security Issues Found\nSee below.\n\n### Verdict\n**CHANGES REQUESTED**\n\n---\nReviewed by Hakim (Security Auditor)\nReviewed commit: `eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee`\n",
+          "commit_id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "submitted_at": "2026-09-04T10:05:00Z",
+          "html_url": "https://github.com/example-org/example-repo/pull/104#pullrequestreview-1042",
+          "user": {
+            "login": "example-bot"
+          }
+        }
+      ]
+    },
+    {
+      "number": 105,
+      "url": "https://github.com/example-org/example-repo/pull/105",
+      "reviews": [
+        {
+          "id": 1051,
+          "state": "COMMENTED",
+          "body": "The verdict is APPROVED. Next action is design review.\n\n## Code Review: PR #0\n\n**Commit**: `f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0`\n**Scope**: `Full`\n\n### Summary\nThe change looks fine.\n\n### Verdict\n**APPROVED**\nThe findings support this verdict.\n\n---\nReviewed by Rex (Code Reviewer Agent)\nReviewed commit: `f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0`\n",
+          "commit_id": "f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0",
+          "submitted_at": "2026-09-05T10:00:00Z",
+          "html_url": "https://github.com/example-org/example-repo/pull/105#pullrequestreview-1051",
+          "user": {
+            "login": "example-bot"
+          }
+        },
+        {
+          "id": 1052,
+          "state": "COMMENTED",
+          "body": "## Design Review: PR #0\n\n**Commit**: `f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0`\n\n### Blocking Findings\nB1: the design skips the rollback path.\n\n### Verdict\n**CHANGES REQUESTED**\nFix B1.\n\n---\nReviewed by Tariq (Solution Architect)\nReviewed commit: `f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0`\n",
+          "commit_id": "f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0",
+          "submitted_at": "2026-09-05T10:05:00Z",
+          "html_url": "https://github.com/example-org/example-repo/pull/105#pullrequestreview-1052",
+          "user": {
+            "login": "example-bot"
+          }
+        }
+      ]
+    },
+    {
+      "number": 106,
+      "url": "https://github.com/example-org/example-repo/pull/106",
+      "reviews": [
+        {
+          "id": 1061,
+          "state": "COMMENTED",
+          "body": "## Code Review: PR #0\n\n**Commit**: `11111111`\n**Scope**: `Full`\n\n### Summary\nThe change looks fine.\n\n### Verdict\n**APPROVED**\nThe findings support this verdict.\n\n---\nReviewed by Rex (Code Reviewer Agent)\nReviewed commit: `11111111`\n",
+          "commit_id": "1111111111111111111111111111111111111111",
+          "submitted_at": "2026-09-06T10:00:00Z",
+          "html_url": "https://github.com/example-org/example-repo/pull/106#pullrequestreview-1061",
+          "user": {
+            "login": "example-bot"
+          }
+        },
+        {
+          "id": 1062,
+          "state": "COMMENTED",
+          "body": "## Security Review: PR #0\n\n**Commit**: `1111111111111111111111111111111111111111`\n\n### Summary\nSummary text.\n\n### Security Issues Found\nSee below.\n\n### Verdict\n**BLOCKING**\n\n---\nReviewed by Hakim (Security Auditor)\nReviewed commit: `1111111111111111111111111111111111111111`\n",
+          "commit_id": "2222222222222222222222222222222222222222",
+          "submitted_at": "2026-09-06T10:30:00Z",
+          "html_url": "https://github.com/example-org/example-repo/pull/106#pullrequestreview-1062",
+          "user": {
+            "login": "example-bot"
+          }
+        }
+      ]
+    },
+    {
+      "number": 107,
+      "url": "https://github.com/example-org/example-repo/pull/107",
+      "reviews": [
+        {
+          "id": 1071,
+          "state": "COMMENTED",
+          "body": "## Code Review: PR #0\n\n**Commit**: `3333333333333333333333333333333333333333`\n**Scope**: `Full`\n\n### Summary\nThe change looks fine.\n\n### Verdict\n**APPROVED**\nThe findings support this verdict.\n\n---\nReviewed by Rex (Code Reviewer Agent)\nReviewed commit: `3333333333333333333333333333333333333333`\n",
+          "commit_id": "3333333333333333333333333333333333333333",
+          "submitted_at": "2026-09-07T10:00:00Z",
+          "html_url": "https://github.com/example-org/example-repo/pull/107#pullrequestreview-1071",
+          "user": {
+            "login": "example-bot"
+          }
+        },
+        {
+          "id": 1072,
+          "state": "COMMENTED",
+          "body": "## Security Review: PR #0\n\n**Commit**: `3333333333333333333333333333333333333333`\n\n### Summary\nSummary text.\n\n### Security Issues Found\nSee below.\n\n### Verdict\n**[APPROVED / CHANGES REQUESTED / COMMENT]**\n\n---\nReviewed by Hakim (Security Auditor)\nReviewed commit: `3333333333333333333333333333333333333333`\n",
+          "commit_id": "3333333333333333333333333333333333333333",
+          "submitted_at": "2026-09-07T10:05:00Z",
+          "html_url": "https://github.com/example-org/example-repo/pull/107#pullrequestreview-1072",
+          "user": {
+            "login": "example-bot"
+          }
+        }
+      ]
+    }
+  ]
+}

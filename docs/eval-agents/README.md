@@ -49,6 +49,26 @@ Corpus growth is deliberately manual and human-adjudicated in v1 — `/eval-agen
 
 See [`SCHEMA.md`](SCHEMA.md) for the field-by-field format.
 
+### Find candidates with the miner
+
+Use the miner to do step 1 for Rex. The miner does not do steps 2 to 4.
+
+```
+python3 .claude/skills/eval-agents/lib/mine_disagreements.py --repo <owner/repo> --format markdown
+```
+
+The miner lists each commit that Rex approved and that Hakim or Tariq rejected with CHANGES REQUESTED or BLOCKING. Each row links to both reviews. The miner is read-only. It prints to stdout and never writes to `corpus/`.
+
+A candidate is not an entry. For each candidate, do these steps:
+
+1. Open the challenge review and the diff at the reviewed commit.
+2. Confirm that the finding is a real defect in that diff.
+3. Confirm that the finding is in Rex's scope.
+4. Write `ground_truth_defects` from the challenge evidence.
+5. Set `recorded_verdict.was_justified`. Use `false` for a confirmed miss.
+
+The JSON `draft_entry` has no `ground_truth_defects` and no `was_justified`. The validator rejects it until you add both. The miner does not look for Hakim misses. A Hakim miss needs the `confirmed_fix` oracle, which the miner does not detect. See [`SKILL.md`](../../.claude/skills/eval-agents/SKILL.md) § "Mining candidate entries".
+
 ## Candidate corpus entries (needs human adjudication before adding)
 
 Found while working me2resh/apexyard#861 (the first `/eval-agents rex` run's follow-ups). These are **proposed only** — none are promoted into `corpus/*.json` yet, per rule 7 (no fabricated ground truth; an entry only ships with real, checkable evidence). Two sources were mined:
