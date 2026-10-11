@@ -1,0 +1,39 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-plan-apexyard-token-efficiency-20261011T054102Z",
+  "planId": "plan-apexyard-token-efficiency",
+  "outcomeId": "o4-reviewers-do-not-wait",
+  "basedOn": {
+    "planRevision": 2,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261011T054547Z",
+    "repositories": {}
+  },
+  "objective": "Reviewers check CI once and never wait. The orchestrator waits for green CI with a Monitor and then spawns Rex.",
+  "why": "ac4-1 ac4-2 and ac4-5 are not-verified. The baseline has 469 CI-wait turns in 195 of 350 reviewer runs. The hook banner is about 3.9 KB and names no CI order. code-reviewer.md line 161 tells Rex to wait.",
+  "contributesTo": [
+    "ac4-1",
+    "ac4-2",
+    "ac4-4",
+    "ac4-5"
+  ],
+  "scope": {
+    "include": [
+      "Cut the auto-code-review banner to at most 300 bytes. It keeps exit 2 and the pending-review marker and says: wait with a Monitor; then spawn Rex",
+      "Say the same in the /code-review skill",
+      "A hook that blocks gh pr checks --watch and gh run watch and sleep of 60 seconds or more for review agents; it also blocks a second gh pr checks in one review run",
+      "The hook names review agents by an allowlist of agent slugs. It reads the agent type from hook input when the harness gives it; else it uses the active-reviewer marker; else it allows the command",
+      "Hook tests for the banner size and each blocked command and an allowed single gh pr checks and an orchestrator command that is not blocked",
+      "A first step that confirms what agent identity the hook input carries and records it in the PR",
+      "The promptCacheTtl advice for adopters outside the limits of a subscription in the o4 rule and docs/getting-started.md (ac4-5)",
+      "Record the before numbers from the baseline in the PR and name the o1 metric for the after numbers (C3)"
+    ],
+    "exclude": [
+      "Any edit to block-unreviewed-merge.sh or block-merge-on-red-ci.sh (C1)",
+      "The Rex and Hakim prompt trims and omitClaudeMd (harness o4 and o5)",
+      "The reviewer hand-back format and resume rules (o7)",
+      "The cache TTL trial",
+      "The measurement script itself (o1)",
+      "The reviewer-text lines in code-reviewer.md and security-reviewer.md (harness o4 eval cycle, C4)"
+    ]
+  }
+}

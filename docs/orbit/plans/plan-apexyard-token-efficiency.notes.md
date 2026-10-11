@@ -29,13 +29,13 @@ The five most-invoked skills in the baseline (ac6-2): `/approve-merge` 209, `/ap
 ## Decisions
 
 - **CI sequencing (2026-10-10):** the orchestrator waits for green CI without model turns (a Monitor), then spawns Rex. The rule "do not approve while CI is pending" in `code-reviewer.md` stays as written; lines that tell a reviewer to wait are edited (ac4-2). The alternative, an APPROVED verdict conditional on green CI, was not chosen. This applies to the Claude Code harness; Codex and Cursor adapters are covered by plan-apexyard-harness-golden-path o2 and o3.
-- **Relation to plan-apexyard-harness-golden-path o4 (2026-10-10):** that plan stays at revision 3. Its o4 slice (`slice-harness-o4-review-agent-token-trim`) runs after o1 and measures with the o1 script (owner decision, 2026-10-11). It owns `omitClaudeMd` and the floor block for Rex and Hakim, the Rex prompt trim, the per-review token measurement and the Hakim corpus. This plan's o5 is the increment: the other five review and audit agents, the Hakim and Tariq prompt trims and the lower effort on delta re-reviews. o1 builds the one measurement script with the per-review, session and forge views. Build agents keep CLAUDE.md and the memory index, because their lessons (for example, no non-ASCII in AWS strings) live there and no check would detect the loss.
+- **Relation to plan-apexyard-harness-golden-path o4 (2026-10-10):** that plan stays at revision 3. Its o4 slice (`slice-harness-o4-review-agent-token-trim`) runs after o1 and measures with the o1 script (owner decision, 2026-10-11). It owns `omitClaudeMd` and the floor block for Rex and Hakim, the Rex prompt trim, the per-review baseline and the Hakim corpus. This plan's o5 is the increment: the other five review and audit agents, the Hakim and Tariq prompt trims and the lower effort on delta re-reviews. o1 builds the one measurement script with the per-review, session and forge views. Build agents keep CLAUDE.md and the memory index, because their lessons (for example, no non-ASCII in AWS strings) live there and no check would detect the loss.
 - **Tier by script (o7)** follows AgDR-0116 Option 4: depth changes inside the review, the merge gate is untouched, and the tier is computed by a script in the spawn path (`auto-code-review.sh` and `/code-review`). An AgDR-0116 evolution entry records it. The lean procedure runs on Opus; a smaller model was considered and rejected.
 - **Targets:** ac3-4 counts pure-refresh rounds against refresh events, not rounds per PR, so that it cannot be met by blocking less. ac7-5 is a percentage against the o1 baseline, because an absolute number for a trimmed Opus prompt is not known yet.
 
 ## Naqid's challenge (2026-10-10)
 
-Verdict: proceed-with-changes. Applied (Naqid's ten numbered changes, listed by part): step 5 of `/approve-merge` stays inline and a test proves the script has no `approved_by` (ac6-1); C1 restated and the carry-over changes tied to AgDR-0178; the docs-only advisory carry-over dropped, because 3 of 11 wording rewrites added errors; the o7 rail moved out of the merge gate; docs paths named by prompts are Full; a Tariq corpus and five delta entries precede the prompt cuts; `omitClaudeMd` limited to review and audit agents; the reviewer wait lines named; ac3-4 restated; the banner edit merged into o4 and the compact line into o6; context size given its own outcome with a spike; the order starts with the harness o4 slice.
+Verdict: proceed-with-changes. Applied (Naqid's ten numbered changes, listed by part): step 5 of `/approve-merge` stays inline and a test proves the script has no `approved_by` (ac6-1); C1 restated and the carry-over changes tied to AgDR-0178; the docs-only advisory carry-over dropped, because 3 of 11 wording rewrites added errors; the o7 rail moved out of the merge gate; docs paths named by prompts are Full; a Tariq corpus and five delta entries precede the prompt cuts; `omitClaudeMd` limited to review and audit agents; the reviewer wait lines named; ac3-4 restated; the banner edit merged into o4 and the compact line into o6; context size given its own outcome with a spike; the order starts with the harness o4 slice (superseded on 2026-10-11: o1 runs first; see "Order").
 
 ## Prompt-cache TTL (2026-10-10)
 
@@ -62,7 +62,7 @@ Decisions:
 
 ## Order
 
-o1 first, because every later change and the harness o4 slice measure with its script. The owner chose this on 2026-10-11, because the reverse order stalled o1. Then the harness o4 slice. Then o2 (the spike), o3 and o4, which are independent. Then o5, o6, o7. o7 lands after o5 and after the harness o4 trim, because the Lean procedure is measured against the trimmed Rex prompt. Reviewer prompt edits are batched: o4 edits one line each in two agent files; o5 and o7 each run one eval cycle.
+o1 first, because every later change and the harness o4 slice measure with its script. The owner chose this on 2026-10-11, because the reverse order stalled o1. Then the harness o4 slice. Then o2 (the spike) and o3. o4 runs in parallel with o1: its before numbers are in the baseline, and the o1 script counts the after numbers (owner decision, 2026-10-11). o8 is independent of the others. Then o5, o6, o7. o7 lands after o5 and after the harness o4 trim, because the Lean procedure is measured against the trimmed Rex prompt. Reviewer prompt edits are batched: o4 edits one line each in two agent files; o5 and o7 each run one eval cycle.
 
 ## Dependencies
 
@@ -84,3 +84,14 @@ o1 first, because every later change and the harness o4 slice measure with its s
 - me2resh/orbit-spec#21: one Plan revision per record root; superseded revisions go to `docs/orbit/history/`.
 - The Plan schema has no field for a criterion's proof, so each statement ends with a short "Shown by:" clause (me2resh/apexyard#1618 proposes the rule).
 - Harness requests under ac2-4 are filed with Claude Code, not in this repo; the links go here when they exist.
+
+## Revision 2 (2026-10-11)
+
+- Adds o8-records-light for AgDR-0225: one linted records PR per planning cycle, a reconciliation only when a status changes, and an /orbit status view. Records PRs keep a reduced-scope Rex review.
+- Naqid challenged AgDR-0225 twice. The first challenge dropped a records-only gate exemption, because a check status can be spoofed and Plan history files fall outside any records allowlist.
+- Naqid challenged the r2 cycle. Applied: the o4 hook detects review agents from hook input or the active-reviewer marker and fails open; the reviewer-text lines move to the harness o4 eval cycle (C4); ac4-5 names pr-workflow.md; ac8-4 builds on orbit progress; ac8-5 counts exception PRs apart and targets 1 round; the o1 slice gains a records-PR classifier and stops counting the one allowed CI check as a wait.
+- The o1 slice now points at the revision 2 reconciliation. o1 to o7 and their criteria did not change.
+
+## Checks
+
+Each check that changes no status adds one line here: date, commit, result (AgDR-0225).

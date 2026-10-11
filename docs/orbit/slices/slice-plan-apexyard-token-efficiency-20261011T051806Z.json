@@ -4,8 +4,8 @@
   "planId": "plan-apexyard-token-efficiency",
   "outcomeId": "o1-cost-measured",
   "basedOn": {
-    "planRevision": 1,
-    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261010T201358Z",
+    "planRevision": 2,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261011T054547Z",
     "repositories": {}
   },
   "objective": "Ship one framework script that reports token and time cost per session, reviewer and PR. Commit a dated baseline of the 2026-10-10 numbers under docs/perf/.",
@@ -26,13 +26,14 @@
       "Tests for the script on small fixture transcripts with no private content",
       "A short usage section that tells each later slice how to record its before and after numbers (ac1-3)",
       "Re-measure the 2026-10-10 session with this script beside the debug-synthesis numbers; a relative difference over 5% on any metric blocks the slice until the script or the synthesis is fixed",
-      "Counting rules, tested on fixtures: a CI-wait turn is a reviewer turn whose only tool call polls CI status; a Rex round is one Rex verdict on one head commit; a refresh round is a Rex round on a head that differs from the approved head only by a base merge; a cache rebuild is a request whose cache-creation tokens exceed half its input tokens",
+      "Counting rules, tested on fixtures: a CI-wait turn is a reviewer turn whose only tool call polls CI status, except the first single gh pr checks of a run; a Rex round is one Rex verdict on one head commit; a refresh round is a Rex round on a head that differs from the approved head only by a base merge; a cache rebuild is a request whose cache-creation tokens exceed half its input tokens",
       "Refresh-round view: pure-refresh rounds out of refresh events per PR (for ac3-4)",
       "Main-loop cache rebuilds during a CI wait (for ac4-4)",
       "Resume rebuilds per 100 reviewer runs (for ac7-6)",
       "The baseline file records the transcript SHA-256, the script commit and the Claude Code CLI version",
       "The forge view reads only me2resh/apexyard, and the session view groups untracked or private skills as other",
-      "Run check-private-refs-runtime.sh on the baseline file and the fixtures before the PR"
+      "Run check-private-refs-runtime.sh on the baseline file and the fixtures before the PR",
+      "A records-PR classifier in the forge view: a PR whose files are all under docs/orbit/ or docs/agdr/ (for ac8-5)"
     ],
     "exclude": [
       "Any change to hooks or skills or agent prompts or settings (o2 to o7)",

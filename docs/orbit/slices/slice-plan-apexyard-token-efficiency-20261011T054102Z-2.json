@@ -1,0 +1,37 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-plan-apexyard-token-efficiency-20261011T054102Z-2",
+  "planId": "plan-apexyard-token-efficiency",
+  "outcomeId": "o8-records-light",
+  "basedOn": {
+    "planRevision": 2,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261011T054547Z",
+    "repositories": {}
+  },
+  "objective": "The /orbit skill lints records before the PR and ships one records PR per planning cycle. It writes a reconciliation only when a status changes and shows status live.",
+  "why": "ac8-1 to ac8-5 are not-verified. AgDR-0225 records the owner decision. PR #1620 took four Rex rounds on records and each record is a separate PR today.",
+  "contributesTo": [
+    "ac8-1",
+    "ac8-2",
+    "ac8-3",
+    "ac8-4",
+    "ac8-5"
+  ],
+  "scope": {
+    "include": [
+      "A records lint script that stops on the first fault. It runs validate; the leak scrub; the sentence check; the Missing and Next rule; the local-path check",
+      "/orbit runs the lint before it opens a records PR",
+      "The cycle flow in the /orbit skill: cut the slices of a cycle with the Plan revision and open one PR",
+      "The reconcile-only-on-change rule: a check that changes no status adds one dated line to a Checks section in the plan notes file in the next cycle PR",
+      "An /orbit status operation that shows recorded statuses and commits since the last reconciliation and writes no record",
+      "Tests for the lint on a faulty fixture and for the change-only rule"
+    ],
+    "exclude": [
+      "Any merge-gate change or Rex exemption for records (rejected in AgDR-0225)",
+      "A bot that commits reconciliations",
+      "The local viewer and status pane of the owner",
+      "Changes to the ORBIT CLI or its schemas",
+      "The review tier of records PRs (o7; ac7-1 makes docs/orbit/slices Full because a hook reads it)"
+    ]
+  }
+}

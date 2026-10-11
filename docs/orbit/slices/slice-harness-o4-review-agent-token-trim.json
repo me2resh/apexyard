@@ -22,7 +22,8 @@
       "Record a baseline of tokens per review and k /eval-agents runs for Rex and Hakim before any change",
       "Set omitClaudeMd in both agent files and add a short block with the always-on floor rules each agent enforces",
       "Trim the Rex prompt without removing a check the corpus exercises",
-      "Re-measure tokens and re-run k evals and report per-entry verdict flips and the token drop in docs/eval-agents/reports/"
+      "Re-measure tokens and re-run k evals and report per-entry verdict flips and the token drop in docs/eval-agents/reports/",
+      "One line each in code-reviewer.md and security-reviewer.md: run gh pr checks once and never wait (token-efficiency ac4-2, in this eval cycle)"
     ],
     "exclude": [
       "autoCompactWindow (not a subagent setting)",

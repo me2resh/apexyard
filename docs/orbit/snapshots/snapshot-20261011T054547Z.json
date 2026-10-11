@@ -1,0 +1,15 @@
+{
+  "specVersion": "0.1",
+  "id": "snapshot-apexyard-20261011T054547Z",
+  "project": {
+    "id": "apexyard"
+  },
+  "observedAt": "2026-10-11T05:45:47.717Z",
+  "repositories": [
+    {
+      "repositoryId": "me2resh/apexyard",
+      "branch": "dev",
+      "commit": "692c17e889a75211870e0480c495c4516dbe2a05"
+    }
+  ]
+}
