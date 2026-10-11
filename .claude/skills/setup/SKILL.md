@@ -517,6 +517,28 @@ Which harness(es) do you run ApexYard with?
 
 Record the pick (comma-separated list, or `claude-code` if 1/default) as `$SELECTED_HARNESSES` for the Step 4 summary line.
 
+### Step 2e: Status band (optional, Claude Code only)
+
+Skip this step when `$SELECTED_HARNESSES` does not include `claude-code`.
+
+Use `AskUserQuestion` with one yes/no question. Recommend "n" first. Use this prompt only when the harness lacks the tool:
+
+```
+Show the ApexYard status band above the prompt? (y/n)
+```
+
+- **"n" or empty** → continue to Step 3.
+- **"y"** → run these two commands from the ops-fork root, then continue to Step 3:
+
+  ```bash
+  claude plugin marketplace add ./ --scope local
+  claude plugin install apexyard-status@apexyard --scope local
+  ```
+
+  `local` scope writes only to the uncommitted `.claude/settings.local.json`. Do not enable the plugin in `.claude/settings.json`. If a command fails, print the error and the two commands, then continue. The band is optional.
+
+Record the answer as `$STATUS_BAND` (`on` or `off`) for the Step 4 summary line, for example `Status band: on (local scope)`. See `plugins/apexyard-status/README.md` and AgDR-0227.
+
 ### Step 3: Parse and map to defaults
 
 From the user's description, extract:
@@ -562,6 +584,7 @@ AgDR gate: ON (default architecture paths)
 Commit types: framework defaults (feat, fix, refactor, test, docs, chore, style, perf, build, ci, revert)
 LSP: enabled (typescript via typescript-language-server, env var in ~/.zshrc, plugin: manual)
 Harness: Claude Code (native — no adapter needed)
+Status band: off
 
 Use these defaults, or customize?
 ```

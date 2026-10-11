@@ -170,6 +170,19 @@ Full setup guide with directory layout, daily workflow, and FAQ: [`docs/multi-pr
 
 Keeping a fork current — upgrade in place, when to re-fork instead, and how to preserve your portfolio data either way: [`docs/upgrading.md`](docs/upgrading.md).
 
+### Optional: status band above the prompt
+
+The `apexyard-status` plugin draws one line above the Claude Code prompt. The line shows the active ticket, the PRs that wait for your `/approve-merge`, and the reviewer lock of the session. The plugin only reads files. It does not replace a hook or a gate.
+
+`/setup` asks if you want the band. If you skipped that question, run these two commands from the ops-fork root:
+
+```bash
+claude plugin marketplace add ./ --scope local
+claude plugin install apexyard-status@apexyard --scope local
+```
+
+The band is on only for you, on this machine. After `/update`, run `/reload-plugins` to load the new version. Details and settings: [`plugins/apexyard-status/README.md`](plugins/apexyard-status/README.md).
+
 ## Using another AI coding tool?
 
 **ApexYard was built for Claude Code.** Its slash commands are native Claude

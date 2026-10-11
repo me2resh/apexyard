@@ -153,6 +153,10 @@ Invoke the `Skill` tool with `skill: setup` to run the full config bootstrap
 (company info, tech stack, defaults). This is `/setup`'s Steps 2–7,
 unmodified — `/onboard` does not re-implement any of it.
 
+`/setup` Step 2e asks the status-band question: "Show the ApexYard status
+band above the prompt? (y/n)". On "y" it runs the two `--scope local`
+plugin commands. Do not ask the question a second time in `/onboard`.
+
 **Capture the technical-level signal (D5).** While `/setup`'s Step 2 asks
 "tell me about your company and tech stack," read that answer for how
 technically fluent it reads (mentions of specific languages/frameworks/CI

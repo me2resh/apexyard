@@ -1,0 +1,22 @@
+{
+  "name": "apexyard-status",
+  "version": "0.1.0",
+  "description": "Display-only ApexYard status band above the prompt: active ticket, PRs waiting for /approve-merge, reviewer lock, optional build count.",
+  "author": { "name": "ApexYard" },
+  "license": "MIT",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "build_process_pattern": {
+      "type": "string",
+      "title": "Build-process pattern",
+      "description": "Regular expression matched against each running process command line. Matching processes count as background builds. Empty turns the build count off.",
+      "default": ""
+    },
+    "waiting_window_days": {
+      "type": "number",
+      "title": "Waiting window (days)",
+      "description": "Count a Rex-approved PR as waiting for /approve-merge only when its Rex marker is newer than this number of days.",
+      "default": 3
+    }
+  }
+}

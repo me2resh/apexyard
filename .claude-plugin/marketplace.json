@@ -1,5 +1,6 @@
 {
   "name": "apexyard",
+  "description": "ApexYard plugins: ORBIT planning and fork-only add-ons for an ApexYard ops fork.",
   "owner": {
     "name": "me2resh",
     "url": "https://github.com/me2resh"
@@ -12,6 +13,11 @@
         "repo": "me2resh/orbit-spec"
       },
       "description": "ORBIT planning lifecycle: plan, snapshot, reconcile, slice, progress"
+    },
+    {
+      "name": "apexyard-status",
+      "source": "./plugins/apexyard-status",
+      "description": "Fork-only, display-only status band above the prompt: active ticket, PRs waiting for /approve-merge, reviewer lock"
     }
   ]
 }
