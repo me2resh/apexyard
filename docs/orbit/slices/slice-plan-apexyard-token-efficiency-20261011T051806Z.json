@@ -1,0 +1,46 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-plan-apexyard-token-efficiency-20261011T051806Z",
+  "planId": "plan-apexyard-token-efficiency",
+  "outcomeId": "o1-cost-measured",
+  "basedOn": {
+    "planRevision": 1,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261010T201358Z",
+    "repositories": {}
+  },
+  "objective": "Ship one framework script that reports token and time cost per session, reviewer and PR. Commit a dated baseline of the 2026-10-10 numbers under docs/perf/.",
+  "why": "ac1-1, ac1-2 and ac1-3 are not-verified. docs/perf/ on dev holds only hook-test-profile-2026-10.md. The debug scripts live in a session scratchpad, and the baseline numbers exist only in the 2026-10-10 debug synthesis. Each later slice must cite this script before and after its change (C3), so o1 comes first. The harness o4 slice takes its per-review baseline with this script. ac1-3 closes only when the later reconciliations cite this script, so it stays partly verified until o7.",
+  "contributesTo": [
+    "ac1-1",
+    "ac1-2",
+    "ac1-3"
+  ],
+  "scope": {
+    "include": [
+      "Build the one token measurement script; the harness o4 slice uses it and writes no second script",
+      "Session view: context tokens per turn and context share by category and skill injections and compactions (ac1-1)",
+      "Reviewer view per reviewer and per review: first-turn context, total tokens, cache-read tokens apart, tool calls, CI-wait turns, cache rebuilds, cache TTL (ac1-2)",
+      "Forge view: Rex rounds per PR and hours from open to merge (ac1-2)",
+      "Report runs with a 1-hour cache TTL apart from 5-minute runs",
+      "A dated baseline file under docs/perf/ with aggregate numbers only, produced by this script, and the command form with a placeholder transcript path",
+      "Tests for the script on small fixture transcripts with no private content",
+      "A short usage section that tells each later slice how to record its before and after numbers (ac1-3)",
+      "Re-measure the 2026-10-10 session with this script beside the debug-synthesis numbers; a relative difference over 5% on any metric blocks the slice until the script or the synthesis is fixed",
+      "Counting rules, tested on fixtures: a CI-wait turn is a reviewer turn whose only tool call polls CI status; a Rex round is one Rex verdict on one head commit; a refresh round is a Rex round on a head that differs from the approved head only by a base merge; a cache rebuild is a request whose cache-creation tokens exceed half its input tokens",
+      "Refresh-round view: pure-refresh rounds out of refresh events per PR (for ac3-4)",
+      "Main-loop cache rebuilds during a CI wait (for ac4-4)",
+      "Resume rebuilds per 100 reviewer runs (for ac7-6)",
+      "The baseline file records the transcript SHA-256, the script commit and the Claude Code CLI version",
+      "The forge view reads only me2resh/apexyard, and the session view groups untracked or private skills as other",
+      "Run check-private-refs-runtime.sh on the baseline file and the fixtures before the PR"
+    ],
+    "exclude": [
+      "Any change to hooks or skills or agent prompts or settings (o2 to o7)",
+      "A dashboard or a scheduled run",
+      "Reading transcripts of other users or uploading transcript content anywhere",
+      "Changing the cache TTL trial",
+      "Transcript text or local paths in any committed file",
+      "The Rex and Hakim baselines, evals and prompt trims (harness o4 slice)"
+    ]
+  }
+}

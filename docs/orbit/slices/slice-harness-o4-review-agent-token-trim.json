@@ -17,7 +17,7 @@
   ],
   "scope": {
     "include": [
-      "Define and script the token measurement: per-message usage from the subagent transcript with cache-read tokens counted separately",
+      "Measure tokens per review with the script of slice-plan-apexyard-token-efficiency-20261011T051806Z, which counts cache-read tokens separately; do not write a second script",
       "Mine Hakim CHANGES REQUESTED rounds to grow the Hakim corpus to at least 10 entries that follow docs/eval-agents/SCHEMA.md",
       "Record a baseline of tokens per review and k /eval-agents runs for Rex and Hakim before any change",
       "Set omitClaudeMd in both agent files and add a short block with the always-on floor rules each agent enforces",

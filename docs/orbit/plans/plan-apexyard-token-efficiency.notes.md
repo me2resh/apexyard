@@ -29,7 +29,7 @@ The five most-invoked skills in the baseline (ac6-2): `/approve-merge` 209, `/ap
 ## Decisions
 
 - **CI sequencing (2026-10-10):** the orchestrator waits for green CI without model turns (a Monitor), then spawns Rex. The rule "do not approve while CI is pending" in `code-reviewer.md` stays as written; lines that tell a reviewer to wait are edited (ac4-2). The alternative, an APPROVED verdict conditional on green CI, was not chosen. This applies to the Claude Code harness; Codex and Cursor adapters are covered by plan-apexyard-harness-golden-path o2 and o3.
-- **Relation to plan-apexyard-harness-golden-path o4 (2026-10-10):** that plan stays at revision 3 and its o4 slice (`slice-harness-o4-review-agent-token-trim`) runs first. It owns `omitClaudeMd` and the floor block for Rex and Hakim, the Rex prompt trim, the per-review token measurement and the Hakim corpus. This plan's o5 is the increment: the other five review and audit agents, the Hakim and Tariq prompt trims and the lower effort on delta re-reviews. o1 reuses the o4 measurement script and adds the session and forge views. Build agents keep CLAUDE.md and the memory index, because their lessons (for example, no non-ASCII in AWS strings) live there and no check would detect the loss.
+- **Relation to plan-apexyard-harness-golden-path o4 (2026-10-10):** that plan stays at revision 3. Its o4 slice (`slice-harness-o4-review-agent-token-trim`) runs after o1 and measures with the o1 script (owner decision, 2026-10-11). It owns `omitClaudeMd` and the floor block for Rex and Hakim, the Rex prompt trim, the per-review token measurement and the Hakim corpus. This plan's o5 is the increment: the other five review and audit agents, the Hakim and Tariq prompt trims and the lower effort on delta re-reviews. o1 builds the one measurement script with the per-review, session and forge views. Build agents keep CLAUDE.md and the memory index, because their lessons (for example, no non-ASCII in AWS strings) live there and no check would detect the loss.
 - **Tier by script (o7)** follows AgDR-0116 Option 4: depth changes inside the review, the merge gate is untouched, and the tier is computed by a script in the spawn path (`auto-code-review.sh` and `/code-review`). An AgDR-0116 evolution entry records it. The lean procedure runs on Opus; a smaller model was considered and rejected.
 - **Targets:** ac3-4 counts pure-refresh rounds against refresh events, not rounds per PR, so that it cannot be met by blocking less. ac7-5 is a percentage against the o1 baseline, because an absolute number for a trimmed Opus prompt is not known yet.
 
@@ -62,7 +62,7 @@ Decisions:
 
 ## Order
 
-The harness o4 slice first, because o1 reuses its measurement script. Then o1. Then o2 (the spike), o3 and o4, which are independent. Then o5, o6, o7. o7 lands after o5 and after the harness o4 trim, because the Lean procedure is measured against the trimmed Rex prompt. Reviewer prompt edits are batched: o4 edits one line each in two agent files; o5 and o7 each run one eval cycle.
+o1 first, because every later change and the harness o4 slice measure with its script. The owner chose this on 2026-10-11, because the reverse order stalled o1. Then the harness o4 slice. Then o2 (the spike), o3 and o4, which are independent. Then o5, o6, o7. o7 lands after o5 and after the harness o4 trim, because the Lean procedure is measured against the trimmed Rex prompt. Reviewer prompt edits are batched: o4 edits one line each in two agent files; o5 and o7 each run one eval cycle.
 
 ## Dependencies
 
