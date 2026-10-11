@@ -56,6 +56,10 @@ if [ -r "$HOOK_DIR/_lib-extract-pr.sh" ]; then
   . "$HOOK_DIR/_lib-extract-pr.sh"
 fi
 
+# run_hook is the FAIL-OPEN path, for advisory checks and cost guards. A crash
+# or timeout in one of these hooks warns and the dispatcher carries on.
+# Gates that must fail closed use run_fail_closed_hook instead. The dispatch
+# loop and the gate functions below choose between the two by script name.
 run_hook() {
   local script="$1" rc=0
   # A hook may warn or fail for an unrelated reason, but only exit 2 blocks
@@ -80,27 +84,48 @@ run_hook() {
   fi
 }
 
-# run_merge_gate_hook: the four MERGE-GATE hooks fail CLOSED, not open, on
-# any exit other than 0 or 2 (me2resh/apexyard#1403, AgDR-0169).
+# run_fail_closed_hook: the FAIL-CLOSED path (me2resh/apexyard#1403,
+# AgDR-0169; extended to ticket-first by me2resh/apexyard#1623).
 #
 # run_hook above WARNS and continues past a non-2 non-zero exit, which is
 # right for an advisory check but wrong for a gate whose only job is to
-# decide whether a merge may proceed. A merge gate that cannot run its own
-# check (a missing sourced library under POSIX mode, for one) still exits
-# non-zero, just not 2 — and a normal Claude Code session never sets
-# POSIXLY_CORRECT, but other harnesses and CI shells may. `run_hook` would
-# log that as a WARN and let the merge through unreviewed. This wrapper
-# treats it as a BLOCKED instead.
-run_merge_gate_hook() {
+# decide whether a tool call may proceed. A gate that cannot run its own
+# check (a missing sourced library under POSIX mode, a crash, a syntax
+# error, a kill signal) still exits non-zero, just not 2. run_hook would log
+# that as a WARN and let the call through unchecked. This wrapper treats it
+# as a BLOCKED instead.
+#
+# A gate that hangs is not caught here. The dispatcher sets no timer of its
+# own. The "timeout" and "onFailure": "block" fields on the dispatcher entry
+# in .claude/settings.json end a hung gate and block the call. See
+# docs/hooks-fail-closed.md.
+#
+# Fail-closed gates: the four merge gates (run_merge_gate_hook) and
+# require-active-ticket.sh (ticket-first).
+run_fail_closed_hook() {
   local script="$1" rc=0
   if "$HOOK_DIR/$script" <<<"$INPUT"; then :; else rc=$?; fi
   if [ "$rc" -eq 2 ]; then
     exit 2
   fi
   if [ "$rc" -ne 0 ]; then
-    printf 'BLOCKED: %s exited %s instead of a normal PASS. A merge gate that cannot run its own check fails closed, not open.\n' "$script" "$rc" >&2
+    printf 'BLOCKED: %s exited %s instead of a normal PASS. A gate that cannot run its own check fails closed, not open.\n' "$script" "$rc" >&2
     exit 2
   fi
+}
+
+# The four merge gates keep their own name for readers of the AgDR-0169 trail.
+run_merge_gate_hook() {
+  run_fail_closed_hook "$1"
+}
+
+# run_cost_guard_hook: the explicit FAIL-OPEN exception. block-reviewer-ci-wait.sh
+# is a cost guard (me2resh/apexyard#1625). If it crashes, the reviewer pays for
+# a CI poll. No safety property is lost. A crash must not block a whole review
+# run, so a crash warns and the dispatcher continues. Its own exit 2 still
+# blocks. Do not move this hook to run_fail_closed_hook.
+run_cost_guard_hook() {
+  run_hook "$1"
 }
 
 # APEXYARD_DISPATCH_GATE: Bash|*|block-ambient-tracker-repo.sh
@@ -171,7 +196,13 @@ for script in \
   warn-isolated-build-risk.sh \
   block-reviewer-repo-mutation.sh \
   block-reviewer-ci-wait.sh; do
-  run_hook "$script"
+  case "$script" in
+    # Ticket-first fails closed (me2resh/apexyard#1623).
+    require-active-ticket.sh) run_fail_closed_hook "$script" ;;
+    # Cost guard: fails open on purpose. See run_cost_guard_hook.
+    block-reviewer-ci-wait.sh) run_cost_guard_hook "$script" ;;
+    *) run_hook "$script" ;;
+  esac
 done
 
 _merge_gates_ran=0

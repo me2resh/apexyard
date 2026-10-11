@@ -1,0 +1,82 @@
+name: claude plugin validate
+
+# Validates the plugin marketplace with a pinned Claude Code version, and
+# tests the operator escape hatch (claude --settings with disableAllHooks).
+# See docs/hooks-fail-closed.md and me2resh/apexyard#1623.
+#
+# The Claude Code version is pinned so a new release cannot turn this check
+# red without a reviewed change. The minimum version for the "onFailure" hook
+# field is 2.1.295. To change the pin, edit CLAUDE_CODE_VERSION below.
+
+on:
+  pull_request:
+    paths:
+      - ".claude-plugin/**"
+      - "plugins/**"
+      - ".claude/settings.json"
+      - "bin/check-escape-hatch.sh"
+      - ".github/workflows/claude-plugin-validate.yml"
+  push:
+    branches: [dev, main]
+    paths:
+      - ".claude-plugin/**"
+      - "plugins/**"
+      - ".claude/settings.json"
+      - "bin/check-escape-hatch.sh"
+      - ".github/workflows/claude-plugin-validate.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: claude-plugin-validate-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CLAUDE_CODE_VERSION: "2.1.296"
+
+jobs:
+  validate:
+    name: validate marketplace and escape hatch
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned Claude Code version
+        run: |
+          npm install --global "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+          actual=$(claude --version)
+          echo "claude --version: $actual"
+          case "$actual" in
+            "${CLAUDE_CODE_VERSION} "*) ;;
+            *) echo "::error::Expected Claude Code ${CLAUDE_CODE_VERSION}, got: $actual"; exit 1 ;;
+          esac
+
+      - name: Validate the marketplace (strict)
+        run: claude plugin validate --strict .claude-plugin/marketplace.json
+
+      - name: Validate each local plugin in the marketplace (strict)
+        run: |
+          # A plugin with a string source is a path inside this repository.
+          # A plugin with an object source (for example github) is validated
+          # in its own repository.
+          jq -r '.plugins[] | select(.source | type == "string") | .source' \
+            .claude-plugin/marketplace.json | while IFS= read -r source; do
+            echo "Validating local plugin: $source"
+            claude plugin validate --strict "$source"
+          done
+
+      - name: Negative control, a marketplace without a description must fail
+        run: |
+          control=$(mktemp -d)
+          mkdir -p "$control/.claude-plugin"
+          jq 'del(.description)' .claude-plugin/marketplace.json > "$control/.claude-plugin/marketplace.json"
+          if claude plugin validate --strict "$control/.claude-plugin/marketplace.json"; then
+            echo "::error::--strict accepted a marketplace with no description, so the check proves nothing"
+            exit 1
+          fi
+
+      - name: Test the escape hatch (hooks on by default, off under disableAllHooks)
+        run: bash bin/check-escape-hatch.sh
