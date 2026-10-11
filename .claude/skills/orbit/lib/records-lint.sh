@@ -9,6 +9,11 @@
 #   5. local-path check
 # Checks 2 to 5 read the record files changed against --base (default
 # origin/dev), or every record file with --all.
+# By default, checks 3 and 4 read only the text that changed against the merge
+# base. A JSON record is compared field by field. A notes file is compared line
+# by line. A new file counts as fully changed. A file whose only change is
+# "basedOn" has no changed text, so it gets the validate and leak-scrub checks
+# but no sentence or Missing/Next check. --all checks all text.
 #
 # Usage: records-lint.sh --orbit-root <dir> [--repo <owner/name>] [--base <ref>] [--all]
 # Exit: 0 clean; 10 validate; 11 leak scrub; 12 sentence; 13 Missing/Next;
@@ -90,15 +95,62 @@ if [ "${#sel[@]}" -eq 0 ]; then
   exit 0
 fi
 
+# Filter for both field readers: a text path, not an identifier or date.
+SKIP_RE='^(id|specVersion|status|basedOn|repositories|repositoryId|commit|branch|url|observedAt|reconciledAt|outcomeId|criterionId|planId|planRevision|projectSnapshotId|contributesTo)$|Id$'
+
 # Text fields of a record: every string except identifiers, provenance and dates.
 text_fields() {
-  jq -r '
+  jq -r --arg skip "$SKIP_RE" '
     . as $r
     | [paths(type == "string")]
     | .[]
-    | select(all(.[]; tostring | test("^(id|specVersion|status|basedOn|repositories|repositoryId|commit|branch|url|observedAt|reconciledAt|outcomeId|criterionId|planId|planRevision|projectSnapshotId|contributesTo)$|Id$") | not))
+    | select(all(.[]; tostring | test($skip) | not))
     | . as $p | $r | getpath($p)
   ' "$1" 2>/dev/null
+}
+
+# old_copy <file>: write the merge-base copy of a tracked file to a temp file
+# and print its path. Print nothing when the lint checks all text or the file
+# is new.
+old_copy() {
+  [ "$use_diff" -eq 1 ] || return 0
+  local rel tmp
+  rel="${1#"$top"/}"
+  tmp=$(mktemp "${TMPDIR:-/tmp}/records-lint-old.XXXXXX") || return 0
+  if git -C "$top" show "$mb:$rel" > "$tmp" 2>/dev/null && jq -e . "$tmp" >/dev/null 2>&1; then
+    echo "$tmp"
+  else
+    rm -f "$tmp"
+  fi
+}
+
+# changed_text <file>: the text that checks 3 needs. Text fields whose value
+# differs from the merge base (JSON), or added and changed lines (notes).
+changed_text() {
+  local f="$1" old
+  case "$f" in
+    *.json)
+      old=$(old_copy "$f")
+      if [ -z "$old" ]; then text_fields "$f"; return 0; fi
+      jq -r --slurpfile old "$old" --arg skip "$SKIP_RE" '
+        . as $r | $old[0] as $o
+        | [paths(type == "string")] | .[]
+        | select(all(.[]; tostring | test($skip) | not))
+        | . as $p
+        | select((try ($o | getpath($p)) catch null) != ($r | getpath($p)))
+        | $r | getpath($p)
+      ' "$f" 2>/dev/null
+      rm -f "$old"
+      ;;
+    *)
+      if [ "$use_diff" -eq 1 ] && git -C "$top" ls-files --error-unmatch "${f#"$top"/}" >/dev/null 2>&1 \
+         && git -C "$top" cat-file -e "$mb:${f#"$top"/}" 2>/dev/null; then
+        git -C "$top" diff -U0 "$mb" -- "${f#"$top"/}" | grep '^+' | grep -v '^+++' | sed 's/^+//'
+      else
+        cat "$f"
+      fi
+      ;;
+  esac
 }
 
 # 2. Leak scrub, one pass per file over its text.
@@ -118,7 +170,7 @@ done
 # 3. Sentence length, record JSON only. Notes are prose, a person reads them.
 for f in "${sel[@]}"; do
   case "$f" in *.json) ;; *) continue ;; esac
-  long=$(text_fields "$f" | awk -v max="$MAX_WORDS" '
+  long=$(changed_text "$f" | awk -v max="$MAX_WORDS" '
     { gsub(/[.!?]+[ \t]+/, "&\n"); n = split($0, parts, "\n")
       for (i = 1; i <= n; i++) { w = split(parts[i], words, /[ \t]+/); c = 0
         for (j = 1; j <= w; j++) if (words[j] != "") c++
@@ -130,10 +182,24 @@ done
 for f in "${sel[@]}"; do
   case "$f" in *.json) ;; *) continue ;; esac
   [ "$(jq -r '.criterionAssessments | type' "$f" 2>/dev/null)" = "array" ] || continue
-  bad=$(jq -r '.criterionAssessments[]
+  old=$(old_copy "$f")
+  if [ -n "$old" ]; then
+    # Only an assessment whose explanation or status changed.
+    bad=$(jq -r --slurpfile old "$old" '
+      (($old[0].criterionAssessments // []) | if type == "array" then . else [] end) as $oa
+      | .criterionAssessments[] | . as $a
+      | select(($oa | map(select(.criterionId == $a.criterionId)) | .[0]) as $p
+          | ($p.explanation // null) != ($a.explanation // null) or ($p.status // null) != ($a.status // null))
+      | select(.status != "achieved")
+      | select((.explanation // "") | test("^Missing: .+ Next: .+") | not)
+      | .criterionId' "$f" | head -1)
+    rm -f "$old"
+  else
+    bad=$(jq -r '.criterionAssessments[]
     | select(.status != "achieved")
     | select((.explanation // "") | test("^Missing: .+ Next: .+") | not)
     | .criterionId' "$f" | head -1)
+  fi
   [ -z "$bad" ] || fail 13 missing-next "$f" "criterion $bad is not achieved. Its explanation must read \"Missing: <what>. Next: <action>.\""
 done
 
