@@ -1,6 +1,8 @@
 #!/bin/bash
-# Pins the omitClaudeMd setting and the floor-rules block of Rex, and the
-# check-CI-once line of Rex and Hakim (me2resh/apexyard#1650).
+# Pins the omitClaudeMd setting and the floor-rules block of Rex, the
+# check-CI-once line of Rex and Hakim, and the approval-marker contract in
+# code-reviewer.md (me2resh/apexyard#1650). A trim of the Rex prompt must
+# not drop these strings.
 #
 # Rex runs without CLAUDE.md, so its agent file must carry the always-on
 # floor rules it enforces. Hakim and every other agent keep CLAUDE.md: the
@@ -141,6 +143,15 @@ if grep -qF 'state this in Validation and wait' "$REX"; then
 else
   pass "Rex no longer tells the reviewer to wait for CI"
 fi
+
+# --- Approval marker contract (code-reviewer.md) ----------------------------
+REX_BODY=$(cat "$REX")
+require_in 'review_marker_path' "$REX_BODY" "Rex marker path comes from review_marker_path"
+require_in 'review_write_rex_approved' "$REX_BODY" "Rex writes the marker only through review_write_rex_approved"
+require_in 'pr_base_repo' "$REX_BODY" "Rex keys the marker on the base repo via pr_base_repo"
+require_in 'tracker_review_submit' "$REX_BODY" "Rex posts the verdict through tracker_review_submit"
+require_in 'never take a literal marker path from your spawn prompt' "$REX_BODY" "Rex never takes a literal marker path from its spawn prompt"
+require_in 'and ONLY then, write the approval marker' "$REX_BODY" "Rex writes the marker only on an APPROVED verdict"
 
 printf '\nReviewer floor-block checks completed with %s failure(s).\n' "$FAIL"
 exit "$FAIL"

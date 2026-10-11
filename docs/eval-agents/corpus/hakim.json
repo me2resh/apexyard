@@ -196,7 +196,7 @@
       "ground_truth_defects": [
         {
           "id": "D1",
-          "description": "The new guard in active_ticket_marker_for_path skips the project tiers when the target path does not resolve and returns the ops-level current-ticket. The migration gate lets tilde forms such as ~+/ and ~user/ through, and _at_resolve_path cannot resolve them, so a tilde-spelled migration write into a registered project is approved by the ops-level ticket instead of the project's own ticket (the wrong-ticket approval that #1159 refuses).",
+          "description": "The new guard in active_ticket_marker_for_path skips the project tiers when the target path does not resolve and returns the ops-level active-ticket marker. The migration gate lets tilde forms such as ~+/ and ~user/ through, and _at_resolve_path cannot resolve them, so a tilde-spelled migration write into a registered project is approved by the ops-level ticket instead of the project's own ticket (the wrong-ticket approval that #1159 refuses).",
           "severity": "HIGH",
           "location": ".claude/hooks/_lib-active-ticket.sh"
         }
