@@ -1,0 +1,249 @@
+{
+  "specVersion": "0.1",
+  "id": "reconciliation-plan-apexyard-orbit-build-20261011T063724Z",
+  "planId": "plan-apexyard-orbit-build",
+  "planRevision": 3,
+  "projectSnapshotId": "snapshot-apexyard-20261011T063724Z",
+  "reconciledAt": "2026-10-11T06:37:24.403Z",
+  "observations": [
+    "Observed me2resh/apexyard at 49a2979b2e77b258581d4def15a4bf175b46dddb (dev, after PR #1622). The check ran at 692c17e. The later commit adds ORBIT records and AgDR-0225 only, with no skill, hook or test change.",
+    "Merged ORBIT PRs since 2026-09-28: #1447, #1454, #1571, #1574, #1606, #1608, #1610.",
+    "All 13 tests under .claude/skills/orbit/tests pass at this commit."
+  ],
+  "criterionAssessments": [
+    {
+      "criterionId": "ac1-1",
+      "status": "partially-verified",
+      "evidence": [
+        ".claude/skills/orbit/SKILL.md:177-245 defines /orbit handoff (PR #1454, merged 2026-09-29). Lines 240-245 file the issue with a direct tracker create call from the adapter's dry-run preview, not with the adapter's real sync.",
+        "No issue in me2resh/apexyard created since 2026-09-28 carries a slice ID from a handoff. Issues #1612, #1613, #1616, #1618 and #1619 carry 'ORBIT slice: none'."
+      ],
+      "explanation": "Missing: no live handoff has filed an issue, and the write bypasses the adapter's real sync. Next: run one live /orbit handoff and record the issue URL, or accept the preview-based write in a Plan revision."
+    },
+    {
+      "criterionId": "ac1-2",
+      "status": "achieved",
+      "evidence": [
+        "orbit sync github --dry-run (orbit-spec 0f31c3f) on docs/orbit/slices/slice-o1-handoff.json renders the objective, the Includes and Excludes lists, 'Plan: plan-apexyard-orbit-build (revision 3)' and 'Slice: slice-plan-apexyard-orbit-build-o1-handoff'.",
+        ".claude/skills/orbit/SKILL.md:232-235 prepends '**ORBIT slice:** <slice-id>' to the preview body."
+      ],
+      "explanation": "The adapter body carries every required field, and the skill adds the slice ID line."
+    },
+    {
+      "criterionId": "ac1-3",
+      "status": "achieved",
+      "evidence": [
+        ".claude/skills/orbit/lib/handoff-preflight.sh:151-155 runs orbit validate --all and exits 11 with the CLI error text.",
+        ".claude/skills/orbit/tests/test_handoff_refusal_validate_fails.sh passes at this commit."
+      ],
+      "explanation": "The handoff stops on a validate failure and states the reason."
+    },
+    {
+      "criterionId": "ac1-4",
+      "status": "achieved",
+      "evidence": [
+        ".claude/skills/orbit/lib/handoff-preflight.sh:71-72 prints one install note and exits 10 when the CLI is absent.",
+        ".claude/skills/orbit/tests/test_handoff_refusal_cli_absent.sh passes at this commit."
+      ],
+      "explanation": "The handoff stops with one install note when the CLI is absent."
+    },
+    {
+      "criterionId": "ac1-5",
+      "status": "achieved",
+      "evidence": [
+        "git grep -ln ORBIT_BIN finds only .claude/skills/orbit/ files, docs/orbit-adapter.md and ORBIT records.",
+        "git grep for an orbit CLI subcommand call in .claude/hooks and .claude/skills outside .claude/skills/orbit finds nothing. feature, task and start-ticket mention ORBIT but call no CLI."
+      ],
+      "explanation": "No skill other than /orbit calls the ORBIT CLI."
+    },
+    {
+      "criterionId": "ac1-6",
+      "status": "achieved",
+      "evidence": [
+        ".claude/skills/orbit/SKILL.md:212-219 orders the dry-run preview, the leak scrub, the operator confirmation and then the create call.",
+        ".claude/skills/orbit/tests/test_handoff_refusal_leak_scrub.sh passes at this commit.",
+        "docs/agdr/AgDR-0179-orbit-handoff-one-issue-per-slice.md Decision section permits the write only after this order."
+      ],
+      "explanation": "The handoff previews, scrubs and asks for confirmation before any tracker write."
+    },
+    {
+      "criterionId": "ac1-7",
+      "status": "not-verified",
+      "evidence": [
+        "find docs/orbit -iname '*mapping*' finds nothing.",
+        ".claude/skills/orbit/SKILL.md:249 lists the sidecar mapping file as out of scope."
+      ],
+      "explanation": "Missing: no sidecar mapping file exists. Next: cut an O1 slice for the mapping file, with its own AgDR as AgDR-0179 Consequences requires."
+    },
+    {
+      "criterionId": "ac1-8",
+      "status": "not-verified",
+      "evidence": [
+        "No mapping file and no handoff exist (see ac1-1 and ac1-7)."
+      ],
+      "explanation": "Idempotent re-handoff depends on ac1-7."
+    },
+    {
+      "criterionId": "ac1-9",
+      "status": "not-verified",
+      "evidence": [
+        "No mapping file exists (see ac1-7)."
+      ],
+      "explanation": "Missing: the repo-match check needs the mapping. Next: add the check in the same slice as ac1-7."
+    },
+    {
+      "criterionId": "ac1-10",
+      "status": "partially-verified",
+      "evidence": [
+        ".githooks/pre-commit:77 runs check-private-refs-staged.sh on staged files, and .githooks/pre-push:194 runs check-private-refs-push.sh on every pushed blob (PR #1575). Neither exempts docs/orbit.",
+        "docs/getting-started.md:155 and :163: the hooks run only where core.hooksPath is installed, and never in a managed-project clone.",
+        ".claude/skills/orbit/SKILL.md:249 lists the leak scrub on committed ORBIT records as out of scope."
+      ],
+      "explanation": "Missing: no scrub runs on ORBIT records in a managed-project clone or a clone without the git hooks. Next: have /orbit scrub each record before it writes it."
+    },
+    {
+      "criterionId": "ac1-11",
+      "status": "not-verified",
+      "evidence": [
+        "grep -ci 'slice' .claude/skills/start-ticket/SKILL.md returns 0."
+      ],
+      "explanation": "The marker does not record a slice ID yet."
+    },
+    {
+      "criterionId": "ac1-12",
+      "status": "achieved",
+      "evidence": [
+        "docs/agdr/AgDR-0164-orbit-adapter-boundary.md:3 adds a 'Partly superseded by AgDR-0179' note (PR #1454).",
+        "docs/agdr/AgDR-0179-orbit-handoff-one-issue-per-slice.md permits one issue per validated slice after preview, leak scrub and confirmation."
+      ],
+      "explanation": "The amendment exists and permits the single-issue write."
+    },
+    {
+      "criterionId": "ac2-1",
+      "status": "not-verified",
+      "evidence": [
+        "git grep -n 'Slice:' in .claude, .github, templates and workflows finds only .claude/skills/orbit/SKILL.md:249, which lists the PR check as out of scope."
+      ],
+      "explanation": "Missing: no PR convention or check adds a Slice: reference. Next: cut an O2 slice for the PR body reference."
+    },
+    {
+      "criterionId": "ac2-2",
+      "status": "partially-verified",
+      "evidence": [
+        ".claude/agents/code-reviewer.md:208-210 holds the blocking acceptance-criteria check. grep -n -i exclud .claude/agents/code-reviewer.md finds nothing."
+      ],
+      "explanation": "Missing: Rex does not check the Excludes list. Next: add an Excludes-list check to the code-reviewer agent in an O2 slice."
+    },
+    {
+      "criterionId": "ac2-3",
+      "status": "achieved",
+      "evidence": [
+        "grep -c -i orbit .claude/agents/code-reviewer.md returns 0."
+      ],
+      "explanation": "Rex reads no ORBIT record. Evidence by absence: re-verify after O2 lands."
+    },
+    {
+      "criterionId": "ac2-4",
+      "status": "achieved",
+      "evidence": [
+        "grep -l -i orbit .claude/hooks/*.sh finds require-orbit-slice-for-ticket.sh, dispatch-bash.sh, require-skill-for-issue-create.sh and _lib-flag-value.sh.",
+        ".claude/hooks/require-orbit-slice-for-ticket.sh:2 and :486 gate ticket creation and read docs/orbit/slices. No merge gate reads ORBIT records."
+      ],
+      "explanation": "No merge gate reads ORBIT records. The new slice guard reads them at issue creation only."
+    },
+    {
+      "criterionId": "ac3-1",
+      "status": "not-verified",
+      "evidence": [
+        ".claude/skills/orbit/SKILL.md:249 lists the Projects v2 board as out of scope. git grep for 'Projects v2', 'draft item' or 'Level field' in .claude/skills/orbit finds nothing else."
+      ],
+      "explanation": "Missing: no board sync exists. Next: cut an O3 slice after orbit-spec supports draft items and fields."
+    },
+    {
+      "criterionId": "ac3-2",
+      "status": "not-verified",
+      "evidence": [
+        ".claude/skills/orbit/SKILL.md:249 lists the Projects v2 board as out of scope. git grep for 'Projects v2', 'draft item' or 'Level field' in .claude/skills/orbit finds nothing else."
+      ],
+      "explanation": "Missing: no board sync exists. Next: cut an O3 slice after orbit-spec supports draft items and fields."
+    },
+    {
+      "criterionId": "ac3-3",
+      "status": "not-verified",
+      "evidence": [
+        ".claude/skills/orbit/SKILL.md:249 lists the Projects v2 board as out of scope. git grep for 'Projects v2', 'draft item' or 'Level field' in .claude/skills/orbit finds nothing else."
+      ],
+      "explanation": "Missing: no board sync exists. Next: cut an O3 slice after orbit-spec supports draft items and fields."
+    },
+    {
+      "criterionId": "ac3-4",
+      "status": "not-verified",
+      "evidence": [
+        ".claude/skills/orbit/SKILL.md:249 lists the Projects v2 board as out of scope. git grep for 'Projects v2', 'draft item' or 'Level field' in .claude/skills/orbit finds nothing else."
+      ],
+      "explanation": "Missing: no board sync exists. Next: cut an O3 slice after orbit-spec supports draft items and fields."
+    },
+    {
+      "criterionId": "ac3-5",
+      "status": "not-verified",
+      "evidence": [
+        ".claude/skills/orbit/SKILL.md:249 lists the Projects v2 board as out of scope. git grep for 'Projects v2', 'draft item' or 'Level field' in .claude/skills/orbit finds nothing else."
+      ],
+      "explanation": "Missing: no board sync exists. Next: cut an O3 slice after orbit-spec supports draft items and fields."
+    },
+    {
+      "criterionId": "ac3-6",
+      "status": "not-verified",
+      "evidence": [
+        ".claude-plugin/marketplace.json (PR #1608) names me2resh/orbit-spec with no ref or version pin.",
+        "orbit sync github (orbit-spec 0f31c3f) accepts --project-owner and --project-number to add one issue to a board, but has no draft items or field setting."
+      ],
+      "explanation": "Missing: no pinned orbit-spec release provides a board sync. Next: tag an orbit-spec release with board sync, then pin it."
+    },
+    {
+      "criterionId": "ac4-1",
+      "status": "not-verified",
+      "evidence": [
+        "git grep -il orbit -- .claude/skills/plan-initiative .claude/skills/write-spec finds nothing."
+      ],
+      "explanation": "Missing: neither skill reads orbit.default_planning. Next: cut an O4 slice that routes both skills to the /orbit Plan flow."
+    },
+    {
+      "criterionId": "ac4-2",
+      "status": "not-verified",
+      "evidence": [
+        ".claude/skills/feature/SKILL.md:208-211 and .claude/skills/task/SKILL.md:211-214 add only a literal body-file note for the ORBIT gate. No step offers an existing slice."
+      ],
+      "explanation": "Missing: /feature and /task do not offer to start from a slice. Next: add the offer in an O4 slice."
+    },
+    {
+      "criterionId": "ac4-3",
+      "status": "achieved",
+      "evidence": [
+        "Outside .claude/skills/orbit, only feature, task and start-ticket mention ORBIT. start-ticket SKILL.md:79 runs its check only when orbit.default_planning is true. feature and task add comments only.",
+        "No skill outside /orbit references ORBIT_BIN or docs/orbit. .claude/hooks/require-orbit-slice-for-ticket.sh:335 exits before it reads docs/orbit when the flag is not true."
+      ],
+      "explanation": "With the flag false, no planning or ticket skill reads docs/orbit or calls the CLI. Evidence by absence: re-verify after O4 lands."
+    },
+    {
+      "criterionId": "ac3-7",
+      "status": "not-verified",
+      "evidence": [
+        ".claude/skills/orbit/SKILL.md:249 lists the Projects v2 board as out of scope. git grep for 'Projects v2', 'draft item' or 'Level field' in .claude/skills/orbit finds nothing else."
+      ],
+      "explanation": "Missing: no board sync exists. Next: cut an O3 slice after orbit-spec supports draft items and fields."
+    },
+    {
+      "criterionId": "ac4-4",
+      "status": "not-verified",
+      "evidence": [
+        "git grep -il orbit -- .claude/skills/plan-initiative .claude/skills/write-spec finds nothing."
+      ],
+      "explanation": "Missing: the fallback note depends on ac4-1. Next: add it in the same O4 slice."
+    }
+  ],
+  "discoveries": [
+    "Ten status changes were proposed and challenged. Two were rejected and keep their 2026-09-28 status. ac1-8: handoff never edits an issue. ac1-11: /start-ticket reads the slice ID but does not record it.",
+    "The r3 plan has no Shown by field, so each criterion was judged against its statement."
+  ]
+}
