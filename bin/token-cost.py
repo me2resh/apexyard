@@ -697,6 +697,90 @@ def measure_session(path, window, skills_tracked, digest=None):
 # --------------------------------------------------------------------------
 
 
+# A block by the reviewer mutation lock. The hook message is the only
+# attribution: the text is fixed in block-reviewer-repo-mutation.sh.
+HOOK_ERROR_RE = re.compile(r"\s*PreToolUse:\w+ hook error")
+LOCK_BLOCK_RE = re.compile(r"BLOCKED: review-class agent (?:is read-only while an active review|cannot )")
+SEGMENT_SPLIT_RE = re.compile(r"[;&|()\n]+")
+# Git options that take their value as the next word.
+GIT_VALUE_OPTIONS = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env"}
+
+
+def git_subcommands(command):
+    """Return the git subcommand of each command segment, in order.
+
+    The scan is a single pass over the words of each segment, so a command
+    with hundreds of options costs linear time. A regular expression with a
+    nested quantifier over the option list backtracks badly instead.
+    """
+    found = []
+    for segment in SEGMENT_SPLIT_RE.split(command):
+        words = segment.split()
+        index = 0
+        while index < len(words) and "=" in words[index] and not words[index].startswith("-"):
+            index += 1  # a leading VAR=value assignment
+        if index >= len(words) or words[index] != "git":
+            continue
+        index += 1
+        while index < len(words) and words[index].startswith("-"):
+            index += 2 if words[index] in GIT_VALUE_OPTIONS else 1
+        if index < len(words):
+            found.append(words[index])
+    return found
+
+
+def measure_lock_blocks(paths, window):
+    """Count hook blocks that the reviewer lock caused, per kind and per day.
+
+    Rule for combining counts across sessions: a block is one tool call, named
+    by its tool_use id. Read every transcript of the sessions in the period
+    (main loop and subagents), count each id once, and add the counts. A
+    resumed session copies earlier records into a new file, so the same id can
+    appear twice. The per-day view groups on the UTC date of the result.
+    """
+    seen = set()
+    totals = {"total": 0, "git_commit": 0, "git_push": 0, "other": 0}
+    by_day = {}
+    files = 0
+    for path in paths:
+        files += 1
+        commands = {}
+        for record, ts in iter_records(path, window):
+            message = as_dict(record.get("message"))
+            content = message.get("content")
+            if not isinstance(content, list):
+                continue
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "tool_use":
+                    commands[block.get("id")] = tool_command(block.get("name"), block.get("input"))
+                elif block.get("type") == "tool_result" and block.get("is_error"):
+                    text = text_of(block.get("content"))
+                    if not HOOK_ERROR_RE.match(text) or not LOCK_BLOCK_RE.search(text):
+                        continue
+                    tool_id = block.get("tool_use_id")
+                    if tool_id in seen:
+                        continue
+                    seen.add(tool_id)
+                    command = commands.get(tool_id, "")
+                    subcommands = git_subcommands(command)
+                    if "commit" in subcommands:
+                        kind = "git_commit"
+                    elif "push" in subcommands:
+                        kind = "git_push"
+                    else:
+                        kind = "other"
+                    totals["total"] += 1
+                    totals[kind] += 1
+                    day = ts.strftime("%Y-%m-%d") if ts else "unknown"
+                    entry = by_day.setdefault(day, {"total": 0, "git_commit": 0, "git_push": 0, "other": 0})
+                    entry["total"] += 1
+                    entry[kind] += 1
+    totals["commit_or_push"] = totals["git_commit"] + totals["git_push"]
+    return {"transcripts": files, "blocks": totals, "by_day": dict(sorted(by_day.items()))}
+
+
 def find_subagent_files(directory):
     files = glob.glob(os.path.join(directory, "agent-*.jsonl"))
     files += glob.glob(os.path.join(directory, "workflows", "*", "agent-*.jsonl"))
@@ -1168,6 +1252,10 @@ def flat_metrics(report):
             for key, value in entry.items():
                 if not isinstance(value, dict):
                     out["reviewers.%s.%s" % (name, key)] = value
+    locks = report.get("lock_blocks")
+    if locks:
+        for key, value in locks["blocks"].items():
+            out["lock_blocks.%s" % key] = value
     samples = [report.get("forge")] + list(report.get("forge_samples") or [])
     for number, forge in enumerate(samples, start=1):
         if not forge:
@@ -1305,6 +1393,20 @@ def markdown_report(report):
             for name, entry in reviewers["other_agents"].items():
                 add("| %s | %s | %s / %s | %s |" % (name, fmt(entry["runs"]), fmt(entry["first_turn_context_median"]),
                                                    fmt(entry["first_turn_context_max"]), fmt(entry["total_tokens_sum"])))
+    locks = report.get("lock_blocks")
+    if locks:
+        blocks = locks["blocks"]
+        add("")
+        add("## Reviewer lock blocks")
+        add("")
+        add("| Metric | Value |")
+        add("|---|---|")
+        add("| Blocked commit or push | %s |" % fmt(blocks["commit_or_push"]))
+        add("| Blocked commit / push | %s / %s |" % (fmt(blocks["git_commit"]), fmt(blocks["git_push"])))
+        add("| Other blocked commands | %s |" % fmt(blocks["other"]))
+        add("| Transcripts read | %s |" % fmt(locks["transcripts"]))
+        for day, entry in locks["by_day"].items():
+            add("| %s commit or push | %s |" % (day, fmt(entry["git_commit"] + entry["git_push"])))
     for forge in [report.get("forge")] + list(report.get("forge_samples") or []):
         if not forge:
             continue
@@ -1356,6 +1458,13 @@ def build_command(args):
         parts.append("--label %s" % args.label)
     parts.append("--format %s" % args.format)
     return " \\\n  ".join(parts)
+
+
+def lock_paths(transcripts, subagent_dirs):
+    paths = list(transcripts)
+    for directory in subagent_dirs:
+        paths += find_subagent_files(directory)
+    return paths
 
 
 def repo_root():
@@ -1426,6 +1535,11 @@ def main(argv=None):
     p_rev.add_argument("--agent-ids", help="count only the agent ids listed in this file (one per line)")
     add_window_args(p_rev)
 
+    p_locks = sub.add_parser("locks", help="reviewer-lock blocks of commit and push commands")
+    p_locks.add_argument("--transcript", action="append", default=[], help="a main-loop transcript (repeatable)")
+    p_locks.add_argument("--subagents", action="append", default=[], help="a <session-id>/subagents directory (repeatable)")
+    add_window_args(p_locks)
+
     p_forge = sub.add_parser("forge", help="forge view of merged %s PRs" % FORGE_REPO)
     add_forge_args(p_forge)
 
@@ -1453,6 +1567,9 @@ def main(argv=None):
         elif args.cmd == "reviewers":
             window = Window(args.since, args.until)
             emit(measure_reviewers(args.subagents, window, load_ids(args.agent_ids)), "json")
+        elif args.cmd == "locks":
+            window = Window(args.since, args.until)
+            emit(measure_lock_blocks(lock_paths(args.transcript, args.subagents), window), "json")
         elif args.cmd == "forge":
             if not (args.forge_from or args.forge_range or args.forge_last):
                 parser.error("forge needs --forge-from, --forge-range or --forge-last")
@@ -1478,6 +1595,9 @@ def main(argv=None):
                 report["reviewers"] = measure_reviewers(args.subagents, window, load_ids(args.agent_ids))
                 if args.format == "md":
                     report["reviewers"].pop("runs", None)
+            if args.transcript or args.subagents:
+                report["lock_blocks"] = measure_lock_blocks(
+                    lock_paths([args.transcript] if args.transcript else [], [args.subagents] if args.subagents else []), window)
             if args.forge_from or args.forge_range or args.forge_last:
                 samples = [measure_forge(data) for data in load_forge_samples(args)]
                 report["forge"] = samples[0]

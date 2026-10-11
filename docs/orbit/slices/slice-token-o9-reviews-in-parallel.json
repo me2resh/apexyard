@@ -1,0 +1,37 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-token-o9-reviews-in-parallel",
+  "planId": "plan-apexyard-token-efficiency",
+  "outcomeId": "o9-reviews-run-in-parallel",
+  "basedOn": {
+    "planRevision": 3,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261011T082929Z",
+    "repositories": {}
+  },
+  "objective": "Identify review agents by the agent type in the hook input. Reviews and build agents then run at the same time, and the orchestrator is never blocked.",
+  "why": "ac9-1 is not-verified. On 2026-10-11 the session-wide review lock held up two build commits and five orbit-spec builds, and reviews ran one at a time. Owner decision 2026-10-11: the harness o1 slice (#1623) merges first, because its PR was ready first. o9 builds on it, so o9 fails closed from the start.",
+  "contributesTo": [
+    "ac9-1"
+  ],
+  "scope": {
+    "include": [
+      "First step: capture live PreToolUse payloads from a code-reviewer subagent, a general-purpose subagent and the main thread, and commit them as test fixtures",
+      "Review agents are found by an allowlist of agent types in the hook input. The active-reviewer marker is used only for a subagent with no type",
+      "One active-reviewer marker per review, keyed by session, repo, PR and review kind. Each review clears only its own marker; SessionStart clears this session's set",
+      "The new marker key in active_reviewer_marker_path and in the marker steps of the code-review, security-review and design-review skills",
+      "The repository-mutation lock blocks a review agent. The orchestrator and build agents are never blocked",
+      "The same detection in block-reviewer-repo-mutation.sh and require-active-ticket.sh and warn-review-marker-write.sh and block-reviewer-ci-wait.sh and auto-code-review.sh",
+      "A test that an approval for a stale head commit still blocks at the merge gate, with the gate unchanged (C1)",
+      "An AgDR-0145 amendment that names the new trust root (the harness-set agent type) and replaces the line that makes the orchestrator wait",
+      "A blocked-commit counter in bin/token-cost.py, and a rule for combining the count across sessions (C3)",
+      "Hook tests incl. negative tests for an orchestrator commit and a build push during a review",
+      "The before number (2 blocked build commits on 2026-10-11) in the PR"
+    ],
+    "exclude": [
+      "Any edit to block-unreviewed-merge.sh or block-merge-on-red-ci.sh (C1)",
+      "Fail-closed dispatch for crashed hooks, which the harness o1 slice (#1623) delivers before o9",
+      "Review depth tiers and the delta review format (o7)",
+      "Reviewer prompt text (harness o4 eval cycle)"
+    ]
+  }
+}

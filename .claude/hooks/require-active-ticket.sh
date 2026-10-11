@@ -646,11 +646,19 @@ _ratc_evaluate_target() {
                 "$_review_git_root"/*)
                   # shellcheck source=/dev/null
                   . "$HOOK_DIR/_lib-review-markers.sh"
-                  _review_marker=$(active_reviewer_marker_path "$OPS_ROOT")
-                  if [ -f "$_review_marker" ] && \
-                     grep -Eq '^[[:alnum:]_.-]+(/[[:alnum:]_.-]+)+#[1-9][0-9]*:(rex|security|architecture)$' "$_review_marker" && \
-                     awk 'END { exit (NR != 1) }' "$_review_marker"; then
-                    return 0
+                  # A typed sub-agent that is not a review agent gets no
+                  # review exemption (me2resh/apexyard#1649). The marker set
+                  # holds one file per review plus the legacy single file.
+                  if [ "$(review_caller_class "$INPUT" "$OPS_ROOT")" != "other-agent" ]; then
+                    while IFS= read -r _review_marker; do
+                      [ -n "$_review_marker" ] || continue
+                      if grep -Eq '^[[:alnum:]_.-]+(/[[:alnum:]_.-]+)+#[1-9][0-9]*:(rex|security|architecture)$' "$_review_marker" && \
+                         awk 'END { exit (NR != 1) }' "$_review_marker"; then
+                        return 0
+                      fi
+                    done <<EOF_REVIEW_MARKERS
+$(active_reviewer_marker_files "$OPS_ROOT")
+EOF_REVIEW_MARKERS
                   fi
                   ;;
               esac

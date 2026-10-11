@@ -1,0 +1,19 @@
+{
+  "agent_id": "a0000000000000001",
+  "agent_type": "general-purpose",
+  "cwd": "/redacted/cwd",
+  "effort": {
+    "level": "high"
+  },
+  "hook_event_name": "PreToolUse",
+  "permission_mode": "bypassPermissions",
+  "prompt_id": "redacted-prompt",
+  "session_id": "00000000-0000-4000-8000-000000000001",
+  "tool_input": {
+    "command": "echo GP_CALL",
+    "description": "Print GP_CALL"
+  },
+  "tool_name": "Bash",
+  "tool_use_id": "toolu_redacted",
+  "transcript_path": "/redacted/transcript.jsonl"
+}

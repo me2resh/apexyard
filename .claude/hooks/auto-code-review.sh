@@ -111,5 +111,25 @@ fi
 # about 3.9 KB of context on every PR. The rules it carried are in
 # .claude/rules/pr-workflow.md and the /code-review skill. Keep both readers
 # covered (#843): a build agent cannot spawn Rex and must not review.
-printf '%s\n' "${PR_REF} created. Build agent: report the PR and stop; never review it or write review markers. Orchestrator: wait for green CI with a Monitor, then run /code-review ${PR_NUMBER:-<pr>}." >&2
+# The caller class comes from the harness agent_type (review_caller_class in
+# _lib-review-markers.sh, AgDR-0145 amendment, me2resh/apexyard#1649). A
+# sub-agent gets the stop line and the orchestrator gets the review line.
+# With no class available, print the combined line that serves both readers.
+CALLER_CLASS=unknown
+if [ -r "$HOOKS_DIR/_lib-review-markers.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOKS_DIR/_lib-review-markers.sh"
+  CALLER_CLASS=$(review_caller_class "$INPUT" "")
+fi
+case "$CALLER_CLASS" in
+  reviewer|other-agent|untyped-agent)
+    printf '%s\n' "${PR_REF} created. Report the PR and stop. Never review it or write review markers. The orchestrator runs the review." >&2
+    ;;
+  main)
+    printf '%s\n' "${PR_REF} created. Wait for green CI with a Monitor, then run /code-review ${PR_NUMBER:-<pr>}. Build agents run at the same time." >&2
+    ;;
+  *)
+    printf '%s\n' "${PR_REF} created. Build agent: report the PR and stop; never review it or write review markers. Orchestrator: wait for green CI with a Monitor, then run /code-review ${PR_NUMBER:-<pr>}." >&2
+    ;;
+esac
 exit 2

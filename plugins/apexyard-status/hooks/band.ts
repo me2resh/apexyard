@@ -223,6 +223,17 @@ export function lockLabel(text: string): string | null {
   return m ? `${m[1]} (${m[2]})` : t
 }
 
+// All reviewer locks of a session: one label per marker, in order, no duplicates.
+// Texts come from the per-review files and the legacy single file.
+export function lockLabels(texts: Array<string | null>): string | null {
+  const labels: string[] = []
+  for (const text of texts) {
+    const label = text ? lockLabel(text) : null
+    if (label && !labels.includes(label)) labels.push(label)
+  }
+  return labels.length > 0 ? labels.join(', ') : null
+}
+
 // The text of the "waiting" segment. Lists up to three references.
 export function waitingText(waiting: string[], offline = false): string {
   const tag = offline ? ' (offline)' : ''

@@ -188,6 +188,111 @@ done
 cp "$TMP/hooks/block-unreviewed-merge.sh.orig" "$TMP/hooks/block-unreviewed-merge.sh"
 rm -f "$TMP/hooks/block-unreviewed-merge.sh.orig"
 
+# me2resh/apexyard#1623: ticket-first (require-active-ticket.sh) fails CLOSED
+# inside the dispatcher, through the same path as the merge gates. A crash
+# must block (exit 2 plus a BLOCKED line), where run_hook used to WARN and
+# let the Bash call through. block-reviewer-ci-wait.sh is the explicit
+# fail-OPEN exception: it is a cost guard (me2resh/apexyard#1625), so the
+# same crashes must warn and let the call through, and its own exit 2 must
+# still block. Each scenario replaces one stub and restores it afterwards.
+write_crash_stub() {
+  # $1 = stub path, $2 = scenario
+  case "$2" in
+    exit-1)
+      printf '#!/usr/bin/env bash\ncat >/dev/null\nexit 1\n' > "$1" ;;
+    exit-127)
+      printf '#!/usr/bin/env bash\ncat >/dev/null\nthis-command-does-not-exist-anywhere\n' > "$1" ;;
+    syntax-error)
+      printf '#!/usr/bin/env bash\ncat >/dev/null\nif [ 1 -eq 1\n' > "$1" ;;
+    killed-by-signal)
+      printf '#!/usr/bin/env bash\ncat >/dev/null\nkill -TERM $$\n' > "$1" ;;
+  esac
+  chmod +x "$1"
+}
+
+for scenario in exit-1 exit-127 syntax-error killed-by-signal; do
+  # Ticket-first crash -> BLOCKED, exit 2. Use a plain command so no other
+  # route runs.
+  cp "$TMP/hooks/require-active-ticket.sh" "$TMP/hooks/require-active-ticket.sh.orig"
+  write_crash_stub "$TMP/hooks/require-active-ticket.sh" "$scenario"
+  : > "$TMP/log"
+  set +e
+  printf '{"tool_name":"Bash","tool_input":{"command":"echo hello"}}' \
+    | DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh" >/dev/null 2>"$TMP/stderr"
+  rc=$?
+  set -e
+  cp "$TMP/hooks/require-active-ticket.sh.orig" "$TMP/hooks/require-active-ticket.sh"
+  rm -f "$TMP/hooks/require-active-ticket.sh.orig"
+  if [ "$rc" -ne 2 ]; then
+    echo "FAIL: require-active-ticket.sh ($scenario) did not block (rc=$rc, want 2)" >&2
+    cat "$TMP/stderr" >&2
+    exit 1
+  fi
+  # A bash syntax error already exits 2 by itself, with no BLOCKED line.
+  if [ "$scenario" != syntax-error ] && ! grep -q 'BLOCKED: require-active-ticket.sh' "$TMP/stderr"; then
+    echo "FAIL: require-active-ticket.sh ($scenario) blocked without a BLOCKED line naming it" >&2
+    cat "$TMP/stderr" >&2
+    exit 1
+  fi
+
+  # Cost guard crash -> WARN, exit 0, and the remaining gates still run.
+  # Bash ends a script with a syntax error at exit 2, the blocking code. The
+  # dispatcher cannot tell that from a deliberate block, so it is not a
+  # fail-open scenario.
+  if [ "$scenario" = syntax-error ]; then
+    continue
+  fi
+  cp "$TMP/hooks/block-reviewer-ci-wait.sh" "$TMP/hooks/block-reviewer-ci-wait.sh.orig"
+  write_crash_stub "$TMP/hooks/block-reviewer-ci-wait.sh" "$scenario"
+  : > "$TMP/log"
+  set +e
+  printf '{"tool_name":"Bash","tool_input":{"command":"git add foo"}}' \
+    | DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh" >/dev/null 2>"$TMP/stderr"
+  rc=$?
+  set -e
+  cp "$TMP/hooks/block-reviewer-ci-wait.sh.orig" "$TMP/hooks/block-reviewer-ci-wait.sh"
+  rm -f "$TMP/hooks/block-reviewer-ci-wait.sh.orig"
+  if [ "$rc" -ne 0 ]; then
+    echo "FAIL: block-reviewer-ci-wait.sh ($scenario) must fail OPEN (rc=$rc, want 0)" >&2
+    cat "$TMP/stderr" >&2
+    exit 1
+  fi
+  if ! grep -q 'WARN: block-reviewer-ci-wait.sh exited' "$TMP/stderr"; then
+    echo "FAIL: block-reviewer-ci-wait.sh ($scenario) crashed without a WARN line" >&2
+    cat "$TMP/stderr" >&2
+    exit 1
+  fi
+  if grep -q 'BLOCKED' "$TMP/stderr"; then
+    echo "FAIL: block-reviewer-ci-wait.sh ($scenario) must not print BLOCKED" >&2
+    cat "$TMP/stderr" >&2
+    exit 1
+  fi
+  grep -qx 'block-git-add-all.sh' "$TMP/log"
+done
+
+# A deliberate exit 2 still blocks from both hooks.
+for gate in require-active-ticket.sh block-reviewer-ci-wait.sh; do
+  cp "$TMP/hooks/$gate" "$TMP/hooks/$gate.orig"
+  printf '#!/usr/bin/env bash\ncat >/dev/null\nexit 2\n' > "$TMP/hooks/$gate"
+  chmod +x "$TMP/hooks/$gate"
+  set +e
+  printf '{"tool_name":"Bash","tool_input":{"command":"echo hello"}}' \
+    | DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh" >/dev/null 2>&1
+  rc=$?
+  set -e
+  cp "$TMP/hooks/$gate.orig" "$TMP/hooks/$gate"
+  rm -f "$TMP/hooks/$gate.orig"
+  if [ "$rc" -ne 2 ]; then
+    echo "FAIL: $gate exit 2 did not block (rc=$rc, want 2)" >&2
+    exit 1
+  fi
+done
+
+# A passing ticket-first gate lets the call through.
+: > "$TMP/log"
+run 'echo hello'
+grep -qx 'require-active-ticket.sh' "$TMP/log"
+
 for command in \
   'gh pr merge 42' \
   'gh api repos/example/pulls/42' \

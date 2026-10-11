@@ -42,7 +42,7 @@ FAIL=0
 run_case() {
   local name="$1" command="$2" expected="$3" cwd="${4:-$ops}"
   local input output rc
-  input=$(jq -cn --arg command "$command" '{tool_input:{command:$command}}')
+  input=$(jq -cn --arg command "$command" '{agent_type:"code-reviewer",agent_id:"a1",tool_input:{command:$command}}')
   output=$(
     cd "$cwd" || exit 1
     printf '%s' "$input" | env -u CLAUDE_CODE_SESSION_ID APEXYARD_REVIEW_OPS_ROOT="$ops" \

@@ -287,6 +287,50 @@ class TokenCostTests(unittest.TestCase):
     def test_forge_rejects_other_repo(self):
         self.cli('forge', '--forge-from', FIXTURES / 'forge-other.json', code=1)
 
+    def test_lock_blocks_count_once_per_tool_call(self):
+        block_text = ('PreToolUse:Bash hook error: [dispatch]: BLOCKED: review-class agent is read-only '
+                      'while an active review is in flight.')
+
+        def result(tool_id, text, seconds):
+            return {'type': 'user', 'timestamp': stamp(seconds), 'message': {'content': [
+                {'type': 'tool_result', 'tool_use_id': tool_id, 'is_error': True, 'content': text}]}}
+
+        records = [
+            assistant(1, 1, bash('git ' + 'commit -m x')),
+            result('toolu_001_0', block_text, 2),
+            assistant(2, 3, bash('git -C repo ' + 'push origin x')),
+            result('toolu_002_0', block_text, 4),
+            assistant(3, 5, bash('git status')),
+            result('toolu_003_0', 'Exit code 1\nissue text: ' + block_text, 6),
+            assistant(4, 7, bash('git clone x')),
+            result('toolu_004_0', block_text.replace('is read-only while an active review', 'cannot'), 8),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            first = Path(directory) / 'a.jsonl'
+            second = Path(directory) / 'b.jsonl'
+            write_jsonl(first, records)
+            write_jsonl(second, records[:2])  # a resumed session repeats an earlier call
+            data = json.loads(self.cli('locks', '--transcript', first, '--transcript', second))
+        self.assertEqual(data['blocks'], {'total': 3, 'git_commit': 1, 'git_push': 1,
+                                          'other': 1, 'commit_or_push': 2})
+        self.assertEqual(data['by_day']['2030-01-01']['total'], 3)
+        self.assertEqual(data['transcripts'], 2)
+
+    def test_git_subcommands_are_fast_and_exact(self):
+        import time
+        flags = ' '.join('-c k%d=v' % i for i in range(100)) + ' ' + ' '.join('--flag%d' % i for i in range(100))
+        started = time.time()
+        found = tc.git_subcommands('git ' + flags + ' ' + 'commit -m x')
+        self.assertLess(time.time() - started, 1)
+        self.assertEqual(found, ['commit'])
+        long_miss = 'git ' + ' '.join('-x%d' % i for i in range(200)) + ' status'
+        started = time.time()
+        self.assertEqual(tc.git_subcommands(long_miss), ['status'])
+        self.assertLess(time.time() - started, 1)
+        self.assertEqual(tc.git_subcommands('cd r && git -C r ' + 'push origin x; echo git commit'), ['push'])
+        self.assertEqual(tc.git_subcommands('echo "git commit"'), [])
+        self.assertEqual(tc.git_subcommands('GIT_AUTHOR_NAME=a git ' + 'commit -m x'), ['commit'])
+
     def test_compare_cli_change_pct(self):
         with tempfile.TemporaryDirectory() as directory:
             paths = [Path(directory) / name for name in ('before.json', 'after.json')]

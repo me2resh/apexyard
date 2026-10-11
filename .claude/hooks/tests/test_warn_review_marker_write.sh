@@ -1183,6 +1183,43 @@ case47
 case48
 
 # ---------------------------------------------------------------------------
+# (49-51) me2resh/apexyard#1649: the marker grant depends on the caller type.
+# A typed build agent never gets the grant. A review agent and the
+# orchestrator do, and a per-review marker file counts like the legacy file.
+# ---------------------------------------------------------------------------
+typed_write_json() {
+  jq -nc --arg path "$1" --arg t "$2" \
+    '{tool_name:"Write",tool_input:{file_path:$path,content:"sha123"}} + (if $t != "" then {agent_type:$t,agent_id:"a1"} else {} end)'
+}
+run_typed() { # sandbox label json want(warn|silent)
+  local sb="$1" label="$2" json="$3" want="$4" err rc
+  err=$(cd "$sb" && printf '%s' "$json" | "$sb/.claude/hooks/warn-review-marker-write.sh" 2>&1 >/dev/null)
+  rc=$?
+  if [ "$rc" -eq 0 ] && { { [ "$want" = warn ] && [ -n "$err" ]; } || { [ "$want" = silent ] && [ -z "$err" ]; }; }; then
+    echo "PASS [$label]"; PASS=$((PASS+1))
+  else
+    echo "FAIL [$label]: rc=$rc want=$want stderr=${err:0:200}" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="$FAILED_CASES $label"
+  fi
+}
+case49() {
+  local sb; sb=$(make_sandbox)
+  cp "$(dirname "$HOOK_SRC")/_lib-review-markers.sh" "$sb/.claude/hooks/_lib-review-markers.sh"
+  printf '%s\n' "${REPO}#42:rex" > "$sb/.claude/session/active-reviewer"
+  local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
+  run_typed "$sb" "typed build agent is denied the marker grant" "$(typed_write_json "$marker" backend-engineer)" warn
+  run_typed "$sb" "typed code-reviewer gets the marker grant" "$(typed_write_json "$marker" code-reviewer)" silent
+  run_typed "$sb" "orchestrator gets the marker grant" "$(typed_write_json "$marker" "")" silent
+  rm -f "$sb/.claude/session/active-reviewer"
+  mkdir -p "$sb/.claude/session/active-reviewers/nosession"
+  printf '%s\n' "${REPO}#42:rex" > "$sb/.claude/session/active-reviewers/nosession/me2resh__apexyard__42-rex"
+  run_typed "$sb" "per-review marker file grants the sanctioned write" "$(typed_write_json "$marker" code-reviewer)" silent
+  run_typed "$sb" "per-review marker file does not grant a build agent" "$(typed_write_json "$marker" platform-engineer)" warn
+  rm -rf "$sb"
+}
+case49
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

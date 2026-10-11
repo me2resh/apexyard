@@ -98,16 +98,64 @@ When the skill stops, ask the CEO to do this, or to approve you doing it:
 
 1. Update the branch: `gh pr update-branch <pr> --repo <owner/repo>`.
 2. Wait for green CI on the updated branch.
-3. Get a short Rex re-review of the new merge commit. The SHA changed, so the
-   existing Rex marker no longer matches HEAD.
+3. Run the carry-over check before you ask for a Rex round. See
+   "Carry-over check after a refresh" below. Ask for a short Rex delta
+   re-review only when the check does not return `true`.
 4. Run `/approve-merge <pr>` again.
 
 Do not run the update-branch command yourself without the user's approval. The update
 pushes a merge commit to the PR's head branch. On a fork PR with maintainer
 edits that branch belongs to the contributor, not to this session. Do not
-update the branch before the first review either way — an update changes the
-SHA and invalidates any Rex approval already recorded. Update the branch once,
-just before the merge.
+update the branch before the first review either way. The carry-over check
+covers only one base merge on top of the SHA that Rex approved. Update the
+branch once, just before the merge.
+
+#### Carry-over check after a refresh (me2resh/apexyard#1638)
+
+A base-branch refresh changes the HEAD SHA, so the Rex marker names the old
+SHA. The merge gate can carry that marker over to the new HEAD (AgDR-0178,
+me2resh/apexyard#1437 and #1456). Do not spend a Rex round on a refresh that
+the gate accepts.
+
+Run this command from a clone of the PR's repository:
+
+```bash
+bash -c '. "$1/.claude/hooks/_lib-merge-behind.sh" && rex_approval_carries_over "$2" "$3" "$4" "$5"' \
+  _ <ops-root> <owner/repo> <rex-approved-sha> <new-head-sha> <base-branch>
+```
+
+`<ops-root>` is the root of the ops fork. `<rex-approved-sha>` is the SHA in
+the Rex marker. `<new-head-sha>` is the PR head after the refresh.
+
+- `true`: do not spawn Rex. The merge gate and `/approve-merge` step 4 run
+  the same check and accept the existing Rex marker.
+- `false` or `unknown`: ask for a short Rex delta re-review of the new merge
+  commit. The gate refuses the existing marker in both cases.
+
+The check returns `true` only when all of these conditions are true:
+
+- The forge reports the new HEAD as a merge commit with exactly two parents.
+- The first parent is the SHA that Rex approved.
+- The second parent is an ancestor of the base branch tip. The tip comes from
+  the forge branches endpoint, so a tag cannot replace the branch name.
+- An isolated `git merge-tree --write-tree` of the two parents gives the tree
+  that the forge reports for the new HEAD.
+
+The merge-tree step runs in an empty `GIT_DIR` that reads objects only
+through alternates. A local merge driver or grafts entry cannot change its
+result.
+
+A merge commit with a hand-resolved conflict fails the tree comparison. A
+merge commit with a hunk that git's own merge did not produce also fails it.
+Two existing tests prove the refusal:
+
+- `test_lib_merge_behind.sh` case 12: the check returns `false` for a
+  hand-resolved conflict merge.
+- `test_block_unreviewed_merge.sh` CO4: the merge gate still blocks that
+  merge.
+
+A rebase, a force-push, or a second base merge after the first does not
+qualify. Ask for a Rex delta re-review for each of them.
 
 This check adds no new blocking condition to `block-unreviewed-merge.sh`. The
 gate's marker and SHA checks stay unchanged. The stop happens inside
@@ -178,7 +226,7 @@ The mirror direction is also forbidden: a review-class agent (`code-reviewer`, `
 
 **`warn-review-marker-write.sh` is ADVISORY — it warns, it does not block.** It was a blocking gate from #843 until #1026 returned it to advisory per [AgDR-0111](../../docs/agdr/AgDR-0111-marker-gate-plain-advisory.md). Do not read it as enforcement:
 
-1. `warn-review-marker-write.sh` — PreToolUse hook that fires when a Write or Bash call looks like it targets `*-rex.approved`, `*-security.approved`, or `*-architecture.approved` under `.claude/session/reviews/`. It prints a warning and **exits 0** when no matching **active-reviewer session marker** exists at `.claude/session/active-reviewer.<session-id>` (one line: `<owner>/<repo>#<pr>:<kind>`), written by the orchestrator (or one of `/code-review`, `/security-review`, `/design-review`) immediately before spawning the sanctioned reviewer. The marker is scoped to the `CLAUDE_CODE_SESSION_ID` that wrote it (`active_reviewer_marker_path` in `_lib-review-markers.sh`, me2resh/apexyard#1376), so one session's review can never suppress or trigger this warning in a different session. Setting that marker suppresses the warning for the sanctioned write; it does not "unblock" anything, because nothing is blocked. `*-ceo.approved` has always been advisory-only and has its own structured-field defence in `block-unreviewed-merge.sh` (`sha=` / `approved_by=user` / `skill_version=`). A `clear-active-reviewer-marker.sh` SessionStart hook sweeps a stale marker left by an earlier, interrupted run of the SAME session, mirroring `clear-bootstrap-marker.sh`.
+1. `warn-review-marker-write.sh` — PreToolUse hook that fires when a Write or Bash call looks like it targets `*-rex.approved`, `*-security.approved`, or `*-architecture.approved` under `.claude/session/reviews/`. It prints a warning and **exits 0** when no matching **active-reviewer session marker** exists. There is one file per review at `.claude/session/active-reviewers/<session-id>/<owner>__<repo>__<pr>-<kind>` (one line: `<owner>/<repo>#<pr>:<kind>`), and the legacy `.claude/session/active-reviewer.<session-id>` file is still read. The orchestrator (or one of `/code-review`, `/security-review`, `/design-review`) writes it immediately before spawning the sanctioned reviewer. The marker is scoped to the `CLAUDE_CODE_SESSION_ID` that wrote it (`active_reviewer_marker_path` in `_lib-review-markers.sh`, me2resh/apexyard#1376), so one session's review can never suppress or trigger this warning in a different session. Setting that marker suppresses the warning for the sanctioned write; it does not "unblock" anything, because nothing is blocked. `*-ceo.approved` has always been advisory-only and has its own structured-field defence in `block-unreviewed-merge.sh` (`sha=` / `approved_by=user` / `skill_version=`). A `clear-active-reviewer-marker.sh` SessionStart hook sweeps a stale marker left by an earlier, interrupted run of the SAME session, mirroring `clear-bootstrap-marker.sh`.
 2. The prompt-convention guardrail in each build-agent file — a build agent is told plainly not to write these files, and that nothing will stop it, which is exactly why the instruction matters.
 
 **Why it stopped blocking.** It decided by pattern-matching the *text* of a shell command, which AgDR-0104 established cannot be made sound. It failed in both directions at once: 13 false positives in a single session (a read-only `grep`, a commit message, a reviewer's own prose, `/approve-merge`'s documented merge step) while the split-path spelling walked straight through. #843's actual root cause was separately repaired — `auto-code-review.sh`'s banner used to tell whoever ran `gh pr create` to "Invoke Rex NOW", which a build-class sub-agent cannot do, so twice (PRs #835, #842) it resolved the contradiction by writing the marker itself. That banner now addresses both readers explicitly (AgDR-0056), so the inducement is gone and the block was belt-and-braces on a fixed cause.
@@ -287,9 +335,9 @@ directly" and to "don't set the active-reviewer marker by hand". It applies
 only when the skill cannot run at all. A **build-class sub-agent is not the
 audience for it** — it cannot nest the Agent tool, so it must hand the PR back
 to the orchestrator, exactly as it would normally. Note that the active-reviewer
-marker is a provenance signal at `.claude/session/active-reviewer.<session-id>`
-(session-scoped since me2resh/apexyard#1376 — resolve it through
-`active_reviewer_marker_path`, never a literal path); it is not an
+marker is a provenance signal. There is one file per review, keyed on session,
+repo, PR and review kind (me2resh/apexyard#1649). Resolve it through
+`active_reviewer_marker_path`, never a literal path. It is not an
 approval marker, and setting it grants no gate-passing power.
 
 Adopters who hit this every session can settle the name collision permanently
@@ -325,6 +373,9 @@ Using `gh api .../merge` as a workaround for other issues (e.g. cross-repo resol
 
 A review is bound to a specific commit SHA — pushing additional commits invalidates the prior review.
 
+One exception: a base-branch refresh that the carry-over check accepts needs
+no new review. See § "Carry-over check after a refresh".
+
 ### Re-invoke as a delta re-review (me2resh/apexyard#1418)
 
 Re-invoke the reviewer as a delta re-review, not a fresh full review. The
@@ -332,7 +383,9 @@ reviewer reads only `git diff <last-reviewed-SHA>..HEAD` and checks each
 earlier finding against that delta. See `.claude/agents/code-reviewer.md`
 § "Delta Re-Reviews" and `.claude/agents/security-reviewer.md` § "Delta
 Re-Reviews" for the full procedure. A merge of the base branch into the PR
-branch gets a `git range-diff` check instead of a full re-read.
+branch gets a `git range-diff` check instead of a full re-read. Run the
+carry-over check first. Re-invoke the reviewer for that merge only when the
+check does not return `true`.
 
 The reviewer still writes a fresh approval marker at the new HEAD SHA on an
 APPROVED verdict. The merge gate is unchanged — it still compares the

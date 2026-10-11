@@ -59,7 +59,7 @@ while [ -n "$r" ] && [ "$r" != "/" ]; do
   r=$(dirname "$r")
 done
 . "$ops_root/.claude/hooks/_lib-review-markers.sh"
-active_marker=$(active_reviewer_marker_path "$ops_root")
+active_marker=$(active_reviewer_marker_path "$ops_root" "" "<owner/repo>" "<pr>" "architecture")
 mkdir -p "$(dirname "$active_marker")"
 printf '%s\n' "<owner/repo>#<pr>:architecture" > "$active_marker"
 ```
@@ -75,9 +75,11 @@ while [ -n "$r" ] && [ "$r" != "/" ]; do
   r=$(dirname "$r")
 done
 . "$ops_root/.claude/hooks/_lib-review-markers.sh"
-active_marker=$(active_reviewer_marker_path "$ops_root")
+active_marker=$(active_reviewer_marker_path "$ops_root" "" "<owner/repo>" "<pr>" "architecture")
 rm -f "$active_marker"
 ```
+
+The marker is keyed on session, repo, PR and review kind (me2resh/apexyard#1649). Each review writes and clears only its own file, so reviews run at the same time. The mutation lock applies to review agents only; the orchestrator and build agents can keep working. Use the same `<owner/repo>`, `<pr>` and kind in the write step and the exit step. Spawn the reviewer with the Agent tool and `subagent_type: solution-architect`. Never use `general-purpose`: the lock finds a review agent by that type.
 
 Doc-only reviews (no PR yet) never write a marker, so this step is a no-op for them. Nothing mechanically stops a build-class sub-agent writing the same file; what makes this marker legitimate is that a real, independent review happened. See `.claude/hooks/warn-review-marker-write.sh` and `.claude/rules/pr-workflow.md` § "Build agents cannot self-review".
 

@@ -5,10 +5,16 @@
 # workspace so a reviewer can provision an isolated checkout after the
 # active-reviewer marker is set (AgDR-0147, AgDR-0205 / #1509).
 #
-# The active-reviewer marker is written by the review skill immediately before
-# Rex, Hakim, or Tariq is spawned. It is a narrow session signal: when present,
-# review-class work is in flight, so Bash git mutations must be rejected before
-# they can alter the reviewed branch or working tree. Read-only git commands
+# WHO IS BLOCKED (me2resh/apexyard#1649, AgDR-0145 amendment): a review agent
+# only. The harness sets agent_type on every sub-agent tool call; the shared
+# helper review_caller_class (_lib-review-markers.sh) reads it. The orchestrator
+# and build agents are never blocked, so reviews and builds run at the same
+# time. A sub-agent with no type is blocked only while the session has a marker.
+#
+# The active-reviewer markers are written by the review skill immediately
+# before Rex, Hakim, or Tariq is spawned: one file per review. When one exists,
+# review-class work is in flight, so Bash git mutations by a review agent must
+# be rejected before they can alter the reviewed branch or working tree. Read-only git commands
 # remain available for evidence gathering and review submission.
 #
 # SESSION-SCOPED marker (me2resh/apexyard#1376): the marker path is keyed on
@@ -244,6 +250,34 @@ if [ -z "$ROOT" ] || [ ! -d "$ROOT/.claude/session" ]; then
 fi
 
 [ -n "$ROOT" ] || exit 0
+
+# Who is calling? The harness sets agent_type on a sub-agent call (AgDR-0145
+# amendment, me2resh/apexyard#1649). Only a review agent is locked. The
+# orchestrator (main thread) and build agents are never blocked, so reviews
+# and builds run at the same time. A sub-agent with no type is locked only
+# while this session has an active-reviewer marker. An unreadable payload
+# fails closed while a marker exists.
+CALLER_CLASS=main
+LIB_MISSING=0
+if command -v review_caller_class >/dev/null 2>&1; then
+  CALLER_CLASS=$(review_caller_class "$INPUT" "$ROOT")
+else
+  # The lib is missing. Fail closed (me2resh/apexyard#1649, review of PR 1651):
+  # a payload whose top-level agent_type is a review agent is treated as a
+  # reviewer and locked even with no marker. Any other caller keeps the old
+  # behaviour: locked while any marker exists.
+  LIB_MISSING=1
+  CALLER_CLASS=unparsable
+  _brrm_type=$(printf '%s' "$INPUT" | jq -r '.agent_type // empty' 2>/dev/null || true)
+  case "$_brrm_type" in
+    code-reviewer|security-reviewer|solution-architect) CALLER_CLASS=reviewer ;;
+  esac
+fi
+case "$CALLER_CLASS" in
+  reviewer|unparsable) ;;
+  *) exit 0 ;;
+esac
+
 if command -v active_reviewer_marker_path >/dev/null 2>&1; then
   ACTIVE=$(active_reviewer_marker_path "$ROOT")
 else
@@ -251,6 +285,25 @@ else
   # broken install fails no worse than it did before this change.
   ACTIVE="$ROOT/.claude/session/active-reviewer"
 fi
+
+# True when this session has any active-reviewer marker: one per review, or
+# the legacy single file kept readable during the transition.
+_brrm_has_marker() {
+  if [ "$LIB_MISSING" -eq 1 ]; then
+    [ "$CALLER_CLASS" = reviewer ] && return 0
+    [ -f "$ACTIVE" ] && return 0
+    local _f
+    for _f in "$ROOT"/.claude/session/active-reviewer.* "$ROOT"/.claude/session/active-reviewers/*/*; do
+      [ -f "$_f" ] && return 0
+    done
+    return 1
+  fi
+  if command -v active_reviewer_any_marker >/dev/null 2>&1; then
+    active_reviewer_any_marker "$ROOT"
+  else
+    [ -f "$ACTIVE" ]
+  fi
+}
 
 # ADVISORY ONLY (me2resh/apexyard#1400 security re-review, LOW 3): a session
 # with an id resolves ACTIVE to the session-suffixed path and never falls
@@ -284,7 +337,7 @@ MUTATING='add|commit|push|restore|reset|stash|clean|checkout|checkout-index|swit
 # mutations are not blocked. Name that fail-open state on stderr, but only when
 # the Bash payload is a git mutation — read-only commands such as `ls` must
 # stay silent (the legacy file is irrelevant to them).
-if [ ! -f "$ACTIVE" ] && [ -n "$SID" ] && [ "$ACTIVE" != "$LEGACY_ACTIVE" ] && [ -f "$LEGACY_ACTIVE" ]; then
+if ! _brrm_has_marker && [ -n "$SID" ] && [ "$ACTIVE" != "$LEGACY_ACTIVE" ] && [ -f "$LEGACY_ACTIVE" ]; then
   _legacy_advise=0
   if [ -z "$COMMAND" ]; then
     if printf '%s' "$INPUT" | grep -qE '(^|[^[:alnum:]_-])git[[:space:]]+([^;&|]*[[:space:]])?(add|commit|push|restore|reset|stash|clean|checkout|switch|mv|rm|rebase|cherry-pick|merge|tag|branch)([[:space:];|&]|$)'; then
@@ -299,7 +352,7 @@ if [ ! -f "$ACTIVE" ] && [ -n "$SID" ] && [ "$ACTIVE" != "$LEGACY_ACTIVE" ] && [
   exit 0
 fi
 
-[ -f "$ACTIVE" ] || exit 0
+_brrm_has_marker || exit 0
 
 if [ -z "$COMMAND" ]; then
   if printf '%s' "$INPUT" | grep -qE '(^|[^[:alnum:]_-])git[[:space:]]+([^;&|]*[[:space:]])?(add|commit|push|restore|reset|stash|clean|checkout|switch|mv|rm|rebase|cherry-pick|merge|tag|branch)([[:space:];|&]|$)'; then

@@ -16,7 +16,7 @@ import {
   openPrsFor,
   reReviewText,
   findOpsRoot,
-  lockLabel,
+  lockLabels,
   markerRef,
   newMarkers,
   rexMarkers,
@@ -140,8 +140,16 @@ async function refreshOnce($: EngineInterface) {
     offline = q.offline
   } catch {}
 
-  const lockText = await readText($, `${session}/active-reviewer.${safeSessionId(sid)}`)
-  const reviewLock = lockText ? lockLabel(lockText) : null
+  // One marker file per review (me2resh/apexyard#1649), plus the legacy single
+  // file that is still read during the transition.
+  const safeSid = safeSessionId(sid)
+  const lockTexts: Array<string | null> = []
+  try {
+    const setDir = `${session}/active-reviewers/${safeSid}`
+    for (const name of await $.fs.list(setDir)) lockTexts.push(await readText($, `${setDir}/${name}`))
+  } catch {}
+  lockTexts.push(await readText($, `${session}/active-reviewer.${safeSid}`))
+  const reviewLock = lockLabels(lockTexts)
 
   let builds: number | null = null
   if (settings.pattern.trim()) {
