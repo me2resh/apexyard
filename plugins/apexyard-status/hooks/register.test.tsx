@@ -36,6 +36,8 @@ describe('status band', () => {
     holdBand(on, {
       ticket: 'apexyard#1541 Optional status band',
       waiting: ['me2resh/apexyard#12'],
+      reReview: ['me2resh/apexyard#14'],
+      offline: false,
       reviewLock: 'me2resh/apexyard#13 (rex)',
       builds: 2,
     })
@@ -47,18 +49,30 @@ describe('status band', () => {
       ).toBeDefined()
       expect(await ui.find({ type: 'Text', text: 'review lock: me2resh/apexyard#13 (rex)' })).toBeDefined()
       expect(await ui.find({ type: 'Text', text: '2 builds running' })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: '1 needs re-review: me2resh/apexyard#14' })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: '(offline)' })).toBe(undefined)
       await ui.unmount()
     }
   })
 
   test('shows the empty states and hides the lock and the build count', async ($, on) => {
-    holdBand(on, { ticket: null, waiting: [], reviewLock: null, builds: null })
+    holdBand(on, { ticket: null, waiting: [], reReview: [], offline: false, reviewLock: null, builds: null })
     for (const surface of SURFACES) {
       const ui = await $.ui.mount({ ...BAND, surface })
       expect(await ui.find({ type: 'Text', text: 'no active ticket' })).toBeDefined()
       expect(await ui.find({ type: 'Text', text: 'nothing waiting for /approve-merge' })).toBeDefined()
       expect(await ui.find({ type: 'Text', text: 'review lock' })).toBe(undefined)
       expect(await ui.find({ type: 'Text', text: 'running' })).toBe(undefined)
+      expect(await ui.find({ type: 'Text', text: 're-review' })).toBe(undefined)
+      await ui.unmount()
+    }
+  })
+
+  test('marks the count offline when the open-PR check failed', async ($, on) => {
+    holdBand(on, { ticket: null, waiting: ['a/b#1'], reReview: [], offline: true, reviewLock: null, builds: null })
+    for (const surface of SURFACES) {
+      const ui = await $.ui.mount({ ...BAND, surface })
+      expect(await ui.find({ type: 'Text', text: '1 waiting for your /approve-merge (offline): a/b#1' })).toBeDefined()
       await ui.unmount()
     }
   })

@@ -17,20 +17,115 @@ export function markerRef(name: string): string | null {
   return `${m[1]}/${m[2]}#${m[3]}`
 }
 
-// The PRs that have a Rex marker newer than the window and no CEO marker.
-export function waitingFrom(entries: Entry[], now: number, windowDays: number): string[] {
+export type Candidate = { name: string; ref: string; repo: string; number: number }
+
+// The Rex markers newer than the window that have no CEO marker. These are
+// candidates only: a marker stays after a PR merges outside /approve-merge.
+export function candidatesFrom(entries: Entry[], now: number, windowDays: number): Candidate[] {
   const names = new Set(entries.map(e => e.name))
   const windowMs = Math.max(0, windowDays) * DAY_MS
-  const out: string[] = []
+  const out: Candidate[] = []
   for (const e of entries) {
-    if (!e.name.endsWith('-rex.approved')) continue
-    const ref = markerRef(e.name)
-    if (!ref) continue
+    const m = e.name.match(MARKER)
+    if (!m || m[4] !== 'rex') continue
     if (now - e.mtimeMs > windowMs) continue
     if (names.has(e.name.replace(/-rex\.approved$/, '-ceo.approved'))) continue
-    out.push(ref)
+    const repo = `${m[1]}/${m[2]}`
+    out.push({ name: e.name, ref: `${repo}#${m[3]}`, repo, number: Number(m[3]) })
   }
-  return out.sort()
+  return out.sort((x, y) => x.ref.localeCompare(y.ref))
+}
+
+// A GitHub owner/repo slug. Anything else is never passed to gh.
+export function validRepo(repo: string): boolean {
+  return /^[A-Za-z0-9_.][A-Za-z0-9_.-]*\/[A-Za-z0-9_.][A-Za-z0-9_.-]*$/.test(repo) && !repo.split('/').some(p => p === '.' || p === '..')
+}
+
+// The reviewed commit in a Rex marker (AgDR-0161: the bare SHA), or null.
+export function markerSha(text: string | null): string | null {
+  const t = text?.trim().split('\n')[0]?.trim() ?? ''
+  return /^[0-9a-f]{7,40}$/i.test(t) ? t.toLowerCase() : null
+}
+
+export type OpenPrs = Map<number, string>
+
+// The JSON list of open PRs ({ number, headRefOid } each) -> PR number to
+// head SHA. Null when the output is not that shape.
+export function parseOpenPrs(stdout: string): OpenPrs | null {
+  let v: unknown
+  try {
+    v = JSON.parse(stdout)
+  } catch {
+    return null
+  }
+  if (!Array.isArray(v)) return null
+  const out: OpenPrs = new Map()
+  for (const x of v) {
+    const o = x as { number?: unknown; headRefOid?: unknown }
+    if (typeof o.number === 'number' && typeof o.headRefOid === 'string') out.set(o.number, o.headRefOid.toLowerCase())
+  }
+  return out
+}
+
+export const GH_CACHE_MS = 120_000
+export const GH_TIMEOUT_MS = 5000
+
+export type GhResult = { exitCode: number; stdout: string }
+export type GhRun = (argv: readonly string[]) => Promise<GhResult>
+export type GhCache = Map<string, { at: number; open: OpenPrs | null }>
+
+// The read-only list command for one repo. An argument array, no shell.
+export function ghArgv(repo: string): string[] {
+  return ['gh', 'pr', 'list', '--repo', repo, '--state', 'open', '--json', 'number,headRefOid', '--limit', '200']
+}
+
+// The open PRs of one repo, from the cache when the last lookup is newer than
+// GH_CACHE_MS. Null when gh is missing, fails or times out, or the repo is not
+// a valid slug. A failed lookup is cached too, so gh runs at most once per
+// window for each repo.
+export async function openPrsFor(cache: GhCache, repo: string, now: number, run: GhRun): Promise<OpenPrs | null> {
+  if (!validRepo(repo)) return null
+  const hit = cache.get(repo)
+  if (hit && now - hit.at < GH_CACHE_MS) return hit.open
+  let open: OpenPrs | null = null
+  try {
+    const r = await run(ghArgv(repo))
+    open = r.exitCode === 0 ? parseOpenPrs(r.stdout) : null
+  } catch {
+    open = null
+  }
+  cache.set(repo, { at: now, open })
+  return open
+}
+
+export type Queue = { waiting: string[]; reReview: string[]; offline: boolean }
+
+// Sort the candidates with the open PRs of their repos:
+// - open, and the head is the commit Rex reviewed: waiting for /approve-merge
+// - open, with another head (or no SHA in the marker): needs re-review
+// - not open (merged or closed): dropped
+// A repo with no lookup (null) falls back to the marker only: its candidates
+// count as waiting and the queue is marked offline.
+export function classify(
+  cands: Candidate[],
+  shas: Map<string, string | null>,
+  open: Map<string, OpenPrs | null>,
+): Queue {
+  const q: Queue = { waiting: [], reReview: [], offline: false }
+  for (const c of cands) {
+    const prs = open.get(c.repo) ?? null
+    if (prs === null) {
+      q.waiting.push(c.ref)
+      q.offline = true
+      continue
+    }
+    const head = prs.get(c.number)
+    if (head === undefined) continue
+    const sha = shas.get(c.name) ?? null
+    if (sha && head.startsWith(sha)) q.waiting.push(c.ref)
+    else q.reReview.push(c.ref)
+  }
+  return q
 }
 
 // The Rex marker names in a directory listing (AgDR-0060 names only).
@@ -129,9 +224,18 @@ export function lockLabel(text: string): string | null {
 }
 
 // The text of the "waiting" segment. Lists up to three references.
-export function waitingText(waiting: string[]): string {
-  if (waiting.length === 0) return 'nothing waiting for /approve-merge'
+export function waitingText(waiting: string[], offline = false): string {
+  const tag = offline ? ' (offline)' : ''
+  if (waiting.length === 0) return `nothing waiting for /approve-merge${tag}`
   const shown = waiting.slice(0, 3).join(', ')
   const more = waiting.length > 3 ? ` +${waiting.length - 3}` : ''
-  return `${waiting.length} waiting for your /approve-merge: ${shown}${more}`
+  return `${waiting.length} waiting for your /approve-merge${tag}: ${shown}${more}`
+}
+
+// The text of the "needs re-review" segment, or null when it is empty.
+export function reReviewText(refs: string[]): string | null {
+  if (refs.length === 0) return null
+  const shown = refs.slice(0, 3).join(', ')
+  const more = refs.length > 3 ? ` +${refs.length - 3}` : ''
+  return `${refs.length} need${refs.length === 1 ? 's' : ''} re-review: ${shown}${more}`
 }

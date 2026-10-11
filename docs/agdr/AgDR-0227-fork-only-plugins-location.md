@@ -36,13 +36,14 @@ Rules for fork-only plugins:
 1. A fork-only plugin lives in `plugins/<name>/` and has its own `.claude-plugin/plugin.json`.
 2. The root `.claude-plugin/marketplace.json` lists it with `"source": "./plugins/<name>"`.
 3. The plugin is optional. The committed `.claude/settings.json` does not enable it. An operator installs it with `--scope local`, which writes only to the uncommitted `.claude/settings.local.json`.
-4. A fork-only plugin is display only. It reads files and never writes them. It never replaces a shell hook. All gates stay in `.claude/hooks/`.
+4. A fork-only plugin is display only. It reads files and never writes them. It can run read-only commands, such as a framework resolver, `ps`, or a read-only `gh` query. It never calls a write endpoint. It never replaces a shell hook. All gates stay in `.claude/hooks/`.
 5. The extraction script and the AgDR-0049 smoke test do not read `plugins/`.
 
 ## Consequences
 
 - An operator installs the band from the ops-fork root with two commands: `claude plugin marketplace add ./ --scope local` and `claude plugin install apexyard-status@apexyard --scope local`. `/setup` asks one yes/no question and runs them.
 - The CLI refuses a bare `.` as a marketplace source in Claude Code 2.1.296. The commands use `./`.
+- Change to #1541 (owner decision, 2026-10-11): #1541 ruled out network calls. The owner allowed one network call. Reason: review markers stay after a PR merges or closes outside `/approve-merge`, so a band that counts markers only shows stale `/approve-merge` requests. More than 40 such markers existed in one fork. The band now runs one read-only `gh pr list --state open` for each repo that has a candidate, at most once every 2 minutes, with a 5-second time limit, and keeps the result in memory. A PR waits only when it is open and its head is the commit in the Rex marker. If `gh` fails, the band counts from the markers and shows `(offline)`.
 - The plugin hook API is early access. If a Claude Code release changes it, the band disappears. No gate is affected.
 - A later fork-only plugin follows the same five rules. A plugin that also works outside a fork goes through AgDR-0049 instead.
 

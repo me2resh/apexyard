@@ -1,18 +1,26 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import {
+  candidatesFrom,
+  classify,
   countBuilds,
   findOpsRoot,
+  ghArgv,
   lockLabel,
   markerRef,
+  markerSha,
   newMarkers,
+  openPrsFor,
+  parseOpenPrs,
   parentDir,
+  reReviewText,
   rexMarkers,
   safeSessionId,
   ticketLabel,
-  waitingFrom,
+  validRepo,
   waitingText,
 } from './band'
+import type { Candidate, GhCache, GhRun, OpenPrs } from './band'
 import { readSettings, RESOLVE_TICKET } from './register'
 
 const DAY = 24 * 60 * 60 * 1000
@@ -27,7 +35,7 @@ describe('review markers (AgDR-0060 names)', () => {
     expect(markerRef('429-rex.approved')).toBe(null)
   })
 
-  test('waiting = recent Rex marker and no CEO marker', async () => {
+  test('candidates = recent Rex marker and no CEO marker', async () => {
     const now = 10 * DAY
     const entries = [
       { name: 'me2resh__apexyard__11-rex.approved', mtimeMs: now - 60_000 },
@@ -37,8 +45,15 @@ describe('review markers (AgDR-0060 names)', () => {
       { name: '429-rex.approved', mtimeMs: now },
       { name: 'acme__infra__30-architecture.approved', mtimeMs: now },
     ]
-    expect(waitingFrom(entries, now, 3)).toEqual(['acme/infra#176'])
-    expect(waitingFrom(entries, now, 7)).toEqual(['acme/infra#176', 'acme/infra#20'])
+    const refs = (days: number) => candidatesFrom(entries, now, days).map(c => c.ref)
+    expect(refs(3)).toEqual(['acme/infra#176'])
+    expect(refs(7)).toEqual(['acme/infra#176', 'acme/infra#20'])
+    expect(candidatesFrom(entries, now, 3)[0]).toEqual({
+      name: 'acme__infra__176-rex.approved',
+      ref: 'acme/infra#176',
+      repo: 'acme/infra',
+      number: 176,
+    })
   })
 
   test('the first refresh never toasts; later ones toast only new Rex markers', async () => {
@@ -57,6 +72,118 @@ describe('review markers (AgDR-0060 names)', () => {
     expect(waitingText(['a/b#1', 'a/b#2', 'a/b#3', 'a/b#4'])).toBe(
       '4 waiting for your /approve-merge: a/b#1, a/b#2, a/b#3 +1',
     )
+    expect(waitingText(['a/b#1'], true)).toBe('1 waiting for your /approve-merge (offline): a/b#1')
+    expect(waitingText([], true)).toBe('nothing waiting for /approve-merge (offline)')
+  })
+
+  test('re-review text', async () => {
+    expect(reReviewText([])).toBe(null)
+    expect(reReviewText(['a/b#1'])).toBe('1 needs re-review: a/b#1')
+    expect(reReviewText(['a/b#1', 'a/b#2'])).toBe('2 need re-review: a/b#1, a/b#2')
+  })
+
+  test('the marker SHA is the bare reviewed commit', async () => {
+    expect(markerSha('ABCDEF1234567\n')).toBe('abcdef1234567')
+    expect(markerSha('')).toBe(null)
+    expect(markerSha('approved by rex')).toBe(null)
+    expect(markerSha(null)).toBe(null)
+  })
+})
+
+const SHA_A = 'a'.repeat(40)
+const SHA_B = 'b'.repeat(40)
+const cand = (repo: string, n: number): Candidate => ({
+  name: `${repo.replace('/', '__')}__${n}-rex.approved`,
+  ref: `${repo}#${n}`,
+  repo,
+  number: n,
+})
+
+describe('open-PR check (cached, read only)', () => {
+  test('open with the reviewed head -> waiting; another head -> re-review; not open -> dropped', async () => {
+    const c1 = cand('me2resh/apexyard', 1)
+    const c2 = cand('me2resh/apexyard', 2)
+    const c3 = cand('me2resh/apexyard', 3)
+    const shas = new Map([[c1.name, SHA_A], [c2.name, SHA_A], [c3.name, SHA_A]])
+    const open = new Map<string, OpenPrs | null>([['me2resh/apexyard', new Map([[1, SHA_A], [2, SHA_B]])]])
+    expect(classify([c1, c2, c3], shas, open)).toEqual({
+      waiting: ['me2resh/apexyard#1'],
+      reReview: ['me2resh/apexyard#2'],
+      offline: false,
+    })
+  })
+
+  test('a short SHA in the marker matches the full head', async () => {
+    const c = cand('a/b', 5)
+    const q = classify([c], new Map([[c.name, 'aaaaaaa']]), new Map([['a/b', new Map([[5, SHA_A]])]]))
+    expect(q.waiting).toEqual(['a/b#5'])
+  })
+
+  test('an open PR whose marker has no SHA needs re-review', async () => {
+    const c = cand('a/b', 6)
+    const q = classify([c], new Map([[c.name, null]]), new Map([['a/b', new Map([[6, SHA_A]])]]))
+    expect(q.reReview).toEqual(['a/b#6'])
+  })
+
+  test('a repo with a failed lookup falls back to the markers and is offline', async () => {
+    const c1 = cand('a/b', 1)
+    const c2 = cand('c/d', 2)
+    const open = new Map<string, OpenPrs | null>([['a/b', null], ['c/d', new Map()]])
+    expect(classify([c1, c2], new Map(), open)).toEqual({ waiting: ['a/b#1'], reReview: [], offline: true })
+  })
+
+  test('the gh command is read only, an argument array, and needs a valid repo', async () => {
+    expect(ghArgv('me2resh/apexyard')).toEqual([
+      'gh', 'pr', 'list', '--repo', 'me2resh/apexyard', '--state', 'open',
+      '--json', 'number,headRefOid', '--limit', '200',
+    ])
+    expect(validRepo('me2resh/apexyard')).toBe(true)
+    expect(validRepo('acme/my_repo.js')).toBe(true)
+    expect(validRepo('a/b; rm -rf /')).toBe(false)
+    expect(validRepo('../b')).toBe(false)
+    expect(validRepo('a/b/c')).toBe(false)
+    expect(validRepo('-R/x')).toBe(false)
+    expect(validRepo('me2resh/.github')).toBe(true)
+  })
+
+  test('parses the open-PR list and refuses another shape', async () => {
+    const out = parseOpenPrs(JSON.stringify([{ number: 7, headRefOid: SHA_A.toUpperCase() }, { number: 'x' }]))
+    expect(out && [...out.entries()]).toEqual([[7, SHA_A]])
+    expect(parseOpenPrs('not json')).toBe(null)
+    expect(parseOpenPrs('{}')).toBe(null)
+  })
+
+  test('the lookup is cached for 120 seconds per repo, failures too', async () => {
+    const calls: string[][] = []
+    let ok = true
+    const run: GhRun = async argv => {
+      calls.push([...argv])
+      if (!ok) throw new Error('gh: not found')
+      return { exitCode: 0, stdout: JSON.stringify([{ number: 1, headRefOid: SHA_A }]) }
+    }
+    const cache: GhCache = new Map()
+    expect((await openPrsFor(cache, 'a/b', 0, run))?.get(1)).toBe(SHA_A)
+    await openPrsFor(cache, 'a/b', 119_999, run)
+    expect(calls.length).toBe(1)
+    await openPrsFor(cache, 'c/d', 1000, run)
+    expect(calls.length).toBe(2)
+    ok = false
+    expect(await openPrsFor(cache, 'a/b', 120_000, run)).toBe(null)
+    expect(calls.length).toBe(3)
+    expect(await openPrsFor(cache, 'a/b', 200_000, run)).toBe(null)
+    expect(calls.length).toBe(3)
+  })
+
+  test('a failed or invalid lookup returns null and never throws', async () => {
+    const fail: GhRun = async () => ({ exitCode: 4, stdout: '' })
+    expect(await openPrsFor(new Map(), 'a/b', 0, fail)).toBe(null)
+    let called = false
+    const spy: GhRun = async () => {
+      called = true
+      return { exitCode: 0, stdout: '[]' }
+    }
+    expect(await openPrsFor(new Map(), 'not a repo', 0, spy)).toBe(null)
+    expect(called).toBe(false)
   })
 })
 

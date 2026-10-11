@@ -1,12 +1,20 @@
-// ApexYard status band. Display only: it reads files under the ops fork and
-// draws one line above the prompt. It never writes a file and never replaces
-// a shell hook. All gates stay in .claude/hooks/.
+// ApexYard status band. Display only: it reads files under the ops fork,
+// runs read-only commands (the ticket resolver, one cached open-PR list per
+// repo, and ps when a build pattern is set) and draws one line above the
+// prompt. It never writes a file and never replaces a shell hook. All gates
+// stay in .claude/hooks/.
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Band } from '../types'
 import {
+  candidatesFrom,
+  classify,
   countBuilds,
+  GH_TIMEOUT_MS,
+  markerSha,
+  openPrsFor,
+  reReviewText,
   findOpsRoot,
   lockLabel,
   markerRef,
@@ -14,9 +22,9 @@ import {
   rexMarkers,
   safeSessionId,
   ticketLabel,
-  waitingFrom,
   waitingText,
 } from './band'
+import type { GhCache, OpenPrs } from './band'
 
 const band = atom({ plugin: 'apexyard-status', key: 'band' } as const, null)
 
@@ -74,6 +82,9 @@ type Seen = { rex: Set<string> | null; builds: number | null }
 // Module state. A reload of the module starts these over, so the first
 // refresh after a reload seeds them and does not toast.
 const seen: Seen = { rex: null, builds: null }
+// Open PRs per repo, in memory only. openPrsFor refreshes an entry at most
+// once every GH_CACHE_MS.
+const ghCache: GhCache = new Map()
 let settings: Settings = readSettings(undefined)
 let busy = false
 
@@ -92,7 +103,9 @@ async function refreshOnce($: EngineInterface) {
   const sid = await $.session.id()
   const home = await $.env.get('HOME')
   const pinDir = (await $.env.get('APEXYARD_OPS_PIN_DIR')) || (home ? `${home}/.claude/apexyard` : '')
-  const pinned = pinDir ? await readText($, `${pinDir}/ops-root-${sid}`) : null
+  // APEXYARD_OPS_DISABLE_PIN=1 ignores the pin, as resolve_ops_root does.
+  const pinOff = (await $.env.get('APEXYARD_OPS_DISABLE_PIN')) === '1'
+  const pinned = pinDir && !pinOff ? await readText($, `${pinDir}/ops-root-${sid}`) : null
   const root = await findOpsRoot(pinned, cwd, p => exists($, p))
   if (!root) {
     await update($, band, () => null)
@@ -104,11 +117,27 @@ async function refreshOnce($: EngineInterface) {
   const ticket = marker ? ticketLabel(marker) : null
 
   let waiting: string[] = []
+  let reReview: string[] = []
+  let offline = false
   let rexNow = new Set<string>()
   try {
-    const entries = await $.fs.list(`${session}/reviews`)
-    waiting = waitingFrom(entries, await $.clock.now(), settings.windowDays)
+    const reviews = `${session}/reviews`
+    const entries = await $.fs.list(reviews)
+    const now = await $.clock.now()
     rexNow = rexMarkers(entries)
+    const cands = candidatesFrom(entries, now, settings.windowDays)
+    const shas = new Map<string, string | null>()
+    const open = new Map<string, OpenPrs | null>()
+    for (const c of cands) {
+      shas.set(c.name, markerSha(await readText($, `${reviews}/${c.name}`)))
+      if (!open.has(c.repo)) {
+        open.set(c.repo, await openPrsFor(ghCache, c.repo, now, argv => $.process.run(argv, { timeoutMs: GH_TIMEOUT_MS })))
+      }
+    }
+    const q = classify(cands, shas, open)
+    waiting = q.waiting
+    reReview = q.reReview
+    offline = q.offline
   } catch {}
 
   const lockText = await readText($, `${session}/active-reviewer.${safeSessionId(sid)}`)
@@ -132,7 +161,7 @@ async function refreshOnce($: EngineInterface) {
   seen.rex = rexNow
   seen.builds = builds
 
-  const next: Band = { ticket, waiting, reviewLock, builds }
+  const next: Band = { ticket, waiting, reReview, offline, reviewLock, builds }
   await update($, band, () => next)
 }
 
@@ -164,8 +193,10 @@ export const register: Register = (on, options) => {
         <Text key="ticket">{b.ticket ?? 'no active ticket'}</Text>
         <Text key="sep1" dimColor> · </Text>
         <Text key="waiting" color={b.waiting.length ? 'yellow' : undefined} dimColor={b.waiting.length === 0}>
-          {waitingText(b.waiting)}
+          {waitingText(b.waiting, b.offline)}
         </Text>
+        {b.reReview.length ? <Text key="sep4" dimColor> · </Text> : null}
+        {b.reReview.length ? <Text key="rereview" color="magenta">{reReviewText(b.reReview)}</Text> : null}
         {b.reviewLock ? <Text key="sep2" dimColor> · </Text> : null}
         {b.reviewLock ? <Text key="lock" color="magenta">review lock: {b.reviewLock}</Text> : null}
         {b.builds !== null ? <Text key="sep3" dimColor> · </Text> : null}
