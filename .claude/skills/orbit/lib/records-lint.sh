@@ -60,11 +60,21 @@ fi
 
 # Select the files for checks 2 to 5.
 files=()
-if [ "$check_all" -eq 0 ] && git -C "$orbit_root" rev-parse --verify -q "$base" >/dev/null 2>&1; then
+use_diff=0
+if [ "$check_all" -eq 0 ]; then
+  if git -C "$orbit_root" rev-parse --verify -q "$base" >/dev/null 2>&1; then
+    use_diff=1
+  else
+    echo "records-lint: notice: base ref $base not found, so the lint checks every record file." >&2
+  fi
+fi
+if [ "$use_diff" -eq 1 ]; then
   top=$(git -C "$orbit_root" rev-parse --show-toplevel)
+  # Diff against the merge base, not the tip of the base ref.
+  mb=$(git -C "$orbit_root" merge-base "$base" HEAD 2>/dev/null) || mb="$base"
   while IFS= read -r f; do
     [ -n "$f" ] && [ -f "$top/$f" ] && files+=("$top/$f")
-  done < <({ git -C "$orbit_root" diff --name-only "$base" -- .
+  done < <({ git -C "$orbit_root" diff --name-only "$mb" -- .
              git -C "$orbit_root" ls-files --others --exclude-standard --full-name -- .; } | sort -u)
 else
   while IFS= read -r f; do files+=("$f"); done < <(find "$orbit_root" -type f \( -name '*.json' -o -name '*.md' \) | sort)

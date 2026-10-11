@@ -49,6 +49,19 @@ printf '{"criterionAssessments":[{"criterionId":"ac1-1","status":"not-verified"}
 out=$("$script" --previous "$sb/prev.json" --candidate "$sb/cand.json" --notes "$notes" --commit 1111111 --date 2026-10-15)
 [ "$out" = "changed: ac1-2" ] || { echo "FAIL: removed criterion not reported: $out"; fail=1; }
 
+# The same file as previous and candidate is refused and nothing is deleted.
+mk "$sb/same.json" not-verified
+ln -s same.json "$sb/link.json"
+before=$(cat "$notes")
+for pair in "$sb/same.json $sb/same.json" "$sb/same.json $sb/link.json"; do
+  set -- $pair
+  out=$("$script" --previous "$1" --candidate "$2" --notes "$notes" --commit 2222222 --date 2026-10-16 2>&1); rc=$?
+  [ "$rc" -eq 21 ] || { echo "FAIL: same-file case exit $rc, expected 21 ($out)"; fail=1; }
+  case "$out" in *"same file"*) ;; *) echo "FAIL: no clear message: $out"; fail=1 ;; esac
+  [ -e "$sb/same.json" ] || { echo "FAIL: same-file case deleted the record"; fail=1; }
+  [ "$(cat "$notes")" = "$before" ] || { echo "FAIL: same-file case changed the notes"; fail=1; }
+done
+
 rm -rf "$sb"
 [ "$fail" -eq 0 ] && echo "PASS: a reconciliation is written only on a status change"
 exit "$fail"

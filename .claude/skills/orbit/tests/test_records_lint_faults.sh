@@ -72,6 +72,13 @@ set_why "Fixture reason."
 fixtures_install_mock_orbit "$sb" 1
 expect "a validate fault stops first" 10 "[validate]"
 
+fixtures_install_mock_orbit "$sb"
+set_expl "$good_expl"
+# A missing base ref prints one notice and checks every file.
+out=$("$lint" --orbit-root "$orbit_root" --base origin/does-not-exist 2>&1); rc=$?
+case "$out" in *"notice: base ref origin/does-not-exist not found"*) ;; *) echo "FAIL: no fallback notice: $out"; fail=1 ;; esac
+case "$out" in *"validate"*|*FAIL*) echo "FAIL: unexpected fault: $out"; fail=1 ;; esac
+
 rm -rf "$sb"
 [ "$fail" -eq 0 ] && echo "PASS: records-lint stops on the first fault"
 exit "$fail"

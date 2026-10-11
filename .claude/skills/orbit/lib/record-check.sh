@@ -7,7 +7,7 @@
 # and appends one dated line to the "## Checks" section of the plan notes.
 #
 # Usage: record-check.sh --previous <file> --candidate <file> --notes <file> --commit <sha> [--date YYYY-MM-DD]
-# Exit: 0 either way; 20 usage or bad input.
+# Exit: 0 either way; 20 usage or bad input; 21 previous and candidate are the same file.
 
 set -u
 previous=""; candidate=""; notes=""; commit=""; date_str=""
@@ -26,6 +26,13 @@ done
 for f in "$previous" "$candidate" "$notes"; do [ -f "$f" ] || { echo "record-check: file not found: $f" >&2; exit 20; }; done
 command -v jq >/dev/null 2>&1 || { echo "record-check: jq is required." >&2; exit 20; }
 [ -n "$date_str" ] || date_str=$(date -u +%Y-%m-%d)
+
+# Refuse when both paths name one file: the unchanged branch deletes the candidate.
+real_path() { printf '%s/%s' "$(cd "$(dirname "$1")" && pwd -P)" "$(basename "$1")"; }
+if [ "$(real_path "$previous")" = "$(real_path "$candidate")" ] || [ "$previous" -ef "$candidate" ]; then
+  echo "record-check: --previous and --candidate are the same file ($previous). Refusing: nothing was changed or deleted." >&2
+  exit 21
+fi
 
 statuses() { jq -c '[.criterionAssessments[] | {(.criterionId): .status}] | add // {}' "$1"; }
 prev=$(statuses "$previous") || { echo "record-check: cannot read $previous" >&2; exit 20; }
