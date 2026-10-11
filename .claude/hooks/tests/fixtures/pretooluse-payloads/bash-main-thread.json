@@ -1,0 +1,17 @@
+{
+  "cwd": "/redacted/cwd",
+  "effort": {
+    "level": "high"
+  },
+  "hook_event_name": "PreToolUse",
+  "permission_mode": "bypassPermissions",
+  "prompt_id": "redacted-prompt",
+  "session_id": "00000000-0000-4000-8000-000000000001",
+  "tool_input": {
+    "command": "echo MAIN_CALL",
+    "description": "Echo MAIN_CALL"
+  },
+  "tool_name": "Bash",
+  "tool_use_id": "toolu_redacted",
+  "transcript_path": "/redacted/transcript.jsonl"
+}

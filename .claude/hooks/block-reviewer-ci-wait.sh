@@ -16,7 +16,7 @@
 #   1. The hook input carries agent_type. Claude Code sets it to the agent
 #      name for a tool call made inside a sub-agent (hooks reference,
 #      PreToolUse input). A review agent is one whose type is in the
-#      allowlist below. Any other type is not a review agent: allow.
+#      allowlist in the shared lib. Any other type is not a review agent: allow.
 #   2. The input carries agent_id but no agent_type (a sub-agent with no
 #      type). Fall back to the session's active-reviewer marker
 #      (active_reviewer_marker_path in _lib-review-markers.sh). Marker
@@ -35,9 +35,8 @@ set -u
 
 INPUT=$(cat)
 
-# Allowlist of review agent slugs. Add a slug here when a new review-class
-# agent is created.
-REVIEW_AGENT_SLUGS="code-reviewer security-reviewer solution-architect"
+# The review agent allowlist lives in _lib-review-markers.sh
+# (REVIEW_AGENT_SLUGS). Add a slug there when a review-class agent is created.
 
 command -v jq >/dev/null 2>&1 || exit 0
 
@@ -76,16 +75,11 @@ find_ops_root() {
 
 ROOT=""
 IS_REVIEWER=0
-if [ -n "$AGENT_TYPE" ]; then
-  for slug in $REVIEW_AGENT_SLUGS; do
-    [ "$AGENT_TYPE" = "$slug" ] && IS_REVIEWER=1
-  done
-elif [ -n "$AGENT_ID" ]; then
+# Shared detection (review_caller_class in _lib-review-markers.sh): the
+# harness agent_type first, the marker only for a sub-agent with no type.
+if command -v review_caller_class >/dev/null 2>&1; then
   ROOT=$(find_ops_root)
-  if [ -n "$ROOT" ] && command -v active_reviewer_marker_path >/dev/null 2>&1; then
-    marker=$(active_reviewer_marker_path "$ROOT")
-    [ -f "$marker" ] && IS_REVIEWER=1
-  fi
+  [ "$(review_caller_class "$INPUT" "$ROOT")" = "reviewer" ] && IS_REVIEWER=1
 fi
 [ "$IS_REVIEWER" -eq 1 ] || exit 0
 

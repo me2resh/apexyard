@@ -335,9 +335,9 @@ directly" and to "don't set the active-reviewer marker by hand". It applies
 only when the skill cannot run at all. A **build-class sub-agent is not the
 audience for it** — it cannot nest the Agent tool, so it must hand the PR back
 to the orchestrator, exactly as it would normally. Note that the active-reviewer
-marker is a provenance signal at `.claude/session/active-reviewer.<session-id>`
-(session-scoped since me2resh/apexyard#1376 — resolve it through
-`active_reviewer_marker_path`, never a literal path); it is not an
+marker is a provenance signal. There is one file per review, keyed on session,
+repo, PR and review kind (me2resh/apexyard#1649). Resolve it through
+`active_reviewer_marker_path`, never a literal path. It is not an
 approval marker, and setting it grants no gate-passing power.
 
 Adopters who hit this every session can settle the name collision permanently

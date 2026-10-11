@@ -35,7 +35,8 @@ Requirements: Python 3.9 or later, `git`, and an authenticated `gh` for the forg
 | Session | `session --transcript <session.jsonl>` | Context per turn (mean, p50, p90, p99, max), context share by category, skill injections, compactions, main-loop cache rebuilds, main-loop cache rebuilds during a CI wait, requests with 1-hour and 5-minute cache writes, wall time |
 | Reviewer | `reviewers --subagents <session-dir>/subagents` | Per reviewer and per review: first-turn context, total tokens, cache-read tokens, tool calls, CI-wait turns, long CI waits, cache rebuilds, resume rebuilds, cache TTL, wall time. Other agent types in a separate table |
 | Forge | `forge --forge-range A-B` or `--forge-last N` | Rex rounds per PR, hours from open to merge, pure-refresh rounds and refresh events, records PRs |
-| Report | `report` with any of the options above | All views in one JSON or Markdown document |
+| Locks | `locks --transcript <session.jsonl> --subagents <session-dir>/subagents` | Tool calls that the reviewer lock blocked, split into blocked commits, blocked pushes and other commands, and per UTC day |
+| Report | `report` with any of the options above | All views in one JSON or Markdown document. A transcript or subagents option adds the lock counts |
 | Compare | `compare before.json after.json` | The relative change of each metric between two JSON reports |
 
 Use `--since` and `--until` (ISO-8601) to measure one window of a session.
@@ -78,6 +79,24 @@ The tests in `.claude/hooks/tests/token_cost/` check each rule on fixture transc
 - **Refresh event**: a base-merge commit after a Rex approval, with no other commit between that approval and the merge.
   Each Rex approval starts its own count. The script counts pure-refresh rounds after each approval too.
 - **Records PR**: every file is under `docs/orbit/`, with or without one `docs/agdr/AgDR-*.md` file.
+
+## Count blocked commits and pushes
+
+The `locks` view counts hook blocks that the reviewer mutation lock caused (me2resh/apexyard#1649).
+A block is a failed tool result that starts with `PreToolUse:` and `hook error`, and contains the lock message `BLOCKED: review-class agent`.
+Text that only quotes the message, for example an issue body, does not count.
+The script looks up the command of the call by its tool-use id and sorts the block into commit, push or other.
+
+Rule for combining counts across sessions:
+
+1. Name each block by its tool-use id.
+2. Read every main-loop transcript and every subagent transcript of the period.
+3. Count each tool-use id once. A resumed session copies earlier records into a new file.
+4. Add the counts of all transcripts. Report `commit_or_push` as the headline number.
+5. Group by the UTC date of the result when the period spans several days.
+
+Run the script with several `--transcript` and `--subagents` options to combine sessions in one call.
+The script counts blocks that reach the transcript. It cannot count a block that a hook logs only to a file.
 
 ## Record the before and after numbers of a slice
 
