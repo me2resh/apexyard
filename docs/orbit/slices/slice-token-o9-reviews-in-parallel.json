@@ -9,7 +9,7 @@
     "repositories": {}
   },
   "objective": "Identify review agents by the agent type in the hook input. Reviews and build agents then run at the same time, and the orchestrator is never blocked.",
-  "why": "ac9-1 is not-verified. On 2026-10-11 the session-wide review lock held up two build commits and five orbit-spec builds, and reviews ran one at a time. Owner decision 2026-10-11: o9 runs before the harness o1 slice (#1623), which rebases on it.",
+  "why": "ac9-1 is not-verified. On 2026-10-11 the session-wide review lock held up two build commits and five orbit-spec builds, and reviews ran one at a time. Owner decision 2026-10-11: the harness o1 slice (#1623) merges first, because its PR was ready first. o9 builds on it, so o9 fails closed from the start.",
   "contributesTo": [
     "ac9-1"
   ],
@@ -29,7 +29,7 @@
     ],
     "exclude": [
       "Any edit to block-unreviewed-merge.sh or block-merge-on-red-ci.sh (C1)",
-      "Fail-closed dispatch for crashed hooks: until the harness o1 slice (#1623) lands, a crashed reviewer hook only warns",
+      "Fail-closed dispatch for crashed hooks, which the harness o1 slice (#1623) delivers before o9",
       "Review depth tiers and the delta review format (o7)",
       "Reviewer prompt text (harness o4 eval cycle)"
     ]
