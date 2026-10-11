@@ -224,7 +224,7 @@ evidence the PR is up to date.
          .claude/rules/pr-workflow.md "Carry-over check after a refresh").
          On true, the merge gate carries the existing Rex approval over
          (forge-verified two-parent merge whose tree matches an isolated
-         `git merge-tree --write-tree` of the parents; me2resh/apexyard#1437,
+         `git merge-tree --write-tree` of the parents, me2resh/apexyard#1437,
          hardened in #1456). Ask for a short Rex delta re-review of the
          new merge commit only when the check does not return true. Write
          no marker by hand either way.
