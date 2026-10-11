@@ -116,7 +116,7 @@ Criterion ac2-2 must measure a real session at 500,000 with the o1 script. If th
 |---|---|
 | The setting does not exist. | Not met. `autoCompactWindow` exists and works in `claude -p`. |
 | Two runs show no difference beyond run-to-run variance. | Not met. The windows differ by far more than the variance. |
-| Budget of about 2 hours of agent time and a hard spend cap. | Met. The spike used well under 2 hours and 36.83 USD. |
+| Budget of about 2 hours of agent time and a hard spend cap. | Not met. The spike stayed inside the budget: well under 2 hours and 36.83 USD. |
 
 ## Out of scope
 
