@@ -54,9 +54,10 @@ These rules are binding (slice `slice-plan-apexyard-token-efficiency-20261011T05
 The tests in `.claude/hooks/tests/token_cost/` check each rule on fixture transcripts.
 
 - **CI-wait turn**: a reviewer turn whose only tool call polls CI status.
-  - A poll is `gh pr checks`, `gh run watch|view|list`, a `gh api` call on check runs, statuses or Actions runs, or a `--watch` call.
+  - A poll is `gh pr checks`, `gh run watch|view|list`, a `gh api` call on check runs, statuses or Actions runs. A `--watch` flag counts only on the checks command.
   - A bare `sleep N` counts as a poll, because a reviewer sleeps only to wait for CI.
   - The first single `gh pr checks` turn of a run does not count.
+  - The first checks call of a run uses up this exemption in any turn shape. After a check in a turn with other tool calls, a later single check counts.
   - A turn with a poll and another tool call does not count.
 - **Cache rebuild**: a request whose cache-creation tokens exceed half its input tokens.
   - The first request of a run builds the cache. The script does not count it as a rebuild.
@@ -74,7 +75,8 @@ The tests in `.claude/hooks/tests/token_cost/` check each rule on fixture transc
 - **Pure-refresh round**: a Rex round on a head that differs from the approved head only by a base merge.
   - A base merge is a merge commit with a parent outside the PR commits.
   - The approved head is the head of the last Rex APPROVED round.
-- **Refresh event**: a base-merge commit after the last Rex approval, with no other commit between.
+- **Refresh event**: a base-merge commit after a Rex approval, with no other commit between that approval and the merge.
+  Each Rex approval starts its own count. The script counts pure-refresh rounds after each approval too.
 - **Records PR**: every file is under `docs/orbit/`, with or without one `docs/agdr/AgDR-*.md` file.
 
 ## Record the before and after numbers of a slice
@@ -114,6 +116,20 @@ Run `.claude/hooks/check-private-refs-runtime.sh <file>` before you commit it.
 | ac7-5 | `reviewers.Rex.total_tokens_median` |
 | ac7-6 | `reviewers.resume_rebuilds_per_100_runs` |
 | ac8-5 | `forge.records_pr_rex_rounds_mean` and the records PR table |
+
+## Baseline corrections
+
+The re-measurement in PR #1633 corrected one number of the 2026-10-10 reconciliation.
+
+- **CI-wait turns**: the reconciliation says 469 turns in 195 of 350 reviewer runs. That number counted tool calls, not turns.
+- Under the counting rule above, the same 350 runs have 411 CI-wait turns in 178 runs.
+- All transcripts up to 2026-10-10T23:59:59Z have 420 CI-wait turns in 185 of 388 reviewer runs. The baseline file holds this number.
+- The difference from 469 on the same 350 runs has four parts:
+  - 50 calls were in turns with a second tool call. The rule does not count those turns.
+  - 10 calls were `sleep` commands that waited for a file or a process, not for CI.
+  - 4 single polls count now. The earlier count exempted the first poll of any command, and the rule exempts only the first checks call.
+  - 2 single checks are exempt now, because each is the first checks call of its run.
+- So 469 - 50 - 10 + 4 - 2 = 411. Cite 420 in 185 of 388 as the ac4-2 and ac4-4 baseline.
 
 ## Limits
 

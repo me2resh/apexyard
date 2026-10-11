@@ -81,6 +81,32 @@ class TokenCostTests(unittest.TestCase):
         self.assertEqual(self.run_records([assistant(1, commands=bash('gh pr checks 12')),
                                           assistant(2, commands=bash('gh pr checks 12'))])['ci_wait_turns'], 1)
 
+    def test_ci_wait_exemption_spent_by_check_in_multi_tool_turn(self):
+        # The first checks call of the run uses up the exemption even when it
+        # shares its turn with another tool, so a later lone check counts.
+        run = self.run_records([
+            assistant(1, commands=bash('gh pr checks 12') + bash('echo fixture')),
+            assistant(2, commands=bash('gh pr checks 12'))])
+        self.assertEqual(run['ci_wait_turns'], 1)
+        # A poll that is not a plain check does not use up the exemption.
+        run = self.run_records([
+            assistant(1, commands=bash('gh run view 1') + bash('echo fixture')),
+            assistant(2, commands=bash('gh pr checks 12'))])
+        self.assertEqual(run['ci_wait_turns'], 0)
+
+    def test_watch_flag_counts_only_for_ci_commands(self):
+        for command, expected in [('gh pr checks 12 --watch', 1), ('gh run watch 1', 1),
+                                  ('npm test -- --watch', 0), ('fixture-tool --watch', 0)]:
+            with self.subTest(command=command):
+                self.assertEqual(self.run_records([assistant(1, commands=bash(command))])['ci_wait_turns'], expected)
+
+    def test_session_tolerates_wrong_type_fields(self):
+        data = json.loads(self.cli('session', '--transcript', FIXTURES / 'session-malformed.jsonl'))
+        self.assertEqual(data['api_turns'], 2)
+        self.assertEqual(data['compactions']['count'], 1)
+        self.assertEqual(data['compactions']['mean_pre'], 0)
+        self.assertEqual(data['context_per_turn']['max'], 100)
+
     def test_ci_wait_only_tool(self):
         for commands in [bash('gh run view 1') + bash('echo fixture'), bash('echo fixture')]:
             with self.subTest(commands=commands):
@@ -132,6 +158,10 @@ class TokenCostTests(unittest.TestCase):
         self.assertEqual(data['resume_rebuilds_per_100_runs'], 33.33)
 
     def test_session_cli_metrics(self):
+        # tracked_skills() reads `git ls-files`. Outside a git work tree every
+        # skill is "other" by design, so the skill assertions need a checkout.
+        if not tc.tracked_skills(str(ROOT)):
+            self.skipTest('not a git work tree: tracked skills are unknown')
         data = json.loads(self.cli('session', '--transcript', FIXTURES / 'session.jsonl'))
         self.assertEqual(data['api_turns'], 10)
         self.assertEqual(data['context_per_turn']['mean'], 550)

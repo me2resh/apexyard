@@ -48,10 +48,10 @@ LONG_WAIT_SECONDS = 300  # A wait of this length or more can expire a 5-minute c
 # A command polls CI when it reads check or run status, or watches it.
 CI_POLL_RE = re.compile(
     r"gh\s+pr\s+checks|gh\s+run\s+(?:watch|view|list)"
-    r"|gh\s+api\s+\S*(?:check-runs|check-suites|/status\b|/actions/runs)|--watch",
+    r"|gh\s+api\s+\S*(?:check-runs|check-suites|/status\b|/actions/runs)",
     re.I,
 )
-CI_WATCH_RE = re.compile(r"--watch|gh\s+run\s+watch", re.I)
+CI_WATCH_RE = re.compile(r"gh\s+pr\s+checks\b[^\n;&|]*--watch|gh\s+run\s+watch", re.I)
 SLEEP_RE = re.compile(r"(?:^|[\s;&|(])sleep\s+\d+", re.I)
 BARE_SLEEP_RE = re.compile(r"^\s*sleep\s+\d+[smh]?\s*$", re.I)
 CI_GREEN_RE = re.compile(
@@ -112,6 +112,16 @@ def utf8_len(value):
 
 def est_tokens(nbytes):
     return int(round(nbytes / 4.0))
+
+
+def as_dict(value):
+    """Return value when it is a JSON object, else an empty dict (wrong type = missing)."""
+    return value if isinstance(value, dict) else {}
+
+
+def as_list(value):
+    """Return value when it is a JSON array, else an empty list (wrong type = missing)."""
+    return value if isinstance(value, list) else []
 
 
 def text_of(content):
@@ -193,7 +203,8 @@ def iter_records(path, window, digest=None):
 
 def usage_numbers(usage):
     """Return (input, cache_creation, cache_read, output, eph_5m, eph_1h)."""
-    usage = usage or {}
+    if not isinstance(usage, dict):
+        usage = {}
 
     def get(src, key):
         value = src.get(key)
@@ -282,21 +293,21 @@ def ci_wait_turns(requests, exempt_first_check=True):
 
     Counting rule: a CI-wait turn is a turn whose only tool call polls CI
     status (a bare sleep counts as a poll). The first single `gh pr checks`
-    of a run does not count.
+    of a run does not count. The first `gh pr checks` call of the run uses
+    up this exemption in any turn shape, so a check in an opening batch of
+    several tool calls makes a later lone check count.
     """
     result = []
     first_check_seen = not exempt_first_check
     for index, req in enumerate(requests):
-        if len(req.tools) != 1:
-            continue
-        _, name, tool_input = req.tools[0]
-        kind = ci_call_kind(name, tool_input)
-        if kind is None:
-            continue
-        if kind == "check" and not first_check_seen:
+        kinds = [ci_call_kind(name, tool_input) for _, name, tool_input in req.tools]
+        exempt = False
+        if not first_check_seen and "check" in kinds:
             first_check_seen = True
+            exempt = True
+        if len(kinds) != 1 or kinds[0] is None or exempt:
             continue
-        result.append((index, kind))
+        result.append((index, kinds[0]))
     return result
 
 
@@ -496,16 +507,16 @@ def measure_session(path, window, skills_tracked, digest=None):
         if rtype == "system":
             if record.get("subtype") == "compact_boundary":
                 comp.boundary(turn_index)
-                meta = record.get("compactMetadata") or {}
+                meta = as_dict(record.get("compactMetadata"))
                 compactions.append({"pre": meta.get("preTokens") or 0, "post": meta.get("postTokens") or 0})
                 compaction_turns.add(turn_index)
             elif record.get("subtype") == "turn_duration" and isinstance(record.get("durationMs"), (int, float)):
                 turn_durations_ms += record["durationMs"]
             continue
         if rtype == "assistant":
-            message = record.get("message") or {}
-            mid = message.get("id")
-            for block in message.get("content") or []:
+            message = as_dict(record.get("message"))
+            mid = message.get("id") if isinstance(message.get("id"), str) else None
+            for block in as_list(message.get("content")):
                 if not isinstance(block, dict):
                     continue
                 if block.get("type") == "tool_use":
@@ -521,7 +532,7 @@ def measure_session(path, window, skills_tracked, digest=None):
             if mid and mid not in requests:
                 req = Request(mid, ts)
                 req.set_usage(message.get("usage"))
-                for block in message.get("content") or []:
+                for block in as_list(message.get("content")):
                     if isinstance(block, dict) and block.get("type") == "tool_use":
                         req.tools.append((block.get("id"), block.get("name"), block.get("input") or {}))
                 requests[mid] = req
@@ -531,7 +542,7 @@ def measure_session(path, window, skills_tracked, digest=None):
                 requests[mid].set_usage(message.get("usage"))
             continue
         if rtype == "user":
-            message = record.get("message") or {}
+            message = as_dict(record.get("message"))
             content = message.get("content")
             if record.get("isCompactSummary"):
                 comp.add("compaction-summary", est_tokens(utf8_len(text_of(content))), turn_index)
@@ -580,10 +591,10 @@ def measure_session(path, window, skills_tracked, digest=None):
                     add_skill_body(sub, utf8_len(text))
             continue
         if rtype == "attachment" and "rendered" in record:
-            att = record.get("attachment") or {}
+            att = as_dict(record.get("attachment"))
             att_type = att.get("type")
             if att_type == "instructions":
-                for item in att.get("files") or []:
+                for item in as_list(att.get("files")):
                     if not isinstance(item, dict):
                         continue
                     is_memory = item.get("type") == "AutoMem" or str(item.get("path") or "").endswith("MEMORY.md")
@@ -591,7 +602,7 @@ def measure_session(path, window, skills_tracked, digest=None):
                     comp.add("memory-index" if is_memory else "claude-md", est_tokens(nbytes), turn_index)
                 continue
             if att_type == "invoked_skills":
-                for item in att.get("skills") or []:
+                for item in as_list(att.get("skills")):
                     if not isinstance(item, dict):
                         continue
                     bucket = skill_bucket(item.get("name") or "unknown")
@@ -729,7 +740,7 @@ def measure_run(path, window):
             last_ts = ts
         rtype = record.get("type")
         if rtype == "user":
-            content = (record.get("message") or {}).get("content")
+            content = as_dict(record.get("message")).get("content")
             if isinstance(content, list):
                 for block in content:
                     if isinstance(block, dict) and block.get("type") == "tool_result":
@@ -740,8 +751,8 @@ def measure_run(path, window):
             continue
         if rtype != "assistant":
             continue
-        message = record.get("message") or {}
-        mid = message.get("id")
+        message = as_dict(record.get("message"))
+        mid = message.get("id") if isinstance(message.get("id"), str) else None
         if not mid:
             continue
         req = requests.get(mid)
@@ -752,7 +763,7 @@ def measure_run(path, window):
             requests[mid] = req
             order.append(mid)
         req.set_usage(message.get("usage"))
-        for block in message.get("content") or []:
+        for block in as_list(message.get("content")):
             if isinstance(block, dict) and block.get("type") == "tool_use":
                 req.tools.append((block.get("id"), block.get("name"), block.get("input") or {}))
     reqs = [requests[mid] for mid in order]
@@ -989,8 +1000,9 @@ def analyze_pr(pr):
                 pure_refresh_rounds += 1
         if verdict == "APPROVED":
             approved = head
-    # A refresh event is a base-merge commit pushed after the latest Rex
-    # approval, with no other commit after that approval.
+    # A refresh event is a base-merge commit pushed after a Rex approval,
+    # with no other commit between that approval and the merge. Each
+    # approval opens its own run of refresh events (the ac3-4 denominator).
     last_approved = None
     for _when, verdict, head in rounds["Rex"]:
         if verdict == "APPROVED" and head in index_of:

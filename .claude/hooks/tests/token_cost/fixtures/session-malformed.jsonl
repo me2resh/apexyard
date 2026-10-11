@@ -1,0 +1,9 @@
+{"type": "assistant", "timestamp": "2030-01-01T00:00:00Z", "message": "not an object"}
+{"type": "assistant", "timestamp": "2030-01-01T00:00:01Z", "message": {"id": "msg_001", "usage": ["not", "an", "object"], "content": "not a list"}}
+{"type": "assistant", "timestamp": "2030-01-01T00:00:02Z", "message": {"id": ["not", "a", "string"], "usage": {"input_tokens": 1}}}
+{"type": "system", "subtype": "compact_boundary", "timestamp": "2030-01-01T00:00:03Z", "compactMetadata": "not an object"}
+{"type": "user", "timestamp": "2030-01-01T00:00:04Z", "message": 42}
+{"type": "attachment", "timestamp": "2030-01-01T00:00:05Z", "attachment": "not an object", "rendered": "fixture text"}
+{"type": "attachment", "timestamp": "2030-01-01T00:00:06Z", "attachment": {"type": "instructions", "files": "not a list"}, "rendered": ""}
+["not", "a", "record"]
+{"type": "assistant", "timestamp": "2030-01-01T00:00:07Z", "message": {"id": "msg_002", "usage": {"input_tokens": 10, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 90, "output_tokens": 5}, "content": [{"type": "text", "text": "fixture text"}]}}
