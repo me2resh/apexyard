@@ -6,7 +6,7 @@ This report records the before and after measurement for me2resh/apexyard#1650 (
 
 - **Rex:** `omitClaudeMd`, a floor-rules block, and a prompt trim cut the first-turn input by 38.2% (43,390 to 26,813 tokens, median).
 - **Rex quality:** no per-entry change in the justified verdict or in the defects caught. Two clean entries changed verdict label once each, inside the approve class or toward the justified verdict.
-- **Hakim:** `omitClaudeMd` and a floor block cut the first-turn input by 36.7%, but Hakim then missed a HIGH defect on one entry in 4 of 19 runs. The baseline missed it in 0 of 19 runs. So the Hakim change was reverted.
+- **Hakim:** `omitClaudeMd` and a floor block cut the first-turn input by 36.7%. But Hakim then missed a HIGH defect on one entry in 4 of 19 runs. The baseline missed it in 0 of 19 runs. So the Hakim change was reverted.
 - **Hakim as shipped:** the original prompt plus the one check-CI-once line. It showed no flip in the justified verdict and no lost catch.
 - **Corpus:** `corpus/hakim.json` grew from 4 to 11 entries.
 
@@ -25,7 +25,7 @@ This report records the before and after measurement for me2resh/apexyard#1650 (
 
 The baseline at k=3 showed run-to-run variance on 2 of 21 entries (`hakim-773-ca3a9400` and `hakim-1518-a66eb8578`).
 That rate is low, so k=3 was enough to detect a change.
-The rule for a flip beyond variance was set before the after runs: an after verdict that never appeared in the baseline runs of that entry.
+The flip rule was set before the after runs. A flip is an after verdict that never appeared in the baseline runs of that entry.
 Each flagged entry then got 5 more runs in both phases (k=8), so the decision did not rest on 3 samples.
 
 ### Differences from the `/eval-agents` skill procedure
@@ -147,7 +147,7 @@ With these corrections, no Rex entry lost a catch, and the shipped Hakim lost no
 
 ## Overall verdict
 
-**PASS for the shipped files.** Rex input per review drops by 38.2% at the first turn and by 25.6% in cache reads, with no change in justified verdicts or catches.
+**PASS for the shipped files.** Rex input per review drops by 38.2% at the first turn and by 25.6% in cache reads. Justified verdicts and catches do not change.
 Hakim keeps CLAUDE.md, because omitting it lost a HIGH-defect catch beyond the measured variance.
 The Hakim token saving moves to a later cycle (see "Follow-up").
 
