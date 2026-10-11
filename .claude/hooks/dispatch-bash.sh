@@ -65,7 +65,7 @@ run_hook() {
     block-main-push.sh)
       if APEXYARD_OPS_SCOPE_GUARD=1 "$HOOK_DIR/$script" <<<"$INPUT"; then :; else rc=$?; fi
       ;;
-    block-reviewer-repo-mutation.sh)
+    block-reviewer-repo-mutation.sh|block-reviewer-ci-wait.sh)
       if APEXYARD_REVIEW_OPS_ROOT="$(cd "$HOOK_DIR/../.." && pwd -P)" "$HOOK_DIR/$script" <<<"$INPUT"; then :; else rc=$?; fi
       ;;
     *)
@@ -112,6 +112,7 @@ run_merge_gate_hook() {
 # APEXYARD_DISPATCH_GATE: Bash|*|warn-review-marker-write.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|warn-isolated-build-risk.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|block-reviewer-repo-mutation.sh
+# APEXYARD_DISPATCH_GATE: Bash|*|block-reviewer-ci-wait.sh
 # APEXYARD_DISPATCH_GATE: Bash|git add *|block-git-add-all.sh
 # APEXYARD_DISPATCH_GATE: Bash|git push *|block-main-push.sh
 # APEXYARD_DISPATCH_GATE: Bash|git push *|validate-branch-name.sh
@@ -168,7 +169,8 @@ for script in \
   require-active-ticket.sh \
   warn-review-marker-write.sh \
   warn-isolated-build-risk.sh \
-  block-reviewer-repo-mutation.sh; do
+  block-reviewer-repo-mutation.sh \
+  block-reviewer-ci-wait.sh; do
   run_hook "$script"
 done
 

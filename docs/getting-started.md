@@ -220,6 +220,8 @@ Three levers manage it, ordered by effort-to-win ratio: (1) **`opusplan`** — O
 
 Full explanation + the opt-in thin-orchestrator mode: [`docs/orchestrator-cost-model.md`](orchestrator-cost-model.md).
 
+**Idle CI waits and the prompt cache.** The orchestrator waits for green CI with a Monitor before it spawns a reviewer. The main conversation is idle in that time. A subscription inside its usage limits keeps the main prompt cache for 1 hour. An API key, Bedrock, Vertex, or Foundry keeps it for 5 minutes. A CI wait longer than 5 minutes then rebuilds the whole main context. If you run outside the limits of a subscription, set `promptCacheTtl` to `"1h"` in your Claude Code settings where your provider supports it. The `CLAUDE_CODE_PROMPT_CACHE_TTL` environment variable does the same. Check that your provider accepts a 1-hour cache first. The rule text is in [`.claude/rules/pr-workflow.md`](../.claude/rules/pr-workflow.md).
+
 ---
 
 ## Optional: LSP-aware code navigation

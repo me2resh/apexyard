@@ -53,6 +53,10 @@ Retain its required sections and give each checklist result a reason or evidence
 Before submission, check the report against that format and repair omissions.
 Do not write a process transcript.
 
+### CI order: wait for green CI first (me2resh/apexyard#1625)
+
+The orchestrator waits for green CI with a Monitor, then spawns Rex. Do not spawn Rex while CI is still running. Rex checks CI once and never waits. A review agent that runs `gh pr checks --watch`, `gh run watch`, or `sleep` of 60 seconds or more is blocked by `block-reviewer-ci-wait.sh`.
+
 ### 0. Write the active-reviewer marker (REQUIRED — me2resh/apexyard#843)
 
 Before spawning the Code Reviewer agent (Rex), write the active-reviewer session marker. It records that this review pass is the sanctioned one, and suppresses `warn-review-marker-write.sh`'s advisory warning on Rex's `*-rex.approved` write (that hook warns and never blocks since #1026 — AgDR-0111). The marker is scoped to THIS Claude Code session (me2resh/apexyard#1376) — resolve its path through `active_reviewer_marker_path`, never write the bare `.claude/session/active-reviewer` path directly, or a concurrent session's review would read or clobber it. At skill entry:

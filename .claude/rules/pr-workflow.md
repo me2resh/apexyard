@@ -46,10 +46,23 @@ Also check before pushing:
 ## After `gh pr create`
 
 ```
+[ ] Wait for green CI with a Monitor (the orchestrator waits, never a reviewer)
 [ ] Invoke Code Reviewer agent
 [ ] Wait for Code Reviewer approval
 [ ] Wait for human approver (explicit "approved" or similar)
 ```
+
+### CI order: the orchestrator waits, the reviewer never waits (me2resh/apexyard#1625)
+
+The orchestrator waits for green CI with a Monitor. Then it spawns Rex through `/code-review`. A review agent (`code-reviewer`, `security-reviewer`, or `solution-architect`) runs `gh pr checks` once and reports what it saw. It does not wait for CI. A reviewer that polls CI keeps its whole context warm for minutes and pays for every poll.
+
+The `block-reviewer-ci-wait.sh` PreToolUse control enforces this for review agents only. It blocks `gh pr checks --watch`, `gh run watch`, `sleep` of 60 seconds or more, and a second `gh pr checks` in one review run. The orchestrator is never blocked. The control finds a review agent from the `agent_type` field of the hook input. If the input names a sub-agent with no type, it falls back to the active-reviewer marker. `block-reviewer-ci-wait.sh` does not change `block-unreviewed-merge.sh` or `block-merge-on-red-ci.sh`. A merge on pending CI stays blocked.
+
+### Prompt cache lifetime during a CI wait
+
+The orchestrator is idle while it waits for CI. The main conversation keeps its prompt cache for 1 hour on a subscription that is inside its usage limits. On an API key, Bedrock, Vertex, or Foundry the cache lives for 5 minutes. If a CI wait is longer than 5 minutes, the next turn rebuilds the whole main context.
+
+If you run outside the limits of a subscription, set `promptCacheTtl` to `"1h"` in your Claude Code settings where your provider supports a 1-hour cache. The `CLAUDE_CODE_PROMPT_CACHE_TTL` environment variable does the same. Check your provider documentation first, because not every provider accepts a 1-hour cache. This setting changes only the main conversation. It does not change the cache of sub-agents.
 
 ## Before `gh pr merge` (HARD STOP)
 
