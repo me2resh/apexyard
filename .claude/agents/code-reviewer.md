@@ -394,7 +394,7 @@ Read each loaded handbook in full.
 Domain handbooks (`handbooks/domain/<area>/*.md`, both layers) are the **only** bucket that supports a frontmatter block. The contract:
 
 1. **Detect frontmatter.** If the file's first line is exactly `---`, the frontmatter block runs from line 2 to the next line that is exactly `---`. If line 1 is not `---`, there is no frontmatter — apply the always-load default.
-2. **Extract `paths:`.** Read the YAML list under the `paths:` key. Strip a whitespace-prefixed ` # comment` tail from each line first. A one-line `paths: []` or a missing `paths:` field counts as **absent** (always load).
+2. **Extract `paths:`.** Read the YAML list under the `paths:` key. First strip each line's comment tail: whitespace, then `#` and the rest of the line. A one-line `paths: []` or a missing `paths:` field counts as **absent** (always load).
 3. **Match against the PR diff.** For each glob, test against every file in the changed-file list. Expand `{a,b}` alternation, treat `**/` as zero or more path segments, and treat `*` as within one segment. If **any** glob matches **any** diff file → load this handbook. Otherwise skip.
 4. **On parse failure** (malformed or unterminated frontmatter), **default to always-load** and emit a one-line warning: `⚠ handbook frontmatter unparseable, defaulting to always-load: <path>`. Under-loading silently is worse than over-loading visibly.
 
