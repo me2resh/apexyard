@@ -16,9 +16,9 @@
       "status": "partially-verified",
       "evidence": [
         ".claude/skills/orbit/SKILL.md:177-245 defines /orbit handoff (PR #1454, merged 2026-09-29). Lines 240-245 file the issue with a direct tracker create call from the adapter's dry-run preview, not with the adapter's real sync.",
-        "No issue in me2resh/apexyard created since 2026-09-28 carries a slice ID from a handoff. Issues #1612, #1613, #1616, #1618 and #1619 carry 'ORBIT slice: none'."
+        "On 2026-10-11, /orbit handoff filed slice issues #1623 to #1626 in me2resh/apexyard. Each body starts with the ORBIT slice line and the adapter preview body."
       ],
-      "explanation": "Missing: no live handoff has filed an issue, and the write bypasses the adapter's real sync. Next: run one live /orbit handoff and record the issue URL, or accept the preview-based write in a Plan revision."
+      "explanation": "Missing: the handoff writes the issue from the dry-run preview, not through the adapter's real sync. Next: route the write through orbit sync github, or accept the preview-based write in a Plan revision."
     },
     {
       "criterionId": "ac1-2",
@@ -79,9 +79,12 @@
       "criterionId": "ac1-8",
       "status": "not-verified",
       "evidence": [
-        "No mapping file and no handoff exist (see ac1-1 and ac1-7)."
+        ".claude/skills/orbit/SKILL.md:177-245 defines /orbit handoff.",
+        "handoff-preflight.sh line 188 exits 12 when an open issue already carries the slice ID.",
+        "AgDR-0179 line 39: handoff never edits, closes, or creates a second issue for the same slice.",
+        "No slice-to-issue mapping file exists."
       ],
-      "explanation": "Idempotent re-handoff depends on ac1-7."
+      "explanation": "Missing: a slice-to-issue mapping and an edit path; a repeated handoff refuses instead of editing the mapped issue. Next: decide in a Plan revision whether ac1-8 still holds under AgDR-0179."
     },
     {
       "criterionId": "ac1-9",
@@ -105,9 +108,10 @@
       "criterionId": "ac1-11",
       "status": "not-verified",
       "evidence": [
-        "grep -ci 'slice' .claude/skills/start-ticket/SKILL.md returns 0."
+        ".claude/skills/start-ticket/SKILL.md lines 79-88 read the issue body for an ORBIT slice line and warn when it is missing.",
+        "The ticket marker that /start-ticket writes does not record the slice ID."
       ],
-      "explanation": "The marker does not record a slice ID yet."
+      "explanation": "Missing: /start-ticket reads the slice ID but does not record it in the ticket marker. Next: a slice that writes the slice ID into the marker."
     },
     {
       "criterionId": "ac1-12",
