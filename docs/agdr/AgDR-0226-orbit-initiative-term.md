@@ -16,7 +16,7 @@ status: proposed
 - The ORBIT Plan record holds durable intent, outcomes and acceptance criteria. Slices reference it through `planId`, and record IDs start with `plan-`.
 - "Plan" also names Claude Code plan mode and the `plan-mode.md` rule. Operators and agents read "plan" in three senses.
 - `/plan-initiative` (AgDR-0051) uses "initiative" for a different unit: an initiative document with milestones, a topological sequence and milestone tickets. ORBIT is the default planning flow for this portfolio, so two planning flows use overlapping words.
-- ORBIT is at v0.1, before any stable release. The records exist in three repositories: 21 records with `plan-` IDs. Every synced slice issue body also quotes its `plan-` ID (`lib/github-sync.mjs` line 16). The public spec may have adopters this portfolio cannot see.
+- ORBIT is at v0.1, before any stable release. On 2026-10-11, 14 records in three repositories have `plan-` IDs, including 2 examples in orbit-spec. Every synced slice issue body also quotes its `plan-` ID (`lib/github-sync.mjs` line 16). The public spec may have adopters this portfolio cannot see.
 
 ## Options Considered
 
@@ -25,7 +25,7 @@ status: proposed
 | Option | Pros | Cons |
 |--------|------|------|
 | Keep Plan | No change | Three meanings of "plan" remain |
-| Goal | No collision; the status pane already says "ORBIT goals" | Reads small for multi-outcome work |
+| Goal | No collision; the owner's local status pane already uses "goals" | Reads small for multi-outcome work |
 | Initiative | Fits multi-outcome, multi-week work; matches how the owner talks about the work | Collides with /plan-initiative unless that skill changes |
 | Objective | Common in OKRs | Collides with the Execution Slice `objective` field |
 
