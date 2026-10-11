@@ -377,7 +377,7 @@ _scrub_merge_command() {
     # evaluate the array subscript, which runs the substitution (#1489 review).
     function allowed(word) {
       return word == "grep" || word == "egrep" || word == "fgrep" || \
-             word == "cat" || word == "echo" || \
+             word == "cat" || word == "echo" || word == "jq" || \
              word == "head" || word == "tail" || word == "wc"
     }
     function is_grep_family(word) {

@@ -22,7 +22,7 @@ Review found that the general scrubber allowed `gh api`, `git`, `rg`, and `sort`
 
 Chosen: **scrub only the narrow merge-specific command list and retain a raw fallback**.
 
-- Every segment must start with a literal `grep`, `egrep`, `fgrep`, `cat`, `echo`, `head`, `tail`, or `wc` command word. `printf` is excluded: `printf -v` into an array element evaluates the subscript, which can run a command substitution.
+- Every segment must start with a literal `grep`, `egrep`, `fgrep`, `cat`, `echo`, `jq`, `head`, `tail`, or `wc` command word. `printf` is excluded: `printf -v` into an array element evaluates the subscript, which can run a command substitution.
 - The parser checks each segment across separators and newlines. It never searches whole lines for an apparent first word.
 - Any other command word preserves the entire raw command, including `gh`, `glab`, `git`, `tracker_pr_merge`, `rg`, `sort`, `xargs`, `find`, and shells.
 - Quoted arguments and confirmed heredoc bodies are data only after every command word passes this check.
@@ -56,6 +56,13 @@ Forge controls remain authoritative for these limits.
 ### #1507 raw fallbacks for three execution shapes
 
 PR #1497 reviews named three shapes inside the narrow list that can still execute data. The scrubber now keeps the entire raw command for unquoted `~[`, output redirects to shell startup names or `.git/hooks/`, and grep-family `--filter` / `--pager` / `--view` / `--format-open`. Ordinary `grep`, `cat`, and `echo` data cases stay scrubbed. See AgDR-0204.
+
+### #1639 jq joins the data-only list
+
+We added `jq` because it cannot execute shell text.
+The raw fallback still applies to any other command word outside the list.
+`test_merge_command_data.sh` adds jq data cases and pins executable forms to the raw scan.
+`test_block_ambient_tracker_repo.sh` adds data cases and pins real PR checks to explicit repository selection.
 
 ## Artifacts
 

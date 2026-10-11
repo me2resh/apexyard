@@ -82,6 +82,14 @@ run_case 'tracker command after semicolon is blocked' 2 'printf x; gh issue crea
 run_case 'tracker command inside bash -c is blocked' 2 "bash -c 'gh pr create --title x'" "$root"
 run_case 'tracker text piped into bash is blocked' 2 "printf 'gh issue create --title x' | bash" "$root"
 run_case 'tracker command in bash heredoc is blocked' 2 "$(printf 'bash <<EOF\ngh pr create --title x\nEOF')" "$root"
+# #1639: tracker text in data does not select an ambient repository.
+run_case 'notes heredoc then git add treats PR checks as data' 0 \
+  $'cat > notes.md <<\'EOF\'\ngh pr checks 5\nEOF\ngit add notes.md' "$root"
+run_case 'git commit message treats PR checks as data' 0 \
+  'git commit -m "docs: run gh pr checks before merge"' "$root"
+run_case 'jq issue-create text is data' 0 "jq -n '\"gh issue create --title x\"'" "$root"
+run_case 'real PR checks without repo are blocked' 2 'gh pr checks 5' "$root"
+run_case 'real PR checks with explicit repo are allowed' 0 'gh pr checks 5 --repo owner/project' "$root"
 run_case 'quoted gh command word is blocked' 2 "'gh' pr create --title x" "$root"
 run_case 'split-quoted gh command word is blocked' 2 "g'h' pr create --title x" "$root"
 run_case 'escaped gh command word is blocked' 2 'g\h pr create --title x' "$root"
