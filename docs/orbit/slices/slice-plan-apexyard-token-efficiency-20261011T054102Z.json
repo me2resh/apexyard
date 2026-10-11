@@ -4,8 +4,8 @@
   "planId": "plan-apexyard-token-efficiency",
   "outcomeId": "o4-reviewers-do-not-wait",
   "basedOn": {
-    "planRevision": 2,
-    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261011T054547Z",
+    "planRevision": 3,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261011T082929Z",
     "repositories": {}
   },
   "objective": "Reviewers check CI once and never wait. The orchestrator waits for green CI with a Monitor and then spawns Rex.",

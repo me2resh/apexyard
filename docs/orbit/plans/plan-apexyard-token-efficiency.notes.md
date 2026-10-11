@@ -23,7 +23,7 @@ The five most-invoked skills in the baseline (ac6-2): `/approve-merge` 209, `/ap
 - **C3. Measure before and after.** Each slice names the o1 metric it moves and records both numbers in its PR.
 - **C4. Zero verdict flips.** A change to a reviewer prompt ships only after k repeated `/eval-agents` runs show no per-entry verdict flip beyond the baseline variance. The corpus grows before the prompt shrinks: a Tariq corpus and at least five Rex delta entries exist before ac5-2 and ac5-3.
 - **C5. Prose moves, it is not deleted.** Rationale, history and anti-pattern text removed from an execution path goes under `docs/` behind a one-line pointer, because adopters read it. A docs path that a prompt file names is part of the prompt layer and is reviewed in Full (ac7-1).
-- **C6. One slice, one ticket, one PR.** Each outcome has one slice. A fault found inside a slice is a step in that slice.
+- **C6. One slice, one ticket, one PR.** Each outcome has one open slice at a time. A spike may come before the build slice (Revision 3). A fault found inside a slice is a step in that slice.
 - **C7. The CEO marker is written only by the inline step 5 of the human-invoked `/approve-merge`.** No script writes `approved_by=user` (ac6-1).
 
 ## Decisions
@@ -93,6 +93,18 @@ o1 first, because every later change and the harness o4 slice measure with its s
 - The o1 slice now points at the revision 2 reconciliation. In o1 to o7, only the ac4-5 statement changed: it names pr-workflow.md.
 - Rex on PR #1622: the o4 hook uses the active-reviewer marker only for a subagent with no type, because the marker covers the whole session. The orchestrator is never blocked.
 - Correction to the message of commit 3bf5e52 (PR #1620): the wrong range came from a faulty first parse, not from the four most common sizes. In a correct parse the most common sizes are 3,925 to 3,930 bytes.
+
+## Revision 3 (2026-10-11)
+
+- o1 (#1633), o4 (#1634) and o8 (#1630) merged. The reconciliation records their statuses with file and test evidence.
+- **Baseline correction (ac4-4).** The new figure is 420 CI-wait turns in 185 of 388 reviewer runs. The old synthesis was the faulty side: it counted every CI check and 10 non-CI sleeps. The run count moved from 350 to 388, because the script covers all of 2026-10-10. The gap is 10.4%, over the o1 gate of 5%, because the old number was wrong (PR #1633).
+- **Baseline correction (ac7-6).** The o1 script counts 21 resume rebuilds in 388 runs. Without CI-green messages it counts 15, which is 3.87 per 100. The old figure was 4.0 per 100 in 350 runs.
+- **o9 (reviews run in parallel).** It is a new outcome, not an o7 criterion: o7 is about review depth and o9 is about concurrency. Review agents are found by agent type, as the o4 hook does, so the orchestrator and build agents are never blocked. o9 comes after the harness o1 slice (#1623), because both edit dispatch-bash.sh.
+- **Parked: ac3-3.** A reopened PR has no Rex marker under its new number (block-unreviewed-merge.sh lines 459-462). Carry-over would need a merge-gate edit, which breaks C1, or an agent-written marker, which is forbidden.
+- **Parked: ac3-2.** It waits until a count shows how often chained refreshes happen.
+- **C6 amended.** One open slice per outcome; a spike may come before the build slice. The o2 spike covers ac2-1, and a later o2 build slice covers ac2-2 to ac2-4.
+- **Delivered slices.** The o1, o4 and o8 slices are re-pointed to this reconciliation only because the validator requires their reconciliation in docs/orbit/reconciliations/. Their text is unchanged.
+- This cycle cuts the o2 spike slice (ac2-1) and the o3 slice (ac3-1 and ac3-4).
 
 ## Checks
 

@@ -1,0 +1,32 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-token-o3-refresh-rounds",
+  "planId": "plan-apexyard-token-efficiency",
+  "outcomeId": "o3-refresh-rounds-stopped",
+  "basedOn": {
+    "planRevision": 3,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261011T082929Z",
+    "repositories": {}
+  },
+  "objective": "Stop Rex rounds after a base-branch refresh that the merge gate already carries over. Change the rule text only; the gate stays as it is.",
+  "why": "ac3-1 is partially verified: the gate carries the Rex marker over a clean base merge, but pr-workflow.md step 3 still asks for a re-review. The baseline has 15 pure-refresh Rex rounds out of 17 refresh events.",
+  "contributesTo": [
+    "ac3-1",
+    "ac3-4"
+  ],
+  "scope": {
+    "include": [
+      "pr-workflow.md step 3 runs rex_approval_carries_over first and asks for a Rex delta only when it returns false",
+      "Cite the existing smuggled-hunk tests as the proof: test_lib_merge_behind.sh case 12 and test_block_unreviewed_merge.sh CO4",
+      "The same change in the code-review skill where it describes a refresh",
+      "The before numbers from the baseline in the PR and the o1 forge metric for ac3-4 (C3)"
+    ],
+    "exclude": [
+      "Chained refreshes (ac3-2; parked in the Revision 3 notes)",
+      "Same-SHA reopen carry-over (ac3-3; parked in the Revision 3 notes)",
+      "Any edit to block-unreviewed-merge.sh or _lib-merge-behind.sh (C1)",
+      "Review depth tiers and the delta review format (o7)",
+      "The review lock (o9)"
+    ]
+  }
+}

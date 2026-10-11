@@ -1,0 +1,32 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-token-o2-compaction-spike",
+  "planId": "plan-apexyard-token-efficiency",
+  "outcomeId": "o2-context-bounded",
+  "basedOn": {
+    "planRevision": 3,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261011T082929Z",
+    "repositories": {}
+  },
+  "objective": "Run a time-boxed spike that measures whether the auto-compaction threshold setting bounds the context on 1M-context Opus. Record the recommended setting in the framework docs.",
+  "why": "ac2-1 is not-verified. The 2026-10-10 baseline has a main context mean of 489,792 tokens per turn and 18 compactions, 12 near the cap. ac2-2 to ac2-4 depend on the spike result.",
+  "contributesTo": [
+    "ac2-1"
+  ],
+  "scope": {
+    "include": [
+      "A spike ticket with a budget and kill criteria",
+      "Two or more threshold values tried on the same scripted task in throwaway sessions",
+      "The o1 script session view before and after each value: mean and p90 context per turn and the compaction count",
+      "A spike memo under docs/spike-memos/ with the numbers and a recommendation",
+      "The recommended setting in the framework docs or the reason no setting is recommended"
+    ],
+    "exclude": [
+      "The compact prompt and the 300k target (ac2-2)",
+      "Fork and fresh-spawn rules (ac2-3)",
+      "Harness requests (ac2-4)",
+      "Any change to settings.json defaults or hooks",
+      "Reviewer and subagent settings"
+    ]
+  }
+}
