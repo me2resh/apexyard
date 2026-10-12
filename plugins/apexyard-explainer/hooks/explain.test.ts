@@ -37,11 +37,11 @@ describe('plain templates', () => {
       ['Agent', { subagent_type: 'rex' }, 'Asks a reviewer agent to check the PR.'],
       ['Agent', { description: 'review the change' }, 'Asks a reviewer agent to check the PR.'],
       ['Skill', { skill: 'start-ticket' }, 'Runs the skill start-ticket to follow its steps.'],
-      ['mcp__x__y', {}, 'Runs the tool `mcp__x__y`.'],
+      ['mcp__x__y', {}, 'Uses X: y.'],
     ]
     for (const [tool, input, line] of cases) expect(explain(tool, input)).toBe(line)
     expect(explain('MultiEdit', { file_path: 'a.ts' })).toBe(explain('Edit', { file_path: 'a.ts' }))
-    expect(explain('NotebookEdit', { notebook_path: 'a.ipynb' })).toBe(explain('Edit', { file_path: 'a.ipynb' }))
+    expect(explain('NotebookEdit', { notebook_path: 'a.ipynb' })).toBe(TEMPLATES.notebookEdit)
     expect(explain('Task', {})).toBe(TEMPLATES.agentAny)
     const plain: Array<[string, string]> = [['WebFetch', 'webFetch'], ['WebSearch', 'webSearch'], ['TodoWrite', 'todo'], ['TaskCreate', 'todo'], ['TaskUpdate', 'todo'], ['AskUserQuestion', 'ask']]
     for (const [tool, key] of plain) {
@@ -87,5 +87,52 @@ describe('plain templates', () => {
     expect(baseName(undefined)).toBe('?')
     expect(baseName('/')).toBe('?')
     expect(fill('{file} {file} {tool}', { file: 'a' })).toBe('a a ?')
+  })
+})
+
+
+describe('fallback order', () => {
+  test('safe descriptions win for any tool except a reviewer', async () => {
+    for (const tool of ['Bash', 'Agent', 'Task', 'Read', 'Workflow', 'mcp__Gmail__search_threads', 'FutureTool']) {
+      expect(explain(tool, { command: 'git status', description: '  Checks\n the next\tstep  ' })).toBe('Checks the next step.')
+    }
+    expect(explain('Agent', { subagent_type: 'rex', description: 'Checks the change' })).toBe(TEMPLATES.agentReview)
+    expect(explain('Task', { description: 'review the change' })).toBe(TEMPLATES.agentReview)
+    for (const description of [undefined, null, 42, '', ' \n ']) {
+      expect(explain('Bash', { command: 'git status', description })).toBe(TEMPLATES.gitStatus)
+    }
+    expect(explain('Bash', { description: 'a '.repeat(100) }).length <= 120).toBe(true)
+    expect(explain('Bash', { description: 'Reads ' + 'word '.repeat(30) })).toBe(('Reads ' + 'word '.repeat(30)).slice(0, 119).trimEnd() + '.')
+    for (const ending of ['.', '!', '?', '...']) {
+      expect(explain('Read', { description: 'Reads the file' + ending })).toBe('Reads the file.')
+    }
+  })
+  test('MCP names become server and tool words', async () => {
+    expect(explain('mcp__claude_ai_Gmail__search_threads', {})).toBe('Uses Gmail: search threads.')
+    expect(explain('mcp__my_server-name__read-file_now', {})).toBe('Uses My Server Name: read file now.')
+    expect(explain('mcp__Gmail__search_threads', { description: 'Finds the mail' })).toBe('Finds the mail.')
+    expect(explain('mcp__Gmail__', {})).toBe('Runs the tool `mcp__Gmail__`.')
+  })
+  test('new built-ins have plain templates', async () => {
+    const cases: Array<[string, string]> = [
+      ['Workflow', 'workflow'], ['ToolSearch', 'toolSearch'], ['SendMessage', 'sendMessage'],
+      ['Monitor', 'monitor'], ['TaskStop', 'taskStop'], ['Artifact', 'artifact'], ['LSP', 'lsp'],
+      ['NotebookEdit', 'notebookEdit'], ['ScheduleWakeup', 'scheduleWakeup'],
+      ['ReadNotifications', 'readNotifications'], ['BashOutput', 'bashOutput'],
+      ['TaskOutput', 'bashOutput'], ['task-output', 'bashOutput'], ['task_output', 'bashOutput'],
+    ]
+    for (const [tool, key] of cases) expect(explain(tool, {})).toBe(TEMPLATES[key])
+    expect(explain('FutureTool', {})).toBe('Runs the tool `FutureTool`.')
+  })
+  test('token-looking descriptions and commands fall back without exposing them', async () => {
+    const secrets = ['ghp_' + 'x'.repeat(12), 'sk-' + 'x'.repeat(12), 'xoxb-' + 'x'.repeat(12),
+      'abcdef0123456789'.repeat(3), 'QWxhZGRpbjpvcGVuIHNlc2FtZQ'.repeat(2)]
+    for (const secret of secrets) {
+      expect(explain('Bash', { description: 'Uses ' + secret, command: 'git status' })).toBe(TEMPLATES.gitStatus)
+      expect(explain('Bash', { description: 'Checks the change', command: 'git diff ' + secret })).toBe(TEMPLATES.gitDiff)
+      expect(explain('Agent', { description: 'Builds with ' + secret })).toBe(TEMPLATES.agentAny)
+      expect(explain('mcp__Gmail__search_threads', { description: 'Finds ' + secret })).toBe('Uses Gmail: search threads.')
+      expect(explain('Bash', { description: 'word '.repeat(40) + secret })).toBe(TEMPLATES.bash)
+    }
   })
 })

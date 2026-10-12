@@ -19,6 +19,17 @@ export const TEMPLATES: Readonly<Record<string, string>> = {
   webSearch: "Searches the web to find facts for the task.",
   todo: "Updates the task list to track the work.",
   ask: "Asks you a question to choose the next step.",
+  workflow: "Runs a multi-agent workflow to split the work.",
+  toolSearch: "Loads more tools for the next step.",
+  sendMessage: "Sends a message to another agent.",
+  monitor: "Watches a background task until it finishes.",
+  taskStop: "Stops a background task.",
+  artifact: "Publishes or reads a web page made for this session.",
+  lsp: "Asks the language server about the code.",
+  notebookEdit: "Edits a notebook cell.",
+  scheduleWakeup: "Sets a time to continue the work.",
+  readNotifications: "Reads new notifications for this session.",
+  bashOutput: "Reads the output of a background command.",
   unknown: "Runs the tool `{tool}`.",
   tests: "Runs the tests to check the change.",
   gitStatus: "Checks git status to see what changed.",
@@ -111,20 +122,37 @@ export function bashKind(command: string): BashKind {
   return 'bash'
 }
 
+// Check the full input before shortening it, so a hidden suffix cannot leak.
+function looksLikeSecret(value: unknown): boolean {
+  return typeof value === 'string' &&
+    /ghp_|sk-|xox|[A-Za-z0-9+/_=-]{32,}/i.test(value)
+}
+
+function descriptionLine(value: unknown): string | undefined {
+  if (typeof value !== 'string' || looksLikeSecret(value)) return undefined
+  const line = value.replace(/\s+/g, ' ').trim()
+  if (!line) return undefined
+  return line.slice(0, 119).trimEnd().replace(/[.!?]+$/, '') + '.'
+}
+
 export function explain(tool: string, input: Readonly<Record<string, unknown>>): string {
+  const review = (tool === 'Agent' || tool === 'Task') &&
+    [input.subagent_type, input.description].some(value => typeof value === 'string' && /review|rex|auditor/i.test(value))
+  const description = looksLikeSecret(input.command) ? undefined : descriptionLine(input.description)
+  if (description && !review) return description
   let key: string
   const values: Record<string, string> = {}
   switch (tool) {
-    case 'Read': case 'Edit': case 'Write': case 'MultiEdit': case 'NotebookEdit':
+    case 'Read': case 'Edit': case 'Write': case 'MultiEdit':
       key = tool === 'Read' ? 'read' : tool === 'Write' ? 'write' : 'edit'
-      values.file = baseName(tool === 'NotebookEdit' ? input.notebook_path : input.file_path)
+      values.file = baseName(input.file_path)
       break
     case 'Grep': case 'Glob':
       key = tool === 'Grep' ? 'grep' : 'glob'
       values.pattern = token(input.pattern)
       break
     case 'Agent': case 'Task':
-      if ([input.subagent_type, input.description].some(value => typeof value === 'string' && /review|rex|auditor/i.test(value))) key = 'agentReview'
+      if (review) key = 'agentReview'
       else if (typeof input.subagent_type === 'string' && input.subagent_type.trim()) {
         key = 'agent'
         values.agent = token(input.subagent_type)
@@ -136,7 +164,28 @@ export function explain(tool: string, input: Readonly<Record<string, unknown>>):
     case 'WebSearch': key = 'webSearch'; break
     case 'TodoWrite': case 'TaskCreate': case 'TaskUpdate': key = 'todo'; break
     case 'AskUserQuestion': key = 'ask'; break
-    default: key = 'unknown'; values.tool = token(tool, 48)
+    case 'Workflow': key = 'workflow'; break
+    case 'ToolSearch': key = 'toolSearch'; break
+    case 'SendMessage': key = 'sendMessage'; break
+    case 'Monitor': key = 'monitor'; break
+    case 'TaskStop': key = 'taskStop'; break
+    case 'Artifact': key = 'artifact'; break
+    case 'LSP': key = 'lsp'; break
+    case 'NotebookEdit': key = 'notebookEdit'; break
+    case 'ScheduleWakeup': key = 'scheduleWakeup'; break
+    case 'ReadNotifications': key = 'readNotifications'; break
+    case 'BashOutput': case 'TaskOutput': case 'task-output': case 'task_output':
+      key = 'bashOutput'; break
+    default: {
+      const mcp = /^mcp__(.+?)__(.+)$/.exec(tool)
+      if (mcp) {
+        const server = (mcp[1] ?? '').replace(/^claude_ai_/i, '').replace(/[_-]+/g, ' ')
+          .replace(/\b\w/g, letter => letter.toUpperCase()).trim()
+        const words = (mcp[2] ?? '').replace(/[_-]+/g, ' ').trim()
+        if (server && words) return `Uses ${server}: ${words}.`
+      }
+      key = 'unknown'; values.tool = token(tool, 48)
+    }
   }
   return fill(TEMPLATES[key] ?? TEMPLATES.unknown ?? 'Runs the tool `{tool}`.', values)
 }
