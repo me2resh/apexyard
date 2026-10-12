@@ -125,6 +125,10 @@ refusal message — but the cheap fix is upstream of both: don't pass a path.
 6. On JS/TS diffs, run the Fallow static-analysis pass (§ 9 of the agent) — changed-scope, fail-soft, advisory; render a `### Fallow Findings` table + dry-run fix preview
 7. Submit the review through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host — #758), not a hardcoded `gh pr review`, then clear the active-reviewer marker from step 0
 
+On GitHub, add `ready-to-merge` after APPROVED: `gh pr edit {number} --repo "$PR_HOST_REPO" --add-label ready-to-merge`.
+Remove it after CHANGES REQUESTED: `gh pr edit {number} --repo "$PR_HOST_REPO" --remove-label ready-to-merge`.
+A label failure changes no verdict or marker.
+
 ### 8. Offer pre-merge QA after APPROVED
 
 Run this step only after Rex posts an APPROVED verdict and the active-reviewer marker is clear.

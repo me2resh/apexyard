@@ -493,6 +493,10 @@ Add a `### Fallow Findings  *(advisory — JS/TS static analysis, changed scope)
 6. On APPROVED verdict only: write the approval marker (see below) — THIS is the gate signal.
 ```
 
+On GitHub, add `ready-to-merge` after APPROVED: `gh pr edit {number} --repo "$PR_HOST_REPO" --add-label ready-to-merge`.
+Remove it after CHANGES REQUESTED: `gh pr edit {number} --repo "$PR_HOST_REPO" --remove-label ready-to-merge`.
+Report label failures without changing the verdict or approval marker.
+
 **CRITICAL**: Always include the commit SHA in your review. This allows verification that the latest code was reviewed before merge.
 
 ## ⛔ Approval marker — EXACT FORMAT REQUIRED
