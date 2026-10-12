@@ -6,9 +6,7 @@ argument-hint: "<feature or problem statement>"
 
 # /write-spec — Feature Specification
 
-## Writing rule
-
-Use the controlled technical writing profile from .claude/rules/writing-standard.md for each artifact. Use short complete sentences, active voice, one term for one meaning, and clear lists.
+Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
 Write a feature specification or product requirements document (PRD).
 

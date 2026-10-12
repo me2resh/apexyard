@@ -11,6 +11,7 @@
 #   - polling loops with sleep or gh pr checks
 #   - total sleep of 60 seconds or more
 #   - a second gh pr checks in the same review run
+# A brace body { ... } of a for loop is read like do ... done. Commands in a for header count toward the totals.
 # The orchestrator is never blocked.
 #
 # Review-agent detection, in order:
@@ -163,21 +164,32 @@ SEGMENTS=$(printf '%s\n' "$SCAN" | tr -d "'\"\\\\" | tr ';&|()`' '\n' | sed 's/[
 CHECKS_IN_COMMAND=0
 LOOP_DEPTH=0
 LOOP_FOR_HEADER=0
+IN_HEADER=0
 POLLING_LOOP=0
 TOTAL=0
+# A for header runs once per outer iteration. The for itself raised the depth.
+mark_polling_loop() {
+  local eff=$LOOP_DEPTH
+  [ "$IN_HEADER" -eq 0 ] || eff=$((eff - 1))
+  [ "$eff" -le 0 ] || POLLING_LOOP=1
+}
 while IFS= read -r seg; do
   read -r -a words <<< "$seg"
   i=0
   n=${#words[@]}
-  if [ "$LOOP_FOR_HEADER" -eq 1 ] && [ "${words[0]:-}" != "do" ]; then continue; fi
+  IN_HEADER=0
+  if [ "$LOOP_FOR_HEADER" -eq 1 ] && [ "${words[0]:-}" != "do" ] && [ "${words[0]:-}" != "{" ]; then
+    IN_HEADER=1
+  fi
   while [ "$i" -lt "$n" ]; do
     w="${words[$i]##*/}"
     case "$w" in
       while|until) LOOP_DEPTH=$((LOOP_DEPTH + 1)) ;;
       for) LOOP_DEPTH=$((LOOP_DEPTH + 1)); LOOP_FOR_HEADER=1; i=$n; break ;;
       do) LOOP_FOR_HEADER=0 ;;
+      '{') LOOP_FOR_HEADER=0 ;;
       done) [ "$LOOP_DEPTH" -le 0 ] || LOOP_DEPTH=$((LOOP_DEPTH - 1)) ;;
-      '{'|'!'|then|else|elif|if|time|command|builtin|exec|nohup|eval) ;;
+      '!'|then|else|elif|if|time|command|builtin|exec|nohup|eval) ;;
       env)
         i=$((i + 1))
         while [ "$i" -lt "$n" ]; do
@@ -227,10 +239,10 @@ while IFS= read -r seg; do
           case "$arg" in --watch|--watch=*) block "gh pr checks --watch is not allowed in a review agent." ;; esac
         done
         CHECKS_IN_COMMAND=$((CHECKS_IN_COMMAND + 1))
-        [ "$LOOP_DEPTH" -eq 0 ] || POLLING_LOOP=1
+        mark_polling_loop
       fi ;;
     sleep)
-      [ "$LOOP_DEPTH" -eq 0 ] || POLLING_LOOP=1
+      mark_polling_loop
       i=$((i + 1))
       while [ "$i" -lt "$n" ]; do
         arg="${words[$i]}"

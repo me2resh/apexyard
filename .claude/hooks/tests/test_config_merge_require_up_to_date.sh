@@ -2,9 +2,9 @@
 # Regression test for the merge.require_up_to_date config key (apexyard#1386).
 #
 # /approve-merge reads this key before deciding whether to stop on a
-# behind-base PR (see .claude/skills/approve-merge/SKILL.md step 3a).
+# behind-base PR (see .claude/skills/approve-merge/scripts/approve-merge.sh).
 # These cases pin the shipped default and the override path, using the
-# same config_get_or helper the skill's instructions call for.
+# same config_get_or helper the script calls.
 #
 # This test FAILS on the pre-#1386 project-config.defaults.json, which has
 # no "merge" key at all, and config_get_or falls back to the caller's own
@@ -43,6 +43,14 @@ make_sandbox() {
 }
 
 # ---------------------------------------------------------------------------
+# The script must keep the config switch and compare check.
+SCRIPT="$SRC_ROOT/.claude/skills/approve-merge/scripts/approve-merge.sh"
+if [ -f "$SCRIPT" ] && grep -q 'is_pr_behind_base' "$SCRIPT" && grep -q "merge.require_up_to_date" "$SCRIPT"; then
+  mark_pass "script checks config and behind-base state"
+else
+  mark_fail "script behind-base checks" "script or checks missing"
+fi
+
 # Case 1: shipped default is "true" — read via config_get_or, no override file.
 # ---------------------------------------------------------------------------
 sb=$(make_sandbox)

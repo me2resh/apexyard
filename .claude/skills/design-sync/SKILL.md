@@ -4,9 +4,7 @@ description: Sync a local component library to a claude.ai/design design-system 
 argument-hint: "[--project <uuid>] [--dir <localDir>] [component-name…]"
 ---
 
-## Writing rule
-
-When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
 # /design-sync — Sync a design system to claude.ai/design
 
