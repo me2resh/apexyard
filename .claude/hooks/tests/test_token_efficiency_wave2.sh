@@ -9,8 +9,8 @@
 #      (chars÷4). The 54k figure from the ticket overstated the load.
 #   4. AGENTS.md stays below 5,000 tokens so Cursor/pi do not ingest a
 #      second full rule restatement.
-#   5. settings.json excludes .claude/rules/** from Claude Code auto-load
-#      (claudeMdExcludes) — removing @ imports alone is not enough (#1354).
+#   5. Local writer excludes this clone’s rules from Claude Code auto-load
+#      (AgDR-0233) — shared settings must not contain the wide pattern.
 #   6. No .md fixtures remain under .claude/rules/ (fixtures belong under
 #      docs/quality-regression/fixtures/).
 #
@@ -128,12 +128,11 @@ else
   fi
 fi
 
-echo "== Invariant 5: settings.json excludes .claude/rules/** from auto-load"
-if [ ! -f "$SETTINGS_JSON" ]; then
-  red "  FAIL: .claude/settings.json missing"
-  FAIL=$((FAIL + 1))
-elif ! jq -e '(.claudeMdExcludes // []) as $e | (($e | type) == "array") and (($e | index("**/.claude/rules/**")) != null)' "$SETTINGS_JSON" >/dev/null 2>&1; then
-  red "  FAIL: .claudeMdExcludes is not an array containing \"**/.claude/rules/**\""
+echo "== Invariant 5: per-clone excludes replace the shared wide pattern"
+if ! jq -e 'has("claudeMdExcludes") | not' "$SETTINGS_JSON" >/dev/null 2>&1 ||
+   ! grep -q 'write-rule-excludes.sh' "$ROOT/.claude/hooks/dispatch-session-start.sh" ||
+   ! grep -q 'write-rule-excludes.sh' "$ROOT/.claude/skills/setup/SKILL.md"; then
+  red "  FAIL: per-clone writer wiring or shared settings incorrect"
   FAIL=$((FAIL + 1))
 else
   green "  OK"

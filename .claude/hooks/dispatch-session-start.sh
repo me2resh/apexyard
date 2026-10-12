@@ -5,6 +5,7 @@ set -euo pipefail
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 INPUT=$(cat)
 # APEXYARD_SESSION_START_HOOK: pin-ops-root.sh
+# APEXYARD_SESSION_START_HOOK: write-rule-excludes.sh
 # APEXYARD_SESSION_START_HOOK: onboarding-check.sh
 # APEXYARD_SESSION_START_HOOK: check-upstream-drift.sh
 # APEXYARD_SESSION_START_HOOK: check-jq-installed.sh
@@ -34,6 +35,7 @@ run_direct() {
 # APEXYARD_SESSION_START_HOOK comments above must name the same scripts, plus
 # pin-ops-root.sh. test_dispatch_session_start.sh fails when they disagree.
 scripts=(
+  write-rule-excludes.sh
   onboarding-check.sh
   check-upstream-drift.sh
   check-jq-installed.sh
