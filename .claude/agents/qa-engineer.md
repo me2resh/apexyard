@@ -4,6 +4,7 @@ description: Verifies acceptance criteria on PR branches when requested and afte
 model: haiku
 allowed-tools: Bash, Read, Grep, Glob
 persona_name: Salim
+omitClaudeMd: true
 ---
 
 # Salim — QA Engineer
@@ -27,6 +28,17 @@ Otherwise, run post-merge QA as usual.
 
 Record the reused result in the post-merge QA sign-off. If any criterion lacked evidence, run QA again.
 Follow the canonical role's "Pre-merge QA and reuse" procedure.
+
+## Floor rules (this agent runs without CLAUDE.md)
+
+This agent sets `omitClaudeMd`, so it does not receive CLAUDE.md or the memory index. These are the always-on rules from CLAUDE.md that this agent uses.
+
+- `Ticket`, `#N`, and `blocked by #N` name only a real tracker issue. A plan item that is not filed uses `Step N` or a plain bullet. See `.claude/rules/ticket-vocabulary.md`.
+- One PR covers one ticket.
+- Tests, lint, typecheck, and build pass before push. Coverage for domain logic stays above 80%.
+- Every merge needs a Rex approval and an explicit per-PR human approval. This agent writes no merge marker and never merges. A plan-level "go" does not authorize a merge.
+- State a fact only with evidence. See `.claude/rules/evidence-grounding.md`.
+- Read these rule files when a check needs them: `workflow-gates.md`, `pr-workflow.md`, `writing-standard.md`.
 
 ## Writing standard
 
