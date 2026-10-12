@@ -61,7 +61,7 @@ _command_scrub_allowlist_ok() {
              t == "true" || t == "false" || t == "test" || t == "[" || \
              t == "cd" || t == "pwd" || t == "mkdir" || t == "touch" || \
              t == "tee" || t == "cp" || t == "mv" || t == "rm" || \
-             t == "git" || t == "gh"
+             t == "git" || t == "gh" || t == "orbit"
     }
     # read_word may skip ahead through quotes. Reject a consumed word that
     # still holds executing $( / backticks / process substitution / <<<
@@ -373,8 +373,14 @@ _command_scrub_allowlist_ok() {
           if (word_executes(WORD)) { ok = 0; break }
           w = norm_word(WORD)
           if (w == "") { ok = 0; break }
-          # A leading assignment can name a program (GIT_PAGER, EDITOR). Return raw.
+          # Only a standalone lowercase scalar with a literal path value
+          # is data. Keep environment prefixes, special uppercase variables,
+          # expansions, array assignments and executable values raw.
           if (is_assign(WORD) && WORD !~ /^[A-Za-z_][A-Za-z0-9_]*==/) {
+            skip_ws()
+            after = substr(s, pos, 1)
+            if (WORD ~ /^[a-z_][a-z0-9_]*=[A-Za-z0-9_.\/-]+$/ &&
+                (after == ";" || after == "\n" || after == "")) { continue }
             ok = 0
             break
           }
