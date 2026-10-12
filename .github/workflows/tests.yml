@@ -42,11 +42,16 @@ jobs:
             else
               git diff --name-only "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/changed"
               if bash bin/select-affected-tests.sh --docs-only "$RUNNER_TEMP/changed"; then tier=docs; fi
+              # The full macOS suite takes about 32 minutes on one runner, over
+              # the 30-minute job timeout. A full selection keeps the 4 shards.
+              if [ "$tier" = light ] && bash bin/select-affected-tests.sh "$RUNNER_TEMP/changed" | grep -Fxq ALL; then full_macos=1; fi
             fi
           fi
           echo "tier=$tier" >> "$GITHUB_OUTPUT"
           if [ "$tier" = heavy ] || [ "$tier" = release ]; then
             matrix='{"include":[{"os":"ubuntu-latest","label":"linux jq-1.7"},{"os":"ubuntu-latest","label":"linux jq-1.8"},{"os":"macos-latest","label":"macos bash-3.2 (1/4)","shard":"1/4"},{"os":"macos-latest","label":"macos bash-3.2 (2/4)","shard":"2/4"},{"os":"macos-latest","label":"macos bash-3.2 (3/4)","shard":"3/4"},{"os":"macos-latest","label":"macos bash-3.2 (4/4)","shard":"4/4"}]}'
+          elif [ -n "${full_macos:-}" ]; then
+            matrix='{"include":[{"os":"ubuntu-latest","label":"linux jq-1.7"},{"os":"macos-latest","label":"macos bash-3.2 (1/4)","shard":"1/4"},{"os":"macos-latest","label":"macos bash-3.2 (2/4)","shard":"2/4"},{"os":"macos-latest","label":"macos bash-3.2 (3/4)","shard":"3/4"},{"os":"macos-latest","label":"macos bash-3.2 (4/4)","shard":"4/4"}]}'
           else
             matrix='{"include":[{"os":"ubuntu-latest","label":"linux jq-1.7"},{"os":"macos-latest","label":"macos bash-3.2 affected"}]}'
           fi

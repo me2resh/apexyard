@@ -103,6 +103,14 @@ for (const path of ['.claude/skills/demo/SKILL.md', '.claude/hooks/example.sh'])
   assert.equal(r.matrix[0].label, 'linux jq-1.7');
   assert.equal(r.matrix[1].os, 'macos-latest');
 }
+// A full selection on a regular PR keeps Linux jq-1.7 plus the 4 macOS shards,
+// because one macOS job would run past the 30-minute timeout.
+{
+  const r = tier('pull_request', '.claude/hooks/_lib-tracker.sh');
+  assert.equal(r.tier, 'light'); assert.equal(r.matrix.length, 5);
+  assert.equal(r.matrix[0].label, 'linux jq-1.7');
+  assert.deepEqual(r.matrix.filter(m => m.shard).map(m => m.shard), ['1/4', '2/4', '3/4', '4/4']);
+}
 for (const [branch, title] of [['release/v1.0', 'docs'], ['feature/example', 'release(1.0): ship']]) {
   const r = tier('pull_request', 'README.md', branch, title);
   assert.equal(r.tier, 'release'); assert.equal(r.matrix.length, 6);

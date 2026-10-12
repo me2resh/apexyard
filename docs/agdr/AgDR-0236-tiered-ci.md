@@ -51,7 +51,7 @@ The selector prints `ALL` for shared inputs:
 - `bin/run-hook-tests.sh` and `bin/select-affected-tests.sh`
 - `.github/workflows/tests.yml` and `.githooks/*`
 
-`ALL` selects the full macOS suite. An empty selection runs no macOS tests and passes.
+`ALL` selects the full macOS suite. On a regular PR it keeps the 4 macOS shards, because the full suite takes about 32 minutes on one runner, over the 30-minute job timeout. An empty selection runs no macOS tests and passes.
 The runner accepts a validated, explicit test-list file through `--files`.
 
 ## Consequences
