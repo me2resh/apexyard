@@ -115,6 +115,7 @@ tracks closing this gap for those seven keys.
 | `pr.title_type_whitelist` | `validate-pr-create.sh`, `pr-title-check.yml` (CI) | Conventional-commit types for PR titles. |
 | `external_contributions` | `validate-pr-create.sh` | Repositories you contribute to but do **not** govern. See below. |
 | `build.isolation` | `.claude/rules/isolated-builds.md`, `/fan-out`, build agents | Selects build isolation for the whole ops fork. Default: `worktree`. See [Build isolation](#build-isolation-buildisolation) and [AgDR-0210](agdr/AgDR-0210-build-isolation-setting.md). |
+| `review_identity` | `tracker_review_submit` in `_lib-tracker.sh` | Opt-in GitHub App identity for `gh` reviews. Default `kind` is `operator`. See [Reviewer GitHub App](#reviewer-github-app-review_identity) and [AgDR-0235](agdr/AgDR-0235-reviewer-github-app.md). |
 | `review_markers.extra_review_agents` | `_lib-review-markers.sh` (`review_caller_class`), `block-reviewer-repo-mutation.sh`, `block-reviewer-ci-wait.sh`, `warn-review-marker-write.sh`, `require-active-ticket.sh`, `auto-code-review.sh` | Adds exact review types. See [Add your own review agent types](hooks-fail-closed.md#add-your-own-review-agent-types). |
 | `qa.pre_merge_offer` | `/code-review` | Controls the advisory pre-merge QA offer after Rex approves. Default: `ask`. |
 | `leak_protection.public_framework_repos` | `check-private-refs-*.sh`, `block-private-refs-in-public-repos.sh` | Known-public `owner/repo` slugs. Origin identity is exempt when origin matches an entry. |
@@ -198,6 +199,21 @@ Before each commit in `branch` mode, check that HEAD is still your ticket branch
 Stop if HEAD is no longer your ticket branch.
 After merge in `branch` mode, return to the base branch and delete the local ticket branch.
 Always tell the user the branch name.
+
+## Reviewer GitHub App (`review_identity`)
+
+`tracker_review_submit` posts GitHub reviews with the operator `gh` login by default.
+Set `review_identity.kind` to `github_app` to post those reviews as a GitHub App.
+The app token is applied to that one `gh pr review` command.
+`tracker_pr_merge` and `/approve-merge` keep the operator login.
+
+The private key path must be outside every git work tree and outside `.claude/`.
+`fallback` value `comment` posts an operator comment when the app path fails.
+Any other value fails closed and posts nothing.
+
+Create the app, store the key, and set the override with the how-to:
+[Use a GitHub App for agent reviews](how-to/reviewer-github-app.md).
+The decision record is [AgDR-0235](agdr/AgDR-0235-reviewer-github-app.md).
 
 ## Extending the defaults
 

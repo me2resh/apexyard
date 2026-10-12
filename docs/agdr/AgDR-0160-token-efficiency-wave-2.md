@@ -4,6 +4,8 @@
 
 Accepted
 
+Superseded in part by AgDR-0233. The per-clone exclude replaces the wide-pattern trade-off below.
+
 ## Context
 
 Wave 1 (AgDR-0044, #322) shortened skill blurbs and the CLAUDE.md skill table.

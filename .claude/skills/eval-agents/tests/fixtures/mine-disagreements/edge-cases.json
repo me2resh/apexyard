@@ -1,0 +1,125 @@
+{
+  "repo": "example-org/example-repo",
+  "prs": [
+    {
+      "number": 201,
+      "url": "https://github.com/example-org/example-repo/pull/201",
+      "reviews": [
+        {
+          "id": 2011,
+          "state": "COMMENTED",
+          "body": "## Code Review: PR #201\n\n### Verdict\n**APPROVED**\n\n---\nLast reviewed commit: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`\nReviewed commit: `bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb`\n",
+          "commit_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "submitted_at": "2026-09-01T10:01:00Z",
+          "html_url": "https://github.com/example-org/example-repo/pull/201#pullrequestreview-2011",
+          "user": {
+            "login": "example-bot"
+          }
+        },
+        {
+          "id": 2012,
+          "state": "COMMENTED",
+          "body": "## Security Review: PR #201\n\n### Verdict\n**CHANGES REQUESTED**\n\n---\nReviewed commit: `bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb`\n",
+          "commit_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "submitted_at": "2026-09-01T10:02:00Z",
+          "html_url": "https://github.com/example-org/example-repo/pull/201#pullrequestreview-2012",
+          "user": {
+            "login": "example-bot"
+          }
+        }
+      ]
+    },
+    {
+      "number": 202,
+      "url": "https://github.com/example-org/example-repo/pull/202",
+      "reviews": [
+        {
+          "id": 2021,
+          "state": "COMMENTED",
+          "body": "## Code Review: PR #202\n\n### Verdict\n**APPROVED**\n\n---\nReviewed commit: `cccccccccccccccccccccccccccccccccccccccc`\n",
+          "commit_id": "cccccccccccccccccccccccccccccccccccccccc",
+          "submitted_at": "2026-09-01T10:01:00Z",
+          "html_url": "https://github.com/example-org/example-repo/pull/202#pullrequestreview-2021",
+          "user": {
+            "login": "example-bot"
+          }
+        },
+        {
+          "id": 2022,
+          "state": "COMMENTED",
+          "body": "## Security Review: PR #202\n\n### Verdict\nNo blocking findings remain.\n\n---\nReviewed commit: `cccccccccccccccccccccccccccccccccccccccc`\n",
+          "commit_id": "cccccccccccccccccccccccccccccccccccccccc",
+          "submitted_at": "2026-09-01T10:02:00Z",
+          "html_url": "https://github.com/example-org/example-repo/pull/202#pullrequestreview-2022",
+          "user": {
+            "login": "example-bot"
+          }
+        }
+      ]
+    },
+    {
+      "number": 203,
+      "url": "https://github.com/example-org/example-repo/pull/203",
+      "reviews": [
+        {
+          "id": 2031,
+          "state": "COMMENTED",
+          "body": "## Code Review: PR #203\n\n### Verdict\n**APPROVED**\n\n---\nReviewed commit: `dddddddddddddddddddddddddddddddddddddddd`\n",
+          "commit_id": "dddddddddddddddddddddddddddddddddddddddd",
+          "submitted_at": "2026-09-01T10:01:00Z",
+          "html_url": "https://github.com/example-org/example-repo/pull/203#pullrequestreview-2031",
+          "user": {
+            "login": "example-bot"
+          }
+        },
+        {
+          "id": 2032,
+          "state": "COMMENTED",
+          "body": "## Security Review: PR #203\n\n### Verdict\n**CHANGES REQUESTED**\n\n---\nReviewed commit: `dddddddd`\n",
+          "commit_id": null,
+          "submitted_at": "2026-09-01T10:02:00Z",
+          "html_url": "https://github.com/example-org/example-repo/pull/203#pullrequestreview-2032",
+          "user": {
+            "login": "example-bot"
+          }
+        }
+      ]
+    },
+    {
+      "number": 1080,
+      "url": "https://example.test/pr/1080",
+      "reviews": [
+        {
+          "body": "## Code Review: PR #1080\n\n**Commit**: `63177daa`\n\n### Verdict\n**APPROVED**\n\n---\nReviewed by Rex\nReviewed commit: `63177daa`\n",
+          "commit_id": "596a95b4",
+          "submitted_at": "2026-09-01T10:01:00Z",
+          "html_url": "https://example.test/pr/1080/review/1"
+        },
+        {
+          "body": "## Security Review: PR #1080\n\n**Commit**: `63177daa`\n\n### Verdict\n**CHANGES REQUESTED**\n\n---\nReviewed by Hakim\nReviewed commit: `63177daa`\n",
+          "commit_id": "63177daa",
+          "submitted_at": "2026-09-01T10:02:00Z",
+          "html_url": "https://example.test/pr/1080/review/2"
+        }
+      ]
+    },
+    {
+      "number": 1292,
+      "url": "https://example.test/pr/1292",
+      "reviews": [
+        {
+          "body": "## Code Review: PR #1292\n\n### Verdict\n**APPROVED**\n\n---\nReviewed by Rex\nReviewed commit: `abcdef01`\n",
+          "commit_id": "8e5c33ea",
+          "submitted_at": "2026-09-01T10:01:00Z",
+          "html_url": "https://example.test/pr/1292/review/1"
+        },
+        {
+          "body": "## Security Review: PR #1292\n\n**Commit**: `8e5c33ea`\n\n### Verdict\n**CHANGES REQUESTED**\n\n---\nReviewed by Hakim\nReviewed commit: `8e5c33ea`\n",
+          "commit_id": "8e5c33ea",
+          "submitted_at": "2026-09-01T10:02:00Z",
+          "html_url": "https://example.test/pr/1292/review/2"
+        }
+      ]
+    }
+  ]
+}
