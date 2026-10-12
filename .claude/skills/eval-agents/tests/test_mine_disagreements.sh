@@ -124,19 +124,35 @@ else
 fi
 
 # --- 3. A raw draft never validates as a corpus entry ---------------------
-python3 "$MINER" --fixture "$SCRIPT_DIR/fixtures/mine-disagreements/merged-prs.json" >"$tmp/fixture.json"
-python3 - "$tmp/fixture.json" "$tmp/drafts.json" <<'PY'
+if ! python3 "$MINER" --fixture "$SCRIPT_DIR/fixtures/mine-disagreements/merged-prs.json" >"$tmp/fixture.json"; then
+  bad "miner generates raw drafts"
+  exit 1
+fi
+if ! python3 - "$tmp/fixture.json" "$tmp/drafts.json" <<'PY'
 import json, sys
 report = json.load(open(sys.argv[1]))
 corpus = {"agent": "rex", "schema_version": 1,
           "entries": [c["draft_entry"] for c in report["candidates"]]}
+assert corpus["entries"], "draft list must not be empty"
 json.dump(corpus, open(sys.argv[2], "w"))
 PY
+then
+  bad "raw draft helper succeeds with a non-empty list"
+  exit 1
+fi
+if [ ! -s "$tmp/drafts.json" ]; then
+  bad "raw draft file exists"
+  exit 1
+fi
 if bash "$VALIDATE" rex "$tmp/drafts.json" >"$tmp/validate.out" 2>&1; then
   bad "validate-corpus.sh rejects raw drafts"
   cat "$tmp/validate.out"
-else
+elif grep -q -F "'ground_truth_defects' must be an array" "$tmp/validate.out" &&
+  grep -q -F "recorded_verdict.was_justified must be a boolean" "$tmp/validate.out"; then
   ok "validate-corpus.sh rejects raw drafts"
+else
+  bad "validate-corpus.sh reports both raw draft rejection reasons"
+  cat "$tmp/validate.out"
 fi
 
 echo

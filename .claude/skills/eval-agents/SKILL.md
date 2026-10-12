@@ -52,9 +52,9 @@ That shape is the `independent_review` oracle (AgDR-0089). The script does not m
 How the script reads a review:
 
 1. It gets the reviewer from the section header (`## Code Review`, `## Security Review`, `## Design Review`). All agents post under one account, so the GitHub author does not identify the agent.
-2. It reads the verdict only from the `### Verdict` section. When no such heading exists, it reads a `**Verdict**:` line. It never searches the full body, because recap prose caused all false positives in the #1440 probe.
-3. It gets the reviewed commit from the `Reviewed commit:` footer or the `**Commit**:` line. When the body names no commit, it uses the API `commit_id`.
-4. It groups the reviews by commit and reports each commit that has the mined shape.
+2. It reads the verdict only from the `### Verdict` section. When no such heading exists, it reads a `**Verdict**:` line. It never searches the full body, because recap prose caused all false positives in the #1440 probe. The verdict line must start with a verdict word. A line such as "No blocking findings remain." gives an unknown verdict.
+3. The miner uses the `**Commit**:` line first, then the `Reviewed commit:` footer. It uses the API `commit_id` only when the body names no commit. It ignores "Last reviewed commit:" and "Last-reviewed commit:".
+4. It groups the reviews by commit. A short SHA of 7 or more characters joins the group of the full SHA that it prefixes. It reports each commit that has the mined shape.
 
 Each candidate has a partial `draft_entry` and an `evidence` block with links to the approval and the challenge. The draft has no `ground_truth_defects` and no `recorded_verdict.was_justified`. Thus `validate-corpus.sh` rejects a raw paste. To promote a candidate, follow `docs/eval-agents/README.md` § "Growing the corpus".
 

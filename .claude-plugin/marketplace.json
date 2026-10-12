@@ -23,6 +23,11 @@
       "name": "apexyard-explainer",
       "source": "./plugins/apexyard-explainer",
       "description": "Display-only pane that explains each tool call in one plain sentence"
+    },
+    {
+      "name": "apexyard-bootcamp",
+      "source": "./plugins/apexyard-bootcamp",
+      "description": "Display-only guided bootcamp pane with nine modules and session checkpoints"
     }
   ]
 }
