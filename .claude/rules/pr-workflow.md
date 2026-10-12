@@ -52,6 +52,18 @@ Also check before pushing:
 [ ] Wait for human approver (explicit "approved" or similar)
 ```
 
+### Framework CI tiers (#1690)
+
+Regular PRs run the full Linux jq-1.7 suite and affected tests on one macOS bash-3.2 runner.
+Shared hook libraries and CI inputs select the full suite, which runs on Linux only on a PR; the macOS suite runs on merge and nightly.
+Docs-only PRs skip hook jobs and retain the passing `hook test suite` summary.
+Docs-only means every path is under `docs/`, or is Markdown outside `.claude/`.
+Pushes to `dev` or `main`, nightly runs on `dev`, and manual runs use all six matrix jobs.
+Release PRs also require conformance through the summary when the repository variable `CONFORMANCE_ON_RELEASE` is `true`.
+A release PR has a `release/v*` head branch or a title that starts with `release(`.
+An unaffected macOS test can fail after merge or during the nightly run.
+See [AgDR-0236](../../docs/agdr/AgDR-0236-tiered-ci.md).
+
 ### CI order: the orchestrator waits, the reviewer never waits (me2resh/apexyard#1625)
 
 The orchestrator waits for green CI with a Monitor. Then it spawns Rex through `/code-review`. A review agent (`code-reviewer`, `security-reviewer`, or `solution-architect`) runs `gh pr checks` once and reports what it saw. It does not wait for CI. A reviewer that polls CI keeps its whole context warm for minutes and pays for every poll.
@@ -94,7 +106,9 @@ It does not merge on a CI result computed against a stale base. A failed
 compare-API call also stops the merge. The skill never treats a failed check
 as evidence the PR is up to date.
 
-PRs with the `ready-to-merge` label refresh automatically after pushes to the configured integration branch.
+After each integration-branch push, the workflow refreshes only the oldest eligible behind PR with the `ready-to-merge` label.
+Eligible PRs are open, non-draft, and from the same repository.
+A failed attempt stops the refresh run.
 Rex adds the label on APPROVED and removes it on CHANGES REQUESTED.
 A new non-merge commit removes the label and needs another Rex review.
 Base-branch merge commits retain the label. Carry-over keeps Rex's approval only when the existing check returns `true`.

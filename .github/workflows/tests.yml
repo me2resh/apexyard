@@ -1,12 +1,10 @@
 name: tests
 
-# Runs the framework's mechanical-enforcement test suites (the ~60 test_*.sh
-# under .claude/**/tests/) on every PR and on push to dev/main. Until now these
-# tests were advisory — only 2 ran in CI — so a hook regression could ship
-# green. This job makes the whole suite a gate. See me2resh/apexyard#526.
-
 on:
   pull_request:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
   push:
     branches: [dev, main]
 
@@ -14,38 +12,67 @@ permissions:
   contents: read
 
 concurrency:
-  group: tests-${{ github.ref }}
+  # The nightly run gets its own group, so a push cannot cancel it and open
+  # a false "Nightly CI failed" issue.
+  group: tests-${{ github.event_name == 'schedule' && 'nightly' || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  tier:
+    runs-on: ubuntu-latest
+    outputs:
+      tier: ${{ steps.select.outputs.tier }}
+      matrix: ${{ steps.select.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'schedule' && 'dev' || github.sha }}
+      - id: select
+        env:
+          EVENT: ${{ github.event_name }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          tier=heavy
+          if [ "$EVENT" = pull_request ]; then
+            tier=light
+            if [[ "$HEAD_BRANCH" == release/v* || "$PR_TITLE" == release\(* ]]; then
+              tier=release
+            else
+              git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/changed"
+              if bash bin/select-affected-tests.sh --docs-only "$RUNNER_TEMP/changed"; then tier=docs; fi
+              # Owner decision 2026-10-12: a PR that needs the full suite runs it
+              # on Linux only. The macOS bash-3.2 suite runs on merge and nightly.
+              if [ "$tier" = light ] && bash bin/select-affected-tests.sh "$RUNNER_TEMP/changed" | grep -Fxq ALL; then full_suite=1; fi
+            fi
+          fi
+          echo "tier=$tier" >> "$GITHUB_OUTPUT"
+          if [ "$tier" = heavy ] || [ "$tier" = release ]; then
+            matrix='{"include":[{"os":"ubuntu-latest","label":"linux jq-1.7"},{"os":"ubuntu-latest","label":"linux jq-1.8"},{"os":"macos-latest","label":"macos bash-3.2 (1/4)","shard":"1/4"},{"os":"macos-latest","label":"macos bash-3.2 (2/4)","shard":"2/4"},{"os":"macos-latest","label":"macos bash-3.2 (3/4)","shard":"3/4"},{"os":"macos-latest","label":"macos bash-3.2 (4/4)","shard":"4/4"}]}'
+          elif [ -n "${full_suite:-}" ]; then
+            matrix='{"include":[{"os":"ubuntu-latest","label":"linux jq-1.7"}]}'
+          else
+            matrix='{"include":[{"os":"ubuntu-latest","label":"linux jq-1.7"},{"os":"macos-latest","label":"macos bash-3.2 affected"}]}'
+          fi
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   hook-tests:
+    needs: tier
+    if: needs.tier.outputs.tier != 'docs'
     name: hook tests (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            label: linux jq-1.7
-          - os: ubuntu-latest
-            label: linux jq-1.8
-          - os: macos-latest
-            label: macos bash-3.2 (1/4)
-            shard: 1/4
-          - os: macos-latest
-            label: macos bash-3.2 (2/4)
-            shard: 2/4
-          - os: macos-latest
-            label: macos bash-3.2 (3/4)
-            shard: 3/4
-          - os: macos-latest
-            label: macos bash-3.2 (4/4)
-            shard: 4/4
+      matrix: ${{ fromJSON(needs.tier.outputs.matrix) }}
     steps:
       - name: Checkout
         with:
           fetch-depth: 0
+          ref: ${{ github.event_name == 'schedule' && 'dev' || github.sha }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install jq (used by the hooks + their tests)
@@ -78,6 +105,9 @@ jobs:
 
       - name: Run the hook test suite
         env:
+          TIER: ${{ needs.tier.outputs.tier }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           HOOK_TEST_MATRIX_SHARD: ${{ matrix.shard }}
         run: |
           if [ "$RUNNER_OS" = macOS ]; then
@@ -101,6 +131,18 @@ jobs:
             [[ "$(/bin/bash --version | head -1)" == *"version 3.2."* ]]
             python3 -c 'import tomllib'
           fi
+          shard_args=()
+          if [ "$RUNNER_OS" = macOS ] && [ "$TIER" = light ]; then
+            git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/changed"
+            /bin/bash bin/select-affected-tests.sh "$RUNNER_TEMP/changed" > "$RUNNER_TEMP/affected"
+            if ! grep -Fxq ALL "$RUNNER_TEMP/affected"; then
+              shard_args=(--files "$RUNNER_TEMP/affected")
+              if [ ! -s "$RUNNER_TEMP/affected" ]; then
+                /bin/bash bin/run-hook-tests.sh "${shard_args[@]}"
+                exit 0
+              fi
+            fi
+          fi
           snapshot_repo=$(mktemp -d)
           trap 'rm -rf "$snapshot_repo"' EXIT
           git -C "$snapshot_repo" init -q --bare
@@ -120,22 +162,59 @@ jobs:
               exit 1
             fi
           done
-          shard_args=()
-          if [ "$RUNNER_OS" = macOS ]; then
+          if [ "$RUNNER_OS" = macOS ] && [ -n "$HOOK_TEST_MATRIX_SHARD" ]; then
             shard_args=(--shard "$HOOK_TEST_MATRIX_SHARD")
           fi
           APEXYARD_SNAPSHOT_REPO="$snapshot_repo" REQUIRE_SNAPSHOTS=1 \
             /bin/bash bin/run-hook-tests.sh "${shard_args[@]}"
 
+  conformance:
+    needs: tier
+    # Conformance needs the CONFORMANCE_* secrets. Set the repo variable
+    # CONFORMANCE_ON_RELEASE=true once they exist; until then it is skipped.
+    if: needs.tier.outputs.tier == 'release' && vars.CONFORMANCE_ON_RELEASE == 'true'
+    # GitHub checks nested job permissions at startup, even for jobs that
+    # skip. The badge job in conformance.yml asks for these two.
+    permissions:
+      contents: write
+      actions: read
+    uses: ./.github/workflows/conformance.yml
+    secrets: inherit
+
   # The dev ruleset requires "hook test suite". Matrix jobs have distinct names.
   # This final job fails unless every leg passes, preserving the required check.
   hook-test-suite:
     name: hook test suite
-    needs: [hook-tests]
+    needs: [tier, hook-tests, conformance]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Require every matrix leg to pass
         env:
           MATRIX_RESULT: ${{ needs.hook-tests.result }}
-        run: test "$MATRIX_RESULT" = success
+          TIER_RESULT: ${{ needs.tier.result }}
+          TIER: ${{ needs.tier.outputs.tier }}
+          CONFORMANCE_RESULT: ${{ needs.conformance.result }}
+          CONFORMANCE_ON_RELEASE: ${{ vars.CONFORMANCE_ON_RELEASE }}
+        run: |
+          test "$TIER_RESULT" = success
+          if [ "$TIER" = docs ]; then test "$MATRIX_RESULT" = skipped; else test "$MATRIX_RESULT" = success; fi
+          if [ "$TIER" = release ] && [ "$CONFORMANCE_ON_RELEASE" = true ]; then test "$CONFORMANCE_RESULT" = success; fi
+
+  nightly-failure:
+    needs: hook-test-suite
+    if: always() && github.event_name == 'schedule' && needs.hook-test-suite.result == 'failure'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const title = 'Nightly CI failed';
+            const body = `Nightly CI on dev failed: ${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const issues = await github.paginate(github.rest.issues.listForRepo, { owner, repo, state: 'open', creator: 'github-actions[bot]', per_page: 100 });
+            const issue = issues.find(i => !i.pull_request && i.title === title);
+            if (issue) await github.rest.issues.update({ owner, repo, issue_number: issue.number, body });
+            else await github.rest.issues.create({ owner, repo, title, body });
