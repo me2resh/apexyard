@@ -79,6 +79,38 @@ out=$("$lint" --orbit-root "$orbit_root" --base origin/does-not-exist 2>&1); rc=
 case "$out" in *"notice: base ref origin/does-not-exist not found"*) ;; *) echo "FAIL: no fallback notice: $out"; fail=1 ;; esac
 case "$out" in *"validate"*|*FAIL*) echo "FAIL: unexpected fault: $out"; fail=1 ;; esac
 
+# Branch scope must reject cross-initiative records, even with --all.
+mkdir -p "$sb/docs"
+mv "$orbit_root" "$sb/docs/orbit"
+orbit_root="$sb/docs/orbit"
+slice="$orbit_root/slices/slice-demo-o1.json"
+git -C "$sb" init -q
+git -C "$sb" config user.email test@example.com
+git -C "$sb" config user.name test
+plan=$(jq -r '.id' "$orbit_root"/plans/*.json | head -1)
+git -C "$sb" add docs/orbit
+git -C "$sb" commit -qm base
+git -C "$sb" update-ref refs/remotes/origin/dev HEAD
+git -C "$sb" checkout -qb "orbit/${plan#plan-}-cycle"
+expect "own initiative no changed records" 0 "records-lint: OK"
+set_why "Changed reason."
+jq '.planId = "plan-other"' "$slice" > "$slice.t" && mv "$slice.t" "$slice"
+expect "cross initiative slice" 15 "Record belongs to another initiative."
+jq --arg p "$plan" '.planId = $p' "$slice" > "$slice.t" && mv "$slice.t" "$slice"
+echo notes > "$orbit_root/plans/plan-other.notes.md"
+expect "cross initiative notes" 15 "Notes belong to another initiative."
+rm "$orbit_root/plans/plan-other.notes.md"
+snapshot="$orbit_root/snapshots/snapshot-demo-widget-1.json"
+jq '.observedAt = "2026-10-12T00:00:00Z"' "$snapshot" > "$snapshot.t" && mv "$snapshot.t" "$snapshot"
+expect "unreferenced changed snapshot" 15 "Snapshot is not referenced"
+rec="$orbit_root/reconciliations/reconciliation-demo-widget-r1.json"
+set_expl "Missing: fresh evidence. Next: inspect the slice."
+expect "referenced changed snapshot" 0 "records-lint: OK"
+jq '.planId = "plan-other"' "$rec" > "$rec.t" && mv "$rec.t" "$rec"
+expect "cross initiative reconciliation" 15 "Record belongs to another initiative."
+git -C "$sb" checkout -qb orbit/unknown-cycle
+expect "unknown initiative" 15 "No matching plan record"
+
 rm -rf "$sb"
 [ "$fail" -eq 0 ] && echo "PASS: records-lint stops on the first fault"
 exit "$fail"

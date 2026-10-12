@@ -14,6 +14,20 @@ Examples:
 
 The `TICKET-ID` should reference an issue in the project's tracker. Default format: `#58` or `GH-58` (GitHub Issues). The validators in `.claude/hooks/` source the regex from `.tracker.id_pattern` in `.claude/project-config.{defaults,}.json` — the default pattern also matches any uppercase tracker prefix (e.g. `ABC-123`) for teams using Linear, Jira, or similar. See `_lib-tracker.sh` and AgDR-0033 for how to swap the active tracker; ApexYard's out-of-the-box default is per-project GitHub Issues, with one repo's issues never crossing into another repo's PRs.
 
+### ORBIT records branches
+
+Use `orbit/<initiative-id>-<description>` without a ticket only when every changed file is under `docs/orbit/`.
+Use lowercase kebab segments for the branch suffix.
+The initiative ID is the Plan record ID without `plan-`. For `plan-apexyard-scaffold`, use `orbit/apexyard-scaffold-first-slice`.
+The hook resolves the longest existing Plan ID prefix on the branch and blocks unknown initiatives.
+Use the title `docs(orbit/<initiative-id>): <description>` for these records PRs.
+The validators fail closed when they cannot verify the files or remote trunk base.
+The PR body must contain the exact line `Initiative: plan-<initiative-id>` instead of a ticket reference.
+Every commit carries the same `Initiative: plan-<initiative-id>` trailer.
+Find all changes with `git log --grep "Initiative: plan-<initiative-id>"`.
+Records lint rejects records from other initiatives. Snapshots require a reference from a changed Reconciliation.
+Review gates, merge gates, and per-PR approval still apply.
+
 ## PR Title Format
 
 Must match: `type(TICKET): description` or `type(TICKET)!: description` (breaking change)
@@ -22,6 +36,7 @@ Regex: `^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|spike|pro
 
 `<TICKET_ID_PATTERN>` is sourced from `.tracker.id_pattern` so adopters get their own tracker's shape validation. Default matches `#123`, `GH-123`, or `[A-Z]{2,10}-[0-9]+` (Jira / Linear / similar).
 
+- Use `docs(orbit/<initiative-id>): <description>` only for qualifying ORBIT records branches.
 - One ticket ID per PR title — multi-ticket titles like `fix(ABC-1,2,3):` are rejected
 - GitHub Issues use `#XX` format: `fix(#58): description`
 - Breaking changes use `!` before the colon: `feat(#58)!: remove deprecated v1 endpoints`
