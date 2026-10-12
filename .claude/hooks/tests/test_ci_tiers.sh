@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Selector and executable workflow contract checks. Requires Node and yq/PyYAML.
 set -euo pipefail
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
 root=$(cd "$(dirname "$0")/../../.." && pwd)
 cd "$root"
 tmp=$(mktemp -d)
