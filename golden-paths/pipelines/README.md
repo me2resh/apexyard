@@ -16,7 +16,7 @@ Reusable GitHub Actions workflows that integrate ApexYard's automated agents int
 | `review-check.yml` | Rex (verification) | Block merge if Rex hasn't reviewed the latest commit | Every PR + review event |
 | `seo-check.yml` | SEO Check | SEO analysis for content files | Content changes |
 | `auto-tag-on-release-pr-merge.yml` | CI | Auto-tag squash commit + create GitHub Release when a `release/v*` PR merges | PR closed (merged) |
-| `refresh-ready-prs.yml` | Rex | Refresh approved PR branches and remove stale readiness labels | Integration push, PR synchronize |
+| `refresh-ready-prs.yml` | Rex | Refresh the oldest eligible behind PR and remove stale readiness labels | Integration push, PR synchronize |
 | `ci.yml` | Combined | All checks in one pipeline | Every PR |
 
 ---
@@ -367,6 +367,10 @@ Copy this workflow into `.github/workflows/`. Create the `ready-to-merge` reposi
 Set `INTEGRATION_BRANCHES` to `main` for projects without `dev`. The default is `dev`.
 For other branches, also change the static `on.push.branches` list. GitHub does not expand environment variables in event filters.
 
+Each integration push attempts only the oldest open, non-draft, same-repository labelled PR that is behind.
+The workflow orders PRs by creation time and stops after one attempt, including a failed attempt.
+It never merges or force-pushes. Conflict comments repeat only when the head changes.
+
 Configure `APEXYARD_BOT_TOKEN` with repository contents and pull-request write access to start CI after branch updates.
 Without this secret, the workflow uses `GITHUB_TOKEN` and logs the CI limitation.
 GitHub suppresses new workflow runs for pushes made with `GITHUB_TOKEN`.
@@ -374,3 +378,14 @@ Refresh failures produce one comment per head SHA. The orchestrator resolves con
 The workflow skips fork PRs. It does not refresh them, and it does not remove their label after a new commit, because a fork run has a read-only token.
 Treat the Rex marker SHA as the reviewed head for a fork PR. Update a fork branch only with the user's approval.
 The workflow never grants merge approval. Existing carry-over checks and per-PR human approval still apply.
+
+### Framework hook-test tiers
+
+The framework's `tests.yml` uses a light PR tier, a heavy tier, and a release tier.
+Regular PRs run the full Linux jq-1.7 suite and affected macOS bash-3.2 tests.
+`bin/select-affected-tests.sh` maps changed hooks, tests, skills, and agents to tests.
+Shared libraries and CI inputs select the full suite, which runs on Linux only on a PR; the macOS suite runs on merge and nightly.
+Docs-only PRs skip hook jobs and retain the required `hook test suite` summary.
+Pushes to `dev` and `main`, nightly runs on `dev`, and manual runs execute the six-job matrix.
+Release PRs execute that matrix. They require the reusable conformance workflow through the summary when the repository variable `CONFORMANCE_ON_RELEASE` is `true`.
+See [AgDR-0236](../../docs/agdr/AgDR-0236-tiered-ci.md) for selection rules and risks.

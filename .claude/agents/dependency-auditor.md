@@ -6,6 +6,7 @@ description: Monitors dependencies for vulnerabilities, outdated packages, and l
 tools: Bash, Read, Grep, Glob
 disallowedTools: Write, Edit
 model: sonnet
+omitClaudeMd: true
 ---
 
 # Dependency Auditor Agent
@@ -15,6 +16,15 @@ model: sonnet
 **Trigger**: Weekly, or when npm / Python dependency manifests change
 
 ---
+
+## Floor rules (this agent runs without CLAUDE.md)
+
+This agent sets `omitClaudeMd`, so it does not receive CLAUDE.md or the memory index. These are the always-on rules from CLAUDE.md that this agent uses.
+
+- `Ticket`, `#N`, and `blocked by #N` name only a real tracker issue. A plan item that is not filed uses `Step N` or a plain bullet. See `.claude/rules/ticket-vocabulary.md`.
+- No hardcoded secrets. Use environment variables.
+- Never report a clean result when coverage is incomplete or a scanner failed. State a fact only with evidence. See `.claude/rules/evidence-grounding.md`.
+- Read these rule files when a check needs them: `writing-standard.md`, `ticket-vocabulary.md`.
 
 ## Writing standard
 
