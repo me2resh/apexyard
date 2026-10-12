@@ -328,15 +328,6 @@ else
   pass "Tariq no longer claims that framework rules are always loaded"
 fi
 
-# --- security-reviewer reference rules ---
-BODY=$(cat "$ROOT/docs/agents/security-reviewer-reference.md")
-require_in '## Consolidation note' "$BODY" 'security-reviewer reference: retains ## Consolidation note'
-require_in 'Hatim' "$BODY" 'security-reviewer reference: retains Hatim'
-require_in '## Ops-root resolution and review posting: full script' "$BODY" 'security-reviewer reference: retains ## Ops-root resolution and review posting: full script'
-require_in 'APEXYARD_OPS_DISABLE_PIN' "$BODY" 'security-reviewer reference: retains APEXYARD_OPS_DISABLE_PIN'
-require_in '## Example invocation' "$BODY" 'security-reviewer reference: retains ## Example invocation'
-require_in '## Status of `omitClaudeMd`' "$BODY" 'security-reviewer reference: retains ## Status of `omitClaudeMd`'
-
 # --- solution-architect reference rules ---
 BODY=$(cat "$ROOT/docs/agents/solution-architect-reference.md")
 require_in '## Review lens: original wording' "$BODY" 'solution-architect reference: retains ## Review lens: original wording'

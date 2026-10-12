@@ -52,7 +52,7 @@ The scan read every tool call and flagged the Bash commands of six runs by patte
 
 The four small agents grow by the floor block. They save more than that by dropping CLAUDE.md.
 Tariq’s rationale and long scripts moved to `docs/agents/solution-architect-reference.md`.
-Hakim retains the original agent text. `docs/agents/security-reviewer-reference.md` records the tested variant and context.
+Hakim retains the original agent text. The trim does not ship, per the owner decision on 2026-10-12.
 
 ## First-turn context per agent type (o1 metric)
 
