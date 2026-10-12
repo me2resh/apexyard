@@ -16,6 +16,7 @@ Reusable GitHub Actions workflows that integrate ApexYard's automated agents int
 | `review-check.yml` | Rex (verification) | Block merge if Rex hasn't reviewed the latest commit | Every PR + review event |
 | `seo-check.yml` | SEO Check | SEO analysis for content files | Content changes |
 | `auto-tag-on-release-pr-merge.yml` | CI | Auto-tag squash commit + create GitHub Release when a `release/v*` PR merges | PR closed (merged) |
+| `refresh-ready-prs.yml` | Rex | Refresh approved PR branches and remove stale readiness labels | Integration push, PR synchronize |
 | `ci.yml` | Combined | All checks in one pipeline | Every PR |
 
 ---
@@ -359,3 +360,17 @@ Ensure your `package.json` has these scripts:
 3. **Enable `dependency-audit.yml`** — weekly health checks
 4. **Add `review-check.yml`** — once you have agents reviewing PRs
 5. **Add `seo-check.yml` for content sites** — optimise discoverability
+
+### Refresh Ready PRs (`refresh-ready-prs.yml`)
+
+Copy this workflow into `.github/workflows/`. Create the `ready-to-merge` repository label before Rex uses it.
+Set `INTEGRATION_BRANCHES` to `main` for projects without `dev`. The default is `dev`.
+For other branches, also change the static `on.push.branches` list. GitHub does not expand environment variables in event filters.
+
+Configure `APEXYARD_BOT_TOKEN` with repository contents and pull-request write access to start CI after branch updates.
+Without this secret, the workflow uses `GITHUB_TOKEN` and logs the CI limitation.
+GitHub suppresses new workflow runs for pushes made with `GITHUB_TOKEN`.
+Refresh failures produce one comment per head SHA. The orchestrator resolves conflicts.
+The workflow skips fork PRs. It does not refresh them, and it does not remove their label after a new commit, because a fork run has a read-only token.
+Treat the Rex marker SHA as the reviewed head for a fork PR. Update a fork branch only with the user's approval.
+The workflow never grants merge approval. Existing carry-over checks and per-PR human approval still apply.
