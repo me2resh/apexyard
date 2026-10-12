@@ -8,6 +8,7 @@
 #
 # Usage:
 #   bin/run-hook-tests.sh            # run the whole suite
+#   bin/run-hook-tests.sh --files /tmp/tests # explicit newline-separated list
 #   bin/run-hook-tests.sh --list     # list discovered tests, run nothing
 #   bin/run-hook-tests.sh --shard 1/4 # run one shard
 #   bin/hook-test-weights.txt supplies weights when present.
@@ -22,6 +23,7 @@
 
 set -uo pipefail
 
+FILES=
 LIST=0
 SHARD=${HOOK_TEST_SHARD-}
 SHARDS=${HOOK_TEST_SHARDS-}
@@ -31,6 +33,11 @@ shard_error() {
 }
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --files)
+      [ "$#" -ge 2 ] || { echo "--files requires a newline-separated test-list file" >&2; exit 2; }
+      FILES=$2
+      shift 2
+      ;;
     --list) LIST=1; shift ;;
     --shard)
       [ "$#" -ge 2 ] || shard_error
@@ -132,6 +139,22 @@ done < <(
   find .claude/hooks/tests .claude/agents/tests .claude/skills \
        -type f \( -name 'test_*.sh' -o -name '*.test.sh' \) 2>/dev/null | LC_ALL=C sort
 )
+
+# Validate explicit selections against discovery; an empty list runs no tests.
+if [ -n "$FILES" ]; then
+  [ -r "$FILES" ] || { echo "Cannot read test list: $FILES" >&2; exit 2; }
+  REQUESTED=()
+  while IFS= read -r _t || [ -n "$_t" ]; do
+    [ -n "$_t" ] || continue
+    found=0
+    for candidate in ${TESTS[@]+"${TESTS[@]}"}; do
+      [ "$candidate" != "$_t" ] || found=1
+    done
+    [ "$found" -eq 1 ] || { echo "Unknown test: $_t" >&2; exit 2; }
+    REQUESTED+=("$_t")
+  done < "$FILES"
+  TESTS=(${REQUESTED[@]+"${REQUESTED[@]}"})
+fi
 
 SELECTED=()
 WEIGHTS_FILE=${HOOK_TEST_WEIGHTS_FILE:-$ROOT/bin/hook-test-weights.txt}

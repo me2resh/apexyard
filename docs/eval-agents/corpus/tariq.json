@@ -1,0 +1,210 @@
+{
+  "agent": "tariq",
+  "schema_version": 1,
+  "entries": [
+    {
+      "id": "tariq-1430-68a26b4e3",
+      "pr": 1430,
+      "repo": "me2resh/apexyard",
+      "commit": "68a26b4e3",
+      "diff_range": "68a26b4e3~1..68a26b4e3",
+      "oracle": {
+        "source": "confirmed_fix",
+        "established_by": "Tariq's round-1 review named both blockers. Commit 91cc4cdb4 forbade the package-manager exporters, added numeric bounds, and recorded the scanner and advisory-source decision in AgDR-0175. Tariq's delta re-review of 91cc4cdb4 marked both resolved and approved.",
+        "reference": "me2resh/apexyard#1430"
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "The design runs the Poetry, uv, and Pipenv lockfile exporters inside an untrusted checkout, including fork pull requests in CI, with no stated execution bound. A committed Poetry plugin directory runs project code on any Poetry command, and uv export can relock over the network and build source distributions. The design has intent-level rules such as 'never regenerate a lockfile' but does not bind the exporter invocations to them, and it gives no numeric timeout, retry, or batch bounds.",
+          "severity": "HIGH",
+          "location": "docs/designs/dependency-audit-ecosystems-technical-design.md (Python inputs)"
+        },
+        {
+          "id": "D2",
+          "description": "No decision record covers the Python scanner and advisory source. AgDR-0175 says it does not approve the external integrations, yet the design commits to pip-audit, a direct OSV client, the PyPI JSON API, and three exporters. Each is a new external tool or network dependency and a material choice that needs an AgDR with compared options (for example OSV-Scanner or direct lockfile parsing).",
+          "severity": "HIGH",
+          "location": "docs/agdr/AgDR-0175-dependency-audit-ecosystem-dispatch.md (Review State)"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "CHANGES REQUESTED",
+        "was_justified": true
+      },
+      "notes": "Docs-only design PR. Tariq also listed eleven advisory findings (A1 to A11); they are not ground-truth defects."
+    },
+    {
+      "id": "tariq-917-caca090f1",
+      "pr": 917,
+      "repo": "me2resh/apexyard",
+      "commit": "caca090f1",
+      "diff_range": "caca090f1~1..caca090f1",
+      "oracle": {
+        "source": "confirmed_fix",
+        "established_by": "Tariq's round-1 review required an AgDR for D1. Commit 71de27889 added AgDR-0097 (the /onboard decision) and AgDR-0098 (the shared detector), and Tariq's re-review of 71de27889 marked the gap closed and approved.",
+        "reference": "me2resh/apexyard#917"
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "Decision D1 revives the deprecated /onboard skill as the live first-run orchestrator, a framework-surface-altering choice with real alternatives (a net-new /first-run, or extending /setup), but the design links no AgDR. A design doc with rationale does not replace a searchable decision record.",
+          "severity": "HIGH",
+          "location": "docs/technical-designs/onboarding-increment-1.md (D1)"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "CHANGES REQUESTED",
+        "was_justified": true
+      },
+      "notes": "Docs-only design PR. Tariq also recommended, but did not require, an AgDR for D2 (the shared fresh-fork detector); it is not scored."
+    },
+    {
+      "id": "tariq-1205-4b17e7170",
+      "pr": 1205,
+      "repo": "me2resh/apexyard",
+      "commit": "4b17e7170",
+      "diff_range": "4b17e7170~1..4b17e7170",
+      "oracle": {
+        "source": "confirmed_fix",
+        "established_by": "Tariq's round-1 review named two blockers. The next round co-filed AgDR-0133 for D6 and moved the primary repo's epoch onto the single remote clock, and Tariq's re-review of e9fb4fe59 marked both closed and approved.",
+        "reference": "me2resh/apexyard#1205"
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "The AgDR section names four decisions that meet the AgDR threshold and singles out D6 (the multi-repo clone layout, load-bearing for two gate hooks' path attribution), but implementation task 1 records an AgDR for only D2, D3, and the rendering choice. D6 would ship with no decision record, and the D6 risk-row mitigation depends on that record.",
+          "severity": "HIGH",
+          "location": "docs/technical-designs/portfolio-multi-repo-aggregation.md (implementation plan, task 1)"
+        },
+        {
+          "id": "D2",
+          "description": "The staleness comparison reads the primary repo's epoch from git log on the local clone, which reports the latest commit as of the last fetch (unbounded error, and unpushed commits can run the other way), while the other repos use the remote pushedAt. A primary clone fetched 45 days ago on an active repo is shown as stale. The design rejected the same class of input (stale remote state served from a cache) for CI status in D2 and did not reconcile the two.",
+          "severity": "HIGH",
+          "location": "docs/technical-designs/portfolio-multi-repo-aggregation.md (D1 staleness)"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "CHANGES REQUESTED",
+        "was_justified": true
+      },
+      "notes": "Docs-only design PR (single file). Tariq's review also answered specific author questions that are not defects."
+    },
+    {
+      "id": "tariq-504-769bee435",
+      "pr": 504,
+      "repo": "me2resh/apexyard",
+      "commit": "769bee435",
+      "diff_range": "6b31c7796~1..769bee435",
+      "oracle": {
+        "source": "confirmed_fix",
+        "established_by": "Tariq's review of 769bee435 named one blocker. Commit dbb2d57b8 rewrote the comment and banner to state that the gate is deferred, and Tariq's re-review of dbb2d57b8 marked the finding resolved and approved.",
+        "reference": "me2resh/apexyard#504"
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "The advisory hook warn-review-marker-write.sh tells agents, in its header comment and in the runtime banner, that block-unreviewed-merge.sh requires a real posted review at HEAD and that a fabricated marker will be rejected at merge time. This PR defers that gate and leaves the merge-gate hook unchanged, so a fabricated Rex marker is not rejected and the claim is false (agent-facing text overclaims a mechanical gate).",
+          "severity": "HIGH",
+          "location": ".claude/hooks/warn-review-marker-write.sh (header comment and stderr banner)"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "CHANGES REQUESTED",
+        "was_justified": true
+      },
+      "notes": "Round 3 of PR 504. The diff range runs from the first commit of the PR to the reviewed commit, so it holds the whole reviewed change."
+    },
+    {
+      "id": "tariq-1498-3e634e7e0",
+      "pr": 1498,
+      "repo": "me2resh/apexyard",
+      "commit": "3e634e7e0",
+      "diff_range": "3e634e7e0~1..3e634e7e0",
+      "oracle": {
+        "source": "confirmed_fix",
+        "established_by": "Tariq's round-1 review named the blocker. Commit da6ff78f5 bound reuse to the PR's final head SHA and added a trusted-author rule, and Tariq's delta re-review of da6ff78f5 accepted it and approved.",
+        "reference": "me2resh/apexyard#1498"
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "The pre-merge QA reuse rule requires the exact merged commit SHA to equal the QA SHA. A GitHub squash, rebase, or merge-commit merge always creates a new commit, so on GitHub under the default squash strategy the reuse never fires and every PR with pre-merge QA gets a second full QA run. The AgDR does not state this effect and does not consider matching on content (tree SHA) or the final head SHA.",
+          "severity": "HIGH",
+          "location": "docs/agdr/AgDR-0201-sha-bound-pre-merge-qa-reuse.md; roles/engineering/qa-engineer.md (Pre-merge QA and reuse)"
+        },
+        {
+          "id": "D2",
+          "description": "The reuse rule accepts a PASS stamp without checking who posted it. On a public repo anyone can post a review comment with a matching stamp and so skip the post-merge QA run. The rule must trust only reports from an account with write access.",
+          "severity": "HIGH",
+          "location": "roles/engineering/qa-engineer.md; .claude/agents/qa-engineer.md (Pre-merge QA and reuse)"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "CHANGES REQUESTED",
+        "was_justified": true
+      },
+      "notes": "Both defects came from one Tariq blocking finding."
+    },
+    {
+      "id": "tariq-1499-669142fcb",
+      "pr": 1499,
+      "repo": "me2resh/apexyard",
+      "commit": "669142fcb",
+      "diff_range": "669142fcb~1..669142fcb",
+      "oracle": {
+        "source": "confirmed_fix",
+        "established_by": "Tariq's round-1 review named two blockers. Commit dea35a265 defined parallel by concurrency, moved the choice to the orchestrator, and added a HEAD check before each commit, and Tariq's delta re-review of dea35a265 marked both resolved and approved.",
+        "reference": "me2resh/apexyard#1499"
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "The rule defines parallel builds by skill name (/fan-out, Workflow stages) instead of by concurrency. A spawned agent cannot know whether another writer is active, a background spawn or a second spawn on the same checkout is not covered, and the dirty-tree check misses the case where agent A commits (clean tree) and agent B then switches the branch, so agent A's next commit lands on agent B's branch.",
+          "severity": "HIGH",
+          "location": ".claude/rules/isolated-builds.md; docs/agdr/AgDR-0200-build-isolation-setting.md (Consequences)"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "CHANGES REQUESTED",
+        "was_justified": true
+      },
+      "notes": "Tariq's first blocker in this round, an AgDR number collision with open PRs, depends on other open PRs and cannot be derived from the diff. It is not scored."
+    },
+    {
+      "id": "tariq-905-bbee5cf8a",
+      "pr": 905,
+      "repo": "me2resh/apexyard",
+      "commit": "bbee5cf8a",
+      "diff_range": "34b941e0c~1..bbee5cf8a",
+      "oracle": {
+        "source": "no_contradiction",
+        "established_by": "Tariq approved with no blocking finding. Rex approved the same commit, and the PR merged with no later review or fix that contradicted the design review.",
+        "reference": "me2resh/apexyard#905"
+      },
+      "ground_truth_defects": [],
+      "recorded_verdict": {
+        "verdict": "APPROVED",
+        "was_justified": true
+      },
+      "notes": "PRD for guided onboarding. Tariq listed two advisory suggestions (a term-count inconsistency and an unmeasured baseline). Neither blocks."
+    },
+    {
+      "id": "tariq-595-534416094",
+      "pr": 595,
+      "repo": "me2resh/apexyard",
+      "commit": "534416094",
+      "diff_range": "534416094~1..534416094",
+      "oracle": {
+        "source": "no_contradiction",
+        "established_by": "Tariq approved with no blocking finding. Rex approved the same commit, and the PR merged with no later review or fix that contradicted the design review.",
+        "reference": "me2resh/apexyard#595"
+      },
+      "ground_truth_defects": [],
+      "recorded_verdict": {
+        "verdict": "APPROVED",
+        "was_justified": true
+      },
+      "notes": "Rule plus AgDR for governed looping. Tariq named one advisory gap (the verify-stage guardrail is advisory); a follow-up commit clarified the wording. It does not block."
+    }
+  ]
+}
