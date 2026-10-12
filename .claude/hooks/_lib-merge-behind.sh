@@ -71,9 +71,9 @@ is_pr_behind_base() {
 #       "true" only when ALL of the following hold, each verified against
 #       the forge (never against local git state alone — me2resh/apexyard#1437
 #       round-2 review, Rex B1 + Hakim A1; hardened further in #1456):
-#         - <new_sha> is a two-parent commit, per the forge's own commit API
-#           (GET /repos/<repo>/commits/<new_sha>), not local `git log`.
-#         - parent[0] is exactly <old_sha> (the Rex-approved commit).
+#         - Each step is a two-parent commit, per the forge's own commit API
+#           (GET /repos/<repo>/commits/<sha>), not local `git log`.
+#         - The first-parent chain reaches <old_sha> within 10 merge steps.
 #         - parent[1] is an ancestor of (or equal to) <base_branch>'s CURRENT
 #           tip, resolved from the forge branches endpoint
 #           (GET /repos/<repo>/branches/<url-encoded-name> → .commit.sha).
@@ -92,7 +92,7 @@ is_pr_behind_base() {
 #           A local .git/config merge driver, info/grafts entry, replace
 #           ref, or commit-graph cannot change the result (#1456). The
 #           computed tree must equal the forge-reported tree for
-#           <new_sha> (`.commit.tree.sha`). Never trusts <new_sha>'s own
+#           each step (`.commit.tree.sha`). Never trusts the commit's own
 #           locally-recorded tree.
 #       Every other shape — a missing/unresolvable base tip, a missing
 #       object, a failed fetch, a non-merge commit, an octopus merge, a
@@ -223,121 +223,128 @@ rex_approval_carries_over() {
     return 0
   fi
 
-  # 2. Resolve <new_sha>'s parents AND tree from the forge commit API — not
-  # from local `git log`/`git show`, which reads whatever this clone's
-  # object store currently contains.
-  local commit_json commit_json_rc
-  commit_json=$(gh api "repos/${repo}/commits/${new_sha}" 2>/dev/null)
-  commit_json_rc=$?
-  if [ "$commit_json_rc" -ne 0 ] || [ -z "$commit_json" ]; then
-    echo "unknown"
-    return 0
-  fi
-  local forge_parent_count
-  forge_parent_count=$(printf '%s' "$commit_json" | jq -r '.parents | length' 2>/dev/null)
-  case "$forge_parent_count" in
-    ''|*[!0-9]*)
-      echo "unknown"
-      return 0
-      ;;
-  esac
-  if [ "$forge_parent_count" -ne 2 ]; then
-    # A non-merge commit (1 parent) or an octopus merge (3+ parents) is
-    # never a "clean base merge" — no carry-over.
-    echo "false"
-    return 0
-  fi
-
-  local forge_parent0 forge_parent1 forge_tree
-  forge_parent0=$(printf '%s' "$commit_json" | jq -r '.parents[0].sha' 2>/dev/null)
-  forge_parent1=$(printf '%s' "$commit_json" | jq -r '.parents[1].sha' 2>/dev/null)
-  forge_tree=$(printf '%s' "$commit_json" | jq -r '.commit.tree.sha' 2>/dev/null)
-  if ! _rex_carry_is_sha40 "$forge_parent0" || ! _rex_carry_is_sha40 "$forge_parent1" \
-     || ! _rex_carry_is_sha40 "$forge_tree"; then
-    echo "unknown"
-    return 0
-  fi
-
-  if [ "$forge_parent0" != "$old_sha" ]; then
-    echo "false"
-    return 0
-  fi
-
-  # 3. The objects needed for the LOCAL computation below (parent0,
-  # parent1, base_tip) must be present. Best-effort fetch when missing; a
-  # failed fetch leaves the object absent and the follow-up check returns
-  # "unknown". <new_sha> itself is never fetched or trusted locally — every
-  # fact about it above came from the forge.
-  local sha
-  for sha in "$forge_parent0" "$forge_parent1" "$base_tip"; do
-    if ! git cat-file -e "${sha}^{commit}" 2>/dev/null; then
-      _rex_carry_git fetch -q "https://github.com/${repo}.git" "$sha" >/dev/null 2>&1
-    fi
-    if ! git cat-file -e "${sha}^{commit}" 2>/dev/null; then
+  # Verify each merge before following its first parent (#1682).
+  # At least one merge is required. No unverified step can retain approval.
+  local current_sha="$new_sha" steps=0
+  while [ "$steps" -lt 10 ]; do
+    # 2. Resolve each commit's parents and tree from the forge commit API.
+    # Local `git log`/`git show` cannot supply these facts.
+    local commit_json commit_json_rc
+    commit_json=$(gh api "repos/${repo}/commits/${current_sha}" 2>/dev/null)
+    commit_json_rc=$?
+    if [ "$commit_json_rc" -ne 0 ] || [ -z "$commit_json" ]; then
       echo "unknown"
       return 0
     fi
+    local forge_parent_count
+    forge_parent_count=$(printf '%s' "$commit_json" | jq -r '.parents | length' 2>/dev/null)
+    case "$forge_parent_count" in
+      ''|*[!0-9]*)
+        echo "unknown"
+        return 0
+        ;;
+    esac
+    if [ "$forge_parent_count" -ne 2 ]; then
+      # A non-merge commit (1 parent) or an octopus merge (3+ parents) is
+      # never a "clean base merge" — no carry-over.
+      echo "false"
+      return 0
+    fi
+
+    local forge_parent0 forge_parent1 forge_tree
+    forge_parent0=$(printf '%s' "$commit_json" | jq -r '.parents[0].sha' 2>/dev/null)
+    forge_parent1=$(printf '%s' "$commit_json" | jq -r '.parents[1].sha' 2>/dev/null)
+    forge_tree=$(printf '%s' "$commit_json" | jq -r '.commit.tree.sha' 2>/dev/null)
+    if ! _rex_carry_is_sha40 "$forge_parent0" || ! _rex_carry_is_sha40 "$forge_parent1" \
+       || ! _rex_carry_is_sha40 "$forge_tree"; then
+      echo "unknown"
+      return 0
+    fi
+
+    # 3. The objects needed for the LOCAL computation below (parent0,
+    # parent1, base_tip) must be present. Best-effort fetch when missing; a
+    # failed fetch leaves the object absent and the follow-up check returns
+    # "unknown". Fetch only computation inputs. Each step's parents and
+    # recorded tree come from the forge, even when its object exists locally.
+    local sha
+    for sha in "$forge_parent0" "$forge_parent1" "$base_tip"; do
+      if ! git cat-file -e "${sha}^{commit}" 2>/dev/null; then
+        _rex_carry_git fetch -q "https://github.com/${repo}.git" "$sha" >/dev/null 2>&1
+      fi
+      if ! git cat-file -e "${sha}^{commit}" 2>/dev/null; then
+        echo "unknown"
+        return 0
+      fi
+    done
+
+    # 4. parent[1] must be an ancestor of (or equal to) the REAL base tip.
+    # This is the fix for the critical bypass: without this check, a merge
+    # whose second parent is any descendant of <old_sha> — not actually the
+    # base branch at all — would otherwise pass on parent[0] alone.
+    # Runs in an isolated empty GIT_DIR (#1456) so a local grafts entry
+    # cannot invent the ancestor relationship.
+    # No `!` negation here on purpose: `if ! cmd; then` would make `$?` inside
+    # the branch reflect the NEGATION's exit status (always 0), not cmd's own
+    # code — and rc 1 (not an ancestor) must be distinguished from rc 128+ (an
+    # object couldn't be read / an internal error).
+    _rex_carry_git_isolated merge-base --is-ancestor "$forge_parent1" "$base_tip" 2>/dev/null
+    local anc_rc=$?
+    if [ "$anc_rc" -ne 0 ]; then
+      if [ "$anc_rc" -eq 1 ]; then
+        echo "false"
+      else
+        echo "unknown"
+      fi
+      return 0
+    fi
+
+    # 5. Recompute the merge in an isolated empty GIT_DIR (#1456) and compare
+    # its TREE (stdout only) against this step's forge-reported tree.
+    # Never parses diff text, never trusts the step's local tree, and
+    # never lets a local merge driver alter the recomputation.
+    local mt_tree mt_rc mt_err
+    mt_err=$(mktemp 2>/dev/null) || {
+      echo "unknown"
+      return 0
+    }
+    mt_tree=$(_rex_carry_git_isolated merge-tree --write-tree "$forge_parent0" "$forge_parent1" 2>"$mt_err")
+    mt_rc=$?
+    if [ "$mt_rc" -ne 0 ]; then
+      if grep -qiE 'unknown option|usage: git merge-tree' "$mt_err" 2>/dev/null; then
+        # This git build doesn't support `merge-tree --write-tree` — cannot
+        # verify, not "verified and conflicting".
+        rm -f "$mt_err"
+        echo "unknown"
+      else
+        # A real conflict: the recorded merge required a decision git's own
+        # merge could not make on its own — not a mechanical replay.
+        rm -f "$mt_err"
+        echo "false"
+      fi
+      return 0
+    fi
+    rm -f "$mt_err"
+
+    mt_tree=$(printf '%s' "$mt_tree" | head -1 | tr -d '[:space:]')
+    if ! _rex_carry_is_sha40 "$mt_tree"; then
+      echo "unknown"
+      return 0
+    fi
+    if [ "$mt_tree" != "$forge_tree" ]; then
+      echo "false"
+      return 0
+    fi
+
+    if [ "$forge_parent0" = "$old_sha" ]; then
+      echo "true"
+      return 0
+    fi
+    current_sha="$forge_parent0"
+    steps=$((steps + 1))
   done
 
-  # 4. parent[1] must be an ancestor of (or equal to) the REAL base tip.
-  # This is the fix for the critical bypass: without this check, a merge
-  # whose second parent is any descendant of <old_sha> — not actually the
-  # base branch at all — would otherwise pass on parent[0] alone.
-  # Runs in an isolated empty GIT_DIR (#1456) so a local grafts entry
-  # cannot invent the ancestor relationship.
-  # No `!` negation here on purpose: `if ! cmd; then` would make `$?` inside
-  # the branch reflect the NEGATION's exit status (always 0), not cmd's own
-  # code — and rc 1 (not an ancestor) must be distinguished from rc 128+ (an
-  # object couldn't be read / an internal error).
-  _rex_carry_git_isolated merge-base --is-ancestor "$forge_parent1" "$base_tip" 2>/dev/null
-  local anc_rc=$?
-  if [ "$anc_rc" -ne 0 ]; then
-    if [ "$anc_rc" -eq 1 ]; then
-      echo "false"
-    else
-      echo "unknown"
-    fi
-    return 0
-  fi
-
-  # 5. Recompute the merge in an isolated empty GIT_DIR (#1456) and compare
-  # its TREE (stdout only) against the forge-reported tree for <new_sha>.
-  # Never parses diff text, never trusts <new_sha>'s local object, and
-  # never lets a local merge driver alter the recomputation.
-  local mt_tree mt_rc mt_err
-  mt_err=$(mktemp 2>/dev/null) || {
-    echo "unknown"
-    return 0
-  }
-  mt_tree=$(_rex_carry_git_isolated merge-tree --write-tree "$forge_parent0" "$forge_parent1" 2>"$mt_err")
-  mt_rc=$?
-  if [ "$mt_rc" -ne 0 ]; then
-    if grep -qiE 'unknown option|usage: git merge-tree' "$mt_err" 2>/dev/null; then
-      # This git build doesn't support `merge-tree --write-tree` — cannot
-      # verify, not "verified and conflicting".
-      rm -f "$mt_err"
-      echo "unknown"
-    else
-      # A real conflict: the recorded merge required a decision git's own
-      # merge could not make on its own — not a mechanical replay.
-      rm -f "$mt_err"
-      echo "false"
-    fi
-    return 0
-  fi
-  rm -f "$mt_err"
-
-  mt_tree=$(printf '%s' "$mt_tree" | head -1 | tr -d '[:space:]')
-  if ! _rex_carry_is_sha40 "$mt_tree"; then
-    echo "unknown"
-    return 0
-  fi
-  if [ "$mt_tree" != "$forge_tree" ]; then
-    echo "false"
-    return 0
-  fi
-
-  echo "true"
+  # The reviewed commit was not reached within the fixed verification limit.
+  echo "false"
 }
 
 # _merge_behind_path_matches_any <path> <newline-separated patterns>

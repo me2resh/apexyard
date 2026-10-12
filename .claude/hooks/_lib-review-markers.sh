@@ -521,11 +521,13 @@ _REVIEW_AGDR_HEADINGS='## Context
 ## Consequences
 ## Artifacts'
 
-# review_validate_body <profile> <body_file> [pr_sections]
+# review_validate_body <profile> <body_file> [pr_sections] [verified_initiative]
+# Only the qualifying records-PR caller supplies verified_initiative.
 # The same local, read-only validator serves review, PR, and AgDR bodies.
 # It checks required structure and reference evidence, not prose quality.
 review_validate_body() {
   local profile="${1:-}" body_file="${2:-}" pr_sections="${3:-}"
+  local initiative="${4:-}"
   local headings="" heading section section_re
   REVIEW_VALIDATION_MISSING=""
   REVIEW_VALIDATION_RESULT="incomplete"
@@ -578,7 +580,12 @@ EOF
     # Tracker keys (ABC-12) stay unscoped. Only Closes and Refs count — not
     # Fixes/Resolves — so the required line is the explicit ticket link, not
     # every GitHub auto-close keyword.
-    if ! grep -qiE '^[[:space:]]*(Closes|Refs)[[:space:]]+(([A-Za-z0-9._-]+/[A-Za-z0-9._-]+)?#[0-9]+|[A-Z]{2,10}-[0-9]+)([[:space:][:punct:]]|$)' "$body_file"; then
+    if [ -n "$initiative" ]; then
+      if ! grep -qxF "Initiative: $initiative" "$body_file"; then
+        REVIEW_VALIDATION_MISSING="${REVIEW_VALIDATION_MISSING}Initiative: $initiative line
+"
+      fi
+    elif ! grep -qiE '^[[:space:]]*(Closes|Refs)[[:space:]]+(([A-Za-z0-9._-]+/[A-Za-z0-9._-]+)?#[0-9]+|[A-Z]{2,10}-[0-9]+)([[:space:][:punct:]]|$)' "$body_file"; then
       REVIEW_VALIDATION_MISSING="${REVIEW_VALIDATION_MISSING}Closes or Refs line
 "
     fi

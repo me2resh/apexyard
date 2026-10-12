@@ -11,7 +11,7 @@ docs/eval-agents/
   corpus/
     rex.json             starter corpus for the code-reviewer agent (Rex)
     hakim.json            starter corpus for the security-reviewer agent (Hakim)
-    tariq.json            NOT SEEDED — see below
+    tariq.json            starter corpus for the solution-architect agent (Tariq)
   reports/
     <agent>-<date>.md     dated run reports, written by /eval-agents
 ```
@@ -21,7 +21,7 @@ docs/eval-agents/
 - **Rex (`corpus/rex.json`)** — 9 entries mined from this repo's own review history: two confirmed MISSes (wrong approvals — both caught by Hakim's independent review of the identical commit; both entries carry `oracle.source: independent_review`, not `confirmed_fix` — the fix that landed afterward corroborates the defect but isn't the oracle basis), two GOOD_CATCH (correctly required changes), and five GOOD_CLEAN (correctly approved a genuinely clean diff).
 - **Hakim (`corpus/hakim.json`)** — 11 entries: ten GOOD_CATCH, one GOOD_CLEAN. me2resh/apexyard#1650 added seven GOOD_CATCH entries (PRs #1339, #1404, #1462, #1511, #1517, #1518, #1546). Each one is a Hakim CHANGES REQUESTED round with a `confirmed_fix` oracle. A later commit fixed the defect. A later Hakim review confirmed the fix. Each new `diff_range` covers the PR from its first commit to the reviewed commit, so it holds the whole reviewed diff. **No confirmed Hakim MISS is seeded yet** — the spike's sample didn't surface a clean Hakim-authored wrong approval. This is a real, documented gap. Approve-precision on the Hakim starter run will trivially read 1.0 until a genuine miss is harvested and added; treat that number as "no counter-evidence yet," not "Hakim is perfect."
 - **Three entries are same-diff cross-agent pairs** (`rex-792-2ce6708` / `hakim-792-2ce6708`, `rex-767-a99f1009` / `hakim-767-a99f1009`, and `rex-773-ca3a9400` / `hakim-773-ca3a9400`) — the identical commit, reviewed by both agents the same day. The first two have different outcomes (Rex approved, Hakim caught a real defect); the third is a matched clean pair (both agents correctly approved). These are the cleanest possible corpus entries: the diff is held constant, only the reviewing agent varies.
-- **Tariq — no starter corpus.** No Tariq-reviewed PRs were in the spike's sample. `/eval-agents tariq` requires an operator-supplied `--corpus <path>` until one exists.
+- **Tariq (`corpus/tariq.json`)** — 8 entries mined from real Tariq rounds in me2resh/apexyard: six GOOD_CATCH and two GOOD_CLEAN. The six GOOD_CATCH entries carry a `confirmed_fix` oracle (PRs #1430, #917, #1205, #504, #1498, #1499). The two GOOD_CLEAN entries carry a `no_contradiction` oracle (PRs #905, #595).
 - **Naqid — out of scope for v1.** Naqid challenges premises, not diffs; it has no defect-set structure to score against. See AgDR-0089 § Decision point 7.
 
 ## How the starter corpus was built

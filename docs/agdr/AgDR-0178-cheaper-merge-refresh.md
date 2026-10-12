@@ -26,6 +26,10 @@ category: patterns
 > `.claude/rules/pr-workflow.md`, in exchange for cutting most refreshes in
 > a queue to zero.
 
+Amended by [AgDR-0232](AgDR-0232-carry-approvals-across-base-merge-chains.md) on 2026-10-12.
+The amendment permits up to 10 verified base merges for both Rex and CEO markers.
+It replaces the single-step limit and its forge-read count.
+
 ## Context
 
 AgDR-0170 (apexyard#1386) added a stop in `/approve-merge` step 3a: before
