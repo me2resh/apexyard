@@ -94,21 +94,22 @@ It does not merge on a CI result computed against a stale base. A failed
 compare-API call also stops the merge. The skill never treats a failed check
 as evidence the PR is up to date.
 
-When the skill stops, ask the CEO to do this, or to approve you doing it:
+PRs with the `ready-to-merge` label refresh automatically after pushes to the configured integration branch.
+Rex adds the label on APPROVED and removes it on CHANGES REQUESTED.
+A new non-merge commit removes the label and needs another Rex review.
+Base-branch merge commits retain the label. Carry-over keeps Rex's approval only when the existing check returns `true`.
+A refresh failure comment means the orchestrator must resolve the conflict or API failure.
 
-1. Update the branch: `gh pr update-branch <pr> --repo <owner/repo>`.
-2. Wait for green CI on the updated branch.
-3. Run the carry-over check before you ask for a Rex round. See
-   "Carry-over check after a refresh" below. Ask for a short Rex delta
-   re-review only when the check does not return `true`.
-4. Run `/approve-merge <pr>` again.
+Fork PRs are the exception. The workflow skips a PR whose head repository differs from the base repository.
+A fork PR does not refresh automatically, and a new commit on it does not remove its label.
+For a fork PR, compare the Rex marker SHA with the PR head to see what was reviewed.
+Update a fork PR branch only after the user approves, because the branch belongs to the contributor.
 
-Do not run the update-branch command yourself without the user's approval. The update
-pushes a merge commit to the PR's head branch. On a fork PR with maintainer
-edits that branch belongs to the contributor, not to this session. Do not
-update the branch before the first review either way. The carry-over check
-covers only one base merge on top of the SHA that Rex approved. Update the
-branch once, just before the merge.
+When the skill stops on a same-repository PR, wait for the automatic refresh and green CI.
+Run the carry-over check before requesting another Rex round.
+Request a delta re-review when the check does not return `true`.
+Then run `/approve-merge <pr>` again with the required per-PR human approval.
+For unlabelled PRs, obtain user approval before a manual branch update.
 
 #### Carry-over check after a refresh (me2resh/apexyard#1638)
 

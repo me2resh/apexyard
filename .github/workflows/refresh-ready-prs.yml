@@ -1,0 +1,106 @@
+name: Refresh ready PRs
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+# Set to main in projects without dev. Use a comma-separated list for multiple bases.
+env:
+  INTEGRATION_BRANCHES: dev
+
+concurrency:
+  group: refresh-ready-prs-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          HAS_BOT_TOKEN: ${{ secrets.APEXYARD_BOT_TOKEN != '' }}
+        with:
+          # GITHUB_TOKEN-triggered pushes do not start new workflow runs.
+          # APEXYARD_BOT_TOKEN needs contents: write and pull-requests: write for updated-branch CI.
+          github-token: ${{ secrets.APEXYARD_BOT_TOKEN || github.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const label = 'ready-to-merge';
+            const sameRepo = pr => pr.head.repo?.id != null && pr.head.repo.id === pr.base.repo?.id;
+            const branches = process.env.INTEGRATION_BRANCHES.split(',').map(b => b.trim());
+            if (process.env.HAS_BOT_TOKEN !== 'true') {
+              core.info('APEXYARD_BOT_TOKEN missing: using GITHUB_TOKEN; updated-branch CI requires APEXYARD_BOT_TOKEN.');
+            }
+            if (context.eventName === 'pull_request') {
+              const pr = context.payload.pull_request;
+              if (!sameRepo(pr)) {
+                core.info(`PR #${pr.number}: skipping fork or unavailable head repository.`);
+                return;
+              }
+              if (!pr.labels.some(l => l.name === label)) return;
+              try {
+                const { data: head } = await github.rest.repos.getCommit({ owner, repo, ref: pr.head.sha });
+                let baseMerge = false;
+                if (head.parents.length === 2 && head.parents[0].sha === context.payload.before) {
+                  const { data: comparison } = await github.rest.repos.compareCommits({
+                    owner, repo, base: head.parents[1].sha, head: pr.base.ref
+                  });
+                  baseMerge = comparison.status === 'ahead' || comparison.status === 'identical';
+                }
+                if (!baseMerge) {
+                  await github.rest.issues.removeLabel({ owner, repo, issue_number: pr.number, name: label });
+                }
+              } catch (error) {
+                core.warning(`PR #${pr.number}: could not check/remove readiness label: ${error.message}`);
+              }
+              return;
+            }
+            const base = context.ref.replace('refs/heads/', '');
+            if (!branches.includes(base)) return;
+            let prs;
+            try {
+              prs = await github.paginate(github.rest.pulls.list, { owner, repo, state: 'open', base, per_page: 100 });
+            } catch (error) {
+              core.warning(`Could not list ready PRs: ${error.message}`);
+              return;
+            }
+            for (const pr of prs) {
+              if (!sameRepo(pr)) {
+                core.info(`PR #${pr.number}: skipping fork or unavailable head repository.`);
+                continue;
+              }
+              if (pr.draft || !pr.labels.some(l => l.name === label)) continue;
+              try {
+                const { data: comparison } = await github.rest.repos.compareCommits({
+                  owner, repo, base, head: pr.head.sha
+                });
+                if (comparison.behind_by === 0) continue;
+                await github.request('PUT /repos/{owner}/{repo}/pulls/{pull_number}/update-branch', {
+                  owner, repo, pull_number: pr.number, expected_head_sha: pr.head.sha
+                });
+                core.info(`PR #${pr.number}: branch update requested.`);
+              } catch (error) {
+                const cause = `HTTP ${error.status || 'unknown'}: ${error.message}`;
+                core.warning(`PR #${pr.number}: ${cause}`);
+                const marker = `<!-- apexyard-refresh-error:${pr.head.sha} -->`;
+                try {
+                  const comments = await github.paginate(github.rest.issues.listComments, {
+                    owner, repo, issue_number: pr.number, per_page: 100
+                  });
+                  if (!comments.some(c => c.body?.includes(marker))) {
+                    await github.rest.issues.createComment({
+                      owner, repo, issue_number: pr.number,
+                      body: `${marker}\nAutomatic branch refresh failed for head ${pr.head.sha}.\nCause: ${cause}\nThe orchestrator must resolve conflicts or API failures before retrying.`
+                    });
+                  }
+                } catch (commentError) {
+                  core.warning(`PR #${pr.number}: could not post failure comment: ${commentError.message}`);
+                }
+              }
+            }
