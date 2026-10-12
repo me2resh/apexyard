@@ -8,6 +8,27 @@ orbit_records_branch_shape() {
   [[ "$1" =~ ^orbit/[a-z0-9]+(-[a-z0-9]+)+$ ]]
 }
 
+# Resolve from committed records on the supplied branch, never from filenames.
+# The longest matching ID disambiguates initiatives with shared prefixes.
+orbit_records_initiative() {
+  local repo_dir="$1" ref="$2" path id suffix best="" listing
+  ORBIT_INITIATIVE=""
+  repo_dir=$(git -C "$repo_dir" rev-parse --show-toplevel) || return 1
+  listing=$(git -C "$repo_dir" ls-tree -r --name-only "$ref" -- docs/orbit/plans/) || return 1
+  while IFS= read -r path; do
+    case "$path" in *.json) ;; *) continue ;; esac
+    id=$(git -C "$repo_dir" show "$ref:$path" | jq -er '.id | select(type == "string")' 2>/dev/null) || return 1
+    [[ "$id" =~ ^plan-[a-z0-9]+(-[a-z0-9]+)*$ ]] || return 1
+    suffix=${id#plan-}
+    case "$ref" in
+      orbit/"$suffix"-?*)
+        if [ "${#suffix}" -gt "${#best}" ]; then best=$suffix; fi ;;
+    esac
+  done <<< "$listing"
+  [ -n "$best" ] || return 1
+  ORBIT_INITIATIVE="$best"
+}
+
 orbit_records_only() {
   local repo_dir="$1" ref="$2" trunks="$3"
   local commit candidates candidate trunk base count best_base="" best_count="" paths path seen=0
@@ -64,6 +85,10 @@ EOF_REFS
   rm -f "$paths"
   if [ "$seen" -ne 1 ]; then
     ORBIT_RECORDS_REASON="The branch has no changed files against the base."
+    return 1
+  fi
+  if ! orbit_records_initiative "$repo_dir" "$ref"; then
+    ORBIT_RECORDS_REASON="No matching plan record exists for the branch initiative."
     return 1
   fi
   return 0

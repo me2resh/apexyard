@@ -33,9 +33,10 @@ make_sandbox() {
   git -C "$sb" checkout -qb orbit/scaffold-initiative
 }
 records_commit() {
-  mkdir -p "$sb/docs/orbit"
+  mkdir -p "$sb/docs/orbit/plans"
   echo records > "$sb/docs/orbit/plan.md"
-  git -C "$sb" add docs/orbit/plan.md
+  printf '{"id":"plan-scaffold"}\n' > "$sb/docs/orbit/plans/plan-scaffold.json"
+  git -C "$sb" add docs/orbit/plan.md docs/orbit/plans/plan-scaffold.json
   git -C "$sb" commit -qm records
 }
 check() {
@@ -76,19 +77,38 @@ Add records.
 Run hook tests.
 ## Glossary
 ORBIT: planning lifecycle.
-Refs #1673
+Initiative: plan-scaffold
 BODY
 pr_check() {
   check "$1" validate-pr-create.sh "gh pr create --repo me2resh/apexyard --title '$2' --head $3 --body-file $sb/body.md" "$4" "${5:-}"
 }
-pr_check K 'docs(orbit): add initiative records' orbit/scaffold-initiative 0
-pr_check M 'docs(orbit): x' feature/GH-1-x 2 '{type}/{TICKET-ID}-{description}'
+pr_check K 'docs(orbit/scaffold): add initiative records' orbit/scaffold-initiative 0
+pr_check M 'docs(orbit/scaffold): x' feature/GH-1-x 2 '{type}/{TICKET-ID}-{description}'
+pr_check wrong-title 'docs(orbit/other): x' orbit/scaffold-initiative 2
+pr_check legacy-title 'docs(orbit): x' orbit/scaffold-initiative 2
+pr_check N-initiative-only 'feat(#1): x' feature/GH-1-x 2 'Closes or Refs'
+sed -i.bak 's/Initiative: plan-scaffold/Initiative: plan-other/' "$sb/body.md"
+pr_check wrong-body 'docs(orbit/scaffold): x' orbit/scaffold-initiative 2
+sed -i.bak 's/Initiative: plan-other/Refs #1673/' "$sb/body.md"
+pr_check missing-initiative 'docs(orbit/scaffold): x' orbit/scaffold-initiative 2
 pr_check N 'feat(#1): x' feature/GH-1-x 0
+sed -i.bak 's/Refs #1673/Initiative: plan-scaffold/' "$sb/body.md"
+git -C "$sb" branch orbit/unknown-records
+branch_check unknown 'git push origin orbit/unknown-records' 2 'No matching plan record'
+pr_check unknown-pr 'docs(orbit/unknown): x' orbit/unknown-records 2
+printf '{"id":"plan-scaffold-initiative"}\n' > "$sb/docs/orbit/plans/long.json"
+git -C "$sb" add docs/orbit/plans/long.json
+git -C "$sb" commit -qm longer
+git -C "$sb" branch orbit/scaffold-initiative-cycle
+sed -i.bak 's/plan-scaffold$/plan-scaffold-initiative/' "$sb/body.md"
+pr_check longest 'docs(orbit/scaffold-initiative): x' orbit/scaffold-initiative-cycle 0
+pr_check shorter 'docs(orbit/scaffold): x' orbit/scaffold-initiative-cycle 2
+sed -i.bak 's/plan-scaffold-initiative$/plan-scaffold/' "$sb/body.md"
 echo extra > "$sb/src/app.sh"
 git -C "$sb" add src/app.sh
 git -C "$sb" commit -qm extra
 branch_check B 'git push origin orbit/scaffold-initiative' 2 '{type}/{TICKET-ID}-{description}'
-pr_check L 'docs(orbit): add initiative records' orbit/scaffold-initiative 2 '{type}/{TICKET-ID}-{description}'
+pr_check L 'docs(orbit/scaffold): add initiative records' orbit/scaffold-initiative 2 '{type}/{TICKET-ID}-{description}'
 make_sandbox lookalike
 mkdir -p "$sb/docs/orbit-extra"
 echo extra > "$sb/docs/orbit-extra/x.md"

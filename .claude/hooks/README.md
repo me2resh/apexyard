@@ -387,3 +387,14 @@ All hooks rely on:
 - `gh` for the merge-gate hook's PR-number fallback
 
 On macOS these come from Homebrew (`brew install jq gh`). On Debian-based Linux, `apt install jq gh`. CI runners typically have them pre-installed. If `jq` is missing, the hooks short-circuit cleanly (they can't parse the input, so they exit 0 without blocking) — worth adding a `command -v jq` guard if you want loud failure instead.
+
+### ORBIT records PRs
+
+A ticket-free records PR uses `orbit/<initiative-id>-<description>` and
+`docs(orbit/<initiative-id>): <description>`. The initiative ID is the Plan ID
+without `plan-`. Resolve the longest existing ID prefix from Plan records on
+the branch. Unknown IDs fail closed. The PR body and every commit carry
+`Initiative: plan-<initiative-id>` instead of a ticket reference.
+The body exception applies only after the branch and records-only diff qualify.
+Remote trunk refs, one simple push, and the `docs/orbit/` boundary remain required.
+Records lint checks initiative ownership and referenced Snapshots.

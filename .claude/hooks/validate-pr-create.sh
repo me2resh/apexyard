@@ -502,12 +502,43 @@ EOF
         _vpc_listed_lc _vpc_origin_lc
 fi
 
+BRANCH_DIR=""
+if [ -n "$CD_TARGET" ]; then
+  CD_TOPLEVEL=$(git -C "$CD_TARGET" rev-parse --show-toplevel 2>/dev/null)
+  if [ -n "$CD_TOPLEVEL" ]; then
+    BRANCH_DIR="$CD_TOPLEVEL"
+  fi
+fi
+HEAD_FLAG=$(echo "$COMMAND" | sed -nE 's/.*--head[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+if [ -n "$HEAD_FLAG" ]; then
+  CURRENT_BRANCH="$HEAD_FLAG"
+elif [ -n "$BRANCH_DIR" ]; then
+  CURRENT_BRANCH=$(git -C "$BRANCH_DIR" branch --show-current 2>/dev/null)
+else
+  CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
+fi
+ORBIT_RECORDS_OK=0
+ORBIT_RECORDS_REASON=""
+if declare -F orbit_records_branch_shape >/dev/null 2>&1 &&
+   orbit_records_branch_shape "$CURRENT_BRANCH"; then
+  ORBIT_TRUNKS=$(config_get '.branch.trunk_whitelist[]' 2>/dev/null)
+  if [ -z "$ORBIT_TRUNKS" ]; then
+    ORBIT_TRUNKS=$'main\nmaster\ndevelop\ndev\ndevelopment'
+  fi
+  if orbit_records_only "${BRANCH_DIR:-.}" "$CURRENT_BRANCH" "$ORBIT_TRUNKS"; then
+    ORBIT_RECORDS_OK=1
+  fi
+fi
+ORBIT_BODY_INITIATIVE=""
+if [ "$ORBIT_RECORDS_OK" = 1 ] && [[ "$TITLE" == "docs(orbit/$ORBIT_INITIATIVE): "* ]]; then
+  ORBIT_BODY_INITIATIVE="plan-$ORBIT_INITIATIVE"
+fi
 TICKET_REF=""
 if [ -n "$EXTERNAL_TARGET" ]; then
   echo "NOTE: validate-pr-create.sh: ${CMD_REPO} is listed in .external_contributions — this framework's PR-title convention is not applied. Follow that project's own CONTRIBUTING.md." >&2
 elif [ -n "$TITLE" ]; then
   if ! echo "$TITLE" | grep -qE "^(${PR_TYPES})\(([A-Z]{2,10}-[0-9]+|#[0-9]+)\)!?:"; then
-    if printf '%s\n' "$TITLE" | grep -qE '^docs\(orbit\): [^[:space:]]'; then
+    if printf '%s\n' "$TITLE" | grep -qE '^docs\(orbit/[a-z0-9]+(-[a-z0-9]+)*\): [^[:space:]]'; then
       ORBIT_TITLE=1
     else
       ERRORS="${ERRORS}PR title '$TITLE' doesn't match format: type(TICKET-ID): description\n"
@@ -904,7 +935,7 @@ if echo "$COMMAND" | grep -qE '\-\-body(-file)?\b|[[:space:]]-F[[:space:]]'; the
     ERRORS="${ERRORS}  Fix the path (check for a typo, or make it absolute) and retry.\n"
   else
     if [ -n "$BODY_FILE" ]; then
-      review_validate_body pr "$BODY_FILE" "$REQUIRED_SECTIONS" 2>/dev/null
+      review_validate_body pr "$BODY_FILE" "$REQUIRED_SECTIONS" "${ORBIT_BODY_INITIATIVE:-}" 2>/dev/null
     else
       # review_validate_body requires a regular file (-f). A process-substitution
       # fd is not a regular file on Linux, so materialise HAYSTACK via mktemp.
@@ -913,7 +944,7 @@ if echo "$COMMAND" | grep -qE '\-\-body(-file)?\b|[[:space:]]-F[[:space:]]'; the
         exit 2
       }
       printf '%s\n' "$HAYSTACK" > "$_pr_body_temp"
-      review_validate_body pr "$_pr_body_temp" "$REQUIRED_SECTIONS" 2>/dev/null
+      review_validate_body pr "$_pr_body_temp" "$REQUIRED_SECTIONS" "${ORBIT_BODY_INITIATIVE:-}" 2>/dev/null
       rm -f "$_pr_body_temp"
     fi
     if [ "$REVIEW_VALIDATION_RESULT" != complete ]; then
@@ -1042,35 +1073,8 @@ fi
 # the PR-title check above is independent of cwd.
 # CD_TARGET was extracted early (near top of script) for --body-file path
 # resolution; reuse it here for the branch-name fallback below.
-BRANCH_DIR=""
-if [ -n "$CD_TARGET" ]; then
-  CD_TOPLEVEL=$(git -C "$CD_TARGET" rev-parse --show-toplevel 2>/dev/null)
-  if [ -n "$CD_TOPLEVEL" ]; then
-    BRANCH_DIR="$CD_TOPLEVEL"
-  fi
-fi
-HEAD_FLAG=$(echo "$COMMAND" | sed -nE 's/.*--head[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
-if [ -n "$HEAD_FLAG" ]; then
-  CURRENT_BRANCH="$HEAD_FLAG"
-elif [ -n "$BRANCH_DIR" ]; then
-  CURRENT_BRANCH=$(git -C "$BRANCH_DIR" branch --show-current 2>/dev/null)
-else
-  CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
-fi
-ORBIT_RECORDS_OK=0
-ORBIT_RECORDS_REASON=""
-if declare -F orbit_records_branch_shape >/dev/null 2>&1 &&
-   orbit_records_branch_shape "$CURRENT_BRANCH"; then
-  ORBIT_TRUNKS=$(config_get '.branch.trunk_whitelist[]' 2>/dev/null)
-  if [ -z "$ORBIT_TRUNKS" ]; then
-    ORBIT_TRUNKS=$'main\nmaster\ndevelop\ndev\ndevelopment'
-  fi
-  if orbit_records_only "${BRANCH_DIR:-.}" "$CURRENT_BRANCH" "$ORBIT_TRUNKS"; then
-    ORBIT_RECORDS_OK=1
-  fi
-fi
-if [ "$ORBIT_TITLE" = 1 ] && [ "$ORBIT_RECORDS_OK" != 1 ]; then
-  ERRORS="${ERRORS}PR title 'docs(orbit): ...' is allowed only on an orbit/<slug>-<description> branch that changes only files under docs/orbit/. Use the normal shape type(TICKET-ID): description and a {type}/{TICKET-ID}-{description} branch.\n"
+if [ "$ORBIT_TITLE" = 1 ] && [ -z "$ORBIT_BODY_INITIATIVE" ]; then
+  ERRORS="${ERRORS}PR title 'docs(orbit/<initiative-id>): ...' is allowed only on an orbit/<initiative-id>-<description> branch that changes only files under docs/orbit/. Use the normal shape type(TICKET-ID): description and a {type}/{TICKET-ID}-{description} branch.\n"
   if [ -n "$ORBIT_RECORDS_REASON" ]; then
     ERRORS="${ERRORS}${ORBIT_RECORDS_REASON}\n"
   fi

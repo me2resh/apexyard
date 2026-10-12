@@ -194,7 +194,7 @@ Lint the records before a records PR (AgDR-0225). `/orbit` runs this step itself
   --orbit-root "$orbit_root" --repo "$project_repo"
 ```
 
-The script checks the record files changed against `origin/dev`. Pass `--base <ref>` to change the base. Pass `--all` to check every record file. It runs five checks in order and stops on the first fault:
+The script checks the record files changed against `origin/dev`. Pass `--base <ref>` to change the base. Pass `--all` to check every record file. It checks initiative ownership on `orbit/` branches (exit 15), then runs five checks in order and stops on the first fault:
 
 1. `orbit validate --all`. Exit 10.
 2. The leak scrub, `check-private-refs-runtime.sh`. Exit 11.
@@ -313,8 +313,15 @@ One planning cycle ships one records PR (AgDR-0225). Run these steps in order:
 3. Run `/orbit reconcile`. Keep the Reconciliation only when a status changes. Otherwise the `## Checks` line is the record.
 4. Cut every slice of the cycle with `/orbit slice`. Each slice uses this Plan revision and this Reconciliation.
 5. Run `/orbit lint`. Stop on the first fault.
-6. Ask the operator to open one PR with all records of the cycle. Follow the normal ApexYard review and merge gates. Use `orbit/<initiative-slug>-<description>` without a ticket only when the PR changes only `docs/orbit/`.
-   Use the title `docs(orbit): <description>` for that records PR.
+6. Ask the operator to open one PR with all records of the cycle. Follow the normal ApexYard review and merge gates. Use `orbit/<initiative-id>-<description>` without a ticket only when the PR changes only `docs/orbit/`.
+   Use the title `docs(orbit/<initiative-id>): <description>` for that records PR.
+   Derive `<initiative-id>` from the Plan's `id` by removing `plan-`.
+   Write `Initiative: plan-<initiative-id>` in the PR body instead of `Closes` or `Refs`.
+   When committing the cycle records, write the same trailer in every commit:
+   `git commit -m "docs: update ORBIT records" -m "Initiative: plan-<initiative-id>"`.
+   Use `git log --grep "Initiative: plan-<initiative-id>"` to find every change.
+   Lint blocks records from other initiatives, including Plan notes and history.
+   A changed Snapshot must be referenced by a changed Reconciliation of this Plan.
    This branch name and title exemption does not change review or merge gates.
 7. After the merge, run `/orbit handoff` for each slice.
 
