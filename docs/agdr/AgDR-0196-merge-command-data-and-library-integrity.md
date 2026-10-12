@@ -73,15 +73,32 @@ The narrow merge list is unchanged. Shell wrappers and substitutions retain the 
 but its agent can run commands outside this hook. We have not established that every
 invocation of either CLI meets the data-only contract, so the conservative fallback stays.
 
-A standalone lowercase scalar assignment with a literal path value can precede a
-quoted file heredoc. Environment prefixes, uppercase special variables, arrays,
-expansions and executable assignment values retain raw scanning. Tests cover the
-variable-path heredoc and subsequent real tracker commands on two active repositories.
+A standalone lowercase scalar assignment with a literal path value can precede a quoted file heredoc.
+Environment prefixes, uppercase special variables, arrays, expansions, and executable assignment values retain raw scanning.
+The zsh names path, fpath, cdpath, manpath, module_path, mailpath, and psvar also retain raw scanning.
+Assigning path in zsh sets PATH.
+The other names set tied search arrays.
+Tests cover the variable-path heredoc and later real tracker commands on two active repositories.
+
+### #1665 zsh tied names stay raw
+
+The lowercase path-assignment exception treated `path=/x` as data.
+In zsh that assignment sets PATH.
+The same exception now keeps path, fpath, cdpath, manpath, module_path, mailpath, and psvar raw.
+`test_command_scrub_regressions.sh` checks one heredoc redirect per name.
+An ordinary name such as `d=/tmp/x` stays data.
+
+`_portfolio_reset_caches` used `export -n` to drop the export flag on its internal names.
+zsh rejects that option and prints `bad option: -n`.
+Bash 3.2 still uses `export -n`.
+zsh uses `typeset -g +x`, which leaves the same empty unexported names.
+`test_portfolio_paths.sh` sources the library under zsh and expects empty stderr.
 
 ## Artifacts
 
 - Issue #1489
 - Issue #1507
+- Issue #1665
 - `test_merge_command_data.sh`
 - `test_merge_gate_library_functions.sh`
 - `test_merge_known_limits.sh`
