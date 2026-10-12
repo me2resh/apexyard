@@ -58,9 +58,12 @@ describe('checkpoints', () => {
     const course = loadLessons(content)
     const p = navigate(initial(), course, 'bootcamp-goto', '5 5')
     expect(tick(p, course, { tool: 'Bash', command: 'gh pr create --draft' }).ticked).toEqual({ '4:4': true })
-    for (const command of ['gh pr view', 'gh pr create --help', 'gh pr create --draft --help', 'rg "gh pr create" .', 'echo gh pr create', 'gh pr create ' + 'x'.repeat(2000)]) {
+    for (const command of ['gh pr view', 'gh pr create --help', 'gh pr create --draft --help', 'rg "gh pr create" .', 'echo gh pr create', 'gh pr create ' + 'x'.repeat(32000)]) {
       expect(tick(p, course, { tool: 'Bash', command }).ticked).toEqual({})
     }
+    // Real PR commands with an inline body reach about 7,000 characters and must still tick.
+    const longBody = 'gh pr create --draft --title "feat: x" --body "' + 'y'.repeat(7000) + '"'
+    expect(tick(p, course, { tool: 'Bash', command: longBody }).ticked).toEqual({ '4:4': true })
     expect(tick(p, course, { tool: 'Bash', command: 'git status && gh pr create --draft' }).ticked).toEqual({ '4:4': true })
   })
   test('ticks only the current step and preserves earlier ticks', async () => {

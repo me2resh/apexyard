@@ -66,7 +66,7 @@ export function matches(check: Check | undefined, event: Record<string, unknown>
       && skill.split(':').pop() === check.value.split(':').pop()
   }
   if (event.tool !== 'Bash' || typeof event.command !== 'string') return false
-  if (event.command.length > 2000) return false
+  if (event.command.length > 32000) return false
   try { return new RegExp(check.value, 'i').test(event.command) } catch { return false }
 }
 

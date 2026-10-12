@@ -58,7 +58,7 @@ Each field can appear once per step. Empty fields and invalid regexes produce an
 Body text is required. The pane shows body text as terminal text, including any Markdown markers.
 A malformed module shows its file name and parser error. Navigation can move past that module.
 Use three to six steps for each generic module. Use short active sentences with at most 20 words.
-Avoid nested quantifiers in content regexes. Commands longer than 2,000 characters do not tick Bash checkpoints.
+Avoid nested quantifiers in content regexes. Commands longer than 32,000 characters do not tick Bash checkpoints. Real PR commands with an inline body reach about 7,000 characters.
 Use ASCII content and real ApexYard skill names. Keep Corner Shop as the sample project.
 
 ## Bundle content
