@@ -252,7 +252,10 @@ within_byte_budget() {
   [ "$bytes" -le 12000 ]
 }
 
-for name in security-reviewer solution-architect; do
+# Hakim step 1 does not ship (owner decision 2026-10-12).
+# Keep the loop for agents with a shipped trim.
+# shellcheck disable=SC2043
+for name in solution-architect; do
   if within_byte_budget "$AGENTS/$name.md"; then
     pass "$name stays within 12000 bytes"
   else
@@ -270,17 +273,17 @@ fi
 BODY=$(cat "$AGENTS/security-reviewer.md")
 require_in 'Run gh pr checks once and never wait.' "$BODY" 'security-reviewer: retains Run gh pr checks once and never wait.'
 require_in 'tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"' "$BODY" 'security-reviewer: retains tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"'
-require_in 'Do not pass `approve`.' "$BODY" 'security-reviewer: retains Do not pass `approve`.'
-require_in 'No merge-gate marker applies.' "$BODY" 'security-reviewer: retains No merge-gate marker applies.'
+require_in 'Do NOT pass the `approve` verdict by default.' "$BODY" 'security-reviewer: retains Do NOT pass the `approve` verdict by default.'
+require_in 'security review has **no merge-gate marker**' "$BODY" 'security-reviewer: retains security review has **no merge-gate marker**'
 require_in 'A regression against the base branch.' "$BODY" 'security-reviewer: retains A regression against the base branch.'
 require_in 'A way for an outside actor to run code or bypass the per-PR human merge approval.' "$BODY" 'security-reviewer: retains A way for an outside actor to run code or bypass the per-PR human merge approval.'
 require_in 'A correctness bug in the changed code, or in a durable artifact'\''s stated meaning or evidence.' "$BODY" 'security-reviewer: retains A correctness bug in the changed code, or in a durable artifact'\''s stated meaning or evidence.'
 require_in 'A failed acceptance criterion.' "$BODY" 'security-reviewer: retains A failed acceptance criterion.'
 require_in '## Running tests in a scratch clone' "$BODY" 'security-reviewer: retains ## Running tests in a scratch clone'
-require_in 'Never rephrase, split, encode, or disguise commands to bypass hooks.' "$BODY" 'security-reviewer: retains Never rephrase, split, encode, or disguise commands to bypass hooks.'
+require_in 'Never rephrase, split, encode, or disguise a command to get past a hook' "$BODY" 'security-reviewer: retains Never rephrase, split, encode, or disguise a command to get past a hook'
 require_in 'git range-diff <old-base>..<old-head> <new-base>..<new-head>' "$BODY" 'security-reviewer: retains git range-diff <old-base>..<old-head> <new-base>..<new-head>'
 require_in 'git show --remerge-diff <merge-sha>' "$BODY" 'security-reviewer: retains git show --remerge-diff <merge-sha>'
-require_in 'Set Scope to `Delta re-review`.' "$BODY" 'security-reviewer: retains Set Scope to `Delta re-review`.'
+require_in 'State `Delta re-review` in the review body' "$BODY" 'security-reviewer: retains State `Delta re-review` in the review body'
 require_in '### 1. Secrets and Credentials' "$BODY" 'security-reviewer: retains ### 1. Secrets and Credentials'
 require_in '### 2. Injection Prevention' "$BODY" 'security-reviewer: retains ### 2. Injection Prevention'
 require_in '### 3. Cross-Site Scripting (XSS)' "$BODY" 'security-reviewer: retains ### 3. Cross-Site Scripting (XSS)'
@@ -288,11 +291,10 @@ require_in '### 4. Authentication and Authorisation' "$BODY" 'security-reviewer:
 require_in '### 5. Data Protection' "$BODY" 'security-reviewer: retains ### 5. Data Protection'
 require_in '### 6. API Security' "$BODY" 'security-reviewer: retains ### 6. API Security'
 require_in '### 7. Gate & Trust-Chain Integrity (#777)' "$BODY" 'security-reviewer: retains ### 7. Gate & Trust-Chain Integrity (#777)'
-require_in 'Resolve ops root pin-first' "$BODY" 'security-reviewer: retains Resolve ops root pin-first'
-require_in 'This agent writes no gate marker' "$BODY" 'security-reviewer: retains This agent writes no gate marker'
+require_in 'Resolve the ops fork root **pin-first**' "$BODY" 'security-reviewer: retains Resolve the ops fork root **pin-first**'
+require_in 'This agent writes **no** gate marker' "$BODY" 'security-reviewer: retains This agent writes **no** gate marker'
 require_in 'PR_HOST_REPO=$(pr_base_repo {number} "$REPO")' "$BODY" 'security-reviewer: retains PR_HOST_REPO=$(pr_base_repo {number} "$REPO")'
 require_in 'Reviewed by Hakim (Security Auditor)' "$BODY" 'security-reviewer: retains Reviewed by Hakim (Security Auditor)'
-require_in 'docs/agents/security-reviewer-reference.md' "$BODY" 'security-reviewer: retains docs/agents/security-reviewer-reference.md'
 
 # --- solution-architect kept rules ---
 BODY=$(cat "$AGENTS/solution-architect.md")

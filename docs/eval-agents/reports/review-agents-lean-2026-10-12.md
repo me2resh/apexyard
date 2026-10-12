@@ -6,7 +6,7 @@ It follows the method of `rex-hakim-token-trim-2026-10-11.md` (me2resh/apexyard#
 ## Outcome
 
 - **Tariq:** the prompt shrank from 22,858 to 11,943 bytes and now sets `omitClaudeMd`. The first-turn input fell by 63.0% (30,273 to 11,188 tokens, median). No verdict flip and no lost catch.
-- **Hakim, step 1 (trim only):** the prompt shrank from 21,723 to 11,996 bytes and keeps CLAUDE.md. The first-turn input fell by 12.0%. One entry needs a flag (see "Hakim step 1: the flag").
+- **Hakim, step 1 (trim only): Not shipped (owner decision 2026-10-12).** The trim produced one verdict flip: APPROVED on HIGH-defect entry `hakim-1511-2e3b039c8`. The owner chose Rex option A. This PR restores `security-reviewer.md` from `upstream/dev`. Hakim keeps CLAUDE.md.
 - **Hakim, step 2 (`omitClaudeMd`):** it failed the pass criterion. On `hakim-1546-f78c8ae25`, 4 of 19 runs gave no blocking verdict. The pass criterion was 0 of 19. Hakim keeps CLAUDE.md. `ac5-1` stays partial for Hakim.
 - **Naqid, Salim, Munir, Hamza:** each now sets `omitClaudeMd` and carries a floor block with only the rules it uses. The smoke check showed the same output shape and the same verdicts. The first-turn input fell by 39% to 67%.
 - **Corpus:** `corpus/tariq.json` is new. It has 6 GOOD_CATCH entries and 2 GOOD_CLEAN entries from real Tariq rounds.
@@ -43,7 +43,7 @@ The scan read every tool call and flagged the Bash commands of six runs by patte
 
 | Agent file | Before | After | Change |
 |---|---|---|---|
-| `security-reviewer.md` (Hakim) | 21,723 | 11,996 | -9,727 |
+| `security-reviewer.md` (Hakim, restored) | 21,723 | 21,723 | 0 |
 | `solution-architect.md` (Tariq) | 22,858 | 11,943 | -10,915 |
 | `contrarian.md` (Naqid) | 7,070 | 7,926 | +856 |
 | `qa-engineer.md` (Salim) | 4,549 | 5,436 | +887 |
@@ -51,7 +51,8 @@ The scan read every tool call and flagged the Bash commands of six runs by patte
 | `penetration-tester.md` (Hamza) | 1,513 | 2,559 | +1,046 |
 
 The four small agents grow by the floor block. They save more than that by dropping CLAUDE.md.
-The rationale and the long scripts of Hakim and Tariq moved to `docs/agents/security-reviewer-reference.md` and `docs/agents/solution-architect-reference.md`.
+Tariq’s rationale and long scripts moved to `docs/agents/solution-architect-reference.md`.
+Hakim retains the original agent text. `docs/agents/security-reviewer-reference.md` records the tested variant and context.
 
 ## First-turn context per agent type (o1 metric)
 
@@ -59,7 +60,7 @@ First-turn context is the input of the first request. Medians, in tokens.
 
 | Agent | Runs before / after | Before | After | Change |
 |---|---|---|---|---|
-| Hakim, trim only (shipped) | 27 / 27 | 29,508 | 25,970 | -12.0% |
+| Hakim, trim only (not shipped) | 27 / 27 | 29,508 | 25,970 | -12.0% |
 | Hakim, trim and `omitClaudeMd` (not shipped) | 27 / 49 | 29,508 | 11,028 | -62.6% |
 | Tariq (shipped) | 29 / 29 | 30,273 | 11,188 | -63.0% |
 | Naqid | 2 / 2 | 21,541 | 7,022 | -67.4% |
@@ -148,8 +149,10 @@ The two APPROVED runs missed the HIGH defect (the bash 3.2 substitution stall). 
 | Same, with the older baseline runs pooled | 1 of 25 | 2 of 19 | 0.57 |
 
 The two miss rates are not distinguishable at this k. This is not proof of no effect.
-I treated the entry as inside the baseline variance and kept the trim.
-A reviewer who reads the rule strictly can reverse that call. To reverse it, restore the `dev` version of `security-reviewer.md`.
+The initial assessment treated the entry as inside the baseline variance and kept the trim.
+The owner reversed that call on 2026-10-12 and chose Rex option A because the strict rule counts one verdict flip.
+Hakim step 1 does not ship. The agent file is restored from `upstream/dev`.
+The step 1 measurements below describe the rejected variant.
 
 Defect catches (HIGH defects only, plus the one MEDIUM that moved):
 
@@ -217,7 +220,7 @@ Munir got scanner data with one Critical, one High, one Unknown finding, and two
 
 - **Tariq: PASS.** The trim and `omitClaudeMd` ship. No flip and no lost catch.
 - **Naqid, Salim, Munir, Hamza: PASS.** The smoke check shows no change in shape or verdict.
-- **Hakim trim: PASS with one flag.** The flag is `hakim-1511-2e3b039c8`, explained above.
+- **Hakim trim: NOT SHIPPED (owner decision 2026-10-12).** APPROVED on HIGH-defect entry `hakim-1511-2e3b039c8` produced one verdict flip.
 - **Hakim `omitClaudeMd`: FAIL.** The agent keeps CLAUDE.md.
 
 ## Follow-up
