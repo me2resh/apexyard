@@ -5,7 +5,7 @@ argument-hint: "<plan|snapshot|reconcile|slice|validate|lint|status|handoff> --p
 allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion
 ---
 
-# /orbit — ORBIT planning adapter
+# /orbit - ORBIT planning adapter
 
 Use this skill when an operator explicitly wants ORBIT records for one managed project. The skill is an ApexYard adapter. The ORBIT CLI remains the source of truth for record schemas, lifecycle output, and validation.
 
@@ -110,6 +110,11 @@ if [ "$cli_status" -eq 0 ]; then
     --reconciliation "$reconciliation_file"; then
     echo "ORBIT coverage check failed; reconcile status is unchanged." >&2
   fi
+  if ! "$(git rev-parse --show-toplevel)/.claude/skills/orbit/lib/warn-criterion-shape.sh" \
+    --orbit-root "$orbit_root" --plan "$plan_file" \
+    --reconciliation "$reconciliation_file"; then
+    echo "ORBIT criterion shape check failed; reconcile status is unchanged." >&2
+  fi
 fi
 (exit "$cli_status")
 ```
@@ -178,6 +183,10 @@ if [ "$cli_status" -eq 0 ]; then
     --orbit-root "$orbit_root"; then
     echo "ORBIT coverage check failed; validate status is unchanged." >&2
   fi
+  if ! "$(git rev-parse --show-toplevel)/.claude/skills/orbit/lib/warn-criterion-shape.sh" \
+    --orbit-root "$orbit_root"; then
+    echo "ORBIT criterion shape check failed; validate status is unchanged." >&2
+  fi
 fi
 (exit "$cli_status")
 ```
@@ -222,9 +231,9 @@ Recorded statuses do not change. A status changes only through `/orbit reconcile
 
 ### `/orbit handoff --project <name> --slice <file>`
 
-Turn one validated execution slice into one tracker issue, through the existing single-issue `orbit sync github` adapter. This is the only `/orbit` operation that writes to an external tracker. No other ApexYard skill calls the ORBIT CLI (ac1-5) — keep that boundary when you extend this operation.
+Turn one validated execution slice into one tracker issue, through the existing single-issue `orbit sync github` adapter. This is the only `/orbit` operation that writes to an external tracker. No other ApexYard skill calls the ORBIT CLI (ac1-5) - keep that boundary when you extend this operation.
 
-Resolve `project_root` and `orbit_root` as in "Project resolution" above. Also resolve the project's tracker repo from the same registry entry — the handoff files the issue against this repo, and every other step below (the duplicate check, the leak scrub, the sync, the confirmation prompt) uses this same value, never a placeholder typed by hand. Use the helper, not a hand-rolled `awk` line — a project that is not the last registry entry needs the `found`-flag fix the helper carries (apexyard#1446, Hakim N1):
+Resolve `project_root` and `orbit_root` as in "Project resolution" above. Also resolve the project's tracker repo from the same registry entry - the handoff files the issue against this repo, and every other step below (the duplicate check, the leak scrub, the sync, the confirmation prompt) uses this same value, never a placeholder typed by hand. Use the helper, not a hand-rolled `awk` line - a project that is not the last registry entry needs the `found`-flag fix the helper carries (apexyard#1446, Hakim N1):
 
 ```bash
 project_repo=$("$(git rev-parse --show-toplevel)/.claude/skills/orbit/lib/resolve-project-repo.sh" "$registry" "$project") || {
@@ -241,7 +250,7 @@ The slice file's `basedOn` names the Plan revision and the Reconciliation it was
 
 Stop and report if any of the three is missing or ambiguous. Do not guess a record when more than one file matches.
 
-Run the mechanical preflight helper. It performs steps 1–5 below and prints the leak-scrubbed dry-run preview on stdout, or stops with a reason on stderr and a non-zero exit:
+Run the mechanical preflight helper. It performs steps 1-5 below and prints the leak-scrubbed dry-run preview on stdout, or stops with a reason on stderr and a non-zero exit:
 
 ```bash
 preview=$("$(git rev-parse --show-toplevel)/.claude/skills/orbit/lib/handoff-preflight.sh" \
@@ -254,9 +263,9 @@ The helper's flow, in order:
 
 1. **CLI check.** If `$ORBIT_BIN` (default `orbit`) is not on `PATH`, stop with one install note (ac1-4): "ORBIT CLI not found. Install orbit-spec ... or set ORBIT_BIN to the CLI path." Take no further action.
 2. **Validate.** Run `orbit validate --all --root "$orbit_root"`. On a non-zero exit, stop and state the reason from the CLI's own error text (ac1-3).
-3. **Duplicate check.** Search open issues in `$project_repo` for the slice ID, but only *count* a hit when an issue's body contains the exact backtick-quoted token the adapter renders under "Orbit identifiers" (`` `<slice-id>` ``) — a shared word or a prefix is not a match. When the search itself fails (auth, network, rate limit), stop with a "cannot verify" error; never treat a failed search as "no duplicate found".
+3. **Duplicate check.** Search open issues in `$project_repo` for the slice ID, but only *count* a hit when an issue's body contains the exact backtick-quoted token the adapter renders under "Orbit identifiers" (`` `<slice-id>` ``) - a shared word or a prefix is not a match. When the search itself fails (auth, network, rate limit), stop with a "cannot verify" error; never treat a failed search as "no duplicate found".
 4. **Dry-run preview.** Run `orbit sync github --dry-run --plan <plan_file> --snapshot <snapshot_file> --reconciliation <reconciliation_file> --slice <slice_file> --repo "$project_repo"`. The adapter renders the issue title and body with the Plan ID and revision, objective, scope, and identifiers. The preflight requires a `[Slice]` title. Keep that content.
-5. **Leak scrub.** Extract the plain-text title and body from the preview with `jq -r '.title'` / `jq -r '.body'` — not the raw JSON, where a name at the start of a body line is preceded by the two characters `\n` rather than a real newline, and the scrub's word-boundary rule misses it. Run `check-private-refs-runtime.sh` against `$project_repo`, the plain-text title, and the plain-text body written to a file. A non-zero exit blocks the handoff (ac1-6).
+5. **Leak scrub.** Extract the plain-text title and body from the preview with `jq -r '.title'` / `jq -r '.body'` - not the raw JSON, where a name at the start of a body line is preceded by the two characters `\n` rather than a real newline, and the scrub's word-boundary rule misses it. Run `check-private-refs-runtime.sh` against `$project_repo`, the plain-text title, and the plain-text body written to a file. A non-zero exit blocks the handoff (ac1-6).
 
 After the helper exits 0 with the scrubbed preview on stdout, continue in the skill itself (these two steps ask for and act on operator input, so they stay outside the mechanical helper):
 
@@ -323,7 +332,7 @@ If a required input is missing, stop at that stage and report the missing eviden
 ## Interaction script
 
 Use `AskUserQuestion` for every operator choice between options in this skill.
-Follow `.claude/rules/reporting-style.md § Operator choices`.
+Follow `.claude/rules/reporting-style.md section Operator choices`.
 Keep single yes/no and ticket confirmation prompts as written.
 The prose option prompts below are fallbacks only when the harness lacks `AskUserQuestion`.
 
@@ -337,10 +346,17 @@ The operator may pass `--no-challenge` when a challenge was already run for the 
 
 ### Plan interview
 
+Each acceptance criterion has one or two sentences, each with at most 25 words (the STE100 descriptive limit).
+The statement says what must be true, never how to prove it. Proof belongs elsewhere.
+
+Until the ORBIT schema has a proof field, store proof instructions in `docs/orbit/plans/<plan-id>.notes.md` under `## Proof`.
+Use one bullet per criterion ID, for example `- ac1-2: <command or artifact>`.
+Record observed results in the Reconciliation evidence.
+
 1. `What project outcome are you trying to achieve?`
 2. `What durable intent should the Plan preserve?`
 3. `What outcomes must be true when the work is complete?`
-4. `What acceptance criteria will prove each outcome?`
+4. `What acceptance criteria state what must be true for each outcome?`
 5. `What constraints or assumptions must the Plan record?`
 6. Show the complete Plan JSON, run Naqid, then ask: `Save this Plan revision?`
 
@@ -355,6 +371,14 @@ Confirm the selected project and resolved repository path:
 The snapshot command is read-only against the repository. Do not ask for or expose credentials.
 
 ### Reconciliation interview
+
+For every assessment that is not `achieved`, start its explanation with this prefix:
+
+```text
+Missing: <what is still missing>. Next: <the step that closes it>.
+```
+
+Put other facts after this prefix.
 
 For each acceptance criterion, ask:
 
@@ -392,4 +416,4 @@ Report:
 - next ApexYard gate, if the operator is handing off a slice
 - for `handoff`: the resolved Plan/Snapshot/Reconciliation files, the preflight exit code, the leak scrub result, the operator's confirmation, and the created issue URL (or the refusal reason and exit code, if the handoff stopped)
 
-Do not report a slice as executed. ORBIT describes intent and bounded handoff; execution remains provider-specific. `handoff` is the exception: report the created issue as created, not as executed — filing a ticket is not running the work.
+Do not report a slice as executed. ORBIT describes intent and bounded handoff; execution remains provider-specific. `handoff` is the exception: report the created issue as created, not as executed - filing a ticket is not running the work.
