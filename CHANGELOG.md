@@ -16,6 +16,7 @@ Behaviour change: the active ticket now lives in each working tree's git dir (#1
 
 - The Bash dispatcher and the ticket-first gate fail closed (#1623, AgDR-0228). The `dispatch-bash.sh` and `require-active-ticket.sh` entries in `.claude/settings.json` set `onFailure` to `block` with timeouts of 20 and 10 seconds, taken from the profile in `docs/perf/hook-fail-closed-profile-2026-10.md`. `onFailure` needs Claude Code 2.1.295 or later. An older client ignores the field. `docs/hooks-fail-closed.md` describes the behavior, the `claude --settings '{"disableAllHooks": true}'` escape hatch, and the version finding. `bin/hook-timing-profile.py` measures hook timing. `bin/check-escape-hatch.sh` tests the escape hatch. A new workflow runs `claude plugin validate --strict` on the marketplace with a pinned Claude Code version.
 - `bin/token-cost.py` reports the token and time cost of a session (#1624). It has a session view, a reviewer view and a forge view of me2resh/apexyard PRs. `docs/perf/token-cost.md` gives the usage and the counting rules. The 2026-10-10 baseline is in `docs/perf/token-cost-baseline-2026-10-10.md`.
+- `apexyard-explainer` shows one plain sentence for each tool call in a pane (#1661). It uses templates and keeps the last five lines in session memory. `/explainer-toggle` opens or closes the pane.
 
 ### Changed
 

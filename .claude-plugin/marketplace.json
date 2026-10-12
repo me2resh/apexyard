@@ -18,6 +18,11 @@
       "name": "apexyard-status",
       "source": "./plugins/apexyard-status",
       "description": "Fork-only, display-only status band above the prompt: active ticket, PRs waiting for /approve-merge, reviewer lock"
+    },
+    {
+      "name": "apexyard-explainer",
+      "source": "./plugins/apexyard-explainer",
+      "description": "Display-only pane that explains each tool call in one plain sentence"
     }
   ]
 }
