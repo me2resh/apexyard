@@ -1,0 +1,39 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-token-o5-review-agents-lean",
+  "planId": "plan-apexyard-token-efficiency",
+  "outcomeId": "o5-subagents-start-lean",
+  "basedOn": {
+    "planRevision": 3,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261011T223213Z",
+    "repositories": {}
+  },
+  "objective": "Start the six other review and audit agents without CLAUDE.md and the memory index, and trim the Hakim and Tariq prompts to 12,000 bytes each. Hakim and Tariq show zero verdict flips; the four others pass a smoke check.",
+  "why": "ac5-1 and ac5-2 are not-verified. #1652 ships Rex with omitClaudeMd and cuts its first turn by 38.2%. With omitClaudeMd, Hakim missed a HIGH defect on hakim-1546-f78c8ae25 in 4 of 19 runs, and the cause is not known. security-reviewer.md is 21,723 bytes and solution-architect.md is 22,858 bytes. No Tariq corpus exists.",
+  "contributesTo": [
+    "ac5-1",
+    "ac5-2"
+  ],
+  "scope": {
+    "include": [
+      "Flips use the #1652 definition and its baseline-variance rule: a flip is an after verdict that never appeared in the baseline runs of that entry",
+      "Hakim, step 1: trim security-reviewer.md to 12,000 bytes with CLAUDE.md kept, and run one /eval-agents cycle",
+      "Hakim, step 2: compare the baseline and omitClaudeMd transcripts on hakim-1546-f78c8ae25, move any CLAUDE.md content Hakim used into its prompt, add omitClaudeMd, and run a second cycle. hakim-1546-f78c8ae25 runs at k=19 with 0 misses, which bounds the miss rate below about 15%",
+      "If step 2 finds no movable content or Hakim flips, Hakim keeps CLAUDE.md, ac5-1 stays partial for Hakim, and the PR records this. The other agents still ship",
+      "Build docs/eval-agents/corpus/tariq.json from real Tariq rounds with a confirmed_fix oracle: at least 5 GOOD_CATCH and 2 clean entries. If they do not exist, stop before the Tariq cut and report",
+      "Trim solution-architect.md to 12,000 bytes and set omitClaudeMd, then run one Tariq cycle with zero flips",
+      "omitClaudeMd and a floor block in contrarian, qa-engineer, dependency-auditor and penetration-tester. Each agent gets a per-agent floor block with only the rules it uses",
+      "Smoke check for those four: spawn each once on a fixed input with and without CLAUDE.md, and compare the output shape and the o1 first-turn context in the PR",
+      "test_reviewer_floor_block.sh fails when one of the seven agents lacks omitClaudeMd or its floor block, and when a build agent sets omitClaudeMd",
+      "Rationale moves under docs/agents/, the ops-root and marker text is one line, and each moved rule has a text-pin test",
+      "The o1 first-turn context per agent type, before and after, in the PR"
+    ],
+    "exclude": [
+      "The per-agent reasoning effort spike and the lean-effort delta reviewer (ac5-3, a later spike slice)",
+      "The Rex prompt and its floor block (delivered in #1652)",
+      "Review depth tiers and the delta review format (o7)",
+      "Any edit to block-unreviewed-merge.sh, block-merge-on-red-ci.sh or another merge-gate hook (C1)",
+      "CLAUDE.md for build agents"
+    ]
+  }
+}

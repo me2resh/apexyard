@@ -206,16 +206,52 @@ active_reviewer_any_marker() {
   [ -n "$first" ]
 }
 
+# Capture this library's directory only under bash, as _lib-read-config.sh does.
+_REVIEW_MARKERS_LIB_DIR=""
+if [ -n "${BASH_VERSION:-}" ]; then
+  _REVIEW_MARKERS_LIB_DIR=$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd) || true
+fi
+
+# review_agent_extra_slugs
+# Print validated extra types. Config can only add to the fixed built-ins.
+# Missing, empty, or malformed values leave the built-in list unchanged.
+review_agent_extra_slugs() {
+  local slug extras
+  if ! command -v config_get >/dev/null 2>&1; then
+    if [ -n "$_REVIEW_MARKERS_LIB_DIR" ] && [ -r "$_REVIEW_MARKERS_LIB_DIR/_lib-read-config.sh" ]; then
+      # shellcheck source=/dev/null
+      . "$_REVIEW_MARKERS_LIB_DIR/_lib-read-config.sh" 2>/dev/null || true
+    fi
+  fi
+  command -v config_get >/dev/null 2>&1 || return 0
+  extras=$(config_get '.review_markers.extra_review_agents | select(type == "array") | .[] | select(type == "string") | select(contains("\n") | not)' 2>/dev/null) || extras=""
+  while IFS= read -r slug; do
+    case "$slug" in
+      ""|[!A-Za-z0-9]*|*[!A-Za-z0-9._:-]*) continue ;;
+    esac
+    printf '%s\n' "$slug"
+  done <<EOF_EXTRAS
+$extras
+EOF_EXTRAS
+  return 0
+}
+
 # review_agent_slug_match <agent_type>
-# Exit 0 when the agent type is a review agent. Add a slug to
-# REVIEW_AGENT_SLUGS when a new review-class agent is created.
+# Match exact types in the union of fixed built-ins and validated config extras.
+# Config can only add types. Empty or malformed values cannot remove built-ins.
 REVIEW_AGENT_SLUGS="code-reviewer security-reviewer solution-architect"
 review_agent_slug_match() {
-  local t="${1:-}" slug
+  local t="${1:-}" slug extras
   [ -n "$t" ] || return 1
   for slug in $REVIEW_AGENT_SLUGS; do
     [ "$t" = "$slug" ] && return 0
   done
+  extras=$(review_agent_extra_slugs)
+  while IFS= read -r slug; do
+    [ -n "$slug" ] && [ "$t" = "$slug" ] && return 0
+  done <<EOF_EXTRAS
+$extras
+EOF_EXTRAS
   return 1
 }
 

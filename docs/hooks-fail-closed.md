@@ -108,6 +108,28 @@ The `/code-review`, `/security-review` and `/design-review` skills spawn the
 reviewer with its own agent type: `code-reviewer`, `security-reviewer` or
 `solution-architect`. Do not spawn a review with `general-purpose`.
 
+### Add your own review agent types
+
+Set `review_markers.extra_review_agents` in `.claude/project-config.json` to an array of exact type names.
+Do not use patterns.
+The config can only add types.
+You cannot remove built-in types.
+A malformed or missing value leaves the built-in list unchanged.
+The helper skips entries with disallowed characters.
+The first character must be a letter or digit.
+Other characters can be letters, digits, `.`, `_`, `:`, or `-`.
+The fallback knows only built-in types when the library is missing.
+
+```json
+{
+  "review_markers": {
+    "extra_review_agents": ["acme-reviewer", "plugin:code-reviewer"]
+  }
+}
+```
+
+**Warning:** A name shared with a build agent locks that build agent during an active review.
+
 ## Operator escape hatch
 
 If a gate blocks all work, for example after a bad hook edit, start Claude

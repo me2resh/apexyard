@@ -105,6 +105,10 @@ o1 first, because every later change and the harness o4 slice measure with its s
 - **C6 amended.** One open slice per outcome; a spike may come before the build slice. The o2 spike covers ac2-1, and a later o2 build slice covers ac2-2 to ac2-4.
 - **Delivered slices.** The o1, o4 and o8 slices are re-pointed to this reconciliation only because the validator requires their reconciliation in docs/orbit/reconciliations/. Their text is unchanged.
 - This cycle cuts the o2 spike slice (ac2-1) and the o3 slice (ac3-1 and ac3-4).
+- **o6 slice (2026-10-11).** `slice-token-o6-skill-bodies-lean` covers ac6-1 to ac6-5 in one PR. Owner decision 2026-10-11: cut it now, after o9 merged (#1651). o5 waits for the harness o4 PR (#1652), and o7 waits for o5. Naqid returned proceed-with-changes. The record has all seven changes. They are a fail-closed script contract, a strategy allow-list, a no-marker-write test, the ops-root bootstrap kept inline, repointed tests, the fixed five-skill list, and a Full Rex review plus a Hakim review.
+- **Reconciliation 2026-10-11T22:32Z (dev 9b25c83).** It follows the merges of #1651 (o9), #1646 (o2 spike) and #1652 (harness o4). ac2-1, ac3-1, ac4-2 and ac8-2 are achieved. ac5-1 and ac9-1 are partially-verified.
+- **o5 slice (2026-10-11).** `slice-token-o5-review-agents-lean` covers ac5-1 and ac5-2. The owner chose this cut; ac5-3 gets a later spike slice. Naqid returned proceed-with-changes, and the record has all seven changes.
+- **Owner waiver (2026-10-11).** In o5, Hakim gets two eval cycles instead of one. The trim runs first and omitClaudeMd second, so a flip traces to one change. Hakim missed a HIGH defect with omitClaudeMd in #1652, and the cause is not known.
 
 ## Checks
 

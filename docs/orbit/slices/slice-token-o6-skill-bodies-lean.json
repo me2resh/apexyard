@@ -1,0 +1,43 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-token-o6-skill-bodies-lean",
+  "planId": "plan-apexyard-token-efficiency",
+  "outcomeId": "o6-skill-bodies-lean",
+  "basedOn": {
+    "planRevision": 3,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261011T082929Z",
+    "repositories": {}
+  },
+  "objective": "Make the skill bodies on the execution path short. Move steps 3a, 4 and 6 of /approve-merge into a fail-closed script, put each shared block in one file, and move rationale under docs/skills/.",
+  "why": "ac6-1 and ac6-3 to ac6-5 are not-verified, and ac6-2 is partially-verified. On dev at 425a4ab, approve-merge SKILL.md is 39,268 bytes against the 14,000-byte target, and it is 21.5% of main-loop skill re-reads in the o1 baseline. The Writing rule preamble repeats in 45 skills and the ops-root walk-up in 18. The /approve-merge report has no /compact line. The orbit skill runs Naqid on every Reconciliation draft. o9 merged (#1651), so builds and reviews now run at the same time.",
+  "contributesTo": [
+    "ac6-1",
+    "ac6-2",
+    "ac6-3",
+    "ac6-4",
+    "ac6-5"
+  ],
+  "scope": {
+    "include": [
+      "Use the five skills that the plan notes list from the o1 baseline (approve-merge, approve-design, code-review, task, start-ticket). Record the before byte count of each in the PR",
+      "scripts/approve-merge.sh runs steps 3a, 4 and 6 and prints one line of JSON with marker_home, pr_host_repo and strategy. Step 5 (the CEO marker) and the bare tracker_pr_merge line stay inline in SKILL.md",
+      "The script exits non-zero on any error. The skill stops on a non-zero exit, on invalid JSON or on a missing field, and never assumes a pass",
+      "The skill accepts strategy only from the set squash, merge, rebase, and stops on any other value",
+      "A test that scripts/approve-merge.sh contains no merge command and no approved_by, and writes no file under the marker directory. A release-class case in the same test",
+      "Repoint test_config_merge_require_up_to_date.sh and test_release_sync.sh to the script",
+      "The ops-root bootstrap stays inline in /approve-merge, so the skill can find the script. The other 17 skills source _lib-ops-root.sh through the session pin",
+      "approve-merge SKILL.md at most 14,000 bytes; each of the five skills at most 16,000 bytes, with rationale moved under docs/skills/",
+      "The Writing rule preamble appears in each skill as one line that names the shared file. A grep test finds 0 repeats of either shared block, and the wave-1 skill test gets a 16 KB cap",
+      "A one-line /compact suggestion at the end of the /approve-merge report after a successful merge",
+      "The orbit skill runs Naqid by default on Plan and Slice drafts, and on a Reconciliation only when a status changes or the operator asks",
+      "Commit order: the script and its tests first, the skill sweep second. The PR gets a Full Rex review and a Hakim review",
+      "The before and after byte counts in the PR"
+    ],
+    "exclude": [
+      "Any edit to block-unreviewed-merge.sh, block-merge-on-red-ci.sh or another merge-gate hook (C1)",
+      "Any change to the CEO marker format, the marker path or the human-only invocation of /approve-merge",
+      "Review agent prompts and review depth tiers (o5, o7)",
+      "Skills outside the five, other than the shared-block one-liners"
+    ]
+  }
+}
