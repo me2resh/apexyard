@@ -85,3 +85,26 @@ The agent type is set by the harness, not by the agent. A tool call that runs ou
 - `.claude/hooks/tests/test_review_agent_detection.sh`
 - `.claude/hooks/tests/fixtures/pretooluse-payloads/`
 - `bin/token-cost.py` (the `locks` view)
+
+## Amendment — 2026-10-11, me2resh/apexyard#1653
+
+### Decision
+
+`review_markers.extra_review_agents` in `.claude/project-config.json` adds exact review agent types.
+The lock list is the union of built-in types and validated extra types.
+The built-in types stay fixed.
+The config cannot remove types or use patterns.
+The fallback uses only built-in types when the library is missing.
+Only a typed non-built-in sub-agent triggers a config read.
+
+### Consequence
+
+Adopters can lock custom review agents, including plugin types, during an active review.
+Invalid entries do not widen the lock.
+A name shared with a build agent also locks that build agent.
+
+### Artifacts
+
+- `.claude/hooks/_lib-review-markers.sh`
+- `.claude/project-config.defaults.json`
+- `.claude/hooks/tests/test_review_agent_extra_types.sh`

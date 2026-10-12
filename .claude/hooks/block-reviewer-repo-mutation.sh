@@ -269,6 +269,8 @@ else
   LIB_MISSING=1
   CALLER_CLASS=unparsable
   _brrm_type=$(printf '%s' "$INPUT" | jq -r '.agent_type // empty' 2>/dev/null || true)
+  # This list must equal REVIEW_AGENT_SLUGS in _lib-review-markers.sh. A test checks it.
+  # Config types cannot apply without the lib. This fallback is built-in only by design.
   case "$_brrm_type" in
     code-reviewer|security-reviewer|solution-architect) CALLER_CLASS=reviewer ;;
   esac

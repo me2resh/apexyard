@@ -117,6 +117,8 @@ CI owns the full test suite. Read the CI check-run results for the head SHA befo
 gh pr checks {number} --repo "$PR_HOST_REPO"
 ```
 
+Run gh pr checks once and never wait. Do not poll CI again, do not use `--watch`, and do not sleep. The orchestrator waits for CI before it spawns you.
+
 Run only the test or probe the security checklist needs to confirm a specific finding. A red CI check is itself a blocking finding under § "Blocking-Severity Bar" kind 1 or kind 3. Do not approve while CI for the head SHA is pending or absent — post `COMMENT` and state the limit.
 
 ## Scope Split with the Code Reviewer (me2resh/apexyard#1418, AgDR-0172)

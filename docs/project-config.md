@@ -115,6 +115,7 @@ tracks closing this gap for those seven keys.
 | `pr.title_type_whitelist` | `validate-pr-create.sh`, `pr-title-check.yml` (CI) | Conventional-commit types for PR titles. |
 | `external_contributions` | `validate-pr-create.sh` | Repositories you contribute to but do **not** govern. See below. |
 | `build.isolation` | `.claude/rules/isolated-builds.md`, `/fan-out`, build agents | Selects build isolation for the whole ops fork. Default: `worktree`. See [Build isolation](#build-isolation-buildisolation) and [AgDR-0210](agdr/AgDR-0210-build-isolation-setting.md). |
+| `review_markers.extra_review_agents` | `_lib-review-markers.sh` (`review_caller_class`), `block-reviewer-repo-mutation.sh`, `block-reviewer-ci-wait.sh`, `warn-review-marker-write.sh`, `require-active-ticket.sh`, `auto-code-review.sh` | Adds exact review types. See [Add your own review agent types](hooks-fail-closed.md#add-your-own-review-agent-types). |
 | `qa.pre_merge_offer` | `/code-review` | Controls the advisory pre-merge QA offer after Rex approves. Default: `ask`. |
 | `leak_protection.public_framework_repos` | `check-private-refs-*.sh`, `block-private-refs-in-public-repos.sh` | Known-public `owner/repo` slugs. Origin identity is exempt when origin matches an entry. |
 | `leak_protection.origin_verified_public` | `check-private-refs-staged.sh`, `check-private-refs-runtime.sh` | Exact origin `owner/repo` slug recorded by `/setup` or `/update` after `gh` confirms visibility is PUBLIC. Hooks stay offline and fail closed when this key is missing or does not match origin. See AgDR-0190. |
