@@ -2,7 +2,9 @@
 # _lib-menu-approval.sh — parse an approval menu and write its record.
 #
 # The PostToolUse hook record-menu-approval.sh is the only supported writer
-# of approval_channel=menu. The question text must name the repo, the PR,
+# of approval_channel=menu. A guard blocks other writers by text match only,
+# so a menu record has the same trust level as a typed marker (AgDR-0234).
+# The question text must name the repo, the PR,
 # and the full 40-hex head SHA. The selected option must be the exact
 # approve label. See AgDR-0234 and me2resh/apexyard#1391.
 #
