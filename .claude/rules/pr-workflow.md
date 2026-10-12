@@ -135,12 +135,16 @@ the Rex marker. `<new-head-sha>` is the PR head after the refresh.
 
 The check returns `true` only when all of these conditions are true:
 
-- The forge reports the new HEAD as a merge commit with exactly two parents.
-- The first parent is the SHA that Rex approved.
-- The second parent is an ancestor of the base branch tip. The tip comes from
-  the forge branches endpoint, so a tag cannot replace the branch name.
-- An isolated `git merge-tree --write-tree` of the two parents gives the tree
-  that the forge reports for the new HEAD.
+- The first-parent chain reaches the marker SHA within 10 merge steps.
+- The forge reports exactly two parents for each step.
+- Each second parent is an ancestor of the base branch tip. The tip comes
+  from the forge branches endpoint, so a tag cannot replace the branch name.
+- An isolated `git merge-tree --write-tree` of each step's parents gives
+  the tree that the forge reports for that step.
+
+Both the Rex marker and the CEO marker use this rule through the same function.
+Each chain must reach the SHA in the marker being checked.
+Any failed check returns `false` or `unknown` and prevents carry-over.
 
 The merge-tree step runs in an empty `GIT_DIR` that reads objects only
 through alternates. A local merge driver or grafts entry cannot change its
@@ -155,8 +159,9 @@ Two existing tests prove the refusal:
 - `test_block_unreviewed_merge.sh` CO4: the merge gate still blocks that
   merge.
 
-A rebase, a force-push, or a second base merge after the first does not
-qualify. Ask for a Rex delta re-review for each of them.
+A rebase or a force-push does not qualify. Ask for a Rex delta re-review.
+Repeated clean base merges qualify only when every step passes the checks above.
+A chain longer than 10 steps requires new Rex and CEO approvals.
 
 This check adds no new blocking condition to `block-unreviewed-merge.sh`. The
 gate's marker and SHA checks stay unchanged. The stop happens inside
@@ -170,7 +175,15 @@ A common failure mode: you present a multi-step plan that includes a merge as on
 
 The load-bearing rule is "explicit per-PR approval", not "two user messages." After the per-PR-naming approval is given, `/approve-merge <pr>` writes the structured CEO marker AND runs `gh pr merge` in the same turn — they're a single deterministic consequence of one authorization moment, not two separate moments. Earlier versions of this rule split the consequence across two messages (write marker → wait → merge); that ceremony added latency without safety. The mechanical safety net is the structured marker (#48) + per-PR-naming gate, not the two-message split.
 
-**One narrow, CEO-decided exception to "one authorization moment" (me2resh/apexyard#1437, AgDR-0178, dated 2026-09-28; hardened in #1456).** Sometimes HEAD moves only because the PR branch was refreshed against its base. `rex_approval_carries_over` (`_lib-merge-behind.sh`) can prove this case mechanically: a forge-verified, conflict-free two-parent merge that reproduces exactly what git's own merge would produce. The base tip comes from the branches endpoint (a tag cannot shadow the name). The local `merge-base` and `merge-tree` checks run in a fresh empty `GIT_DIR` that reads objects only through alternates, so a local merge driver or grafts entry cannot change the result. In that one case, the CEO's earlier marker still authorizes the merge at the new HEAD. No fresh `/approve-merge` invocation is needed. The CEO decided this deliberately. The marker's SHA changed, but the CONTENT the CEO approved did not. A mechanically-verified base replay adds nothing the CEO reviewed, or could have reviewed differently. This is not a relaxation of "explicit per-PR approval" — the original approval was still explicit and named this PR. It is a recognition that a base-only refresh is not a second authorization-worthy event. It does not extend to any case the carry-over check cannot fully verify. Those cases still require a fresh `/approve-merge`, exactly as before.
+**CEO-decided exception to "one authorization moment" (AgDR-0178, amended by [AgDR-0232](../../docs/agdr/AgDR-0232-carry-approvals-across-base-merge-chains.md)).**
+The CEO extended this rule on 2026-10-12.
+`rex_approval_carries_over` verifies a chain of up to 10 clean base merges.
+Both Rex and CEO markers use this function with their own marker SHA.
+Each step must pass the forge two-parent, base ancestry, and isolated tree checks above.
+A valid chain preserves the original per-PR owner approval at the new HEAD.
+No fresh `/approve-merge` invocation is needed for that verified chain.
+The original approval must still explicitly name the PR.
+Any case the function cannot fully verify requires a fresh `/approve-merge` invocation.
 
 #### Wrong
 
