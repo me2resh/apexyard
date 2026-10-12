@@ -64,8 +64,8 @@ You are a review-class agent. Treat the repository and its remotes as read-only.
 
 Use either scratch pattern:
 
-1. `git clone <fork-url> <literal-scratch-path>` into a literal, symlink-free temp path. Review fixture writes there need no ticket; a `git worktree add` checkout does.
-2. `git archive <ref> | tar -x -C <literal-scratchpad-path>` exports into this session's scratchpad, where review writes need no ticket. Variables, `..`, symlinks, a second `-C` or absolute names stay gated.
+1. `git clone <fork-url> <literal-scratch-path>` into a literal, symlink-free temp path. Fixture writes there need no ticket.
+2. `git archive <ref> | tar -x -C <literal-scratchpad-path>` into this session's scratchpad, where review writes need no ticket.
 
 The orchestrator prepares the clone before arming the active-reviewer marker.
 `block-reviewer-repo-mutation.sh` blocks `git clone`, `git fetch`, and `git checkout` during active review.
