@@ -94,8 +94,8 @@ _TOKEN_PATTERNS: Tuple[Tuple[str, "re.Pattern[str]"], ...] = (
 )
 
 _COMMIT_PATTERNS = (
-    re.compile(r"(?<!last )Reviewed commit:\s*`?([0-9a-f]{7,40})`?", re.IGNORECASE),
     re.compile(r"\*\*Commit\*\*:\s*`?([0-9a-f]{7,40})`?", re.IGNORECASE),
+    re.compile(r"(?<!last )(?<!last-)Reviewed commit:\s*`?([0-9a-f]{7,40})`?", re.IGNORECASE),
 )
 
 
@@ -239,17 +239,14 @@ def parse_verdict(body: str) -> Tuple[Optional[str], str]:
 def reviewed_commit(body: str, api_commit: Optional[str]) -> Optional[str]:
     """Return the commit SHA that the review submission identifies.
 
-    The API `commit_id` wins when present. The body supplies a fallback
-    through a `Reviewed commit:` footer or a `**Commit**:` line.
+    The body's `**Commit**:` line wins, followed by its `Reviewed commit:`
+    footer. Use API `commit_id` only when the body names no commit.
     """
-    api = (api_commit or "").lower() or None
-    if api:
-        return api
     for pattern in _COMMIT_PATTERNS:
         match = pattern.search(body or "")
         if match:
             return match.group(1).lower()
-    return None
+    return (api_commit or "").lower() or None
 
 
 def _excerpt(text: str) -> str:

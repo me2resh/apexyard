@@ -157,13 +157,13 @@ class ReviewedCommitTest(unittest.TestCase):
     FULL = "0123456789abcdef0123456789abcdef01234567"
     LATER = "fedcba9876543210fedcba9876543210fedcba98"
 
-    def test_api_wins_over_body_footer(self):
+    def test_body_footer_wins_over_api(self):
         body = "Reviewed commit: `{}`".format(self.FULL)
-        self.assertEqual(md.reviewed_commit(body, self.LATER), self.LATER)
+        self.assertEqual(md.reviewed_commit(body, self.LATER), self.FULL)
 
-    def test_short_body_sha_resolves_to_api(self):
+    def test_short_body_sha_wins_over_api(self):
         body = "**Commit**: `{}`".format(self.FULL[:8])
-        self.assertEqual(md.reviewed_commit(body, self.FULL), self.FULL)
+        self.assertEqual(md.reviewed_commit(body, self.FULL), self.FULL[:8])
 
     def test_api_fallback(self):
         self.assertEqual(
@@ -178,6 +178,21 @@ class ReviewedCommitTest(unittest.TestCase):
             self.assertEqual(md.reviewed_commit(body, api), self.FULL[:8])
         self.assertEqual(md.reviewed_commit("**Commit**: `abcdef01`", None), "abcdef01")
         self.assertIsNone(md.reviewed_commit("Last reviewed commit: `abcdef01`", None))
+
+    def test_commit_line_wins_over_footer_and_api(self):
+        body = "Reviewed commit: `{}`\n**Commit**: `{}`".format(
+            self.LATER, self.FULL[:8]
+        )
+        self.assertEqual(md.reviewed_commit(body, self.LATER), self.FULL[:8])
+
+    def test_last_reviewed_commit_variants_are_excluded(self):
+        for label in ("Last reviewed commit", "Last-reviewed commit"):
+            with self.subTest(label=label):
+                body = "{}: `{}`".format(label, self.LATER)
+                self.assertIsNone(md.reviewed_commit(body, None))
+                self.assertEqual(md.reviewed_commit(body, self.FULL), self.FULL)
+                body += "\nReviewed commit: `{}`".format(self.FULL[:8])
+                self.assertEqual(md.reviewed_commit(body, None), self.FULL[:8])
 
     def test_nothing_known(self):
         self.assertIsNone(md.reviewed_commit("", None))
@@ -267,7 +282,7 @@ class FixtureMineTest(unittest.TestCase):
         self.by_pr = {c["draft_entry"]["pr"]: c for c in self.report["candidates"]}
 
     def test_only_the_mined_direction_is_reported(self):
-        self.assertEqual(sorted(self.by_pr), [101, 105])
+        self.assertEqual(sorted(self.by_pr), [101, 105, 106])
 
     def test_reverse_direction_is_not_mined(self):
         self.assertNotIn(102, self.by_pr)
@@ -281,10 +296,10 @@ class FixtureMineTest(unittest.TestCase):
     def test_tariq_challenge_is_mined(self):
         self.assertEqual(self.by_pr[105]["direction"], "Rex APPROVED -> Tariq CHANGES")
 
-    def test_api_commit_beats_body_commit(self):
+    def test_body_commit_beats_api_commit(self):
         pr = next(pr for pr in load_fixture()["prs"] if pr["number"] == 106)
-        self.assertEqual(md.review_unit(pr["reviews"][1])["commit"], "2" * 40)
-        self.assertNotIn(106, self.by_pr)
+        self.assertEqual(md.review_unit(pr["reviews"][1])["commit"], "1" * 40)
+        self.assertIn(106, self.by_pr)
 
     def test_unparsed_reviews_are_reported(self):
         self.assertEqual(self.report["scanned"]["agent_reviews_without_verdict"], 1)
@@ -324,6 +339,14 @@ class EdgeCasesFixtureTest(unittest.TestCase):
         with open(path, encoding="utf-8") as handle:
             self.data = json.load(handle)
         self.report = md.mine(self.data["repo"], self.data["prs"])
+
+    def test_pr_1080_keeps_body_commit_candidate_after_newer_push(self):
+        candidates = [c for c in self.report["candidates"] if c["draft_entry"]["pr"] == 1080]
+        self.assertEqual([c["candidate_id"] for c in candidates], ["rex-1080-63177daa"])
+
+    def test_pr_1292_does_not_join_reviews_on_api_commit(self):
+        candidates = [c for c in self.report["candidates"] if c["draft_entry"]["pr"] == 1292]
+        self.assertEqual(candidates, [])
 
     def test_rereview_uses_submission_commit(self):
         candidates = [c for c in self.report["candidates"] if c["draft_entry"]["pr"] == 201]
@@ -375,7 +398,7 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 0)
         report = json.loads(out)
         self.assertEqual(report["schema"], md.OUTPUT_SCHEMA)
-        self.assertEqual(len(report["candidates"]), 2)
+        self.assertEqual(len(report["candidates"]), 3)
 
     def test_markdown_output(self):
         code, out, _ = self.run_main(["--fixture", FIXTURE, "--format", "markdown"])

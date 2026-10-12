@@ -84,6 +84,42 @@
           }
         }
       ]
+    },
+    {
+      "number": 1080,
+      "url": "https://example.test/pr/1080",
+      "reviews": [
+        {
+          "body": "## Code Review: PR #1080\n\n**Commit**: `63177daa`\n\n### Verdict\n**APPROVED**\n\n---\nReviewed by Rex\nReviewed commit: `63177daa`\n",
+          "commit_id": "596a95b4",
+          "submitted_at": "2026-09-01T10:01:00Z",
+          "html_url": "https://example.test/pr/1080/review/1"
+        },
+        {
+          "body": "## Security Review: PR #1080\n\n**Commit**: `63177daa`\n\n### Verdict\n**CHANGES REQUESTED**\n\n---\nReviewed by Hakim\nReviewed commit: `63177daa`\n",
+          "commit_id": "63177daa",
+          "submitted_at": "2026-09-01T10:02:00Z",
+          "html_url": "https://example.test/pr/1080/review/2"
+        }
+      ]
+    },
+    {
+      "number": 1292,
+      "url": "https://example.test/pr/1292",
+      "reviews": [
+        {
+          "body": "## Code Review: PR #1292\n\n### Verdict\n**APPROVED**\n\n---\nReviewed by Rex\nReviewed commit: `abcdef01`\n",
+          "commit_id": "8e5c33ea",
+          "submitted_at": "2026-09-01T10:01:00Z",
+          "html_url": "https://example.test/pr/1292/review/1"
+        },
+        {
+          "body": "## Security Review: PR #1292\n\n**Commit**: `8e5c33ea`\n\n### Verdict\n**CHANGES REQUESTED**\n\n---\nReviewed by Hakim\nReviewed commit: `8e5c33ea`\n",
+          "commit_id": "8e5c33ea",
+          "submitted_at": "2026-09-01T10:02:00Z",
+          "html_url": "https://example.test/pr/1292/review/2"
+        }
+      ]
     }
   ]
 }
