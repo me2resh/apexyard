@@ -9,7 +9,10 @@
 # Usage:
 #   bin/run-hook-tests.sh            # run the whole suite
 #   bin/run-hook-tests.sh --list     # list discovered tests, run nothing
-#   bin/run-hook-tests.sh --shard 1/4 # run one round-robin shard
+#   bin/run-hook-tests.sh --shard 1/4 # run one shard
+#   bin/hook-test-weights.txt supplies weights when present.
+#   HOOK_TEST_WEIGHTS_FILE overrides that path.
+#   A missing or empty file uses round-robin. Missing tests use weight 10.
 #   HOOK_TEST_SHARD=1 HOOK_TEST_SHARDS=4 bin/run-hook-tests.sh
 #
 # Quarantine: tests that genuinely cannot run headless (or are known-failing
@@ -131,11 +134,45 @@ done < <(
 )
 
 SELECTED=()
-for ((k=0; k<${#TESTS[@]}; k++)); do
-  if [ "$((k % SHARDS))" -eq "$((SHARD - 1))" ]; then
-    SELECTED+=("${TESTS[$k]}")
-  fi
-done
+WEIGHTS_FILE=${HOOK_TEST_WEIGHTS_FILE:-$ROOT/bin/hook-test-weights.txt}
+WEIGHTED=0
+if [ "$SHARDS" -gt 1 ] && [ -s "$WEIGHTS_FILE" ]; then
+  # Sort by descending weight, then path. Assign ties to the first shard.
+  awk '
+    FILENAME == ARGV[1] {
+      if ($0 !~ /^[[:space:]]*(#|$)/ && $1 ~ /^[0-9]+$/ && $1 > 0 && NF == 2) {
+        weights[$2] = $1
+        valid = 1
+      }
+      next
+    }
+    { print (($0 in weights) ? weights[$0] : 10), $0 }
+    END { if (!valid) exit 1 }
+  ' "$WEIGHTS_FILE" <(printf '%s\n' ${TESTS[@]+"${TESTS[@]}"}) > "$OUTPUT_DIR/weights" && WEIGHTED=1
+fi
+if [ "$WEIGHTED" -eq 1 ]; then
+  while IFS= read -r _t; do
+    [ -n "$_t" ] && SELECTED+=("$_t")
+  done < <(
+    LC_ALL=C sort -k1,1nr -k2,2 "$OUTPUT_DIR/weights" |
+      awk -v shards="$SHARDS" -v selected="$SHARD" '
+        {
+          best = 1
+          for (i = 2; i <= shards; i++) {
+            if (total[i] + 0 < total[best] + 0) best = i
+          }
+          total[best] += $1
+          if (best == selected) print $2
+        }
+      ' | LC_ALL=C sort
+  )
+else
+  for ((k=0; k<${#TESTS[@]}; k++)); do
+    if [ "$((k % SHARDS))" -eq "$((SHARD - 1))" ]; then
+      SELECTED+=("${TESTS[$k]}")
+    fi
+  done
+fi
 # bash 3.2 treats an empty "${arr[@]}" as unbound under set -u.
 TESTS=(${SELECTED[@]+"${SELECTED[@]}"})
 

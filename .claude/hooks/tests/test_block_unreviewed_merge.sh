@@ -89,21 +89,24 @@ make_sandbox_template() {
   # `gh pr view <N> --json headRefOid -q '.headRefOid'` (or a similar
   # shape) — return the fixed SHA on stdout, no network involved.
   # Also handles headRefName (sync-PR guard) and headRepository (repo extraction, #485).
-  cat > "$sb/bin/gh" <<EOF
+  printf '%s\n' "$FIXED_SHA" > "$sb/mock-FIXED_SHA"
+  cat > "$sb/bin/gh" <<'EOF'
 #!/bin/bash
+sb=${0%/bin/gh}
+IFS= read -r FIXED_SHA < "$sb/mock-FIXED_SHA"
 # Minimal gh shim for test_block_unreviewed_merge.
-case "\$*" in
+case "$*" in
   *"pr view"*"headRefOid"*)        echo "$FIXED_SHA" ;;
   *"pr view"*"headRefName"*)       echo "feature/GH-99-test" ;;
   *"pr view"*"headRepository"*)    echo "me2resh/apexyard" ;;
   *"pr view"*"--json number"*)      echo "1546" ;;
-  *"pr view"*"mergeStateStatus"*)  echo "\${MOCK_MERGE_STATE:-CLEAN}" ;;
-  *"pr view"*"baseRefName"*)       echo "\${MOCK_BASE_BRANCH:-dev}" ;;
+  *"pr view"*"mergeStateStatus"*)  echo "${MOCK_MERGE_STATE:-CLEAN}" ;;
+  *"pr view"*"baseRefName"*)       echo "${MOCK_BASE_BRANCH:-dev}" ;;
   # #1386: is_pr_behind_base reads behind_by from the compare API, not
-  # mergeStateStatus. \$MOCK_BEHIND_BY lets a case say "the PR IS behind"
-  # independent of whatever \$MOCK_MERGE_STATE says — the exact split #1386
+  # mergeStateStatus. $MOCK_BEHIND_BY lets a case say "the PR IS behind"
+  # independent of whatever $MOCK_MERGE_STATE says — the exact split #1386
   # reported (a behind PR whose mergeStateStatus reads CLEAN or BLOCKED).
-  *"api "*"compare/"*)             echo "\${MOCK_BEHIND_BY:-0}" ;;
+  *"api "*"compare/"*)             echo "${MOCK_BEHIND_BY:-0}" ;;
   *) ;;
 esac
 exit 0
@@ -639,9 +642,14 @@ make_sandbox_with_sync_branch() {
   branch_name="${1:-sync/main-to-dev-after-v2.3.0}"
   sb=$(make_sandbox)
   # Rewrite the gh shim to handle headRefOid, headRefName, and headRepository.
-  cat > "$sb/bin/gh" <<EOF
+  printf '%s\n' "$FIXED_SHA" > "$sb/mock-FIXED_SHA"
+  printf '%s\n' "$branch_name" > "$sb/mock-branch_name"
+  cat > "$sb/bin/gh" <<'EOF'
 #!/bin/bash
-case "\$*" in
+sb=${0%/bin/gh}
+IFS= read -r FIXED_SHA < "$sb/mock-FIXED_SHA"
+IFS= read -r branch_name < "$sb/mock-branch_name"
+case "$*" in
   *"pr view"*"headRefOid"*)     echo "$FIXED_SHA" ;;
   *"pr view"*"headRefName"*)    echo "$branch_name" ;;
   *"pr view"*"headRepository"*) echo "me2resh/apexyard" ;;
@@ -656,9 +664,12 @@ EOF
 make_sandbox_non_sync() {
   local sb
   sb=$(make_sandbox)
-  cat > "$sb/bin/gh" <<EOF
+  printf '%s\n' "$FIXED_SHA" > "$sb/mock-FIXED_SHA"
+  cat > "$sb/bin/gh" <<'EOF'
 #!/bin/bash
-case "\$*" in
+sb=${0%/bin/gh}
+IFS= read -r FIXED_SHA < "$sb/mock-FIXED_SHA"
+case "$*" in
   *"pr view"*"headRefOid"*)     echo "$FIXED_SHA" ;;
   *"pr view"*"headRefName"*)    echo "feature/GH-99-something" ;;
   *"pr view"*"headRepository"*) echo "me2resh/apexyard" ;;
@@ -796,9 +807,14 @@ make_sandbox_for_repo() {
   local repo="${1:-me2resh/apexyard}"
   local sb
   sb=$(make_sandbox)
-  cat > "$sb/bin/gh" <<EOF
+  printf '%s\n' "$FIXED_SHA" > "$sb/mock-FIXED_SHA"
+  printf '%s\n' "$repo" > "$sb/mock-repo"
+  cat > "$sb/bin/gh" <<'EOF'
 #!/bin/bash
-case "\$*" in
+sb=${0%/bin/gh}
+IFS= read -r FIXED_SHA < "$sb/mock-FIXED_SHA"
+IFS= read -r repo < "$sb/mock-repo"
+case "$*" in
   *"pr view"*"headRefOid"*)     echo "$FIXED_SHA" ;;
   *"pr view"*"headRefName"*)    echo "feature/test" ;;
   *"pr view"*"headRepository"*) echo "$repo" ;;
@@ -1530,39 +1546,44 @@ write_gh_mock_head() {
   # forge commit-lookup / branches-tip calls rex_approval_carries_over
   # makes all reflect real SHAs built in the sandbox's own git history.
   local sb="$1" head_sha="$2" base_branch="${3:-dev}"
-  cat > "$sb/bin/gh" <<EOF
+  printf '%s\n' "$head_sha" > "$sb/mock-head_sha"
+  printf '%s\n' "$base_branch" > "$sb/mock-base_branch"
+  cat > "$sb/bin/gh" <<'EOF'
 #!/bin/bash
-case "\$*" in
+sb=${0%/bin/gh}
+IFS= read -r head_sha < "$sb/mock-head_sha"
+IFS= read -r base_branch < "$sb/mock-base_branch"
+case "$*" in
   *"pr view"*"headRefOid"*)        echo "$head_sha" ;;
   *"pr view"*"headRefName"*)       echo "feature/GH-99-test" ;;
   *"pr view"*"headRepository"*)    echo "acme-org/example" ;;
-  *"pr view"*"mergeStateStatus"*)  echo "\${MOCK_MERGE_STATE:-CLEAN}" ;;
+  *"pr view"*"mergeStateStatus"*)  echo "${MOCK_MERGE_STATE:-CLEAN}" ;;
   *"pr view"*"baseRefName"*)       echo "$base_branch" ;;
-  *"api "*"compare/"*)             echo "\${MOCK_BEHIND_BY:-0}" ;;
+  *"api "*"compare/"*)             echo "${MOCK_BEHIND_BY:-0}" ;;
   *"/branches/"*)
-    ref=\$(printf '%s' "\$*" | sed -E 's#.*branches/([^ ]+).*#\1#')
-    ref=\$(printf '%s' "\$ref" | sed 's/%2[Ff]/\//g')
-    sha=\$(git rev-parse "refs/heads/\$ref" 2>/dev/null)
-    [ -z "\$sha" ] && exit 1
-    echo "\$sha"
+    ref=$(printf '%s' "$*" | sed -E 's#.*branches/([^ ]+).*#\1#')
+    ref=$(printf '%s' "$ref" | sed 's/%2[Ff]/\//g')
+    sha=$(git rev-parse "refs/heads/$ref" 2>/dev/null)
+    [ -z "$sha" ] && exit 1
+    echo "$sha"
     ;;
   *"commits/"*)
-    target=\$(printf '%s' "\$*" | sed -E 's#.*commits/([^ ]+).*#\1#')
-    if ! git cat-file -e "\${target}^{commit}" 2>/dev/null; then
+    target=$(printf '%s' "$*" | sed -E 's#.*commits/([^ ]+).*#\1#')
+    if ! git cat-file -e "${target}^{commit}" 2>/dev/null; then
       exit 1
     fi
-    parents=\$(git show -s --format='%P' "\$target")
-    tree=\$(git rev-parse "\${target}^{tree}")
-    p0=\$(printf '%s' "\$parents" | awk '{print \$1}')
-    p1=\$(printf '%s' "\$parents" | awk '{print \$2}')
-    if [ -n "\$p1" ]; then
-      pj="[{\"sha\":\"\$p0\"},{\"sha\":\"\$p1\"}]"
-    elif [ -n "\$p0" ]; then
-      pj="[{\"sha\":\"\$p0\"}]"
+    parents=$(git show -s --format='%P' "$target")
+    tree=$(git rev-parse "${target}^{tree}")
+    p0=$(printf '%s' "$parents" | awk '{print $1}')
+    p1=$(printf '%s' "$parents" | awk '{print $2}')
+    if [ -n "$p1" ]; then
+      pj="[{\"sha\":\"$p0\"},{\"sha\":\"$p1\"}]"
+    elif [ -n "$p0" ]; then
+      pj="[{\"sha\":\"$p0\"}]"
     else
       pj="[]"
     fi
-    printf '{"sha":"%s","parents":%s,"commit":{"tree":{"sha":"%s"}}}\n' "\$target" "\$pj" "\$tree"
+    printf '{"sha":"%s","parents":%s,"commit":{"tree":{"sha":"%s"}}}\n' "$target" "$pj" "$tree"
     ;;
   *) ;;
 esac

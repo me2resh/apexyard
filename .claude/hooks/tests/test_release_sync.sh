@@ -11,8 +11,8 @@
 #   B4-1/B4-2. static assertions on release-sync/SKILL.md itself: no -X ours
 #       in the step 5 merge; tag resolution peels with ^{commit}
 #       (me2resh/apexyard#1406 Rex finding B4)
-#   B4-3. static assertion on approve-merge/SKILL.md itself: the behind check
-#       uses the compare API, not mergeStateStatus (#1406 Rex finding B4)
+#   B4-3. Check the approve-merge script for the compare API helper.
+#       The behind check must not depend on mergeStateStatus (#1406).
 #   1.  "already in sync" path   → git log dev..main empty → no-op expected
 #   2.  diverged path            → commits on main not on dev → sync needed
 #   3.  branch name shape        → sync/main-to-dev-after-vX.Y.Z
@@ -50,7 +50,7 @@ set -u
 
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 SKILL_MD="$SRC_ROOT/.claude/skills/release-sync/SKILL.md"
-APPROVE_MERGE_SKILL_MD="$SRC_ROOT/.claude/skills/approve-merge/SKILL.md"
+APPROVE_MERGE_SCRIPT="$SRC_ROOT/.claude/skills/approve-merge/scripts/approve-merge.sh"
 
 PASS=0
 FAIL=0
@@ -61,7 +61,7 @@ mark_fail() { printf "  ✗ %s: %s\n" "$1" "$2" >&2; FAIL=$((FAIL+1)); FAILED="$
 
 # ---------------------------------------------------------------------------
 # B4 (me2resh/apexyard#1406 Rex finding): static assertions on the real
-# SKILL.md files, not on a copy of their logic. An earlier version of this
+# source files, not on a copy of their logic. An earlier version of this
 # file reached 17/17 pass against the pre-fix release-sync SKILL.md, which
 # still said `-X ours` — because every other case here exercises a
 # re-implementation of the skill's git operations, never the skill's own
@@ -89,13 +89,13 @@ else
   fi
 fi
 
-if [ ! -f "$APPROVE_MERGE_SKILL_MD" ]; then
-  mark_fail "B4: approve-merge SKILL.md exists" "not found at $APPROVE_MERGE_SKILL_MD"
+if [ ! -f "$APPROVE_MERGE_SCRIPT" ]; then
+  mark_fail "B4: approve-merge script exists" "not found at $APPROVE_MERGE_SCRIPT"
 else
-  if grep -q 'is_pr_behind_base' "$APPROVE_MERGE_SKILL_MD"; then
+  if grep -q 'is_pr_behind_base' "$APPROVE_MERGE_SCRIPT"; then
     mark_pass "B4: /approve-merge uses the compare API for the behind check"
   else
-    mark_fail "B4: /approve-merge uses the compare API for the behind check" "no 'is_pr_behind_base' reference found in $APPROVE_MERGE_SKILL_MD"
+    mark_fail "B4: /approve-merge uses the compare API for the behind check" "no 'is_pr_behind_base' reference found in $APPROVE_MERGE_SCRIPT"
   fi
 fi
 

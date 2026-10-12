@@ -329,7 +329,9 @@ The prose option prompts below are fallbacks only when the harness lacks `AskUse
 
 Ask one question at a time. Show the proposed record before writing it.
 
-After each Plan, Reconciliation, and Execution Slice draft, run `/challenge` with the draft as the target. Naqid must steelman the draft, identify hidden assumptions, failure modes, missing evidence, and cheaper alternatives, then return an advisory verdict. Relay the result without softening it. The operator may revise the draft, accept it, or stop. Naqid never writes records and never blocks an ApexYard gate.
+Run `/challenge` by default on Plan and Execution Slice drafts. For Reconciliation, run only when a status changes against the previous Reconciliation or the operator asks.
+
+Naqid must steelman it. Challenge assumptions, failure modes, missing evidence, and cheaper alternatives. Relay its verdict intact. You may revise, accept, or stop. Naqid cannot write records or block gates.
 
 The operator may pass `--no-challenge` when a challenge was already run for the same unchanged draft. Report that the challenge was skipped and preserve the reason.
 
@@ -363,7 +365,7 @@ The status list below is a prose fallback only when the harness lacks the tool.
 2. `Which status applies: not-verified, partially-verified, achieved, or contradicted?`
 3. `What explanation should remain with the evidence?`
 
-Show the complete Reconciliation, run Naqid, and ask: `Save this Reconciliation?` A missing answer remains `not-verified`.
+Show Reconciliation. Run Naqid only when a status changes or the operator asks. Ask: `Save this Reconciliation?` A missing answer remains `not-verified`.
 
 ### Slice interview
 
