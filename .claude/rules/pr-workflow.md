@@ -55,11 +55,11 @@ Also check before pushing:
 ### Framework CI tiers (#1690)
 
 Regular PRs run the full Linux jq-1.7 suite and affected tests on one macOS bash-3.2 runner.
-Shared hook libraries and CI inputs select the full macOS suite.
+Shared hook libraries and CI inputs select the full suite, which runs on Linux only on a PR; the macOS suite runs on merge and nightly.
 Docs-only PRs skip hook jobs and retain the passing `hook test suite` summary.
 Docs-only means every path is under `docs/`, or is Markdown outside `.claude/`.
 Pushes to `dev` or `main`, nightly runs on `dev`, and manual runs use all six matrix jobs.
-Release PRs also require conformance through the summary.
+Release PRs also require conformance through the summary when the repository variable `CONFORMANCE_ON_RELEASE` is `true`.
 A release PR has a `release/v*` head branch or a title that starts with `release(`.
 An unaffected macOS test can fail after merge or during the nightly run.
 See [AgDR-0236](../../docs/agdr/AgDR-0236-tiered-ci.md).

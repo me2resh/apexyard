@@ -12,7 +12,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: tests-${{ github.ref }}
+  # The nightly run gets its own group, so a push cannot cancel it and open
+  # a false "Nightly CI failed" issue.
+  group: tests-${{ github.event_name == 'schedule' && 'nightly' || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -40,17 +42,17 @@ jobs:
             if [[ "$HEAD_BRANCH" == release/v* || "$PR_TITLE" == release\(* ]]; then
               tier=release
             else
-              git diff --name-only "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/changed"
+              git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/changed"
               if bash bin/select-affected-tests.sh --docs-only "$RUNNER_TEMP/changed"; then tier=docs; fi
               # Owner decision 2026-10-12: a PR that needs the full suite runs it
               # on Linux only. The macOS bash-3.2 suite runs on merge and nightly.
-              if [ "$tier" = light ] && bash bin/select-affected-tests.sh "$RUNNER_TEMP/changed" | grep -Fxq ALL; then full_macos=1; fi
+              if [ "$tier" = light ] && bash bin/select-affected-tests.sh "$RUNNER_TEMP/changed" | grep -Fxq ALL; then full_suite=1; fi
             fi
           fi
           echo "tier=$tier" >> "$GITHUB_OUTPUT"
           if [ "$tier" = heavy ] || [ "$tier" = release ]; then
             matrix='{"include":[{"os":"ubuntu-latest","label":"linux jq-1.7"},{"os":"ubuntu-latest","label":"linux jq-1.8"},{"os":"macos-latest","label":"macos bash-3.2 (1/4)","shard":"1/4"},{"os":"macos-latest","label":"macos bash-3.2 (2/4)","shard":"2/4"},{"os":"macos-latest","label":"macos bash-3.2 (3/4)","shard":"3/4"},{"os":"macos-latest","label":"macos bash-3.2 (4/4)","shard":"4/4"}]}'
-          elif [ -n "${full_macos:-}" ]; then
+          elif [ -n "${full_suite:-}" ]; then
             matrix='{"include":[{"os":"ubuntu-latest","label":"linux jq-1.7"}]}'
           else
             matrix='{"include":[{"os":"ubuntu-latest","label":"linux jq-1.7"},{"os":"macos-latest","label":"macos bash-3.2 affected"}]}'
@@ -131,7 +133,7 @@ jobs:
           fi
           shard_args=()
           if [ "$RUNNER_OS" = macOS ] && [ "$TIER" = light ]; then
-            git diff --name-only "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/changed"
+            git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/changed"
             /bin/bash bin/select-affected-tests.sh "$RUNNER_TEMP/changed" > "$RUNNER_TEMP/affected"
             if ! grep -Fxq ALL "$RUNNER_TEMP/affected"; then
               shard_args=(--files "$RUNNER_TEMP/affected")

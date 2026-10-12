@@ -35,6 +35,20 @@ for path in .claude/skills/demo/SKILL.md bin/example.sh; do
   if printf '%s\n' README.md "$path" | /bin/bash "$selector" --docs-only; then echo "FAIL docs-only: $path"; exit 1; fi
 done
 if printf '' | /bin/bash "$selector" --docs-only; then echo 'FAIL empty docs-only input'; exit 1; fi
+# A rename out of .claude/ must not look docs-only: the old path must be listed.
+rename_repo="$tmp/rename-repo"
+git init -q "$rename_repo"
+mkdir -p "$rename_repo/.claude/rules"
+printf '%s\n' 'rule text that stays the same' > "$rename_repo/.claude/rules/foo.md"
+git -C "$rename_repo" add .claude/rules/foo.md
+git -C "$rename_repo" -c user.name=t -c user.email=t@example.invalid commit -q -m base
+mkdir -p "$rename_repo/docs"
+git -C "$rename_repo" mv .claude/rules/foo.md docs/foo.md
+git -C "$rename_repo" -c user.name=t -c user.email=t@example.invalid commit -q -m move
+git -C "$rename_repo" diff --name-only --no-renames HEAD~1...HEAD > "$tmp/renamed"
+grep -Fxq .claude/rules/foo.md "$tmp/renamed" || { echo 'FAIL rename hides old path'; exit 1; }
+if /bin/bash "$selector" --docs-only "$tmp/renamed"; then echo 'FAIL rename out of .claude/ counted as docs-only'; exit 1; fi
+[ "$(grep -c 'git diff --name-only --no-renames' .github/workflows/tests.yml)" = 2 ] || { echo 'FAIL workflow diff calls must use --no-renames'; exit 1; }
 # Explicit list execution, empty lists, and rejection use a tiny runner fixture.
 cp bin/run-hook-tests.sh "$tmp/bin/"
 printf '%s\n' '#!/bin/bash' 'exit 0' > "$tmp/.claude/hooks/tests/test_other.sh"
