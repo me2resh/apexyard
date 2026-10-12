@@ -119,11 +119,15 @@ if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
          || echo "$SEGMENT" | grep -qE 'refs/tags/'; then
         HAS_EVIDENCE=1
       fi
-      [ "$HAS_EVIDENCE" = "1" ] && continue
+      SEG_REF=""
       if declare -F _extract_push_ref_core > /dev/null 2>&1; then
         SEG_REF=$(_extract_push_ref_core "$SEGMENT")
-        [ -n "$SEG_REF" ] && SCAN_LAST_REF="$SEG_REF"
       fi
+      # Explicit ORBIT refs must reach the records command check (#1673).
+      if [ "$HAS_EVIDENCE" = "1" ]; then
+        case "$SEG_REF" in orbit/*) ;; *) continue ;; esac
+      fi
+      [ -n "$SEG_REF" ] && SCAN_LAST_REF="$SEG_REF"
     done < <(echo "$STRIPPED_FOR_SCAN" | grep -oE '\bgit\s+push\b[^|;&]*')
 
     if [ -z "$SCAN_LAST_REF" ]; then
@@ -303,6 +307,26 @@ fi
 # and land as a PR the repo owner reviews. See AgDR-0129.
 if echo "$CURRENT_BRANCH" | grep -qE '^docs/(agents-md|apexyard-badge)$'; then
   exit 0
+fi
+
+# Exempt by NAME and content together. Fail closed (#1673).
+if [ -f "$HOOK_DIR/_lib-orbit-records.sh" ]; then
+  # shellcheck source=./_lib-orbit-records.sh
+  . "$HOOK_DIR/_lib-orbit-records.sh"
+  if orbit_records_branch_shape "$CURRENT_BRANCH"; then
+    if orbit_push_command_simple "$COMMAND" &&
+       orbit_records_only "${BRANCH_DIR:-.}" "$CURRENT_BRANCH" "$TRUNK_BRANCHES"; then
+      exit 0
+    fi
+    cat >&2 <<MSG
+BLOCKED: This branch uses the orbit/ records shape.
+Allow this shape only when every changed file is under docs/orbit/.
+${ORBIT_RECORDS_REASON}
+Use the normal shape {type}/{TICKET-ID}-{description}, such as feature/GH-45-add-thing.
+Run git fetch first when the base looks stale.
+MSG
+    exit 2
+  fi
 fi
 
 # Load the branch-type whitelist from project config.

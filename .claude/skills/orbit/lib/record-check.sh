@@ -63,7 +63,19 @@ awk -v line="$line" '
     for (i = start + 1; i <= NR; i++) if (lines[i] ~ /^## /) { end = i - 1; break }
     last = start
     for (i = start + 1; i <= end; i++) if (lines[i] !~ /^[[:space:]]*$/) last = i
-    for (i = 1; i <= NR; i++) { print lines[i]; if (i == last) print line }
+    for (i = 1; i <= NR; i++) {
+      print lines[i]
+      if (i == last && last == start) {
+        # An empty section gets one blank line under the heading.
+        print ""
+        print line
+        # Separate the entry from a following line that is not blank.
+        if (last < NR && lines[last + 1] !~ /^[[:space:]]*$/) print ""
+      } else if (i == last) {
+        if (lines[last] !~ /^- /) print ""
+        print line
+      }
+    }
   }' "$notes" > "$tmp" && cat "$tmp" > "$notes"
 rm -f "$tmp" "$candidate"
 echo "unchanged"

@@ -893,6 +893,31 @@ rm -rf "$SIBROOT"
 
 
 # ---------------------------------------------------------------------------
+# #1665: zsh rejects `export -n` while this library is sourced.
+# zsh -f skips startup files, so the check sees only the library.
+# ---------------------------------------------------------------------------
+if ! command -v zsh >/dev/null 2>&1; then
+  echo "NOTE: zsh is not installed, so the source-under-zsh stderr check was skipped"
+else
+  zerr=$(mktemp)
+  zsh -f -c '. "$1"' _ "$LIB_SRC" >/dev/null 2>"$zerr"
+  zrc=$?
+  if [ "$zrc" -eq 0 ] && [ ! -s "$zerr" ]; then
+    PASS=$((PASS + 1))
+    echo "PASS: sourcing _lib-portfolio-paths.sh under zsh writes no stderr"
+  else
+    FAIL=$((FAIL + 1))
+    FAILED_CASES="$FAILED_CASES\n  - sourcing _lib-portfolio-paths.sh under zsh writes no stderr"
+    echo "FAIL: sourcing _lib-portfolio-paths.sh under zsh writes no stderr"
+    echo "  exit: $zrc"
+    if [ -s "$zerr" ]; then
+      echo "  stderr: $(cat "$zerr")"
+    fi
+  fi
+  rm -f "$zerr"
+fi
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo

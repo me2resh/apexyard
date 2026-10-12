@@ -70,7 +70,7 @@ jobs:
               core.warning(`Could not list ready PRs: ${error.message}`);
               return;
             }
-            for (const pr of prs) {
+            for (const pr of prs.sort((a, b) => new Date(a.created_at) - new Date(b.created_at) || a.number - b.number)) {
               if (!sameRepo(pr)) {
                 core.info(`PR #${pr.number}: skipping fork or unavailable head repository.`);
                 continue;
@@ -81,10 +81,12 @@ jobs:
                   owner, repo, base, head: pr.head.sha
                 });
                 if (comparison.behind_by === 0) continue;
+                // Attempt only the oldest eligible behind PR, including on conflict.
                 await github.request('PUT /repos/{owner}/{repo}/pulls/{pull_number}/update-branch', {
                   owner, repo, pull_number: pr.number, expected_head_sha: pr.head.sha
                 });
                 core.info(`PR #${pr.number}: branch update requested.`);
+                return;
               } catch (error) {
                 const cause = `HTTP ${error.status || 'unknown'}: ${error.message}`;
                 core.warning(`PR #${pr.number}: ${cause}`);
@@ -102,5 +104,6 @@ jobs:
                 } catch (commentError) {
                   core.warning(`PR #${pr.number}: could not post failure comment: ${commentError.message}`);
                 }
+                return;
               }
             }

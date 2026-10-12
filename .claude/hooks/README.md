@@ -293,6 +293,7 @@ Helpers that implement this convention:
 |--------|---------|----------------|
 | `_lib-extract-pr.sh` | `block-unreviewed-merge.sh`, `require-design-review-for-ui.sh`, `block-merge-on-red-ci.sh` | PR number from `gh pr merge` and `gh api .../pulls/<N>/merge` |
 | `_lib-extract-push-ref.sh` | `validate-branch-name.sh` | Source ref from `git push origin <ref>` (and refspec / -u / --set-upstream / --force-with-lease variants) |
+| `_lib-orbit-records.sh` | `validate-branch-name.sh`, `validate-pr-create.sh` | Validate ORBIT records branch names, simple pushes, and files against remote trunk refs |
 | `_lib-flag-value.sh` | `validate-issue-structure.sh`, `require-agdr-for-arch-pr.sh`, `block-private-refs-in-public-repos.sh`, `require-orbit-slice-for-ticket.sh` | Quoted flag value from a command string. Callers pass the trim and the dash anchor their previous copy used. |
 
 When you add a new hook that depends on git state, ask first: "is the answer
@@ -386,3 +387,14 @@ All hooks rely on:
 - `gh` for the merge-gate hook's PR-number fallback
 
 On macOS these come from Homebrew (`brew install jq gh`). On Debian-based Linux, `apt install jq gh`. CI runners typically have them pre-installed. If `jq` is missing, the hooks short-circuit cleanly (they can't parse the input, so they exit 0 without blocking) — worth adding a `command -v jq` guard if you want loud failure instead.
+
+### ORBIT records PRs
+
+A ticket-free records PR uses `orbit/<initiative-id>-<description>` and
+`docs(orbit/<initiative-id>): <description>`. The initiative ID is the Plan ID
+without `plan-`. Resolve the longest existing ID prefix from Plan records on
+the branch. Unknown IDs fail closed. The PR body and every commit carry
+`Initiative: plan-<initiative-id>` instead of a ticket reference.
+The body exception applies only after the branch and records-only diff qualify.
+Remote trunk refs, one simple push, and the `docs/orbit/` boundary remain required.
+Records lint checks initiative ownership and referenced Snapshots.
