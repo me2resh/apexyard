@@ -313,7 +313,9 @@ _ratc_read_scratchpad_dir() {
 
 # REPLY is the -C directory of one literal export command. Any other shape
 # returns 1. The write detector is not modified; tar -x stays unextractable,
-# and this hook names the directory itself.
+# and this hook names the directory itself. The exempt shape has no archive
+# options: a ref or later argument that starts with "-" is rejected. Git
+# opens -o before it checks the tree-ish.
 _ratc_literal_export_dir() {
   local cmd="${1:-}" rest="" ref="" dir=""
   REPLY=""
@@ -374,8 +376,10 @@ _ratc_literal_export_dir() {
       return 1
       ;;
   esac
+  # The tree-ish charset allows an interior dash (release-1). A leading
+  # dash is an option, including a later argument such as "HEAD -o...".
   case "$ref" in
-    ""|*[!A-Za-z0-9._~/-]*) return 1 ;;
+    ""|-*|*' '-*|*[!A-Za-z0-9._~/-]*) return 1 ;;
   esac
   case "$dir" in
     /*) ;;
@@ -870,11 +874,13 @@ EOF_REVIEW_MARKERS
       fi
       # #1417: a governed-tree miss can still be this session's scratchpad.
       # #883 already returned when the target is outside git. This arm covers
-      # a scratchpad that is a git directory, and any other outside-governance
-      # path the earlier arms did not take. Symlinks and `..` stay gated.
+      # a scratchpad that is its own git directory. A linked worktree has a
+      # .git file, so the directory check keeps it gated, the same check as
+      # #1402. Symlinks and `..` stay gated.
       if [ "$_og_has_symlink" = 0 ] \
          && [ "$_og_in_ops_raw" = 0 ] && [ "$_og_in_ws_raw" = 0 ] \
-         && [ "$_og_in_ops_res" = 0 ] && [ "$_og_in_ws_res" = 0 ]; then
+         && [ "$_og_in_ops_res" = 0 ] && [ "$_og_in_ws_res" = 0 ] \
+         && [ -d "$_og_git_root/.git" ]; then
         if _ratc_reviewer_scratchpad_target "$_og_abs_target" "$OPS_ROOT" "$WORKSPACE_DIR" "$HOOK_DIR"; then
           return 0
         fi

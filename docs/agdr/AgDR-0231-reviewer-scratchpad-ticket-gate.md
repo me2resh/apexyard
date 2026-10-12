@@ -24,9 +24,11 @@ The hook reads `scratchpad_dir` when the harness sends it. The directory must co
 
 When `scratchpad_dir` is absent or null, only a path under those temp roots that contains this session id as a path segment qualifies. A present value that is empty, not a string, or fails a check does not use that wider rule.
 
-The export is recognized only as the literal command `git archive <ref> | tar -x -C <absolute-path>`. A shell variable, a second command, or an absolute-name tar flag stays gated. The write detector is unchanged.
+The export is recognized only as the literal command `git archive <ref> | tar -x -C <absolute-path>`. A shell variable, a second command, an absolute-name tar flag, or a leading-dash archive argument stays gated. The write detector is unchanged.
 
-A typed build agent stays denied. Another session's marker does not count. A missing or mismatched ops-root pin keeps the gate closed.
+The exemption applies to a git scratchpad only when `.git` is a directory. A linked worktree keeps `.git` as a file. A linked worktree under the scratchpad still needs a ticket.
+
+A typed build agent stays denied. The orchestrator (main loop) also gains the exemption while it holds a reviewer marker. Another session's marker does not count. A missing or mismatched ops-root pin keeps the gate closed.
 
 ## Consequences
 
@@ -36,6 +38,19 @@ A typed build agent stays denied. Another session's marker does not count. A mis
 - A `..` segment or a symlink never receives the exemption.
 - A present `scratchpad_dir` that fails a check does not widen into the temp-path rule.
 - Build agents gain no exemption.
+- The orchestrator (main loop) also gains the exemption while it holds a reviewer marker.
+- A leading-dash archive argument stays gated.
+- A linked worktree under the scratchpad still needs a ticket.
+
+## Architecture evolution
+
+### Before
+
+The export parser treated a leading-dash archive argument as a tree-ish. Git opens an option such as `-o` before it checks the tree-ish. That option can create or empty a file outside the scratchpad. The scratchpad exemption also covered a linked worktree. A linked worktree keeps `.git` as a file. AgDR-0188 keeps that checkout behind the ticket gate.
+
+### After
+
+The exempt archive shape rejects a leading-dash archive argument. A git scratchpad qualifies only when `.git` is a directory. Issue #1402 uses the same directory check. A linked worktree under the scratchpad still needs a ticket. The orchestrator (main loop) also gains the exemption while it holds a reviewer marker.
 
 ## Artifacts
 

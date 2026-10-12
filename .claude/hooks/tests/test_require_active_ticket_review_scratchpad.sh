@@ -253,6 +253,64 @@ case "$home_pad" in
     ;;
 esac
 
+# A leading dash after `git archive` is an option, not a tree-ish.
+# `git archive -o<path>` creates or truncates that path before git checks
+# the tree-ish, so the exempt shape allows no archive options.
+echo precious > "$ops/README.md"
+use_marker session-a rex
+run_case 'git archive -o to an ops file still needs a ticket' 2 "$ops" \
+  "$(bash_input "git archive -o$ops/README.md | tar -x -C $pad" "$pad")"
+run_case 'git archive -o with a relative path still needs a ticket' 2 "$ops" \
+  "$(bash_input "git archive -oREADME.md | tar -x -C $pad" "$pad")"
+run_case 'git archive -o still needs a ticket when scratchpad_dir is absent' 2 "$ops" \
+  "$(bash_input "git archive -o$ops/README.md | tar -x -C $pad")"
+run_case 'an archive long option still needs a ticket' 2 "$ops" \
+  "$(bash_input "git archive --list | tar -x -C $pad" "$pad")"
+run_case 'an archive option after the ref still needs a ticket' 2 "$ops" \
+  "$(bash_input "git archive HEAD -o$ops/README.md | tar -x -C $pad" "$pad")"
+run_case 'an archive ref may contain an interior dash' 0 "$ops" \
+  "$(bash_input "git archive release-1 | tar -x -C $pad" "$pad")"
+use_marker session-a rex none
+run_case 'git archive -o still needs a ticket with no reviewer marker' 2 "$ops" \
+  "$(bash_input "git archive -o$ops/README.md | tar -x -C $pad" "$pad")"
+use_marker session-a rex
+mkdir -p "$TMP/SESSION-A/x"
+run_case 'a case-variant session segment still needs a ticket' 2 "$ops" \
+  "$(bash_input "$(export_to "$TMP/SESSION-A/x")")"
+upper_ops=$(printf '%s' "$ops" | tr 'a-z' 'A-Z')
+run_case 'an uppercase ops path still needs a ticket' 2 "$ops" \
+  "$(bash_input "$(export_to "$upper_ops")" "$pad")"
+mkdir -p "$pad/a..b"
+run_case 'a doubled dot inside a name still needs a ticket' 2 "$ops" \
+  "$(bash_input "$(export_to "$pad/a..b")" "$pad")"
+run_case 'a trailing slash on the scratchpad export passes' 0 "$ops" \
+  "$(bash_input "$(export_to "$pad/")" "$pad")"
+run_case 'a second tar -C still needs a ticket' 2 "$ops" \
+  "$(bash_input "git archive HEAD | tar -x -C $pad -C $ops" "$pad")"
+run_case 'tar -f in the export still needs a ticket' 2 "$ops" \
+  "$(bash_input "git archive HEAD | tar -x -C $pad -f /etc/x" "$pad")"
+
+# A linked worktree of the ops fork has a .git file, not a .git directory.
+# The scratchpad git arm uses the same directory check as #1402.
+use_marker session-a rex
+if ! git -C "$ops" worktree add -q "$pad/wt" HEAD; then
+  printf 'FAIL [linked worktree setup]: git worktree add failed\n' >&2
+  FAIL=$((FAIL + 1))
+elif [ -d "$pad/wt/.git" ] || [ ! -f "$pad/wt/.git" ]; then
+  printf 'FAIL [linked worktree setup]: expected a .git file at %s\n' "$pad/wt/.git" >&2
+  FAIL=$((FAIL + 1))
+else
+  run_case 'a linked worktree edit in the scratchpad still needs a ticket' 2 "$ops" \
+    "$(edit_input "$pad/wt/onboarding.yaml" "$pad")"
+  run_case 'a linked worktree edit by code-reviewer still needs a ticket' 2 "$ops" \
+    "$(edit_input "$pad/wt/onboarding.yaml" "$pad" code-reviewer)"
+  run_case 'a redirect into a linked worktree in the scratchpad still needs a ticket' 2 "$ops" \
+    "$(bash_input "echo x > $pad/wt/onboarding.yaml" "$pad")"
+  use_marker session-a rex none
+  run_case 'the same linked worktree edit with no marker still needs a ticket' 2 "$ops" \
+    "$(edit_input "$pad/wt/onboarding.yaml" "$pad")"
+fi
+
 use_marker session-a rex
 git -C "$pad" init -q
 run_case 'a fixture edit in a git scratchpad passes with a reviewer marker' 0 "$ops" \
