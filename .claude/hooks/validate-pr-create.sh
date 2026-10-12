@@ -275,6 +275,11 @@ fi
 if [ -z "$CONFIG_ROOT" ]; then
   CONFIG_ROOT="$REPO_ROOT"
 fi
+ORBIT_TITLE=0
+if [ -f "$HOOK_DIR/_lib-orbit-records.sh" ]; then
+  # shellcheck source=./_lib-orbit-records.sh
+  . "$HOOK_DIR/_lib-orbit-records.sh"
+fi
 PR_TYPES=""
 if [ -f "$HOOK_DIR/_lib-read-config.sh" ]; then
   # shellcheck disable=SC1090,SC1091
@@ -502,8 +507,12 @@ if [ -n "$EXTERNAL_TARGET" ]; then
   echo "NOTE: validate-pr-create.sh: ${CMD_REPO} is listed in .external_contributions — this framework's PR-title convention is not applied. Follow that project's own CONTRIBUTING.md." >&2
 elif [ -n "$TITLE" ]; then
   if ! echo "$TITLE" | grep -qE "^(${PR_TYPES})\(([A-Z]{2,10}-[0-9]+|#[0-9]+)\)!?:"; then
-    ERRORS="${ERRORS}PR title '$TITLE' doesn't match format: type(TICKET-ID): description\n"
-    ERRORS="${ERRORS}Accepted types (from .claude/project-config.*.json → .pr.title_type_whitelist): ${PR_TYPES//|/, }\n"
+    if printf '%s\n' "$TITLE" | grep -qE '^docs\(orbit\): [^[:space:]]'; then
+      ORBIT_TITLE=1
+    else
+      ERRORS="${ERRORS}PR title '$TITLE' doesn't match format: type(TICKET-ID): description\n"
+      ERRORS="${ERRORS}Accepted types (from .claude/project-config.*.json → .pr.title_type_whitelist): ${PR_TYPES//|/, }\n"
+    fi
   else
     # Extract the ticket reference so we can verify it exists
     TICKET_REF=$(echo "$TITLE" | sed -nE 's/^[a-z]+\(([^)]+)\):.*/\1/p')
@@ -1048,6 +1057,24 @@ elif [ -n "$BRANCH_DIR" ]; then
 else
   CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
 fi
+ORBIT_RECORDS_OK=0
+ORBIT_RECORDS_REASON=""
+if declare -F orbit_records_branch_shape >/dev/null 2>&1 &&
+   orbit_records_branch_shape "$CURRENT_BRANCH"; then
+  ORBIT_TRUNKS=$(config_get '.branch.trunk_whitelist[]' 2>/dev/null)
+  if [ -z "$ORBIT_TRUNKS" ]; then
+    ORBIT_TRUNKS=$'main\nmaster\ndevelop\ndev\ndevelopment'
+  fi
+  if orbit_records_only "${BRANCH_DIR:-.}" "$CURRENT_BRANCH" "$ORBIT_TRUNKS"; then
+    ORBIT_RECORDS_OK=1
+  fi
+fi
+if [ "$ORBIT_TITLE" = 1 ] && [ "$ORBIT_RECORDS_OK" != 1 ]; then
+  ERRORS="${ERRORS}PR title 'docs(orbit): ...' is allowed only on an orbit/<slug>-<description> branch that changes only files under docs/orbit/. Use the normal shape type(TICKET-ID): description and a {type}/{TICKET-ID}-{description} branch.\n"
+  if [ -n "$ORBIT_RECORDS_REASON" ]; then
+    ERRORS="${ERRORS}${ORBIT_RECORDS_REASON}\n"
+  fi
+fi
 if [ -n "$CURRENT_BRANCH" ] && [ "$CURRENT_BRANCH" != "main" ] && [ "$CURRENT_BRANCH" != "master" ]; then
   # Release-cut branches are exempt — same recognition `validate-branch-name.sh`
   # added in me2resh/apexyard#168 / #169. Release branches don't carry a
@@ -1062,8 +1089,13 @@ if [ -n "$CURRENT_BRANCH" ] && [ "$CURRENT_BRANCH" != "main" ] && [ "$CURRENT_BR
     :  # External contribution (#1448/#1451 B3): the branch belongs to the
        # contributor's own fork and the destination project has its own
        # naming conventions, so a framework ticket ID is not required here.
+  elif [ "$ORBIT_RECORDS_OK" = 1 ]; then
+    : # Records branch, validated against remote trunk refs.
   elif ! echo "$CURRENT_BRANCH" | grep -qE '[A-Z]{2,10}-[0-9]+|GH-[0-9]+|#[0-9]+'; then
     ERRORS="${ERRORS}Branch '$CURRENT_BRANCH' missing ticket ID.\n"
+    case "$CURRENT_BRANCH" in
+      orbit/*) ERRORS="${ERRORS}Use the normal shape {type}/{TICKET-ID}-{description}.\n" ;;
+    esac
   fi
 fi
 

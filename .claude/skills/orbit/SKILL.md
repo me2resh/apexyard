@@ -313,7 +313,9 @@ One planning cycle ships one records PR (AgDR-0225). Run these steps in order:
 3. Run `/orbit reconcile`. Keep the Reconciliation only when a status changes. Otherwise the `## Checks` line is the record.
 4. Cut every slice of the cycle with `/orbit slice`. Each slice uses this Plan revision and this Reconciliation.
 5. Run `/orbit lint`. Stop on the first fault.
-6. Ask the operator to open one PR with all records of the cycle. Follow the normal ApexYard review and merge gates. This flow adds no gate exemption.
+6. Ask the operator to open one PR with all records of the cycle. Follow the normal ApexYard review and merge gates. Use `orbit/<initiative-slug>-<description>` without a ticket only when the PR changes only `docs/orbit/`.
+   Use the title `docs(orbit): <description>` for that records PR.
+   This branch name and title exemption does not change review or merge gates.
 7. After the merge, run `/orbit handoff` for each slice.
 
 A slice found in the middle of a cycle waits for the next cycle PR. It gets its own PR only when its build cannot wait. Count that PR as an exception PR.

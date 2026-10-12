@@ -51,6 +51,28 @@ jobs:
               return;
             }
 
+            // Records names and content must both qualify (#1673).
+            if (/^orbit\/[a-z0-9]+(-[a-z0-9]+)+$/.test(headRef) && /^docs\(orbit\): \S/.test(title)) {
+              try {
+                const files = await github.paginate(github.rest.pulls.listFiles, {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.payload.pull_request.number,
+                  per_page: 100,
+                });
+                const recordsPath = name => typeof name === 'string' &&
+                  name.startsWith('docs/orbit/') && name.length > 'docs/orbit/'.length &&
+                  !name.split('/').includes('..');
+                if (files.length > 0 && files.every(file => recordsPath(file.filename) &&
+                    (file.previous_filename === undefined || recordsPath(file.previous_filename)))) {
+                  console.log(`Exempt ORBIT records branch (${headRef}).`);
+                  return;
+                }
+              } catch (error) {
+                console.log(`ORBIT file check failed: ${error.message}`);
+              }
+            }
+
             // Pattern matches:
             //   Project tracker: ABC-123, ENG-456, PROJ-789 (2-10 char uppercase prefix + dash + digits)
             //   GitHub Issues:   #58, #123
