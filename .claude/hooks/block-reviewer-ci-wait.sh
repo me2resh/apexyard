@@ -101,40 +101,58 @@ block() {
   exit 2
 }
 
-# Whole seconds for one sleep argument. Prints -1 for an unbounded wait.
+# Cap values before arithmetic. -1 means over the limit.
+# Round exponent forms up. Preserve truncation for ordinary decimal arguments.
+# Decimal shifting avoids powers and integer overflow, including negative powers.
 sleep_arg_seconds() {
-  local a="${1%\}}" num unit exp
+  local a="${1%\}}" num unit exp=0 digits point whole tail sign=1 round=0
   case "$a" in infinity|inf) printf '%s' -1; return ;; esac
-  if [[ "$a" =~ ^0[xX][0-9a-fA-F]+$ ]]; then
-    printf '%s' "$((a))"
+  if [[ "$a" =~ ^0[xX]([0-9a-fA-F]+)$ ]]; then
+    digits="${BASH_REMATCH[1]}"
+    while [[ "$digits" = 0* ]] && [ "${#digits}" -gt 1 ]; do digits="${digits#0}"; done
+    [ "${#digits}" -le 2 ] || { printf '%s' -1; return; }
+    printf '%s' "$((16#$digits))"
     return
   fi
   if [[ "$a" =~ ^([0-9]+([.][0-9]+)?)[eE]([+-]?[0-9]+)$ ]]; then
     num="${BASH_REMATCH[1]}"
     exp="${BASH_REMATCH[3]}"
-    case "$exp" in
-      -*) printf '%s' 0; return ;;
-      +*) exp="${exp#+}" ;;
-    esac
-    if [[ "$num" =~ [1-9] ]] && [ "$((10#$exp))" -ge 2 ]; then
-      printf '%s' -1
-    else
-      printf '%s' 0
-    fi
-    return
+    unit=s
+    round=1
+  else
+    num="${a%%[!0-9.]*}"
+    unit="${a#"$num"}"
+    [[ "$num" =~ ^[0-9]+([.][0-9]+)?$ ]] || { printf '%s' 0; return; }
   fi
-  num="${a%%[!0-9.]*}"
-  unit="${a#"$num"}"
-  [ -n "$num" ] || { printf '%s' 0; return; }
-  num="${num%%.*}"
-  [ -n "$num" ] || num=0
-  num=$((10#$num))
+  case "$unit" in ""|s|m|h|d) ;; *) printf '%s' 0; return ;; esac
+  digits="${num//./}"
+  point=${#num}
+  if [[ "$num" = *.* ]]; then whole="${num%%.*}"; point=${#whole}; fi
+  while [[ "$digits" = 0* ]] && [ -n "$digits" ]; do
+    digits="${digits#0}"
+    point=$((point - 1))
+  done
+  [ -n "$digits" ] || { printf '%s' 0; return; }
+  case "$exp" in -*) sign=-1; exp="${exp#-}" ;; +*) exp="${exp#+}" ;; esac
+  while [[ "$exp" = 0* ]] && [ "${#exp}" -gt 1 ]; do exp="${exp#0}"; done
+  # Reject powers too large to compute instead of attempting shell arithmetic.
+  [ "${#exp}" -le 6 ] || { printf '%s' -1; return; }
+  point=$((point + sign * 10#$exp))
+  [ "$point" -le 2 ] || { printf '%s' -1; return; }
+  if [ "$point" -le 0 ]; then
+    whole=$round
+  else
+    while [ "${#digits}" -lt "$point" ]; do digits="${digits}0"; done
+    whole="${digits:0:point}"
+    tail="${digits:point}"
+    whole=$((10#$whole))
+    if [ "$round" -eq 1 ] && [[ "$tail" =~ [1-9] ]]; then whole=$((whole + 1)); fi
+  fi
   case "$unit" in
-    ""|s) printf '%s' "$num" ;;
-    m) printf '%s' $((num * 60)) ;;
-    h) printf '%s' $((num * 3600)) ;;
-    d) printf '%s' $((num * 86400)) ;;
-    *) printf '%s' 0 ;;
+    ""|s) printf '%s' "$whole" ;;
+    m) printf '%s' $((whole * 60)) ;;
+    h) printf '%s' $((whole * 3600)) ;;
+    d) printf '%s' $((whole * 86400)) ;;
   esac
 }
 
@@ -143,19 +161,23 @@ sleep_arg_seconds() {
 SEGMENTS=$(printf '%s\n' "$SCAN" | tr -d "'\"\\\\" | tr ';&|()`' '\n' | sed 's/[[:blank:]][[:blank:]]*/ /g')
 
 CHECKS_IN_COMMAND=0
-LOOP_SEEN=0
-SLEEP_SEEN=0
+LOOP_DEPTH=0
+LOOP_FOR_HEADER=0
+POLLING_LOOP=0
 TOTAL=0
 while IFS= read -r seg; do
   read -r -a words <<< "$seg"
   i=0
   n=${#words[@]}
+  if [ "$LOOP_FOR_HEADER" -eq 1 ] && [ "${words[0]:-}" != "do" ]; then continue; fi
   while [ "$i" -lt "$n" ]; do
     w="${words[$i]##*/}"
     case "$w" in
-      while|until) LOOP_SEEN=1 ;;
-      for) LOOP_SEEN=1; i=$n; break ;;
-      '{'|'!'|do|then|else|elif|if|time|command|builtin|exec|nohup|eval) ;;
+      while|until) LOOP_DEPTH=$((LOOP_DEPTH + 1)) ;;
+      for) LOOP_DEPTH=$((LOOP_DEPTH + 1)); LOOP_FOR_HEADER=1; i=$n; break ;;
+      do) LOOP_FOR_HEADER=0 ;;
+      done) [ "$LOOP_DEPTH" -le 0 ] || LOOP_DEPTH=$((LOOP_DEPTH - 1)) ;;
+      '{'|'!'|then|else|elif|if|time|command|builtin|exec|nohup|eval) ;;
       env)
         i=$((i + 1))
         while [ "$i" -lt "$n" ]; do
@@ -205,24 +227,28 @@ while IFS= read -r seg; do
           case "$arg" in --watch|--watch=*) block "gh pr checks --watch is not allowed in a review agent." ;; esac
         done
         CHECKS_IN_COMMAND=$((CHECKS_IN_COMMAND + 1))
+        [ "$LOOP_DEPTH" -eq 0 ] || POLLING_LOOP=1
       fi ;;
     sleep)
-      SLEEP_SEEN=1
+      [ "$LOOP_DEPTH" -eq 0 ] || POLLING_LOOP=1
       i=$((i + 1))
       while [ "$i" -lt "$n" ]; do
         arg="${words[$i]}"
         i=$((i + 1))
         case "$arg" in -*) continue ;; esac
         seconds=$(sleep_arg_seconds "$arg")
-        [ "$seconds" != -1 ] || block "Unbounded sleep is not allowed in a review agent."
+        [ "$seconds" != -1 ] || block "Sleep exceeds the review-agent limit or is too large to compute."
+        # Stop before the sum can overflow, even with many arguments.
+        [ "$seconds" -lt 60 ] || block "Sleep of 60 seconds or more is not allowed in a review agent."
         TOTAL=$((TOTAL + seconds))
+        [ "$TOTAL" -lt 60 ] || block "Total sleep of 60 seconds or more is not allowed in a review agent."
       done ;;
   esac
 done <<EOS
 $SEGMENTS
 EOS
 
-if [ "$LOOP_SEEN" -eq 1 ] && { [ "$SLEEP_SEEN" -eq 1 ] || [ "$CHECKS_IN_COMMAND" -ge 1 ]; }; then
+if [ "$POLLING_LOOP" -eq 1 ]; then
   block "A polling loop is not allowed in a review agent."
 fi
 [ "$TOTAL" -lt 60 ] || block "Total sleep of 60 seconds or more is not allowed in a review agent."

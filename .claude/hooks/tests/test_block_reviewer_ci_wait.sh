@@ -127,6 +127,47 @@ for pattern in 'sleep 30 && sleep 30' 'bash -c "sleep 600"' 'for i in 1 2; do sl
   run_case "build agent: $pattern" allowed "$pattern" backend-engineer
 done
 
+# AC2: 090 and 0090 are decimal 90 and blocked. 08 is decimal 8 and allowed.
+# Exercise both sides of each regression for reviewers and exempt callers.
+blocked_regressions=(
+  'sleep 9e1' 'sleep 600e-1' 'sleep 5.91e1' 'sleep 599e-1'
+  'sleep 1e999999999999999999999' 'sleep 0.1e999999999999999999999'
+  'sleep 9223372036854775808' 'sleep 18446744073709551616'
+  'sleep 999999999999999999999999999999999999m'
+  'sleep 0x8000000000000000' 'sleep 090' 'sleep 0090'
+  'sleep 00000000000000000000000000000090'
+  'while true; do gh pr checks 42; done'
+  'for f in a b; do echo x; sleep 1; done'
+  'for f in a b; do for g in c d; do echo x; done; sleep 1; done'
+  'for f in a b; do echo x; done; while true; do sleep 1; done'
+)
+allowed_regressions=(
+  'sleep 5e1' 'sleep 590e-1' 'sleep 5.8e1' 'sleep 1e-2'
+  'sleep 0e999999999999999999999' 'sleep 1e+00000000000000000001'
+  'sleep 00000000000000000000000000000008' 'sleep 0x00000008'
+  'sleep 08' 'sleep 009' 'sleep 0'
+  'gh pr checks 42 | while read l; do echo "$l"; done'
+  'for f in a b; do echo "$f"; done; sleep 1'
+  'while read l; do echo "$l"; done; gh pr checks 42'
+  'sleep 1; for f in a b; do echo "$f"; done'
+  'for f in a b; do for g in c d; do echo x; done; done; sleep 1'
+  'for f in a b; do echo x; done; gh pr checks 42'
+)
+for pattern in "${blocked_regressions[@]}"; do
+  for agent in code-reviewer security-reviewer solution-architect; do
+    run_case "$agent regression: $pattern" blocked "$pattern" "$agent"
+  done
+  run_case "orchestrator regression: $pattern" allowed "$pattern"
+  run_case "build agent regression: $pattern" allowed "$pattern" backend-engineer
+done
+for pattern in "${allowed_regressions[@]}"; do
+  for agent in code-reviewer security-reviewer solution-architect; do
+    run_case "$agent regression: $pattern" allowed "$pattern" "$agent"
+  done
+  run_case "orchestrator regression: $pattern" allowed "$pattern"
+  run_case "build agent regression: $pattern" allowed "$pattern" backend-engineer
+done
+
 assert_result() {
   if "$@"; then
     echo "PASS: $CHECK_NAME"
@@ -138,7 +179,7 @@ assert_result() {
 input='{"agent_type":"code-reviewer","tool_input":{"command":"sleep 08"}}'
 out=$(printf '%s' "$input" | "$HOOK" 2>&1)
 rc=$?
-CHECK_NAME='sleep 08 allows with clean stderr'
+CHECK_NAME='amended AC2: sleep 08 is decimal 8 and allows with clean stderr'
 assert_result test "$rc" -eq 0
 assert_result test -z "$out"
 
