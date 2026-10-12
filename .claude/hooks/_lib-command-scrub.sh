@@ -374,12 +374,16 @@ _command_scrub_allowlist_ok() {
           w = norm_word(WORD)
           if (w == "") { ok = 0; break }
           # Only a standalone lowercase scalar with a literal path value
-          # is data. Keep environment prefixes, special uppercase variables,
-          # expansions, array assignments and executable values raw.
+          # is data. zsh ties path, fpath, cdpath, manpath, module_path,
+          # mailpath and psvar to PATH or a search array, so those
+          # assignments stay raw. Environment prefixes, uppercase special
+          # variables, expansions, array assignments and executable values
+          # stay raw too.
           if (is_assign(WORD) && WORD !~ /^[A-Za-z_][A-Za-z0-9_]*==/) {
             skip_ws()
             after = substr(s, pos, 1)
             if (WORD ~ /^[a-z_][a-z0-9_]*=[A-Za-z0-9_.\/-]+$/ &&
+                WORD !~ /^(path|fpath|cdpath|manpath|module_path|mailpath|psvar)=/ &&
                 (after == ";" || after == "\n" || after == "")) { continue }
             ok = 0
             break
