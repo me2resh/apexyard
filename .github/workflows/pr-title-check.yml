@@ -12,7 +12,7 @@ on:
     types: [opened, edited, synchronize, reopened]
 
 # Least-privilege sweep (#819): top-level stays empty — this workflow never
-# checks out code, so it needs no `contents` scope either. pull-requests:write
+# checks out code. contents:read resolves plan records; pull-requests:write
 # (label + comment on failure) is granted at job level only, since a
 # top-level write scope is flagged by Scorecard's Token-Permissions check
 # regardless of job-level scoping.
@@ -23,6 +23,7 @@ jobs:
     name: Verify Ticket ID
     runs-on: ubuntu-latest
     permissions:
+      contents: read         # read plan records on the PR head
       pull-requests: write   # add ticket label + post comment on failure
 
     steps:
@@ -49,6 +50,47 @@ jobs:
             if (/^(dependabot\/|renovate\/|sync\/|release\/)/.test(headRef)) {
               console.log(`✅ Exempt automation branch (${headRef}) — ticket ID not required.`);
               return;
+            }
+
+            // Records names and content must both qualify (#1673).
+            if (/^orbit\/[a-z0-9]+(-[a-z0-9]+)+$/.test(headRef) && /^docs\(orbit\/[a-z0-9]+(-[a-z0-9]+)*\): \S/.test(title)) {
+              try {
+                const files = await github.paginate(github.rest.pulls.listFiles, {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.payload.pull_request.number,
+                  per_page: 100,
+                });
+                const recordsPath = name => typeof name === 'string' &&
+                  name.startsWith('docs/orbit/') && name.length > 'docs/orbit/'.length &&
+                  !name.split('/').includes('..');
+                if (files.length > 0 && files.every(file => recordsPath(file.filename) &&
+                    (file.previous_filename === undefined || recordsPath(file.previous_filename)))) {
+                  const head = context.payload.pull_request.head;
+                  const params = { owner: head.repo.owner.login, repo: head.repo.name, ref: head.sha };
+                  const { data: plans } = await github.rest.repos.getContent({ ...params, path: 'docs/orbit/plans' });
+                  if (!Array.isArray(plans)) throw new Error('Plan directory missing');
+                  const ids = [];
+                  for (const file of plans.filter(f => f.type === 'file' && f.name.endsWith('.json'))) {
+                    const { data } = await github.rest.repos.getContent({ ...params, path: file.path });
+                    const record = JSON.parse(Buffer.from(data.content, 'base64').toString('utf8'));
+                    if (!/^plan-[a-z0-9]+(-[a-z0-9]+)*$/.test(record.id)) throw new Error('Invalid plan ID');
+                    const id = record.id.slice(5);
+                    if (headRef.startsWith(`orbit/${id}-`) && headRef.length > id.length + 7) ids.push(id);
+                  }
+                  ids.sort((a, b) => b.length - a.length);
+                  const id = ids[0];
+                  const body = context.payload.pull_request.body || '';
+                  if (!id || !title.startsWith(`docs(orbit/${id}): `) ||
+                      !body.split(/\r?\n/).includes(`Initiative: plan-${id}`)) {
+                    throw new Error('Initiative must match the branch, title and body');
+                  }
+                  console.log(`Exempt ORBIT records branch (${headRef}).`);
+                  return;
+                }
+              } catch (error) {
+                console.log(`ORBIT file check failed: ${error.message}`);
+              }
             }
 
             // Pattern matches:

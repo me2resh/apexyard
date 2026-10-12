@@ -16,6 +16,7 @@ Behaviour change: the active ticket now lives in each working tree's git dir (#1
 
 - The Bash dispatcher and the ticket-first gate fail closed (#1623, AgDR-0228). The `dispatch-bash.sh` and `require-active-ticket.sh` entries in `.claude/settings.json` set `onFailure` to `block` with timeouts of 20 and 10 seconds, taken from the profile in `docs/perf/hook-fail-closed-profile-2026-10.md`. `onFailure` needs Claude Code 2.1.295 or later. An older client ignores the field. `docs/hooks-fail-closed.md` describes the behavior, the `claude --settings '{"disableAllHooks": true}'` escape hatch, and the version finding. `bin/hook-timing-profile.py` measures hook timing. `bin/check-escape-hatch.sh` tests the escape hatch. A new workflow runs `claude plugin validate --strict` on the marketplace with a pinned Claude Code version.
 - `bin/token-cost.py` reports the token and time cost of a session (#1624). It has a session view, a reviewer view and a forge view of me2resh/apexyard PRs. `docs/perf/token-cost.md` gives the usage and the counting rules. The 2026-10-10 baseline is in `docs/perf/token-cost-baseline-2026-10-10.md`.
+- `apexyard-explainer` shows one plain sentence for each tool call in a pane (#1661). It uses templates and keeps the last five lines in session memory. `/explainer-toggle` opens or closes the pane.
 
 ### Changed
 
@@ -28,6 +29,7 @@ Behaviour change: the active ticket now lives in each working tree's git dir (#1
 - `/fan-out` creates each writer worktree from its task's own repo and writes the markers for it.
 - `/approve-merge` offers to remove the merged PR's worktree. It asks first and never uses `--force`.
 - The macOS hook test run is cheaper (#1613, AgDR-0229). `_lib-extract-pr.sh` skips five process launches whose result is known in advance, so one call of `block-merge-on-red-ci.sh` takes 81 ms instead of 139 ms on macOS. No gate decision changes. `bin/run-hook-tests.sh` packs `--shard I/N` by the measured weights in `bin/hook-test-weights.txt` and keeps round-robin when that file is missing. Five merge-gate tests write the same mock text in every case. The report is `docs/perf/hook-test-profile-2026-10-round2.md`.
+- A records PR may use the branch `orbit/<initiative-id>-<description>` and the title `docs(orbit/<initiative-id>): <description>` without a ticket (#1673). `validate-branch-name.sh`, `validate-pr-create.sh` and the PR title check allow this only when every changed file is under `docs/orbit/`. They compare the branch with a remote-tracking trunk ref. They block when they cannot tell, and the message names the normal `{type}/{TICKET-ID}-{description}` shape. The branch resolves the longest existing Plan ID prefix and blocks unknown initiatives. The PR body and commits carry `Initiative: plan-<initiative-id>`. Records lint blocks cross-initiative records and unreferenced snapshots. Review gates, merge gates and per-PR approval do not change.
 
 ## [v5.8.0] — 2026-10-08
 

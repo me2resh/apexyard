@@ -105,7 +105,15 @@ _portfolio_reset_caches() {
   _PP_FP=""
   _PP_WS=""
   _PP_REG=""
-  export -n _PP_FP _PP_WS _PP_REG
+  # These names are lib-internal and must not stay exported. Bash,
+  # including bash 3.2, drops the flag with `export -n`. zsh rejects
+  # `-n` (`bad option: -n`). `typeset -g +x` drops the flag in zsh and
+  # keeps the names global inside this function.
+  if [ -n "${ZSH_VERSION:-}" ]; then
+    typeset -g +x _PP_FP _PP_WS _PP_REG
+  else
+    export -n _PP_FP _PP_WS _PP_REG
+  fi
 }
 
 # ------------------------------------------------------------------------------
@@ -199,7 +207,7 @@ _portfolio_root() {
   # resolver — same anchor conditions as the walk below, so it can only
   # agree with what that walk would have found, never diverge from it
   # (the exact "two hand-maintained resolvers disagree" failure mode this
-  # issue's own "Related" section warns about, apexyard-premium#537).
+  # issue's own "Related" section warns about, a private downstream issue).
   #
   # Deliberately does NOT short-circuit on a resolve_ops_root() MISS:
   # unlike resolve_ops_root() (which returns empty when no anchor is

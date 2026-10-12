@@ -1,0 +1,10 @@
+{
+  "name": "apexyard-explainer",
+  "version": "0.1.0",
+  "description": "Display-only pane that explains each tool call in one plain sentence",
+  "author": {
+    "name": "ApexYard"
+  },
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}

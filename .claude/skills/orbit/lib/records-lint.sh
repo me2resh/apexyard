@@ -17,7 +17,7 @@
 #
 # Usage: records-lint.sh --orbit-root <dir> [--repo <owner/name>] [--base <ref>] [--all]
 # Exit: 0 clean; 10 validate; 11 leak scrub; 12 sentence; 13 Missing/Next;
-#       14 local path; 20 usage or missing tool.
+#       14 local path; 15 initiative; 20 usage or missing tool.
 
 set -u
 
@@ -62,6 +62,56 @@ fail() { # code check file message
 if ! out=$("$ORBIT_BIN" validate --all --root "$orbit_root" 2>&1); then
   fail 10 validate "" "orbit validate --all failed: $out"
 fi
+
+# Initiative scope is checked even with --all, including deleted records and history.
+branch=$(git -C "$orbit_root" branch --show-current 2>/dev/null) || branch=""
+case "$branch" in orbit/*)
+  # shellcheck source=../../../hooks/_lib-orbit-records.sh
+  . "$script_dir/../../../hooks/_lib-orbit-records.sh"
+  orbit_records_branch_shape "$branch" && orbit_records_initiative "$orbit_root" "$branch" ||
+    fail 15 initiative "" "No matching plan record exists for the branch initiative."
+  plan_id="plan-$ORBIT_INITIATIVE"
+  scope_top=$(git -C "$orbit_root" rev-parse --show-toplevel)
+  scope_base=$(git -C "$orbit_root" merge-base "$base" HEAD) ||
+    fail 15 initiative "" "Cannot resolve the initiative comparison base."
+  scope_files=()
+  while IFS= read -r -d '' f; do scope_files+=("$f"); done < <(
+    { git -C "$scope_top" diff --name-only --no-renames -z "$scope_base" -- docs/orbit/
+      git -C "$scope_top" ls-files --others --exclude-standard -z -- docs/orbit/; })
+  snapshots=()
+  for f in ${scope_files[@]+"${scope_files[@]}"}; do
+    case "$f" in docs/orbit/reconciliations/*.json)
+      if [ -f "$scope_top/$f" ]; then
+        snap=$(jq -er --arg p "$plan_id" 'select(.planId == $p) | .projectSnapshotId' "$scope_top/$f") ||
+          fail 15 initiative "$f" "Record belongs to another initiative."
+        snapshots+=("$snap")
+      fi ;;
+    esac
+  done
+  for f in ${scope_files[@]+"${scope_files[@]}"}; do
+    case "$f" in
+      docs/orbit/plans/*.notes.md)
+        [ "${f##*/}" = "$plan_id.notes.md" ] || fail 15 initiative "$f" "Notes belong to another initiative."
+        continue ;;
+      *.json) ;;
+      *) fail 15 initiative "$f" "Cannot establish record initiative." ;;
+    esac
+    if [ -f "$scope_top/$f" ]; then record=$(cat "$scope_top/$f")
+    else record=$(git -C "$scope_top" show "$scope_base:$f") || fail 15 initiative "$f" "Cannot read deleted record."; fi
+    case "$f" in
+      docs/orbit/plans/*|docs/orbit/history/*) owner=$(printf '%s' "$record" | jq -er '.id') ;;
+      docs/orbit/slices/*|docs/orbit/reconciliations/*) owner=$(printf '%s' "$record" | jq -er '.planId') ;;
+      docs/orbit/snapshots/*)
+        id=$(printf '%s' "$record" | jq -er '.id') || fail 15 initiative "$f" "Cannot read snapshot ID."
+        found=0
+        for snap in ${snapshots[@]+"${snapshots[@]}"}; do [ "$snap" != "$id" ] || found=1; done
+        [ "$found" -eq 1 ] || fail 15 initiative "$f" "Snapshot is not referenced by a changed reconciliation."
+        continue ;;
+      *) fail 15 initiative "$f" "Cannot establish record initiative." ;;
+    esac
+    [ "$owner" = "$plan_id" ] || fail 15 initiative "$f" "Record belongs to another initiative."
+  done
+;; esac
 
 # Select the files for checks 2 to 5.
 files=()
