@@ -59,6 +59,14 @@ for opener in '<<"TEXT"' '<<TEXT' '<<-TEXT'; do
 done
 unterminated=$(printf "cat <<'TEXT'\n> src/app.ts")
 check 'unterminated heredoc falls back' write "$(write_result "$unterminated")"
+# zsh ties these names to PATH or a search array. A literal assignment
+# must stay raw, so a redirect inside a quoted heredoc stays visible.
+for zname in path fpath cdpath manpath module_path mailpath psvar; do
+  check "zsh $zname assignment stays raw" write \
+    "$(write_result "$(printf "%s=/x; cat <<'TEXT'\n> src/app.ts\nTEXT" "$zname")")"
+done
+check 'ordinary lowercase path assignment stays data' read \
+  "$(write_result "$(printf "d=/x; cat <<'TEXT'\n> src/app.ts\nTEXT")")"
 ambiguous_delimiter=$(printf "cat <<'X'Y\npayload\nXY\necho x > src/app.ts\nX")
 check 'unsupported delimiter falls back' write \
   "$(write_result "$ambiguous_delimiter")"
