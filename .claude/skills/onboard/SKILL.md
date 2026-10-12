@@ -7,9 +7,7 @@ effort: medium
 allowed-tools: Bash, Read, Write, Skill, AskUserQuestion
 ---
 
-## Writing rule
-
-When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
 # /onboard — Guided First-Run Onboarding
 

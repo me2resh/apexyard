@@ -172,6 +172,7 @@ _forge_kind_for() {
 # Shape-based — used where the command string is in hand (the extractors), so
 # no config lookup is needed: the command literally says which CLI it drives.
 _forge_from_command() {
+  case "${1:-}" in *glab*) ;; *) echo gh; return 0 ;; esac
   if echo "${1:-}" | grep -qE '\bglab\s+(mr|api)\b'; then echo glab; else echo gh; fi
 }
 
@@ -354,6 +355,15 @@ _normalize_json_escapes_legacy_piece() {
 # newlines to spaces. This fallback only broadens detection because the
 # original text is also scanned.
 _join_shell_continuations() {
+  case "$1" in
+    *\\*) ;;
+    *)
+      if command -v awk >/dev/null 2>&1; then
+        printf '%s' "$1"
+        return 0
+      fi
+      ;;
+  esac
   join_shell_continuations "$1"
 }
 
@@ -605,6 +615,8 @@ is_merge_command() {
 # glab argv, API elements with internal commas, split-tail strings, JS
 # backticks, and short list-join / star-unpack gaps. See AgDR-0214.
 _has_argv_merge() {
+  # Every pattern needs a quoted binary element, so no quotes means no match.
+  case "$1" in *\'*|*\"*|*\`*) ;; *) return 1 ;; esac
   # Use tr, not ${1//$'\n'/ }: under macOS /bin/bash 3.2 that substitution
   # slows sharply with input size (about 2,000 lines took over a minute), and
   # a gate that times out does not block. tr is linear.
@@ -862,14 +874,22 @@ extract_pr_number() {
 
   # 1. gh api path extraction — greps the /pulls/<N>/merge segment directly.
   #    The PR number lives in the URL path, so redirections cannot affect it.
-  pr=$(echo "$cmd" | grep -oE 'repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge' | grep -oE '/pulls/[0-9]+/' | grep -oE '[0-9]+' | head -1)
+  case "$cmd" in
+    *pulls/*)
+      pr=$(echo "$cmd" | grep -oE 'repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge' | grep -oE '/pulls/[0-9]+/' | grep -oE '[0-9]+' | head -1)
+      ;;
+  esac
 
   # 1b. glab api path extraction — the /merge_requests/<N>/merge segment (#767).
   #     Same URL-path discipline as step 1: the MR iid lives in the path, so
   #     redirections cannot affect it. The `/merge` suffix keeps this from
   #     grabbing an iid out of a non-merge URL (e.g. `/merge_requests/42/notes`).
   if [ -z "$pr" ]; then
-    pr=$(echo "$cmd" | grep -oE 'merge_requests/[0-9]+/merge' | grep -oE '[0-9]+' | head -1)
+    case "$cmd" in
+      *merge_requests/*)
+        pr=$(echo "$cmd" | grep -oE 'merge_requests/[0-9]+/merge' | grep -oE '[0-9]+' | head -1)
+        ;;
+    esac
   fi
 
   # 2. gh pr merge positional arg.
@@ -1043,7 +1063,12 @@ merge_command_uses_variable() {
   # returns the literal text between quotes verbatim (no expansion), so a
   # quoted `"$REPO"` still surfaces its leading `$` for this check.
   local wspan wargs wpr wrepo
-  wspan=$(echo "$cmd" | grep -oE '\btracker_pr_merge\b[^|;&)]*')
+  wspan=""
+  case "$cmd" in
+    *tracker_pr_merge*)
+      wspan=$(echo "$cmd" | grep -oE '\btracker_pr_merge\b[^|;&)]*')
+      ;;
+  esac
   if [ -n "$wspan" ]; then
     wargs=$(echo "$wspan" | sed -E 's/^tracker_pr_merge[[:space:]]+//')
     wrepo=$(_extract_wrapper_arg "$wargs" 1)

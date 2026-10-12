@@ -1,0 +1,52 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-token-o5-effort-spike",
+  "planId": "plan-apexyard-token-efficiency",
+  "outcomeId": "o5-subagents-start-lean",
+  "basedOn": {
+    "planRevision": 3,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261011T223213Z",
+    "repositories": {}
+  },
+  "objective": "Test per-agent reasoning effort on an Opus custom agent and evaluate a lean-effort delta reviewer. This spike covers part of ac5-3 and cannot achieve it alone.",
+  "why": "ac5-3 is not-verified in the 2026-10-11T22:32Z reconciliation. The plan notes call the per-agent reasoning effort field undocumented, so ac5-3 starts with a spike. No file under .claude/agents/ on dev at 3a31d4e sets an effort field. docs/eval-agents/corpus/rex.json has 10 entries and no delta entry. C4 needs at least five delta entries first. The reconciliation counts 98 delta re-reviews at a mean of 77k tokens. C2 allows lower effort only on Opus delta re-reviews with a prior marker, through a separate agent file. The o5 build slice #1662 is open, so this spike is a second open o5 slice. C6 allows a spike before the build slice, not beside it. The owner waiver is recorded in the plan notes. This slice does not achieve ac5-3. ac5-3 also needs routing of delta re-reviews to the lean agent file, which this slice excludes. After this slice, ac5-3 is partially-verified at best.",
+  "contributesTo": [
+    "ac5-3"
+  ],
+  "scope": {
+    "include": [
+      "A spike ticket sets a token cap from the run count and corpus mining. Budget at least 30 Rex runs at k=3, plus k=8 for each changed entry.",
+      "Kill criteria: the step 0 payoff gate fails, no effort field works on Opus, or the preset effect test fails. Also stop on any verdict flip or a spent token cap.",
+      "Step 0: use the o1 script to count delta rounds that followed a prior Rex approval. Measure their thinking-plus-output token share. Kill the spike if best-case saving is below the 20% noise floor from the #1652 report.",
+      "Step 1: CLI 2.1.296 says agent types get their model, reasoning effort and tools from .claude/agents/*.md frontmatter. Confirm the exact effort key. Confirm the minimum CLI version. Cite the CLI string or docs page in the memo.",
+      "Record that the Agent tool also has a per-spawn effort option. Explain why C2 still needs a separate agent file. Hooks can see and pin the file. They cannot see or pin a per-spawn option.",
+      "Step 2: create a throwaway copy of code-reviewer.md before the headless session starts. Keep the same prompt, model: opus and omitClaudeMd. Set the effort key. Confirm that the transcript shows Opus.",
+      "Confirm that apply-agent-routing.sh keeps the effort key and allows the new agent type. Confirm the same behavior in block-agent-routing-drift.sh.",
+      "Set the effect test before running evaluations. Thinking or output tokens per review must fall by at least 30% on paired runs of the same entry at k=3. A changed transcript alone is not proof.",
+      "Step 3: add at least five delta entries to docs/eval-agents/corpus/rex.json. Use real Rex delta rounds that followed a prior Rex approval.",
+      "Candidates: the delta on an advisory-labelled commit that found a new blocking bug (plan notes, What stays as is), and the rex-1289 range bd78903e..9382269f.",
+      "Each delta entry has a diff_range from the approved commit to the new commit. Its oracle is confirmed_fix, independent_review or no_contradiction. Never use the Rex delta verdict as the oracle (AgDR-0089).",
+      "At least one delta entry must have a confirmed BLOCKING or HIGH defect. If none exists, stop before step 4. If fewer than five delta entries exist, stop before step 4.",
+      "Step 4: run /eval-agents on the delta entries at k=3. Use full-effort code-reviewer as the baseline. Use the lean-effort copy as the after variant.",
+      "Both eval prompts carry the production delta brief. Include the approved SHA. Include the old..new range. State that a prior approval exists. Include a CI-green stub. Include the linked-issue text. Without these inputs, Rex requests changes on most clean entries and saturates the flip check.",
+      "Score the justified verdict for each entry. Score its defect catch. Record its verdict label. A label flip only between CHANGES REQUESTED and COMMENT is reported, but it is not a pass.",
+      "Flips use the #1652 definition: an after verdict that never appeared in the baseline runs of that entry. Run each changed entry at k=8.",
+      "Keep /eval-agents isolation. Run no tracker or network command. Write no file under .claude/session/reviews/.",
+      "Use the o1 reviewers view for each variant. Report first-turn context, thinking tokens, output tokens and total tokens per review, before and after.",
+      "Write a spike memo under docs/spike-memos/. Record the field facts, measured numbers, kill-criteria outcome and disposition. Record the exact frontmatter diff of the throwaway agent file. A later build slice must reproduce the measured variant.",
+      "Write an AgDR with the decision to adopt or reject the lean-effort delta reviewer. Include the measured numbers.",
+      "Write an /eval-agents report under docs/eval-agents/reports/. Include the method, per-entry scores, verdicts and flip count.",
+      "On a kill, record the reason in the memo. Record it in the AgDR. The new delta corpus entries still ship."
+    ],
+    "exclude": [
+      "A committed lean-effort agent file and any routing of delta re-reviews to it (a later slice, if the spike promotes)",
+      "Any change to the code-reviewer.md prompt or its floor block",
+      "Delta re-reviews after a blocking finding. They have no prior approval marker and keep the full-effort Rex (C2, ac7-6)",
+      "Hakim and Tariq reasoning effort",
+      "A reviewer model other than Opus (C2)",
+      "Review depth tiers and the resume-or-fresh rule (o7)",
+      "The ac5-1 and ac5-2 work (slice-token-o5-review-agents-lean)",
+      "Any edit to block-unreviewed-merge.sh, block-merge-on-red-ci.sh or another merge-gate hook (C1)"
+    ]
+  }
+}

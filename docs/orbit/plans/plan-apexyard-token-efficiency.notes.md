@@ -109,6 +109,11 @@ o1 first, because every later change and the harness o4 slice measure with its s
 - **Reconciliation 2026-10-11T22:32Z (dev 9b25c83).** It follows the merges of #1651 (o9), #1646 (o2 spike) and #1652 (harness o4). ac2-1, ac3-1, ac4-2 and ac8-2 are achieved. ac5-1 and ac9-1 are partially-verified.
 - **o5 slice (2026-10-11).** `slice-token-o5-review-agents-lean` covers ac5-1 and ac5-2. The owner chose this cut; ac5-3 gets a later spike slice. Naqid returned proceed-with-changes, and the record has all seven changes.
 - **Owner waiver (2026-10-11).** In o5, Hakim gets two eval cycles instead of one. The trim runs first and omitClaudeMd second, so a flip traces to one change. Hakim missed a HIGH defect with omitClaudeMd in #1652, and the cause is not known.
+- **o5 effort spike (2026-10-12).** `slice-token-o5-effort-spike` covers part of ac5-3. Naqid returned proceed-with-changes, and the record has all 14 changes.
+- **Owner waiver (2026-10-12).** The o5 effort spike may stay open next to the o5 slice #1662, as a second open o5 slice (C6). It has a payoff gate. Step 0 counts delta rounds and their thinking-plus-output share. The spike stops if the best case is below the 20% noise floor from #1652.
+- **o2 build slice (2026-10-12).** `slice-token-o2-compaction-build` covers ac2-2 to ac2-4. Naqid returned proceed-with-changes, and the record has all 15 changes.
+- **Owner decision (2026-10-12).** The o2 build uses one draft PR. The ac2-3 and ac2-4 commits come first, and the ac2-2 measurement commit comes last. ac2-2 is time-boxed to 7 days after o6 (#1663) merges. With no valid session by then, the PR merges and ac2-2 stays not-verified. The window floor is 300,000.
+- **Figure mismatch (2026-10-12).** The reconciliation's p90 853k, fork 281k and 17.8M figures differ from docs/perf/token-cost-baseline-2026-10-10.md. The baseline file governs. The next reconciliation corrects them.
 
 ## Checks
 

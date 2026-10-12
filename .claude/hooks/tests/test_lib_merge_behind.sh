@@ -53,21 +53,18 @@ make_sandbox_with_gh() {
   local sb
   sb=$(mktemp -d)
   mkdir -p "$sb/bin"
-  if [ "$behind_by" = "FAIL" ]; then
-    cat > "$sb/bin/gh" <<'EOF'
+  printf '%s\n' "$behind_by" > "$sb/mock-behind_by"
+  cat > "$sb/bin/gh" <<'EOF'
 #!/bin/bash
-exit 1
-EOF
-  else
-    cat > "$sb/bin/gh" <<EOF
-#!/bin/bash
-case "\$*" in
+sb=${0%/bin/gh}
+IFS= read -r behind_by < "$sb/mock-behind_by"
+if [ "$behind_by" = "FAIL" ]; then exit 1; fi
+case "$*" in
   *"api "*"compare/"*) echo "$behind_by" ;;
   *) ;;
 esac
 exit 0
 EOF
-  fi
   chmod +x "$sb/bin/gh"
   echo "$sb"
 }
@@ -234,45 +231,50 @@ carry_over_in() {
 make_rex_carry_gh_mock() {
   local sb="$1" repo_dir="$2" unresolvable="${3:-}"
   mkdir -p "$sb/bin"
-  cat > "$sb/bin/gh" <<EOF
+  printf '%s\n' "$repo_dir" > "$sb/mock-repo_dir"
+  printf '%s\n' "$unresolvable" > "$sb/mock-unresolvable"
+  cat > "$sb/bin/gh" <<'EOF'
 #!/bin/bash
+sb=${0%/bin/gh}
+IFS= read -r repo_dir < "$sb/mock-repo_dir"
+IFS= read -r unresolvable < "$sb/mock-unresolvable"
 REPO_DIR="$repo_dir"
 UNRESOLVABLE="$unresolvable"
-args="\$*"
-case "\$args" in
+args="$*"
+case "$args" in
   *"/branches/"*)
-    ref=\$(printf '%s' "\$args" | sed -E 's#.*branches/([^ ]+).*#\1#')
+    ref=$(printf '%s' "$args" | sed -E 's#.*branches/([^ ]+).*#\1#')
     # Minimal URL-decode for test branch names that contain '/'.
-    ref=\$(printf '%s' "\$ref" | sed 's/%2[Ff]/\//g')
-    if [ -n "\$UNRESOLVABLE" ] && [ "\$ref" = "\$UNRESOLVABLE" ]; then
+    ref=$(printf '%s' "$ref" | sed 's/%2[Ff]/\//g')
+    if [ -n "$UNRESOLVABLE" ] && [ "$ref" = "$UNRESOLVABLE" ]; then
       exit 1
     fi
     # Fully-qualified heads/ — a tag with the same name must not win.
-    sha=\$(GIT_DIR="\$REPO_DIR/gitdir" GIT_WORK_TREE="\$REPO_DIR" git rev-parse "refs/heads/\$ref" 2>/dev/null)
-    [ -z "\$sha" ] && exit 1
-    echo "\$sha"
+    sha=$(GIT_DIR="$REPO_DIR/gitdir" GIT_WORK_TREE="$REPO_DIR" git rev-parse "refs/heads/$ref" 2>/dev/null)
+    [ -z "$sha" ] && exit 1
+    echo "$sha"
     exit 0
     ;;
   *"commits/"*)
-    target=\$(printf '%s' "\$args" | sed -E 's#.*commits/([^ ]+).*#\1#')
-    if ! GIT_DIR="\$REPO_DIR/gitdir" GIT_WORK_TREE="\$REPO_DIR" git cat-file -e "\${target}^{commit}" 2>/dev/null; then
+    target=$(printf '%s' "$args" | sed -E 's#.*commits/([^ ]+).*#\1#')
+    if ! GIT_DIR="$REPO_DIR/gitdir" GIT_WORK_TREE="$REPO_DIR" git cat-file -e "${target}^{commit}" 2>/dev/null; then
       exit 1
     fi
-    parents=\$(GIT_DIR="\$REPO_DIR/gitdir" GIT_WORK_TREE="\$REPO_DIR" git show -s --format='%P' "\$target")
-    tree=\$(GIT_DIR="\$REPO_DIR/gitdir" GIT_WORK_TREE="\$REPO_DIR" git rev-parse "\${target}^{tree}")
-    p0=\$(printf '%s' "\$parents" | awk '{print \$1}')
-    p1=\$(printf '%s' "\$parents" | awk '{print \$2}')
-    p2=\$(printf '%s' "\$parents" | awk '{print \$3}')
-    if [ -n "\$p2" ]; then
-      pj="[{\"sha\":\"\$p0\"},{\"sha\":\"\$p1\"},{\"sha\":\"\$p2\"}]"
-    elif [ -n "\$p1" ]; then
-      pj="[{\"sha\":\"\$p0\"},{\"sha\":\"\$p1\"}]"
-    elif [ -n "\$p0" ]; then
-      pj="[{\"sha\":\"\$p0\"}]"
+    parents=$(GIT_DIR="$REPO_DIR/gitdir" GIT_WORK_TREE="$REPO_DIR" git show -s --format='%P' "$target")
+    tree=$(GIT_DIR="$REPO_DIR/gitdir" GIT_WORK_TREE="$REPO_DIR" git rev-parse "${target}^{tree}")
+    p0=$(printf '%s' "$parents" | awk '{print $1}')
+    p1=$(printf '%s' "$parents" | awk '{print $2}')
+    p2=$(printf '%s' "$parents" | awk '{print $3}')
+    if [ -n "$p2" ]; then
+      pj="[{\"sha\":\"$p0\"},{\"sha\":\"$p1\"},{\"sha\":\"$p2\"}]"
+    elif [ -n "$p1" ]; then
+      pj="[{\"sha\":\"$p0\"},{\"sha\":\"$p1\"}]"
+    elif [ -n "$p0" ]; then
+      pj="[{\"sha\":\"$p0\"}]"
     else
       pj="[]"
     fi
-    printf '{"sha":"%s","parents":%s,"commit":{"tree":{"sha":"%s"}}}\n' "\$target" "\$pj" "\$tree"
+    printf '{"sha":"%s","parents":%s,"commit":{"tree":{"sha":"%s"}}}\n' "$target" "$pj" "$tree"
     exit 0
     ;;
   *) exit 1 ;;
@@ -665,17 +667,22 @@ POISON
   # Custom mock: branches/main -> real branch tip; commits/main -> tag tip
   # (models the commits/{ref} shadowing the hardened code must not use).
   mkdir -p "$sb/bin"
-  cat > "$sb/bin/gh" <<EOF
+  printf '%s\n' "$repo" > "$sb/mock-repo"
+  printf '%s\n' "$TAG_TIP" > "$sb/mock-TAG_TIP"
+  cat > "$sb/bin/gh" <<'EOF'
 #!/bin/bash
+sb=${0%/bin/gh}
+IFS= read -r repo < "$sb/mock-repo"
+IFS= read -r TAG_TIP < "$sb/mock-TAG_TIP"
 REPO_DIR="$repo"
-args="\$*"
-case "\$args" in
+args="$*"
+case "$args" in
   *"/branches/"*)
-    ref=\$(printf '%s' "\$args" | sed -E 's#.*branches/([^ ]+).*#\1#')
-    ref=\$(printf '%s' "\$ref" | sed 's/%2[Ff]/\//g')
-    sha=\$(GIT_DIR="\$REPO_DIR/gitdir" GIT_WORK_TREE="\$REPO_DIR" git rev-parse "refs/heads/\$ref" 2>/dev/null)
-    [ -z "\$sha" ] && exit 1
-    echo "\$sha"
+    ref=$(printf '%s' "$args" | sed -E 's#.*branches/([^ ]+).*#\1#')
+    ref=$(printf '%s' "$ref" | sed 's/%2[Ff]/\//g')
+    sha=$(GIT_DIR="$REPO_DIR/gitdir" GIT_WORK_TREE="$REPO_DIR" git rev-parse "refs/heads/$ref" 2>/dev/null)
+    [ -z "$sha" ] && exit 1
+    echo "$sha"
     exit 0
     ;;
   *"-q .sha"*|*"commits/main"*)
@@ -684,20 +691,20 @@ case "\$args" in
     exit 0
     ;;
   *"commits/"*)
-    target=\$(printf '%s' "\$args" | sed -E 's#.*commits/([^ ]+).*#\1#')
-    if ! GIT_DIR="\$REPO_DIR/gitdir" GIT_WORK_TREE="\$REPO_DIR" git cat-file -e "\${target}^{commit}" 2>/dev/null; then
+    target=$(printf '%s' "$args" | sed -E 's#.*commits/([^ ]+).*#\1#')
+    if ! GIT_DIR="$REPO_DIR/gitdir" GIT_WORK_TREE="$REPO_DIR" git cat-file -e "${target}^{commit}" 2>/dev/null; then
       exit 1
     fi
-    parents=\$(GIT_DIR="\$REPO_DIR/gitdir" GIT_WORK_TREE="\$REPO_DIR" git show -s --format='%P' "\$target")
-    tree=\$(GIT_DIR="\$REPO_DIR/gitdir" GIT_WORK_TREE="\$REPO_DIR" git rev-parse "\${target}^{tree}")
-    p0=\$(printf '%s' "\$parents" | awk '{print \$1}')
-    p1=\$(printf '%s' "\$parents" | awk '{print \$2}')
-    if [ -n "\$p1" ]; then
-      pj="[{\"sha\":\"\$p0\"},{\"sha\":\"\$p1\"}]"
+    parents=$(GIT_DIR="$REPO_DIR/gitdir" GIT_WORK_TREE="$REPO_DIR" git show -s --format='%P' "$target")
+    tree=$(GIT_DIR="$REPO_DIR/gitdir" GIT_WORK_TREE="$REPO_DIR" git rev-parse "${target}^{tree}")
+    p0=$(printf '%s' "$parents" | awk '{print $1}')
+    p1=$(printf '%s' "$parents" | awk '{print $2}')
+    if [ -n "$p1" ]; then
+      pj="[{\"sha\":\"$p0\"},{\"sha\":\"$p1\"}]"
     else
-      pj="[{\"sha\":\"\$p0\"}]"
+      pj="[{\"sha\":\"$p0\"}]"
     fi
-    printf '{"sha":"%s","parents":%s,"commit":{"tree":{"sha":"%s"}}}\n' "\$target" "\$pj" "\$tree"
+    printf '{"sha":"%s","parents":%s,"commit":{"tree":{"sha":"%s"}}}\n' "$target" "$pj" "$tree"
     exit 0
     ;;
   *) exit 1 ;;
@@ -810,9 +817,10 @@ mkdir -p "$sb/bin"
 cat > "$sb/bin/gen_files.py" <<'PYEOF'
 print("{\"files\": [" + ",".join('{"filename":"f%d.txt"}' % i for i in range(300)) + "]}")
 PYEOF
-cat > "$sb/bin/gh" <<EOF
+cat > "$sb/bin/gh" <<'EOF'
 #!/bin/bash
-case "\$*" in
+sb=${0%/bin/gh}
+case "$*" in
   *"pulls/1/files"*) echo "src/pr_only.txt" ;;
   *"compare/"*) python3 "$sb/bin/gen_files.py" 2>/dev/null || echo '{"files":[]}' ;;
 esac

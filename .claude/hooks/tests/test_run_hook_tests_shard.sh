@@ -93,4 +93,43 @@ rc=0
 "$BASH" "$RUNNER" > "$TMP/run" 2>&1 || rc=$?
 check test "$rc" -eq 1
 check grep -q 'synthetic failure' "$TMP/run"
+# Weighted shards cover every test once for each supported shard count.
+WEIGHTS="$TMP/weights"
+printf '# Measured weights\n\n100 .claude/hooks/tests/test_a.sh\n90 .claude/hooks/tests/test_b.sh\n10 .claude/hooks/tests/test_c.sh\n999 .claude/hooks/tests/test_absent.sh\n' > "$WEIGHTS"
+for n in 1 2 3 4 5 6 7 8; do
+  : > "$TMP/union"
+  for ((i=1; i<=n; i++)); do
+    HOOK_TEST_WEIGHTS_FILE="$WEIGHTS" list "$RUNNER" --shard "$i/$n" >> "$TMP/union"
+  done
+  LC_ALL=C sort "$TMP/union" > "$TMP/sorted"
+  check cmp "$TMP/all" "$TMP/sorted"
+  LC_ALL=C sort "$TMP/union" | uniq -d > "$TMP/duplicates"
+  check test ! -s "$TMP/duplicates"
+done
+HOOK_TEST_WEIGHTS_FILE="$WEIGHTS" list "$RUNNER" --shard 1/1 > "$TMP/one"
+check cmp "$TMP/all" "$TMP/one"
+: > "$WEIGHTS"
+HOOK_TEST_WEIGHTS_FILE="$WEIGHTS" list "$RUNNER" --shard 1/2 > "$TMP/empty"
+list "$RUNNER" --shard 1/2 > "$TMP/round-robin"
+check cmp "$TMP/empty" "$TMP/round-robin"
+# Five tests: a goes to shard 1, b and c to shard 2, d to shard 1,
+# and e to shard 2. Missing entries have weight 10.
+mkdir -p "$TMP/five/bin" "$TMP/five/.claude/hooks/tests"
+cp "$ROOT/bin/run-hook-tests.sh" "$TMP/five/bin/"
+for name in a b c d e; do
+  printf 'exit 0\n' > "$TMP/five/.claude/hooks/tests/test_$name.sh"
+done
+printf '# Comments and blank lines are ignored\n\n100 .claude/hooks/tests/test_a.sh\n90 .claude/hooks/tests/test_b.sh\n10 .claude/hooks/tests/test_c.sh\n999 .claude/hooks/tests/test_absent.sh\n' > "$WEIGHTS"
+HOOK_TEST_WEIGHTS_FILE="$WEIGHTS" list "$TMP/five/bin/run-hook-tests.sh" --shard 1/2 > "$TMP/weighted1"
+printf '.claude/hooks/tests/test_a.sh\n.claude/hooks/tests/test_d.sh\n' > "$TMP/expected"
+check cmp "$TMP/weighted1" "$TMP/expected"
+HOOK_TEST_WEIGHTS_FILE="$WEIGHTS" list "$TMP/five/bin/run-hook-tests.sh" --shard 2/2 > "$TMP/weighted2"
+printf '.claude/hooks/tests/test_b.sh\n.claude/hooks/tests/test_c.sh\n.claude/hooks/tests/test_e.sh\n' > "$TMP/expected"
+check cmp "$TMP/weighted2" "$TMP/expected"
+printf '10 .claude/hooks/tests/test_d.sh\n10 .claude/hooks/tests/test_e.sh\n' >> "$WEIGHTS"
+HOOK_TEST_WEIGHTS_FILE="$WEIGHTS" list "$TMP/five/bin/run-hook-tests.sh" --shard 1/2 > "$TMP/explicit"
+check cmp "$TMP/weighted1" "$TMP/explicit"
+printf '# No weights\n\n' > "$WEIGHTS"
+HOOK_TEST_WEIGHTS_FILE="$WEIGHTS" list "$RUNNER" --shard 1/2 > "$TMP/comments"
+check cmp "$TMP/comments" "$TMP/round-robin"
 printf 'PASS=%s FAIL=0\n' "$pass"
