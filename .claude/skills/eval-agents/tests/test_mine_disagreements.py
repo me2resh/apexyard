@@ -133,6 +133,21 @@ class ParseVerdictTest(unittest.TestCase):
         body = "### Verdict\n**CHANGES REQUESTED**\n\n### Glossary\nx\n\n### Verdict\n**CHANGES REQUESTED**\n"
         self.assertEqual(md.parse_verdict(body)[0], md.CHANGES_REQUESTED)
 
+    def test_deciding_text_must_start_with_verdict(self):
+        cases = [
+            ("No blocking findings remain.", None),
+            ("**No blocking findings.**", None),
+            ("✅ APPROVED", md.APPROVED),
+            ("Verdict: APPROVED", md.APPROVED),
+            ("NOT APPROVED", md.CHANGES_REQUESTED),
+            ("APPROVED. Next action: reply", md.APPROVED),
+            ("**Verdict: APPROVED.** more text", md.APPROVED),
+            ("No findings.\n**BLOCKING**", None),
+        ]
+        for text, expected in cases:
+            with self.subTest(text=text):
+                self.assertEqual(md.parse_verdict("### Verdict\n" + text + "\n")[0], expected)
+
     def test_excerpt_is_capped(self):
         body = "### Verdict\n**APPROVED**\n" + ("word " * 400)
         self.assertLessEqual(len(md.parse_verdict(body)[1]), md.EXCERPT_LIMIT)
@@ -142,9 +157,9 @@ class ReviewedCommitTest(unittest.TestCase):
     FULL = "0123456789abcdef0123456789abcdef01234567"
     LATER = "fedcba9876543210fedcba9876543210fedcba98"
 
-    def test_body_footer_wins_over_api(self):
+    def test_api_wins_over_body_footer(self):
         body = "Reviewed commit: `{}`".format(self.FULL)
-        self.assertEqual(md.reviewed_commit(body, self.LATER), self.FULL)
+        self.assertEqual(md.reviewed_commit(body, self.LATER), self.LATER)
 
     def test_short_body_sha_resolves_to_api(self):
         body = "**Commit**: `{}`".format(self.FULL[:8])
@@ -154,6 +169,15 @@ class ReviewedCommitTest(unittest.TestCase):
         self.assertEqual(
             md.reviewed_commit("no sha here", self.FULL.upper()), self.FULL
         )
+
+    def test_body_fallback_without_api_commit(self):
+        body = "Last reviewed commit: `{}`\nReviewed commit: `{}`".format(
+            self.LATER, self.FULL[:8]
+        )
+        for api in (None, ""):
+            self.assertEqual(md.reviewed_commit(body, api), self.FULL[:8])
+        self.assertEqual(md.reviewed_commit("**Commit**: `abcdef01`", None), "abcdef01")
+        self.assertIsNone(md.reviewed_commit("Last reviewed commit: `abcdef01`", None))
 
     def test_nothing_known(self):
         self.assertIsNone(md.reviewed_commit("", None))
@@ -189,6 +213,26 @@ class GroupingTest(unittest.TestCase):
         ]
         self.assertEqual(md.group_by_commit(units), {})
 
+    def test_prefix_groups_use_longest_sha_in_either_order(self):
+        full = "0123456789abcdef0123456789abcdef0123456789"
+        for length in (7, 8):
+            units = [
+                self.unit("rex", md.APPROVED, full, "t2"),
+                self.unit("hakim", md.CHANGES_REQUESTED, full[:length], "t1"),
+            ]
+            for ordered in (units, list(reversed(units))):
+                with self.subTest(length=length, ordered=ordered):
+                    groups = md.group_by_commit(ordered)
+                    self.assertEqual(list(groups), [full])
+                    self.assertEqual([u["submitted_at"] for u in groups[full]], ["t1", "t2"])
+
+    def test_six_character_prefix_and_unrelated_shas_stay_apart(self):
+        full = "0123456789abcdef0123456789abcdef0123456789"
+        other = "abcdef0123456789abcdef0123456789abcdef01"
+        units = [self.unit("rex", md.APPROVED, sha, "t1")
+                 for sha in (full, full[:6], other)]
+        self.assertEqual(set(md.group_by_commit(units)), {full, full[:6], other})
+
     def test_parallel_challenge_counts_regardless_of_order(self):
         units = [
             self.unit("hakim", md.CHANGES_REQUESTED, "aaa", "2026-01-01T09:00:00Z"),
@@ -223,7 +267,7 @@ class FixtureMineTest(unittest.TestCase):
         self.by_pr = {c["draft_entry"]["pr"]: c for c in self.report["candidates"]}
 
     def test_only_the_mined_direction_is_reported(self):
-        self.assertEqual(sorted(self.by_pr), [101, 105, 106])
+        self.assertEqual(sorted(self.by_pr), [101, 105])
 
     def test_reverse_direction_is_not_mined(self):
         self.assertNotIn(102, self.by_pr)
@@ -237,11 +281,10 @@ class FixtureMineTest(unittest.TestCase):
     def test_tariq_challenge_is_mined(self):
         self.assertEqual(self.by_pr[105]["direction"], "Rex APPROVED -> Tariq CHANGES")
 
-    def test_body_commit_beats_api_commit(self):
-        self.assertEqual(self.by_pr[106]["evidence"]["commit"], "1" * 40)
-        self.assertEqual(
-            self.by_pr[106]["evidence"]["challenges"][0]["verdict"], md.BLOCKING
-        )
+    def test_api_commit_beats_body_commit(self):
+        pr = next(pr for pr in load_fixture()["prs"] if pr["number"] == 106)
+        self.assertEqual(md.review_unit(pr["reviews"][1])["commit"], "2" * 40)
+        self.assertNotIn(106, self.by_pr)
 
     def test_unparsed_reviews_are_reported(self):
         self.assertEqual(self.report["scanned"]["agent_reviews_without_verdict"], 1)
@@ -273,6 +316,31 @@ class FixtureMineTest(unittest.TestCase):
         self.assertEqual(
             evidence["pr_url"], "https://github.com/example-org/example-repo/pull/101"
         )
+
+
+class EdgeCasesFixtureTest(unittest.TestCase):
+    def setUp(self):
+        path = os.path.join(HERE, "fixtures", "mine-disagreements", "edge-cases.json")
+        with open(path, encoding="utf-8") as handle:
+            self.data = json.load(handle)
+        self.report = md.mine(self.data["repo"], self.data["prs"])
+
+    def test_rereview_uses_submission_commit(self):
+        candidates = [c for c in self.report["candidates"] if c["draft_entry"]["pr"] == 201]
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["evidence"]["commit"], "b" * 40)
+
+    def test_prose_verdict_is_unknown_and_not_a_candidate(self):
+        self.assertFalse(any(c["draft_entry"]["pr"] == 202 for c in self.report["candidates"]))
+        self.assertEqual(self.report["unparsed_agent_reviews"], [{
+            "pr": 202, "reviewer": "hakim",
+            "url": self.data["prs"][1]["reviews"][1]["html_url"],
+        }])
+
+    def test_body_prefix_groups_with_full_api_sha(self):
+        candidates = [c for c in self.report["candidates"] if c["draft_entry"]["pr"] == 203]
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["evidence"]["commit"], "d" * 40)
 
 
 class PaginationTest(unittest.TestCase):
@@ -307,7 +375,7 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 0)
         report = json.loads(out)
         self.assertEqual(report["schema"], md.OUTPUT_SCHEMA)
-        self.assertEqual(len(report["candidates"]), 3)
+        self.assertEqual(len(report["candidates"]), 2)
 
     def test_markdown_output(self):
         code, out, _ = self.run_main(["--fixture", FIXTURE, "--format", "markdown"])
