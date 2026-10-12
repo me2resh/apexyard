@@ -130,7 +130,7 @@ install_leak_hooks() {
 
 # Build work + bare remote. Origin URL is a GitHub-form slug; transport is local.
 # Args: dir github_slug [vis_mode]
-build_pair() {
+build_pristine_pair() {
   local dir="$1" slug="$2" vis_mode="${3:-fail}"
   local work bare stub_dir stub
   work="$dir/work"
@@ -164,6 +164,30 @@ build_pair() {
   # Export stub for child hook processes.
   printf '%s\n' "$stub_dir" > "$dir/stub_dir_path"
   printf '%s\n' "$stub" > "$dir/stub_path"
+}
+
+PAIR_TEMPLATE=""
+trap '[ -z "$PAIR_TEMPLATE" ] || rm -rf "$PAIR_TEMPLATE"' EXIT
+
+build_pair() {
+  local dir="$1" slug="$2" vis_mode="${3:-fail}"
+  local work="$dir/work" bare="$dir/remote.git" stub_dir="$dir/vis-stub"
+  if [ -z "$PAIR_TEMPLATE" ]; then
+    PAIR_TEMPLATE=$(mktemp -d) || exit 1
+    build_pristine_pair "$PAIR_TEMPLATE" adopter/fixture-template fail
+  fi
+  # Copies keep object files and refs independent between cases.
+  cp -R "$PAIR_TEMPLATE/work" "$work"
+  cp -R "$PAIR_TEMPLATE/remote.git" "$bare"
+  cp -R "$PAIR_TEMPLATE/vis-stub" "$stub_dir"
+  printf '%s\n' "$vis_mode" > "$stub_dir/mode"
+  git -C "$work" config remote.origin.url "https://github.com/${slug}.git"
+  git -C "$work" config --unset "url.$PAIR_TEMPLATE/remote.git.insteadOf"
+  git -C "$work" config "url.${bare}.insteadOf" "https://github.com/${slug}.git"
+  # The copied origin/main ref and branch.main upstream settings stay valid.
+  # core.hooksPath is relative and the copied hooks retain their modes.
+  printf '%s\n' "$stub_dir" > "$dir/stub_dir_path"
+  printf '%s\n' "$stub_dir/vis.sh" > "$dir/stub_path"
 }
 
 with_vis_env() {

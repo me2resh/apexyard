@@ -32,28 +32,15 @@
 # Whichever one is reading it follows its own branch; the other branch is a
 # no-op for that reader.
 #
-# The orchestrator branch also tells the caller to set the active-reviewer
-# session marker (resolved through active_reviewer_marker_path in
-# _lib-review-markers.sh — session-scoped since #1376, never the literal
-# .claude/session/active-reviewer string) before spawning Rex.
-# #843 made warn-review-marker-write.sh refuse that write without the marker;
-# #1026 returned it to ADVISORY (it warns, never blocks — see AgDR-0111,
-# which supersedes AgDR-0109's block-on-resolved-target decision), so
-# the marker now suppresses a spurious warning rather than unblocking a write.
-# Set it anyway: the convention is what keeps a real review distinguishable
-# from an author reviewing their own work, and the merge gate is what enforces.
+# The banner uses one short line, capped at 300 bytes. It tells the
+# orchestrator to wait for CI, then run /code-review. Sub-agents report
+# the PR to the orchestrator. It gives no marker instructions or tier note.
 #
-# TIER-AWARE NOTE (me2resh/apexyard#1064, AgDR-0116): the banner below keeps
-# "Rex runs on every PR" completely unconditional — that instruction is
-# NEVER softened by tier, because block-unreviewed-merge.sh requires the Rex
-# marker regardless of tier and is not touched by this change. What IS
-# tier-conditional, per .claude/rules/right-size-ceremony.md, is the ROLE
-# CHAIN around Rex (Security Auditor / Solution Architect / UI Designer) —
-# those already only fire on their own diff/path triggers. Do not read the
-# tier note below as license to skip Rex on a Lean diff; it only ever
-# changes Rex's OWN review depth (reduced-scope, per
-# .claude/agents/code-reviewer.md § "Reduced-Scope Review"), never whether
-# Rex runs.
+# TIER-AWARE NOTE (me2resh/apexyard#1064, AgDR-0116): this header keeps
+# "Rex runs on every PR" completely unconditional. The merge gate requires
+# Rex approval for every tier. The tier-aware role chain includes the
+# Security Auditor, Solution Architect, and UI Designer when their triggers apply.
+# The review rules set Rex's depth. The banner does not describe those rules.
 
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)

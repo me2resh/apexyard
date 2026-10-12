@@ -27,6 +27,7 @@ Behaviour change: the active ticket now lives in each working tree's git dir (#1
 - A spike marker in one project no longer exempts a change in another project.
 - `/fan-out` creates each writer worktree from its task's own repo and writes the markers for it.
 - `/approve-merge` offers to remove the merged PR's worktree. It asks first and never uses `--force`.
+- The macOS hook test run is cheaper (#1613, AgDR-0229). `_lib-extract-pr.sh` skips five process launches whose result is known in advance, so one call of `block-merge-on-red-ci.sh` takes 81 ms instead of 139 ms on macOS. No gate decision changes. `bin/run-hook-tests.sh` packs `--shard I/N` by the measured weights in `bin/hook-test-weights.txt` and keeps round-robin when that file is missing. Five merge-gate tests write the same mock text in every case. The report is `docs/perf/hook-test-profile-2026-10-round2.md`.
 
 ## [v5.8.0] — 2026-10-08
 
