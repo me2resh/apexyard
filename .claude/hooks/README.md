@@ -69,13 +69,13 @@ Companion control: `block-reviewer-ci-wait.sh` (PreToolUse, through `dispatch-ba
 | Marker | Path (repo-qualified since #485) | Written by | Semantics |
 |--------|----------------------------------|------------|-----------|
 | Rex | `.claude/session/reviews/<owner>__<repo>__<pr>-rex.approved` | `code-reviewer` agent after a successful review | "Code reviewed, no blocking issues" |
-| CEO | `.claude/session/reviews/<owner>__<repo>__<pr>-ceo.approved` | `/approve-merge <pr>` skill, **only** on explicit user invocation | "The human approver has looked at this specific PR and said ship it" |
+| CEO | `.claude/session/reviews/<owner>__<repo>__<pr>-ceo.approved` | `/approve-merge <pr>`, or `record-menu-approval.sh` after a menu answer | "The human approver has looked at this specific PR and said ship it" |
 
 Marker paths are constructed via `_lib-review-markers.sh::review_marker_path <owner/repo> <pr> <role>`. The double-underscore separator ensures the (owner, repo, pr) triple is unambiguous — GitHub slugs never contain `__`. This prevents same-numbered PRs in different managed repos from colliding on the same marker filename (AgDR-0060).
 
-Both files contain exactly one line: the 40-character HEAD SHA at the time of approval. The hook reads each, compares with `git rev-parse HEAD`, and blocks on any mismatch.
+A Rex marker holds one line, the 40-character HEAD SHA. A typed CEO marker is a `skill_version=2` record. A menu record is `skill_version=3` with `approval_channel=menu`. The gate compares the recorded SHA with the PR head. It blocks on a mismatch.
 
-**Why two markers:** The Rex marker alone isn't enough because it would only enforce the "code review happened" half of the 2-reviews rule. The CEO marker is the mechanical enforcement of **"plan-level 'go' is NOT merge approval"** from `.claude/rules/pr-workflow.md`. A plan-level authorization does not produce the CEO marker — only the `/approve-merge` skill does, and the skill is defined to run only on explicit per-PR user invocation. This closes the failure mode where Claude infers merge approval from an umbrella "go" on a broader plan.
+**Why two markers:** The Rex marker alone isn't enough because it would only enforce the "code review happened" half of the 2-reviews rule. The CEO marker is the mechanical enforcement of **"plan-level 'go' is NOT merge approval"** from `.claude/rules/pr-workflow.md`. A plan-level authorization does not produce the CEO marker. The `/approve-merge` skill writes it on an explicit per-PR nod. The menu hook writes it when the operator selects the approve option. This closes the failure mode where Claude infers merge approval from an umbrella "go" on a broader plan.
 
 **Trust model:** the approval files are **local session state**, not a remote trust boundary. They're gitignored and live on the user's machine. Claude can technically `rm` or `touch` them directly, and a malicious local user could forge them too. That's fine — the goal is to prevent Claude (an automated agent in the same session) from merging without the discrete review-and-approve moments, not to protect against an adversary who owns the machine. The failure mode the hook closes is **invisible inference** ("Claude decided 'go' meant 'merge'"); it converts that into **visible rule violation** ("Claude `touch`ed the marker without being asked"). The latter is grep-able and auditable; the former is not.
 
@@ -83,7 +83,19 @@ For adversarial trust, rely on remote branch-protection rules (GitHub required r
 
 **Enforces:** `workflow-gates.md` rule #5 ("2 reviews, CI green, commit SHA matches review") AND `pr-workflow.md` § "Plan-level 'go' is NOT merge approval".
 
-**Companion skill:** `/approve-merge <pr>` (in `.claude/skills/approve-merge/`) is the only supported way to write the CEO marker. The skill definition includes explicit anti-patterns describing the wrong invocation triggers; read it before using.
+**Companion paths:** `/approve-merge <pr>` writes the typed CEO marker. The approval menu is the other path. `record-menu-approval.sh` writes that record. See AgDR-0234.
+
+### 3a. Menu approval — `record-menu-approval.sh`
+
+**Event:** `PostToolUse` on `AskUserQuestion`.
+
+The operator can approve a merge, a design review, or an architecture review from a menu. The question must name the repo, the PR, and the full head SHA. The selected option must be the exact approve label.
+
+The hook reads the harness payload. It writes `approval_channel=menu` and `skill_version=3`. `Not yet` writes nothing. The model does not write this record.
+
+`block-forged-menu-approval.sh` blocks Edit, Write, and Bash writes of that channel onto a marker file. The guard matches text. It is a backstop. See AgDR-0234 and AgDR-0104.
+
+The typed commands stay. A typed merge marker has no menu channel.
 
 ### 4. Onboarding — `onboarding-check.sh`
 
@@ -198,7 +210,7 @@ design-tokens
 
 **Customize:** `.ui_paths` in `.claude/project-config.json` (REPLACES the default list wholesale — see `docs/project-config.md`). `_lib-ui-paths.sh` filters out a malformed entry (`null`, an object, a nested array, or a whitespace-only string). If every entry is malformed, the library falls back to the shipped defaults above instead of resolving to an empty, always-passing pattern list. Hakim's LOW-2 (me2resh/apexyard#1397) reported this gap.
 
-**Companion skill:** `/approve-design <pr>` (in `.claude/skills/approve-design/`) writes the marker. It follows the same pattern as `/approve-merge`: verify PR state → verify Rex marker at HEAD → write the design marker at the repo root → confirm → stop. The skill definition includes explicit valid/invalid triggers and an anti-pattern section distinguishing mockup approval (design phase) from implementation-review approval (PR phase).
+**Companion paths:** `/approve-design <pr>` writes the typed marker. The menu hook can also write a design record. See AgDR-0234. The typed skill checks the PR state and the Rex marker at HEAD. It then writes the design marker. It stops. The skill definition includes explicit valid and invalid triggers. It also separates mockup approval from review of the PR diff.
 
 **Manual fallback:** for projects that deliberately skip design review (admin tools, internal dashboards), create `touch .claude/session/reviews/<owner>__<repo>__<pr>-design.approved` (using the repo-qualified name) as a visible, auditable "we decided to skip" artifact.
 
@@ -345,7 +357,7 @@ These were already in place before the enforcement layer and remain unchanged (e
 ├── reviews/<owner>__<repo>__<pr>-rex.approved           # created by code-reviewer agent, read by merge-gate
 ├── reviews/<owner>__<repo>__<pr>-ceo.approved           # created by /approve-merge, read by merge-gate
 ├── reviews/<owner>__<repo>__<pr>-design.approved        # created by /approve-design, read by UI merge-gate
-└── reviews/<owner>__<repo>__<pr>-architecture.approved  # created by /approve-architecture or Tariq
+└── reviews/<owner>__<repo>__<pr>-architecture.approved  # created by /approve-architecture, Tariq, or the menu hook
 ```
 
 If a marker gets stale, delete the file and re-run the corresponding skill.

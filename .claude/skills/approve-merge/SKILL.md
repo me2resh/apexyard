@@ -18,6 +18,33 @@ Rationale: read docs/skills/approve-merge-rationale.md for gate history and AgDR
 Invoke only on explicit user approval for this PR. A plan-level "go" is not merge approval.
 Stop and ask when the PR or intent is unclear. Only the human can invoke this skill (#1042).
 
+## Menu path
+
+The typed command stays. The operator can also approve from a menu.
+
+Show one `AskUserQuestion` menu. The question text must be exact.
+
+`Approve and merge <owner>/<repo>#<N> at <40-hex-sha>?`
+
+Use the PR base repo, the PR number, and the full head SHA from the forge. The SHA is 40 lowercase hex digits.
+
+Offer these options and no others.
+
+- `Approve and merge`
+- `Not yet`
+
+Do not add a suffix to either label. The hook matches the label exactly.
+
+`record-menu-approval.sh` reads the harness payload. It writes the menu record when the selected option is `Approve and merge`. Do not write the marker yourself.
+
+`Not yet` writes nothing.
+
+An umbrella "go" does not count. A prose answer does not count. Any answer outside this menu does not count.
+
+The menu record uses `skill_version=3` and `approval_channel=menu`. The typed command still writes `skill_version=2` and does not set that channel. The gate still requires the recorded SHA to match the PR head. Carry-over rules stay as they are.
+
+See AgDR-0234.
+
 ## Process
 
 ### 0. Resolve the configured approver display title (SOFT, prose-only)

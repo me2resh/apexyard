@@ -71,6 +71,7 @@ make_sandbox_template() {
   cp "$(dirname "$LIB_PR")/_lib-awk-fallback.sh" "$sb/.claude/hooks/_lib-awk-fallback.sh"
   cp "$LIB_MARKERS" "$sb/.claude/hooks/_lib-review-markers.sh"
   cp "$LIB_BEHIND"  "$sb/.claude/hooks/_lib-merge-behind.sh"
+  cp "$SRC_ROOT/.claude/hooks/_lib-menu-approval.sh" "$sb/.claude/hooks/_lib-menu-approval.sh"
   chmod +x "$sb/.claude/hooks/block-unreviewed-merge.sh"
   # The hook sources the shared config reader (me2resh/apexyard#957, the
   # configurable human_approver_title key) — mirror the same sandbox setup
@@ -244,6 +245,42 @@ sb=$(make_sandbox)
 write_rex_marker "$sb" 200
 write_ceo_marker_structured "$sb" 200
 run_case "valid rex + valid v2 ceo → allows" 0 "" "$sb" 200
+
+# 1b. Typed v2 path stays valid. A menu record at the same head also allows.
+# The record is written by record-menu-approval.sh, not by hand.
+write_menu_via_hook() {
+  local sb="$1" pr="$2" sha="$3" repo="${4:-$TEST_REPO}"
+  local q payload
+  q="Approve and merge ${repo}#${pr} at ${sha}?"
+  payload=$(jq -nc --arg q "$q" '{
+    tool_name:"AskUserQuestion",
+    tool_input:{questions:[{question:$q}]},
+    tool_response:{answers:{($q):"Approve and merge"}}
+  }')
+  ( cd "$sb" && bash "$SRC_ROOT/.claude/hooks/record-menu-approval.sh" >/dev/null <<< "$payload" )
+}
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1391
+write_menu_via_hook "$sb" 1391 "$FIXED_SHA"
+run_case "hook-written menu record at head -> allows" 0 "" "$sb" 1391
+
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1392
+write_menu_via_hook "$sb" 1392 "$WRONG_SHA"
+run_case "hook-written menu record at other sha -> blocks" 2 "CEO approved commit" "$sb" 1392
+
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1393
+ceo_path=$(review_marker_path "$TEST_REPO" 1393 ceo "$sb")
+cat > "$ceo_path" <<EOF
+sha=${FIXED_SHA}
+approved_by=user
+skill_version=2
+approval_channel=menu
+approved_at=2026-10-12T14:00:00Z
+approval_summary="Approve and merge"
+EOF
+run_case "menu channel with skill_version=2 -> blocks" 2 "menu approval record is invalid" "$sb" 1393
 
 # 2. Missing Rex → blocks
 sb=$(make_sandbox)
@@ -598,6 +635,20 @@ approval_summary=test
 EOF
 gh pr merge 42 --repo me2resh/apexyard --squash"
 run_case_custom_cmd "compound-valid-inline-marker" 0 "" "$sb" "$cmd"
+
+# A menu record inside the merge command is not the hook. Block it.
+sb=$(make_sandbox)
+write_rex_marker "$sb" 42
+cmd="cat > $sb/.claude/session/reviews/42-ceo.approved <<EOF
+sha=${FIXED_SHA}
+approved_by=user
+skill_version=3
+approval_channel=menu
+approved_at=2026-10-12T14:00:00Z
+approval_summary=\"Approve and merge\"
+EOF
+gh pr merge 42 --repo me2resh/apexyard --squash"
+run_case_custom_cmd "compound-inline-menu-record" 2 "menu approval cannot be written" "$sb" "$cmd"
 
 # Case: compound command with WRONG SHA in inline marker → should BLOCK
 sb=$(make_sandbox)

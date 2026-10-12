@@ -219,7 +219,7 @@ Columns:
 
 | rule | source | enforced by | mechanizable? | proposed hook / reason advisory |
 |------|--------|-------------|---------------|---------------------------------|
-| Use `AskUserQuestion` for operator choices between options. Sub-agents return options to the orchestrator. | `.claude/rules/reporting-style.md § Operator choices` | prose | no | Advisory agent behavior. No hook. A shell hook cannot observe how a question reaches the operator. |
+| Use `AskUserQuestion` for operator choices between options. Sub-agents return options to the orchestrator. | `.claude/rules/reporting-style.md § Operator choices` | prose | no | Advisory for ordinary choices. Approval menus are separate. `record-menu-approval.sh` records a matching answer. See AgDR-0234. |
 
 ## Summary
 

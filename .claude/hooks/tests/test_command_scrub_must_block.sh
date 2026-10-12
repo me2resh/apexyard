@@ -89,6 +89,7 @@ setup_dispatch_sandbox() {
     require-skill-for-issue-create.sh require-orbit-slice-for-ticket.sh require-migration-ticket.sh \
     require-active-ticket.sh warn-review-marker-write.sh \
     warn-isolated-build-risk.sh block-reviewer-repo-mutation.sh \
+    block-reviewer-ci-wait.sh block-forged-menu-approval.sh \
     block-git-add-all.sh block-main-push.sh validate-branch-name.sh \
     pre-push-gate.sh block-agent-routing-drift.sh check-secrets.sh \
     block-onboarding-in-git.sh verify-commit-refs.sh validate-commit-format.sh \

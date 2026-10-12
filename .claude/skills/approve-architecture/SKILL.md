@@ -35,6 +35,33 @@ Valid invocation triggers:
 
 **If in doubt: STOP AND ASK.** "PR #X carries a technical design — has it been reviewed and approved against the architecture lens?" is one message. Building against an unsound design is much worse.
 
+## Menu path
+
+The typed command stays. The operator can also approve the architecture review from a menu.
+
+Show one `AskUserQuestion` menu. The question text must be exact.
+
+`Approve architecture review for <owner>/<repo>#<N> at <40-hex-sha>?`
+
+Use the PR base repo, the PR number, and the full head SHA from the forge. The SHA is 40 lowercase hex digits.
+
+Offer these options and no others.
+
+- `Approve architecture review`
+- `Not yet`
+
+Do not add a suffix to either label. The hook matches the label exactly.
+
+`record-menu-approval.sh` reads the harness payload. It writes the menu record when the selected option is `Approve architecture review`. Do not write the marker yourself.
+
+`Not yet` writes nothing.
+
+An umbrella "go" does not count. A prose answer does not count. Any answer outside this menu does not count.
+
+Tariq and the typed command still write a bare SHA. The menu record uses `skill_version=3` and `approval_channel=menu`. The gate accepts both. It still requires the recorded SHA to match the PR head.
+
+See AgDR-0234.
+
 ## Process
 
 ### 1. Parse the PR number — and the repo

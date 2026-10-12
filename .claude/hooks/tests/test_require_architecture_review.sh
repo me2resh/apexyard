@@ -478,6 +478,38 @@ for lib in _lib-extract-pr.sh _lib-review-markers.sh _lib-pr-repo.sh; do
 done
 
 echo ""
+echo "H) design artifact + menu record at head -> ALLOW"
+sb=$(make_sandbox)
+install_mock_gh "$sb" '"projects/foo/docs/technical-design-x.md"' "$SHA"
+cat > "$(review_marker_path "o/r" 77 architecture "$sb")" <<EOF
+sha=${SHA}
+approved_by=user
+skill_version=3
+approval_channel=menu
+approved_at=2026-10-12T14:00:00Z
+approval_summary="Approve architecture review"
+EOF
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "architecture menu record at head allows" "0" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "H) design artifact + menu record at another SHA -> BLOCK"
+sb=$(make_sandbox)
+install_mock_gh "$sb" '"projects/foo/docs/technical-design-x.md"' "$SHA"
+cat > "$(review_marker_path "o/r" 77 architecture "$sb")" <<EOF
+sha=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+approved_by=user
+skill_version=3
+approval_channel=menu
+approved_at=2026-10-12T14:00:00Z
+approval_summary="Approve architecture review"
+EOF
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "architecture menu record at other sha blocks" "2" "$code"
+rm -rf "$sb"
+
+echo ""
 echo "==================================="
 echo "  PASS: $PASS   FAIL: $FAIL"
 echo "==================================="

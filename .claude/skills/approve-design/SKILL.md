@@ -33,6 +33,33 @@ The valid invocation triggers look like this:
 
 **If in doubt: STOP AND ASK.** "PR #X has UI changes — has the design been reviewed and approved?" is one message. Merging a PR with incorrect UI that needs a follow-up revert is much worse.
 
+## Menu path
+
+The typed command stays. The operator can also approve the design review from a menu.
+
+Show one `AskUserQuestion` menu. The question text must be exact.
+
+`Approve design review for <owner>/<repo>#<N> at <40-hex-sha>?`
+
+Use the PR base repo, the PR number, and the full head SHA from the forge. The SHA is 40 lowercase hex digits.
+
+Offer these options and no others.
+
+- `Approve design review`
+- `Not yet`
+
+Do not add a suffix to either label. The hook matches the label exactly.
+
+`record-menu-approval.sh` reads the harness payload. It writes the menu record when the selected option is `Approve design review`. Do not write the marker yourself.
+
+`Not yet` writes nothing.
+
+An umbrella "go" does not count. A prose answer does not count. Any answer outside this menu does not count.
+
+The typed command still writes a bare SHA. The menu record uses `skill_version=3` and `approval_channel=menu`. The gate accepts both. It still requires the recorded SHA to match the PR head.
+
+See AgDR-0234.
+
 ## Process
 
 ### 1. Parse the PR number — and the repo

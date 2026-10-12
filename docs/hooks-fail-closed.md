@@ -23,9 +23,10 @@ It covers me2resh/apexyard#1623.
 | `require-active-ticket.sh` | Edit, Write, MultiEdit matcher in `.claude/settings.json` | Claude Code blocks the call (`onFailure` is `block`) |
 | `require-active-ticket.sh` | Inside the dispatcher, for each Bash call | The dispatcher prints `BLOCKED` and exits 2 |
 | The four merge gates | Inside the dispatcher, for merge commands | The dispatcher prints `BLOCKED` and exits 2 |
+| `block-forged-menu-approval.sh` | Inside the dispatcher, for each Bash call | The dispatcher prints `BLOCKED` and exits 2 |
 
 The dispatcher has one path for fail-closed gates, `run_fail_closed_hook`.
-The merge gates (`run_merge_gate_hook`) and ticket-first use it.
+The merge gates (`run_merge_gate_hook`), ticket-first, and the menu-record guard use it.
 Any exit code other than 0 or 2 blocks. That includes exit 1, exit 127, and a
 kill signal.
 A Bash syntax error in a gate already exits 2, so it blocks too.

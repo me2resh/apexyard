@@ -102,6 +102,8 @@ grep -q 'claude plugin validate --strict .claude-plugin/marketplace.json' "$WORK
 # Static check of the dispatcher routing.
 grep -q 'require-active-ticket.sh) run_fail_closed_hook' "$DISPATCH" \
   || fail "dispatcher does not route require-active-ticket.sh through run_fail_closed_hook"
+grep -q 'block-forged-menu-approval.sh) run_fail_closed_hook' "$DISPATCH" \
+  || fail "dispatcher does not route block-forged-menu-approval.sh through run_fail_closed_hook"
 grep -q 'block-reviewer-ci-wait.sh) run_cost_guard_hook' "$DISPATCH" \
   || fail "dispatcher does not route block-reviewer-ci-wait.sh through run_cost_guard_hook"
 

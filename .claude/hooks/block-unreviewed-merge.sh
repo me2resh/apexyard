@@ -40,8 +40,13 @@
 #   approved_by=user            # signals "this was a human, not the model"
 #   skill_version=<N>           # N >= 2; bare-SHA legacy markers rejected
 #
+# A menu record (AgDR-0234) also has approval_channel=menu and
+# skill_version=3. record-menu-approval.sh is the only supported writer.
+# The typed /approve-merge path omits approval_channel and stays at
+# skill_version=2. Carry-over rules are the same for both.
+#
 # Other fields (approved_at, approval_summary) are written by the skill
-# but not validated by the hook — they're an audit trail, not a check.
+# or the menu hook. The menu path checks them. The typed path does not.
 #
 # Claude could in principle still forge the structured fields. But the
 # act of typing out `approved_by=user` etc. is a visible, auditable,
@@ -596,6 +601,21 @@ fi
 # in-memory and let the command through if it's valid. See #426.
 _INLINE_CEO_MARKER=""
 if [ ! -f "$CEO_APPROVAL" ]; then
+  # A menu record is written by record-menu-approval.sh before the merge
+  # command runs. A merge command that contains approval_channel=menu is
+  # the model writing the record itself. Refuse that inline shape.
+  if printf '%s\n' "$COMMAND" | grep -q 'approval_channel=menu'; then
+    cat >&2 <<MSG
+BLOCKED: PR #${PR_NUMBER} menu approval cannot be written inside the merge command.
+
+The menu record is written by record-menu-approval.sh after the operator
+selects the approve option. A merge command that contains
+approval_channel=menu is not that hook.
+
+Use the approval menu, or run /approve-merge ${PR_NUMBER}.
+MSG
+    exit 2
+  fi
   # Look for inline marker content in the command targeting this PR's
   # approval file. Match heredoc, printf, or echo writing to *-ceo.approved.
   # Match both the new repo-qualified basename and the bare-number legacy form
@@ -632,11 +652,14 @@ Missing file:
 To unblock:
   1. Stop and tell the ${APPROVER_TITLE} the PR is ready, naming it:
      "PR #${PR_NUMBER} is ready to merge."
-  2. Ask THEM to run the skill. Since #1042 it is human-only
+  2. Ask THEM to approve. Since #1042 the skill is human-only
      (disable-model-invocation: true) — you cannot invoke it:
        /approve-merge ${PR_NUMBER}
-  3. Their invocation writes the structured marker AND runs the merge in
-     one turn. Your job ends at step 1.
+     Or show the approval menu. The question must name the repo, the PR,
+     and the full head SHA. record-menu-approval.sh writes the marker
+     when the operator selects the approve option. Do not write it yourself.
+  3. The typed skill writes the structured marker AND runs the merge in
+     one turn. The menu writes the marker only. Your job ends at step 1.
 
 NEVER create this marker yourself. You have no path to it, and that is the
 point: the invocation IS the approval, so it must come from a human.
@@ -719,6 +742,41 @@ introduced in me2resh/apexyard#48 + #132). Older markers are no longer
 accepted — re-record via /approve-merge ${PR_NUMBER}.
 MSG
   exit 2
+fi
+
+# Menu records are skill_version=3 plus approval_channel=menu.
+# A typed marker has no channel. Any other channel is rejected.
+CEO_CHANNEL=""
+if [ "$_INLINE_CEO_MARKER" != "valid" ]; then
+  CEO_CHANNEL=$(ceo_field approval_channel)
+fi
+if [ -n "$CEO_CHANNEL" ] && [ "$CEO_CHANNEL" != "menu" ]; then
+  cat >&2 <<MSG
+BLOCKED: PR #${PR_NUMBER} ${APPROVER_TITLE} marker has approval_channel=${CEO_CHANNEL}.
+
+The merge gate accepts no channel, or approval_channel=menu from the
+approval menu. Re-record via /approve-merge ${PR_NUMBER} or the menu.
+MSG
+  exit 2
+fi
+if [ "$CEO_CHANNEL" = "menu" ]; then
+  _menu_lib="$(dirname "$0")/_lib-menu-approval.sh"
+  if [ ! -r "$_menu_lib" ]; then
+    echo "BLOCKED: merge gate cannot load _lib-menu-approval.sh." >&2
+    exit 2
+  fi
+  # shellcheck source=/dev/null
+  . "$_menu_lib"
+  if ! menu_approval_record_sha "$CEO_APPROVAL" >/dev/null; then
+    cat >&2 <<MSG
+BLOCKED: PR #${PR_NUMBER} menu approval record is invalid.
+
+A menu record needs sha, approved_by=user, skill_version=3,
+approval_channel=menu, approved_at, and approval_summary.
+record-menu-approval.sh writes that shape. Re-run the approval menu.
+MSG
+    exit 2
+  fi
 fi
 
 # Same forge-verified carry-over applies to the CEO marker (#1437) — this is
