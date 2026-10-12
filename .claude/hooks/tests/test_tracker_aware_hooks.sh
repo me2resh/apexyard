@@ -104,10 +104,21 @@ YAML
 install_mock() {
   local sb="$1" name="$2" body="$3"
   mkdir -p "$sb/bin"
-  cat > "$sb/bin/$name" <<EOF
+  if [[ "$body" =~ ^exit\ [0-9]+$ ]]; then
+    printf '%s\n' "${body#exit }" > "$sb/mock-$name-exit"
+    cat > "$sb/bin/$name" <<'EOF'
+#!/bin/bash
+sb=${0%/bin/*}
+name=${0##*/}
+IFS= read -r code < "$sb/mock-$name-exit"
+exit "$code"
+EOF
+  else
+    cat > "$sb/bin/$name" <<EOF
 #!/bin/bash
 $body
 EOF
+  fi
   chmod +x "$sb/bin/$name"
 }
 
