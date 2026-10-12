@@ -28,7 +28,7 @@ Ticket #1690 records the owner's decision to reduce regular PR work.
 
 Chosen: **light PR tier with heavy integration checks**.
 
-- Regular PRs run the full Linux jq-1.7 suite and affected tests on one macOS bash-3.2 job.
+- Regular PRs run the full Linux jq-1.7 suite. When the selector names specific tests, one macOS bash-3.2 job runs only those tests.
 - Docs-only PRs skip hook jobs. Every changed path must be under `docs/`, or Markdown outside `.claude/`.
 - Pushes to `dev` and `main`, manual runs, and nightly runs execute the full six-job matrix.
 - The nightly schedule starts at 03:17 UTC and checks out `dev`.
@@ -51,12 +51,12 @@ The selector prints `ALL` for shared inputs:
 - `bin/run-hook-tests.sh` and `bin/select-affected-tests.sh`
 - `.github/workflows/tests.yml` and `.githooks/*`
 
-`ALL` selects the full macOS suite. On a regular PR it keeps the 4 macOS shards, because the full suite takes about 32 minutes on one runner, over the 30-minute job timeout. An empty selection runs no macOS tests and passes.
+`ALL` means the PR needs the full suite. On a regular PR, the full suite then runs on Linux only, and no macOS job runs. The full macOS suite takes about 32 minutes on one runner, over the 30-minute job timeout, and most framework PRs touch a shared input. Owner decision 2026-10-12: shared-input PRs wait for the merge push and the nightly run for bash-3.2 coverage. An empty selection runs no macOS tests and passes.
 The runner accepts a validated, explicit test-list file through `--files`.
 
 ## Consequences
 
-A macOS-only fault in an unaffected test can reach `dev`.
+A macOS-only fault in an unaffected test, or in any test when a PR changes a shared input, can reach `dev`.
 The merge push or nightly run detects that fault through the full matrix.
 Linux still tests the full suite on every regular PR.
 Conformance requires the `CONFORMANCE_*` secrets and fails when they are missing. On 2026-10-12 the repository has none, so `CONFORMANCE_ON_RELEASE` stays unset and release PRs skip conformance until the owner adds the secrets.
