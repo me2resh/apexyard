@@ -7,9 +7,7 @@ allowed-tools: Bash, Read, Grep, Glob, Write
 effort: medium
 ---
 
-## Writing rule
-
-When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
 # /journey — User-Journey HTML with Modal-Per-Page Design Preview
 

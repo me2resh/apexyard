@@ -36,7 +36,7 @@ check 'rg retains raw merge scan' yes "rg 'glab mr merge 7' notes.txt"
 check 'echo argument is data' no "echo 'gh api repos/demo/service/pulls/7/merge'"
 check 'quoted scratch heredoc is data' no "$(printf "cat > /tmp/merge-notes <<'TEXT'\ngh pr merge 7\nglab mr merge 7\nTEXT")"
 check 'read-only heredoc is data' no "$(printf "cat <<'TEXT'\ntracker_pr_merge demo/service 7 squash\nTEXT")"
-for word in grep egrep fgrep cat echo head tail wc; do
+for word in grep egrep fgrep cat echo jq head tail wc; do
   check "$word quoted data" no "$word 'gh pr merge 7'"
 done
 # printf can run code through an array subscript, so it keeps the raw scan.
@@ -46,6 +46,33 @@ check 'descriptor redirect remains data' no "echo 'gh pr merge 7' 2>&1 | cat"
 check 'multiple heredoc bodies are data' no $'cat <<\'A\' <<\'B\' | grep merge\ngh pr merge 7\nA\nglab mr merge 7\nB'
 check 'tab-stripped heredoc is data' no $'cat <<-\'TEXT\'\n\tgh pr merge 7\n\tTEXT'
 check 'unquoted literal heredoc is data' no $'cat <<TEXT\ngh pr merge 7\nTEXT'
+
+# #1639: jq programs and JSON are data unless another segment can execute them.
+check 'jq JSON merge word is data' no "jq -n '{\"cmd\":\"tracker_pr_merge\"}'"
+check 'jq filter merge phrase is data' no "jq -r '.[] | select(.n==\"gh pr merge 7\")' file.json"
+check 'echo JSON piped into jq is data' no "echo '{\"a\":\"tracker_pr_merge demo/service 7 squash\"}' | jq ."
+check 'quoted jq heredoc is data' no $'jq . <<\'TEXT\'\n{"cmd":"tracker_pr_merge"}\nTEXT'
+check 'jq then real tracker merge' yes "jq -n '{\"cmd\":\"x\"}'; tracker_pr_merge demo/service 7 squash true"
+check 'jq then real gh merge' yes "jq -n '{\"cmd\":\"x\"}' && gh pr merge 7 --squash"
+check 'jq pipeline into bash retains raw scan' yes "echo 'gh pr merge 7'; jq -r '.cmd' f.json | bash"
+check 'bash tracker merge retains raw scan' yes "bash -c 'tracker_pr_merge demo/service 7 squash'"
+check 'bare tracker merge retains raw scan' yes 'tracker_pr_merge demo/service 7 squash'
+check 'jq substitution retains raw scan' yes 'jq -n "$(tracker_pr_merge demo/service 7 squash)"'
+check 'jq startup redirect retains raw scan' yes "jq -n '\"gh pr merge 7\"' > ~/.zshenv"
+
+# ORBIT joins only the general scrubber; every merge wrapper remains visible.
+for merge_form in \
+  'gh pr merge 7' \
+  "sh -c 'gh pr merge 7'" \
+  "eval 'gh pr merge 7'" \
+  'env gh pr merge 7' \
+  'command gh pr merge 7' \
+  '(gh pr merge 7)' \
+  "echo 'gh pr merge 7' | bash" \
+  'echo "$(gh pr merge 7)"' \
+  'echo `gh pr merge 7`'; do
+  check "orbit followed by merge: $merge_form" yes "orbit validate && $merge_form"
+done
 
 check 'gh CLI merge' yes 'gh pr merge 7 --squash'
 check 'gh API merge' yes 'gh api repos/demo/service/pulls/7/merge -X PUT'

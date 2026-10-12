@@ -1,0 +1,51 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-token-o2-compaction-build",
+  "planId": "plan-apexyard-token-efficiency",
+  "outcomeId": "o2-context-bounded",
+  "basedOn": {
+    "planRevision": 3,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261011T223213Z",
+    "repositories": {}
+  },
+  "objective": "Measure the 500,000 compaction window within the time-box. Make a fresh spawn the default over a fork. File the four harness requests.",
+  "why": "ac2-2 to ac2-4 are not-verified in the 2026-10-11T22:32Z reconciliation. The o2 spike (#1646) achieved ac2-1. docs/spike-memos/GH-1637-compaction-threshold.md recommends autoCompactWindow 500000, but no session ran at 500,000. docs/perf/token-cost-baseline-2026-10-10.md has a main context mean of 489,792, p90 849,914 and 18 compactions, 12 near the cap. Two forks had first-turn context of 430,256 median and 580,938 max, and used 160,479 tokens in total. The fork rule is low-spend hygiene, not a large token lever. skill-body is 24.86% and skill-reinjection 10.35% of context-turns. parallel-work.md has no fork rule. fan-out SKILL.md lines 156 and 221 only require a self-contained prompt. No harness request is filed. The reconciliation's p90 853k, fork 281k and 17.8M figures differ from the baseline file. The baseline file governs. The next reconciliation corrects them.",
+  "contributesTo": [
+    "ac2-2",
+    "ac2-3",
+    "ac2-4"
+  ],
+  "scope": {
+    "include": [
+      "Open one draft PR. Commit ac2-3 and ac2-4 first. Commit the ac2-2 measurement last, so rule and filing work does not wait on a multi-day session.",
+      "ac2-2: the owner runs one real orchestrator session with autoCompactWindow 500000 in user settings after o6 PR #1663 merges.",
+      "A valid ac2-2 session has at least 1 compaction at the window and at least 500 main-loop turns. A short session gives a low mean for free.",
+      "Time-box ac2-2 to 7 days after o6 (#1663) merges. With no valid session by then, merge the PR without the measurement. Record ac2-2 as not-verified.",
+      "Before the session, confirm that the effective window is 500000. Check for modelSettings.<model>.autoCompactWindow entries from /autocompact. Check for CLAUDE_CODE_AUTO_COMPACT_WINDOW. Confirm that neither overrides the window, as described in the spike memo, Precedence.",
+      "Measure mean, p90 and max context per turn with the o1 session view. Report compaction count against the 2026-10-10 baseline. Also report total tokens, cache rebuilds and cost per turn against that baseline. Spike Finding 3 showed no cost drop when the window got smaller.",
+      "List token-plan changes live in the measured session: o6, and o5 if merged. The docs must not credit the whole drop to the window.",
+      "If the mean exceeds 300,000, lower the window in steps of 100,000 and measure again. Do not go below 300,000. The spike memo found no saving below that floor. If the mean at 300,000 still exceeds 300k, record ac2-2 as not met. Do not lower the window again.",
+      "Update the Bounding the main context paragraph of docs/getting-started.md line 225 with the measured value. Remove the extrapolation note only when the target is met.",
+      "ac2-3: make a fresh role-appropriate spawn with a written brief the default in parallel-work.md. Apply the same default in fan-out SKILL.md. Allow a fork only when the needed facts are not yet in a file.",
+      "Update fan-out step 2 lines 52 to 64 and rule 8. Replace Default general-purpose and Recommend general-purpose first. Rule 8 must name a role-appropriate agent type for an editing task.",
+      "Add a text-pin test for the fresh-spawn rule in parallel-work.md and fan-out SKILL.md.",
+      "ac2-4: file four harness requests with Claude Code. Each request cites measured numbers from the o1 baseline.",
+      "The requests cover skill-body dedupe inside one window, and a fork from a compacted parent or with a context budget.",
+      "They also cover re-injection as names only, and no skill listing for agents without the Skill tool.",
+      "The baseline has no number for the skill listing in a subagent. Before filing, measure the byte count of the skill_listing attachment in one subagent transcript. The o1 script classifies skill_listing only for the main loop. It has no per-category subagent view.",
+      "Before filing, search anthropics/claude-code for each of the four topics. If a request exists, add the numbers as a comment. Link that request. The owner confirms that a comment on an existing request counts as filed.",
+      "Each request carries aggregate numbers only. The leak-protection hook checks only public framework repos. It does not check the Claude Code tracker. Run the leak-protection.md scrub by hand. The owner approves each request text before filing.",
+      "Put the issue links in the Upstream gaps section of the plan notes.",
+      "C3: report before and after mean context per turn in the PR as the ac2-2 metric. ac2-3 and ac2-4 move no o1 metric in this PR."
+    ],
+    "exclude": [
+      "The /compact line in the /approve-merge report (o6, slice-token-o6-skill-bodies-lean)",
+      "Any change to .claude/settings.json defaults, or a compaction window in a shared project file",
+      "Reviewer and subagent compaction and cache settings",
+      "The prompt-cache TTL settings (ac4-5 and the owner trial)",
+      "The resume-or-fresh rule for delta re-reviews (ac7-6)",
+      "Any harness change beyond filing the four requests",
+      "Any edit to block-unreviewed-merge.sh, block-merge-on-red-ci.sh or another merge-gate hook (C1)"
+    ]
+  }
+}

@@ -92,3 +92,47 @@ describe('status band', () => {
     }
   })
 })
+
+// Pane fixtures use the same state envelope as the band fixtures above.
+describe('ORBIT initiatives pane', () => {
+  test('renders the title, initiative name, in-flight work and check date on both surfaces', async ($, on) => {
+    on('state.get', { plugin: 'apexyard-status', key: 'orbit' }, async () => ({ value: { value: {
+      activeRepo: 'a/b', updatedAt: 0, plans: [{ key: 'a/b#plan-x', repo: 'a/b', summary: {
+        title: 'Ship the dashboard', planId: 'plan-x', revision: 2, reconciledAt: '2026-10-01', checkedAt: '2026-10-12',
+        outcomes: [], slices: [{ id: 'slice-t1', contributesTo: [] }],
+        totals: { achieved: 0, partly: 0, contradicted: 0, total: 0 },
+      } }],
+    }, version: 1 }, version: 1 }) as never)
+    on('state.get', { plugin: 'apexyard-status', key: 'expanded' }, async () => ({ value: { value: {}, version: 1 }, version: 1 }) as never)
+    on('state.get', { plugin: 'apexyard-status', key: 'sliceLinks' }, async () => ({ value: { value: {
+      'a/b/slice-t1': { status: 'error', issues: [] },
+    }, version: 1 }, version: 1 }) as never)
+    for (const surface of SURFACES) {
+      const ui = await $.ui.mount({ ...BAND, component: 'Pane', requestId: 'orbit-progress', surface })
+      expect(await ui.find({ type: 'Text', text: 'ORBIT initiatives · 1 in 1 repos' })).toBeDefined()
+      expect(await ui.find({ type: 'Button', text: 'Ship the dashboard' })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: 'in flight (offline)' })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: 'plan-x r2 · reconciled 2026-10-01 · checked 2026-10-12' })).toBeDefined()
+      await ui.unmount()
+    }
+  })
+})
+
+test('collapsed initiative uses its title and hides the plan ID', async ($, on) => {
+  on('state.get', { plugin: 'apexyard-status', key: 'orbit' }, async () => ({ value: { value: {
+    activeRepo: null, updatedAt: 0, plans: [{ key: 'a/b#internal-plan-id', repo: 'a/b', summary: {
+      title: 'Customer onboarding', planId: 'internal-plan-id', revision: 1, reconciledAt: null,
+      outcomes: [], slices: [], totals: { achieved: 0, partly: 0, contradicted: 0, total: 0 },
+    } }],
+  }, version: 1 }, version: 1 }) as never)
+  on('state.get', { plugin: 'apexyard-status', key: 'expanded' }, async () => ({ value: { value: {}, version: 1 }, version: 1 }) as never)
+  on('state.get', { plugin: 'apexyard-status', key: 'sliceLinks' }, async () => ({ value: { value: {}, version: 1 }, version: 1 }) as never)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ ...BAND, component: 'Pane', requestId: 'orbit-progress', surface })
+    expect(await ui.find({ type: 'Button', text: 'Customer onboarding' })).toBeDefined()
+    expect(await ui.find({ type: 'Button', text: 'internal-plan-id' })).toBe(undefined)
+    expect(await ui.find({ type: 'Text', text: 'internal-plan-id' })).toBe(undefined)
+    expect(await ui.find({ type: 'Text', text: 'in flight: 0 open tickets · 0 open PRs' })).toBeDefined()
+    await ui.unmount()
+  }
+})
