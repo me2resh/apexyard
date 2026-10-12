@@ -99,7 +99,7 @@ if command -v markdownlint-cli2 >/dev/null 2>&1; then
     markdownlint-cli2 "$f" || { echo "FAIL: markdownlint-cli2 $f"; fail=1; }
   done
 else
-  echo "SKIP: markdownlint-cli2 is not on PATH"
+  echo "NOTE: markdownlint-cli2 is not on PATH. The awk layout check ran instead."
 fi
 
 rm -rf "$sb"
