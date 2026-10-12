@@ -66,6 +66,8 @@ This is deliberately narrower than "not inside a *registered* repo" — being in
 
 **Reviewer scratch clone exception (#1402):** A sanctioned reviewer can write inside a standalone git clone under a temporary directory. The clone must have an origin remote. The hook requires this session's active-reviewer marker for Rex, Security, or Architecture review. It checks every write target against the ops fork and managed workspace before allowing the write. Any symlink in the target path prevents the exemption, including a dangling link or a link within the clone. Linked `git worktree add` checkouts and unresolved targets remain gated. See [AgDR-0188](../../docs/agdr/AgDR-0188-reviewer-scratch-clone-ticket-gate.md).
 
+**Reviewer scratchpad exception (#1417):** A sanctioned reviewer can write under this session's scratchpad without a ticket. The hook reads `scratchpad_dir` when the harness sends it. The path must contain this session id as a path segment. It must sit under `/tmp`, `/var/tmp`, `TMPDIR`, or `CLAUDE_CODE_TMPDIR`. It must not be the ops fork or a registered workspace. A `..` segment or a symlink keeps the gate closed. When `scratchpad_dir` is absent, only a temp path that contains this session id as a path segment qualifies. A present value that fails a check does not use that wider rule. See [AgDR-0231](../../docs/agdr/AgDR-0231-reviewer-scratchpad-ticket-gate.md).
+
 See AgDR-0011 + me2resh/apexyard#150 for the full design rationale.
 
 ## Migration Gate (3a) — dedicated ticket + AgDR

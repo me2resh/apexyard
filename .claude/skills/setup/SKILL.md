@@ -88,6 +88,20 @@ bash bin/install-git-hooks.sh
 
 Idempotent — a re-run on an already-configured clone reports "no change" and exits 0. If it exits 1 (a real, different `core.hooksPath` the operator configured on purpose), report that plainly and move on without `--force` — overriding a deliberate adopter choice isn't this step's call to make silently. **If it exits 4, treat this as a hard failure of the step, not a warning**: exit 4 means the `git config core.hooksPath` write did not take effect (a stale `.git/config.lock`, a multi-valued key) and the installer is refusing to report success on an unverified write — this clone is **NOT** protected. Show the operator the installer's own error output verbatim and ask them to retry (`bash bin/install-git-hooks.sh`) before continuing `/setup`; do not silently proceed as if the clone were covered. See `bin/install-git-hooks.sh --help` and me2resh/apexyard#1086 for the full state machine (fresh / idempotent / stale-repair / deliberate-third-party / write-failed).
 
+### Step 0.6: Write this clone's rule exclude (REQUIRED)
+
+Ensure the presence-only ops marker exists before resolving a fresh clone without `onboarding.yaml`.
+Run the advisory writer once from the ops fork:
+
+```bash
+[ -f .apexyard-fork ] || touch .apexyard-fork
+bash .claude/hooks/write-rule-excludes.sh
+```
+
+The writer changes only `claudeMdExcludes` in gitignored `.claude/settings.local.json`.
+A warning does not block setup. Restart the session after setup to apply the exclude.
+SessionStart repairs missing or relocated entries. See AgDR-0233.
+
 ### Step 1: Check current state
 
 Read `onboarding.yaml`. Four modes:

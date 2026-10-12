@@ -57,6 +57,19 @@
 # target independently clears the gate. Judging only the first target
 # let a command that also names an out-of-governance target FIRST slip an
 # in-repo target past a gate that stopped looking after target #1.
+#
+# Reviewer scratchpad exemption (#1417, AgDR-0231): while this session's
+# active-reviewer marker exists, a write under the session scratchpad needs
+# no ticket. The hook reads scratchpad_dir from its stdin when the harness
+# sends it (Claude Code v2.1.257 or later). That directory must contain this
+# session id as its own path segment. It must sit under /tmp, /var/tmp,
+# TMPDIR, or CLAUDE_CODE_TMPDIR. It must not be the ops fork or a registered
+# workspace, and it must not contain either tree. A `..` segment or a symlink
+# keeps the gate closed. When scratchpad_dir is absent, only a path under
+# those temp roots that contains this session id as a path segment qualifies.
+# A present scratchpad_dir that fails a check does not use that wider rule.
+# The write detector is unchanged. An export is recognized only as the
+# literal command `git archive <ref> | tar -x -C <absolute-path>`.
 
 # _resolve_real_path — portable directory path canonicalisation.
 #
@@ -257,6 +270,199 @@ _ratc_path_has_symlink_component() {
     probe="$(dirname "$probe")"
   done
   return 1
+}
+
+# ------------------------------------------------------------------------------
+# Reviewer scratchpad (#1417). These helpers fail closed. A doubt is a block.
+# ------------------------------------------------------------------------------
+
+# Read scratchpad_dir from this hook's stdin. Return 0 and an empty REPLY
+# when the field is absent or null. That empty result is the only case that
+# may use the wider temp rule. Return 1 when jq is missing, the payload is
+# empty, or the field is present but not a non-empty string. A failure does
+# not fall back.
+_ratc_read_scratchpad_dir() {
+  local kind=""
+  if [ "${_RATC_PAD_READY:-}" = 1 ]; then
+    REPLY="${_RATC_PAD:-}"
+    return "${_RATC_PAD_RC:-1}"
+  fi
+  _RATC_PAD_READY=1
+  _RATC_PAD=""
+  _RATC_PAD_RC=1
+  if ! command -v jq >/dev/null 2>&1 || [ -z "${INPUT:-}" ]; then
+    REPLY=""
+    return 1
+  fi
+  kind=$(printf '%s' "$INPUT" | jq -r 'if has("scratchpad_dir") | not then "absent" elif (.scratchpad_dir | type) != "string" then "bad" elif .scratchpad_dir == "" then "bad" else "ok" end' 2>/dev/null) || kind="bad"
+  case "$kind" in
+    absent)
+      _RATC_PAD_RC=0
+      ;;
+    ok)
+      _RATC_PAD=$(printf '%s' "$INPUT" | jq -r '.scratchpad_dir' 2>/dev/null) || _RATC_PAD=""
+      _RATC_PAD=${_RATC_PAD%$'\r'}
+      if [ -n "$_RATC_PAD" ]; then
+        _RATC_PAD_RC=0
+      fi
+      ;;
+  esac
+  REPLY="$_RATC_PAD"
+  return "$_RATC_PAD_RC"
+}
+
+# REPLY is the -C directory of one literal export command. Any other shape
+# returns 1. The write detector is not modified; tar -x stays unextractable,
+# and this hook names the directory itself. The exempt shape has no archive
+# options: a ref or later argument that starts with "-" is rejected. Git
+# opens -o before it checks the tree-ish.
+_ratc_literal_export_dir() {
+  local cmd="${1:-}" rest="" ref="" dir=""
+  REPLY=""
+  [ -n "$cmd" ] || return 1
+  case "${TAR_OPTIONS:-}${TAR_OPTS:-}" in
+    "") ;;
+    *) return 1 ;;
+  esac
+  case "$cmd" in
+    *$'\n'*|*$'\r'*|*$'\t'*|*\\*) return 1 ;;
+  esac
+  case "$cmd" in
+    *'$'*|*'`'*|*'..'*|*';'*|*'&'*|*'('*|*')'*|*'<'*|*'>'*|*'"'*|*"'"*|*'*'*|*'?'*|*'['*|*'{'*|*'--absolute-names'*|*'--absolute-paths'*|*'--transform'*|*'--xform'*|*'--to-command'*|*' -P'*|*' -s'*)
+      return 1
+      ;;
+  esac
+  rest=${cmd#*|}
+  case "$rest" in
+    *'|'*) return 1 ;;
+  esac
+  case "$cmd" in
+    'git archive '*' | tar -x -C '/*' -')
+      rest=${cmd#git archive }
+      ref=${rest%% | tar -x -C *}
+      dir=${rest#* | tar -x -C }
+      dir=${dir% -}
+      ;;
+    'git archive '*' | tar -x -C '/*)
+      rest=${cmd#git archive }
+      ref=${rest%% | tar -x -C *}
+      dir=${rest#* | tar -x -C }
+      ;;
+    'git archive '*' | tar --extract -C '/*' -')
+      rest=${cmd#git archive }
+      ref=${rest%% | tar --extract -C *}
+      dir=${rest#* | tar --extract -C }
+      dir=${dir% -}
+      ;;
+    'git archive '*' | tar --extract -C '/*)
+      rest=${cmd#git archive }
+      ref=${rest%% | tar --extract -C *}
+      dir=${rest#* | tar --extract -C }
+      ;;
+    'tar -x -C '/*' -')
+      ref=HEAD
+      dir=${cmd#tar -x -C }
+      dir=${dir% -}
+      ;;
+    'tar -x -C '/*)
+      ref=HEAD
+      dir=${cmd#tar -x -C }
+      ;;
+    'tar --extract -C '/*)
+      ref=HEAD
+      dir=${cmd#tar --extract -C }
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+  # The tree-ish charset allows an interior dash (release-1). A leading
+  # dash is an option, including a later argument such as "HEAD -o...".
+  case "$ref" in
+    ""|-*|*' '-*|*[!A-Za-z0-9._~/-]*) return 1 ;;
+  esac
+  case "$dir" in
+    /*) ;;
+    *) return 1 ;;
+  esac
+  case "$dir" in
+    *[!/A-Za-z0-9._-]*|*//*|/) return 1 ;;
+  esac
+  REPLY=$dir
+  return 0
+}
+
+# Return 0 when this session has one valid Rex, Security, or Architecture
+# marker and the caller is not a typed build agent. Another session's marker
+# is never read.
+_ratc_sanctioned_reviewer() {
+  local ops="$1" hook_dir="$2" marker="" hook_root="" cwd_root="" session_root=""
+  local ops_phys="" hook_phys="" p="" found=1
+  [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] || return 1
+  [ -n "$ops" ] || return 1
+  [ -f "$hook_dir/_lib-review-markers.sh" ] || return 1
+  [ -f "$hook_dir/_lib-ops-root.sh" ] || return 1
+  # shellcheck source=/dev/null
+  . "$hook_dir/_lib-review-markers.sh"
+  # shellcheck source=/dev/null
+  . "$hook_dir/_lib-ops-root.sh"
+  if [ "$(review_caller_class "${INPUT:-}" "$ops")" = "other-agent" ]; then
+    return 1
+  fi
+  command -v resolve_ops_root_walk >/dev/null 2>&1 || return 1
+  command -v resolve_ops_root >/dev/null 2>&1 || return 1
+  hook_root=$(resolve_ops_root_walk "$hook_dir")
+  cwd_root=$(resolve_ops_root_walk "$PWD")
+  session_root=$(resolve_ops_root "$PWD")
+  [ -n "$hook_root" ] && [ -n "$cwd_root" ] && [ -n "$session_root" ] || return 1
+  [ "$cwd_root" = "$hook_root" ] || return 1
+  [ "$session_root" = "$hook_root" ] || return 1
+  ops_phys=$(cd "$ops" 2>/dev/null && pwd -P) || return 1
+  hook_phys=$(cd "$hook_root" 2>/dev/null && pwd -P) || return 1
+  [ "$ops_phys" = "$hook_phys" ] || return 1
+  while IFS= read -r marker; do
+    [ -n "$marker" ] || continue
+    [ -f "$marker" ] && [ ! -L "$marker" ] || continue
+    p=$marker
+    found=1
+    while [ -n "$p" ] && [ "$p" != / ]; do
+      [ -L "$p" ] && found=1 && break
+      case "$p" in
+        */.claude/session) found=0; break ;;
+      esac
+      p=${p%/*}
+    done
+    [ "$found" = 0 ] || continue
+    if grep -Eq '^[[:alnum:]_.-]+(/[[:alnum:]_.-]+)+#[1-9][0-9]*:(rex|security|architecture)$' "$marker" && \
+       awk 'END { exit (NR != 1) }' "$marker"; then
+      return 0
+    fi
+  done <<EOF
+$(active_reviewer_marker_files "$ops")
+EOF
+  return 1
+}
+
+# Return 0 when TARGET may use the scratchpad exemption for this review.
+_ratc_reviewer_scratchpad_target() {
+  local target="$1" ops="$2" ws="$3" hook_dir="$4" pad=""
+  [ -n "$target" ] || return 1
+  [ -n "$ops" ] || return 1
+  [ -n "$hook_dir" ] || return 1
+  [ -f "$hook_dir/_lib-active-ticket.sh" ] || return 1
+  # shellcheck source=/dev/null
+  . "$hook_dir/_lib-active-ticket.sh"
+  command -v active_ticket_in_session_scratchpad >/dev/null 2>&1 || return 1
+  # A path that fails the wide temp rule cannot sit under a valid scratchpad.
+  # Reject it before jq. A present scratchpad_dir is then a second, narrower
+  # check. An unreadable or invalid field fails closed and does not fall back.
+  active_ticket_in_session_scratchpad "$target" "" "$ops" "$ws" "${CLAUDE_CODE_SESSION_ID:-}" || return 1
+  _ratc_read_scratchpad_dir || return 1
+  pad=$REPLY
+  if [ -n "$pad" ]; then
+    active_ticket_in_session_scratchpad "$target" "$pad" "$ops" "$ws" "${CLAUDE_CODE_SESSION_ID:-}" || return 1
+  fi
+  _ratc_sanctioned_reviewer "$ops" "$hook_dir"
 }
 
 # ------------------------------------------------------------------------------
@@ -665,6 +871,29 @@ EOF_REVIEW_MARKERS
               ;;
           esac
         fi
+      fi
+      # #1417: a governed-tree miss can still be this session's scratchpad.
+      # #883 already returned when the target is outside git. This arm covers
+      # a scratchpad that is its own git directory. A linked worktree has a
+      # .git file, so the directory check keeps it gated, the same check as
+      # #1402. Symlinks and `..` stay gated.
+      if [ "$_og_has_symlink" = 0 ] \
+         && [ "$_og_in_ops_raw" = 0 ] && [ "$_og_in_ws_raw" = 0 ] \
+         && [ "$_og_in_ops_res" = 0 ] && [ "$_og_in_ws_res" = 0 ] \
+         && [ -d "$_og_git_root/.git" ]; then
+        if _ratc_reviewer_scratchpad_target "$_og_abs_target" "$OPS_ROOT" "$WORKSPACE_DIR" "$HOOK_DIR"; then
+          return 0
+        fi
+      fi
+    fi
+  fi
+
+  # An unextractable export has no file path. Recognize only the literal
+  # archive command, then apply the same scratchpad rule to its -C directory.
+  if [ -z "$FILE_PATH" ] && [ "$TOOL_NAME" = "Bash" ]; then
+    if _ratc_literal_export_dir "${COMMAND:-}"; then
+      if _ratc_reviewer_scratchpad_target "$REPLY" "$OPS_ROOT" "$WORKSPACE_DIR" "$HOOK_DIR"; then
+        return 0
       fi
     fi
   fi

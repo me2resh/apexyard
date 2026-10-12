@@ -1461,3 +1461,240 @@ active_ticket_project_for_path() {
   _atd_project_for_resolved_path "$REPLY"
   printf '%s' "$REPLY"
 }
+
+# ---------------------------------------------------------------------------
+# Session scratchpad (#1417, AgDR-0231)
+# ---------------------------------------------------------------------------
+#
+# A sanctioned review may write under this session's scratchpad without a
+# ticket. require-active-ticket.sh decides whether a review is sanctioned.
+# This function only answers the path question. It fails closed.
+#
+# SCRATCHPAD_DIR is the harness field scratchpad_dir. Hooks receive it on
+# stdin from Claude Code v2.1.257 onward. When it is empty, the path must
+# sit under a system temp root and contain SESSION_ID as its own path
+# segment. A non-empty SCRATCHPAD_DIR that fails a check returns 1. It does
+# not fall back to the wider rule.
+#
+# Accepted roots are /tmp, /var/tmp, TMPDIR, and CLAUDE_CODE_TMPDIR when that
+# variable is an absolute directory. The physical root / is never accepted.
+# The path must not be the ops fork or the workspace directory, and the
+# scratchpad must not contain either tree. A `..` segment or a symlink
+# returns 1, including a symlink that stays inside the scratchpad. The
+# system temp symlink (/tmp -> /private/tmp) is not treated as one.
+
+# Reject an absolute path that is empty, root, has a `..` segment, a repeated
+# slash, or a character outside the scratchpad set. Sets REPLY.
+_at_normal_abs() {
+  local p="$1"
+  REPLY=""
+  case "$p" in
+    /*) ;;
+    *) return 1 ;;
+  esac
+  while [ "$p" != / ] && [ "${p%/}" != "$p" ]; do
+    p="${p%/}"
+  done
+  case "$p" in
+    /|*//*|*[[:space:]]*|*'..'*|*[!/A-Za-z0-9._-]*) return 1 ;;
+  esac
+  REPLY="$p"
+  return 0
+}
+
+# Return 0 when PATH has SID as one whole path segment.
+_at_path_has_segment() {
+  local path="$1" sid="$2" rest="" seg=""
+  case "$path" in
+    /*) rest="${path#/}" ;;
+    *) return 1 ;;
+  esac
+  while [ -n "$rest" ]; do
+    seg="${rest%%/*}"
+    [ "$seg" = "$sid" ] && return 0
+    case "$rest" in
+      */*) rest="${rest#*/}" ;;
+      *) rest="" ;;
+    esac
+  done
+  return 1
+}
+
+# Return 0 when the part of PATH below ROOT has SID as a path segment.
+_at_rel_has_segment() {
+  local path="$1" root="$2" sid="$3" rel=""
+  case "$path" in
+    "$root"/*) rel="${path#"$root"/}" ;;
+    *) return 1 ;;
+  esac
+  _at_path_has_segment "/$rel" "$sid"
+}
+
+# REPLY is the physical temp root that contains PATH. Return 1 when none does.
+_at_temp_root_for() {
+  local path="$1" candidate="" physical=""
+  REPLY=""
+  for candidate in /tmp /var/tmp "${TMPDIR:-}" "${CLAUDE_CODE_TMPDIR:-}"; do
+    [ -n "$candidate" ] || continue
+    case "$candidate" in
+      /*) ;;
+      *) continue ;;
+    esac
+    [ -d "$candidate" ] || continue
+    _at_rp "$candidate" || continue
+    physical="$REPLY"
+    [ -n "$physical" ] && [ "$physical" != / ] || continue
+    case "$path" in
+      "$physical"/*)
+        REPLY="$physical"
+        return 0
+        ;;
+    esac
+  done
+  REPLY=""
+  return 1
+}
+
+# Return 0 when PATH has a symlink below a temp root, or a `..` segment.
+# A symlink at /tmp itself is ignored. Restores REPLY.
+_at_unsafe_scratch_path() {
+  local path="$1" saved="$REPLY" probe="$1" root="/" candidate="" physical="" rc=1
+  for candidate in /tmp /var/tmp "${TMPDIR:-}" "${CLAUDE_CODE_TMPDIR:-}"; do
+    [ -n "$candidate" ] && [ -d "$candidate" ] || continue
+    case "$candidate" in
+      /*) ;;
+      *) continue ;;
+    esac
+    candidate="${candidate%/}"
+    [ -n "$candidate" ] || continue
+    _at_rp "$candidate" || continue
+    physical="$REPLY"
+    [ "$physical" != / ] || continue
+    case "$path" in
+      "$candidate"/*)
+        probe="$physical/${path#"$candidate"/}"
+        root="$physical"
+        break
+        ;;
+      "$physical"/*)
+        root="$physical"
+        break
+        ;;
+    esac
+  done
+  if [ "$root" != / ]; then
+    case "$probe" in
+      */../*|*/..) rc=0 ;;
+    esac
+  fi
+  if [ "$rc" != 0 ]; then
+    while [ -n "$probe" ] && [ "$probe" != "$root" ] && [ "$probe" != / ]; do
+      case "$probe" in
+        */) probe="${probe%/}"; continue ;;
+      esac
+      if [ -L "$probe" ]; then
+        rc=0
+        break
+      fi
+      case "$probe" in
+        */*) probe="${probe%/*}" ;;
+        *) break ;;
+      esac
+    done
+  fi
+  REPLY="$saved"
+  return "$rc"
+}
+
+# Return 0 when PATH is ROOT or a path under ROOT.
+_at_path_in_root() {
+  local path="$1" root="$2"
+  [ -n "$path" ] && [ -n "$root" ] || return 1
+  case "$path" in
+    "$root"|"$root"/*) return 0 ;;
+  esac
+  return 1
+}
+
+# active_ticket_in_session_scratchpad TARGET SCRATCHPAD_DIR OPS WORKSPACE SESSION_ID
+#
+# Return 0 when TARGET is inside this session's scratchpad. SESSION_ID
+# defaults to CLAUDE_CODE_SESSION_ID. OPS and WORKSPACE are the governed
+# trees. Both must be absolute. Return 1 on every doubt.
+active_ticket_in_session_scratchpad() {
+  local target="$1" pad="${2:-}" ops="${3:-}" ws="${4:-}"
+  local sid="${5:-${CLAUDE_CODE_SESSION_ID:-}}"
+  local abs_in="" abs="" target_phys="" temp_root=""
+  local pad_abs="" pad_phys="" pad_temp="" ops_phys="" ws_phys=""
+
+  case "$sid" in
+    ""|.*|*[!A-Za-z0-9._-]*|*..*) return 1 ;;
+  esac
+  case "$ops" in
+    /*) ;;
+    *) return 1 ;;
+  esac
+  case "$ws" in
+    /*) ;;
+    *) return 1 ;;
+  esac
+
+  case "$target" in
+    /*) abs_in="$target" ;;
+    *)
+      _at_rp "$PWD" || return 1
+      abs_in="$REPLY/$target"
+      ;;
+  esac
+  _at_normal_abs "$abs_in" || return 1
+  _at_lex "$REPLY" || return 1
+  abs="$REPLY"
+  [ "$abs" != / ] || return 1
+  _at_unsafe_scratch_path "$abs" && return 1
+  _at_path_has_segment "$abs" "$sid" || return 1
+  _at_rp "$abs" || return 1
+  target_phys="$REPLY"
+  [ "$target_phys" != / ] || return 1
+  _at_unsafe_scratch_path "$target_phys" && return 1
+  _at_temp_root_for "$target_phys" || return 1
+  temp_root="$REPLY"
+  _at_rel_has_segment "$target_phys" "$temp_root" "$sid" || return 1
+
+  _at_rp "$ops" || return 1
+  ops_phys="$REPLY"
+  _at_rp "$ws" || return 1
+  ws_phys="$REPLY"
+  _at_path_in_root "$abs" "$ops" && return 1
+  _at_path_in_root "$abs" "$ops_phys" && return 1
+  _at_path_in_root "$target_phys" "$ops" && return 1
+  _at_path_in_root "$target_phys" "$ops_phys" && return 1
+  _at_path_in_root "$abs" "$ws" && return 1
+  _at_path_in_root "$abs" "$ws_phys" && return 1
+  _at_path_in_root "$target_phys" "$ws" && return 1
+  _at_path_in_root "$target_phys" "$ws_phys" && return 1
+
+  if [ -z "$pad" ]; then
+    return 0
+  fi
+
+  _at_normal_abs "$pad" || return 1
+  _at_lex "$REPLY" || return 1
+  pad_abs="$REPLY"
+  [ "$pad_abs" != / ] || return 1
+  _at_unsafe_scratch_path "$pad_abs" && return 1
+  _at_path_has_segment "$pad_abs" "$sid" || return 1
+  _at_rp "$pad_abs" || return 1
+  pad_phys="$REPLY"
+  [ "$pad_phys" != / ] || return 1
+  _at_unsafe_scratch_path "$pad_phys" && return 1
+  _at_temp_root_for "$pad_phys" || return 1
+  pad_temp="$REPLY"
+  _at_rel_has_segment "$pad_phys" "$pad_temp" "$sid" || return 1
+  _at_path_in_root "$abs" "$pad_abs" || return 1
+  _at_path_in_root "$target_phys" "$pad_phys" || return 1
+  _at_path_in_root "$ops" "$pad_abs" && return 1
+  _at_path_in_root "$ops_phys" "$pad_phys" && return 1
+  _at_path_in_root "$ws" "$pad_abs" && return 1
+  _at_path_in_root "$ws_phys" "$pad_phys" && return 1
+  return 0
+}
