@@ -9,7 +9,7 @@
     "repositories": {}
   },
   "objective": "Start the six other review and audit agents without CLAUDE.md and the memory index, and trim the Hakim and Tariq prompts to 12,000 bytes each. Hakim and Tariq show zero verdict flips; the four others pass a smoke check.",
-  "why": "ac5-1 and ac5-2 are not-verified. #1652 ships Rex with omitClaudeMd and cuts its first turn by 38.2%. With omitClaudeMd, Hakim missed a HIGH defect on hakim-1546-f78c8ae25 in 4 of 19 runs, and the cause is not known. security-reviewer.md is 21,570 bytes and solution-architect.md is 22,858 bytes. No Tariq corpus exists.",
+  "why": "ac5-1 and ac5-2 are not-verified. #1652 ships Rex with omitClaudeMd and cuts its first turn by 38.2%. With omitClaudeMd, Hakim missed a HIGH defect on hakim-1546-f78c8ae25 in 4 of 19 runs, and the cause is not known. security-reviewer.md is 21,723 bytes and solution-architect.md is 22,858 bytes. No Tariq corpus exists.",
   "contributesTo": [
     "ac5-1",
     "ac5-2"

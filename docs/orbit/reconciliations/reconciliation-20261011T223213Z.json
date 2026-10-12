@@ -189,7 +189,7 @@
         "rex.json has 10 entries and no delta entry",
         "Baseline: 98 delta re-reviews at a mean of 77k tokens"
       ],
-      "explanation": "Missing: the effort spike, the lean-effort agent file and the delta corpus entries. Next: the o5 slice."
+      "explanation": "Missing: the effort spike, the lean-effort agent file and the delta corpus entries. Next: a later ac5-3 spike slice, because the o5 slice covers only ac5-1 and ac5-2."
     },
     {
       "criterionId": "ac6-1",
