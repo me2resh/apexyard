@@ -14,9 +14,15 @@ orbit_records_initiative() {
   local repo_dir="$1" ref="$2" path id suffix best="" listing
   ORBIT_INITIATIVE=""
   repo_dir=$(git -C "$repo_dir" rev-parse --show-toplevel) || return 1
-  listing=$(git -C "$repo_dir" ls-tree -r --name-only "$ref" -- docs/orbit/plans/) || return 1
+  # history/ holds superseded plans too, so a branch that retires an initiative still resolves.
+  listing=$(git -C "$repo_dir" ls-tree -r --name-only "$ref" -- docs/orbit/plans/ docs/orbit/history/) || return 1
   while IFS= read -r path; do
     case "$path" in *.json) ;; *) continue ;; esac
+    case "$path" in
+      docs/orbit/history/*)
+        # Only superseded plans count; a reconciliation in history/ carries .planId.
+        git -C "$repo_dir" show "$ref:$path" | jq -e 'has("planId") | not' >/dev/null 2>&1 || continue ;;
+    esac
     id=$(git -C "$repo_dir" show "$ref:$path" | jq -er '.id | select(type == "string")' 2>/dev/null) || return 1
     [[ "$id" =~ ^plan-[a-z0-9]+(-[a-z0-9]+)*$ ]] || return 1
     suffix=${id#plan-}
