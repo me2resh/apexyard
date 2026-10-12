@@ -64,6 +64,20 @@ The raw fallback still applies to any other command word outside the list.
 `test_merge_command_data.sh` adds jq data cases and pins executable forms to the raw scan.
 `test_block_ambient_tracker_repo.sh` adds data cases and pins real PR checks to explicit repository selection.
 
+### #1639 ORBIT arguments join the general data allowlist
+
+The owner chose the allowlist fix for PR #1657 after Rex reviewed `4158947`.
+`orbit` joins `_lib-command-scrub.sh`: its planning arguments are data, not shell text.
+The narrow merge list is unchanged. Shell wrappers and substitutions retain the raw scan.
+`codex` and `cursor-agent` remain excluded. `codex exec` accepts a prompt as data,
+but its agent can run commands outside this hook. We have not established that every
+invocation of either CLI meets the data-only contract, so the conservative fallback stays.
+
+A standalone lowercase scalar assignment with a literal path value can precede a
+quoted file heredoc. Environment prefixes, uppercase special variables, arrays,
+expansions and executable assignment values retain raw scanning. Tests cover the
+variable-path heredoc and subsequent real tracker commands on two active repositories.
+
 ## Artifacts
 
 - Issue #1489

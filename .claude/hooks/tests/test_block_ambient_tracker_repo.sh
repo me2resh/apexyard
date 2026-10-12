@@ -113,6 +113,34 @@ make_repo "$multiple" "git@github.com:owner/framework.git"
 add_project "$multiple" a owner/project-a
 add_project "$multiple" b owner/project-b
 run_case 'multiple active repos require an explicit target' 2 'gh pr list' "$multiple"
+# #1639: data is allowed on the two-repository fixture too.
+run_case 'orbit include treats tracker text as data' 0 \
+  'orbit slice --include "gh issue create --title x"' "$multiple"
+run_case 'variable-path quoted heredoc treats tracker text as data' 0 \
+  $'d=/tmp/x; cat > "$d/notes.md" <<\'EOF\'\ngh pr checks 5\nEOF' "$multiple"
+run_case 'variable-path heredoc followed by real tracker blocks' 2 \
+  $'d=/tmp/x; cat > "$d/notes.md" <<\'EOF\'\ngh pr checks 5\nEOF\ngh issue create --title x' "$multiple"
+run_case 'environment prefix remains raw' 2 \
+  'd=/tmp/x orbit slice --include "gh issue create --title x"' "$multiple"
+run_case 'special variable assignment remains raw' 2 \
+  $'GIT_PAGER=bash; cat <<\'EOF\'\ngh pr checks 5\nEOF' "$multiple"
+run_case 'codex agent prompt remains conservative' 2 \
+  'codex exec "gh issue create --title x"' "$multiple"
+run_case 'cursor agent prompt remains conservative' 2 \
+  'cursor-agent "gh issue create --title x"' "$multiple"
+for tracker_form in \
+  'gh issue create --title x' \
+  "sh -c 'gh issue create --title x'" \
+  "eval 'gh issue create --title x'" \
+  'env gh issue create --title x' \
+  'command gh issue create --title x' \
+  '(gh issue create --title x)' \
+  "printf 'gh issue create --title x' | bash" \
+  'echo "$(gh issue create --title x)"' \
+  'echo `gh issue create --title x`'; do
+  run_case "orbit followed by tracker: $tracker_form" 2 \
+    "orbit validate && $tracker_form" "$multiple"
+done
 multi_msg=$(cd "$multiple" && printf '%s' "{\"tool_input\":{\"command\":\"gh pr list\"}}" | "$HOOK" 2>&1 >/dev/null)
 case "$multi_msg" in
   *"multiple repositories"*) echo "PASS: the multiple-repository message is restored"; PASS=$((PASS + 1)) ;;

@@ -60,6 +60,20 @@ check 'bare tracker merge retains raw scan' yes 'tracker_pr_merge demo/service 7
 check 'jq substitution retains raw scan' yes 'jq -n "$(tracker_pr_merge demo/service 7 squash)"'
 check 'jq startup redirect retains raw scan' yes "jq -n '\"gh pr merge 7\"' > ~/.zshenv"
 
+# ORBIT joins only the general scrubber; every merge wrapper remains visible.
+for merge_form in \
+  'gh pr merge 7' \
+  "sh -c 'gh pr merge 7'" \
+  "eval 'gh pr merge 7'" \
+  'env gh pr merge 7' \
+  'command gh pr merge 7' \
+  '(gh pr merge 7)' \
+  "echo 'gh pr merge 7' | bash" \
+  'echo "$(gh pr merge 7)"' \
+  'echo `gh pr merge 7`'; do
+  check "orbit followed by merge: $merge_form" yes "orbit validate && $merge_form"
+done
+
 check 'gh CLI merge' yes 'gh pr merge 7 --squash'
 check 'gh API merge' yes 'gh api repos/demo/service/pulls/7/merge -X PUT'
 check 'glab CLI merge' yes 'glab mr merge 7 -R demo/service'
