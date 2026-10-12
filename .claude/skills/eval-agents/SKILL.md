@@ -5,9 +5,7 @@ argument-hint: "<rex|hakim|tariq> [--corpus <path>] [--check-only]"
 allowed-tools: Bash, Read, Glob, Grep, Agent
 ---
 
-## Writing rule
-
-When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
 # /eval-agents — Review-Agent Eval Harness
 

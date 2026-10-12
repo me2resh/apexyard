@@ -5,9 +5,7 @@ argument-hint: "<process-slug> [--from-endpoint METHOD /path] [--from-machine Cl
 allowed-tools: Bash, Read, Grep, Glob, Write, AskUserQuestion
 ---
 
-## Writing rule
-
-When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
 # /process — BPMN 2.0 from Code, Anchor-Scoped, Cross-Repo-Aware
 

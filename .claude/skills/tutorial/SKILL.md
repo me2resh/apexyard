@@ -7,9 +7,7 @@ effort: low
 allowed-tools: Read, Bash
 ---
 
-## Writing rule
-
-When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
 # /tutorial — Replay the Capability Tour
 

@@ -5,9 +5,7 @@ argument-hint: "--promote | --discard [<spike-ticket-number>]"
 allowed-tools: Bash, Read, Write
 ---
 
-## Writing rule
-
-When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
 # /spike-close — Close a Spike via the Disposition Gate
 

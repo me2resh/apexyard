@@ -5,9 +5,7 @@ argument-hint: "[project-path] [--language=ts|js|python|go|ruby] [--runner=<name
 allowed-tools: Bash, Read, Glob, Grep, Write
 ---
 
-## Writing rule
-
-When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
 # /mutation-test — Behaviour-Quality Sensor
 

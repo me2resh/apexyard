@@ -6,11 +6,11 @@ argument-hint: "<issue-number> | <owner/repo>#<number>"
 effort: low
 ---
 
-## Writing rule
-
-When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
 # /start-ticket - Declare the Active Ticket
+
+Rationale: read docs/skills/start-ticket-rationale.md for layout and resolution details.
 
 Writes the active-ticket marker for one working tree, so the `require-active-ticket.sh` PreToolUse hook permits Edit/Write on code paths in that tree. Without it, the hook blocks edits to anything outside `.claude/`, `docs/`, `projects/*/docs/`, and `*.md`.
 
@@ -20,12 +20,6 @@ Each working tree keeps its own marker in its own git dir (AgDR-0222):
 |--------------|-------------|
 | Main clone (the ops fork, or `workspace/<project>/`) | `<repo>/.git/apexyard-ticket` |
 | Linked worktree (`git worktree add`) | `<repo>/.git/worktrees/<id>/apexyard-ticket` |
-
-One tree holds one ticket. Parallel sessions on one project no longer overwrite each other, because each linked worktree has its own marker. `git worktree remove` deletes the marker with the worktree. The marker is never tracked, so it does not appear in `git status`.
-
-The hook trusts a marker in a git dir only for the ops fork or a registered clone. A registered clone is `workspace/<project>/`, or the `workspace:` path of its registry entry. The marker is a process gate. Anyone with write access to the git dir can forge it. It is not an authorization boundary.
-
-During the move to the new layout, the skill also writes the old-layout marker under `<ops_root>/.claude/session/`. It uses the place the old skill used: `tickets/<project>/<branch>`, `tickets/<project>` or `current-ticket`. The hooks still read old markers wherever they read them before. A hook from before the move, after a rollback or in a session that has not reloaded its hooks, sees the ticket too. See AgDR-0222, "Backward compatibility".
 
 This is the mechanical enforcement of the Pre-Build Gate in `.claude/rules/workflow-gates.md` — "do not start coding until the ticket exists".
 
@@ -52,8 +46,6 @@ Expected forms:
 - `apexyard#42` — owner defaults to the current org (parsed from the origin URL).
 
 If `$ARGUMENTS` is empty, stop and ask the user which issue they're starting.
-
-**Cross-repo note:** ApexYard governs a portfolio of repos. If the user is in the ops repo (the apexyard fork) but the ticket lives in a managed project's own repo, they should pass the fully-qualified form so the marker records the correct tracker. Each managed project's tickets live in that project's own GitHub repo — tickets do not cross project boundaries.
 
 ### 2. Verify the Issue Exists
 
@@ -107,12 +99,6 @@ The marker lives in the git dir of the working tree you are in. A ticket on a ma
 
 #### 4a. Locate the ops root
 
-The ops root is the apexyard fork root, anchored by EITHER the `.apexyard-fork` marker (split-portfolio v2, framework ≥ #242 — `onboarding.yaml` and `apexyard.projects.yaml` live in the sibling portfolio repo, not the fork) OR the legacy v1 pair (`onboarding.yaml` AND `apexyard.projects.yaml` both present in the same directory).
-
-Locate `_lib-ops-root.sh` by walking up from `$PWD` — **not** via `git rev-parse --show-toplevel`. Inside a `workspace/<project>/` clone, `--show-toplevel` resolves to the *project* repo, and managed-project clones carry **no `.claude/hooks/` directory at all** (there is no framework mechanism that installs one there) — sourcing from that path silently fails, `resolve_ops_root` is never defined, and this step dead-ends exactly where split-portfolio v2 operators most often run `/start-ticket`. This is the same sibling walk-up pattern `bug`, `feature`, `task`, `migration`, `spike`, `prototype`, and 8 other ticket skills already use to locate `_lib-tracker.sh` — walk up until a directory containing the lib is found, then source it.
-
-Keep two steps distinct: the walk-up below only finds a directory to **source the lib from** (the nearest fork-shaped root above cwd); `resolve_ops_root` then **decides the real ops root**, pin-first (apexyard#381) — the two can differ, e.g. a session pin can point at a different real ops fork than the nearest fork-shaped directory on the walk (say, cwd is inside an ops-fork-shaped `/tmp` build clone).
-
 ```bash
 ops_lib="$(r="$PWD"; while [ -n "$r" ] && [ "$r" != / ]; do \
   [ -f "$r/.claude/hooks/_lib-ops-root.sh" ] && { echo "$r/.claude/hooks/_lib-ops-root.sh"; break; }; \
@@ -151,12 +137,6 @@ else
   ' "$registry")
 fi
 ```
-
-Notes on the fallback:
-
-- Handles both `repo: me2resh/sample-app` and `repo: "me2resh/sample-app"` (and single-quoted).
-- Assumes `- name:` is the FIRST key in each project entry — that matches the shape in `apexyard.projects.yaml.example` and every entry produced by `/handover`. If your registry reorders keys so `repo:` appears before `name:` in an entry, the lookup misses. Fix: move `name:` to the top, or install `yq` (the preferred path).
-- Leading whitespace is tolerated via `^[[:space:]]*` — nested entries under `projects:` parse fine at any indent level, so long as the indent is consistent within the entry.
 
 `$project` is now either a registered project name (e.g. `sample-app`, `demo-svc`) or empty (ticket's tracker repo isn't registered — typically because the ticket is on the ops fork itself, or a repo that's not under management).
 
