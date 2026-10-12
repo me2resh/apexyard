@@ -17,13 +17,9 @@
 
 INPUT=$(cat)
 
-if ! printf '%s' "$INPUT" | grep -q 'approval_channel=menu'; then
-  exit 0
-fi
-
 _menu_block() {
   cat >&2 <<'EOF'
-BLOCKED: menu approval records are written only by record-menu-approval.sh.
+BLOCKED: use the human approval menu to record menu approval.
 Do not write approval_channel=menu into a review marker.
 The operator selects the approve option in the menu. That selection is the approval.
 EOF
@@ -38,7 +34,11 @@ _menu_path_is_marker() {
 }
 
 if ! command -v jq >/dev/null 2>&1; then
-  if printf '%s' "$INPUT" | grep -qE -- '-(ceo|design|architecture)\.approved'; then
+  if printf '%s' "$INPUT" | grep -qE 'record-menu-approval|_lib-menu-approval|menu_approval_write_record'; then
+    _menu_block
+  fi
+  if printf '%s' "$INPUT" | grep -q 'approval_channel=' &&
+     printf '%s' "$INPUT" | grep -qE -- '-(ceo|design|architecture)\.approved'; then
     _menu_block
   fi
   exit 0
@@ -63,7 +63,7 @@ case "$TOOL_NAME" in
         (.tool_input.edits // [] | .[] | .new_string // empty, .old_string // empty)
       ] | map(select(type == "string")) | join("\n")
     ' 2>/dev/null) || BLOB=""
-    if ! printf '%s' "$BLOB" | grep -q 'approval_channel=menu'; then
+    if ! printf '%s' "$BLOB" | grep -qE "approval_channel=[\"']?menu[\"']?"; then
       exit 0
     fi
     while IFS= read -r one_path; do
@@ -80,7 +80,10 @@ esac
 
 COMMAND=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null) || COMMAND=""
 [ -n "$COMMAND" ] || exit 0
-if ! printf '%s' "$COMMAND" | grep -q 'approval_channel=menu'; then
+if printf '%s' "$COMMAND" | grep -qE 'record-menu-approval|_lib-menu-approval|menu_approval_write_record'; then
+  _menu_block
+fi
+if ! printf '%s' "$COMMAND" | grep -qE "approval_channel=[\"']?menu[\"']?"; then
   exit 0
 fi
 

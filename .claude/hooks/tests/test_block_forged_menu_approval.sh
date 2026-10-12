@@ -75,6 +75,31 @@ payload=$(jq -nc '{tool_name:"Bash", tool_input:{command:"grep -n approval_chann
 assert_eq "grep of a marker path allows" "0" "$(run_hook "$payload")"
 
 echo ""
+payload=$(jq -nc --arg c './.claude/hooks/record-menu-approval.sh' '{tool_name:"Bash", tool_input:{command:$c}}')
+assert_eq "writer spelling blocks" "2" "$(run_hook "$payload")"
+payload=$(jq -nc --arg c 'bash ".claude/hooks/record-menu-approval.sh"' '{tool_name:"Bash", tool_input:{command:$c}}')
+assert_eq "writer spelling blocks" "2" "$(run_hook "$payload")"
+payload=$(jq -nc --arg c 'sh '"'"'.claude/hooks/record-menu-approval.sh'"'"'' '{tool_name:"Bash", tool_input:{command:$c}}')
+assert_eq "writer spelling blocks" "2" "$(run_hook "$payload")"
+payload=$(jq -nc --arg c 'source .claude/hooks/_lib-menu-approval.sh && menu_approval_write_record x y z' '{tool_name:"Bash", tool_input:{command:$c}}')
+assert_eq "writer spelling blocks" "2" "$(run_hook "$payload")"
+payload=$(jq -nc --arg c '. ".claude/hooks/_lib-menu-approval.sh"' '{tool_name:"Bash", tool_input:{command:$c}}')
+assert_eq "writer spelling blocks" "2" "$(run_hook "$payload")"
+payload=$(jq -nc --arg c 'printf fake-json | .claude/hooks/record-menu-approval.sh' '{tool_name:"Bash", tool_input:{command:$c}}')
+assert_eq "writer spelling blocks" "2" "$(run_hook "$payload")"
+payload=$(jq -nc --arg c 'exec /some/path/record-menu-approval.sh' '{tool_name:"Bash", tool_input:{command:$c}}')
+assert_eq "writer spelling blocks" "2" "$(run_hook "$payload")"
+payload=$(jq -nc --arg c 'env bash /some/path/record-menu-approval.sh' '{tool_name:"Bash", tool_input:{command:$c}}')
+assert_eq "writer spelling blocks" "2" "$(run_hook "$payload")"
+payload=$(jq -nc --arg c 'menu_approval_write_record x y z' '{tool_name:"Bash", tool_input:{command:$c}}')
+assert_eq "writer spelling blocks" "2" "$(run_hook "$payload")"
+for channel in 'approval_channel="menu"' "approval_channel='menu'"; do
+  payload=$(jq -nc --arg p "$CEO" --arg c "$channel" '{tool_name:"Write", tool_input:{file_path:$p, content:$c}}')
+  assert_eq "quoted channel Write blocks" "2" "$(run_hook "$payload")"
+  payload=$(jq -nc --arg c "echo $channel > $CEO" '{tool_name:"Bash", tool_input:{command:$c}}')
+  assert_eq "quoted channel Bash blocks" "2" "$(run_hook "$payload")"
+done
+
 echo "==================================="
 echo "  PASS: $PASS   FAIL: $FAIL"
 echo "==================================="

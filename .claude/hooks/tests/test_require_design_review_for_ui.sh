@@ -658,6 +658,13 @@ approval_summary="Approve design review"
 EOF
 code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
 assert_eq "menu record at head allows" "0" "$code"
+for channel in 'approval_channel="menu"' "approval_channel='menu'"; do
+  marker=$(review_marker_path "o/r" 77 design "$sb")
+  sed "s/^approval_channel=.*/$channel/" "$marker" > "$sb/quoted-marker"
+  cp "$sb/quoted-marker" "$marker"
+  code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+  assert_eq "quoted channel rejects" "2" "$code"
+done
 rm -rf "$sb"
 
 echo ""

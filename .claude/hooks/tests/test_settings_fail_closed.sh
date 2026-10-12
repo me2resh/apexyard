@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Settings invariants for the fail-closed gates (me2resh/apexyard#1623).
 #
-# 1. The dispatch-bash.sh entry and the require-active-ticket.sh entry set
+# 1. Dispatcher, ticket-first, and menu-record guard entries set
 #    "onFailure": "block".
 # 2. Each timeout is at least 5 x the recorded p95 and never under 10 seconds.
 #    The p95 values come from docs/perf/hook-fail-closed-profile-2026-10.md.
-# 3. No other hook entry sets "onFailure" (out of scope for #1623).
+# 3. Only these entries and the menu-record guard set "onFailure".
 # 4. No tracked settings file sets disableAllHooks.
 # 5. The marketplace CI workflow pins a Claude Code version of 2.1.295 or later.
 # 6. The dispatcher keeps block-reviewer-ci-wait.sh fail open and
@@ -69,15 +69,18 @@ for script in dispatch-bash.sh require-active-ticket.sh; do
     || fail "$script timeout ${timeout_s}s is under 5 x p95 (${p95} ms x 5 = ${need_ms} ms)"
 done
 
-# Only the two entries may set onFailure.
-others=$(jq -r '[.. | objects | select(has("onFailure")) | .command]
-  | map(select((contains("dispatch-bash.sh") or contains("require-active-ticket.sh")) | not))
-  | length' "$SETTINGS")
-[ "$others" -eq 0 ] || fail "$others hook entries other than dispatch-bash.sh and require-active-ticket.sh set onFailure"
+[ "$(entry_field block-forged-menu-approval.sh onFailure)" = block ] \
+  || fail "menu-record guard must set onFailure to block"
 
-# The two entries are the only ones. (dispatch-bash.sh once, require-active-ticket.sh once.)
+# Only the three entries may set onFailure.
+others=$(jq -r '[.. | objects | select(has("onFailure")) | .command]
+  | map(select((contains("dispatch-bash.sh") or contains("require-active-ticket.sh") or contains("block-forged-menu-approval.sh")) | not))
+  | length' "$SETTINGS")
+[ "$others" -eq 0 ] || fail "$others hook entries outside the fail-closed gates set onFailure"
+
+# Each fail-closed entry occurs once.
 total=$(jq '[.. | objects | select(has("onFailure"))] | length' "$SETTINGS")
-[ "$total" -eq 2 ] || fail "expected exactly 2 entries with onFailure, found $total"
+[ "$total" -eq 3 ] || fail "expected exactly 3 entries with onFailure, found $total"
 
 # Hooks are on by default: no tracked settings file turns them off.
 for file in "$ROOT/.claude/settings.json" "$ROOT/.claude/settings.local.json"; do

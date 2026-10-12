@@ -55,6 +55,43 @@ run() {
     | DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh"
 }
 
+payload=$(jq -nc --arg c './.claude/hooks/record-menu-approval.sh' '{tool_name:"Bash", tool_input:{command:$c}}')
+rc=0
+printf '%s' "$payload" | DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh" >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ]
+payload=$(jq -nc --arg c 'bash ".claude/hooks/record-menu-approval.sh"' '{tool_name:"Bash", tool_input:{command:$c}}')
+rc=0
+printf '%s' "$payload" | DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh" >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ]
+payload=$(jq -nc --arg c 'sh '"'"'.claude/hooks/record-menu-approval.sh'"'"'' '{tool_name:"Bash", tool_input:{command:$c}}')
+rc=0
+printf '%s' "$payload" | DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh" >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ]
+payload=$(jq -nc --arg c 'source .claude/hooks/_lib-menu-approval.sh && menu_approval_write_record x y z' '{tool_name:"Bash", tool_input:{command:$c}}')
+rc=0
+printf '%s' "$payload" | DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh" >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ]
+payload=$(jq -nc --arg c '. ".claude/hooks/_lib-menu-approval.sh"' '{tool_name:"Bash", tool_input:{command:$c}}')
+rc=0
+printf '%s' "$payload" | DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh" >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ]
+payload=$(jq -nc --arg c 'printf fake-json | .claude/hooks/record-menu-approval.sh' '{tool_name:"Bash", tool_input:{command:$c}}')
+rc=0
+printf '%s' "$payload" | DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh" >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ]
+payload=$(jq -nc --arg c 'exec /some/path/record-menu-approval.sh' '{tool_name:"Bash", tool_input:{command:$c}}')
+rc=0
+printf '%s' "$payload" | DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh" >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ]
+payload=$(jq -nc --arg c 'env bash /some/path/record-menu-approval.sh' '{tool_name:"Bash", tool_input:{command:$c}}')
+rc=0
+printf '%s' "$payload" | DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh" >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ]
+payload=$(jq -nc --arg c 'menu_approval_write_record x y z' '{tool_name:"Bash", tool_input:{command:$c}}')
+rc=0
+printf '%s' "$payload" | DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh" >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ]
+
 run true
 grep -qx 'block-ambient-tracker-repo.sh' "$TMP/log"
 grep -qx 'block-reviewer-repo-mutation.sh' "$TMP/log"

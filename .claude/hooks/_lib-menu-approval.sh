@@ -43,8 +43,8 @@ menu_approval_field() {
 menu_approval_record_sha() {
   local file="$1" channel sha by ver at sum
   [ -n "$file" ] && [ -f "$file" ] || return 1
-  channel=$(menu_approval_field "$file" approval_channel)
-  [ "$channel" = "menu" ] || return 1
+  channel=$(grep '^approval_channel=' "$file" 2>/dev/null)
+  [ "$channel" = "approval_channel=menu" ] || return 1
   sha=$(menu_approval_field "$file" sha)
   by=$(menu_approval_field "$file" approved_by)
   ver=$(menu_approval_field "$file" skill_version)

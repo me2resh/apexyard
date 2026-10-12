@@ -23,6 +23,7 @@ It covers me2resh/apexyard#1623.
 | `require-active-ticket.sh` | Edit, Write, MultiEdit matcher in `.claude/settings.json` | Claude Code blocks the call (`onFailure` is `block`) |
 | `require-active-ticket.sh` | Inside the dispatcher, for each Bash call | The dispatcher prints `BLOCKED` and exits 2 |
 | The four merge gates | Inside the dispatcher, for merge commands | The dispatcher prints `BLOCKED` and exits 2 |
+| `block-forged-menu-approval.sh` | Edit, Write, MultiEdit matcher in `.claude/settings.json` | Claude Code blocks the call (`onFailure` is `block`) |
 | `block-forged-menu-approval.sh` | Inside the dispatcher, for each Bash call | The dispatcher prints `BLOCKED` and exits 2 |
 
 The dispatcher has one path for fail-closed gates, `run_fail_closed_hook`.

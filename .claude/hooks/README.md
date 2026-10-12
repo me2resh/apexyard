@@ -91,7 +91,7 @@ For adversarial trust, rely on remote branch-protection rules (GitHub required r
 
 The operator can approve a merge, a design review, or an architecture review from a menu. The question must name the repo, the PR, and the full head SHA. The selected option must be the exact approve label.
 
-The hook reads the harness payload. It writes `approval_channel=menu` and `skill_version=3`. `Not yet` writes nothing. The model does not write this record.
+The hook reads the harness payload. It writes `approval_channel=menu` and `skill_version=3`. `Not yet` writes nothing. The menu record has the same trust level as a typed marker. The guard is a text-match backstop (AgDR-0104); the real control is the human-only menu answer plus the gate's head-SHA match.
 
 `block-forged-menu-approval.sh` blocks Edit, Write, and Bash writes of that channel onto a marker file. The guard matches text. It is a backstop. See AgDR-0234 and AgDR-0104.
 

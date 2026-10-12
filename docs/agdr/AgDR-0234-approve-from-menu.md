@@ -13,7 +13,7 @@ category: security
 
 # AgDR-0234: Record menu approval from the harness question tool
 
-> The operator can approve a merge or a design review from a menu. The hook writes the record from the harness payload. The model cannot approve alone.
+> The operator can approve a merge or a design review from a menu. The hook writes the record from the harness payload. The record has the same trust level as a typed marker.
 
 ## Context
 
@@ -21,9 +21,11 @@ Issue #1391 asks for menu approval. The typed `/approve-merge` and `/approve-des
 
 AgDR-0110 and issue #1042 keep approval human-only. A model that reads a menu answer and then writes the marker is not proof. Nothing in that path shows that the human selected the option.
 
-The harness runs a PostToolUse hook after `AskUserQuestion`. The payload contains the question and the selected option. The model cannot forge that payload.
+The harness runs a PostToolUse hook after `AskUserQuestion`. The payload contains the question and the selected option. The menu record has the same trust level as a typed marker. The guard is a text-match backstop (AgDR-0104); the real control is the human-only menu answer plus the gate's head-SHA match.
 
 The question must name the repo, the PR number, and the full 40-hex head SHA. The selected option must be the exact approve label. `Not yet` writes nothing. An umbrella "go" does not match the question shape.
+
+The record shows that the question tool returned the approve label. In normal Claude Code use only a human answers. When an SDK host supplies answers, the host program, not a person, chose it.
 
 ## Options Considered
 
@@ -31,13 +33,13 @@ The question must name the repo, the PR number, and the full 40-hex head SHA. Th
 |--------|------|------|
 | HMAC of the record with a per-session key in a file the model tools cannot read | The gate can reject a forged record | This repo has no such file. Hooks and the model tools share one user and one disk |
 | HMAC with a key in a normal file | Easy to add a field | Bash and Read can read the key. The model can then forge the HMAC |
-| The menu hook is the only writer of `approval_channel=menu`. A PreToolUse guard blocks Edit, Write, and Bash writes of that channel onto a marker | Uses the tools this repo has. The typed path stays | The guard matches command text. AgDR-0104 says that match is a backstop. A later copy can hide the channel string |
+| The menu hook is the supported writer of `approval_channel=menu`. A PreToolUse guard blocks Edit, Write, and Bash writes of that channel onto a marker | Uses the tools this repo has. The typed path stays | The guard matches command text. AgDR-0104 says that match is a backstop. A later copy can hide the channel string |
 
 ## Decision
 
 Chosen: the menu hook writes the record. A PreToolUse guard blocks model writes of `approval_channel=menu`.
 
-No file in this framework is unreadable by the model tools. A key file the hook can read is a key file Bash can read. An HMAC would not prove the writer. The guard is the stronger control this repo can enforce.
+No file in this framework is unreadable by the model tools. A key file the hook can read is a key file Bash can read. An HMAC would not prove the writer. The guard remains a text-match backstop (AgDR-0104).
 
 The guard is a backstop, not a proof of the writer. AgDR-0104 records that limit. The gate checks the record fields and the head SHA. Carry-over rules stay as they are.
 
@@ -52,7 +54,7 @@ A menu record has `skill_version=3` and `approval_channel=menu`. The typed merge
 - An umbrella "go" does not count. A prose answer does not count.
 - The typed `/approve-merge` path still works.
 - A direct Edit, Write, or Bash payload that puts `approval_channel=menu` on a marker file is blocked.
-- A two-step copy that hides the channel text can still land a menu record. The gate cannot see the writer without a secret the model cannot read.
+- A menu record has the same trust level as a typed marker. The guard is a text-match backstop (AgDR-0104); the real control is the human-only menu answer plus the gate's head-SHA match. Calls naming the writer or library are blocked, but hidden spellings or copies can still bypass text matching.
 - Architecture review uses the same menu shape. The architecture gate accepts that record and still accepts a bare SHA.
 
 ## Artifacts

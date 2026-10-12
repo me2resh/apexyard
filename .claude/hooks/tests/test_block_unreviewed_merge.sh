@@ -263,6 +263,16 @@ sb=$(make_sandbox)
 write_rex_marker "$sb" 1391
 write_menu_via_hook "$sb" 1391 "$FIXED_SHA"
 run_case "hook-written menu record at head -> allows" 0 "" "$sb" 1391
+for channel in 'approval_channel="menu"' "approval_channel='menu'"; do
+  sb=$(make_sandbox)
+  write_rex_marker "$sb" 1391
+  write_menu_via_hook "$sb" 1391 "$FIXED_SHA"
+  marker=$(review_marker_path "me2resh/apexyard" 1391 ceo "$sb")
+  sed "s/^approval_channel=.*/$channel/" "$marker" > "$sb/quoted-marker"
+  cp "$sb/quoted-marker" "$marker"
+  run_case "quoted menu channel -> blocks" 2 "marker has approval_channel" "$sb" 1391
+done
+
 
 sb=$(make_sandbox)
 write_rex_marker "$sb" 1392

@@ -1,9 +1,10 @@
 #!/bin/bash
 # PostToolUse hook on AskUserQuestion.
 #
-# CLASS: CONTROL for the write of approval_channel=menu (AgDR-0234).
-# The harness supplies tool_input and tool_response. The model cannot forge
-# that payload. This script is the only supported writer of menu records.
+# Menu records have the same trust level as typed markers (AgDR-0234).
+# The guard is a text-match backstop (AgDR-0104). The real control is the
+# human-only menu answer plus the gate's head-SHA match. This script is the
+# supported writer; invoking it with crafted stdin can also write a record.
 #
 # A question must match a strict shape that names the repo, the PR number,
 # and the full 40-hex head SHA. The selected option must be the exact
@@ -24,6 +25,14 @@ if [ "$TOOL_NAME" != "AskUserQuestion" ]; then
 fi
 if ! command -v jq >/dev/null 2>&1; then
   echo "WARN: menu approval hook cannot parse the payload because jq is missing. No record was written." >&2
+  exit 0
+fi
+
+# A timeout closes the menu without human approval. Check decoded responses too.
+if printf '%s' "$INPUT" | jq -e '
+  def decoded: if type == "string" then (fromjson? // .) else . end;
+  [., (.tool_response | decoded)] | any(.. | objects; has("afkTimeoutMs"))
+' >/dev/null 2>&1; then
   exit 0
 fi
 

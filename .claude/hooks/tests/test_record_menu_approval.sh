@@ -140,6 +140,21 @@ assert_eq "architecture menu sha" "$SHA" "$(menu_approval_record_sha "$amarker" 
 rm -rf "$sb"
 
 echo ""
+# A timeout must not turn an approve-shaped answer into approval.
+for response_form in object string answer; do
+  sb=$(make_sb)
+  payload=$(payload_for "$Q" "Approve and merge" | jq --arg form "$response_form" '
+    .tool_response.afkTimeoutMs = 0 |
+    if $form == "string" then .tool_response |= tojson
+    elif $form == "answer" then
+      .tool_response = {answers: [{question: .tool_input.questions[0].question, answer: "Approve and merge", afkTimeoutMs: 1}]}
+    else . end')
+  run_hook "$sb" "$payload"
+  marker=$(review_marker_path "$REPO" "$PR" ceo "$sb")
+  assert_eq "timeout writes nothing ($response_form)" "absent" "$(if [ -f "$marker" ]; then echo present; else echo absent; fi)"
+  rm -rf "$sb"
+done
+
 echo "==================================="
 echo "  PASS: $PASS   FAIL: $FAIL"
 echo "==================================="

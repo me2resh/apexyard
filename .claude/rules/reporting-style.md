@@ -31,6 +31,7 @@ Concretely:
 When the operator must choose between two or more options, use the `AskUserQuestion` tool. Do not present lettered options in prose.
 
 - Put the recommended option first. Add `(Recommended)` to its label.
+- Approval menus (`Approve and merge`, `Approve design review`, `Approve architecture review`) use the exact label with no suffix.
 - Give every option a one-line description of its effect.
 - Put up to four independent questions in one wizard call. Keep dependent questions in sequence.
 - Keep each question to two to four clickable options. Split larger menus into sequential wizard questions.

@@ -128,6 +128,12 @@ run_cost_guard_hook() {
   run_hook "$1"
 }
 
+# Text-match backstop for direct calls to the menu record writers (AgDR-0104).
+if printf '%s' "$COMMAND" | grep -qE 'record-menu-approval|_lib-menu-approval|menu_approval_write_record'; then
+  echo "BLOCKED: model Bash calls must not invoke menu approval writers." >&2
+  exit 2
+fi
+
 # APEXYARD_DISPATCH_GATE: Bash|*|block-ambient-tracker-repo.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|block-privileged-escalation.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|require-skill-for-issue-create.sh

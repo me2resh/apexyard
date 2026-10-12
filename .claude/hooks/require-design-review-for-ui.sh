@@ -370,7 +370,7 @@ fi
 # The typed /approve-design path writes a bare SHA. The menu path
 # (AgDR-0234) writes a structured record. Carry-over is unchanged: this
 # gate still requires an exact head match.
-if grep -qx 'approval_channel=menu' "$APPROVAL" 2>/dev/null; then
+if grep -q '^approval_channel=' "$APPROVAL" 2>/dev/null; then
   _menu_lib="$(dirname "$0")/_lib-menu-approval.sh"
   if [ ! -r "$_menu_lib" ]; then
     echo "BLOCKED: design gate cannot load _lib-menu-approval.sh." >&2

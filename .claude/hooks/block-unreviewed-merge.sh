@@ -748,18 +748,18 @@ fi
 # A typed marker has no channel. Any other channel is rejected.
 CEO_CHANNEL=""
 if [ "$_INLINE_CEO_MARKER" != "valid" ]; then
-  CEO_CHANNEL=$(ceo_field approval_channel)
+  CEO_CHANNEL=$(grep '^approval_channel=' "$CEO_APPROVAL" 2>/dev/null || true)
 fi
-if [ -n "$CEO_CHANNEL" ] && [ "$CEO_CHANNEL" != "menu" ]; then
+if [ -n "$CEO_CHANNEL" ] && [ "$CEO_CHANNEL" != "approval_channel=menu" ]; then
   cat >&2 <<MSG
-BLOCKED: PR #${PR_NUMBER} ${APPROVER_TITLE} marker has approval_channel=${CEO_CHANNEL}.
+BLOCKED: PR #${PR_NUMBER} ${APPROVER_TITLE} marker has ${CEO_CHANNEL}.
 
 The merge gate accepts no channel, or approval_channel=menu from the
 approval menu. Re-record via /approve-merge ${PR_NUMBER} or the menu.
 MSG
   exit 2
 fi
-if [ "$CEO_CHANNEL" = "menu" ]; then
+if [ "$CEO_CHANNEL" = "approval_channel=menu" ]; then
   _menu_lib="$(dirname "$0")/_lib-menu-approval.sh"
   if [ ! -r "$_menu_lib" ]; then
     echo "BLOCKED: merge gate cannot load _lib-menu-approval.sh." >&2
