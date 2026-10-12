@@ -26,7 +26,7 @@ Full rationale: [AgDR-0089](../../../docs/agdr/AgDR-0089-eval-agents-methodology
 ```
 /eval-agents rex                                            # run against the seeded starter corpus
 /eval-agents hakim --corpus docs/eval-agents/corpus/hakim.json
-/eval-agents tariq --corpus my-corpus.json                  # tariq has no starter corpus — required
+/eval-agents tariq --corpus my-corpus.json                  # Use a custom Tariq corpus.
 /eval-agents rex --check-only                                # validate corpus schema only, no spawns
 ```
 
@@ -98,7 +98,8 @@ if [ ! -f "$CORPUS_PATH" ]; then
 fi
 ```
 
-`tariq.json` does not exist in the seeded set (see `docs/eval-agents/README.md`) — running `/eval-agents tariq` without `--corpus` exits 3 with the message above, same graceful-degrade shape as `/mutation-test` and `/pdf` on a missing dependency.
+`tariq.json` contains 8 seeded entries (see `docs/eval-agents/README.md`).
+`/eval-agents tariq` uses this starter corpus unless the operator supplies `--corpus`.
 
 ### Step 2 — Validate corpus schema
 
@@ -386,7 +387,7 @@ Override per-project in `.claude/project-config.json` (shallow-merge — overrid
 6. **Not wired to any merge gate, CI, pre-commit, or pre-push hook.** v1 is manual/periodic measurement (#824's explicit out-of-scope: auto-tuning agents from results, a CI-gating eval run).
 7. **Corpus curation is manual, human-adjudicated work.** `/eval-agents` validates schema (Step 2), never truth. Do not add a corpus entry without real evidence (`independent_review`, `confirmed_fix`, or `human` in the `oracle` field) — a fabricated defect produces a confidently wrong score.
 8. **No ticket creation without explicit operator yes** (Step 9).
-9. **`tariq` requires an explicit `--corpus`** — no starter corpus is seeded for it in v1.
+9. **`tariq` uses its seeded starter corpus by default.** Supply `--corpus` to use a custom corpus.
 10. **`naqid` is not a supported `<agent>` value in v1** — see "Usage" above.
 11. **Every score is the output of non-deterministic LLM steps, not a fixed measurement.** Both the candidate spawn (Step 3d) and the defect-overlap match against the frozen key (Step 3g) are judgment calls made by an LLM — the frozen `ground_truth_defects` are fixed, but *matching a fresh run's findings against them* is not a byte-for-byte comparison, and re-running the exact same corpus against the exact same agent can produce a different verdict_justified call on a borderline entry. A score delta between two runs (this week's approve-precision vs. last month's) is **not automatically a real regression** — it can just as easily be run-to-run noise in the matching step. Treat a delta as a prompt to look at *which specific entries* flipped and re-read the agent's actual output for that entry, never as a number to trend-line on its own. This is the same caveat AgDR-0089 and spike #825 already carry for the starter corpus's small N — non-determinism compounds it, it doesn't replace it.
 
@@ -403,8 +404,9 @@ Override per-project in `.claude/project-config.json` (shallow-merge — overrid
 | `.claude/skills/eval-agents/tests/test_mine_disagreements.sh` | Miner tests: Python unit tests, a fake `gh` read-only check, and a draft-rejection check (#1440) |
 | `docs/eval-agents/README.md` | Corpus directory overview, what's seeded, how to grow it |
 | `docs/eval-agents/SCHEMA.md` | Field-by-field corpus format |
-| `docs/eval-agents/corpus/rex.json` | Starter corpus — 6 entries |
-| `docs/eval-agents/corpus/hakim.json` | Starter corpus — 4 entries |
+| `docs/eval-agents/corpus/rex.json` | Starter corpus — 10 entries |
+| `docs/eval-agents/corpus/hakim.json` | Starter corpus — 11 entries |
+| `docs/eval-agents/corpus/tariq.json` | Starter corpus — 8 entries |
 | `docs/eval-agents/reports/` | Dated run reports land here |
 | `.claude/project-config.defaults.json` → `eval_agents.*` | Corpus/report dirs + thresholds |
 
