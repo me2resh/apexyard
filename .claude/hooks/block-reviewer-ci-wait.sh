@@ -45,8 +45,8 @@ case "$INPUT" in
   *) exit 0 ;;
 esac
 
-# The review agent allowlist lives in _lib-review-markers.sh
-# (REVIEW_AGENT_SLUGS). Add a slug there when a review-class agent is created.
+# The review agent allowlist lives in _lib-review-markers.sh.
+# Adopters add exact types through review_markers.extra_review_agents.
 
 command -v jq >/dev/null 2>&1 || exit 0
 

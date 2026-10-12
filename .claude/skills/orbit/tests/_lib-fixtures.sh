@@ -178,9 +178,16 @@ EOF
 # repo (.claude/hooks/check-private-refs-runtime.sh and
 # .claude/skills/orbit/lib/handoff-preflight.sh), so the helper's own
 # self-location path resolution finds the sandboxed scrub — never the real
-# fork's. Also writes a synthetic registry at <sandbox>/apexyard.projects.yaml
-# with one private project, so the scrub has a real (but made-up) name to
-# catch. Prints the path to the sandboxed helper.
+# fork's. Also copies _lib-registry-parser.sh into the sandbox hooks dir.
+# The scrub fail-closes when that parser is missing, so every input would
+# exit 2 (and the helper would exit 14) even when the preview text is clean.
+# The parser sources no other file under .claude/hooks/, so nothing else is
+# copied with it. _lib-portfolio-paths.sh and _lib-read-config.sh stay out:
+# the scrub treats both as optional, and leaving them out keeps the sandbox
+# isolated from this fork. Also writes a synthetic registry at
+# <sandbox>/apexyard.projects.yaml with one private project, so the scrub
+# has a real (but made-up) name to catch. Prints the path to the sandboxed
+# helper.
 fixtures_install_leak_scrub_sandbox() {
   sb="$1"
   private_name="${2:-zephyrvault}"
@@ -189,6 +196,7 @@ fixtures_install_leak_scrub_sandbox() {
   real_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
   mkdir -p "$sb/.claude/hooks" "$sb/.claude/skills/orbit/lib"
   cp "$real_root/.claude/hooks/check-private-refs-runtime.sh" "$sb/.claude/hooks/check-private-refs-runtime.sh"
+  cp "$real_root/.claude/hooks/_lib-registry-parser.sh" "$sb/.claude/hooks/_lib-registry-parser.sh"
   cp "$real_root/.claude/skills/orbit/lib/handoff-preflight.sh" "$sb/.claude/skills/orbit/lib/handoff-preflight.sh"
   chmod +x "$sb/.claude/hooks/check-private-refs-runtime.sh" "$sb/.claude/skills/orbit/lib/handoff-preflight.sh"
 

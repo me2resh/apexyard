@@ -100,6 +100,187 @@
         "was_justified": true
       },
       "notes": "Spike #825 row R17 (GOOD_CLEAN). Verdict text was 'NON-BLOCKING (clean on injection; one minor governance note)' — mapped to COMMENT since no changes were required."
+    },
+    {
+      "id": "hakim-1511-2e3b039c8",
+      "pr": 1511,
+      "repo": "me2resh/apexyard",
+      "commit": "2e3b039c8",
+      "diff_range": "a77347b30~1..2e3b039c8",
+      "oracle": {
+        "source": "confirmed_fix",
+        "established_by": "Hakim's round-1 review measured the stall; commit 457d120 replaced the substitution with a linear awk join, and Hakim's delta re-review of 3992079 marked the finding resolved.",
+        "reference": "me2resh/apexyard#1511"
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "The new joined view uses the bash pattern substitution ${SCAN_COMMAND//$'\\\\\\n'/} to remove backslash-newlines. Under macOS /bin/bash 3.2 its cost grows super-linearly with the number of continuations, so a long continued command stalls the hook for minutes. The hook runs first in dispatch-bash.sh, so a hook timeout can skip every later Bash gate, including the merge gates (a regression and a fail-open path).",
+          "severity": "HIGH",
+          "location": ".claude/hooks/block-ambient-tracker-repo.sh"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "CHANGES REQUESTED",
+        "was_justified": true
+      },
+      "notes": "Harvested for #1650 from a Hakim CHANGES REQUESTED round. Same class as hakim-1517 and hakim-1546: a bash 3.2 super-linear string operation that makes a gate time out."
+    },
+    {
+      "id": "hakim-1339-39eaabe45",
+      "pr": 1339,
+      "repo": "me2resh/apexyard",
+      "commit": "39eaabe45",
+      "diff_range": "39eaabe45~1..39eaabe45",
+      "oracle": {
+        "source": "confirmed_fix",
+        "established_by": "Hakim's round-1 review traced both gaps; commit c395be44 removed the prefix skip and made a missing parser run the four merge gates, and Hakim's re-review of c395be44 approved.",
+        "reference": "me2resh/apexyard#1339"
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "The dispatcher's prefix-skip case arm ignores commands that start with git add, git commit and other routed prefixes before it calls is_merge_command. A compound payload that starts with git add and then calls the tracker merge wrapper therefore never runs the four merge gates (merge-gate bypass, the fail-open class the PR set out to close).",
+          "severity": "HIGH",
+          "location": ".claude/hooks/dispatch-bash.sh"
+        },
+        {
+          "id": "D2",
+          "description": "Sourcing _lib-extract-pr.sh is optional, and the routing check short-circuits on command -v is_merge_command. When the library is missing, wrapped merges skip the merge gates instead of failing closed.",
+          "severity": "MEDIUM",
+          "location": ".claude/hooks/dispatch-bash.sh"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "CHANGES REQUESTED",
+        "was_justified": true
+      },
+      "notes": "Harvested for #1650. Hakim also listed a pi and opencode adapter glob residual as a non-blocking follow-up outside this diff; it is not a ground-truth defect here."
+    },
+    {
+      "id": "hakim-1517-d5da944ed",
+      "pr": 1517,
+      "repo": "me2resh/apexyard",
+      "commit": "d5da944ed",
+      "diff_range": "4a4c33a47~1..d5da944ed",
+      "oracle": {
+        "source": "confirmed_fix",
+        "established_by": "Hakim's round-1 review measured the timing; commits a94490f and 537cbf6 limited the check to word starts with a fixed window, and Hakim's delta re-review of 537cbf6 marked the finding closed.",
+        "reference": "me2resh/apexyard#1517"
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "In _scrub_merge_command, the new grep-option lookahead (is_grep_family(cmdword) && c == \"-\") runs for every unquoted dash, including a dash inside a word, and read_merge_word rescans to the end of the word each time. A long dash word after grep costs about N squared steps, so a merge command can make every merge gate time out and run ungated (a regression and a gate fail-open).",
+          "severity": "HIGH",
+          "location": ".claude/hooks/_lib-extract-pr.sh"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "CHANGES REQUESTED",
+        "was_justified": true
+      },
+      "notes": "Harvested for #1650. The round-2 finding on this PR (a wrong window size in AgDR-0204) belongs to a later commit and is not part of this entry."
+    },
+    {
+      "id": "hakim-1404-493eff83a",
+      "pr": 1404,
+      "repo": "me2resh/apexyard",
+      "commit": "493eff83a",
+      "diff_range": "1ccd0acd8~1..493eff83a",
+      "oracle": {
+        "source": "confirmed_fix",
+        "established_by": "Hakim's round-1 review traced the path from the code; commit 19dfe2f restored an empty marker for a non-empty target that fails to resolve, and Hakim's re-review of 19dfe2f confirmed the fix holds.",
+        "reference": "me2resh/apexyard#1404"
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "The new guard in active_ticket_marker_for_path skips the project tiers when the target path does not resolve and returns the ops-level active-ticket marker. The migration gate lets tilde forms such as ~+/ and ~user/ through, and _at_resolve_path cannot resolve them, so a tilde-spelled migration write into a registered project is approved by the ops-level ticket instead of the project's own ticket (the wrong-ticket approval that #1159 refuses).",
+          "severity": "HIGH",
+          "location": ".claude/hooks/_lib-active-ticket.sh"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "CHANGES REQUESTED",
+        "was_justified": true
+      },
+      "notes": "Harvested for #1650. The diff also edits the three reviewer agent files; those prose edits carry no ground-truth defect."
+    },
+    {
+      "id": "hakim-1546-f78c8ae25",
+      "pr": 1546,
+      "repo": "me2resh/apexyard",
+      "commit": "f78c8ae25",
+      "diff_range": "ca7a9c7b0~1..f78c8ae25",
+      "oracle": {
+        "source": "confirmed_fix",
+        "established_by": "Hakim's round-1 review measured the stall under bash 3.2; commit 947490a replaced the substitution with printf piped to tr, and Hakim's re-review of e233db5 marked H1 resolved.",
+        "reference": "me2resh/apexyard#1546"
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "_has_argv_merge starts with local flat=\"${1//$'\\n'/ }\". Under macOS /bin/bash 3.2 this global substitution is super-linear on text with many newlines, so a merge command padded with about 2,000 lines makes the merge gates time out and run ungated. The dispatcher reaches the same code for non-merge commands, so a large heredoc can stall every Bash gate (a regression and an approval bypass).",
+          "severity": "HIGH",
+          "location": ".claude/hooks/_lib-extract-pr.sh"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "CHANGES REQUESTED",
+        "was_justified": true
+      },
+      "notes": "Harvested for #1650. Linux CI with bash 5 cannot show this regression; only a bash 3.2 timing probe does."
+    },
+    {
+      "id": "hakim-1518-a66eb8578",
+      "pr": 1518,
+      "repo": "me2resh/apexyard",
+      "commit": "a66eb8578",
+      "diff_range": "b44469cce~1..a66eb8578",
+      "oracle": {
+        "source": "confirmed_fix",
+        "established_by": "Hakim's round-1 review reproduced both forms with a probe harness; commit 2aabce5 blocked dot components and compared ancestors by file identity, and Hakim's delta re-review marked Finding 1 resolved.",
+        "reference": "me2resh/apexyard#1518"
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "The new worktree-add containment check resolves the nearest existing ancestor and appends the missing tail literally, and it skips the lexical check when the path has '..'. A path such as <tmp>/nonexist/../<ops>/x, or a case variant of the ops path on a case-insensitive file system, passes the check, and git then creates the worktree inside the ops fork. The PR and its AgDR state that the path must be outside the ops fork and the managed workspace, so the check is incorrect.",
+          "severity": "HIGH",
+          "location": ".claude/hooks/block-reviewer-repo-mutation.sh"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "CHANGES REQUESTED",
+        "was_justified": true
+      },
+      "notes": "Harvested for #1650. Not a regression (dev allowed every path), but a correctness bug in the new check that fails the #1509 scoping criterion."
+    },
+    {
+      "id": "hakim-1462-6ac562654",
+      "pr": 1462,
+      "repo": "me2resh/apexyard",
+      "commit": "6ac562654",
+      "diff_range": "6ac562654~1..6ac562654",
+      "oracle": {
+        "source": "confirmed_fix",
+        "established_by": "Hakim's round-1 review showed the shapes with synthetic registries; commit 458e1b0 removed the GARBAGE classification, and Hakim's re-review of 458e1b0 approved after running every probe.",
+        "reference": "me2resh/apexyard#1462"
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "The public-flag registry pass marks every nested '- name:' line deeper than the entry indent as GARBAGE without checking whether the item is a project, and the correlation step then treats that name as matched. Grouped projects, a map of lists with uneven indentation, or an entry that is itself a sequence therefore exempt real private project names from the leak hooks (a leak-gate fail-open).",
+          "severity": "HIGH",
+          "location": ".claude/hooks/_lib-registry-parser.sh"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "CHANGES REQUESTED",
+        "was_justified": true
+      },
+      "notes": "Harvested for #1650. Repo slugs in the same shapes still block; only NAME tokens leak."
     }
   ]
 }
