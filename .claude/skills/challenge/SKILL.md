@@ -4,9 +4,7 @@ description: Invoke The Contrarian (Naqid) to steelman-then-challenge an idea, f
 argument-hint: "<idea | #N | path/to/doc | 'the plan'>"
 ---
 
-## Writing rule
-
-When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
 # /challenge — Stress-test the premise with The Contrarian
 

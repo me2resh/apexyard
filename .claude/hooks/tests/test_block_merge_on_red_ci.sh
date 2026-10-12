@@ -86,15 +86,24 @@ make_sandbox() {
   cp "$(dirname "$LIB_PR")/_lib-awk-fallback.sh" "$sb/.claude/hooks/_lib-awk-fallback.sh"
   chmod +x "$sb/.claude/hooks/block-merge-on-red-ci.sh"
 
-  cat > "$sb/bin/gh" <<EOF
+  printf '%s\n' "$gh_mode" > "$sb/mock-gh_mode"
+  printf '%s\n' "$nocheck_mode" > "$sb/mock-nocheck_mode"
+  printf '%s\n' "$TEST_REPO" > "$sb/mock-TEST_REPO"
+  printf '%s\n' "$TEST_SHA" > "$sb/mock-TEST_SHA"
+  cat > "$sb/bin/gh" <<'EOF'
 #!/bin/bash
-printf '%s\n' "\$*" >> "$sb/gh-calls"
+sb=${0%/bin/gh}
+IFS= read -r gh_mode < "$sb/mock-gh_mode"
+IFS= read -r nocheck_mode < "$sb/mock-nocheck_mode"
+IFS= read -r TEST_REPO < "$sb/mock-TEST_REPO"
+IFS= read -r TEST_SHA < "$sb/mock-TEST_SHA"
+printf '%s\n' "$*" >> "$sb/gh-calls"
 # The API path is the first repos/ argument. A GHE call puts
 # --hostname <host> before it.
 api_path=""
-for a in "\$@"; do case "\$a" in repos/*) api_path="\$a"; break ;; esac; done
-if [ "\$1" = "api" ]; then echo "\$api_path" >> "$sb/api-calls"; fi
-case "\$*" in
+for a in "$@"; do case "$a" in repos/*) api_path="$a"; break ;; esac; done
+if [ "$1" = "api" ]; then echo "$api_path" >> "$sb/api-calls"; fi
+case "$*" in
   *"pr checks"*)
     case "$gh_mode" in
       green) printf 'build\tpass\t1m\thttps://x\n'; exit 0 ;;
@@ -142,7 +151,7 @@ case "\$*" in
   *"actions/runs"*)
     # The exact head filter is part of the contract. An unfiltered query
     # fails here, so the failure-run cases cannot pass without that filter.
-    case "\$api_path" in
+    case "$api_path" in
       "repos/$TEST_REPO/actions/runs?head_sha=$TEST_SHA&per_page=100") ;;
       *) exit 1 ;;
     esac
@@ -185,7 +194,7 @@ case "\$*" in
     esac
     ;;
   *"pr view"*)
-    if [[ " \$* " == *" --json number "* ]]; then echo "77"; exit 0; fi
+    if [[ " $* " == *" --json number "* ]]; then echo "77"; exit 0; fi
     case "$nocheck_mode" in
       bad_sha) echo "deadbeef" ;;
       *)       echo "$TEST_SHA" ;;
@@ -196,9 +205,12 @@ esac
 EOF
   chmod +x "$sb/bin/gh"
 
-  cat > "$sb/bin/glab" <<EOF
+  printf '%s\n' "$glab_mode" > "$sb/mock-glab_mode"
+  cat > "$sb/bin/glab" <<'EOF'
 #!/bin/bash
-case "\$*" in
+sb=${0%/bin/glab}
+IFS= read -r glab_mode < "$sb/mock-glab_mode"
+case "$*" in
   *"mr view"*)
     case "$glab_mode" in
       success)      echo '{"iid":1,"head_pipeline":{"status":"success"}}' ;;
@@ -515,12 +527,15 @@ run_case "#1559: complete page with missing event keeps unverified note" 0 "CI s
 # visible failing run into a silent allow. Only that filter is intercepted.
 sb=$(make_sandbox green "" failure)
 real_jq=$(command -v jq)
-cat > "$sb/bin/jq" <<EOF
+printf '%s\n' "$real_jq" > "$sb/mock-real_jq"
+cat > "$sb/bin/jq" <<'EOF'
 #!/bin/bash
-case "\$*" in
+sb=${0%/bin/jq}
+IFS= read -r real_jq < "$sb/mock-real_jq"
+case "$*" in
   *'group_by([.workflow_id, .event])'*) exit 3 ;;
 esac
-exec "$real_jq" "\$@"
+exec "$real_jq" "$@"
 EOF
 chmod +x "$sb/bin/jq"
 run_case "#1559 B-3: jq run selection failure blocks" 2 "cannot evaluate the head runs" "$sb" \
@@ -738,9 +753,12 @@ projects:
     tracker:
       kind: glab
 YAML
-  cat > "$sb/bin/glab" <<EOF
+  printf '%s\n' "$glab_mode" > "$sb/mock-glab_mode"
+  cat > "$sb/bin/glab" <<'EOF'
 #!/bin/bash
-case "\$*" in
+sb=${0%/bin/glab}
+IFS= read -r glab_mode < "$sb/mock-glab_mode"
+case "$*" in
   *"mr view"*)
     case "$glab_mode" in
       success) echo '{"iid":1,"head_pipeline":{"status":"success"}}' ;;
@@ -856,9 +874,14 @@ projects:
     tags:
       - customer-facing
 YAML
-  cat > "$sb/bin/gh" <<EOF
+  printf '%s\n' "$gh_mode" > "$sb/mock-gh_mode"
+  printf '%s\n' "$TEST_SHA" > "$sb/mock-TEST_SHA"
+  cat > "$sb/bin/gh" <<'EOF'
 #!/bin/bash
-case "\$*" in
+sb=${0%/bin/gh}
+IFS= read -r gh_mode < "$sb/mock-gh_mode"
+IFS= read -r TEST_SHA < "$sb/mock-TEST_SHA"
+case "$*" in
   *"pr checks"*)
     case "$gh_mode" in
       green) printf 'build\tpass\t1m\thttps://x\n'; exit 0 ;;

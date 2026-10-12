@@ -5,9 +5,7 @@ argument-hint: "[--pr <N>] [--blocking] [<github-pr-comment-url>]"
 allowed-tools: Bash, Read, Write, AskUserQuestion
 ---
 
-## Writing rule
-
-When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
 # /codify-rule — Codify a Rex-Miss Into a Handbook Entry
 
