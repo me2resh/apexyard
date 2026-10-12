@@ -240,6 +240,15 @@
     "custom_handbooks_dir": "./custom-handbooks"
   },
 
+  "review_identity": {
+    "_comment": "Opt-in GitHub account for gh pull-request reviews from tracker_review_submit (#1538, AgDR-0235). kind=operator (default) uses the operator gh login. kind=github_app mints a short-lived installation token and sets GH_TOKEN for that one gh pr review command. private_key_path must be outside every git work tree and outside .claude/. The key and the token are never printed or stored by the library. fallback=comment posts a comment with the operator login when the app path fails. Any other fallback, including empty, fails closed and posts nothing. The app token is never used for tracker_pr_merge or /approve-merge. See docs/how-to/reviewer-github-app.md.",
+    "kind": "operator",
+    "app_id": "",
+    "installation_id": "",
+    "private_key_path": "",
+    "fallback": ""
+  },
+
   "tracker": {
     "_comment": "Tracker dispatch — selects which CLI verifies that ticket-IDs reference real tickets. Default is GH (GitHub Issues via `gh issue view`), matching today's behaviour exactly. Supported `kind` values: gh, glab, linear, jira, asana, custom, none. `view_command` is a template with `{id}` and `{owner_repo}` placeholders — the lib substitutes them and runs the result. It is intentionally NOT pinned here: the lib picks a KIND-AWARE built-in default (gh → `gh issue view … --json state,title,url,labels,body`; glab → `glab issue view … --output json`), so a glab/gh adopter who only sets `kind` gets the matching command without also having to set `view_command`. Pinning a default here would deep-merge over a `kind: glab` override and force the gh command (me2resh/apexyard#755). linear/jira/asana/custom adopters still set their own `view_command`. `id_pattern` is the regex `validate-branch-name.sh` and `validate-pr-create.sh` use to shape-check ticket IDs (covers GH `#123` / `GH-123` plus enterprise prefixes like `LIN-456` / `JIRA-789` by default). Set `kind = none` to disable existence verification entirely (shape-only). See AgDR-0033 and `.claude/hooks/_lib-tracker.sh`.",
     "kind": "gh",
