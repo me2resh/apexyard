@@ -55,9 +55,9 @@ const run = new AsyncFunction('github', 'context', 'core', script);
     { number: 1, draft: true },
     { number: 2, labels: [] },
     { number: 3 }, { number: 4 }, { number: 5 }, { number: 6 },
-    { number: 7, head: { sha: 'fork', repo: { id: 2 } } },
-    { number: 8, head: { sha: 'deleted', repo: null } }
-  ].map(pr => ({ draft: false, labels: [{ name: 'ready-to-merge' }], head: { sha: `sha${pr.number}`, repo: { id: 1 } }, base: { ref: 'dev', repo: { id: 1 } }, ...pr }));
+    { number: 7, created_at: '2025-01-01T00:00:00Z', head: { sha: 'fork', repo: { id: 2 } } },
+    { number: 8, created_at: '2025-01-02T00:00:00Z', head: { sha: 'deleted', repo: null } }
+  ].map(pr => ({ draft: false, labels: [{ name: 'ready-to-merge' }], head: { sha: `sha${pr.number}`, repo: { id: 1 } }, created_at: `2026-01-${String(pr.number).padStart(2, '0')}T00:00:00Z`, base: { ref: 'dev', repo: { id: 1 } }, ...pr }));
   const github = {
     rest: {
       pulls: { list: 'pulls' },
@@ -74,7 +74,7 @@ const run = new AsyncFunction('github', 'context', 'core', script);
         removeLabel: async args => calls.push(['remove', args.issue_number])
       }
     },
-    paginate: async (method) => method === 'pulls' ? prs : comments,
+    paginate: async (method) => method === 'pulls' ? [...prs].reverse() : comments,
     request: async (route, args) => {
       calls.push(['update', args.pull_number, args.expected_head_sha]);
       if (args.pull_number === 4) throw Object.assign(new Error('Merge conflict'), { status: 422 });
@@ -85,14 +85,18 @@ const run = new AsyncFunction('github', 'context', 'core', script);
   const logs = [];
   const core = { info(message) { logs.push(message); }, warning() {} };
   await run(github, context, core);
-  assert.deepEqual(calls.map(c => c[1]), [4, 5, 6]);
-  assert.equal(comments.length, 2);
+  assert.deepEqual(calls.map(c => c[1]), [4], 'Only the oldest behind PR is attempted, even on conflict');
+  assert.equal(comments.length, 1);
   assert(comments.every(c => ![7, 8].includes(c.issue_number)));
+
   assert(logs.some(l => l.includes('PR #7: skipping')));
   assert(logs.some(l => l.includes('PR #8: skipping')));
   assert(comments[0].body.includes('Merge conflict'));
   await run(github, context, core);
-  assert.equal(comments.length, 2, 'Failure comments repeat only for a new head');
+  assert.equal(comments.length, 1, 'Failure comments repeat only for a new head');
+  github.request = async (route, args) => calls.push(['update', args.pull_number, args.expected_head_sha]);
+  await run(github, context, core);
+  assert.deepEqual(calls.at(-1), ['update', 4, 'sha4'], 'Only the oldest behind PR updates on success');
   context.eventName = 'pull_request';
   context.payload = { before: 'old', pull_request: prs[5] };
   await run(github, context, core);
@@ -108,8 +112,8 @@ const run = new AsyncFunction('github', 'context', 'core', script);
     await run(noCalls, context, core);
   }
   assert.equal(calls.length, before, 'Skipped synchronize events never remove labels');
-  assert.equal(comments.length, 2, 'Skipped PRs never receive comments');
-  console.log('PASS: filtering, errors continue, comment deduplication, and synchronize labels');
+  assert.equal(comments.length, 1, 'Skipped PRs never receive comments');
+  console.log('PASS: oldest behind selection, conflict stops, comment deduplication, and synchronize labels');
 })().catch(error => { console.error(error); process.exitCode = 1; });
 console.log('PASS: workflow YAML, permissions, guards, API safety, and copy parity');
 JS

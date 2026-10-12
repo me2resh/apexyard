@@ -33,6 +33,7 @@
 name: Conformance CI
 
 on:
+  workflow_call:
   schedule:
     # Daily, not per-PR: pi and Codex bill a real per-turn API cost and
     # per-PR frequency would multiply that cost with the number of PRs
