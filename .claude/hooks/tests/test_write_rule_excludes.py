@@ -32,7 +32,7 @@ with tempfile.TemporaryDirectory() as temporary:
     for name in ['write-rule-excludes.sh', '_lib-ops-root.sh']:
         shutil.copy2(source / '.claude/hooks' / name, hooks / name)
     shutil.copytree(source / '.claude/hooks/lib', hooks / 'lib')
-    (root / '.gitignore').write_text('.claude/settings.local.json\n')
+    (root / '.gitignore').write_text('.claude/settings.local.json\n.claude/session/\n')
     target = root / '.claude/settings.local.json'
     env = dict(os.environ, HOME=str(home), APEXYARD_OPS_DISABLE_PIN='1')
     env.pop('CLAUDE_CODE_SESSION_ID', None)
@@ -82,10 +82,21 @@ with tempfile.TemporaryDirectory() as temporary:
     link = base / 'linked'
     link.symlink_to(root, target_is_directory=True)
     assert not run(link).stdout
-    # 6: Rename replaces exactly the reserved writer signature, retaining user entries.
+    # 6: Absolute user exclusions survive two runs and clone relocation.
+    sidecar = root / '.claude/session/rule-excludes.owned'
+    user_entries = [str(home) + writer.SUFFIX,
+                    writer.escape_root(str(root / 'workspace/app')) + writer.SUFFIX]
+
     existing = json.loads(updated)
-    existing['claudeMdExcludes'].extend(['**/user-only.md', 'relative/.claude/rules/**'])
+    existing['claudeMdExcludes'].extend(user_entries + ['**/user-only.md', 'relative/.claude/rules/**'])
     target.write_text(json.dumps(existing))
+    saved = target.read_bytes()
+    owned_before = sidecar.stat()
+    for _ in range(2):
+        assert not run().stdout
+        assert target.read_bytes() == saved
+        assert sidecar.stat().st_ino == owned_before.st_ino
+        assert sidecar.stat().st_mtime_ns == owned_before.st_mtime_ns
     renamed = base / 'renamed'
     root.rename(renamed)
     root = renamed
@@ -93,7 +104,11 @@ with tempfile.TemporaryDirectory() as temporary:
     target = root / '.claude/settings.local.json'
     assert run().stdout
     entries = json.loads(target.read_bytes())['claudeMdExcludes']
-    assert entries == ['**/user-only.md', 'relative/.claude/rules/**', str(root) + writer.SUFFIX]
+    assert entries == user_entries + ['**/user-only.md', 'relative/.claude/rules/**', str(root) + writer.SUFFIX]
+    sidecar = root / '.claude/session/rule-excludes.owned'
+    assert sidecar.read_text() == str(root) + writer.SUFFIX
+    saved = target.read_bytes()
+    assert not run().stdout and target.read_bytes() == saved
     # 7: Nested project and unrelated cwd with a valid pin both write ops settings.
     project = root / 'workspace/app'
     project.mkdir(parents=True)
@@ -106,6 +121,39 @@ with tempfile.TemporaryDirectory() as temporary:
     pinned = dict(env, CLAUDE_CODE_SESSION_ID='test', APEXYARD_OPS_PIN_DIR=str(pins))
     pinned.pop('APEXYARD_OPS_DISABLE_PIN')
     assert not run(home, pinned).stdout
+    # An unrelated pinned clone must receive no settings or sidecar writes.
+    unrelated = base / 'unrelated'
+    unrelated.mkdir()
+    git(unrelated, 'init', '-q')
+    (unrelated / '.apexyard-fork').touch()
+    (unrelated / '.claude/hooks').mkdir(parents=True)
+    (unrelated / '.gitignore').write_text('.claude/settings.local.json\n.claude/session/\n')
+    (pins / 'ops-root-test').write_text(str(unrelated) + '\n')
+    result = run(home, pinned)
+    assert not result.stdout and not result.stderr
+    assert not (unrelated / '.claude/settings.local.json').exists()
+    assert not (unrelated / '.claude/session').exists()
+    # Missing ownership data preserves even an old absolute writer-shaped entry.
+    sidecar.unlink()
+    old_entry = '/old/clone/.claude/rules/**'
+    target.write_text(json.dumps({'claudeMdExcludes': [old_entry]}))
+    run()
+    assert json.loads(target.read_bytes())['claudeMdExcludes'] == [old_entry, str(root) + writer.SUFFIX]
+    # Sidecar and parent symlinks must fail open without modifying settings.
+    saved = target.read_bytes()
+    sidecar.unlink()
+    external_owned = base / 'external.owned'
+    external_owned.write_text(old_entry)
+    sidecar.symlink_to(external_owned)
+    assert len(run().stderr.splitlines()) == 1
+    assert target.read_bytes() == saved and external_owned.read_text() == old_entry
+    sidecar.unlink()
+    session = sidecar.parent
+    session.rmdir()
+    session.symlink_to(home, target_is_directory=True)
+    assert len(run().stderr.splitlines()) == 1 and target.read_bytes() == saved
+    session.unlink()
+    run()
     # 9, 12: Invalid JSON and symlink targets fail open with one warning, no edits.
     for invalid in [b'{broken', b'[]', b'{"env":1,"env":2}', b'{"claudeMdExcludes":false}']:
         target.write_bytes(invalid)
@@ -155,7 +203,7 @@ with tempfile.TemporaryDirectory() as temporary:
     (root / '.gitignore').write_text('')
     saved = target.read_bytes()
     assert len(run().stderr.splitlines()) == 1 and target.read_bytes() == saved
-    (root / '.gitignore').write_text('.claude/settings.local.json\n')
+    (root / '.gitignore').write_text('.claude/settings.local.json\n.claude/session/\n')
     git(root, 'add', '-f', '.claude/settings.local.json')
     assert len(run().stderr.splitlines()) == 1 and target.read_bytes() == saved
     print('PASS: requirements 1–12 (load-order limitation documented separately).')

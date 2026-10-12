@@ -1,8 +1,4 @@
-"""jq owns the merge; splice only its target value to preserve other bytes.
-
-Reserved writer signature: absolute, escaped literal root + /.claude/rules/**.
-Only this signature is removed on relocation. Relative/wide/user globs stay.
-"""
+"""Preserve user exclusions and track the exact writer entry in a local sidecar."""
 import fnmatch
 import json
 import os
@@ -25,15 +21,33 @@ def escape_root(root):
     return ''.join('[' + c + ']' if c in META else c for c in root)
 
 
-def owned(pattern):
-    if not isinstance(pattern, str) or not pattern.startswith('/') or not pattern.endswith(SUFFIX):
-        return False
-    prefix = pattern[:-len(SUFFIX)]
-    literal = re.sub(r'\[([*?\[\]{}()!+@])\]', lambda m: m.group(1), prefix)
+def read_safe(target):
+    """Read regular files without following a final-component symlink."""
     try:
-        return escape_root(literal) == prefix
-    except ValueError:
-        return False
+        fd = os.open(target, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return None
+    with os.fdopen(fd, 'rb') as stream:
+        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+            raise ValueError('unsafe local file')
+        return stream.read()
+
+
+def replace_safe(target, content, original):
+    fd, temporary = tempfile.mkstemp(prefix='.rule-excludes-', dir=target.parent)
+    try:
+        if original is not None:
+            os.fchmod(fd, stat.S_IMODE(target.lstat().st_mode))
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        if read_safe(target) != original:
+            raise ValueError('local file changed concurrently')
+        os.replace(temporary, target)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 def matches(pattern, path):
@@ -98,10 +112,15 @@ def advisory(root, home, excludes):
 
 def main(root, home):
     target = Path(root, '.claude/settings.local.json')
-    # Refuse links and unusual files rather than overwrite their targets.
-    if target.is_symlink() or (target.exists() and not target.is_file()):
-        raise ValueError('unsafe settings file')
-    original = target.read_bytes() if target.exists() else b'{}\n'
+    session = Path(root, '.claude/session')
+    if session.is_symlink() or (session.exists() and not session.is_dir()):
+        raise ValueError('unsafe session directory')
+    session.mkdir(exist_ok=True)
+    sidecar = session / 'rule-excludes.owned'
+    previous = read_safe(sidecar)
+    recorded = previous.decode('utf-8') if previous is not None else None
+    settings_original = read_safe(target)
+    original = settings_original if settings_original is not None else b'{}\n'
     raw = original.decode('utf-8')
     existing = json.loads(raw)
     if not isinstance(existing, dict):
@@ -113,7 +132,9 @@ def main(root, home):
     pattern = escape_root(root) + SUFFIX
     if not safe_pattern(pattern, root, home):
         raise ValueError('protected path excluded')
-    wanted = [p for p in entries if not owned(p)] + [pattern]
+    wanted = [p for p in entries if not (recorded != pattern and p == recorded)]
+    if pattern not in wanted:
+        wanted.append(pattern)
     # jq merge changes precisely one key. Preserve every other value's lexical bytes.
     merged = subprocess.run(['jq', '--argjson', 'entries', json.dumps(wanted),
                              '. + {claudeMdExcludes: $entries}'], input=original,
@@ -128,22 +149,10 @@ def main(root, home):
             updated = raw[:end] + (',' if spans else '') + '"claudeMdExcludes": ' + value + raw[end:]
         if json.loads(updated) != result:
             raise ValueError('splice differs from jq merge')
-        fd, temporary = tempfile.mkstemp(prefix='.rule-excludes-', dir=target.parent)
-        try:
-            if target.exists():
-                os.fchmod(fd, stat.S_IMODE(target.stat().st_mode))
-            with os.fdopen(fd, 'wb') as stream:
-                stream.write(updated.encode('utf-8'))
-                stream.flush()
-                os.fsync(stream.fileno())
-            # Do not overwrite an intervening user edit.
-            if target.exists() and target.read_bytes() != original:
-                raise ValueError('settings changed concurrently')
-            os.replace(temporary, target)
-            print('Rule excludes: updated .claude/settings.local.json for this ops clone (effective next session).')
-        finally:
-            if os.path.exists(temporary):
-                os.unlink(temporary)
+        replace_safe(target, updated.encode('utf-8'), settings_original)
+        print('Rule excludes: updated .claude/settings.local.json for this ops clone (effective next session).')
+    if previous != pattern.encode('utf-8'):
+        replace_safe(sidecar, pattern.encode('utf-8'), previous)
     # Arrays merge across settings layers. Inspect those layers without editing them.
     exclusions = list(wanted)
     for layer in [Path(home, '.claude/settings.json'), Path(root, '.claude/settings.json')]:

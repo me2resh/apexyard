@@ -4,7 +4,7 @@
 
 ## Status
 
-Executed locally for #1388. Supersedes the wide-pattern decision and scope trade-off in AgDR-0160. The rule index remains unchanged.
+Accepted for #1388. Supersedes the wide-pattern decision and scope trade-off in AgDR-0160. The rule index remains unchanged.
 
 ## Context
 
@@ -38,9 +38,14 @@ Chosen: **write one local absolute pattern** with `.claude/hooks/write-rule-excl
 - Refuse an intervening settings edit detected before replacement.
 - Report one line after a write. Leave unchanged files untouched on subsequent runs.
 
-The writer reserves absolute patterns comprising an escaped literal root followed by `/.claude/rules/**` as its ownership signature.
-It replaces only that signature after relocation. Other patterns remain unchanged, including the user's wide or relative patterns.
-Users must avoid manually assigning that reserved signature. No ownership key is added to settings.
+The gitignored `.claude/session/rule-excludes.owned` sidecar records the exact entry last written.
+After relocation, the writer removes only that recorded entry when it differs from the new entry.
+All other exclusions remain unchanged, including absolute user exclusions.
+A missing sidecar means the writer removes nothing. An old writer entry can remain after the first upgrade run.
+The sidecar uses the same symlink rejection, temporary-file write, and atomic replacement as settings.
+The writer rejects symbolic-link session directories.
+The resolved root must be the running hook's clone or share its Git common directory.
+An unrelated resolved root causes a zero exit without any write.
 
 `/setup` runs the writer once. The existing SessionStart dispatcher runs it after ops-root pinning.
 Failures affect token reduction only. The writer always returns zero and never changes gate settings.
