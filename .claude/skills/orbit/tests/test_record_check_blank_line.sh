@@ -29,7 +29,7 @@ expect_file() { # actual expected label
   cmp -s "$1" "$2" || { echo "FAIL: $3 notes differ"; diff -u "$2" "$1" || true; fail=1; }
 }
 
-# No two blank lines in a row. Every ## heading has a blank line around it.
+# No consecutive blank lines. Headings and lists have the required blank lines.
 lint_notes() { # file label
   msg=$(awk '
     { lines[NR] = $0 }
@@ -39,6 +39,10 @@ lint_notes() { # file label
         blank = (lines[i] ~ /^[[:space:]]*$/)
         if (blank && prev_blank) {
           printf "consecutive blank lines at line %d\n", i
+          exit 1
+        }
+        if (lines[i] ~ /^- / && i > 1 && !prev_blank && lines[i - 1] !~ /^- /) {
+          printf "no blank line before list at line %d\n", i
           exit 1
         }
         if (lines[i] ~ /^## /) {
@@ -72,12 +76,12 @@ printf '# Notes\n\ntext\n\n## Checks\n\n- 2026-10-12, abc1234: checked, no chang
 expect_file "$notes" "$exp" "case B"
 cp "$notes" "$sb/case-b.md"
 
-# C. An existing entry stays put. The blank line before the next heading stays one line.
+# C. Prose has one blank line before the entry and before the next heading.
 notes="$sb/notes-c.md"
 printf '# Notes\n\n## Checks\n\nIntro line.\n\n## After\n\ntext\n' > "$notes"
 unchanged "$notes" abc1234 2026-10-12
 exp="$sb/exp-c.md"
-printf '# Notes\n\n## Checks\n\nIntro line.\n- 2026-10-12, abc1234: checked, no change.\n\n## After\n\ntext\n' > "$exp"
+printf '# Notes\n\n## Checks\n\nIntro line.\n\n- 2026-10-12, abc1234: checked, no change.\n\n## After\n\ntext\n' > "$exp"
 expect_file "$notes" "$exp" "case C"
 cp "$notes" "$sb/case-c.md"
 

@@ -71,7 +71,10 @@ awk -v line="$line" '
         print line
         # Separate the entry from a following line that is not blank.
         if (last < NR && lines[last + 1] !~ /^[[:space:]]*$/) print ""
-      } else if (i == last) print line
+      } else if (i == last) {
+        if (lines[last] !~ /^- /) print ""
+        print line
+      }
     }
   }' "$notes" > "$tmp" && cat "$tmp" > "$notes"
 rm -f "$tmp" "$candidate"
