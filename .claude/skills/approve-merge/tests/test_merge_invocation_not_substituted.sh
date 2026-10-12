@@ -171,6 +171,23 @@ else
   fail "/release-sync and /update sync branch and title shapes are classified as sync PRs"
 fi
 
+# --- Case 9: step 6 re-derives strategy and release class and stops ---------
+# Run the real step 6 block in a fresh shell, with MERGE_STRATEGY and
+# RELEASE_CLASS unset. A stub script prints a chosen result. The merge
+# adapter is a stub that writes a sentinel file when it runs (#1196).
+T9=$(mktemp -d)
+mkdir -p "$T9/home/.claude/skills/approve-merge/scripts" "$T9/home/.claude/hooks"
+printf '%s\n' 'tracker_pr_merge() { : > "$SENTINEL"; printf "{\"sha\":\"abc\"}"; }' > "$T9/home/.claude/hooks/_lib-tracker.sh"
+printf '%s\n' '#!/bin/bash' 'printf "%s\n" "$STUB_JSON"' > "$T9/home/.claude/skills/approve-merge/scripts/approve-merge.sh"
+printf '%s' "$MERGE_BLOCK" | sed -e "s|<marker_home>|$T9/home|g" -e 's|<repo>|owner/repo|g' -e 's|<pr>|42|g' > "$T9/block.sh"
+run9() { rm -f "$T9/sentinel"; env -u MERGE_STRATEGY -u RELEASE_CLASS SENTINEL="$T9/sentinel" STUB_JSON="$1" bash "$T9/block.sh" >/dev/null 2>&1; }
+OK9='{"marker_home":"x","pr_host_repo":"owner/repo","strategy":"squash","head_sha":"abc","release_class":false}'
+if run9 '{}' || [ -e "$T9/sentinel" ]; then fail "step 6 stops when strategy and release_class are missing"; else pass "step 6 stops when strategy and release_class are missing"; fi
+if run9 '{"pr_host_repo":"owner/repo","strategy":"fast-forward","release_class":false}' || [ -e "$T9/sentinel" ]; then fail "step 6 stops on an invalid strategy"; else pass "step 6 stops on an invalid strategy"; fi
+if run9 '{"pr_host_repo":"owner/repo","strategy":"squash"}' || [ -e "$T9/sentinel" ]; then fail "step 6 stops on a missing release_class"; else pass "step 6 stops on a missing release_class"; fi
+if run9 "$OK9" && [ -e "$T9/sentinel" ]; then pass "step 6 merges when the script result is valid"; else fail "step 6 merges when the script result is valid"; fi
+rm -rf "$T9"
+
 echo
 echo "PASS: $PASS  FAIL: $FAIL"
 [ "$FAIL" -eq 0 ] || exit 1

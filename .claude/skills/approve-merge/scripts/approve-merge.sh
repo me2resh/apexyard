@@ -79,4 +79,4 @@ if [[ "$PR_HEAD_BRANCH" =~ ^release/v[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ "$PR_TITLE
   BODY=$(gh pr view "$PR" --repo "$PR_HOST_REPO" --json body -q '.body') || fail 13 "Cannot read the release PR's body. Retry /approve-merge."
   [ -n "$BODY" ] || fail 13 'Release body is empty. Refusing to drop the Released-From trailer.'
 fi
-jq -cn --arg marker_home "$MARKER_HOME" --arg pr_host_repo "$PR_HOST_REPO" --arg strategy "$STRATEGY" --argjson release_class "$RELEASE_CLASS" '{marker_home:$marker_home,pr_host_repo:$pr_host_repo,strategy:$strategy,release_class:$release_class}' || fail 1 'Cannot produce result JSON.'
+jq -cn --arg marker_home "$MARKER_HOME" --arg pr_host_repo "$PR_HOST_REPO" --arg strategy "$STRATEGY" --arg head_sha "$HEAD_SHA" --argjson release_class "$RELEASE_CLASS" '{marker_home:$marker_home,pr_host_repo:$pr_host_repo,strategy:$strategy,head_sha:$head_sha,release_class:$release_class}' || fail 1 'Cannot produce result JSON.'

@@ -16,20 +16,38 @@ for sentence in \
   'ops_root="$PWD"; r="$PWD"'; do
   if grep -F "$sentence" "$ROOT"/.claude/skills/*/SKILL.md; then FAIL=$((FAIL + 1)); fi
 done
-# The long pin snippet lives in the shared file only. Skills carry the one-line form.
-if grep -l 'pin_file=' "$ROOT"/.claude/skills/*/SKILL.md; then FAIL=$((FAIL + 1)); fi
-# Run the one-line form from a skill: valid pin, missing pin.
-line=$(grep -m1 -F 'ops_root=$(. ' "$ROOT/.claude/skills/feature/SKILL.md")
+# Every walk-up shape is gone from the skills, except the /approve-merge bootstrap.
+for shape in '$r/.apexyard-fork' '$r/onboarding.yaml' 'r=$(dirname "$r")'; do
+  for f in "$ROOT"/.claude/skills/*/SKILL.md; do
+    [ "$(basename "$(dirname "$f")")" != approve-merge ] || continue
+    if grep -qF -- "$shape" "$f"; then printf 'FAIL: walk-up shape %s in %s\n' "$shape" "$f"; FAIL=$((FAIL + 1)); fi
+  done
+done
+# All 17 skills carry the shared line (review skills carry two blocks or more).
+for skill in bug feature idea investigation migration plan-initiative prototype report-apexyard-bug request-apexyard-feature spike task walking-skeleton approve-design approve-architecture code-review design-review security-review; do
+  check grep -qE '^(ops_root|OPS_ROOT)=\$\(p="\$\{APEXYARD_OPS_PIN_DIR' "$ROOT/.claude/skills/$skill/SKILL.md"
+done
+for skill in code-review design-review security-review; do
+  check test "$(grep -cE '^ops_root=\$\(p=' "$ROOT/.claude/skills/$skill/SKILL.md")" -ge 2
+done
+# Run the shared line: valid pin, disabled pin, no session id, stale pin, outside a fork.
+line=$(grep -m1 -E '^ops_root=\$\(p=' "$ROOT/.claude/skills/feature/SKILL.md")
 check test -n "$line"
 pt=$(mktemp -d)
-mkdir -p "$pt/fork/.claude/hooks" "$pt/pins"
+mkdir -p "$pt/fork/.claude/hooks" "$pt/fork/sub/dir" "$pt/other/.claude/hooks" "$pt/pins" "$pt/empty"
 cp "$ROOT/.claude/hooks/_lib-ops-root.sh" "$pt/fork/.claude/hooks/"
-touch "$pt/fork/.apexyard-fork"
+cp "$ROOT/.claude/hooks/_lib-ops-root.sh" "$pt/other/.claude/hooks/"
+touch "$pt/fork/.apexyard-fork" "$pt/other/.apexyard-fork"
 printf '%s\n' "$pt/fork" > "$pt/pins/ops-root-ok"
+printf '%s\n' "$pt/gone" > "$pt/pins/ops-root-stale"
 printf '%s\n' "$line" 'echo "$ops_root" > "$OUT"' > "$pt/line.sh"
-check env APEXYARD_OPS_DISABLE_PIN= CLAUDE_CODE_SESSION_ID=ok APEXYARD_OPS_PIN_DIR="$pt/pins" OUT="$pt/out" bash "$pt/line.sh"
-check test "$(cat "$pt/out" 2>/dev/null)" = "$pt/fork"
-if env APEXYARD_OPS_DISABLE_PIN= CLAUDE_CODE_SESSION_ID=none APEXYARD_OPS_PIN_DIR="$pt/pins" OUT="$pt/out2" bash "$pt/line.sh" 2>/dev/null; then FAIL=$((FAIL + 1)); printf 'FAIL: missing pin must stop\n'; fi
+run_line() { # cwd session disable
+  rm -f "$pt/out"; (cd "$1" && env -u CLAUDE_CODE_SESSION_ID APEXYARD_OPS_DISABLE_PIN="$3" ${2:+CLAUDE_CODE_SESSION_ID=$2} APEXYARD_OPS_PIN_DIR="$pt/pins" OUT="$pt/out" bash "$pt/line.sh" >/dev/null 2>&1); }
+run_line "$pt/other" ok ""; check test "$(cat "$pt/out" 2>/dev/null)" = "$pt/fork"
+run_line "$pt/other" ok 1; check test "$(cat "$pt/out" 2>/dev/null)" = "$pt/other"
+run_line "$pt/fork/sub/dir" "" ""; check test "$(cat "$pt/out" 2>/dev/null)" = "$pt/fork"
+run_line "$pt/fork/sub/dir" stale ""; check test "$(cat "$pt/out" 2>/dev/null)" = "$pt/fork"
+if run_line "$pt/empty" none ""; then FAIL=$((FAIL + 1)); printf 'FAIL: outside a fork must stop\n'; fi
 rm -rf "$pt"
 # This list records the 45 consumers before the sweep.
 for skill in compliance-check extract-features geo-audit split-portfolio tech-vision tasks tutorial decide seo-audit inbox audit-deps spike-close docs-audit validate-idea projects mutation-test approve-architecture setup codify-rule feature-diagram pdf approve-merge bug status onboard monitoring-audit journey start-ticket performance-audit fan-out accessibility-audit approve-design agdr task design-sync c4 feature analytics-audit write-spec challenge prototype-close eval-agents security-review process debug; do

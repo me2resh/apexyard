@@ -414,3 +414,7 @@ If `_lib-read-config.sh` or `jq` is unavailable, `config_get_or` degrades to the
 - The marker format is **versioned**. A bare-SHA legacy marker (skill_version absent) is rejected by the merge gate as of `block-unreviewed-merge.sh` v2 — same release as this skill. Adopters with stale legacy markers from earlier sessions just re-run `/approve-merge` once.
 - The skill intentionally does **not** wait/poll for "the user's 'approved'." The skill exists to be invoked, not to poll.
 
+
+## Script read errors
+
+The script exits 13 when it cannot read the PR branch or title, for any PR. This is stricter than the old inline step. It fails closed.

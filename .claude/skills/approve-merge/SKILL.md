@@ -98,6 +98,7 @@ printf '%s' "$CHECK_JSON" | jq -e '
   (.marker_home | type == "string" and length > 0) and
   (.pr_host_repo | type == "string" and length > 0) and
   (.strategy | type == "string" and length > 0) and
+  (.head_sha | type == "string" and length > 0) and
   (.release_class | type == "boolean")' >/dev/null || exit 1
 MARKER_HOME=$(printf '%s' "$CHECK_JSON" | jq -r '.marker_home') || exit 1
 PR_HOST_REPO=$(printf '%s' "$CHECK_JSON" | jq -r '.pr_host_repo') || exit 1
@@ -108,8 +109,9 @@ case "$MERGE_STRATEGY" in
   *) echo "Invalid merge strategy." >&2; exit 1 ;;
 esac
 source "$MARKER_HOME/.claude/hooks/_lib-review-markers.sh" || exit 1
+CHECK_SHA=$(printf '%s' "$CHECK_JSON" | jq -r '.head_sha') || exit 1
 HEAD_SHA=$(gh pr view <pr> --repo "$PR_HOST_REPO" --json headRefOid -q '.headRefOid') || exit 1
-[ -n "$HEAD_SHA" ] || exit 1
+[ -n "$HEAD_SHA" ] && [ "$HEAD_SHA" = "$CHECK_SHA" ] || { echo "PR head changed after the check." >&2; exit 1; }
 ```
 
 Stop on any non-zero exit, invalid JSON, or missing field. NEVER assume a pass.
@@ -139,7 +141,7 @@ approval_summary="<truncated user approval message, ≤200 chars>"
 ```
 
 Keep all marker fields below. Use the ops root and the repo-qualified `review_marker_path` helper (AgDR-0060, #765).
-Use `HEAD_SHA` from the scoped host query in step 4.
+`HEAD_SHA` is the script's `head_sha`, confirmed by a fresh read in step 4.
 
 ```bash
 # (MARKER_HOME and PR_HOST_REPO already resolved in step 4 — reuse them here.)
@@ -164,9 +166,18 @@ EOF
 ### 6. Merge with the checked strategy
 
 Skip this step for `--no-merge`. Run this entire block in one shell.
+Shell variables from step 4 do not carry over. The block re-runs the script and stops on a missing or invalid strategy or release_class (#1196). Fill in `<marker_home>`, `<repo>` and `<pr>` with literal values.
 The tracker_pr_merge call MUST be invoked as a bare top-level statement, never inside `$(...)` or backticks. The merge-gate matcher reads the raw command text and may not fire on a wrapped call. Redirect stdout to a file, then read the result in a separate step.
 
 ```bash
+MARKER_HOME="<marker_home>"
+CHECK_JSON=$(bash "$MARKER_HOME/.claude/skills/approve-merge/scripts/approve-merge.sh" <pr> "<repo>" "$MARKER_HOME") || exit 1
+PR_HOST_REPO=$(printf '%s' "$CHECK_JSON" | jq -r '.pr_host_repo | tostring') || exit 1
+MERGE_STRATEGY=$(printf '%s' "$CHECK_JSON" | jq -r '.strategy | tostring') || exit 1
+RELEASE_CLASS=$(printf '%s' "$CHECK_JSON" | jq -r '.release_class | tostring') || exit 1
+[ -n "$PR_HOST_REPO" ] && [ "$PR_HOST_REPO" != null ] || exit 1
+case "$MERGE_STRATEGY" in squash|merge|rebase) ;; *) echo "Invalid strategy." >&2; exit 1 ;; esac
+case "$RELEASE_CLASS" in true|false) ;; *) echo "Invalid release_class." >&2; exit 1 ;; esac
 source "$MARKER_HOME/.claude/hooks/_lib-tracker.sh" || exit 1
 RELEASE_SUBJECT=""
 RELEASE_BODY_FILE=""
@@ -247,29 +258,8 @@ If `MERGE_RC` = 3 (`tracker.kind: none`, no host CLI configured):
 
 ### 9a. Optional: offer to remove the merged PR's worktree
 
-Skip this step when `MERGE_RC` is not 0, and when `--no-merge` was passed.
-
-A merged PR often leaves a linked worktree on disk. Removing it also removes its ticket marker, because the marker lives in the worktree's git dir. Offer the removal. Never do it without a yes.
-
-1. Find the local clone of the PR's repo, the **source tree**. For a registered project it is `workspace/<name>/`, or the `workspace:` path of its registry entry. For a PR on the ops fork it is the ops root.
-2. List the candidates with the helper. The head branch is the merged PR's head branch:
-
-   ```bash
-   .claude/skills/approve-merge/remove-worktree.sh list "<source-tree>" "<head-branch>"
-   ```
-
-   The helper takes candidates only from `git worktree list --porcelain -z`, run with `-C` on the validated common dir. The `-z` option needs git 2.36 or later. With an older git, the helper lists no worktree, prints an error and removes nothing. Tell the user that the worktree stays on disk. The helper prints `ok` or `refused (<reason>)` for each worktree that holds the branch, and the ignored files of each `ok` worktree. It refuses the main worktree, a locked worktree, the session's own tree, and any path that equals or contains the ops root.
-3. If there is an `ok` worktree, ask with `AskUserQuestion`. Show the path and the ignored files the helper listed, because `git worktree remove` deletes them. Offer "Remove it" and "Keep it".
-4. On "Remove it", run:
-
-   ```bash
-   .claude/skills/approve-merge/remove-worktree.sh remove "<source-tree>" "<path>" "<head-branch>"
-   ```
-
-   The helper first re-checks that the worktree still holds the merged head branch and passes every refusal rule. It runs `git worktree remove` with no `--force`. A dirty worktree stops the step. Report the helper's message, and leave the worktree for the user.
-5. On "Keep it", do nothing. Do not ask again.
-
-Never remove a path that the helper did not list. Never pass `--force`.
+Skip when `MERGE_RC` is not 0 or `--no-merge` was passed. Read docs/skills/approve-merge-worktree-offer.md for the full steps.
+List candidates with `.claude/skills/approve-merge/remove-worktree.sh list "<source-tree>" "<head-branch>"`. Ask with `AskUserQuestion` ("Remove it" or "Keep it") and show the ignored files the helper lists. On "Remove it", run `remove-worktree.sh remove "<source-tree>" "<path>" "<head-branch>"`. Never remove a path the helper did not list. Never pass `--force`. Never remove without a yes.
 
 ### 10. Optional: post-merge child-issue closure
 

@@ -57,7 +57,7 @@ after=$(ls -a "$SB/.claude/session/reviews")
 printf '%s\n' abc123 > "$MARKER"
 before=$(ls -a "$SB/.claude/session/reviews"; cksum "$MARKER")
 expect_code 'normal PR' 0
-if [ "$(wc -l < "$SB/out" | tr -d ' ')" = 1 ] && jq -e --arg home "$SB" '.marker_home == $home and .pr_host_repo == "owner/repo" and .strategy == "squash" and .release_class == false and length == 4' "$SB/out" >/dev/null; then
+if [ "$(wc -l < "$SB/out" | tr -d ' ')" = 1 ] && jq -e --arg home "$SB" '.marker_home == $home and .pr_host_repo == "owner/repo" and .strategy == "squash" and .release_class == false and .head_sha == "abc123" and length == 5' "$SB/out" >/dev/null; then
   pass 'normal PR prints one compact JSON result'
 else
   fail 'normal PR JSON result'

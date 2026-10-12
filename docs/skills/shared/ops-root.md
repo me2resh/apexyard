@@ -26,8 +26,8 @@ ops_root=$(resolve_ops_root)
 [ -n "$ops_root" ] || { echo "Cannot resolve the ops root." >&2; exit 1; }
 ```
 
-The skills that write the active-issue marker use this short form. It reads the pin only. Use the full snippet above when the pin may be missing.
+All 17 skills that resolve the ops root outside /approve-merge use this one line. It tries the session pin first and skips it when APEXYARD_OPS_DISABLE_PIN is set or the pin has no hook library. Then it walks up from PWD to find the library. `resolve_ops_root` makes the final choice. It re-checks the pin against the fork anchors and walks up when the pin is stale.
 
 ```text
-ops_root=$(. "$(<"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID:-}")/.claude/hooks/_lib-ops-root.sh" && resolve_ops_root) && [ -n "$ops_root" ] || { echo "No ops root. See docs/skills/shared/ops-root.md." >&2; exit 1; }
+ops_root=$(p="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID:-}"; r=""; [ -z "${APEXYARD_OPS_DISABLE_PIN:-}" ] && [ -f "$p" ] && IFS= read -r r < "$p"; [ -f "$r/.claude/hooks/_lib-ops-root.sh" ] || { r="$PWD"; while [ -n "$r" ] && [ ! -f "$r/.claude/hooks/_lib-ops-root.sh" ]; do r=${r%/*}; done; }; [ -f "$r/.claude/hooks/_lib-ops-root.sh" ] && . "$r/.claude/hooks/_lib-ops-root.sh" && resolve_ops_root) && [ -n "$ops_root" ] || { echo "No ops root. See docs/skills/shared/ops-root.md." >&2; exit 1; }
 ```
