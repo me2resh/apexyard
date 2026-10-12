@@ -100,7 +100,12 @@ A new non-merge commit removes the label and needs another Rex review.
 Base-branch merge commits retain the label. Carry-over keeps Rex's approval only when the existing check returns `true`.
 A refresh failure comment means the orchestrator must resolve the conflict or API failure.
 
-When the skill stops, wait for the automatic refresh and green CI.
+Fork PRs are the exception. The workflow skips a PR whose head repository differs from the base repository.
+A fork PR does not refresh automatically, and a new commit on it does not remove its label.
+For a fork PR, compare the Rex marker SHA with the PR head to see what was reviewed.
+Update a fork PR branch only after the user approves, because the branch belongs to the contributor.
+
+When the skill stops on a same-repository PR, wait for the automatic refresh and green CI.
 Run the carry-over check before requesting another Rex round.
 Request a delta re-review when the check does not return `true`.
 Then run `/approve-merge <pr>` again with the required per-PR human approval.

@@ -371,4 +371,6 @@ Configure `APEXYARD_BOT_TOKEN` with repository contents and pull-request write a
 Without this secret, the workflow uses `GITHUB_TOKEN` and logs the CI limitation.
 GitHub suppresses new workflow runs for pushes made with `GITHUB_TOKEN`.
 Refresh failures produce one comment per head SHA. The orchestrator resolves conflicts.
+The workflow skips fork PRs. It does not refresh them, and it does not remove their label after a new commit, because a fork run has a read-only token.
+Treat the Rex marker SHA as the reviewed head for a fork PR. Update a fork branch only with the user's approval.
 The workflow never grants merge approval. Existing carry-over checks and per-PR human approval still apply.
