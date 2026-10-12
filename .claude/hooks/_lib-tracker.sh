@@ -1384,7 +1384,10 @@ tracker_label_ensure() {
 # the operator login so a typo cannot mint a token.
 _tracker_review_identity_is_app() {
   local k
-  k=$(_tracker_config_get_or '.review_identity.kind' 'operator' 2>/dev/null) || k="operator"
+  k=$(_tracker_config_get_or '.review_identity.kind' 'operator' 2>/dev/null) || {
+    printf '%s\n' "reviewer identity: config read failed; fell back to operator" >&2
+    k="operator"
+  }
   [ "$k" = "github_app" ]
 }
 
@@ -1569,6 +1572,13 @@ _tracker_review_mint_installation_token_body() {
       ;;
   esac
   key_cfg=$(_tracker_config_get_or '.review_identity.private_key_path' '' 2>/dev/null) || key_cfg=""
+  case "$key_cfg" in
+    /*) ;;
+    *)
+      printf '%s\n' "reviewer GitHub App: private_key_path must be absolute" >&2
+      return 1
+      ;;
+  esac
   key=$(_tracker_review_key_is_allowed "$key_cfg") || return 1
   jwt=$(_tracker_review_sign_jwt "$app_id" "$key") || {
     printf '%s\n' "reviewer GitHub App: could not sign the app JWT" >&2
@@ -1596,7 +1606,7 @@ _tracker_review_mint_installation_token_body() {
       "header = \"Authorization: Bearer ${jwt}\"" \
       'header = "X-GitHub-Api-Version: 2022-11-28"' \
       "url = \"${url}\"" \
-      | curl --config -
+      | curl -q --config -
   ) || {
     printf '%s\n' "reviewer GitHub App: could not mint an installation token" >&2
     return 1

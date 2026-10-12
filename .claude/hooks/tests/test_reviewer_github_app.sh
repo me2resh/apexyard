@@ -104,6 +104,15 @@ EOF
   cat > "$sb/bin/curl" <<'EOF'
 #!/bin/bash
 in=$(cat)
+if [ "${1:-}" != "-q" ]; then
+  # Model a hostile curlrc exposing the request and response.
+  if [ -f "${CURL_HOME:-}/.curlrc" ]; then
+    printf '%s\n' "$in" >&2
+    printf '%s\n' "$in" "$MOCK_INSTALL_TOKEN" > "$CURL_HOME/trace.txt"
+  fi
+  echo "curl stub: -q must be the first argument" >&2
+  exit 1
+fi
 if [ -n "${CURL_LOG:-}" ]; then
   {
     printf '%s\n' "$in"
@@ -290,6 +299,42 @@ gh pr view 99 >/dev/null
 assert_eq "app mode → later gh uses the operator token" "1" "$(grep -c 'auth:operator' "$SB/gh.log")"
 assert_eq "app mode → still exactly one app-authenticated call" "1" "$(grep -c 'auth:app' "$SB/gh.log")"
 assert_secret_clean "app mode"
+
+# Hostile curlrc must not expose the JWT or installation token.
+reset_logs
+mkdir -p "$SB/curl-home"
+printf 'verbose\ntrace-ascii = "%s/trace.txt"\n' "$SB/curl-home" > "$SB/curl-home/.curlrc"
+export CURL_HOME="$SB/curl-home"
+# Existing request logging intentionally records the JWT. Disable it here.
+unset CURL_LOG
+tracker_clear_cache
+rc=$(run_review comment)
+assert_eq "hostile curlrc → -q first and review succeeds" "0" "$rc"
+assert_no_needle "hostile curlrc → JWT absent from stderr and files" "e30.e30.e30" ""
+assert_secret_clean "hostile curlrc"
+assert_eq "hostile curlrc → no trace file" "no" "$([ -e "$CURL_HOME/trace.txt" ] && echo yes || echo no)"
+unset CURL_HOME
+
+# Config failure warns once and preserves the operator review exit status.
+reset_logs
+rc=$(
+  _tracker_config_get_or() { return 1; }
+  run_review comment
+)
+assert_eq "config read failure → exit 0" "0" "$rc"
+assert_eq "config read failure → one fallback warning" "1" "$(grep -c '^reviewer identity: config read failed; fell back to operator$' "$SB/err")"
+assert_eq "config read failure → operator token" "1" "$(grep -c 'auth:operator' "$SB/gh.log")"
+
+# Relative paths are refused even when the key exists outside git.
+reset_logs
+write_config "github_app" "secrets/app.pem" ""
+tracker_clear_cache
+rc=$(run_review comment)
+assert_eq "relative key path → non-zero" "1" "$rc"
+assert_contains "relative key path → clear error" "private_key_path must be absolute" "$SB/err"
+assert_eq "relative key path → no openssl call" "0" "$(grep -c . "$SB/openssl.log" || true)"
+assert_eq "relative key path → no curl call" "0" "$(grep -c . "$SB/curl.log" || true)"
+assert_eq "relative key path → no gh call" "0" "$(grep -c . "$SB/gh.log" || true)"
 
 # Case 4 — key inside a git work tree is refused before openssl.
 reset_logs

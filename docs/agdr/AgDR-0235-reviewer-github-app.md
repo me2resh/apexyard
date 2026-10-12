@@ -78,9 +78,12 @@ GitLab and custom review adapters ignore `review_identity`.
 
 ## Consequences
 
-- Operator mode is unchanged when `kind` is `operator` or the key is absent.
-- A GitHub App approval can count toward a required approving review.
-- The app permission `pull_requests: write` can also merge. This library does not use the token to merge. A leaked key could still mint a token elsewhere.
+- Operator mode is unchanged when `kind` is `operator` or the `review_identity` config key is absent.
+- An App review must never satisfy a required human review.
+- Keep agents on the `comment` verdict.
+- Require a CODEOWNERS or team review that excludes the App. A bot `APPROVED` review must not satisfy the branch rule.
+- The local `/approve-merge` gate still applies.
+- Merging requires `contents: write`. The app has only `contents: read`. This library does not use the token to merge.
 - Fail closed leaves the pull request without a new review. The command exits non-zero.
 - Comment fallback does not satisfy a required approving review.
 - GitHub Enterprise Server is not covered. The token URL is `https://api.github.com`.

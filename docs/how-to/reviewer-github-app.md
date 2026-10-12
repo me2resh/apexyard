@@ -4,7 +4,7 @@ Rex, Hakim, and Tariq post reviews with `tracker_review_submit`.
 The default posts with your `gh` login.
 GitHub can treat that approval as your approval.
 A GitHub App posts as its own account.
-Branch protection can then count the app approval.
+An App review must never satisfy a required human review.
 
 This mode is off until you set it.
 The setting is `review_identity` in `.claude/project-config.json`.
@@ -199,14 +199,16 @@ They ignore `review_identity`.
 
 ## Limits
 
-The app permission `pull_requests: write` can also merge a pull request.
+Merging requires `contents: write`.
+The app has only `contents: read`.
 This library never uses the app token for a merge.
 Keep the private key private so nothing else can mint a token.
 
-A required review counts the app bot.
-The bot is a different account from the operator.
-An approval from the operator can still be a self-approval.
-The app approval is not a self-approval.
+Keep agents on the `comment` verdict.
+Require a CODEOWNERS or team review that excludes the App.
+Configure that requirement so a bot `APPROVED` review cannot satisfy the branch rule.
+An App review must never satisfy a required human review.
+The local `/approve-merge` gate still applies.
 
 `fallback` `comment` does not satisfy a required approving review.
 Fail closed posts nothing.
