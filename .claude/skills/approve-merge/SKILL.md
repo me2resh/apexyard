@@ -164,7 +164,7 @@ EOF
 ### 6. Merge with the checked strategy
 
 Skip this step for `--no-merge`. Run this entire block in one shell.
-Keep tracker_pr_merge as a bare top-level statement. Redirect stdout, then read the result separately.
+The tracker_pr_merge call MUST be invoked as a bare top-level statement, never inside `$(...)` or backticks. The merge-gate matcher reads the raw command text and may not fire on a wrapped call. Redirect stdout to a file, then read the result in a separate step.
 
 ```bash
 source "$MARKER_HOME/.claude/hooks/_lib-tracker.sh" || exit 1
@@ -279,10 +279,10 @@ If the PR's merge commit / PR body contains `Closes <owner/repo>#<N>` references
 
 `/approve-merge <pr> --no-merge` writes the marker and stops. Useful when:
 
-- CI is still running and you want to record approval before the green light, then merge later
-- You want to record approval but defer the merge for a batch
-- You want the marker on disk to unblock a teammate who'll do the merge themselves
-- A regulated environment requires temporal separation between approval and execution
+- CI is still running and you want to record approval first
+- You want to defer the merge for a batch
+- A teammate will do the merge
+- A regulated environment separates approval from execution
 
 The skill never writes the marker AND defers the merge in any other case. The default IS auto-merge.
 

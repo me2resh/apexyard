@@ -158,11 +158,17 @@ else
 fi
 
 # --- Case 8: /update sync shapes select the ancestry-preserving strategy ----
-if grep -qF 'sync-upstream-(apexyard|dev)' "$SKILL_MD" \
-  && grep -qF 'sync ops fork with upstream' "$SKILL_MD"; then
-  pass "/update sync branch and title shapes are classified as sync PRs"
+# Sync-class detection lives in scripts/approve-merge.sh (steps 3a, 4, 6).
+SCRIPT="$SRC_ROOT/.claude/skills/approve-merge/scripts/approve-merge.sh"
+if [ -f "$SCRIPT" ] \
+  && grep -qF 'sync/main-to-dev-after-' "$SCRIPT" \
+  && grep -qF 'sync\(' "$SCRIPT" \
+  && grep -qF 'sync-upstream-(apexyard|dev)' "$SCRIPT" \
+  && grep -qF 'sync ops fork with upstream' "$SCRIPT" \
+  && grep -qF 'STRATEGY=merge' "$SCRIPT"; then
+  pass "/release-sync and /update sync branch and title shapes are classified as sync PRs"
 else
-  fail "/update sync branch and title shapes are classified as sync PRs"
+  fail "/release-sync and /update sync branch and title shapes are classified as sync PRs"
 fi
 
 echo

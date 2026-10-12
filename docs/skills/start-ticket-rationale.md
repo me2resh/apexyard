@@ -4,7 +4,7 @@ One tree holds one ticket. Parallel sessions on one project no longer overwrite 
 
 The hook trusts a marker in a git dir only for the ops fork or a registered clone. A registered clone is `workspace/<project>/`, or the `workspace:` path of its registry entry. The marker is a process gate. Anyone with write access to the git dir can forge it. It is not an authorization boundary.
 
-During the move to the new layout, the skill also writes the old-layout marker under `<ops_root>/.claude/session/`. It uses the place the old skill used: `tickets/<project>/<branch>`, `tickets/<project>` or `current-ticket`. The hooks still read old markers wherever they read them before. A hook from before the move, after a rollback or in a session that has not reloaded its hooks, sees the ticket too. See AgDR-0222, "Backward compatibility".
+During the move to the new layout, the skill also writes the old-layout marker under `<ops_root>/.claude/session/`. It uses the places the old skill used. The resolver in `_lib-active-ticket.sh` defines them. The hooks still read old markers wherever they read them before. A hook from before the move, after a rollback or in a session that has not reloaded its hooks, sees the ticket too. See AgDR-0222, "Backward compatibility".
 
 
 **Cross-repo note:** ApexYard governs a portfolio of repos. If the user is in the ops repo (the apexyard fork) but the ticket lives in a managed project's own repo, they should pass the fully-qualified form so the marker records the correct tracker. Each managed project's tickets live in that project's own GitHub repo — tickets do not cross project boundaries.
