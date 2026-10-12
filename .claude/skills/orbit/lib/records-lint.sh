@@ -100,7 +100,9 @@ case "$branch" in orbit/*)
     if [ -f "$scope_top/$f" ]; then record=$(cat "$scope_top/$f")
     else record=$(git -C "$scope_top" show "$scope_base:$f") || fail 15 initiative "$f" "Cannot read deleted record."; fi
     case "$f" in
-      docs/orbit/plans/*|docs/orbit/history/*) owner=$(printf '%s' "$record" | jq -er '.id') ;;
+      docs/orbit/plans/*) owner=$(printf '%s' "$record" | jq -er '.id') ;;
+      # A history file is a superseded plan (owner in .id) or reconciliation (owner in .planId).
+      docs/orbit/history/*) owner=$(printf '%s' "$record" | jq -er '.planId // .id') ;;
       docs/orbit/slices/*|docs/orbit/reconciliations/*) owner=$(printf '%s' "$record" | jq -er '.planId') ;;
       docs/orbit/snapshots/*)
         id=$(printf '%s' "$record" | jq -er '.id') || fail 15 initiative "$f" "Cannot read snapshot ID."

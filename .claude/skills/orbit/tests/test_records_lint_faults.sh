@@ -115,6 +115,14 @@ set_expl "Missing: fresh evidence. Next: inspect the slice."
 expect "referenced changed snapshot" 0 "records-lint: OK"
 jq '.planId = "plan-other"' "$rec" > "$rec.t" && mv "$rec.t" "$rec"
 expect "cross initiative reconciliation" 15 "Record belongs to another initiative."
+jq --arg p "$plan" '.planId = $p' "$rec" > "$rec.t" && mv "$rec.t" "$rec"
+# A superseded reconciliation in history/ is owned through .planId, not .id.
+mkdir -p "$orbit_root/history"
+jq '.id = "reconciliation-demo-widget-r0"' "$rec" > "$orbit_root/history/reconciliation-demo-r0.json"
+expect "own initiative history reconciliation" 0 "records-lint: OK"
+jq '.planId = "plan-other"' "$orbit_root/history/reconciliation-demo-r0.json" > "$rec.t" && mv "$rec.t" "$orbit_root/history/reconciliation-demo-r0.json"
+expect "cross initiative history reconciliation" 15 "Record belongs to another initiative."
+rm "$orbit_root/history/reconciliation-demo-r0.json"
 git -C "$sb" checkout -qb orbit/unknown-cycle
 expect "unknown initiative" 15 "No matching plan record"
 
