@@ -127,7 +127,7 @@ refusal message — but the cheap fix is upstream of both: don't pass a path.
 
 On GitHub, add `ready-to-merge` after APPROVED: `gh pr edit {number} --repo "$PR_HOST_REPO" --add-label ready-to-merge`.
 Remove it after CHANGES REQUESTED: `gh pr edit {number} --repo "$PR_HOST_REPO" --remove-label ready-to-merge`.
-Report label failures without changing the verdict or approval marker.
+A label failure changes no verdict or marker.
 
 ### 8. Offer pre-merge QA after APPROVED
 
