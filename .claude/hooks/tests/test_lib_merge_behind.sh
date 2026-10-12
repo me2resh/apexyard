@@ -290,7 +290,7 @@ if command -v git >/dev/null 2>&1; then
 
   # #1682: real histories with the same forge mock cover the chain limit
   # and failures below a clean head merge.
-  for scenario in two three ten eleven nonmerge mismatch api; do
+  for scenario in two three ten eleven nonmerge mismatch api offbase octopus; do
     repo=$(make_git_repo)
     echo base > "$repo/base.txt"
     g "$repo" add base.txt
@@ -307,7 +307,7 @@ if command -v git >/dev/null 2>&1; then
       two) count=2 ;;
       ten) count=10 ;;
       eleven) count=11; expected=false ;;
-      nonmerge|mismatch) expected=false ;;
+      nonmerge|mismatch|offbase|octopus) expected=false ;;
       api) expected=unknown ;;
     esac
     for ((step=1; step<=count; step++)); do
@@ -321,7 +321,28 @@ if command -v git >/dev/null 2>&1; then
         g "$repo" add extra.txt
         g "$repo" commit -q -m "unreviewed work"
       fi
-      g "$repo" merge -q --no-ff main -m "base merge $step"
+      if [ "$step" -eq 2 ] && { [ "$scenario" = offbase ] || [ "$scenario" = octopus ]; }; then
+        # Put an unreviewed side merge in the middle of a three-step chain.
+        # Its tree is clean, so only the per-step ancestry check rejects it.
+        g "$repo" checkout -q -b side-one
+        echo side > "$repo/side-one.txt"
+        g "$repo" add side-one.txt
+        g "$repo" commit -q -m "unreviewed side work"
+        g "$repo" checkout -q pr-branch
+        if [ "$scenario" = octopus ]; then
+          # Three parents below a valid head must also be rejected.
+          g "$repo" checkout -q -b side-two
+          echo side > "$repo/side-two.txt"
+          g "$repo" add side-two.txt
+          g "$repo" commit -q -m "second side work"
+          g "$repo" checkout -q pr-branch
+          g "$repo" merge -q --no-ff side-one side-two -m "middle octopus merge"
+        else
+          g "$repo" merge -q --no-ff side-one -m "middle off-base merge"
+        fi
+      else
+        g "$repo" merge -q --no-ff main -m "base merge $step"
+      fi
       if [ "$scenario" = mismatch ] && [ "$step" -eq 2 ]; then
         # Amend a conflict-free merge with an extra change. Its tree differs
         # from merge-tree, although the final head merge remains clean.
