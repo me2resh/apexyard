@@ -13,7 +13,7 @@ category: patterns
 
 # AgDR-0229: Skip provably empty process launches in the merge parser and weight the test shards
 
-> Skip five process launches whose result is known in advance and assign test shards by measured weight, to cut macOS hook test cost, accepting one new data file and one shell guard at each skip.
+> Skip five process launches with a known result. Assign test shards by measured weight. This cuts macOS hook test cost. It adds one data file and one shell guard at each skip.
 
 ## Context
 
