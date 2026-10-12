@@ -53,3 +53,7 @@ Revision 2 records move to `docs/orbit/history/` because `orbit validate --all` 
 `orbit validate --all` does not read `docs/orbit/history/`. To check a history record, validate it on its own, for example `orbit validate docs/orbit/history/plan-apexyard-orbit-build.r2.json`.
 
 The snapshot records the local planning branch name. The commit `378623e` is the `dev` tip at snapshot time.
+
+## Checks
+
+2026-10-12, 3a31d4e: checked, no change.

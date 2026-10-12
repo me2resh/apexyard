@@ -5,9 +5,7 @@ disable-model-invocation: false
 argument-hint: "<what you're deciding>"
 ---
 
-## Writing rule
-
-When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
 # /decide — Technical Decision Gate
 

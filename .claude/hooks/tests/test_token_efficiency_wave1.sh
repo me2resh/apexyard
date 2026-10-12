@@ -137,6 +137,7 @@ if [ "${TOKEN_EFFICIENCY_SKIP_SYMLINK_FIXTURE:-0}" != "1" ]; then
            "$fixture/.claude/hooks" \
            "$fixture/private/custom-skills/private-skill"
   cp "$0" "$fixture/.claude/hooks/test_token_efficiency_wave1.sh"
+  cp "$TEST_DIR/_test-session-isolation.sh" "$fixture/.claude/hooks/"
   cat > "$fixture/CLAUDE.md" <<'EOF'
 ### Available skills
 | Skill | Description |
@@ -174,15 +175,23 @@ fi
 # Invariant 4 — SessionStart happy-path char budget
 # -----------------------------------------------------------------------------
 echo "== Invariant 4: SessionStart hooks emit ≤ 600 chars on the happy path (worst-case fixture)"
+# Use an unconfigured fork fixture. Do not read or write the operator's fork.
+ss_fixture=$(mktemp -d "$ROOT/.wave1-session.XXXXXX")
+mkdir -p "$ss_fixture/.claude"
+cp -R "$HOOKS_DIR" "$ss_fixture/.claude/hooks"
+cp "$ROOT/.claude/project-config.defaults.json" "$ss_fixture/.claude/" 2>/dev/null || true
+touch "$ss_fixture/.apexyard-fork"
+git -C "$ss_fixture" init -q
 ss_total=0
 for h in onboarding-check check-upstream-drift check-jq-installed check-portfolio-config clear-bootstrap-marker clear-issue-skill-marker link-custom-skills apply-agent-routing; do
   if [ ! -x "$HOOKS_DIR/$h.sh" ] && [ ! -f "$HOOKS_DIR/$h.sh" ]; then
     continue
   fi
-  out=$(bash "$HOOKS_DIR/$h.sh" 2>&1 </dev/null || true)
+  out=$(cd "$ss_fixture" && bash "$ss_fixture/.claude/hooks/$h.sh" 2>&1 </dev/null || true)
   n=$(printf '%s' "$out" | wc -c | tr -d ' ')
   ss_total=$((ss_total + n))
 done
+rm -rf "$ss_fixture"
 echo "  Total SessionStart banner: $ss_total chars"
 if [ "$ss_total" -gt 600 ]; then
   red "  FAIL: SessionStart banner is $ss_total chars (> 600 budget)"
@@ -190,6 +199,23 @@ if [ "$ss_total" -gt 600 ]; then
 else
   green "  OK"
 fi
+
+# Invariant 5 — core skill bodies stay within their byte caps.
+echo "== Invariant 5: core skill body byte caps"
+for skill in approve-merge approve-design code-review task start-ticket; do
+  f="$ROOT/.claude/skills/$skill/SKILL.md"
+  # Small catalog fixtures do not contain the core skills.
+  [ -f "$f" ] || continue
+  cap=16000
+  [ "$skill" != approve-merge ] || cap=14000
+  bytes=$(wc -c < "$f" | tr -d ' ')
+  if [ "$bytes" -gt "$cap" ]; then
+    red "  FAIL: $skill — $bytes bytes (> $cap)"
+    FAIL=$((FAIL + 1))
+  else
+    green "  OK: $skill — $bytes bytes"
+  fi
+done
 
 # -----------------------------------------------------------------------------
 # Summary

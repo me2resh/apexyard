@@ -71,13 +71,8 @@ The check is `rex_approval_carries_over` in `.claude/hooks/_lib-merge-behind.sh`
 Before spawning the Code Reviewer agent (Rex), write the active-reviewer session marker. It records that this review pass is the sanctioned one, and suppresses `warn-review-marker-write.sh`'s advisory warning on Rex's `*-rex.approved` write (that hook warns and never blocks since #1026 — AgDR-0111). The marker is scoped to THIS Claude Code session (me2resh/apexyard#1376) — resolve its path through `active_reviewer_marker_path`, never write the bare `.claude/session/active-reviewer` path directly, or a concurrent session's review would read or clobber it. At skill entry:
 
 ```bash
-ops_root=$(git rev-parse --show-toplevel)
-r="$ops_root"
-while [ -n "$r" ] && [ "$r" != "/" ]; do
-  [ -f "$r/.apexyard-fork" ] && { ops_root="$r"; break; }
-  [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ] && { ops_root="$r"; break; }
-  r=$(dirname "$r")
-done
+# Ops root: pin first, then walk up (docs/skills/shared/ops-root.md).
+ops_root=$(p="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID:-}"; r=""; [ -z "${APEXYARD_OPS_DISABLE_PIN:-}" ] && [ -f "$p" ] && IFS= read -r r < "$p"; [ -f "$r/.claude/hooks/_lib-ops-root.sh" ] || { r="$PWD"; while [ -n "$r" ] && [ ! -f "$r/.claude/hooks/_lib-ops-root.sh" ]; do r=${r%/*}; done; }; [ -f "$r/.claude/hooks/_lib-ops-root.sh" ] && . "$r/.claude/hooks/_lib-ops-root.sh" && resolve_ops_root) || ops_root=$(git rev-parse --show-toplevel)
 . "$ops_root/.claude/hooks/_lib-review-markers.sh"
 active_marker=$(active_reviewer_marker_path "$ops_root" "" "<owner/repo>" "<pr>" "rex")
 mkdir -p "$(dirname "$active_marker")"
@@ -87,13 +82,8 @@ printf '%s\n' "<owner/repo>#<pr>:rex" > "$active_marker"
 On skill exit (after Rex posts its verdict, whether APPROVED or CHANGES REQUESTED), clear the marker. Shell variables do not persist across separate Bash tool calls, so the exit step re-resolves `ops_root` and `active_marker` from scratch — it does not reuse the step-0 variable, which would silently be empty in a later call and turn the `rm -f` into a no-op:
 
 ```bash
-ops_root=$(git rev-parse --show-toplevel)
-r="$ops_root"
-while [ -n "$r" ] && [ "$r" != "/" ]; do
-  [ -f "$r/.apexyard-fork" ] && { ops_root="$r"; break; }
-  [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ] && { ops_root="$r"; break; }
-  r=$(dirname "$r")
-done
+# Ops root: pin first, then walk up (docs/skills/shared/ops-root.md).
+ops_root=$(p="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID:-}"; r=""; [ -z "${APEXYARD_OPS_DISABLE_PIN:-}" ] && [ -f "$p" ] && IFS= read -r r < "$p"; [ -f "$r/.claude/hooks/_lib-ops-root.sh" ] || { r="$PWD"; while [ -n "$r" ] && [ ! -f "$r/.claude/hooks/_lib-ops-root.sh" ]; do r=${r%/*}; done; }; [ -f "$r/.claude/hooks/_lib-ops-root.sh" ] && . "$r/.claude/hooks/_lib-ops-root.sh" && resolve_ops_root) || ops_root=$(git rev-parse --show-toplevel)
 . "$ops_root/.claude/hooks/_lib-review-markers.sh"
 active_marker=$(active_reviewer_marker_path "$ops_root" "" "<owner/repo>" "<pr>" "rex")
 rm -f "$active_marker"
@@ -135,6 +125,10 @@ refusal message — but the cheap fix is upstream of both: don't pass a path.
 6. On JS/TS diffs, run the Fallow static-analysis pass (§ 9 of the agent) — changed-scope, fail-soft, advisory; render a `### Fallow Findings` table + dry-run fix preview
 7. Submit the review through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host — #758), not a hardcoded `gh pr review`, then clear the active-reviewer marker from step 0
 
+On GitHub, add `ready-to-merge` after APPROVED: `gh pr edit {number} --repo "$PR_HOST_REPO" --add-label ready-to-merge`.
+Remove it after CHANGES REQUESTED: `gh pr edit {number} --repo "$PR_HOST_REPO" --remove-label ready-to-merge`.
+A label failure changes no verdict or marker.
+
 ### 8. Offer pre-merge QA after APPROVED
 
 Run this step only after Rex posts an APPROVED verdict and the active-reviewer marker is clear.
@@ -144,13 +138,8 @@ Resolve the ops root again. Shell variables from step 0 do not persist across Ba
 Read the setting through the shared config reader:
 
 ```bash
-ops_root=$(git rev-parse --show-toplevel)
-r="$ops_root"
-while [ -n "$r" ] && [ "$r" != "/" ]; do
-  [ -f "$r/.apexyard-fork" ] && { ops_root="$r"; break; }
-  [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ] && { ops_root="$r"; break; }
-  r=$(dirname "$r")
-done
+# Ops root: pin first, then walk up (docs/skills/shared/ops-root.md).
+ops_root=$(p="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID:-}"; r=""; [ -z "${APEXYARD_OPS_DISABLE_PIN:-}" ] && [ -f "$p" ] && IFS= read -r r < "$p"; [ -f "$r/.claude/hooks/_lib-ops-root.sh" ] || { r="$PWD"; while [ -n "$r" ] && [ ! -f "$r/.claude/hooks/_lib-ops-root.sh" ]; do r=${r%/*}; done; }; [ -f "$r/.claude/hooks/_lib-ops-root.sh" ] && . "$r/.claude/hooks/_lib-ops-root.sh" && resolve_ops_root) || ops_root=$(git rev-parse --show-toplevel)
 source "$ops_root/.claude/hooks/_lib-read-config.sh"
 qa_offer=$(config_get_or '.qa.pre_merge_offer' 'ask')
 case "$qa_offer" in

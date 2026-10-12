@@ -140,6 +140,12 @@ blocked_regressions=(
   'for f in a b; do echo x; sleep 1; done'
   'for f in a b; do for g in c d; do echo x; done; sleep 1; done'
   'for f in a b; do echo x; done; while true; do sleep 1; done'
+  'for x in a b; { sleep 30; }; sleep 100'
+  'for x in $(sleep 100); do echo; done'
+  'for x in a b; { sleep 30; }'
+  'for x in $(sleep 30 && sleep 30); do echo; done'
+  'for x in $(gh pr checks 42); do echo; done; gh pr checks 42'
+  'while true; do for x in $(sleep 1); do echo; done; done'
 )
 allowed_regressions=(
   'sleep 5e1' 'sleep 590e-1' 'sleep 5.8e1' 'sleep 1e-2'
@@ -152,6 +158,9 @@ allowed_regressions=(
   'sleep 1; for f in a b; do echo "$f"; done'
   'for f in a b; do for g in c d; do echo x; done; done; sleep 1'
   'for f in a b; do echo x; done; gh pr checks 42'
+  'for x in $(sleep 5); do echo; done'
+  'for x in $(gh pr checks 42); do echo; done'
+  'for x in a b; { echo x; }'
 )
 for pattern in "${blocked_regressions[@]}"; do
   for agent in code-reviewer security-reviewer solution-architect; do
