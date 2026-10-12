@@ -1,0 +1,8 @@
+{
+  "name": "apexyard-bootcamp",
+  "version": "0.1.0",
+  "description": "Display-only guided bootcamp pane with session checkpoints",
+  "author": { "name": "ApexYard" },
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}

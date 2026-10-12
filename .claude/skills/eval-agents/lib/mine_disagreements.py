@@ -60,6 +60,7 @@ COMMENT = "COMMENT"
 CHANGES_CLASS = (CHANGES_REQUESTED, BLOCKING)
 
 EXCERPT_LIMIT = 400
+MIN_COMMIT_PREFIX = 7
 
 # Reviewer identity comes from the body, not the GitHub author: every agent
 # posts under one account. The section header is primary. The signature
@@ -93,8 +94,8 @@ _TOKEN_PATTERNS: Tuple[Tuple[str, "re.Pattern[str]"], ...] = (
 )
 
 _COMMIT_PATTERNS = (
-    re.compile(r"Reviewed commit:\s*`?([0-9a-f]{7,40})`?", re.IGNORECASE),
     re.compile(r"\*\*Commit\*\*:\s*`?([0-9a-f]{7,40})`?", re.IGNORECASE),
+    re.compile(r"(?<!last )(?<!last-)Reviewed commit:\s*`?([0-9a-f]{7,40})`?", re.IGNORECASE),
 )
 
 
@@ -178,14 +179,18 @@ def tokens_in(text: str) -> List[str]:
 def verdict_of_section(section: str) -> Optional[str]:
     """Return the verdict that one section states, or None.
 
-    The first line that names a verdict decides. CHANGES REQUESTED and
-    BLOCKING on one line agree. A line that names two other verdicts (an unfilled template such as
+    The first non-empty line decides and must start with a verdict token.
+    CHANGES REQUESTED and BLOCKING on one line agree. A line that names two
+    other verdicts (an unfilled template such as
     `[APPROVED / CHANGES REQUESTED / COMMENT]`) is ambiguous: return None.
     """
     for line in section.splitlines():
-        found = tokens_in(_deciding_text(line))
-        if not found:
+        if not line.strip():
             continue
+        deciding = _deciding_text(line)
+        if not any(pattern.match(deciding) for _, pattern in _TOKEN_PATTERNS):
+            return None
+        found = tokens_in(deciding)
         if len(found) > 1 and not all(verdict in CHANGES_CLASS for verdict in found):
             return None
         return found[0]
@@ -204,10 +209,14 @@ def _deciding_text(line: str) -> str:
     `APPROVED. Next action: reply to the comment` reads as APPROVED.
     """
     bold = [segment for segment in _BOLD.findall(line) if segment.strip()]
+    text = " ".join(bold) if bold else line
+    text = re.sub(r"^[^a-zA-Z]+", "", text)
+    text = re.sub(r"^Verdict\b\s*[:\-]\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^[^a-zA-Z]+", "", text)
     if bold:
-        return " ".join(bold)
-    end = _SENTENCE_END.search(line)
-    return line[: end.start()] if end else line
+        return text
+    end = _SENTENCE_END.search(text)
+    return text[: end.start()] if end else text
 
 
 def parse_verdict(body: str) -> Tuple[Optional[str], str]:
@@ -228,23 +237,16 @@ def parse_verdict(body: str) -> Tuple[Optional[str], str]:
 
 
 def reviewed_commit(body: str, api_commit: Optional[str]) -> Optional[str]:
-    """Return the full SHA of the commit that a review assessed.
+    """Return the commit SHA that the review submission identifies.
 
-    The body states the reviewed commit (`Reviewed commit:` footer or
-    `**Commit**:` line). That value wins, because the API `commit_id` is the
-    PR head when the review was posted, which can be a later push. A short
-    body SHA that prefixes the API SHA resolves to the API SHA.
+    The body's `**Commit**:` line wins, followed by its `Reviewed commit:`
+    footer. Use API `commit_id` only when the body names no commit.
     """
-    api = (api_commit or "").lower() or None
     for pattern in _COMMIT_PATTERNS:
         match = pattern.search(body or "")
-        if not match:
-            continue
-        stated = match.group(1).lower()
-        if api and api.startswith(stated):
-            return api
-        return stated
-    return api
+        if match:
+            return match.group(1).lower()
+    return (api_commit or "").lower() or None
 
 
 def _excerpt(text: str) -> str:
@@ -277,14 +279,29 @@ def review_unit(raw: Dict[str, Any]) -> Dict[str, Any]:
 def group_by_commit(units: Iterable[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
     """Group review units by reviewed commit SHA.
 
-    Units with no reviewer, no verdict, or no commit are left out. Each
-    group is sorted by submission time.
+    Match prefixes of at least MIN_COMMIT_PREFIX characters to the longest
+    SHA. Drop units without a reviewer, verdict, or commit. Sort each group
+    by submission time.
     """
+    valid = [
+        unit
+        for unit in units
+        if unit["reviewer"] and unit["verdict"] and unit["commit"]
+    ]
+    commits = sorted({unit["commit"] for unit in valid}, key=lambda sha: (-len(sha), sha))
+    keys: Dict[str, str] = {}
+    for commit in commits:
+        keys[commit] = next(
+            (
+                sha
+                for sha in commits
+                if len(commit) >= MIN_COMMIT_PREFIX and sha.startswith(commit)
+            ),
+            commit,
+        )
     groups: Dict[str, List[Dict[str, Any]]] = {}
-    for unit in units:
-        if not (unit["reviewer"] and unit["verdict"] and unit["commit"]):
-            continue
-        groups.setdefault(unit["commit"], []).append(unit)
+    for unit in valid:
+        groups.setdefault(keys[unit["commit"]], []).append(unit)
     for members in groups.values():
         members.sort(key=lambda unit: unit.get("submitted_at") or "")
     return groups

@@ -38,6 +38,11 @@
 #                                      adapters built in, `custom` review_command template, `none`
 #                                      no-op (returns 3, echoes body). Exit 0 = submitted; non-zero
 #                                      = CLI errored; 3 = shape-only (kind=none, nothing to call).
+#                                      gh reviews honor review_identity (#1538, AgDR-0235). The
+#                                      default kind=operator uses the operator gh login. kind=
+#                                      github_app mints an installation token and sets GH_TOKEN for
+#                                      that one gh pr review command. The token is never exported,
+#                                      logged, or written to disk. tracker_pr_merge does not use it.
 #   tracker_pr_merge <owner/repo> <pr> <strategy> [<delete_branch>] [<subject>] [<body_file>]  (#759, #1136)
 #                                      merges a PR/MR via the git host. strategy is one of
 #                                      squash|merge|rebase (default squash, normalised — never
@@ -1374,9 +1379,309 @@ tracker_label_ensure() {
 # `comment`), not here.
 # ------------------------------------------------------------------------------
 
+# review_identity (#1538, AgDR-0235). Default operator. Only the exact value
+# github_app selects the app path. Any other value, including empty, stays on
+# the operator login so a typo cannot mint a token.
+_tracker_review_identity_is_app() {
+  local k
+  k=$(_tracker_config_get_or '.review_identity.kind' 'operator' 2>/dev/null) || {
+    printf '%s\n' "reviewer identity: config read failed; fell back to operator" >&2
+    k="operator"
+  }
+  [ "$k" = "github_app" ]
+}
+
+# fallback=comment is the only degraded mode. Anything else fails closed.
+_tracker_review_identity_allows_comment_fallback() {
+  local fb
+  fb=$(_tracker_config_get_or '.review_identity.fallback' '' 2>/dev/null) || fb=""
+  [ "$fb" = "comment" ]
+}
+
+# Resolve a private-key path to one absolute form.
+# mode L keeps the logical path (a symlink inside a work tree stays inside it).
+# mode P follows directory and final-file symlinks.
+# Prints the path. Returns non-zero when the parent directory cannot be resolved.
+_tracker_review_abs_path() {
+  local p="$1" mode="$2"
+  local dir base target hops=0
+  case "$p" in
+    /*) ;;
+    *) p="$(pwd)/$p" ;;
+  esac
+  while [ "$hops" -lt 16 ]; do
+    hops=$((hops + 1))
+    dir=$(dirname "$p") || return 1
+    base=$(basename "$p") || return 1
+    if [ "$mode" = "P" ]; then
+      dir=$(cd -P "$dir" 2>/dev/null && pwd -P) || return 1
+    else
+      dir=$(cd -L "$dir" 2>/dev/null && pwd -L) || return 1
+    fi
+    if [ "$mode" = "P" ] && [ -L "$dir/$base" ]; then
+      target=$(readlink "$dir/$base") || return 1
+      case "$target" in
+        /*) p="$target" ;;
+        *) p="$dir/$target" ;;
+      esac
+      continue
+    fi
+    printf '%s\n' "$dir/$base"
+    return 0
+  done
+  return 1
+}
+
+# Print a block reason, or nothing when the path is allowed.
+# Reasons: claude, worktree, gitdir, nogit, unresolved.
+# Ambient GIT_DIR is cleared so a caller inside this repo cannot make an
+# outside path look inside, or hide a path that is inside another work tree.
+_tracker_review_path_block_reason() {
+  local p="$1" dir inside
+  case "$p" in
+    */.claude|*/.claude/*)
+      printf '%s\n' "claude"
+      return 0
+      ;;
+    */.git|*/.git/*)
+      printf '%s\n' "gitdir"
+      return 0
+      ;;
+  esac
+  if ! command -v git >/dev/null 2>&1; then
+    printf '%s\n' "nogit"
+    return 0
+  fi
+  dir=$(dirname "$p") || {
+    printf '%s\n' "unresolved"
+    return 0
+  }
+  inside=$(
+    env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_OBJECT_DIRECTORY \
+      -u GIT_INDEX_FILE -u GIT_PREFIX -u GIT_NAMESPACE \
+      git -C "$dir" rev-parse --is-inside-work-tree 2>/dev/null
+  ) || inside=""
+  if [ "$inside" = "true" ]; then
+    printf '%s\n' "worktree"
+    return 0
+  fi
+  return 1
+}
+
+# Refuse a key inside any git work tree, inside a .git directory, or under
+# .claude/. Check the logical path and the symlink-resolved path. On success
+# print the physical path. Never print the key bytes.
+_tracker_review_key_is_allowed() {
+  local raw="$1" logical="" physical="" reason="" p=""
+  case "$raw" in
+    ''|*$'\n'*|*$'\r'*)
+      printf '%s\n' "reviewer GitHub App: private key path is missing or unreadable" >&2
+      return 1
+      ;;
+  esac
+  logical=$(_tracker_review_abs_path "$raw" L) || {
+    printf '%s\n' "reviewer GitHub App: private key path is missing or unreadable" >&2
+    return 1
+  }
+  physical=$(_tracker_review_abs_path "$raw" P) || {
+    printf '%s\n' "reviewer GitHub App: private key path is missing or unreadable" >&2
+    return 1
+  }
+  for p in "$logical" "$physical"; do
+    reason=$(_tracker_review_path_block_reason "$p") || reason=""
+    case "$reason" in
+      "") ;;
+      claude)
+        printf '%s\n' "reviewer GitHub App: private key path is under .claude/" >&2
+        return 1
+        ;;
+      worktree|gitdir)
+        printf '%s\n' "reviewer GitHub App: private key path is inside a git work tree" >&2
+        return 1
+        ;;
+      *)
+        printf '%s\n' "reviewer GitHub App: cannot check the private key path" >&2
+        return 1
+        ;;
+    esac
+  done
+  if [ ! -f "$physical" ] || [ ! -r "$physical" ] || [ ! -s "$physical" ]; then
+    printf '%s\n' "reviewer GitHub App: private key path is missing or unreadable" >&2
+    return 1
+  fi
+  printf '%s\n' "$physical"
+}
+
+# URL-safe base64 with padding removed. openssl base64 wraps lines; tr joins them.
+# The raw signature is not stored in a shell variable (it can contain NUL).
+_tracker_review_b64url() {
+  local raw
+  raw=$(openssl base64) || return 1
+  printf '%s' "$raw" | tr -d '\n=' | tr '/+' '_-'
+}
+
+# RS256 JWT for the GitHub App. iat is 60 seconds in the past. exp is 9 minutes
+# ahead (GitHub rejects a JWT older than 10 minutes). iss is the numeric app id.
+# openssl reads the private key from the file. The key bytes are not printed.
+_tracker_review_sign_jwt() {
+  local app_id="$1" key="$2"
+  local now="" iat="" exp="" header="" payload="" signing="" sig=""
+  now=$(date +%s) || return 1
+  case "$now" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  iat=$((now - 60))
+  exp=$((now + 540))
+  header=$(printf '%s' '{"alg":"RS256","typ":"JWT"}' | _tracker_review_b64url) || return 1
+  payload=$(printf '{"iat":%s,"exp":%s,"iss":%s}' "$iat" "$exp" "$app_id" | _tracker_review_b64url) || return 1
+  [ -n "$header" ] && [ -n "$payload" ] || return 1
+  signing="${header}.${payload}"
+  sig=$(
+    set -o pipefail
+    printf '%s' "$signing" | openssl dgst -sha256 -sign "$key" | openssl base64
+  ) || return 1
+  sig=$(printf '%s' "$sig" | tr -d '\n=' | tr '/+' '_-') || return 1
+  [ -n "$sig" ] || return 1
+  printf '%s' "${signing}.${sig}"
+}
+
+# Mint one installation token. The token is the only stdout. Errors go to stderr
+# and do not include the key or the token. The token is not written to a file.
+_tracker_review_mint_installation_token_body() {
+  local app_id="" installation_id="" key_cfg="" key="" jwt="" resp="" token="" url=""
+  if ! command -v openssl >/dev/null 2>&1; then
+    printf '%s\n' "reviewer GitHub App: openssl is not available" >&2
+    return 1
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    printf '%s\n' "reviewer GitHub App: curl is not available" >&2
+    return 1
+  fi
+  app_id=$(_tracker_config_get_or '.review_identity.app_id' '' 2>/dev/null) || app_id=""
+  installation_id=$(_tracker_config_get_or '.review_identity.installation_id' '' 2>/dev/null) || installation_id=""
+  case "$app_id" in
+    ''|*[!0-9]*)
+      printf '%s\n' "reviewer GitHub App: app_id or installation_id is missing or not numeric" >&2
+      return 1
+      ;;
+  esac
+  case "$installation_id" in
+    ''|*[!0-9]*)
+      printf '%s\n' "reviewer GitHub App: app_id or installation_id is missing or not numeric" >&2
+      return 1
+      ;;
+  esac
+  key_cfg=$(_tracker_config_get_or '.review_identity.private_key_path' '' 2>/dev/null) || key_cfg=""
+  case "$key_cfg" in
+    /*) ;;
+    *)
+      printf '%s\n' "reviewer GitHub App: private_key_path must be absolute" >&2
+      return 1
+      ;;
+  esac
+  key=$(_tracker_review_key_is_allowed "$key_cfg") || return 1
+  jwt=$(_tracker_review_sign_jwt "$app_id" "$key") || {
+    printf '%s\n' "reviewer GitHub App: could not sign the app JWT" >&2
+    return 1
+  }
+  case "$jwt" in
+    *.*.*) ;;
+    *)
+      printf '%s\n' "reviewer GitHub App: could not sign the app JWT" >&2
+      return 1
+      ;;
+  esac
+  url="https://api.github.com/app/installations/${installation_id}/access_tokens"
+  # The JWT is a secret. Pass it on curl's stdin config, not in argv.
+  # Do not use -v, --trace, or -D. Those modes print the request and the body.
+  resp=$(
+    set -o pipefail
+    printf '%s\n' \
+      'silent' \
+      'show-error' \
+      'fail' \
+      'max-time = 30' \
+      'request = "POST"' \
+      'header = "Accept: application/vnd.github+json"' \
+      "header = \"Authorization: Bearer ${jwt}\"" \
+      'header = "X-GitHub-Api-Version: 2022-11-28"' \
+      "url = \"${url}\"" \
+      | curl -q --config -
+  ) || {
+    printf '%s\n' "reviewer GitHub App: could not mint an installation token" >&2
+    return 1
+  }
+  jwt=""
+  token=$(printf '%s\n' "$resp" | sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p') || token=""
+  resp=""
+  unset resp
+  case "$token" in
+    ''|*[!A-Za-z0-9_]*)
+      token=""
+      printf '%s\n' "reviewer GitHub App: installation token was empty or rejected" >&2
+      return 1
+      ;;
+  esac
+  if [ "${#token}" -lt 8 ]; then
+    token=""
+    printf '%s\n' "reviewer GitHub App: installation token was empty or rejected" >&2
+    return 1
+  fi
+  printf '%s' "$token"
+  token=""
+  return 0
+}
+
+# Drop a token that failed the charset check so it cannot reach GH_TOKEN.
+_tracker_review_mint_installation_token() {
+  local token="" rc=0
+  token=$(_tracker_review_mint_installation_token_body) && rc=0 || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    token=""
+    return "$rc"
+  fi
+  case "$token" in
+    ''|*[!A-Za-z0-9_]*)
+      token=""
+      return 1
+      ;;
+  esac
+  if [ "${#token}" -lt 8 ]; then
+    token=""
+    return 1
+  fi
+  printf '%s' "$token"
+  token=""
+  return 0
+}
+
+# App-path failure. fallback=comment posts a comment with the operator login.
+# The app token is not set on this command. Any other fallback posts nothing.
+_tracker_review_gh_operator_comment_or_fail() {
+  local repo="$1" pr="$2" body_file="$3"
+  local -a args
+  if _tracker_review_identity_allows_comment_fallback; then
+    printf '%s\n' "reviewer GitHub App: posting the review as a comment with the operator login" >&2
+    args=(pr review "$pr" --repo "$repo" --comment)
+    if [ -n "$body_file" ] && [ -f "$body_file" ]; then
+      args+=(--body-file "$body_file")
+    fi
+    gh "${args[@]}"
+    return $?
+  fi
+  printf '%s\n' "reviewer GitHub App: review was not posted" >&2
+  return 1
+}
+
 # Internal adapter: gh → `gh pr review`. Args passed as an array (never an eval'd
 # string) so a body full of shell metacharacters is inert. Stdout and stderr both
 # propagate: the caller needs the host's diagnostic when a review is rejected.
+#
+# review_identity.kind=github_app (gh adapter only) mints an installation token
+# and assigns GH_TOKEN for this one gh command. The assignment is not an export.
+# xtrace is off while the token is in a variable so `set -x` cannot print it.
+# On mint or post failure, fallback=comment retries as a comment on the operator
+# login. Otherwise the review is not posted. Merge never calls this path.
 _tracker_review_gh() {
   local repo="$1" pr="$2" verdict="$3" body_file="$4"
   _tracker_check_private_refs "$repo" "" "$body_file" || return $?
@@ -1390,7 +1695,32 @@ _tracker_review_gh() {
   if [ -n "$body_file" ] && [ -f "$body_file" ]; then
     args+=(--body-file "$body_file")
   fi
-  gh "${args[@]}"
+  if ! _tracker_review_identity_is_app; then
+    gh "${args[@]}"
+    return $?
+  fi
+
+  local was_x=0 token="" rc=0
+  case $- in
+    *x*) was_x=1; set +x ;;
+  esac
+  token=$(_tracker_review_mint_installation_token) && rc=0 || rc=$?
+  if [ "$rc" -ne 0 ] || [ -z "$token" ]; then
+    token=""
+    unset token
+    if [ "$was_x" -eq 1 ]; then set -x; fi
+    _tracker_review_gh_operator_comment_or_fail "$repo" "$pr" "$body_file"
+    return $?
+  fi
+  GH_TOKEN="$token" gh "${args[@]}" && rc=0 || rc=$?
+  token=""
+  unset token
+  if [ "$was_x" -eq 1 ]; then set -x; fi
+  if [ "$rc" -ne 0 ]; then
+    _tracker_review_gh_operator_comment_or_fail "$repo" "$pr" "$body_file"
+    return $?
+  fi
+  return 0
 }
 
 # Internal adapter: glab (GitLab) → `glab mr approve` / `glab mr note create`.
@@ -1598,6 +1928,10 @@ tracker_review_at_sha() {
 # through). tracker_pr_merge closes that gap the same way #758's
 # tracker_review_submit closed it for review *submission* — a kind-dispatched
 # function (gh/glab/custom/none), never a re-derived inline command.
+#
+# The reviewer GitHub App token is not used here. tracker_pr_merge and
+# /approve-merge always use the operator login, even when review_identity.kind
+# is github_app (#1538, AgDR-0235).
 #
 # ORTHOGONAL to the merge-*gate* hooks (block-unreviewed-merge.sh,
 # block-merge-on-red-ci.sh, require-design-review-for-ui.sh,
