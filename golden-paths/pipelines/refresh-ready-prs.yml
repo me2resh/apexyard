@@ -32,12 +32,17 @@ jobs:
           script: |
             const { owner, repo } = context.repo;
             const label = 'ready-to-merge';
+            const sameRepo = pr => pr.head.repo?.id != null && pr.head.repo.id === pr.base.repo?.id;
             const branches = process.env.INTEGRATION_BRANCHES.split(',').map(b => b.trim());
             if (process.env.HAS_BOT_TOKEN !== 'true') {
               core.info('APEXYARD_BOT_TOKEN missing: using GITHUB_TOKEN; updated-branch CI requires APEXYARD_BOT_TOKEN.');
             }
             if (context.eventName === 'pull_request') {
               const pr = context.payload.pull_request;
+              if (!sameRepo(pr)) {
+                core.info(`PR #${pr.number}: skipping fork or unavailable head repository.`);
+                return;
+              }
               if (!pr.labels.some(l => l.name === label)) return;
               try {
                 const { data: head } = await github.rest.repos.getCommit({ owner, repo, ref: pr.head.sha });
@@ -66,6 +71,10 @@ jobs:
               return;
             }
             for (const pr of prs) {
+              if (!sameRepo(pr)) {
+                core.info(`PR #${pr.number}: skipping fork or unavailable head repository.`);
+                continue;
+              }
               if (pr.draft || !pr.labels.some(l => l.name === label)) continue;
               try {
                 const { data: comparison } = await github.rest.repos.compareCommits({
