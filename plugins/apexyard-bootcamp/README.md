@@ -49,7 +49,7 @@ Note: Explain the company settings.
 ```
 
 - `Try: <command>` displays a suggested command or plain request.
-- `Check: skill <name>` matches a Skill call with that exact name, ignoring a plugin prefix.
+- `Check: skill <name>` matches a skill prompt or Skill call with that exact name, ignoring a plugin prefix.
 - `Check: bash <regex>` matches a Bash command with a case-insensitive JavaScript regex.
 - `Done: <text>` supplies the ticked checkpoint text.
 - `Note: <presenter note>` displays dim text.
@@ -58,12 +58,13 @@ Each field can appear once per step. Empty fields and invalid regexes produce an
 Body text is required. The pane shows body text as terminal text, including any Markdown markers.
 A malformed module shows its file name and parser error. Navigation can move past that module.
 Use three to six steps for each generic module. Use short active sentences with at most 20 words.
+Avoid nested quantifiers in content regexes. Commands longer than 2,000 characters do not tick Bash checkpoints.
 Use ASCII content and real ApexYard skill names. Keep Corner Shop as the sample project.
 
 ## Bundle content
 
 The status plugin uses `$.fs.read` for runtime file reads.
-This plugin follows the explainer's display-only scope and imports bundled Markdown strings.
+This plugin imports bundled Markdown strings. It pairs well with the explainer pane when installed.
 The runtime makes no file calls. After you edit content, run:
 
 ```bash
@@ -81,10 +82,12 @@ They call the state API, as the reference plugins do.
 The host persists the store. Closing the pane does not clear progress.
 A restart resumes the stored step. Reset clears stored checkpoints.
 
-Only the current step can tick. Tool calls still tick while the pane is closed.
+Only the current step can tick. Matching events still tick while the pane is closed.
 A step without `Check:` never ticks. A plain request alone cannot tick a checkpoint.
-A checkpoint confirms a matching tool call. It does not prove success, approval, or a completed merge.
-The plugin passes tool calls to the existing handler. It never replaces a governance hook.
+A checkpoint confirms a matching skill prompt or tool call after the existing handler returns.
+Denied tool calls do not tick. Skill prompts include typed commands, Skill calls, and subagent preloads.
+The skill event has no origin field, so a matching preload can tick. It does not prove success, approval, or a completed merge.
+The plugin passes skill prompts and tool calls to the existing handler. It never replaces a governance hook.
 
 ## Tests
 

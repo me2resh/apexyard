@@ -34,6 +34,33 @@ describe('bootcamp pane', () => {
     expect(await ui.find({ type: 'Text', text: '[x] You configured ApexYard.' })).toBeDefined()
     await ui.unmount()
   })
+  test('typed skill prompts tick after passing through unchanged', async ($, on) => {
+    on('skill.prompt', async () => {
+      const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+      expect(await ui.find({ type: 'Text', text: '[ ] Waiting for you to run it' })).toBeDefined()
+      await ui.unmount()
+      return { text: 'Original skill prompt' }
+    })
+    await $.command.run(command('bootcamp-goto', '1 2'))
+    expect(await $.skill.prompt({ skill: 'apexyard:setup', text: 'Input' })).toEqual({ text: 'Original skill prompt' })
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: '[x] You configured ApexYard.' })).toBeDefined()
+    await ui.unmount()
+  })
+  test('denied Skill calls do not tick and pass through the denial', async ($, on) => {
+    on('tool.call', () => ({ deny: 'Blocked by gate' }))
+    await $.command.run(command('bootcamp-goto', '1 2'))
+    expect(await $.tool.call({ tool: 'Skill', skill: 'setup' })).toEqual({ deny: 'Blocked by gate' })
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: '[ ] Waiting for you to run it' })).toBeDefined()
+    await ui.unmount()
+  })
+  test('a null host store restores fresh progress', async ($, on) => {
+    on('state.get', { plugin: 'apexyard-bootcamp', key: 'progress' }, async () => ({ value: { value: null, version: 1 }, version: 1 }) as never)
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: 'Bootcamp · Module 1: Setup · step 1/3' })).toBeDefined()
+    await ui.unmount()
+  })
   test('commands preserve store state while pane closes and remounts', async ($, on) => {
     on('tool.call', () => ({ result: 'ok' }))
     await $.command.run(command('bootcamp-goto', '1 2'))

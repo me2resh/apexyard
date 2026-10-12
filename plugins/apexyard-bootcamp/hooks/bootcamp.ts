@@ -66,17 +66,25 @@ export function matches(check: Check | undefined, event: Record<string, unknown>
       && skill.split(':').pop() === check.value.split(':').pop()
   }
   if (event.tool !== 'Bash' || typeof event.command !== 'string') return false
+  if (event.command.length > 2000) return false
   try { return new RegExp(check.value, 'i').test(event.command) } catch { return false }
 }
 
 export const initial = (): Progress => ({ module: 0, step: 0, ticked: {} })
 export const checkpointKey = (p: Progress): string => `${p.module}:${p.step}`
 
-export function normalize(p: Progress, lessons: Lesson[]): Progress {
-  const module = Number.isInteger(p.module) ? Math.max(0, Math.min(lessons.length - 1, p.module)) : 0
+export function normalize(value: unknown, lessons: Lesson[]): Progress {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return initial()
+  const p = value as Record<string, unknown>
+  if (typeof p.module !== 'number' || !Number.isInteger(p.module)
+    || typeof p.step !== 'number' || !Number.isInteger(p.step)
+    || !p.ticked || typeof p.ticked !== 'object' || Array.isArray(p.ticked)
+    || ![Object.prototype, null].includes(Object.getPrototypeOf(p.ticked))) return initial()
+  const module = Math.max(0, Math.min(Math.max(0, lessons.length - 1), p.module))
   const last = (lessons[module]?.module?.steps.length ?? 1) - 1
-  const step = Number.isInteger(p.step) ? Math.max(0, Math.min(last, p.step)) : 0
-  return { module, step, ticked: p.ticked ?? {} }
+  const step = Math.max(0, Math.min(last, p.step))
+  const ticked = Object.fromEntries(Object.entries(p.ticked).filter(([, v]) => v === true))
+  return { module, step, ticked }
 }
 
 export function navigate(p: Progress, lessons: Lesson[], command: string, args = ''): Progress {

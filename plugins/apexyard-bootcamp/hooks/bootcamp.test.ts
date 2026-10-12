@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'claude-code/testing'
-import { contentError, initial, loadLessons, matches, navigate, parseModule, tick } from './bootcamp'
+import { contentError, initial, loadLessons, matches, navigate, normalize, parseModule, tick } from './bootcamp'
 import { content } from './content.generated'
 
 const good = '# Sample\n\n## First\nUse Corner Shop.\nTry: /setup\nCheck: skill setup\nDone: Setup call observed.\nNote: Explain the setup.\n\n## Second\nInspect the result.'
@@ -58,7 +58,10 @@ describe('checkpoints', () => {
     const course = loadLessons(content)
     const p = navigate(initial(), course, 'bootcamp-goto', '5 5')
     expect(tick(p, course, { tool: 'Bash', command: 'gh pr create --draft' }).ticked).toEqual({ '4:4': true })
-    expect(tick(p, course, { tool: 'Bash', command: 'gh pr view' }).ticked).toEqual({})
+    for (const command of ['gh pr view', 'gh pr create --help', 'gh pr create --draft --help', 'rg "gh pr create" .', 'echo gh pr create', 'gh pr create ' + 'x'.repeat(2000)]) {
+      expect(tick(p, course, { tool: 'Bash', command }).ticked).toEqual({})
+    }
+    expect(tick(p, course, { tool: 'Bash', command: 'git status && gh pr create --draft' }).ticked).toEqual({ '4:4': true })
   })
   test('ticks only the current step and preserves earlier ticks', async () => {
     const p = tick(initial(), lessons, { tool: 'Skill', skill: 'apexyard:setup' })
@@ -86,6 +89,11 @@ describe('navigation and serialized progress', () => {
     expect(navigate(p, lessons, 'bootcamp-goto', '1 99').step).toBe(1)
     for (const args of ['x y', '1', '-1 1', '1 1 extra', '1.5 2']) expect(navigate(p, lessons, 'bootcamp-goto', args)).toEqual(p)
     expect(navigate(p, lessons, 'bootcamp-reset')).toEqual(initial())
+  })
+  test('null and malformed store values restore fresh progress', async () => {
+    for (const value of [null, undefined, 'bad', [], {}, { module: 1, step: 0, ticked: [] }, { module: 1, step: 0, ticked: 'bad' }]) {
+      expect(normalize(value, lessons)).toEqual(initial())
+    }
   })
   test('resumes module, step and ticks from a store snapshot', async () => {
     const saved = navigate(tick(initial(), lessons, { tool: 'Skill', skill: 'setup' }), lessons, 'bootcamp-next')

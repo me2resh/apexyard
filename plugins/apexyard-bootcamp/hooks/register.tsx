@@ -33,8 +33,18 @@ export const register: Register = on => {
     })
   }
   on('tool.call', async ($, e, next) => {
-    try { await update($, progress, p => tick(p, lessons, e as unknown as Record<string, unknown>)) } catch {}
-    return next(e)
+    const result = await next(e)
+    if (result.deny === undefined) {
+      const event = e.tool === 'Skill' ? { tool: e.tool, skill: e.skill }
+        : e.tool === 'Bash' ? { tool: e.tool, command: e.command } : { tool: e.tool }
+      try { await update($, progress, p => tick(p, lessons, event)) } catch {}
+    }
+    return result
+  })
+  on('skill.prompt', async ($, e, next) => {
+    const result = await next(e)
+    try { await update($, progress, p => tick(p, lessons, { tool: 'Skill', skill: e.skill })) } catch {}
+    return result
   })
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text } = $.ui.resolve(e)

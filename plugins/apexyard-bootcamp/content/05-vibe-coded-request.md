@@ -29,7 +29,7 @@ Done: You started the ticket.
 
 A pull request, or PR, presents the change for review. Include the ticket number and test results.
 Try: open a PR
-Check: bash \bgh\s+pr\s+create\b
+Check: bash (?:^|&&|\|\||[;\n])\s*gh\s+pr\s+create\b(?![^;\n&|]*--help\b)
 Done: You opened a pull request.
 
 ## Ask Rex to review
