@@ -12,6 +12,13 @@ real_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
 sb=$(make_sandbox)
 orbit_root=$(fixtures_write_orbit_root "$sb")
 fixtures_install_mock_orbit "$sb"
+# New Plan fixtures include the required operator interview.
+{
+  echo '## Interview'
+  for key in q1-outcome q2-intent q3-outcomes q4-acceptance q5-constraints q6-save; do
+    printf -- '- 2026-10-12, %s: Fixture answer.\n' "$key"
+  done
+} > "$orbit_root/plans/plan-demo-widget.notes.md"
 mkdir -p "$sb/.claude/hooks" "$sb/.claude/skills/orbit/lib"
 cp "$real_root/.claude/hooks/check-private-refs-runtime.sh" "$real_root"/.claude/hooks/_lib-*.sh "$sb/.claude/hooks/"
 cp "$real_root/.claude/skills/orbit/lib/records-lint.sh" "$sb/.claude/skills/orbit/lib/"
