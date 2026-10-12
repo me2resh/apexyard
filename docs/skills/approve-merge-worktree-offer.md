@@ -2,7 +2,7 @@
 
 This is the full text of step 9a. The skill keeps a short form.
 
-### 9a. Optional: offer to remove the merged PR's worktree
+## 9a. Optional: offer to remove the merged PR's worktree
 
 Skip this step when `MERGE_RC` is not 0, and when `--no-merge` was passed.
 
