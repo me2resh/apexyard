@@ -84,7 +84,7 @@ Pi does not auto-import rule files. `Read` a named file under `.claude/rules/` w
 
 ### Skills, without the slash-command runner
 
-`.claude/skills/<name>/SKILL.md` are markdown prompts — 68 of them, covering everything from filing a ticket (`/feature`, `/bug`, `/task`) to running an audit (`/launch-check`, `/threat-model`) to cutting a release. Claude Code turns these into typed slash commands; pi has no slash-command mechanism, so invoke one by `Read`-ing its `SKILL.md` and following the process it describes step by step (e.g. read `.claude/skills/feature/SKILL.md`, then do what it says). The skill's content is the same either way — only the invocation mechanism differs.
+`.claude/skills/<name>/SKILL.md` are markdown prompts — 68 of them, including `/scaffold` for an owner interview and validated spec, and covering everything from filing a ticket (`/feature`, `/bug`, `/task`) to running an audit (`/launch-check`, `/threat-model`) to cutting a release. Claude Code turns these into typed slash commands; pi has no slash-command mechanism, so invoke one by `Read`-ing its `SKILL.md` and following the process it describes step by step (e.g. read `.claude/skills/feature/SKILL.md`, then do what it says). The skill's content is the same either way — only the invocation mechanism differs.
 
 ### What's NOT bridged yet
 
@@ -197,5 +197,3 @@ The framework is plain markdown + shell — no build step, no SaaS, no lock-in. 
 - **`README.md`** — public-facing intro (humans + agents)
 - **`SYSTEM.md`** — optional custom system prompt pi reads alongside `AGENTS.md`; a short operating-posture primer, not a duplicate of this file
 - **`docs/harnesses/pi.md`** — what works / doesn't yet for pi specifically
-
-- **`/scaffold`** — Interview the owner, sized to the project's scale, and write a validated scaffold spec (project generation comes later)

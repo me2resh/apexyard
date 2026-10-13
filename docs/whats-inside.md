@@ -182,7 +182,7 @@ Utility agents: **Rex** (`code-reviewer`), **Hakim** (`security-reviewer`), **Ta
 The full, one-line-per-skill list lives in [`CLAUDE.md`](../CLAUDE.md) under "Available skills". Highlights by category:
 
 - **Bootstrap & sync** — `/setup`, `/handover`, `/update`, `/split-portfolio`
-- **Planning & tickets** — `/write-spec`, `/plan-initiative`, `/feature`, `/bug`, `/task`, `/tickets-batch`, `/spike`, `/prototype`, `/walking-skeleton`, `/migration`, `/investigation`, `/idea`
+- **Planning & tickets** — `/scaffold`, `/write-spec`, `/plan-initiative`, `/feature`, `/bug`, `/task`, `/tickets-batch`, `/spike`, `/prototype`, `/walking-skeleton`, `/migration`, `/investigation`, `/idea`
 - **Review & decisions** — `/decide`, `/agdr`, `/code-review`, `/security-review`, `/design-review`, `/challenge`, `/approve-merge`, `/approve-design`, `/approve-architecture`
 - **Audits** — `/launch-check`, `/threat-model`, `/accessibility-audit`, `/compliance-check`, `/analytics-audit`, `/seo-audit`, `/geo-audit`, `/performance-audit`, `/monitoring-audit`, `/docs-audit`, `/mutation-test`, `/audit-deps`
 - **Architecture & diagrams** — `/c4`, `/dfd`, `/tech-vision`, `/journey`, `/feature-diagram`, `/extract-features`, `/process`
@@ -208,5 +208,3 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 ---
 
 *Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
-
-- **`/scaffold`** — Interview the owner, sized to the project's scale, and write a validated scaffold spec (project generation comes later)

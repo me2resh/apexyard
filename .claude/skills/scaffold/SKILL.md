@@ -39,6 +39,8 @@ The closed key map reads hosting, cloud, and database from the company setup.
 These keys can occur under `onboarding` or the existing `tech_stack` block.
 Only AWS, GCP, Google Cloud, and Azure name a company cloud.
 Only Netlify, Vercel, Render, Fly.io, Heroku, and Amplify name a hosting service.
+Keep a named hosting service in `hostService` with source `onboarding` or `owner`.
+Use that name in the setup sentence and manual steps. Default to Netlify when no service is named.
 Unknown hosting values leave the host question open. Cloud names use the same exact cloud table.
 Database fills storage only. Language and CI system appear only as summary notes or clashes.
 No onboarding key fills data sensitivity, compliance, or sign-in.
@@ -97,6 +99,7 @@ Never ask about cost, budget, currency, tests, coverage, language, database, sig
 4. Show applied defaults and recommendation reasons.
    Coverage defaults to 80%. Web pages default to 500 KB.
    Demo uses no personal details, one environment, and live on merge when deploy exists.
+   When a confirmed PRD names personal or payment details, keep the demo default and show the PRD conflict in `openQuestions`.
    Show the questions that Demo skipped. Explain that the owner can rerun `/scaffold` at a higher scale.
 5. Show the pipeline, manual steps, and future infrastructure draft.
    Name cloud role creation, secret references, and repo environment reviewers when applicable.

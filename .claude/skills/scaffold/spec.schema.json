@@ -410,6 +410,30 @@
               "reason"
             ]
           }
+        },
+        "hostService": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "source"
+          ],
+          "properties": {
+            "value": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source": {
+              "enum": [
+                "onboarding",
+                "owner"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
         }
       }
     },

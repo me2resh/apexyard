@@ -70,17 +70,18 @@ jq -r --arg mode "$mode" --arg scale "$scale" --arg shape "$shape" --arg host "$
     else . end;
   def accepted($key):
     . as $v | ({hostKind:["hosting service","company cloud","server or container","other"],hostProvider:["AWS","Google Cloud","Azure"],shape:["web app","API service","data pipeline","other"],scale:["demo","small","production"],dataSensitivity:["none","personal","payment"],releaseCheck:["teammate","checks","window"],reuseConfirm:["Use these","Change one","Ignore them and ask me"],setupChoice:["Use this setup","Start with a minimal custom setup"]}[$key] // []) as $allowed |
-    if $key == "storage" then type == "string" and length > 0 else ($allowed | index($v)) != null end;
+    if $key == "storage" or $key == "hostService" then type == "string" and length > 0 else ($allowed | index($v)) != null end;
   def answers($source):
     with_entries(.key = (if .key == "host" then "hostKind" else .key end) |
       .key as $key | .value |= (record($source) | .value |= canonical($key))) |
     with_entries(.key as $key | select(.value.value | accepted($key))) |
-    with_entries(select(.key != "storage" or .value.source != "derived"));
+    with_entries(select(.key != "storage" or .value.source != "derived")) |
+    with_entries(select(.key != "hostService" or (.value.source == "owner" or .value.source == "onboarding")));
   ($onboarding["onboarding.hosting"] // $onboarding["tech_stack.hosting"] // "") as $hosting |
   ($hosting | cloud) as $hostingCloud |
   ($onboarding["onboarding.cloud"] // $onboarding["tech_stack.cloud"] // "" | cloud) as $cloud |
   (if $hostingCloud != null then {hostKind:{value:"company cloud",source:"onboarding"},hostProvider:{value:$hostingCloud,source:"onboarding"}}
-   elif (["Netlify","Vercel","Render","Fly.io","Heroku","Amplify"] | index($hosting)) != null then {hostKind:{value:"hosting service",source:"onboarding"}}
+   elif (["Netlify","Vercel","Render","Fly.io","Heroku","Amplify"] | index($hosting)) != null then {hostKind:{value:"hosting service",source:"onboarding"},hostService:{value:$hosting,source:"onboarding"}}
    else {} end) as $hostingAnswers |
   (($cloud | if . == null then {} else {hostProvider:{value:.,source:"onboarding"}} end) + $hostingAnswers +
    ( ($onboarding["onboarding.database"] // $onboarding["tech_stack.database"] // "") |
@@ -94,6 +95,8 @@ jq -r --arg mode "$mode" --arg scale "$scale" --arg shape "$shape" --arg host "$
   ($onboard + $prds + $existing + $current) as $known |
   ($onboard + $prds + $existing | del(.reuseConfirm,.setupChoice) | with_entries(.key as $key | .value = $known[$key])) as $mapped |
   ($known.reuseConfirm.value == "Use these") as $confirmed |
+  (if $confirmed then $known else $current end) as $applied |
+  (if $known.reuseConfirm == null then $known else $applied end) as $questionAnswers |
   ($known.reuseConfirm.value == "Ignore them and ask me") as $ignored_reuse |
   ($current.scale.value // (if $confirmed then $known.scale.value else null end) // (if $scale == "" then "small" else $scale end)) as $tier |
   # "Ignore them and ask me" drops company and PRD values from conflicts too.
@@ -101,7 +104,7 @@ jq -r --arg mode "$mode" --arg scale "$scale" --arg shape "$shape" --arg host "$
     [ .[] | .key as $rank | .value | to_entries[] | {rank:$rank,key:.key,answer:.value} ] |
     group_by(.key) | map(select((map(.answer.value) | unique | length) > 1) |
       {field:.[0].key,values:map(.answer),selected:$known[.[0].key]}) ) as $conflicts |
-  ($spec.answers // {} | keys - ["reuseConfirm","scale","hostKind","hostProvider","shape","dataSensitivity","storage","releaseCheck","setupChoice"]) as $old |
+  ($spec.answers // {} | keys - ["reuseConfirm","scale","hostKind","hostProvider","hostService","shape","dataSensitivity","storage","releaseCheck","setupChoice"]) as $old |
   ($onboarding | keys - ["onboarding.hosting","onboarding.cloud","onboarding.database","tech_stack.hosting","tech_stack.cloud","tech_stack.database","tech_stack.language","tech_stack.ci_cd"]) as $ignored |
   {language:$onboarding["tech_stack.language"],ciSystem:$onboarding["tech_stack.ci_cd"]} as $notes |
   if $mode == "mapped" then
@@ -111,12 +114,12 @@ jq -r --arg mode "$mode" --arg scale "$scale" --arg shape "$shape" --arg host "$
     (["host","hostProvider","shape","scale"] +
       (if $tier == "demo" then [] elif $tier == "small" then ["dataSensitivity"] else ["dataSensitivity","releaseCheck"] end) | .[] |
       . as $id | (if . == "host" then "hostKind" else . end) as $key |
-      select($id != "hostProvider" or ($known.hostKind.value == "company cloud" and $known.hostProvider == null)) |
+      select($id != "hostProvider" or ($questionAnswers.hostKind.value == "company cloud" and $questionAnswers.hostProvider == null)) |
       select($current[$key] == null) |
       select(($confirmed and $known[$key] != null) | not) | $id)
   else
     # Unconfirmed candidates must not silently become applied defaults.
-    ((if $confirmed then $known else $current end) + {scale:($current.scale // (if $confirmed then $known.scale else null end) // {value:$tier,source:"default"})}) as $used |
+    ($applied + {scale:($current.scale // (if $confirmed then $known.scale else null end) // {value:$tier,source:"default"})}) as $used |
     ({hostKind:{value:"hosting service",source:"recommendation",reason:"You get a live link, and you have no servers to look after."},shape:{value:"web app",source:"recommendation",reason:"People can use your product in a browser."},dataSensitivity:(if $tier == "demo" then {value:"none",source:"default"} else {value:"personal",source:"recommendation",reason:"Safeguards cost little. A wrong No is the more costly mistake."} end),releaseCheck:{value:(if $tier == "production" then "teammate" else "checks" end),source:"default"},setupChoice:{value:"Use this setup",source:"default"}} + $used) as $a |
     ($a + (if $tier == "demo" then {dataSensitivity:{value:"none",source:"default"},releaseCheck:{value:"checks",source:"default"}} else {} end) + (if $a.hostKind.value == "company cloud" and $a.hostProvider == null then {hostProvider:{value:"AWS",source:"recommendation",reason:"The framework has tested infrastructure files for AWS."}} else {} end)) as $a |
     ($rules[0].rows | to_entries | map(select(
@@ -124,13 +127,14 @@ jq -r --arg mode "$mode" --arg scale "$scale" --arg shape "$shape" --arg host "$
       else .value.match | to_entries | all(.[]; .key as $k | .value | index($a[$k].value) != null) end)) | .[0]) as $row |
     ($row.value.goldenPath | if type == "object" then .[$a.shape.value] else . end) as $path |
     ($a + {storage:($a.storage // {value:(if $a.shape.value == "web app" and $a.dataSensitivity.value == "none" then "none" else "Choose storage before launch." end),source:"derived"})}) as $a |
-    {row:($row.key+1),rule:$row.value,goldenPath:$path,sentence:$row.value.sentence,answers:$a,
+    {row:($row.key+1),rule:$row.value,goldenPath:$path,sentence:($row.value.sentence | if $a.hostKind.value == "hosting service" then split("Netlify") | join($a.hostService.value // "Netlify") else . end),answers:$a,
      pipeline:$row.value.pipeline,scaleAdditions:$rules[0].scaleAdditions[$tier],dataSensitivityAdditions:$rules[0].dataSensitivityAdditions[$a.dataSensitivity.value],
-     manualSteps:($row.value.manualSteps + (if $tier == "production" and $a.releaseCheck.value != "checks" then ["Set the environment reviewer in repo settings (o4)."] else [] end)),
+     manualSteps:(($row.value.manualSteps | map(if $a.hostKind.value == "hosting service" then split("Netlify") | join($a.hostService.value // "Netlify") else . end)) + (if $tier == "production" and $a.releaseCheck.value != "checks" then ["Set the environment reviewer in repo settings (o4)."] else [] end)),
      infraDraft:$row.value.infraDraft,
      defaults:({coverage:{value:80,source:"default"}} + (if $a.shape.value == "web app" then {pageBudgetKB:{value:500,source:"default"}} else {} end) + (if $tier == "demo" then {environments:{value:1,source:"default"},liveOnMerge:{value:"when deploy exists",source:"default"}} else {} end)),
      notes:($notes + {languageClash:($notes.language != null and $notes.language != ({"typescript-nextjs":"TypeScript","python-fastapi":"Python","go-data-pipeline":"Go"}[$path])),ciClash:($notes.ciSystem != null and $notes.ciSystem != "GitHub Actions")}),
-     openQuestions:(($spec.openQuestions // []) + ($conflicts | map("Conflicting values for " + .field + ": " + (.values | map(.value | tostring) | join(", ")) + ". Selected: " + (.selected.value | tostring) + ". Sources: " + (.values | map(.source) | join(", ")) + ".")) +
+     openQuestions:(($spec.openQuestions // []) +
+       (if $tier == "demo" and $confirmed and ($prds.dataSensitivity.value == "payment" or $prds.dataSensitivity.value == "personal") then ["The PRD says the product keeps " + $prds.dataSensitivity.value + " details. A demo assumes none. Run /scaffold again at a higher scale before real users."] else [] end) + ($conflicts | map("Conflicting values for " + .field + ": " + (.values | map(.value | tostring) | join(", ")) + ". Selected: " + (.selected.value | tostring) + ". Sources: " + (.values | map(.source) | join(", ")) + ".")) +
        (if $row.key == 6 then ["Choose a host before launch."] elif $row.key == 5 then ["Choose how to deploy before launch."] else [] end) + (if $a.storage.value == "Choose storage before launch." then ["Choose storage before launch."] else [] end)),
      unusedFields:($old + ($spec.unusedFields // []) | unique),notUsed:($ignored + (if $hosting != "" and ($hostingAnswers | length) == 0 then ["onboarding.hosting"] else [] end)),
      notice:"Deploy is not set up yet. This run sets up checks only.",

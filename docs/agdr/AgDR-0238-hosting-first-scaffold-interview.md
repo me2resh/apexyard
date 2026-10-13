@@ -9,7 +9,7 @@ status: executed
 
 # AgDR-0238: Hosting-first scaffold interview
 
-> In the context of a /scaffold interview that confused a test user, I chose a hosting-first interview with derived defaults, to keep it short for non-engineers, accepting that some choices become defaults that the owner must review in the summary.
+> In the context of a confusing /scaffold interview, I chose a hosting-first interview with defaults, to keep it short, accepting defaults the owner reviews.
 
 ## Context
 
@@ -33,7 +33,8 @@ The owner asked for a different flow: ask where the project runs, then recommend
 
 Chosen: **hosting-first interview with derived defaults**.
 
-- The questions are: where it runs, which cloud (only when needed), what it is, who uses it (the scale), personal or payment data (small and production), and who checks a release (production).
+- The questions are: where it runs, which cloud (only when needed), what it is, and who uses it (the scale).
+- A small product and a production service also ask about personal or payment data. A production service also asks who checks a release.
 - A demo asks 3 questions, a small product 4, and a production service 5. A cloud follow-up and a confirm screen can add one each.
 - When onboarding or a PRD supplies values, one confirm screen shows them first. A question is skipped only after the owner confirms.
 - A closed key map and a closed value table read onboarding. An unknown value means the skill asks. No onboarding key fills data sensitivity, compliance or sign-in.
@@ -47,7 +48,13 @@ Chosen: **hosting-first interview with derived defaults**.
 
 ## Consequences
 
-- Plan `plan-apexyard-scaffold` revision 3 amends ac1-1 (host first), ac2-1 (defaults instead of questions), ac4-1, ac4-2, ac4-5 and ac4-6 (no budget question, a cost range only).
+- Plan `plan-apexyard-scaffold` revision 3 amends nine criteria:
+  - ac1-1: host first, with 3, 4 or 5 questions by scale.
+  - ac1-5: the answer sources default and derived.
+  - ac2-1: defaults instead of questions for language, coverage and design.
+  - ac4-1, ac4-2, ac4-5 and ac4-6: no budget question, and a cost range only.
+  - ac5-1: the language comes from the golden path.
+  - ac6-2: a page-size budget default of 500 KB.
 - The spec gains the sources `default` and `derived`. Old spec fields such as budget and coverage are listed as no longer used.
 - A wrong default can add work, for example the "personal details" default adds data safeguards. The confirm and summary screens make each default visible.
 - The hosting value table needs updates when new hosting services appear. An unknown value only adds a question.

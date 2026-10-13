@@ -110,7 +110,7 @@ check 'demo fixed answers visible' derived_is '.answers.dataSensitivity.value ==
 check 'production payment safeguards and manual approval' derived_is '.dataSensitivityAdditions | index("Use a hosted checkout.") != null' --scale production --prd-answers "$TMP/prd-data.json" --run-answers "$TMP/reuse.json"
 check 'confirmed company values and clashes visible' derived_is '.answers.hostKind.value == "company cloud" and .answers.storage.value == "PostgreSQL" and .notes.ciClash == true' --scale small --onboarding "$FIX/onboarding.fixture.yaml" --run-answers "$TMP/reuse.json"
 check 'unconfirmed mapped host is not silently applied' derived_is '.answers.hostKind.value == "hosting service"' --scale small --onboarding "$FIX/onboarding.fixture.yaml"
-check 'current scale wins for strictness' derived_is '.answers.scale.value == "production" and (.scaleAdditions | index("security.yml")) != null' --scale demo --prd-answers "$FIX/prd.json" --run-answers "$TMP/reuse.json"
+check 'scale flag falls back below confirmed PRD scale' derived_is '.answers.scale.value == "production" and (.scaleAdditions | index("security.yml")) != null' --scale demo --prd-answers "$FIX/prd.json" --run-answers "$TMP/reuse.json"
 printf '%s\n' '{"hostKind":"company cloud","storage":"PostgreSQL"}' > "$TMP/prd-host.json"
 check 'PRD cannot fill host or storage' mapped_is '(.answers|length) == 0' --prd-answers "$TMP/prd-host.json"
 check 'current answers do not cause a reuse screen' exact $'host\nscale' --scale demo --run-answers "$TMP/current.json"
@@ -120,5 +120,56 @@ jq -n '{answers:{reuseConfirm:{value:"Ignore them and ask me",source:"owner"},ho
 check 'ignore drops company values from conflicts' derived_is '(.openQuestions | length) == 0 and .answers.hostKind.source == "owner"' --scale demo --run-answers "$TMP/ignore.json" --onboarding "$FIX/onboarding.fixture.yaml"
 jq '.answers.reuseConfirm.value="Use these"' "$TMP/ignore.json" > "$TMP/use.json"
 check 'use these keeps a real conflict' derived_is 'any(.openQuestions[]; test("hostKind"))' --scale demo --run-answers "$TMP/use.json" --onboarding "$FIX/onboarding.fixture.yaml"
+
+for choice in "Ignore them and ask me" "Change one"; do
+  jq -n --arg choice "$choice" "{reuseConfirm:\$choice,hostKind:\"company cloud\"}" > "$TMP/cloud-current.json"
+  printf "onboarding:\n  cloud: Azure\n" > "$TMP/azure.yaml"
+  jq -n "{specVersion:\"0.1\",answers:{hostProvider:{value:\"Azure\",source:\"owner\"}}}" > "$TMP/azure-spec.json"
+  for origin in onboarding spec; do
+    case "$origin" in onboarding) input="$TMP/azure.yaml" ;; spec) input="$TMP/azure-spec.json" ;; esac
+    check "$choice $origin cloud asks provider" exact "$(printf "hostProvider\nshape\nscale")" --scale demo "--$origin" "$input" --run-answers "$TMP/cloud-current.json"
+    check "$choice $origin owner Azure uses written plan" derived_is ".row == 5 and .answers.hostProvider.value == \"Azure\" and .answers.hostProvider.source == \"owner\"" --scale demo "--$origin" "$input" --run-answers "$TMP/cloud-current.json" --host-provider Azure
+  done
+done
+
+
+
+
+recommendations_asked() {
+  local questions derived
+  questions=$(ids "$@" | jq -Rn '[inputs | if . == "host" then "hostKind" else . end]') || return 1
+  derived=$(ids --derive "$@") || return 1
+  jq -e --argjson questions "$questions" '
+    [.answers | to_entries[] | select(.value.source == "recommendation") |
+      select(.key == "hostKind" or .key == "hostProvider" or .key == "shape") | .key] |
+    all(.[]; . as $key | $questions | index($key) != null)
+  ' <<< "$derived" >/dev/null
+}
+check 'empty input recommendations were asked' recommendations_asked --scale demo
+check 'confirmed cloud recommendation was asked' recommendations_asked --scale demo --spec "$TMP/cloud.json" --run-answers "$TMP/reuse.json"
+for choice in 'Use these' 'Change one' 'Ignore them and ask me'; do
+  jq -n --arg choice "$choice" '{reuseConfirm:$choice,hostKind:"company cloud"}' > "$TMP/cloud-current.json"
+  check "$choice onboarding recommendations were asked" recommendations_asked --scale demo --onboarding "$TMP/azure.yaml" --run-answers "$TMP/cloud-current.json"
+  check "$choice spec recommendations were asked" recommendations_asked --scale demo --spec "$TMP/azure-spec.json" --run-answers "$TMP/cloud-current.json"
+done
+printf 'onboarding:\n  hosting: Vercel\n' > "$TMP/vercel.yaml"
+check 'confirmed Vercel stays in sentence and manual steps' derived_is '.answers.hostService == {value:"Vercel",source:"onboarding"} and .sentence == "This will run as a website on Vercel." and .manualSteps[0] == "Create the Vercel project."' --scale demo --onboarding "$TMP/vercel.yaml" --run-answers "$TMP/reuse.json"
+printf '%s\n' '{"hostService":"Render"}' > "$TMP/service-owner.json"
+check 'owner service stays in container steps' derived_is '.answers.hostService == {value:"Render",source:"owner"} and (.sentence | contains("on Render")) and .manualSteps[0] == "Confirm that Render can run this container before launch."' --shape 'API service' --run-answers "$TMP/service-owner.json"
+for source in onboarding owner; do
+  jq --arg source "$source" '.answers.hostService={value:"Vercel",source:$source}' "$FIX/good.json" > "$TMP/service-spec.json"
+  check "$source hosting service validates" exit_is 0 bash "$LIB/validate-spec.sh" "$TMP/service-spec.json"
+done
+for mutation in empty source; do
+  case "$mutation" in empty) filter='.answers.hostService.value=""' ;; source) filter='.answers.hostService.source="prd"' ;; esac
+  jq "$filter" "$TMP/service-spec.json" > "$TMP/service-bad.json"
+  check "reject hostService $mutation" exit_is 1 bash "$LIB/validate-spec.sh" "$TMP/service-bad.json"
+done
+check 'spec service resumes without unused field' derived_is '.answers.hostService.value == "Vercel" and (.unusedFields | index("hostService") | not)' --spec "$TMP/service-spec.json" --run-answers "$TMP/reuse.json"
+for value in personal payment; do
+  jq -n --arg value "$value" '{data:$value}' > "$TMP/demo-data.json"
+  check "demo confirmed PRD $value stays visible" derived_is ".answers.dataSensitivity == {value:\"none\",source:\"default\"} and (.openQuestions | index(\"The PRD says the product keeps $value details. A demo assumes none. Run /scaffold again at a higher scale before real users.\") != null)" --scale demo --prd-answers "$TMP/demo-data.json" --run-answers "$TMP/reuse.json"
+  check "demo ignored PRD $value adds no warning" derived_is 'all(.openQuestions[]; contains("The PRD says") | not)' --scale demo --prd-answers "$TMP/demo-data.json" --run-answers "$TMP/ignore.json"
+done
 printf '%s passed; %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
