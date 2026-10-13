@@ -1,0 +1,15 @@
+{
+  "specVersion": "0.1",
+  "id": "snapshot-apexyard-20261013T165249Z",
+  "project": {
+    "id": "apexyard"
+  },
+  "observedAt": "2026-10-13T16:52:49.801Z",
+  "repositories": [
+    {
+      "repositoryId": "me2resh/apexyard",
+      "branch": "orbit/apexyard-token-efficiency-progress-at-merge",
+      "commit": "0890c021ac3655646606153c41d3bbbf10f46dc1"
+    }
+  ]
+}

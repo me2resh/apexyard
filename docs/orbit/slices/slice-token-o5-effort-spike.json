@@ -4,8 +4,8 @@
   "planId": "plan-apexyard-token-efficiency",
   "outcomeId": "o5-subagents-start-lean",
   "basedOn": {
-    "planRevision": 3,
-    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261011T223213Z",
+    "planRevision": 4,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261013T165249Z",
     "repositories": {}
   },
   "objective": "Test per-agent reasoning effort on an Opus custom agent and evaluate a lean-effort delta reviewer. This spike covers part of ac5-3 and cannot achieve it alone.",
