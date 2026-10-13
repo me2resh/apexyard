@@ -13,6 +13,24 @@ write_proposal() {
 }
 : > "$sb/tickets"
 write_proposal
+body="$sb/pr-body"
+body_fail=0
+: > "$body"
+out=$(expect 0 --slice slice-demo-widget-o1 --tickets "$sb/tickets" --pr-body "$body")
+if [[ "$out" != *"records-lint: WARN [next-slice]"* ]]; then
+  echo "FAIL: Missing next slice must warn."
+  body_fail=1
+fi
+printf "No next slice: every outcome is achieved.\n" > "$body"
+if ! (expect 17 --slice slice-demo-widget-o1 --tickets "$sb/tickets" --pr-body "$body"); then body_fail=1; fi
+printf "## Proposed next slice\n" > "$body"
+out=$(expect 0 --slice slice-demo-widget-o1 --tickets "$sb/tickets" --pr-body "$body")
+[[ "$out" != *"records-lint: WARN [next-slice]"* ]] || { echo "FAIL: Proposal heading must not warn."; body_fail=1; }
+rm "$proposal"
+printf "No next slice: every outcome is achieved.\n" > "$body"
+out=$(expect 0 --slice slice-demo-widget-o1 --tickets "$sb/tickets" --pr-body "$body")
+[[ "$out" != *"records-lint: WARN [next-slice]"* ]] || { echo "FAIL: No next slice without a record must pass."; body_fail=1; }
+write_proposal
 expect 0 --slice slice-demo-widget-o1 --tickets "$sb/tickets"
 jq '.id="slice-demo-second"' "$proposal" > "$orbit_root/slices/second.json"
 expect 17 --slice slice-demo-widget-o1 --tickets "$sb/tickets"
@@ -38,13 +56,7 @@ expect 17 --slice slice-demo-widget-o1 --tickets "$sb/tickets"
 printf '%s\n' slice-demo-unfiled > "$sb/tickets"
 expect 0 --slice slice-demo-widget-o1 --tickets "$sb/tickets"
 : > "$sb/tickets"
-printf '## Withdrawn slices\n\n- Withdrawn: slice-demo-unfiled\n' > "$sb/notes"
-blob=$(g hash-object -w "$sb/notes")
-g read-tree base
-g update-index --add --cacheinfo "100644,$blob,docs/orbit/plans/plan-demo-widget.notes.md"
-tree=$(g write-tree)
-commit=$(printf 'Withdraw proposal\n' | g commit-tree "$tree" -p base)
-g update-ref refs/heads/base "$commit"
-g read-tree HEAD
+printf '## Withdrawn slices\n\n- Withdrawn: slice-demo-unfiled\n' >> "$orbit_root/plans/plan-demo-widget.notes.md"
 expect 0 --slice slice-demo-widget-o1 --tickets "$sb/tickets"
+[ "$body_fail" -eq 0 ] || exit 1
 echo 'PASS proposal rules, withdrawal, and delivered own slice.'

@@ -66,6 +66,13 @@ slice_pr_lint() {
         git -C "$root" cat-file -e "$mb:$f" 2>/dev/null || proposals+=("$f") ;;
     esac
   done <<< "$records"
+  if [ -f "$pr_body" ]; then
+    if grep -Fxq "No next slice: every outcome is achieved." "$pr_body"; then
+      [ "${#proposals[@]}" -eq 0 ] || fail 17 next-slice "" "The PR states No next slice but adds a slice record."
+    elif ! grep -Eq "^## Proposed next slice[[:space:]]*$" "$pr_body"; then
+      echo "records-lint: WARN [next-slice] Add a Proposed next slice heading or the No next slice line." >&2
+    fi
+  fi
   [ "${#proposals[@]}" -le 1 ] || fail 17 scope "" "The PR adds more than one slice record."
   for proposal in ${proposals[@]+"${proposals[@]}"}; do
     [ "$count" -eq 1 ] || fail 17 scope "$proposal" "A proposal needs one PR Reconciliation."
@@ -78,7 +85,7 @@ slice_pr_lint() {
       continue
     fi
     outcome=$(jq -r '.outcomeId' "$root/$proposal")
-    notes=$(git -C "$root" show "$base:docs/orbit/plans/$plan.notes.md" 2>/dev/null) || notes=""
+    notes=$(cat "$root/docs/orbit/plans/$plan.notes.md" 2>/dev/null) || notes=""
     withdrawn=0
     local withdrawn_ids=()
     while IFS= read -r line; do

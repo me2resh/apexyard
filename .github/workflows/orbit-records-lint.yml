@@ -47,8 +47,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh issue list --repo "$GITHUB_REPOSITORY" --state all --search "slice-" --json body --limit 500 |
-            jq -r '.[] | (.body // "") | scan("`(slice-[A-Za-z0-9._-]+)`") | .[0]' > "$RUNNER_TEMP/orbit-tickets"
+          gh issue list --repo "$GITHUB_REPOSITORY" --state all --search "slice-" --json title,body --limit 1000 |
+            jq -r '.[] | select((.title // "") | startswith("[Slice]")) | (.body // "") | scan("`(slice-[A-Za-z0-9._-]+)`") | .[0]' > "$RUNNER_TEMP/orbit-tickets"
       - name: Lint records
         if: steps.select.outputs.run == 'true'
         env:

@@ -369,6 +369,11 @@ A merge alone changes no status.
 
 The lint rejects scope faults with exit 17, evidence faults with exit 18, and provenance faults with exit 19.
 A slice PR without a Reconciliation produces a warning.
+Use `--pr-body <file>` to check the next slice statement.
+The lint warns when the body has neither `## Proposed next slice` nor `No next slice: every outcome is achieved.`
+This warning does not change the exit code.
+The lint rejects a PR that states `No next slice: every outcome is achieved.` and adds a slice record.
+This fault uses exit 17.
 After each branch update, run `refresh-slice-record.sh --orbit-root docs/orbit --base origin/dev --pr <number>` from the skill lib directory.
 The script refreshes merge-base observations and the Snapshot. It changes no status or scope.
 It updates proposal `basedOn` fields when needed. A basedOn-only change needs no new owner confirmation.

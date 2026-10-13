@@ -487,11 +487,12 @@ record_path="docs/orbit/slices/$directive.json"
 record_mode=$(git -C "$workspace" ls-tree "refs/remotes/$branch" -- "$record_path" 2>/dev/null | awk 'NR==1 { print $1 }')
 if [ "$record_mode" != 100644 ] && [ "$record_mode" != 100755 ]; then
   integration=$(git -C "$workspace" config apexyard.integrationBranch 2>/dev/null) || integration=""
-  if [ -z "$integration" ] && git -C "$workspace" show-ref --verify --quiet refs/remotes/origin/dev; then
+  if [[ ! "$integration" =~ ^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$ ]] || [[ "$integration" == *..* ]]; then
     integration=dev
   fi
-  if [ -n "$integration" ]; then
-    record_mode=$(git -C "$workspace" ls-tree "refs/remotes/origin/$integration" -- "$record_path" 2>/dev/null | awk 'NR==1 { print $1 }')
+  integration_commit=$(git -C "$workspace" rev-parse --verify --quiet "refs/remotes/origin/$integration^{commit}" 2>/dev/null) || integration_commit=""
+  if [ -n "$integration_commit" ]; then
+    record_mode=$(git -C "$workspace" ls-tree "$integration_commit" -- "$record_path" 2>/dev/null | awk 'NR==1 { print $1 }')
   fi
 fi
 if [ "$record_mode" != 100644 ] && [ "$record_mode" != 100755 ]; then
