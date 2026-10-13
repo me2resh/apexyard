@@ -214,7 +214,7 @@ One-line summary per skill; canonical details live in each `.claude/skills/<name
 | `/tickets-batch` | Bulk-file 5–20 structured tickets in one shared-context flow |
 | `/migration` | Create a labelled migration ticket + migration AgDR (required by migration gate) |
 | `/spike` | Create a time-boxed, hypothesis-driven spike ticket — answers "will it technically work?" (throwaway; exempt from AgDR + coverage gates) |
-| `/scaffold` | Interview the owner, sized to the project's scale, and write a validated scaffold spec (project generation comes later) |
+| `/scaffold` | Interview the owner and generate the project floor from a validated scaffold spec |
 | `/spike-close` | Disposition gate for spikes — `--promote` files a feature, `--discard` writes a memo |
 | `/prototype` | Create a throwaway UX/demo prototype ticket — answers "what should it look/feel like?" (throwaway; same AgDR + coverage exemptions as `/spike`) |
 | `/prototype-close` | Disposition gate for prototypes — `--promote` files a feature, `--discard` writes a memo (mirror of `/spike-close`) |

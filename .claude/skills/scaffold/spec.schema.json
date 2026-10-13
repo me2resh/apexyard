@@ -477,6 +477,49 @@
     "createdAt": {
       "type": "string",
       "format": "date-time"
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "source"
+      ],
+      "properties": {
+        "value": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "source": {
+          "enum": [
+            "owner",
+            "default",
+            "derived"
+          ]
+        }
+      }
+    },
+    "customStack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "source"
+      ],
+      "properties": {
+        "value": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "enum": [
+            "owner",
+            "prd",
+            "onboarding"
+          ]
+        }
+      }
     }
   }
 }

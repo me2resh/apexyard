@@ -133,3 +133,14 @@ Files are **copied, not symlinked**. Symlinks would couple the adopter's instant
 - `CLAUDE.md` — new row in QUICK REFERENCE table
 - Closes: `me2resh/apexyard#297`
 - Related: AgDR-0020 (handbooks foundation), AgDR-0023 (path-mirroring template overrides), AgDR-0032 (per-version migration chain), AgDR-0037 (domain handbooks + `paths:` frontmatter), AgDR-0042 (harnessability dimensions)
+
+## Evolution
+
+### Scaffold floor entry point
+
+`/scaffold` now uses `lib/generate.sh` as a second entry point to the topology bundles.
+It copies the floor handbooks and selects tool commands from the bundle pipeline.
+It records the bundle and VERSION in `.apexyard/topology`.
+Python and Go receive no source tree in this slice.
+A custom stack receives placeholders and a request draft.
+The original `/handover` decision remains in effect.

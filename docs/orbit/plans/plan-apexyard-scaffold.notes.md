@@ -304,3 +304,5 @@ Resolved: the cost estimate source (owner decision 2), the hosts for revision 1 
 ## Checks
 
 Each check that changes no status adds one line here: date, commit, result (AgDR-0225).
+
+- 2026-10-13: the floor slice merged in #1716 and moves to docs/orbit/history/. Its partly met criteria (ac2-5, ac2-6, ac2-16) continue in `slice-scaffold-o2-starter`, the one open o2 slice (C6). The owner chose this slice on 2026-10-13. Naqid returned proceed-with-changes. The record has all three changes. The real proof runs in framework CI. An AgDR chooses the local database and ORM. Four exclusions are added.

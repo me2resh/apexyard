@@ -11,6 +11,8 @@ jq -se --slurpfile schema "$schema" '
     (if $s.const then . == $s.const else true end) and
     (if $s.enum then ($s.enum | index($v)) != null else true end) and
     (if $s.minLength then length >= $s.minLength else true end) and
+    (if $s.minimum != null then . >= $s.minimum else true end) and
+    (if $s.maximum != null then . <= $s.maximum else true end) and
     (if $s.type == "object" then
       (($s.required // []) - keys | length) == 0 and
       (if $s.additionalProperties == false then (keys - ($s.properties | keys) | length) == 0 else true end) and

@@ -1,7 +1,7 @@
 ---
 name: scaffold
-description: Interview the owner, sized to the project's scale, and write a validated scaffold spec (project generation comes later)
-argument-hint: "[target directory] [PRD path]"
+description: Interview the owner, sized to the project's scale, and generate the project floor from a validated scaffold spec
+argument-hint: "<name> [PRD path]"
 allowed-tools: Bash, Read, Write, AskUserQuestion
 ---
 
@@ -10,14 +10,28 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 # /scaffold
 
 Choose a host first. Ask a short interview and write a validated scaffold spec.
-A spec records answers, sources, and open questions. This run generates no project, infrastructure, or deploy files.
+A spec records answers, sources, and open questions. This run generates the project floor.
 
 A golden path is a tested starter. A pipeline runs checks for each change.
 OIDC gives cloud access without stored keys. PRD means product requirements document.
 
+## Mark the bootstrap session
+
+Write the marker before the interview, as AgDR-0011 requires:
+
+```bash
+mkdir -p .claude/session
+printf 'scaffold\n' > .claude/session/active-bootstrap
+```
+
+Use the exemption only for the bootstrap scope below.
+Remove the marker and temporary inputs on every exit, including a No answer or a fault.
+SessionStart also clears an interrupted marker.
+Keep temporary inputs in one directory from `mktemp -d`.
+
 ## Read known values
 
-1. Use the target directory that the owner names. Default to the current project directory.
+1. Ask for a project directory name. Use letters, digits, underscores, and hyphens only.
 2. Resolve the company setup through the portfolio helper:
 
    ```bash
@@ -125,8 +139,10 @@ Never ask about cost, budget, currency, tests, coverage, language, database, sig
     Keep “Choose a host before launch.” as an open question.
     Show the language clash in the custom option description when one exists.
 11. Record the final choice under `setupChoice`.
-    Write `docs/scaffold/spec.json` in the target project only after the owner chooses a setup.
+    Write the confirmed spec to a temporary file outside the target.
     Include `specVersion: "0.1"`, scale, answers, open questions, unused fields, and `createdAt`.
+    Keep an explicit custom stack under `customStack`, with its value and source.
+    Keep an explicit coverage override under `coverage`, with its value and source.
 12. Run `lib/validate-spec.sh <spec.json>`.
     Correct each reported fault before completing the interview.
 
@@ -138,4 +154,46 @@ Never ask about cost, budget, currency, tests, coverage, language, database, sig
 - Use secret names only.
 - Use `main` as the future deploy branch.
 - Use no project names in framework text or records.
-- Write only the scaffold spec in the target project.
+
+## Generate the floor
+
+1. Validate the temporary spec with `lib/validate-spec.sh`.
+2. Resolve the workspace directory with the portfolio helper:
+
+   ```bash
+   source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+   source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+   workspace_dir=$(portfolio_workspace_dir)
+   target="$workspace_dir/$name"
+   ```
+
+3. Show the resolved target path and the file list from the bootstrap scope below.
+   Include the bundle version and each placeholder. Explain that no source tree is included.
+4. Ask one `AskUserQuestion`: "Generate these files at this path?" Offer Yes and No.
+   No ends the skill after cleanup. Yes permits generation.
+5. Run `lib/generate.sh --spec "$spec" --target "$target" --name "$name"` beside this skill.
+   The target must be absent or empty. Stop on any fault.
+6. Remove `.claude/session/active-bootstrap` on completion or failure.
+   SessionStart also clears an interrupted marker. See AgDR-0011.
+   Remove all temporary inputs.
+
+## Bootstrap scope
+
+The exemption covers only these write targets:
+
+- `.claude/session/active-bootstrap`: the session marker.
+- Temporary `spec.json`, `prd-answers.json`, and `run-answers.json` files: the interview inputs and confirmed answers.
+- `workspace/<name>/.github/workflows/ci.yml`: the floor pipeline.
+- `workspace/<name>/scripts/ci/{lint,typecheck,test,build,audit,coverage-gate,audit-gate}.sh`: the gate scripts.
+- `workspace/<name>/handbooks/general/`: the general handbook copies.
+- `workspace/<name>/handbooks/architecture/`: the architecture handbook copies.
+- `workspace/<name>/.apexyard/topology`: the bundle anchor.
+- `workspace/<name>/docs/agdr/AgDR-0001-scaffold-choices.md`: the proposed decision record.
+- `workspace/<name>/docs/scaffold/spec.json`: the confirmed spec copy.
+- `workspace/<name>/docs/scaffold/notes.md`: the open questions and coverage format.
+- `workspace/<name>/docs/scaffold/golden-path-request.md`: the custom stack request draft.
+
+Resolve `workspace/` with `portfolio_workspace_dir`. These paths do not authorize other project edits or registry writes.
+Hakim must review this scope before merge. Keep all review and merge gates.
+
+Never push. Never write secrets. Never apply infrastructure.
