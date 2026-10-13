@@ -135,6 +135,11 @@ Report each `WARNING` line. If the CLI fails, report its failure.
 
 ### `/orbit slice --project <name> --plan <file> --reconciliation <file>`
 
+For a slice PR proposal, draft the record only. Use the PR Plan revision and Reconciliation.
+Run Naqid with `/challenge`. The owner confirms the scope in PR review before merge.
+A scope change needs new confirmation. A basedOn-only change does not.
+After merge, `/orbit handoff` needs a yes before it files the ticket.
+
 Ask for the bounded objective, outcome, reason, included work, excluded work, and the acceptance criterion IDs this slice advances. Pass those criterion IDs to `--contributes` as a comma-separated list. The validator accepts criterion IDs only, and each must belong to the slice's `--outcome`. Pass `--id` with a lowercase slice ID. The CLI default ID contains uppercase timestamp letters. Then create the slice with the plan revision and reconciliation ID as provenance:
 
 ```bash
@@ -214,6 +219,10 @@ The script checks the record files changed against `origin/dev`. Pass `--base <r
 
 The message names the check, the file, and the fault. Fix the fault, then run the lint again. Report the exit code and message when the lint stops.
 
+For a slice PR, pass `--tickets <file>` with one slice ID per line from open and closed issue bodies.
+Count only exact backtick tokens. Without this file, the lint warns and skips the C6 check.
+C6 permits one open slice per outcome. A filed or withdrawn slice does not block a proposal.
+
 ### `/orbit status --project <name> --plan <plan-id>`
 
 Show the live state of a Plan. This operation writes no record, no file, and no notes line.
@@ -266,17 +275,23 @@ The helper's flow, in order:
 2. **Validate.** Run `orbit validate --all --root "$orbit_root"`. On a non-zero exit, stop and state the reason from the CLI's own error text (ac1-3).
 3. **Duplicate check.** Search open issues in `$project_repo` for the slice ID. Count only an exact backtick-quoted token under Orbit identifiers. A shared word or prefix does not match. Stop with a cannot verify error if the search fails. Never treat a failed search as no duplicate found.
 4. **Dry-run preview.** Run `orbit sync github --dry-run --plan <plan_file> --snapshot <snapshot_file> --reconciliation <reconciliation_file> --slice <slice_file> --repo "$project_repo"`. The adapter renders the issue title and body with the Plan ID and revision, objective, scope, and identifiers. The preflight requires a `[Slice]` title. Keep that content.
-5. **Leak scrub.** Extract the plain-text title and body from the preview with `jq -r '.title'` / `jq -r '.body'` - not the raw JSON, where a name at the start of a body line is preceded by the two characters `\n` rather than a real newline, and the scrub's word-boundary rule misses it. Run `check-private-refs-runtime.sh` against `$project_repo`, the plain-text title, and the plain-text body written to a file. A non-zero exit blocks the handoff (ac1-6).
+5. **Leak scrub.** Extract the plain-text title and body with `jq -r '.title'` and `jq -r '.body'`.
+   JSON encodes a newline as `\n`. The scrub can miss a private name after this encoding.
+   Write the plain-text body to a file. Run `check-private-refs-runtime.sh` against `$project_repo`, the title, and that file.
+   A non-zero exit blocks the handoff (ac1-6).
 
 After the helper exits 0, continue with these steps in the skill. They request and use operator input.
 
 6. **Operator confirmation.** Show the target repo, the preview title, and the preview body, and ask: `Create this issue in <owner/repo> for slice <slice-id>? (y/n)`. A "no", an unclear answer, or no answer stops the handoff. Only a clear "yes" continues.
 
-7. **File the issue.** Only after a "yes", confirm that
-   `docs/orbit/slices/<slice-id>.json` exists on the project's local
-   `origin/HEAD` default-branch ref. If the ref is missing or the record is
-   absent, stop until the record PR merges and the local ref is updated. Write
-   the adapter preview's `.body` to a temporary file, with
+On a no, add `- Withdrawn: <slice-id>` under `## Withdrawn slices` in the Plan notes.
+Carry this line in the next records or slice PR. A later slice PR may propose that outcome again.
+An unclear or missing answer does not mark a slice withdrawn.
+
+7. **File the issue.** Only after a yes, resolve the merged slice PR's base branch.
+   Use its PR base, with `dev` as the framework default. Check the record on `refs/remotes/origin/<base>`.
+   Check that branch, not only `origin/HEAD`. Stop until its local ref contains `docs/orbit/slices/<slice-id>.json`.
+   Write the adapter preview's `.body` to a temporary file, with
    `**ORBIT slice:** \`<slice-id>\`` as its first line and one blank line before
    the preview body. Use the preview's `.title`. Before the create call, write
    `orbit` to the ops root's `.claude/session/active-issue-skill` marker. Resolve
@@ -344,12 +359,27 @@ A merge alone changes no status.
 8. Add this observation: `Slice PR: #N; dev merge-base <sha>.`
 9. Run `records-lint.sh --orbit-root docs/orbit --base origin/dev --slice <slice-id> --pr <number>`. Run `git fetch` first, so the base is current.
 10. Include the Snapshot and Reconciliation in the slice build PR.
+11. **Propose the next slice.** Read the Plan notes `Order` section and the PR Reconciliation.
+    Select the first outcome with unmet criteria and no open slice. Count the PR's own slice as delivered at merge.
+    Draft one proposal with `/orbit slice`, using the PR Plan revision and Reconciliation. Run Naqid with `/challenge`.
+    Add the record to the PR. Describe its scope under `## Proposed next slice` in the PR body.
+    The owner confirms or changes its scope during PR review, before merge. A scope change needs new confirmation.
+    A basedOn-only change needs no new confirmation. File no ticket before merge and a yes at handoff.
+    When every outcome is achieved, add no slice. Write `No next slice: every outcome is achieved.` under that heading.
 
 The lint rejects scope faults with exit 17, evidence faults with exit 18, and provenance faults with exit 19.
 A slice PR without a Reconciliation produces a warning.
-Repeat the lint after each branch update.
+Use `--pr-body <file>` to check the next slice statement.
+The lint warns when the body has neither `## Proposed next slice` nor `No next slice: every outcome is achieved.`
+This warning does not change the exit code.
+The lint rejects a PR that states `No next slice: every outcome is achieved.` and adds a slice record.
+This fault uses exit 17.
+After each branch update, run `refresh-slice-record.sh --orbit-root docs/orbit --base origin/dev --pr <number>` from the skill lib directory.
+The script refreshes merge-base observations and the Snapshot. It changes no status or scope.
+It updates proposal `basedOn` fields when needed. A basedOn-only change needs no new owner confirmation.
+A scope change needs new owner confirmation. Repeat the lint with `--tickets <file>` after each branch update.
 A slice PR with a Reconciliation does not count as a records PR for ac8-5.
-Plan revisions and new slices keep the records PR flow below.
+Plan revisions keep the records PR flow below. A slice PR may add one proposed slice.
 
 ### Planning cycle: one records PR
 

@@ -4,6 +4,7 @@ on:
     types: [opened, synchronize, reopened, edited]
 permissions:
   contents: read
+  issues: read
 jobs:
   records-lint:
     runs-on: ubuntu-latest
@@ -41,6 +42,13 @@ jobs:
         if: steps.select.outputs.run == 'true'
         working-directory: .orbit-cli
         run: npm ci --ignore-scripts
+      - name: Read slice tickets
+        if: steps.select.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue list --repo "$GITHUB_REPOSITORY" --state all --search "slice-" --json title,body --limit 1000 |
+            jq -r '.[] | select((.title // "") | startswith("[Slice]")) | (.body // "") | scan("`(slice-[A-Za-z0-9._-]+)`") | .[0]' > "$RUNNER_TEMP/orbit-tickets"
       - name: Lint records
         if: steps.select.outputs.run == 'true'
         env:
@@ -52,4 +60,5 @@ jobs:
           chmod +x "$wrapper"
           export ORBIT_BIN="$wrapper"
           bash .claude/skills/orbit/lib/records-lint.sh --orbit-root docs/orbit \
-            --base "origin/$BASE_REF" --pr "$PR_NUMBER" --pr-body "$RUNNER_TEMP/orbit-pr-body"
+            --base "origin/$BASE_REF" --pr "$PR_NUMBER" --pr-body "$RUNNER_TEMP/orbit-pr-body" \
+            --tickets "$RUNNER_TEMP/orbit-tickets"

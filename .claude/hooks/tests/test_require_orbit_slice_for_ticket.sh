@@ -70,6 +70,27 @@ check slice_missing 2 "$(make_cmd Slice 'plain body')"
 check bold 0 "$(make_cmd Task '**ORBIT slice:** `slice-demo-o1`')"
 check missing 2 "$(make_cmd Feature 'ORBIT slice: slice-demo-o9')"
 check nondefault 2 "$(make_cmd Task 'ORBIT slice: slice-demo-o2')"
+git -C "$project" update-ref refs/remotes/origin/dev HEAD
+check dev_only 0 "$(make_cmd Task 'ORBIT slice: slice-demo-o2')"
+check neither_branch 2 "$(make_cmd Task 'ORBIT slice: slice-demo-o9')"
+git -C "$project" update-ref -d refs/remotes/origin/dev
+# A colon selects a tree path on the old code.
+mkdir -p "$project/b/docs/orbit/slices"
+cp "$project/docs/orbit/slices/slice-demo-o2.json" "$project/b/docs/orbit/slices/"
+git -C "$project" add b/docs/orbit/slices/slice-demo-o2.json
+git -C "$project" commit -qm colon-fixture
+git -C "$project" update-ref refs/remotes/origin/a HEAD
+git -C "$project" config apexyard.integrationBranch "a:b"
+check invalid_integration_colon 2 "$(make_cmd Task 'ORBIT slice: slice-demo-o2')"
+git -C "$project" config apexyard.integrationBranch feature/../x
+check invalid_integration_parent 2 "$(make_cmd Task 'ORBIT slice: slice-demo-o2')"
+git -C "$project" update-ref refs/remotes/origin/dev HEAD
+check invalid_integration_dev_fallback 0 "$(make_cmd Task 'ORBIT slice: slice-demo-o2')"
+git -C "$project" config apexyard.integrationBranch release/test
+git -C "$project" update-ref refs/remotes/origin/release/test HEAD
+check valid_integration 0 "$(make_cmd Task 'ORBIT slice: slice-demo-o2')"
+git -C "$project" config --unset apexyard.integrationBranch
+git -C "$project" update-ref -d refs/remotes/origin/dev
 check no_line 2 "$(make_cmd Feature 'plain body')"
 check empty_reason 2 "$(make_cmd Task 'ORBIT slice: none —   ')"
 check none 0 "$(make_cmd Feature 'ORBIT slice: none — urgent repair')"

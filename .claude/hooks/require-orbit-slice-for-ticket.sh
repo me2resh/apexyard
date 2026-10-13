@@ -485,7 +485,17 @@ fi
 branch=$(git -C "$workspace" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)
 record_path="docs/orbit/slices/$directive.json"
 record_mode=$(git -C "$workspace" ls-tree "refs/remotes/$branch" -- "$record_path" 2>/dev/null | awk 'NR==1 { print $1 }')
-if [ -z "$branch" ] || [ "$record_mode" != 100644 ] && [ "$record_mode" != 100755 ]; then
+if [ "$record_mode" != 100644 ] && [ "$record_mode" != 100755 ]; then
+  integration=$(git -C "$workspace" config apexyard.integrationBranch 2>/dev/null) || integration=""
+  if [[ ! "$integration" =~ ^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$ ]] || [[ "$integration" == *..* ]]; then
+    integration=dev
+  fi
+  integration_commit=$(git -C "$workspace" rev-parse --verify --quiet "refs/remotes/origin/$integration^{commit}" 2>/dev/null) || integration_commit=""
+  if [ -n "$integration_commit" ]; then
+    record_mode=$(git -C "$workspace" ls-tree "$integration_commit" -- "$record_path" 2>/dev/null | awk 'NR==1 { print $1 }')
+  fi
+fi
+if [ "$record_mode" != 100644 ] && [ "$record_mode" != 100755 ]; then
   echo "BLOCKED: ORBIT slice $directive is not on $project's default branch. Merge its record, then file the ticket with /orbit slice." >&2
   exit 2
 fi

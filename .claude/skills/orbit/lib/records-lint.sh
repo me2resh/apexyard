@@ -27,7 +27,7 @@
 # Exit: 0 clean; 10 validate; 11 leak scrub; 12 sentence; 13 Missing/Next;
 #       14 local path; 15 initiative; 16 interview; 17 scope; 18 evidence;
 #       19 provenance; 20 usage or missing tool.
-# Slice options: --slice <id>, --pr-body <file>, --pr <number>.
+# Slice options: --slice <id>, --pr-body <file>, --pr <number>, --tickets <file>.
 
 set -u
 
@@ -36,7 +36,7 @@ orbit_root=""
 repo="me2resh/apexyard"
 base="origin/dev"
 check_all=0
-slice_id=""; pr_body=""; pr_number=""
+slice_id=""; pr_body=""; pr_number=""; tickets=""
 
 usage() {
   echo "Usage: records-lint.sh --orbit-root <dir> [--repo <owner/name>] [--base <ref>] [--all]" >&2
@@ -48,6 +48,7 @@ while [ $# -gt 0 ]; do
     --orbit-root) [ $# -ge 2 ] || usage; orbit_root="$2"; shift 2 ;;
     --repo) [ $# -ge 2 ] || usage; repo="$2"; shift 2 ;;
     --base) [ $# -ge 2 ] || usage; base="$2"; shift 2 ;;
+    --tickets) [ $# -ge 2 ] || usage; tickets="$2"; [ -f "$tickets" ] || usage; shift 2 ;;
     --all) check_all=1; shift ;;
     --slice) [ $# -ge 2 ] || usage; slice_id="$2"; shift 2 ;;
     --pr-body) [ $# -ge 2 ] || usage; pr_body="$2"; shift 2 ;;
