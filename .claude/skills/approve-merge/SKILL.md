@@ -260,9 +260,11 @@ If `MERGE_RC` = 3 (`tracker.kind: none`, no host CLI configured):
 ✓ CEO approval recorded for PR #<pr>. No tracker CLI is configured (tracker.kind: none) — merge <pr> manually on the host; the marker on disk covers the approval, no further /approve-merge invocation needed.
 ```
 
+When the merged PR adds a slice record, print `Next: /orbit handoff --slice <path> to file the proposed slice.`
+
 ### 9a. Optional: offer to remove the merged PR's worktree
 
-Skip when `MERGE_RC` is not 0 or `--no-merge` was passed. Read docs/skills/approve-merge-worktree-offer.md for the full steps.
+Skip unless `MERGE_RC` is 0 without `--no-merge`. Follow docs/skills/approve-merge-worktree-offer.md.
 List candidates with `.claude/skills/approve-merge/remove-worktree.sh list "<source-tree>" "<head-branch>"`. Ask with `AskUserQuestion` ("Remove it" or "Keep it") and show the ignored files the helper lists. On "Remove it", run `remove-worktree.sh remove "<source-tree>" "<path>" "<head-branch>"`. Never remove a path the helper did not list. Never pass `--force`. Never remove without a yes.
 
 ### 10. Optional: post-merge child-issue closure

@@ -70,6 +70,10 @@ check slice_missing 2 "$(make_cmd Slice 'plain body')"
 check bold 0 "$(make_cmd Task '**ORBIT slice:** `slice-demo-o1`')"
 check missing 2 "$(make_cmd Feature 'ORBIT slice: slice-demo-o9')"
 check nondefault 2 "$(make_cmd Task 'ORBIT slice: slice-demo-o2')"
+git -C "$project" update-ref refs/remotes/origin/dev HEAD
+check dev_only 0 "$(make_cmd Task 'ORBIT slice: slice-demo-o2')"
+check neither_branch 2 "$(make_cmd Task 'ORBIT slice: slice-demo-o9')"
+git -C "$project" update-ref -d refs/remotes/origin/dev
 check no_line 2 "$(make_cmd Feature 'plain body')"
 check empty_reason 2 "$(make_cmd Task 'ORBIT slice: none —   ')"
 check none 0 "$(make_cmd Feature 'ORBIT slice: none — urgent repair')"

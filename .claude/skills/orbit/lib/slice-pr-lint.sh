@@ -57,6 +57,49 @@ slice_pr_lint() {
     [ "$sha" = "$mb" ] || fail 19 provenance "$f" "The merge-base SHA does not match."
     [ -z "$pr_number" ] || [ "$number" = "$pr_number" ] || fail 19 provenance "$f" "The PR number does not match."
   done <<< "$records"
+  local proposals=() proposal own_rec="" base_slice id outcome notes withdrawn
+  while IFS= read -r f; do
+    case "$f" in
+      docs/orbit/reconciliations/*.json) [ ! -f "$root/$f" ] || own_rec="$root/$f" ;;
+      docs/orbit/slices/*.json)
+        [ -f "$root/$f" ] || continue
+        git -C "$root" cat-file -e "$mb:$f" 2>/dev/null || proposals+=("$f") ;;
+    esac
+  done <<< "$records"
+  [ "${#proposals[@]}" -le 1 ] || fail 17 scope "" "The PR adds more than one slice record."
+  for proposal in ${proposals[@]+"${proposals[@]}"}; do
+    [ "$count" -eq 1 ] || fail 17 scope "$proposal" "A proposal needs one PR Reconciliation."
+    jq -e --slurpfile rec "$own_rec" '
+      .planId == $rec[0].planId and .basedOn.planRevision == $rec[0].planRevision
+      and .basedOn.reconciliationId == $rec[0].id' "$root/$proposal" >/dev/null ||
+      fail 17 scope "$proposal" "Proposal provenance differs from the PR Reconciliation."
+    if [ -z "${tickets:-}" ]; then
+      echo 'records-lint: WARN [scope] No --tickets file. Skip the open slice check.' >&2
+      continue
+    fi
+    outcome=$(jq -r '.outcomeId' "$root/$proposal")
+    notes=$(git -C "$root" show "$base:docs/orbit/plans/$plan.notes.md" 2>/dev/null) || notes=""
+    withdrawn=0
+    local withdrawn_ids=()
+    while IFS= read -r line; do
+      case "$line" in
+        '## Withdrawn slices') withdrawn=1 ;;
+        '## '*) withdrawn=0 ;;
+        '- Withdrawn: '*) [ "$withdrawn" -ne 1 ] || withdrawn_ids+=("${line#- Withdrawn: }") ;;
+      esac
+    done <<< "$notes"
+    while IFS= read -r f; do
+      base_slice=$(git -C "$root" show "$base:$f") || fail 17 scope "$f" "Cannot read the base slice."
+      [ "$(printf '%s' "$base_slice" | jq -r '.planId')" = "$plan" ] || continue
+      [ "$(printf '%s' "$base_slice" | jq -r '.outcomeId')" = "$outcome" ] || continue
+      id=$(printf '%s' "$base_slice" | jq -r '.id')
+      [ "$id" != "$slice_id" ] || continue
+      grep -Fxq -- "$id" "$tickets" && continue
+      withdrawn=0
+      for line in ${withdrawn_ids[@]+"${withdrawn_ids[@]}"}; do [ "$line" != "$id" ] || withdrawn=1; done
+      [ "$withdrawn" -eq 1 ] || fail 17 scope "$proposal" "Outcome $outcome has an unfiled slice: $id"
+    done < <(git -C "$root" ls-tree -r --name-only "$base" -- docs/orbit/slices/)
+  done
   [ "$count" -gt 0 ] || echo 'records-lint: WARN [progress] The slice PR has no Reconciliation.' >&2
   return 0
 }
