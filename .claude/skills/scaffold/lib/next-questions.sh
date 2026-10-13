@@ -92,10 +92,13 @@ jq -r --arg mode "$mode" --arg scale "$scale" --arg shape "$shape" --arg host "$
   ($runs + (if $host == "" then {} else {hostKind:{value:$host,source:"owner"}} end) +
     (if $provider == "" then {} else {hostProvider:{value:$provider,source:"owner"}} end) +
     (if $shape == "" then {} else {shape:{value:$shape,source:"owner"}} end)) as $current |
-  ($onboard + $prds + $existing + $current) as $known |
-  ($onboard + $prds + $existing | del(.reuseConfirm,.setupChoice) | with_entries(.key as $key | .value = $known[$key])) as $mapped |
+  ($onboard + $prds + $existing + $current |
+    if .hostKind != null and .hostKind.value != "hosting service" then del(.hostService) else . end) as $known |
+  ($onboard + $prds + $existing | del(.reuseConfirm,.setupChoice) |
+    with_entries(.key as $key | .value = $known[$key] | select(.value != null))) as $mapped |
   ($known.reuseConfirm.value == "Use these") as $confirmed |
-  (if $confirmed then $known else $current end) as $applied |
+  (if $confirmed then $known else $current end |
+    if .hostKind != null and .hostKind.value != "hosting service" then del(.hostService) else . end) as $applied |
   (if $known.reuseConfirm == null then $known else $applied end) as $questionAnswers |
   ($known.reuseConfirm.value == "Ignore them and ask me") as $ignored_reuse |
   ($current.scale.value // (if $confirmed then $known.scale.value else null end) // (if $scale == "" then "small" else $scale end)) as $tier |

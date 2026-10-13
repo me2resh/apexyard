@@ -257,3 +257,4 @@
 1 .claude/skills/threat-model/tests/test_snapshot_mermaid_fence.sh
 5 .claude/skills/update/tests/test_step_8a_wiring.sh
 70 .claude/hooks/tests/test_validate_branch_name_orbit_records.sh
+10 .claude/hooks/tests/test_scaffold_generate.sh

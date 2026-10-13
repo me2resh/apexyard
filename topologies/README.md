@@ -60,3 +60,10 @@ When an adopter runs `/update`, the skill diffs the framework's topology `VERSIO
 - Topology composition (e.g. "NextJS web + Python ML service") — pick the closest single shape, manually instantiate the second
 - Per-team topology overrides — file a follow-up if multi-team adopters need this
 - Auto-detection of which topology the adopter should pick — `/handover` already detects the tech stack in step 3; future PR can wire that into the topology suggestion
+
+## New project entry point
+
+Use `/scaffold` to copy a bundle floor into a new project.
+The skill selects the bundle from the confirmed host and shape answers.
+It copies handbooks, writes CI commands, and records the bundle VERSION.
+This floor includes no starter source tree. A custom stack receives placeholders and a request draft.

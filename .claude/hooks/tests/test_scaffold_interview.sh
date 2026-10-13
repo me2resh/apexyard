@@ -166,6 +166,11 @@ for mutation in empty source; do
   check "reject hostService $mutation" exit_is 1 bash "$LIB/validate-spec.sh" "$TMP/service-bad.json"
 done
 check 'spec service resumes without unused field' derived_is '.answers.hostService.value == "Vercel" and (.unusedFields | index("hostService") | not)' --spec "$TMP/service-spec.json" --run-answers "$TMP/reuse.json"
+for host in 'company cloud' 'server or container' other; do
+  jq -n --arg host "$host" '{reuseConfirm:"Use these",hostKind:$host}' > "$TMP/changed-host.json"
+  check "$host clears the saved service" derived_is '.answers | has("hostService") | not' --spec "$TMP/service-spec.json" --run-answers "$TMP/changed-host.json"
+  check "$host clears the company service" mapped_is '.answers | has("hostService") | not' --onboarding "$TMP/vercel.yaml" --run-answers "$TMP/changed-host.json"
+done
 for value in personal payment; do
   jq -n --arg value "$value" '{data:$value}' > "$TMP/demo-data.json"
   check "demo confirmed PRD $value stays visible" derived_is ".answers.dataSensitivity == {value:\"none\",source:\"default\"} and (.openQuestions | index(\"The PRD says the product keeps $value details. A demo assumes none. Run /scaffold again at a higher scale before real users.\") != null)" --scale demo --prd-answers "$TMP/demo-data.json" --run-answers "$TMP/reuse.json"

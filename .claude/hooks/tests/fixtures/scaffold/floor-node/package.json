@@ -1,0 +1,1 @@
+{"name":"floor-fixture","private":true,"scripts":{"test":"fixture-test","build":"next build"}}

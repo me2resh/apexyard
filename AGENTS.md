@@ -84,7 +84,12 @@ Pi does not auto-import rule files. `Read` a named file under `.claude/rules/` w
 
 ### Skills, without the slash-command runner
 
-`.claude/skills/<name>/SKILL.md` are markdown prompts — 68 of them, including `/scaffold` for an owner interview and validated spec, and covering everything from filing a ticket (`/feature`, `/bug`, `/task`) to running an audit (`/launch-check`, `/threat-model`) to cutting a release. Claude Code turns these into typed slash commands; pi has no slash-command mechanism, so invoke one by `Read`-ing its `SKILL.md` and following the process it describes step by step (e.g. read `.claude/skills/feature/SKILL.md`, then do what it says). The skill's content is the same either way — only the invocation mechanism differs.
+`.claude/skills/<name>/SKILL.md` contains 68 skill prompts.
+Use `/scaffold` for an owner interview, a validated spec, and project floor generation.
+Other skills file tickets, run audits, and cut releases.
+Claude Code exposes these skills as slash commands.
+In pi, read the required `SKILL.md` and follow its steps.
+Both tools use the same skill content.
 
 ### What's NOT bridged yet
 
