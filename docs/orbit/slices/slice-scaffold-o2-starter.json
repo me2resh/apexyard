@@ -1,0 +1,60 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-scaffold-o2-starter",
+  "planId": "plan-apexyard-scaffold",
+  "outcomeId": "o2-floor-and-recommended-path",
+  "basedOn": {
+    "planRevision": 4,
+    "reconciliationId": "reconciliation-plan-apexyard-scaffold-20261013T181921Z",
+    "repositories": {}
+  },
+  "objective": "Ship the hardened typescript-nextjs starter, so a generated web project builds, runs and passes every floor gate on a real source tree. This completes outcome o2.",
+  "why": "The floor slice (#1716) generates CI gates, but no golden path has a starter yet. ac2-5, ac2-6 and ac2-16 are met only in part until a real tree passes the gates.",
+  "contributesTo": [
+    "ac2-2",
+    "ac2-4",
+    "ac2-5",
+    "ac2-6",
+    "ac2-8",
+    "ac2-9",
+    "ac2-10",
+    "ac2-11",
+    "ac2-12",
+    "ac2-16"
+  ],
+  "scope": {
+    "include": [
+      "A typescript-nextjs starter directory: a minimal source tree, its tool configuration and exact pinned versions",
+      "A minor bump of the typescript-nextjs bundle VERSION",
+      "An audit of each version that a generator proposes, before the starter pins it",
+      "An install-time environment check, with a fallback recorded in the AgDR",
+      "Session cookies HttpOnly and SameSite, with one rule for Secure",
+      "JSON-only state-changing routes and problem+json errors with stable codes",
+      "One command to migrate, seed and start locally, and one command to reset local data",
+      "A starter fixture with one seeded fault for each gate",
+      "A framework CI test that each gate fails on its fault and passes on the clean starter",
+      "The added CI time in the PR",
+      "generate.sh copies the starter into the generated project",
+      "A high /handover harnessability score on all five dimensions",
+      "Exact pins and the security baseline in the custom start floor",
+      "#1716 advisory: the custom-start audit placeholder fails or warns in CI",
+      "#1716 advisory: generate.sh builds the target from the workspace dir and the name",
+      "#1716 advisory: the generated checkout sets persist-credentials false",
+      "#1716 advisory: the audit gate drops the isDev field",
+      "Framework CI runs the real npm ci, the gates and each seeded fault, with cached modules",
+      "The orchestrator outside the sandbox or CI makes the lock file; the build agent does not",
+      "An AgDR that chooses the local database and the ORM for the run and reset commands",
+      "A recorded /handover harnessability run as the ac2-12 evidence"
+    ],
+    "exclude": [
+      "The python-fastapi and go-data-pipeline starters (o5)",
+      "Infrastructure, deploy and the cost range (o4)",
+      "Handover gap-fill (o3)",
+      "Entry-point offers (o7)",
+      "Login and sign-in flows",
+      "Any database beyond one local store",
+      "Dependency rules and bundle size (o6)",
+      "The shared /handover copy script (ac5-5)"
+    ]
+  }
+}
