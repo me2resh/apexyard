@@ -47,7 +47,6 @@ Preconditions before a revision takes this on:
 
 - **Revision 2** added O1 (slice to ticket) and O2 (build traceability). The record is in `docs/orbit/history/`.
 - **Revision 3** added O3 (the Plan hierarchy on a Projects v2 board: the Plan and outcomes as draft items, only slices as real issues) and O4 (ORBIT as the default planning path behind `orbit.default_planning`, shipped `false`). The CEO wants ORBIT as the default in their own process, so their fork sets the flag to `true`.
-
 - **Revision 4** (2026-10-13) amends ac2-3 only. Rex reads no ORBIT record outside the PR diff. A Reconciliation in a slice PR is reviewed like any other file. This matches token-spend revision 4 (ac8-6 to ac8-10), where a slice PR carries its own Reconciliation. ac2-4 is unchanged: no merge gate reads ORBIT records. The owner chose to skip a separate Naqid challenge, because Naqid already challenged the design in token-spend revision 4. Revision 3 and its Reconciliations move to `docs/orbit/history/`. The o1 handoff slice points to the revision 4 Reconciliation only because the validator requires it. The records lint required the split of two intent sentences and one o3 criterion. Their meaning does not change.
 
 Revision 2 records move to `docs/orbit/history/` because `orbit validate --all` rejects two records with the same Plan ID in one record set.

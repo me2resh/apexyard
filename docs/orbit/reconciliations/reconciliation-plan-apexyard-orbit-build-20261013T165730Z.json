@@ -7,7 +7,8 @@
   "reconciledAt": "2026-10-13T16:57:30.401Z",
   "observations": [
     "Observed me2resh/apexyard at 0890c021ac3655646606153c41d3bbbf10f46dc1.",
-    "Revision 4 amends ac2-3 only. The statuses are carried without change from reconciliation-plan-apexyard-orbit-build-20261011T063724Z. This cycle did not check them again."
+    "Revision 4 amends ac2-3 only. The statuses are carried without change from reconciliation-plan-apexyard-orbit-build-20261011T063724Z. This cycle did not check them again.",
+    "The carried evidence was observed at 49a2979b2e77b258581d4def15a4bf175b46dddb. Its line references and the words at this commit refer to that commit, not to the observed commit above."
   ],
   "criterionAssessments": [
     {
