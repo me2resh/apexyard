@@ -266,7 +266,7 @@ The helper's flow, in order:
 2. **Validate.** Run `orbit validate --all --root "$orbit_root"`. On a non-zero exit, stop and state the reason from the CLI's own error text (ac1-3).
 3. **Duplicate check.** Search open issues in `$project_repo` for the slice ID. Count only an exact backtick-quoted token under Orbit identifiers. A shared word or prefix does not match. Stop with a cannot verify error if the search fails. Never treat a failed search as no duplicate found.
 4. **Dry-run preview.** Run `orbit sync github --dry-run --plan <plan_file> --snapshot <snapshot_file> --reconciliation <reconciliation_file> --slice <slice_file> --repo "$project_repo"`. The adapter renders the issue title and body with the Plan ID and revision, objective, scope, and identifiers. The preflight requires a `[Slice]` title. Keep that content.
-5. **Leak scrub.** Extract the plain-text title and body with `jq -r ''' .title'''` and `jq -r ''' .body'''`. Raw JSON can hide a private name after a `\n` escape. Write the plain-text body to a file. Run `check-private-refs-runtime.sh` against `$project_repo`, the title, and that file. A non-zero exit blocks the handoff (ac1-6).
+5. **Leak scrub.** Extract the plain-text title and body from the preview with `jq -r '.title'` / `jq -r '.body'` - not the raw JSON, where a name at the start of a body line is preceded by the two characters `\n` rather than a real newline, and the scrub's word-boundary rule misses it. Run `check-private-refs-runtime.sh` against `$project_repo`, the plain-text title, and the plain-text body written to a file. A non-zero exit blocks the handoff (ac1-6).
 
 After the helper exits 0, continue with these steps in the skill. They request and use operator input.
 
@@ -342,7 +342,7 @@ A merge alone changes no status.
 6. Change only the `contributesTo` criteria.
 7. Cite changed PR paths as evidence for each raised status.
 8. Add this observation: `Slice PR: #N; dev merge-base <sha>.`
-9. Run records-lint with `--slice <slice-id> --pr <number> --base origin/dev`.
+9. Run `records-lint.sh --orbit-root docs/orbit --base origin/dev --slice <slice-id> --pr <number>`. Run `git fetch` first, so the base is current.
 10. Include the Snapshot and Reconciliation in the slice build PR.
 
 The lint rejects scope faults with exit 17, evidence faults with exit 18, and provenance faults with exit 19.

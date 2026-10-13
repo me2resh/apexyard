@@ -9,14 +9,16 @@ slice_pr_lint() {
     slice_id=$(sed -nE 's/^.*ORBIT slice:[*[:space:]]*`?(slice-[a-z0-9-]+).*$/\1/p' "$pr_body" | head -1)
   fi
   [ -n "$slice_id" ] || return 0
-  for f in "$orbit_root"/slices/*.json; do
-    [ -f "$f" ] || continue
-    [ "$(jq -r '.id' "$f")" != "$slice_id" ] || slice="$f"
-  done
-  [ -n "$slice" ] || return 0
-  plan=$(jq -r '.planId' "$slice")
-  allowed=$(jq -c '.contributesTo' "$slice")
   root=$(git -C "$orbit_root" rev-parse --show-toplevel) || fail 19 provenance "" "Cannot resolve the repository."
+  # Read the slice from the base branch, so a PR cannot widen its own scope.
+  while IFS= read -r f; do
+    case "$f" in docs/orbit/slices/*.json) ;; *) continue ;; esac
+    record=$(git -C "$root" show "$base:$f" 2>/dev/null) || continue
+    [ "$(printf '%s' "$record" | jq -r '.id')" != "$slice_id" ] || slice="$record"
+  done < <(git -C "$root" ls-tree -r --name-only "$base" -- docs/orbit/slices/)
+  [ -n "$slice" ] || fail 17 scope "" "No slice record named $slice_id on $base."
+  plan=$(printf '%s' "$slice" | jq -r '.planId')
+  allowed=$(printf '%s' "$slice" | jq -c '.contributesTo')
   mb=$(git -C "$root" merge-base "$base" HEAD) || fail 19 provenance "" "Cannot resolve the merge base."
   paths=$(git -C "$root" diff --name-only --no-renames "$mb") || fail 18 evidence "" "Cannot read changed paths."
   records=$( { printf '%s\n' "$paths"; git -C "$root" ls-files --others --exclude-standard; } | sort -u)

@@ -12,6 +12,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
       - name: Select records or slice PR
         id: select
         env:
@@ -35,10 +36,11 @@ jobs:
           repository: me2resh/orbit-spec
           ref: 7a024046c7d65d28576a5b175978cd4f70ea91cc
           path: .orbit-cli
+          persist-credentials: false
       - name: Install ORBIT
         if: steps.select.outputs.run == 'true'
         working-directory: .orbit-cli
-        run: npm ci
+        run: npm ci --ignore-scripts
       - name: Lint records
         if: steps.select.outputs.run == 'true'
         env:
