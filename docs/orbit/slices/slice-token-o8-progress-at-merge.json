@@ -1,0 +1,39 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-token-o8-progress-at-merge",
+  "planId": "plan-apexyard-token-efficiency",
+  "outcomeId": "o8-records-light",
+  "basedOn": {
+    "planRevision": 4,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261013T165249Z",
+    "repositories": {}
+  },
+  "objective": "Make a slice build PR carry its own Reconciliation, so the ORBIT pane shows progress when the PR merges. Guard against lost statuses from concurrent slice PRs.",
+  "why": "The pane reads only Reconciliations merged on dev. Today progress waits days for a separate records PR. The owner chose progress at merge on 2026-10-13. Naqid found the lost-status risk, so the guard is part of this slice.",
+  "contributesTo": [
+    "ac8-6",
+    "ac8-7",
+    "ac8-8",
+    "ac8-9",
+    "ac8-10"
+  ],
+  "scope": {
+    "include": [
+      "The orbit skill steps for a Reconciliation in a slice PR",
+      "Lint rules: raised status needs evidence that names a path in the PR diff",
+      "Lint rule: no change to a criterion outside contributesTo against the newest Reconciliation on dev",
+      "A CI workflow that runs the records lint on PRs that change docs/orbit",
+      "A warning, not a block, when a slice PR changes a status with no Reconciliation",
+      "The dev merge-base and PR number in the Reconciliation; /orbit status finds the squash commit by PR number",
+      "Getting the initiative from the slice record, not from the branch name",
+      "An AgDR that amends AgDR-0225 option I",
+      "Tests for each lint rule, including two concurrent slice PRs"
+    ],
+    "exclude": [
+      "Merge gates that read ORBIT records (Build with ORBIT ac2-4 stays)",
+      "Rex reading ORBIT records outside the PR diff",
+      "Changes to the pane rendering",
+      "Automatic status changes on merge"
+    ]
+  }
+}

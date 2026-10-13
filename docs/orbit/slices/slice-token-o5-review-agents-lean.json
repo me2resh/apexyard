@@ -4,8 +4,8 @@
   "planId": "plan-apexyard-token-efficiency",
   "outcomeId": "o5-subagents-start-lean",
   "basedOn": {
-    "planRevision": 3,
-    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261011T223213Z",
+    "planRevision": 4,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261013T165249Z",
     "repositories": {}
   },
   "objective": "Start the six other review and audit agents without CLAUDE.md and the memory index, and trim the Hakim and Tariq prompts to 12,000 bytes each. Hakim and Tariq show zero verdict flips; the four others pass a smoke check.",

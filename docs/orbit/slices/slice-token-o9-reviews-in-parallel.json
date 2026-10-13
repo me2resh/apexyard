@@ -4,8 +4,8 @@
   "planId": "plan-apexyard-token-efficiency",
   "outcomeId": "o9-reviews-run-in-parallel",
   "basedOn": {
-    "planRevision": 3,
-    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261011T082929Z",
+    "planRevision": 4,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261013T165249Z",
     "repositories": {}
   },
   "objective": "Identify review agents by the agent type in the hook input. Reviews and build agents then run at the same time, and the orchestrator is never blocked.",

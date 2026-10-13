@@ -4,8 +4,8 @@
   "planId": "plan-apexyard-token-efficiency",
   "outcomeId": "o2-context-bounded",
   "basedOn": {
-    "planRevision": 3,
-    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261011T223213Z",
+    "planRevision": 4,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261013T165249Z",
     "repositories": {}
   },
   "objective": "Measure the 500,000 compaction window within the time-box. Make a fresh spawn the default over a fork. File the four harness requests.",
