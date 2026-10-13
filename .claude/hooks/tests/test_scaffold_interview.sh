@@ -25,7 +25,7 @@ check 'small nine IDs' count_is 9 --scale small
 check 'production web fourteen IDs' count_is 14 --scale production --shape 'web app'
 check 'production non-web thirteen IDs' count_is 13 --scale production --shape 'API service'
 check 'spec answer skipped' skips q04 --scale small --spec "$FIX/good.json"
-check 'onboarding language skipped' skips q05 --scale demo --onboarding "$FIX/onboarding.yaml"
+check 'onboarding language skipped' skips q05 --scale demo --onboarding "$FIX/onboarding.fixture.yaml"
 check 'PRD auth skipped' skips q06 --scale small --prd-answers "$FIX/prd.json"
 check 'PRD data skipped' skips q07 --scale small --prd-answers "$FIX/prd.json"
 check 'bad scale usage' exit_is 2 ids --scale huge
