@@ -38,7 +38,7 @@ registry=$(portfolio_registry)
 workspace_dir=$(portfolio_workspace_dir)
 ```
 
-Require `--project <name>`. Resolve that project in the registry and stop if it is missing or has no local workspace. Use the entry's `workspace:` value when it is present. Resolve relative values against the portfolio root; use `portfolio_workspace_dir()` only as the fallback for entries without an explicit workspace path. For example:
+Require `--project <name>`. Resolve the project in the registry. Stop if it has no registry entry or local workspace. Use its explicit `workspace:` value when present. Resolve relative values against the portfolio root. Otherwise use `portfolio_workspace_dir()`. For example:
 
 ```bash
 project_workspace=$(awk -v target="$project" '
@@ -135,7 +135,7 @@ Report each `WARNING` line. If the CLI fails, report its failure.
 
 ### `/orbit slice --project <name> --plan <file> --reconciliation <file>`
 
-Ask for the bounded objective, outcome, reason, included work, excluded work, and the acceptance criterion IDs this slice advances. Pass those criterion IDs to `--contributes` as a comma-separated list. The validator accepts criterion IDs only, and each must belong to the slice's `--outcome`. Pass `--id` with a lowercase slice ID; the CLI default ID contains uppercase timestamp letters. Then create the slice with the plan revision and reconciliation ID as provenance:
+Ask for the bounded objective, outcome, reason, included work, excluded work, and the acceptance criterion IDs this slice advances. Pass those criterion IDs to `--contributes` as a comma-separated list. The validator accepts criterion IDs only, and each must belong to the slice's `--outcome`. Pass `--id` with a lowercase slice ID. The CLI default ID contains uppercase timestamp letters. Then create the slice with the plan revision and reconciliation ID as provenance:
 
 ```bash
 "$ORBIT_BIN" slice \
@@ -226,15 +226,15 @@ Show the live state of a Plan. This operation writes no record, no file, and no 
 The output has two parts:
 
 - The `orbit progress` output for the Plan: outcome progress and criterion statuses as recorded.
-- The commits since the observed snapshot commit of the newest Reconciliation of the Plan.
+- The commits since the newest Reconciliation snapshot, or its slice squash commit when it has a `Slice PR: #N` observation.
 
-Recorded statuses do not change. A status changes only through `/orbit reconcile`, and the record ships in a cycle PR.
+Recorded statuses do not change. A status changes only through `/orbit reconcile`. The record ships in a cycle PR or a slice build PR.
 
 ### `/orbit handoff --project <name> --slice <file>`
 
 Turn one validated execution slice into one tracker issue, through the existing single-issue `orbit sync github` adapter. This is the only `/orbit` operation that writes to an external tracker. No other ApexYard skill calls the ORBIT CLI (ac1-5) - keep that boundary when you extend this operation.
 
-Resolve `project_root` and `orbit_root` as in "Project resolution" above. Also resolve the project's tracker repo from the same registry entry - the handoff files the issue against this repo, and every other step below (the duplicate check, the leak scrub, the sync, the confirmation prompt) uses this same value, never a placeholder typed by hand. Use the helper, not a hand-rolled `awk` line - a project that is not the last registry entry needs the `found`-flag fix the helper carries (apexyard#1446, Hakim N1):
+Resolve `project_root` and `orbit_root` as in Project resolution. Resolve the tracker repository from the same registry entry. Use this value for the duplicate check, leak scrub, sync, and confirmation prompt. Use the helper below. Its `found` flag supports entries before the last registry entry (apexyard#1446, Hakim N1).
 
 ```bash
 project_repo=$("$(git rev-parse --show-toplevel)/.claude/skills/orbit/lib/resolve-project-repo.sh" "$registry" "$project") || {
@@ -243,7 +243,7 @@ project_repo=$("$(git rev-parse --show-toplevel)/.claude/skills/orbit/lib/resolv
 }
 ```
 
-The slice file's `basedOn` names the Plan revision and the Reconciliation it was cut from; resolve the matching records from `orbit_root` before doing anything else:
+The slice `basedOn` field names its Plan revision and source Reconciliation. Resolve the matching records from `orbit_root` first:
 
 - Plan: the record in `docs/orbit/plans/` whose `id` equals the slice's `planId` and whose `revision` equals `basedOn.planRevision`.
 - Reconciliation: the record in `docs/orbit/reconciliations/` whose `id` equals `basedOn.reconciliationId`.
@@ -264,11 +264,11 @@ The helper's flow, in order:
 
 1. **CLI check.** If `$ORBIT_BIN` (default `orbit`) is not on `PATH`, stop with one install note (ac1-4): "ORBIT CLI not found. Install orbit-spec ... or set ORBIT_BIN to the CLI path." Take no further action.
 2. **Validate.** Run `orbit validate --all --root "$orbit_root"`. On a non-zero exit, stop and state the reason from the CLI's own error text (ac1-3).
-3. **Duplicate check.** Search open issues in `$project_repo` for the slice ID, but only *count* a hit when an issue's body contains the exact backtick-quoted token the adapter renders under "Orbit identifiers" (`` `<slice-id>` ``) - a shared word or a prefix is not a match. When the search itself fails (auth, network, rate limit), stop with a "cannot verify" error; never treat a failed search as "no duplicate found".
+3. **Duplicate check.** Search open issues in `$project_repo` for the slice ID. Count only an exact backtick-quoted token under Orbit identifiers. A shared word or prefix does not match. Stop with a cannot verify error if the search fails. Never treat a failed search as no duplicate found.
 4. **Dry-run preview.** Run `orbit sync github --dry-run --plan <plan_file> --snapshot <snapshot_file> --reconciliation <reconciliation_file> --slice <slice_file> --repo "$project_repo"`. The adapter renders the issue title and body with the Plan ID and revision, objective, scope, and identifiers. The preflight requires a `[Slice]` title. Keep that content.
 5. **Leak scrub.** Extract the plain-text title and body from the preview with `jq -r '.title'` / `jq -r '.body'` - not the raw JSON, where a name at the start of a body line is preceded by the two characters `\n` rather than a real newline, and the scrub's word-boundary rule misses it. Run `check-private-refs-runtime.sh` against `$project_repo`, the plain-text title, and the plain-text body written to a file. A non-zero exit blocks the handoff (ac1-6).
 
-After the helper exits 0 with the scrubbed preview on stdout, continue in the skill itself (these two steps ask for and act on operator input, so they stay outside the mechanical helper):
+After the helper exits 0, continue with these steps in the skill. They request and use operator input.
 
 6. **Operator confirmation.** Show the target repo, the preview title, and the preview body, and ask: `Create this issue in <owner/repo> for slice <slice-id>? (y/n)`. A "no", an unclear answer, or no answer stops the handoff. Only a clear "yes" continues.
 
@@ -300,9 +300,23 @@ After the helper exits 0 with the scrubbed preview on stdout, continue in the sk
    the created issue URL. The adapter's real sync does not support this body
    prefix, so use its validated preview as the source for the issue content.
 
-The helper's non-zero exit codes: `10` CLI absent, `11` validate failed, `12` an open issue already carries the exact slice-ID token, `13` a usage error, a record-resolution failure, or a duplicate check that could not be verified (the search failed or returned something other than a JSON array), `14` the leak scrub blocked the preview. Surface the stderr message in each case; do not paraphrase it into a different reason.
+The helper uses these non-zero exit codes:
 
-Out of scope for this operation (later ORBIT slices): the sidecar mapping file and idempotent re-handoff, the leak scrub on committed ORBIT records, `/start-ticket` recording the slice ID, the `Slice:` reference check in PR bodies, and the Projects v2 board.
+- `10`: CLI absent.
+- `11`: validation failed.
+- `12`: an open issue carries the exact slice-ID token.
+- `13`: usage error, record resolution failure, or duplicate check failure. The search failed or returned no JSON array.
+- `14`: the leak scrub blocked the preview.
+
+Report the stderr message for each fault. Preserve its stated reason.
+
+Later ORBIT slices cover these items:
+
+- Sidecar mapping and idempotent handoff.
+- Leak scrub on committed records.
+- Slice ID recording in `/start-ticket`.
+- `Slice:` references in PR bodies.
+- Projects v2 board.
 
 ## End-to-end planning workflow
 
@@ -312,7 +326,30 @@ When the operator asks for the full lifecycle, run these stages in order. Do not
 2. **Snapshot.** Capture the current branch and commit with `/orbit snapshot`. Treat the result as observed evidence, not as a claim that the Plan is achieved.
 3. **Reconcile.** Write a record only when a status changes (see `reconcile`). Read the Plan and Snapshot. For every acceptance criterion, inspect the repository evidence and ask for or record a factual status: `not-verified`, `partially-verified`, `achieved`, or `contradicted`. The CLI creates a `not-verified` scaffold. Fill in evidence and explanations before handoff, then run `orbit validate`.
 4. **Slice.** Ask which one bounded outcome should be advanced, why the evidence justifies it, what is included, and what is excluded. Create the Execution Slice with `/orbit slice`. Keep the Plan revision, Reconciliation ID, and repository commits unchanged.
-5. **Validate and hand off.** Run `/orbit validate` and `/orbit lint`. Merge the slice record, then run `/orbit handoff` to file its issue. Report the records, provenance, and issue URL. Hand the issue to the normal ApexYard build gate; do not execute it from this skill.
+5. **Validate and hand off.** Run `/orbit validate` and `/orbit lint`. Merge the slice record, then run `/orbit handoff` to file its issue. Report the records, provenance, and issue URL. Hand the issue to the normal ApexYard build gate. Do not execute it from this skill.
+
+### Progress in a slice PR
+
+A slice build PR may carry its own Reconciliation (AgDR-0239).
+The ORBIT pane reads its statuses when the PR merges on dev.
+A merge alone changes no status.
+
+1. Resolve the slice record and read its `contributesTo` list.
+2. Find the dev merge-base with `git merge-base origin/dev HEAD`.
+3. Run snapshot against that commit in a local worktree.
+4. Run reconcile with that Snapshot and the current Plan.
+5. Copy statuses from the newest Reconciliation on dev.
+6. Change only the `contributesTo` criteria.
+7. Cite changed PR paths as evidence for each raised status.
+8. Add this observation: `Slice PR: #N; dev merge-base <sha>.`
+9. Run `records-lint.sh --orbit-root docs/orbit --base origin/dev --slice <slice-id> --pr <number>`. Run `git fetch` first, so the base is current.
+10. Include the Snapshot and Reconciliation in the slice build PR.
+
+The lint rejects scope faults with exit 17, evidence faults with exit 18, and provenance faults with exit 19.
+A slice PR without a Reconciliation produces a warning.
+Repeat the lint after each branch update.
+A slice PR with a Reconciliation does not count as a records PR for ac8-5.
+Plan revisions and new slices keep the records PR flow below.
 
 ### Planning cycle: one records PR
 
@@ -428,6 +465,7 @@ Report:
 - validation result
 - provenance commit and branch when a snapshot or slice was created
 - next ApexYard gate, if the operator is handing off a slice
-- for `handoff`: the resolved Plan/Snapshot/Reconciliation files, the preflight exit code, the leak scrub result, the operator's confirmation, and the created issue URL (or the refusal reason and exit code, if the handoff stopped)
+- for `handoff`: resolved record files, preflight exit code, leak scrub result, operator confirmation, and issue URL
+- for a stopped `handoff`: refusal reason and exit code
 
-Do not report a slice as executed. ORBIT describes intent and bounded handoff; execution remains provider-specific. `handoff` is the exception: report the created issue as created, not as executed - filing a ticket is not running the work.
+Do not report a slice as executed. ORBIT describes intent and bounded handoff. Execution remains provider-specific. For `handoff`, report the issue as created. Filing a ticket does not execute its work.

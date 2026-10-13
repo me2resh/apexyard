@@ -3,18 +3,20 @@
 #
 # Prints the `orbit progress` output for a Plan, then the commits since the
 # observed snapshot commit of the newest Reconciliation of that Plan.
+# A Slice PR observation selects its squash commit on --base (origin/dev).
 #
 # Usage: status-live.sh --orbit-root <dir> --plan <plan-id> [--repo-path <dir>]
 # Exit: the progress exit status; 20 usage or missing tool.
 
 set -u
-orbit_root=""; plan_id=""; repo_path=""
+orbit_root=""; plan_id=""; repo_path=""; base="origin/dev"
 usage() { echo "Usage: status-live.sh --orbit-root <dir> --plan <plan-id> [--repo-path <dir>]" >&2; exit 20; }
 while [ $# -gt 0 ]; do
   case "$1" in
     --orbit-root) [ $# -ge 2 ] || usage; orbit_root="$2"; shift 2 ;;
     --plan) [ $# -ge 2 ] || usage; plan_id="$2"; shift 2 ;;
     --repo-path) [ $# -ge 2 ] || usage; repo_path="$2"; shift 2 ;;
+    --base) [ $# -ge 2 ] || usage; base="$2"; shift 2 ;;
     *) usage ;;
   esac
 done
@@ -39,6 +41,19 @@ done
 echo
 if [ -z "$rec" ]; then
   echo "Commits since the observed snapshot: no Reconciliation found for $plan_id."
+  exit 0
+fi
+pr=$(jq -r '.observations[]? | capture("^Slice PR: #(?<number>[0-9]+);").number' "$rec" | head -1)
+if [ -n "$pr" ]; then
+  commit=$(git -C "$repo_path" log "$base" --format='%H %s' --extended-regexp --grep="\\(#$pr\\)$" |
+    awk -v suffix="(#$pr)" 'substr($0, length($0)-length(suffix)+1) == suffix {print $1; exit}')
+  echo "Commits since slice PR #$pr:"
+  if [ -z "$commit" ]; then
+    echo "  cannot check: the squash commit is not on the base branch."
+  else
+    log=$(git -C "$repo_path" log --oneline "$commit..$base")
+    if [ -n "$log" ]; then printf '%s\n' "$log"; else echo "  none"; fi
+  fi
   exit 0
 fi
 snap_id=$(jq -r '.projectSnapshotId // empty' "$rec")

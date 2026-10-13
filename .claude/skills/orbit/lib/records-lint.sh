@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# The slice helper reads the option variables.
+# shellcheck disable=SC2034
+
 # records-lint.sh — lint ORBIT records before a records PR (AgDR-0225, ac8-1).
 #
 # Runs six checks in order and stops on the first fault:
@@ -8,6 +11,10 @@
 #   4. "Missing: ... Next:" rule for a non-achieved explanation
 #   5. local-path check
 #   6. Plan interview: six dated operator answers in the Plan notes
+#   7. Slice PR: compare scope with the newest base record.
+#   8. Slice PR: raised statuses need evidence from changed paths.
+#   9. Slice PR: check the PR number and merge-base observation.
+# A slice PR without a Reconciliation produces a warning.
 # Checks 2 to 6 read the record files changed against --base (default
 # origin/dev), or every record file with --all.
 # By default, checks 3 and 4 read only the text that changed against the merge
@@ -18,7 +25,9 @@
 #
 # Usage: records-lint.sh --orbit-root <dir> [--repo <owner/name>] [--base <ref>] [--all]
 # Exit: 0 clean; 10 validate; 11 leak scrub; 12 sentence; 13 Missing/Next;
-#       14 local path; 15 initiative; 16 interview; 20 usage or missing tool.
+#       14 local path; 15 initiative; 16 interview; 17 scope; 18 evidence;
+#       19 provenance; 20 usage or missing tool.
+# Slice options: --slice <id>, --pr-body <file>, --pr <number>.
 
 set -u
 
@@ -27,6 +36,7 @@ orbit_root=""
 repo="me2resh/apexyard"
 base="origin/dev"
 check_all=0
+slice_id=""; pr_body=""; pr_number=""
 
 usage() {
   echo "Usage: records-lint.sh --orbit-root <dir> [--repo <owner/name>] [--base <ref>] [--all]" >&2
@@ -39,6 +49,9 @@ while [ $# -gt 0 ]; do
     --repo) [ $# -ge 2 ] || usage; repo="$2"; shift 2 ;;
     --base) [ $# -ge 2 ] || usage; base="$2"; shift 2 ;;
     --all) check_all=1; shift ;;
+    --slice) [ $# -ge 2 ] || usage; slice_id="$2"; shift 2 ;;
+    --pr-body) [ $# -ge 2 ] || usage; pr_body="$2"; shift 2 ;;
+    --pr) [ $# -ge 2 ] || usage; pr_number="$2"; shift 2 ;;
     *) usage ;;
   esac
 done
@@ -114,6 +127,15 @@ case "$branch" in orbit/*)
     esac
     [ "$owner" = "$plan_id" ] || fail 15 initiative "$f" "Record belongs to another initiative."
   done
+;; esac
+
+# Slice checks use the base tip to prevent lost statuses.
+case "$branch" in orbit/*) ;; *)
+  if [ -n "$slice_id" ] || [ -n "$pr_body" ]; then
+  # shellcheck source=./slice-pr-lint.sh
+  . "$script_dir/slice-pr-lint.sh"
+  slice_pr_lint
+  fi
 ;; esac
 
 # Select the files for checks 2 to 6.

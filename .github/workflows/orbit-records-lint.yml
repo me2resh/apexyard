@@ -1,0 +1,55 @@
+name: ORBIT records lint
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+permissions:
+  contents: read
+jobs:
+  records-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Select records or slice PR
+        id: select
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          git checkout -B "$HEAD_REF" HEAD
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/orbit-pr-body"
+          if git diff --name-only "origin/$BASE_REF...HEAD" -- docs/orbit/ | grep -q . ||
+             grep -q 'ORBIT slice:' "$RUNNER_TEMP/orbit-pr-body"; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v5.0.0
+        if: steps.select.outputs.run == 'true'
+        with:
+          node-version: '22'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.select.outputs.run == 'true'
+        with:
+          repository: me2resh/orbit-spec
+          ref: 7a024046c7d65d28576a5b175978cd4f70ea91cc
+          path: .orbit-cli
+          persist-credentials: false
+      - name: Install ORBIT
+        if: steps.select.outputs.run == 'true'
+        working-directory: .orbit-cli
+        run: npm ci --ignore-scripts
+      - name: Lint records
+        if: steps.select.outputs.run == 'true'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          wrapper="$RUNNER_TEMP/orbit"
+          printf '#!/usr/bin/env bash\nexec node "%s/.orbit-cli/bin/orbit.js" "$@"\n' "$GITHUB_WORKSPACE" > "$wrapper"
+          chmod +x "$wrapper"
+          export ORBIT_BIN="$wrapper"
+          bash .claude/skills/orbit/lib/records-lint.sh --orbit-root docs/orbit \
+            --base "origin/$BASE_REF" --pr "$PR_NUMBER" --pr-body "$RUNNER_TEMP/orbit-pr-body"
