@@ -10,6 +10,60 @@ COMMAND=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/nul
 # The shared allowlist keeps executable command words visible. If it cannot
 # classify the command, the scanner returns raw text and the gate fails closed.
 HOOK_DIR=$(cd "$(dirname "$0")" 2>/dev/null && pwd) || exit 0
+
+# AGC pilot (me2resh/apexyard#1698, AgDR-0237). APEXYARD_AGC_MODE selects:
+#   (unset)  the normal gate: exit 2 blocks, with the AGC object on stderr.
+#   repair   set by dispatch-bash.sh in Claude Code and Codex only. A
+#            mechanical fix prints a "repaired" AGC object on stdout and exits
+#            0. dispatch-bash.sh applies it and runs every gate again.
+#   preview  the same check on a proposed command. It prints the AGC object on
+#            stdout, never blocks and writes no state (AGC SPEC §11).
+AGC_MODE="${APEXYARD_AGC_MODE:-}"
+AGC_LIB=0
+if [ -r "$HOOK_DIR/_lib-agc.sh" ] && command -v jq >/dev/null 2>&1; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-agc.sh"
+  AGC_LIB=1
+fi
+AGC_GATE_ID="block-ambient-tracker-repo"
+AGC_CLASS="missing-repo-flag"
+AGC_EMITTED=0
+# agc_object <verdict> [<remedy-json> <what>]: one AGC response for this call.
+agc_object() {
+  local verdict="$1" remedy="${2:-null}" what="${3:-}"
+  jq -n --arg verdict "$verdict" --arg gate "$AGC_GATE_ID" --arg class "$AGC_CLASS" \
+    --arg fp "$(agc_sha256 "$COMMAND")" --argjson remedy "$remedy" --arg what "$what" '
+    {
+      agc: "0.1",
+      gate: {id: $gate, kind: "deterministic", version: "1"},
+      subject: {kind: "tool-call", fingerprint: $fp, scope: ["Bash.command"]},
+      verdict: $verdict,
+      coverage: {complete: true, classes: [$class]},
+      attempt: {n: 1, budget: 3}
+    }
+    + (if $verdict == "allow" then {findings: []} else {findings: [{
+        id: ($gate + "/" + $class + "/Bash.command"),
+        class: $class,
+        location: "Bash.command",
+        what: $what,
+        why: "A tracker command must name its repository when the active ticket belongs to a different repository than the checkout (me2resh/apexyard#1268).",
+        severity: "blocking",
+        status: "new",
+        remedy: $remedy,
+        check: {kind: "preview"}
+      }]} end)'
+}
+if [ "$AGC_MODE" = "preview" ]; then
+  if [ "$AGC_LIB" -eq 1 ]; then
+    # Every path that ends without a finding is an allow. The trap prints
+    # that answer, and a preview always exits 0.
+    trap '[ "$AGC_EMITTED" -eq 1 ] || agc_object allow; exit 0' EXIT
+  else
+    echo "AGC preview needs jq and _lib-agc.sh." >&2
+    exit 0
+  fi
+fi
+
 SCAN_COMMAND=$COMMAND
 if [ -r "$HOOK_DIR/_lib-command-scrub.sh" ]; then
   # shellcheck source=/dev/null
@@ -237,10 +291,53 @@ if [ "$COUNT" -eq 1 ] && [ "$(printf '%s' "$UNIQUE_REPOS" | tr '[:upper:]' '[:lo
   exit 0
 fi
 
+# A repair is mechanical only for one plain call: `gh issue|pr <subcommand>`
+# at the start of a one-line command, with no shell syntax that could hide a
+# second command, and one target whose name is a plain owner/repo. The flag
+# goes right after the subcommand, before any `--`. dispatch-bash.sh runs
+# every gate again on the rewritten command, this one included.
+NEW_COMMAND=""
 if [ "$COUNT" -eq 1 ]; then
   TARGET=$(printf '%s' "$UNIQUE_REPOS" | head -1)
-  echo "BLOCKED: tracker command has no explicit repository, but the active ticket targets $TARGET while this checkout resolves to ${ORIGIN_REPO:-no origin}. Add --repo $TARGET (or -R $TARGET)." >&2
+  if [ "$JOIN_UNMODELLED" -eq 0 ] \
+    && printf '%s' "$TARGET" | LC_ALL=C grep -qE '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' \
+    && [ "$(printf '%s\n' "$COMMAND" | wc -l | tr -d ' ')" -eq 1 ] \
+    && ! printf '%s' "$COMMAND" | LC_ALL=C grep -q '[;|&()<>`$\\#]' \
+    && printf '%s' "$COMMAND" | LC_ALL=C grep -qE '^[[:space:]]*gh[[:space:]]+(issue|pr)[[:space:]]+[a-z][a-z-]*([[:space:]]|$)'; then
+    NEW_COMMAND=$(printf '%s' "$COMMAND" | sed -E "s#^([[:space:]]*gh[[:space:]]+(issue|pr)[[:space:]]+[a-z][a-z-]*)#\\1 --repo $TARGET#")
+  fi
+  BLOCK_TEXT="BLOCKED: tracker command has no explicit repository, but the active ticket targets $TARGET while this checkout resolves to ${ORIGIN_REPO:-no origin}. Add --repo $TARGET (or -R $TARGET)."
+  WHAT="The tracker command names no repository, but the active ticket targets $TARGET and this checkout resolves to ${ORIGIN_REPO:-no origin}."
 else
-  echo "BLOCKED: tracker command has no explicit repository, and active tickets target multiple repositories. Add --repo <owner/repo> (or -R <owner/repo>)." >&2
+  BLOCK_TEXT="BLOCKED: tracker command has no explicit repository, and active tickets target multiple repositories. Add --repo <owner/repo> (or -R <owner/repo>)."
+  WHAT="The tracker command names no repository, and the active tickets target more than one repository: $(printf '%s' "$UNIQUE_REPOS" | sed '/^$/d' | paste -sd, - | sed 's/,/, /g')."
 fi
+
+if [ "$AGC_LIB" -eq 1 ]; then
+  if [ -n "$NEW_COMMAND" ] && { [ "$AGC_MODE" = "repair" ] || [ "$AGC_MODE" = "preview" ]; }; then
+    agc_object repaired "$(jq -n --arg cmd "$NEW_COMMAND" '{kind: "rewrite", applied: true, input: {command: $cmd}}')" "$WHAT"
+    AGC_EMITTED=1
+    exit 0
+  fi
+  # Without a repair the strongest remedy this hook can carry is one exact
+  # command when it knows the rewrite, and a delegate to the calling agent
+  # otherwise (AGC SPEC §6: an unapplied rewrite is never valid on a block).
+  if [ -n "$NEW_COMMAND" ]; then
+    REMEDY=$(jq -n --arg cmd "$NEW_COMMAND" '{kind: "command", run: $cmd}')
+  else
+    REMEDY=$(jq -n '{kind: "delegate", role: "calling agent", authority: "me2resh/apexyard#1268: add --repo <owner/repo> or -R <owner/repo> to each tracker command"}')
+  fi
+  AGC_JSON=$(agc_object block "$REMEDY" "$WHAT")
+  if [ "$AGC_MODE" = "preview" ]; then
+    printf '%s\n' "$AGC_JSON"
+    AGC_EMITTED=1
+    exit 0
+  fi
+  {
+    printf '%s\n' "$BLOCK_TEXT"
+    printf '```agc\n%s\n```\n' "$(jq -c . <<<"$AGC_JSON")"
+  } >&2
+  exit 2
+fi
+echo "$BLOCK_TEXT" >&2
 exit 2

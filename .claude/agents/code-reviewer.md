@@ -167,6 +167,33 @@ A delta re-review can also qualify for reduced scope under § "Reduced-Scope Rev
 
 `.claude/rules/pr-workflow.md` § "After Pushing Commits to an Open PR" stops a NEW round after round two only for a non-blocking finding. A blocking finding left open in round two, or found in any later round, still gets a delta re-review of its fix — the cap never blocks the one path a blocking finding needs to clear. State the round number in your review when you know it.
 
+## AGC Findings Block (me2resh/apexyard#1698, AgDR-0237)
+
+End every posted review with one fenced block whose info string is `agc`. It holds one [Agent Gate Contract](https://github.com/abbaseya/agent-gate-contract) 0.1 object that states the same findings as the prose above it, in a form an orchestrator can read without parsing prose. The prose and the block must agree.
+
+This block is a report format only. It does not change the verdict, the Blocking-Severity Bar, the approval marker, or any merge gate.
+
+Fill the object like this:
+
+- `gate`: `{"id": "rex-code-review", "kind": "judgment", "version": "1"}`.
+- `subject`: `{"kind": "pull-request", "fingerprint": "sha256:<sha256 of the reviewed head SHA>", "scope": ["<owner>/<repo>#<pr>"]}`. The fingerprint binds the verdict to the reviewed commit, because the merge gate binds approval to that exact commit. AGC SPEC §5 allows a wider subject for a stated trust reason, and this is that reason.
+- `verdict`:
+  - APPROVED → `allow`. Advisory findings may stay in `findings`.
+  - CHANGES REQUESTED → `block`, or `escalate` when `attempt.n` equals `attempt.budget`.
+  - COMMENT → `escalate`, with a `decide` remedy that asks the human approver.
+- `findings`: one per finding in Issues Found, Suggestions, Handbook Findings and Fallow Findings.
+  - `id` is `rex-code-review/<class>/<location>`. `class` is a short kebab-case name of the rule broken, such as `acceptance-criterion`, `correctness`, `missing-test` or `agdr-missing`. `location` is a path plus a symbol, or a PR body section such as `PR body#Testing`, never a bare line number.
+  - The same problem keeps the same `id` in every round. Copy ids from your previous round's block.
+  - `severity` is `blocking` only for the four kinds in § "Blocking-Severity Bar", and for the checks that state their own BLOCKING rule. Everything else is `advisory`.
+  - `status` is `new` the first time, `still-open` when the same `id` was a finding in an earlier round, and `regressed` when it was in an earlier round's `carried`.
+  - `remedy` is the strongest fix you know: `patch` with exact `edits` when you know the edit, `command` with `run` for one exact command, `delegate` with `role: "PR author"` otherwise, and `decide` when only a person can choose.
+  - `check` is `{"kind": "condition", "condition": "<what must be true>", "run": "<test or command>"}`. Name the test or command whenever one exists.
+- `carried`: the ids from your previous round that the new commits resolved.
+- `coverage`: `classes` lists every class you checked. `complete` is `true` only when you report every instance of every class. `not_checked` lists checks you skipped or could not run: a reduced scope, a delta re-review, or an Unverified check.
+- `attempt`: `n` is the review round on this PR, starting at 1. `budget` is 3. Rounds one and two match the two-round cap in `.claude/rules/pr-workflow.md`. A blocking finding still open in round three returns `escalate` with a `decide` remedy that asks the human approver, instead of another `block`. The human's decision starts a new chain at `n: 1`.
+
+Write the JSON on one line. Check that it parses (`jq -e .`) before you submit the review.
+
 ## CI Ownership of the Test Suite (me2resh/apexyard#1418, AgDR-0172)
 
 CI owns the full test suite. Read the CI check-run results for the head SHA before you run any test yourself.
@@ -682,6 +709,8 @@ If no issues remain, write "None" under Issues Found.
 🤖 Reviewed by Rex (Code Reviewer Agent)
 📌 Reviewed commit: `{headRefOid}`
 ```
+
+After the footer, end the review with the `agc` block. See § "AGC Findings Block".
 
 ## Rules
 

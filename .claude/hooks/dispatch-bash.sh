@@ -15,6 +15,49 @@ if [ "$COMMAND" = "null" ]; then
   COMMAND=""
 fi
 
+# AGC repair pass (me2resh/apexyard#1698, AgDR-0237). In Claude Code and Codex
+# only, block-ambient-tracker-repo.sh may fix the call itself instead of
+# blocking it. A repair replaces INPUT and COMMAND here, before any other gate
+# reads them, so every gate below judges the rewritten call. Claude Code does
+# not re-run PreToolUse hooks on updatedInput, so this re-check is the only
+# one the rewritten call gets. From here on stdout carries only the final
+# PreToolUse JSON: any other hook output goes to stderr. Every failure to
+# apply a repair blocks. None of them lets the original call through.
+AGC_REPAIR_OUTPUT=""
+if [ -n "$COMMAND" ] && [ -r "$HOOK_DIR/_lib-agc.sh" ] && [ -x "$HOOK_DIR/block-ambient-tracker-repo.sh" ] \
+  && command -v jq >/dev/null 2>&1; then
+  # shellcheck source=_lib-agc.sh
+  . "$HOOK_DIR/_lib-agc.sh"
+  AGC_RUNTIME=$(agc_runtime "$INPUT")
+  if [ "$AGC_RUNTIME" != "none" ]; then
+    agc_rc=0
+    agc_out=$(APEXYARD_AGC_MODE=repair "$HOOK_DIR/block-ambient-tracker-repo.sh" <<<"$INPUT") || agc_rc=$?
+    if [ "$agc_rc" -eq 2 ]; then
+      exit 2
+    fi
+    if [ "$agc_rc" -eq 0 ] && [ -n "$agc_out" ]; then
+      agc_command=$(jq -er 'select(.verdict == "repaired") | .findings[0].remedy
+        | select(.kind == "rewrite" and .applied == true) | .input.command | select(type == "string" and length > 0)' \
+        <<<"$agc_out" 2>/dev/null) || agc_command=""
+      agc_input=""
+      if [ -n "$agc_command" ]; then
+        agc_input=$(jq -c --arg c "$agc_command" '.tool_input.command = $c' <<<"$INPUT" 2>/dev/null) || agc_input=""
+      fi
+      if [ -n "$agc_input" ]; then
+        AGC_REPAIR_OUTPUT=$(agc_pretooluse_output "$AGC_RUNTIME" "$(jq -c '.tool_input' <<<"$agc_input")" "$agc_out" 2>/dev/null) \
+          || AGC_REPAIR_OUTPUT=""
+      fi
+      if [ -z "$AGC_REPAIR_OUTPUT" ]; then
+        echo "BLOCKED: block-ambient-tracker-repo.sh returned an AGC repair that dispatch-bash.sh could not apply. Add --repo <owner/repo> to the tracker command." >&2
+        exit 2
+      fi
+      INPUT=$agc_input
+      COMMAND=$agc_command
+      exec 3>&1 1>&2
+    fi
+  fi
+fi
+
 # Merge-shape detection for wrapped commands (AgDR-0162, me2resh/apexyard#1338).
 # Prefix case arms still handle the one-line forms. is_merge_command scans the
 # full payload command, so `bash -c` around tracker_pr_merge still routes.
@@ -363,4 +406,10 @@ fi
 if [ -z "$COMMAND" ]; then
   printf 'WARN: dispatcher could not parse the Bash command; running merge gates fail-closed.\n' >&2
   run_merge_gates
+fi
+
+# AGC repair pass: every gate passed on the rewritten call, so hand the
+# repair to the runtime. This is the only stdout the dispatcher writes.
+if [ -n "$AGC_REPAIR_OUTPUT" ]; then
+  printf '%s\n' "$AGC_REPAIR_OUTPUT" >&3
 fi
