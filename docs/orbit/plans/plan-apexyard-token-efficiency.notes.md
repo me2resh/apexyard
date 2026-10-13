@@ -102,7 +102,7 @@ o1 first, because every later change and the harness o4 slice measure with its s
 - **Naqid (2026-10-13): proceed with changes.** All points are applied:
   - Lost statuses from concurrent slice PRs: ac8-9 fails a change to a criterion outside the slice's contributesTo list.
   - Snapshot commit after a squash merge: ac8-10 records the dev merge-base and the PR number.
-  - Lint scope on feature branches and in CI: the slice takes the initiative from the slice record, not from the branch name.
+  - Lint scope on feature branches and in CI: the lint gets the initiative from the slice record, not from the branch name.
   - Conflict with AgDR-0225 option I and ac8-3: an AgDR amends option I. ac8-8 warns only when a status changed.
   - ac8-7 needs a fault a lint can judge: raised status evidence must name a path in the PR diff.
 - **ac8-5.** Slice PRs that carry a Reconciliation do not count as records PRs.

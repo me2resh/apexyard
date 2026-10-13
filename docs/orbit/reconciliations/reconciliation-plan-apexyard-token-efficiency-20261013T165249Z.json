@@ -7,7 +7,8 @@
   "reconciledAt": "2026-10-13T16:52:49.953Z",
   "observations": [
     "Observed me2resh/apexyard at 0890c021ac3655646606153c41d3bbbf10f46dc1.",
-    "Revision 4 adds ac8-6 to ac8-10. The other statuses are carried without change from reconciliation-plan-apexyard-token-efficiency-20261012T124206Z. This cycle did not check them again."
+    "Revision 4 adds ac8-6 to ac8-10. The other statuses are carried without change from reconciliation-plan-apexyard-token-efficiency-20261012T124206Z. This cycle did not check them again.",
+    "The carried evidence was observed at 400db9b428a3f7c1f699f42f546f43e02172758a. Its line references refer to that commit, not to the observed commit above."
   ],
   "criterionAssessments": [
     {
