@@ -1,0 +1,21 @@
+{
+  "rows": [
+    {"match":{"hostKind":["hosting service"],"shape":["web app"]},"goldenPath":"typescript-nextjs","sentence":"This will run as a website on Netlify.","pipeline":["floor CI","platform preview","platform live on merge"],"manualSteps":["Create the Netlify project.","Add the named secrets."],"infraDraft":"platform project config"},
+    {"match":{"hostKind":["hosting service"],"shape":["API service","data pipeline"]},"goldenPath":{"API service":"python-fastapi","data pipeline":"go-data-pipeline"},"sentence":"Hosting services fit websites best. Your service will run as a container on Netlify. You can choose your company cloud instead.","pipeline":["floor CI","platform preview","platform live on merge"],"manualSteps":["Confirm that Netlify can run this container before launch.","Add the named secrets."],"infraDraft":"platform container config"},
+    {"match":{"hostKind":["company cloud"],"hostProvider":["AWS"],"shape":["web app","API service"]},"goldenPath":{"web app":"typescript-nextjs","API service":"python-fastapi"},"sentence":"This will run as a container service on your company cloud.","pipeline":["floor CI","image build","terraform plan","OIDC deploy on merge (disabled)","terraform apply (disabled)"],"manualSteps":["Create the OIDC role.","Add the named secrets."],"infraDraft":"terraform service, registry, network, logs, secret references"},
+    {"match":{"hostKind":["company cloud"],"hostProvider":["AWS"],"shape":["data pipeline"]},"goldenPath":"go-data-pipeline","sentence":"This will run as a scheduled job on your company cloud.","pipeline":["floor CI","image build","terraform plan","OIDC deploy on merge (disabled)","terraform apply (disabled)"],"manualSteps":["Create the OIDC role.","Add the named secrets."],"infraDraft":"terraform scheduler, task, logs"},
+    {"match":{"hostKind":["company cloud"],"hostProvider":["Google Cloud","Azure"],"shape":["web app","API service","data pipeline"]},"goldenPath":{"web app":"typescript-nextjs","API service":"python-fastapi","data pipeline":"go-data-pipeline"},"sentence":"Your infra plan will be a written draft. Files exist for AWS only today.","pipeline":["floor CI","image build","terraform plan","OIDC deploy on merge (disabled)","terraform apply (disabled)"],"manualSteps":["Create the OIDC role.","Add the named secrets."],"infraDraft":"written plan only"},
+    {"match":{"hostKind":["server or container"],"shape":["web app","API service","data pipeline"]},"goldenPath":{"web app":"typescript-nextjs","API service":"python-fastapi","data pipeline":"go-data-pipeline"},"sentence":"This builds a container image. You choose how to deploy it later.","pipeline":["floor CI","image build"],"manualSteps":["Choose how to deploy before launch.","Add the named secrets."],"infraDraft":"Dockerfile and compose file"},
+    {"match":{},"goldenPath":"custom","sentence":"No golden path fits yet. You get the basic checks only.","pipeline":["floor CI","placeholder test (passes and reports placeholder)"],"manualSteps":["Choose a host before launch."],"infraDraft":"none"}
+  ],
+  "scaleAdditions": {
+    "demo":["floor checks","one environment"],
+    "small":["dependency audit","secrets scan","hosting-service preview"],
+    "production":["dependency audit","secrets scan","security.yml","dependency-audit.yml","named approval environment (o4)","staging environment (o4)","rollback step (o4)"]
+  },
+  "dataSensitivityAdditions": {
+    "none":[],
+    "personal":["secrets scan","encryption at rest","backups","Run /threat-model."],
+    "payment":["secrets scan","encryption at rest","backups","Run /threat-model.","Use a hosted checkout."]
+  }
+}

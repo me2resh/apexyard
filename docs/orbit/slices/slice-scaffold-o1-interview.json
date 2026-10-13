@@ -4,12 +4,12 @@
   "planId": "plan-apexyard-scaffold",
   "outcomeId": "o1-interview-sized-to-scale",
   "basedOn": {
-    "planRevision": 2,
-    "reconciliationId": "reconciliation-plan-apexyard-scaffold-20261013T114533Z",
+    "planRevision": 3,
+    "reconciliationId": "reconciliation-plan-apexyard-scaffold-20261013T132131Z",
     "repositories": {}
   },
-  "objective": "Build the /scaffold interview and the scaffold spec. The scale question comes first and sets the depth. Each question has a recommended answer with a plain reason. A JSON schema validates the spec.",
-  "why": "Every other outcome reads the scaffold spec, so the interview and the spec come first. The owner chose o1 as the first slice on 2026-10-13.",
+  "objective": "Build the /scaffold interview and the scaffold spec. The interview asks where the project runs first and sets its depth by scale. Each question has a recommended answer with a plain reason.",
+  "why": "Every other outcome reads the scaffold spec, so the interview and the spec come first. Revision 3 makes the interview hosting-first after a live test run.",
   "contributesTo": [
     "ac1-1",
     "ac1-2",

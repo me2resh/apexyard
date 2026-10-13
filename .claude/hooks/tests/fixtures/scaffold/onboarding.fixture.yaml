@@ -2,5 +2,11 @@ company:
   language: ignored
 tech_stack:
   language: "Python"
+  hosting: "AWS"
+  database: "PostgreSQL"
+  ci_cd: "GitLab CI"
+  dataSensitivity: payment
+  compliance: PCI
+  auth: team
 other:
   cloud: ignored

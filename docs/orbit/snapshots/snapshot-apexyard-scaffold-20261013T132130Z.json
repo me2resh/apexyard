@@ -1,0 +1,15 @@
+{
+  "specVersion": "0.1",
+  "id": "snapshot-apexyard-20261013T132130Z",
+  "project": {
+    "id": "apexyard"
+  },
+  "observedAt": "2026-10-13T13:21:30.899Z",
+  "repositories": [
+    {
+      "repositoryId": "me2resh/apexyard",
+      "branch": "feature/GH-1708-scaffold-interview",
+      "commit": "987d0e29ec26fa8051ea46dccc259d86f2719787"
+    }
+  ]
+}

@@ -1,6 +1,26 @@
-# Notes for the scaffold initiative (current: revision 2)
+# Notes for the scaffold initiative (current: revision 3)
 
 These notes sit beside the initiative record. The ORBIT v0.1 schema for that record type has no fields for constraints, decisions, dependencies or proof. The initiative record stays valid ORBIT. The record type and the file names keep the `plan-` prefix (AgDR-0226).
+
+## Revision 3
+
+Owner direction, 2026-10-13, after a live test run of the first interview: ask where the project runs first, then recommend the technology and the pipeline. Remove the cost, currency and test questions. Keep the interview simple, but effective for infrastructure and pipelines.
+
+A roundtable of the platform, UX, architecture and product roles, with a contrarian, converged on the design. AgDR-0238 records it. The owner approved it on the same day, with two more decisions: Netlify is the default managed hosting service, and outcome o4 shows a rough cost range with no budget question.
+
+Criterion changes in revision 3:
+
+| Criterion | Change |
+|-----------|--------|
+| ac1-1 | Host first, not scale first. A demo asks 3 questions, a small product 4, a production service 5. |
+| ac1-5 | Adds the answer sources default and derived. |
+| ac2-1 | A rules table recommends the stack and the pipeline from the host and the shape. Language, coverage floor and design become defaults. |
+| ac4-1 | No cost, budget or currency question. Scale comes from who uses the project. |
+| ac4-2 | A host of none yet gives an open question, not a draft. |
+| ac4-5 | A rough cost range, with no budget question and no budget comparison. |
+| ac4-6 | The price table serves the cost range. |
+| ac5-1 | The language comes from the golden path. The summary shows a clash with onboarding. |
+| ac6-2 | The page-size budget is a default of 500 KB that the owner can change. |
 
 ## Revision 2
 
@@ -56,6 +76,12 @@ ac4-1 and ac1-3 do not conflict. ac4-1 covers scale, budget and compliance facts
 - 2026-10-13, q4-acceptance: Keep the revision 1 criteria under the new outcomes. Add criteria for scale, recommendations, design, deployment, audited pins, build-environment check and security baseline. Also add one-command start, gap sizing and the lessons loop.
 - 2026-10-13, q5-constraints: Keep the revision 1 constraints. Add: no project names in framework text or records. Use recommendations in plain language for non-engineers. Handover gap-fill never overwrites a file without a yes for that file.
 - 2026-10-13, q6-save: Save revision 2 as drafted.
+- 2026-10-13, q1-outcome (revision 3): Unchanged. The owner added: the interview must be simple but effective at producing good infrastructure and pipelines.
+- 2026-10-13, q2-intent (revision 3): Unchanged.
+- 2026-10-13, q3-outcomes (revision 3): Unchanged. The eight outcomes stay.
+- 2026-10-13, q4-acceptance (revision 3): Ask where the project runs first and recommend the technology and pipeline. Remove the cost, currency and test questions. Amend ac1-1, ac1-5, ac2-1, ac4-1, ac4-2, ac4-5, ac4-6, ac5-1 and ac6-2.
+- 2026-10-13, q5-constraints (revision 3): Netlify is the default managed hosting service. Outcome o4 shows a rough cost range and asks no budget question.
+- 2026-10-13, q6-save (revision 3): Apply the converged roundtable design, with a plan amendment and a short AgDR.
 
 ## Where the initiative comes from
 
@@ -175,12 +201,12 @@ The initiative record schema has no proof field, so the proof for each criterion
 
 | Criterion | Shown by |
 |-----------|----------|
-| ac1-1 | Fixture transcripts start with scale. A demo has at most 5 questions. A production service includes every question. |
+| ac1-1 | Fixture runs ask the host first. The question counts are 3, 4 and 5 for demo, small and production. |
 | ac1-2 | A fixture transcript shows the recommended answer first for each question, with one plain sentence that gives its reason. |
 | ac1-3 | A fixture transcript selects 'Not sure, recommend for me'. The spec records the recommended value, its reason and the recommended mark. |
 | ac1-4 | A fixture with a filled tech_stack block, where the transcript skips those questions. |
-| ac1-5 | The schema file, and a test that validates a good and a bad spec. The valid spec includes scale and owner, recommendation, onboarding and PRD sources. |
-| ac2-1 | A fixture transcript asks one question per turn about service shape, language, deployment target, coverage floor and design direction. A none-yet answer writes an open question in the project plan notes. |
+| ac1-5 | The schema file, and a test that validates a good and a bad spec. The valid spec includes the default and derived sources. |
+| ac2-1 | The rules table, a --derive test for each of the seven rows, and the summary text that shows the defaults. A none-yet host writes an open question. |
 | ac2-2 | The rule table, and a test that a spec no golden path fits takes the custom start of ac2-16. |
 | ac2-3 | The skill text, and a spec written after an override. |
 | ac2-4 | The starter directory, its lock file and the VERSION diff. An audit fixture checks generator versions before pinning. A manifest check confirms exact versions for production dependencies and development tools. |
@@ -202,21 +228,21 @@ The initiative record schema has no proof field, so the proof for each criterion
 | ac3-4 | A fixture with existing files, explicit file approvals and a diff proving unapproved files were not overwritten. |
 | ac3-5 | The fixture report with before and after scores for all five harnessability dimensions. |
 | ac3-6 | A gap report assigns must, should or later from scale. A fixture transcript asks only about gaps and recommends each answer. |
-| ac4-1 | The skill text, and a fixture transcript with unknown answers. |
-| ac4-2 | The draft recommendation for an AWS spec and for a host with no IaC template. |
+| ac4-1 | The question bank and a test that no question asks about cost, budget or currency. |
+| ac4-2 | The draft recommendation for an AWS spec, for a host with no IaC template, and the open question for a none-yet host. |
 | ac4-3 | `terraform validate`, `tflint` and ASCII check output in framework CI, and a seeded non-ASCII fault. |
 | ac4-4 | The generated CI file, and a test that no apply job runs by default. |
-| ac4-5 | The generated cost file for a spec under budget and a spec over budget. |
-| ac4-6 | The price table, the "not a quote" line in each cost file, and the price-date CI check. |
+| ac4-5 | The generated cost range for a small and a production spec, with drivers and assumptions and no budget comparison. |
+| ac4-6 | The price table, the not-a-quote line in each cost range, and the price-date CI check. |
 | ac4-7 | A grep test over the skill text and scripts for apply and cloud write calls. |
-| ac5-1 | The rule table, and a fixture transcript with language unknown. |
+| ac5-1 | The rule table, and a summary that shows a language clash with onboarding. |
 | ac5-2 | A fixture spec with a web plus pipeline shape, and a fixture spec that fits no bundle. |
 | ac5-3 | The starter directories, their lock files and each VERSION diff. |
 | ac5-4 | The generated CI files, the fixture test, and the CI time in the PR. |
 | ac5-5 | `/handover` calling the script, and the regression test. |
 | ac5-6 | The scoring script, and its output on each generated fixture project. |
 | ac6-1 | The generated CI files and layer-check configs for each topology. |
-| ac6-2 | A fixture spec with a bundle-size budget, and the CI step that fails above it. |
+| ac6-2 | A web spec with the 500 KB default, a spec with a changed budget, and the CI step that fails above it. |
 | ac6-3 | The generated fitness-functions file in each fixture run. |
 | ac6-4 | The fixture test in framework CI. |
 | ac7-1 | A new-fork transcript that selects start a new project and shows the recommended /scaffold offer. |

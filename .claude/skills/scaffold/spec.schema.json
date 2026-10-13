@@ -3,26 +3,456 @@
   "title": "Scaffold spec",
   "type": "object",
   "additionalProperties": false,
-  "required": ["specVersion", "scale", "answers", "openQuestions", "createdAt"],
+  "required": [
+    "specVersion",
+    "scale",
+    "answers",
+    "openQuestions",
+    "unusedFields",
+    "createdAt"
+  ],
   "properties": {
-    "specVersion": {"const": "0.1"},
-    "scale": {"enum": ["demo", "small", "production"]},
+    "specVersion": {
+      "const": "0.1"
+    },
+    "scale": {
+      "enum": [
+        "demo",
+        "small",
+        "production"
+      ]
+    },
     "answers": {
       "type": "object",
-      "additionalProperties": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["value", "source"],
-        "properties": {
-          "value": {},
-          "source": {"enum": ["owner", "recommendation", "onboarding", "prd"]},
-          "reason": {"type": "string"}
+      "additionalProperties": false,
+      "properties": {
+        "reuseConfirm": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "source"
+          ],
+          "properties": {
+            "value": {
+              "enum": [
+                "Use these",
+                "Change one",
+                "Ignore them and ask me"
+              ]
+            },
+            "source": {
+              "enum": [
+                "owner",
+                "recommendation",
+                "onboarding",
+                "prd",
+                "default",
+                "derived"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "if": {
+            "properties": {
+              "source": {
+                "const": "recommendation"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "reason"
+            ]
+          }
         },
-        "if": {"properties": {"source": {"const": "recommendation"}}},
-        "then": {"required": ["reason"]}
+        "scale": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "source"
+          ],
+          "properties": {
+            "value": {
+              "enum": [
+                "demo",
+                "small",
+                "production"
+              ]
+            },
+            "source": {
+              "enum": [
+                "owner",
+                "recommendation",
+                "onboarding",
+                "prd",
+                "default",
+                "derived"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "if": {
+            "properties": {
+              "source": {
+                "const": "recommendation"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "reason"
+            ]
+          }
+        },
+        "hostKind": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "source"
+          ],
+          "properties": {
+            "value": {
+              "enum": [
+                "hosting service",
+                "company cloud",
+                "server or container",
+                "other"
+              ]
+            },
+            "source": {
+              "enum": [
+                "owner",
+                "recommendation",
+                "onboarding",
+                "prd",
+                "default",
+                "derived"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "if": {
+            "properties": {
+              "source": {
+                "const": "recommendation"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "reason"
+            ]
+          }
+        },
+        "hostProvider": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "source"
+          ],
+          "properties": {
+            "value": {
+              "enum": [
+                "AWS",
+                "Google Cloud",
+                "Azure"
+              ]
+            },
+            "source": {
+              "enum": [
+                "owner",
+                "recommendation",
+                "onboarding",
+                "prd",
+                "default",
+                "derived"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "if": {
+            "properties": {
+              "source": {
+                "const": "recommendation"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "reason"
+            ]
+          }
+        },
+        "shape": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "source"
+          ],
+          "properties": {
+            "value": {
+              "enum": [
+                "web app",
+                "API service",
+                "data pipeline",
+                "other"
+              ]
+            },
+            "source": {
+              "enum": [
+                "owner",
+                "recommendation",
+                "onboarding",
+                "prd",
+                "default",
+                "derived"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "if": {
+            "properties": {
+              "source": {
+                "const": "recommendation"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "reason"
+            ]
+          }
+        },
+        "dataSensitivity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "source"
+          ],
+          "properties": {
+            "value": {
+              "enum": [
+                "none",
+                "personal",
+                "payment"
+              ]
+            },
+            "source": {
+              "enum": [
+                "owner",
+                "recommendation",
+                "onboarding",
+                "prd",
+                "default",
+                "derived"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "if": {
+            "properties": {
+              "source": {
+                "const": "recommendation"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "reason"
+            ]
+          }
+        },
+        "storage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "source"
+          ],
+          "properties": {
+            "value": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source": {
+              "enum": [
+                "owner",
+                "recommendation",
+                "onboarding",
+                "prd",
+                "default",
+                "derived"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "if": {
+            "properties": {
+              "source": {
+                "const": "recommendation"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "reason"
+            ]
+          }
+        },
+        "releaseCheck": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "source"
+          ],
+          "properties": {
+            "value": {
+              "enum": [
+                "teammate",
+                "checks",
+                "window"
+              ]
+            },
+            "source": {
+              "enum": [
+                "owner",
+                "recommendation",
+                "onboarding",
+                "prd",
+                "default",
+                "derived"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "if": {
+            "properties": {
+              "source": {
+                "const": "recommendation"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "reason"
+            ]
+          }
+        },
+        "setupChoice": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "source"
+          ],
+          "properties": {
+            "value": {
+              "enum": [
+                "Use this setup",
+                "Start with a minimal custom setup"
+              ]
+            },
+            "source": {
+              "enum": [
+                "owner",
+                "recommendation",
+                "onboarding",
+                "prd",
+                "default",
+                "derived"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "if": {
+            "properties": {
+              "source": {
+                "const": "recommendation"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "reason"
+            ]
+          }
+        }
       }
     },
-    "openQuestions": {"type": "array", "items": {"type": "string"}},
-    "createdAt": {"type": "string", "format": "date-time"}
+    "openQuestions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "unusedFields": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "budget",
+          "currency",
+          "coverage",
+          "pageBudget",
+          "language",
+          "database",
+          "data",
+          "auth",
+          "users",
+          "design",
+          "region",
+          "compliance",
+          "cloud",
+          "cloudAccount",
+          "deployTarget",
+          "uptime",
+          "preview",
+          "usersYear1",
+          "monthlyHostingBudget",
+          "coverageFloor",
+          "uptimeTarget",
+          "teamSkills",
+          "pageSizeBudget"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    }
   }
 }
