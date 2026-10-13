@@ -1,0 +1,10 @@
+diff --git a/next.config.ts b/next.config.ts
+index 0000000..3333333 100644
+--- a/next.config.ts
++++ b/next.config.ts
+@@ -1,4 +1,5 @@
+ import type { NextConfig } from "next";
++throw new Error("seeded build fault");
+ 
+ const nextConfig: NextConfig = {
+   serverExternalPackages: ["sql.js"],

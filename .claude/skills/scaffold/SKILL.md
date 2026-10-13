@@ -168,10 +168,15 @@ Never ask about cost, budget, currency, tests, coverage, language, database, sig
    ```
 
 3. Show the resolved target path and the file list from the bootstrap scope below.
-   Include the bundle version and each placeholder. Explain that no source tree is included.
+   Include the bundle version and each placeholder.
+   For typescript-nextjs, say that the starter source tree is copied.
+   For every other bundle, say that no source tree is included.
 4. Ask one `AskUserQuestion`: "Generate these files at this path?" Offer Yes and No.
    No ends the skill after cleanup. Yes permits generation.
-5. Run `lib/generate.sh --spec "$spec" --target "$target" --name "$name"` beside this skill.
+5. Run `lib/generate.sh --spec "$spec" --name "$name"` beside this skill.
+   The script builds the target from the workspace directory and the name.
+   Pass `--target` only to override that path.
+   The override must end in the name.
    The target must be absent or empty. Stop on any fault.
 6. Remove `.claude/session/active-bootstrap` on completion or failure.
    SessionStart also clears an interrupted marker. See AgDR-0011.
@@ -191,6 +196,9 @@ The exemption covers only these write targets:
 - `workspace/<name>/docs/agdr/AgDR-0001-scaffold-choices.md`: the proposed decision record.
 - `workspace/<name>/docs/scaffold/spec.json`: the confirmed spec copy.
 - `workspace/<name>/docs/scaffold/notes.md`: the open questions and coverage format.
+- `workspace/<name>/docs/scaffold/notes.md` for a custom stack: the security baseline notes.
+- `workspace/<name>/scripts/exact-pins.sh` for a custom stack: the exact-pin check.
+- `workspace/<name>/` for typescript-nextjs: the copied starter source tree.
 - `workspace/<name>/docs/scaffold/golden-path-request.md`: the custom stack request draft.
 
 Resolve `workspace/` with `portfolio_workspace_dir`. These paths do not authorize other project edits or registry writes.

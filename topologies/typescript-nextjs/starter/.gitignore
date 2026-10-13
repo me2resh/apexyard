@@ -1,0 +1,5 @@
+node_modules/
+.next/
+coverage/
+data/
+*.tsbuildinfo

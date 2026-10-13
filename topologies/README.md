@@ -66,4 +66,5 @@ When an adopter runs `/update`, the skill diffs the framework's topology `VERSIO
 Use `/scaffold` to copy a bundle floor into a new project.
 The skill selects the bundle from the confirmed host and shape answers.
 It copies handbooks, writes CI commands, and records the bundle VERSION.
-This floor includes no starter source tree. A custom stack receives placeholders and a request draft.
+The typescript-nextjs bundle also copies its starter source tree.
+A custom stack receives placeholders, an exact-pin check, and a request draft.

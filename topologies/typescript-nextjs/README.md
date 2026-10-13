@@ -1,6 +1,6 @@
 # Topology: TypeScript Next.js Web App
 
-**Version**: 1.0.0
+**Version**: 1.1.0
 **Stack**: TypeScript + Next.js (App Router) + Prisma ORM + Vercel/Node.js runtime
 **Use this when**: building a SaaS web app with API routes, server components, a relational DB, and a per-tenant auth model.
 
@@ -56,6 +56,7 @@ typescript-nextjs/
 │       │   └── session-handling.md                           ← paths: app/api/auth/**, middleware.ts
 │       └── nextjs-data/
 │           └── loading-patterns.md                           ← paths: app/**/page.tsx, lib/data/**
+├── starter/                                                  ← Next.js source tree
 ├── golden-paths/
 │   └── nextjs-ci.yml                                         ← typecheck + lint + test + build + bundle-size
 └── templates/
@@ -67,3 +68,10 @@ typescript-nextjs/
 When `/update` detects this topology's framework `VERSION` is ahead of the instantiated copy at `handbooks/architecture/clean-architecture-layers.md` etc., it offers per-file diff acceptance. Default is **skip** — the operator owns each change, same convention as the deprecated-config-key offer in `/update` step 8 (see AgDR-0032).
 
 To force a clean re-instantiation: delete the instantiated files and re-run `/handover --topology typescript-nextjs`. The skill never overwrites without confirmation.
+
+## Starter
+
+Version 1.1.0 adds `starter/`.
+The starter uses Next.js, TypeScript strict mode, and Vitest.
+The local store is Drizzle ORM with sql.js.
+See `starter/README.md` for the commands.

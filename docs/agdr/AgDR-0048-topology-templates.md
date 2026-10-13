@@ -144,3 +144,10 @@ It records the bundle and VERSION in `.apexyard/topology`.
 Python and Go receive no source tree in this slice.
 A custom stack receives placeholders and a request draft.
 The original `/handover` decision remains in effect.
+
+### Starter source tree
+
+The typescript-nextjs bundle now includes `starter/`.
+`/scaffold` copies that tree into the new project.
+The bundle VERSION is 1.1.0.
+Python and Go still have no source tree.

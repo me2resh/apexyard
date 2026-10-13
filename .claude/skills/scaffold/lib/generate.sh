@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
-# Generate the floor without source code or infrastructure.
+# Generate the floor. Copy the typescript-nextjs starter. Skip infrastructure.
 set -euo pipefail
+copy_starter() {
+  local src=$1 dest=$2 file rel dir
+  while IFS= read -r -d '' file; do
+    rel=${file#./}
+    dir=$(dirname "$rel")
+    mkdir -p "$dest/$dir"
+    cp "$src/$rel" "$dest/$rel"
+  done < <(cd "$src" && find . -type d \( -name node_modules -o -name .next -o -name coverage -o -name data \) -prune -o -type f ! -name '*.tsbuildinfo' -print0)
+  find "$dest/scripts" -name '*.sh' -exec chmod +x {} +
+}
 base=$(cd "$(dirname "$0")/.." && pwd)
 root=$(cd "$base/../../.." && pwd)
 spec='' target='' name=''
@@ -13,8 +23,16 @@ while [ "$#" -gt 0 ]; do
   esac
   shift 2
 done
-[ -n "$spec" ] && [ -n "$target" ] || bad 'spec and target are required'
-[ -z "$name" ] || [[ "$name" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]] || bad 'invalid name'
+[ -n "$spec" ] && [ -n "$name" ] || bad 'spec and name are required'
+[[ "$name" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]] || bad 'invalid name'
+if [ -z "$target" ]; then
+  # shellcheck source=/dev/null
+  . "$root/.claude/hooks/_lib-portfolio-paths.sh"
+  target="$(portfolio_workspace_dir)/$name"
+fi
+target_base=${target%/}
+target_base=${target_base##*/}
+[ "$target_base" = "$name" ] || bad 'target must end in the name'
 bash "$base/lib/validate-spec.sh" "$spec"
 spec_json=$(cat "$spec")
 # Pass saved answers as current answers. This preserves the confirmed setup.
@@ -71,13 +89,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
 YAML
 if [ "$bundle" = typescript-nextjs ]; then
   cat >> "$target/.github/workflows/ci.yml" <<'YAML'
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: '20'
-      - run: npm ci
+          node-version: '22'
+      - run: npm ci --ignore-scripts
 YAML
 fi
 for gate in lint typecheck test build audit coverage-gate; do
@@ -86,9 +106,9 @@ done
 for gate in lint typecheck test build audit; do
   command=''
   case "$bundle:$gate" in
-    typescript-nextjs:lint) command='npx --no-install next lint' ;;
+    typescript-nextjs:lint) command='npx --no-install eslint .' ;;
     typescript-nextjs:typecheck) command='npx --no-install tsc --noEmit' ;;
-    typescript-nextjs:test) command='npm run test -- --coverage --coverageReporters=json-summary' ;;
+    typescript-nextjs:test) command='npm run test -- --coverage --coverage.reporter=json-summary' ;;
     typescript-nextjs:build) command='npm run build' ;;
     typescript-nextjs:audit) command='report=$(mktemp)
 trap '\''rm -f "$report"'\'' EXIT
@@ -115,7 +135,10 @@ jq -n --arg pct "$pct" '\''{total:{lines:{pct:($pct|tonumber)}}}'\'' > coverage/
   esac
   {
     printf '#!/usr/bin/env bash\nset -euo pipefail\n'
-    if [ -n "$command" ]; then printf '%s\n' "$command"; else
+    if [ -n "$command" ]; then printf '%s\n' "$command"
+    elif [ "$bundle" = custom ] && [ "$gate" = audit ]; then
+      printf "printf '::warning::placeholder: audit is not set up yet. Fill scripts/ci/audit.sh.\\n'\nexit 0\n"
+    else
       printf "printf 'placeholder: %s is not set up yet. Fill scripts/ci/%s.sh.\\n'\nexit 0\n" "$gate" "$gate"
     fi
   } > "$target/scripts/ci/$gate.sh"
@@ -130,25 +153,17 @@ jq -se --argjson floor "$floor" '
 ' "${1:-coverage/coverage-summary.json}" >/dev/null
 GATE
 } > "$target/scripts/ci/coverage-gate.sh"
-cat > "$target/scripts/ci/audit-gate.sh" <<'GATE'
-#!/usr/bin/env bash
-set -euo pipefail
-# Read npm audit output from a file or stdin. Ignore explicit dev-only findings.
-jq -se '
-  def severe: . == "high" or . == "critical";
-  length == 1 and (.[0] | type == "object" and .error == null and
-    ((.vulnerabilities | type) == "object" or (.advisories | type) == "object") and
-    ([ (.vulnerabilities // {} | .[] | select(.isDev != true) |
-         select((.severity | severe) or any(.via[]?; type == "object" and (.severity | severe)))),
-       (.advisories // {} | .[] | select(.severity | severe) |
-         select((.findings | length) == 0 or any(.findings[]; .dev != true))) ] | length) == 0)
-' "${1:--}" >/dev/null
-GATE
+cp "$root/topologies/typescript-nextjs/starter/scripts/audit-gate.sh" "$target/scripts/ci/audit-gate.sh"
 chmod +x "$target/scripts/ci/"*.sh
 {
   printf '# Scaffold notes\n\n## Coverage format\n\n'
   printf 'Write an Istanbul summary to `coverage/coverage-summary.json`.\nUse a number at `total.lines.pct`. The coverage floor is %s percent.\n\n' "$floor"
-  printf 'Non-npm stacks must replace the audit placeholder.\nPython and Go need their bundle tools before CI can run.\nNo source tree is included.\n\n## Open questions\n\n'
+  if [ "$bundle" = typescript-nextjs ]; then
+    tree_note='The starter source tree is copied.'
+  else
+    tree_note='No source tree is included.'
+  fi
+  printf 'Non-npm stacks must replace the audit placeholder.\nPython and Go need their bundle tools before CI can run.\n%s\n\n## Open questions\n\n' "$tree_note"
   jq -r '.openQuestions[] | "- " + .' <<< "$derived"
 } > "$target/docs/scaffold/notes.md"
 # Render the template body. Follow the body-H1 decision record convention.
@@ -179,13 +194,45 @@ chmod +x "$target/scripts/ci/"*.sh
         jq -r 'if .coverage then "- Coverage: `" + (.coverage.value|tostring) + "`. Source: `" + .coverage.source + "`." else "- Coverage: `80`. Source: `default`." end' <<< "$spec_json"
         ;;
       '- {consequence 1}') printf '%s\n' '- The floor adds checks.' ;;
-      '- {consequence 2}') printf '%s\n' '- The owner must add source code and deploy.' ;;
+      '- {consequence 2}')
+        if [ "$bundle" = typescript-nextjs ]; then
+          printf '%s\n' '- The starter source tree is copied. The owner must add deploy.'
+        else
+          printf '%s\n' '- The owner must add source code and deploy.'
+        fi
+        ;;
       '- {commit/PR/deployment links}') printf '%s\n' '- `docs/scaffold/spec.json`' '- `docs/scaffold/notes.md`' ;;
       *) printf '%s\n' "$line" ;;
     esac
   done < "$root/templates/agdr.md"
 } > "$target/docs/agdr/AgDR-0001-scaffold-choices.md"
+if [ "$bundle" = typescript-nextjs ]; then
+  copy_starter "$root/topologies/typescript-nextjs/starter" "$target"
+  env_report=$(CHECK_ENV_ROOT="$target" bash "$target/scripts/check-env.sh")
+  {
+    printf '\n## Local store\n\n'
+    printf 'The starter uses Drizzle ORM with sql.js.\n'
+    printf 'A failed environment check keeps that driver.\n\n'
+    printf '```\n%s\n```\n' "$env_report"
+  } >> "$target/docs/agdr/AgDR-0001-scaffold-choices.md"
+fi
 if [ "$bundle" = custom ]; then
+  cp "$root/topologies/typescript-nextjs/starter/scripts/exact-pins.sh" "$target/scripts/exact-pins.sh"
+  chmod +x "$target/scripts/exact-pins.sh"
+  cat >> "$target/docs/scaffold/notes.md" <<'NOTES'
+
+## Security baseline
+
+Use an HttpOnly session cookie.
+Use SameSite=Lax on that cookie.
+Add Secure only when COOKIE_SECURE is true.
+Accept application/json on state-changing routes.
+Return status 415 for any other media type.
+Return errors as application/problem+json.
+Use a stable code on each error.
+Pin each dependency to an exact version.
+Run scripts/exact-pins.sh before release.
+NOTES
   {
     printf '# Golden path request\n\nStatus: draft.\n\nThe owner can file this request.\nAdd a bundle for the stack described by these answers.\n\n'
     jq -r 'if .customStack then "Stack: `" + .customStack.value + "`. Source: `" + .customStack.source + "`.\n" else "Stack: unresolved. The owner must name the stack.\n" end' <<< "$spec_json"
