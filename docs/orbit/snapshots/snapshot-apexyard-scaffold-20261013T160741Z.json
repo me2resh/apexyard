@@ -1,0 +1,15 @@
+{
+  "specVersion": "0.1",
+  "id": "snapshot-apexyard-20261013T160741Z",
+  "project": {
+    "id": "apexyard"
+  },
+  "observedAt": "2026-10-13T16:07:41.831Z",
+  "repositories": [
+    {
+      "repositoryId": "me2resh/apexyard",
+      "branch": "orbit/apexyard-scaffold-o2-slice",
+      "commit": "27de5bdb11f5ab2049330ce5e2e15ef254233e52"
+    }
+  ]
+}

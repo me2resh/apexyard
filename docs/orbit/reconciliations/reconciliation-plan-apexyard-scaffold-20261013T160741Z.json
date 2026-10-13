@@ -1,0 +1,445 @@
+{
+  "specVersion": "0.1",
+  "id": "reconciliation-plan-apexyard-scaffold-20261013T160741Z",
+  "planId": "plan-apexyard-scaffold",
+  "planRevision": 3,
+  "projectSnapshotId": "snapshot-apexyard-20261013T160741Z",
+  "reconciledAt": "2026-10-13T16:07:42.039Z",
+  "observations": [
+    "Observed me2resh/apexyard at 27de5bdb11f5ab2049330ce5e2e15ef254233e52, after #1709 merged the o1 interview."
+  ],
+  "criterionAssessments": [
+    {
+      "criterionId": "ac1-1",
+      "status": "achieved",
+      "evidence": [
+        "At 27de5bd (#1709): questions.json asks host first; test_scaffold_interview.sh checks the host-first order and 3, 4 and 5 questions for demo, small product and production. 101 tests pass."
+      ],
+      "explanation": "Live owner run on 2026-10-13: a demo website took 3 questions."
+    },
+    {
+      "criterionId": "ac1-2",
+      "status": "achieved",
+      "evidence": [
+        "At 27de5bd (#1709): SKILL.md asks one question at a time through AskUserQuestion. A test checks that each question has at most three presets, a recommended value among them and a reason of at most 25 words."
+      ],
+      "explanation": "The recommended answer shows first with its reason."
+    },
+    {
+      "criterionId": "ac1-3",
+      "status": "achieved",
+      "evidence": [
+        "At 27de5bd (#1709): spec.schema.json requires a reason for source recommendation. Tests check that unconfirmed onboarding values are never applied and that questions mode and derive mode agree, so derive fills no field silently."
+      ],
+      "explanation": "Not sure records the recommendation and its reason."
+    },
+    {
+      "criterionId": "ac1-4",
+      "status": "achieved",
+      "evidence": [
+        "At 27de5bd (#1709): next-questions.sh reads onboarding.yaml through a closed key map and reads the PRD. Values are skipped only after the owner picks Use these. Tests cover the key map, unknown values and Ignore them."
+      ],
+      "explanation": "Only open questions are asked."
+    },
+    {
+      "criterionId": "ac1-5",
+      "status": "achieved",
+      "evidence": [
+        "At 27de5bd (#1709): validate-spec.sh validates docs/scaffold/spec.json against spec.schema.json. Sources are owner, recommendation, onboarding, prd, default and derived. Tests cover good and bad specs."
+      ],
+      "explanation": "The spec records the scale and the source of each answer."
+    },
+    {
+      "criterionId": "ac2-1",
+      "status": "partially-verified",
+      "evidence": [
+        "At 27de5bd (#1709): rules.json maps host and shape to a golden path, a plain sentence and a pipeline. The summary shows the 80% coverage default."
+      ],
+      "explanation": "Missing: a host of none yet does not add an open question to the project plan notes, and no files are generated. Next: the slice slice-scaffold-o2-floor."
+    },
+    {
+      "criterionId": "ac2-2",
+      "status": "partially-verified",
+      "evidence": [
+        "At 27de5bd (#1709): rules.json holds seven rows. Row 7 is the custom start, so a spec that fits no golden path gets a custom start, not a stop."
+      ],
+      "explanation": "Missing: the typescript-nextjs starter. Next: a later slice for the o2 starter."
+    },
+    {
+      "criterionId": "ac2-3",
+      "status": "partially-verified",
+      "evidence": [
+        "At 27de5bd (#1709): The summary screen shows the setup, each answer and its source. The owner can use the setup, change one answer or start custom. The spec records setupChoice."
+      ],
+      "explanation": "Missing: the pick does not yet drive generated files or the scaffold AgDR. Next: the slice slice-scaffold-o2-floor."
+    },
+    {
+      "criterionId": "ac2-4",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the hardened typescript-nextjs starter. Next: a later slice for the o2 starter."
+    },
+    {
+      "criterionId": "ac2-5",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the stack-agnostic floor, the copy script, generated CI and the custom start. Next: the slice slice-scaffold-o2-floor."
+    },
+    {
+      "criterionId": "ac2-6",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the stack-agnostic floor, the copy script, generated CI and the custom start. Next: the slice slice-scaffold-o2-floor."
+    },
+    {
+      "criterionId": "ac2-7",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the stack-agnostic floor, the copy script, generated CI and the custom start. Next: the slice slice-scaffold-o2-floor."
+    },
+    {
+      "criterionId": "ac2-8",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the hardened typescript-nextjs starter. Next: a later slice for the o2 starter."
+    },
+    {
+      "criterionId": "ac2-9",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the hardened typescript-nextjs starter. Next: a later slice for the o2 starter."
+    },
+    {
+      "criterionId": "ac2-10",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the hardened typescript-nextjs starter. Next: a later slice for the o2 starter."
+    },
+    {
+      "criterionId": "ac2-11",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the hardened typescript-nextjs starter. Next: a later slice for the o2 starter."
+    },
+    {
+      "criterionId": "ac2-12",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the hardened typescript-nextjs starter. Next: a later slice for the o2 starter."
+    },
+    {
+      "criterionId": "ac2-13",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the stack-agnostic floor, the copy script, generated CI and the custom start. Next: the slice slice-scaffold-o2-floor."
+    },
+    {
+      "criterionId": "ac2-14",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the stack-agnostic floor, the copy script, generated CI and the custom start. Next: the slice slice-scaffold-o2-floor."
+    },
+    {
+      "criterionId": "ac2-15",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the stack-agnostic floor, the copy script, generated CI and the custom start. Next: the slice slice-scaffold-o2-floor."
+    },
+    {
+      "criterionId": "ac3-1",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the handover gap-fill mode. Next: a later slice for o3."
+    },
+    {
+      "criterionId": "ac3-2",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the handover gap-fill mode. Next: a later slice for o3."
+    },
+    {
+      "criterionId": "ac3-3",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the handover gap-fill mode. Next: a later slice for o3."
+    },
+    {
+      "criterionId": "ac3-4",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the handover gap-fill mode. Next: a later slice for o3."
+    },
+    {
+      "criterionId": "ac3-5",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the handover gap-fill mode. Next: a later slice for o3."
+    },
+    {
+      "criterionId": "ac3-6",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the handover gap-fill mode. Next: a later slice for o3."
+    },
+    {
+      "criterionId": "ac4-1",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the infrastructure draft and the cost estimate. Next: a later slice for o4."
+    },
+    {
+      "criterionId": "ac4-2",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the infrastructure draft and the cost estimate. Next: a later slice for o4."
+    },
+    {
+      "criterionId": "ac4-3",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the infrastructure draft and the cost estimate. Next: a later slice for o4."
+    },
+    {
+      "criterionId": "ac4-4",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the infrastructure draft and the cost estimate. Next: a later slice for o4."
+    },
+    {
+      "criterionId": "ac4-5",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the infrastructure draft and the cost estimate. Next: a later slice for o4."
+    },
+    {
+      "criterionId": "ac4-6",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the infrastructure draft and the cost estimate. Next: a later slice for o4."
+    },
+    {
+      "criterionId": "ac4-7",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the infrastructure draft and the cost estimate. Next: a later slice for o4."
+    },
+    {
+      "criterionId": "ac5-1",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the python-fastapi and go-data-pipeline starters. Next: a later slice for o5."
+    },
+    {
+      "criterionId": "ac5-2",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the python-fastapi and go-data-pipeline starters. Next: a later slice for o5."
+    },
+    {
+      "criterionId": "ac5-3",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the python-fastapi and go-data-pipeline starters. Next: a later slice for o5."
+    },
+    {
+      "criterionId": "ac5-4",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the python-fastapi and go-data-pipeline starters. Next: a later slice for o5."
+    },
+    {
+      "criterionId": "ac5-5",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the python-fastapi and go-data-pipeline starters. Next: a later slice for o5."
+    },
+    {
+      "criterionId": "ac5-6",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the python-fastapi and go-data-pipeline starters. Next: a later slice for o5."
+    },
+    {
+      "criterionId": "ac6-1",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the generated fitness-function checks. Next: a later slice for o6."
+    },
+    {
+      "criterionId": "ac6-2",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the generated fitness-function checks. Next: a later slice for o6."
+    },
+    {
+      "criterionId": "ac6-3",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the generated fitness-function checks. Next: a later slice for o6."
+    },
+    {
+      "criterionId": "ac6-4",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the generated fitness-function checks. Next: a later slice for o6."
+    },
+    {
+      "criterionId": "ac7-1",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the entry-point offers. Next: a later slice for o7."
+    },
+    {
+      "criterionId": "ac7-2",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the entry-point offers. Next: a later slice for o7."
+    },
+    {
+      "criterionId": "ac7-3",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the entry-point offers. Next: a later slice for o7."
+    },
+    {
+      "criterionId": "ac7-4",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the entry-point offers. Next: a later slice for o7."
+    },
+    {
+      "criterionId": "ac7-5",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the entry-point offers. Next: a later slice for o7."
+    },
+    {
+      "criterionId": "ac7-6",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the entry-point offers. Next: a later slice for o7."
+    },
+    {
+      "criterionId": "ac7-7",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the entry-point offers. Next: a later slice for o7."
+    },
+    {
+      "criterionId": "ac7-8",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the entry-point offers. Next: a later slice for o7."
+    },
+    {
+      "criterionId": "ac8-1",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the lessons loop. Next: a later slice for o8."
+    },
+    {
+      "criterionId": "ac8-2",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the lessons loop. Next: a later slice for o8."
+    },
+    {
+      "criterionId": "ac2-16",
+      "status": "not-verified",
+      "evidence": [
+        "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
+      ],
+      "explanation": "Missing: the stack-agnostic floor, the copy script, generated CI and the custom start. Next: the slice slice-scaffold-o2-floor."
+    }
+  ]
+}

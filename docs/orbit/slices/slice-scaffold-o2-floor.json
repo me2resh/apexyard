@@ -1,0 +1,52 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-scaffold-o2-floor",
+  "planId": "plan-apexyard-scaffold",
+  "outcomeId": "o2-floor-and-recommended-path",
+  "basedOn": {
+    "planRevision": 3,
+    "reconciliationId": "reconciliation-plan-apexyard-scaffold-20261013T160741Z",
+    "repositories": {}
+  },
+  "objective": "Make /scaffold generate a new project for any stack at the stack-agnostic floor. One copy script writes the CI gates, the dependency audit, the general handbooks, the topology anchor and the scaffold AgDR into workspace/<name>/. A spec that no golden path fits gets the custom start.",
+  "why": "o1 is achieved at 27de5bd: the spec and the rules table exist, but /scaffold writes no project files yet. Every stack gets the floor, so the floor comes before the typescript-nextjs starter (owner choice, 2026-10-13). This slice meets ac2-5, ac2-6 and ac2-16 only in part; the starter slice completes them.",
+  "contributesTo": [
+    "ac2-1",
+    "ac2-3",
+    "ac2-5",
+    "ac2-6",
+    "ac2-7",
+    "ac2-13",
+    "ac2-14",
+    "ac2-15",
+    "ac2-16"
+  ],
+  "scope": {
+    "include": [
+      "One copy script that generates workspace/<name>/ from docs/scaffold/spec.json and the rules table",
+      "Generated CI that fails on a lint, typecheck or build fault and below the coverage floor (80 percent, or the higher spec value)",
+      "A generated dependency audit that fails on a high or critical advisory in a production dependency",
+      "The general handbooks and the topology anchor in the generated tree; the tree passes check-secrets.sh",
+      "The custom start for a stack with no golden path, with the custom mark and a drafted golden-path request",
+      "Custom-start CI calls fixed commands: lint, typecheck, test, build and audit. The owner fills them. Each placeholder reports that it is a placeholder",
+      "One proposed scaffold AgDR that lists each stack choice and the spec answers behind it",
+      "A host of none yet adds an open question to the project plan notes",
+      "The bootstrap skill entry and its write scope, which Hakim reviews before merge",
+      "Skill listing and counts in CLAUDE.md, README.md, AGENTS.md, docs/whats-inside.md and topologies/README.md",
+      "Clear a stale hostService when the owner changes the host (Rex advisory on #1709)",
+      "One Node and npm fixture with one seeded fault for each floor gate: lint, typecheck, build, coverage and audit",
+      "A framework test proves that each floor gate fails on its fault",
+      "Specs that pick python-fastapi or go-data-pipeline get the floor and the bundle anchor, with no starter until o5",
+      "An AgDR-0048 evolution entry for the scaffold copy script and the second entry point"
+    ],
+    "exclude": [
+      "The typescript-nextjs starter and its copy (the starter part of ac2-5; ac2-2, ac2-4)",
+      "Exact pins and the security baseline (those parts of ac2-16; ac2-9); the starter slice adds them",
+      "The coverage proof on a real source tree (the ac2-11 fixture and ac2-12 handover score)",
+      "Install-time environment checks for generator tools (ac2-8)",
+      "One command to run and reset the project locally (ac2-10)",
+      "Infrastructure, deploy and the cost range (o4)",
+      "Handover gap-fill (o3), more starters (o5) and entry-point offers (o7)"
+    ]
+  }
+}
