@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Scaffold spec",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["specVersion", "scale", "answers", "openQuestions", "createdAt"],
+  "properties": {
+    "specVersion": {"const": "0.1"},
+    "scale": {"enum": ["demo", "small", "production"]},
+    "answers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["value", "source"],
+        "properties": {
+          "value": {},
+          "source": {"enum": ["owner", "recommendation", "onboarding", "prd"]},
+          "reason": {"type": "string"}
+        },
+        "if": {"properties": {"source": {"const": "recommendation"}}},
+        "then": {"required": ["reason"]}
+      }
+    },
+    "openQuestions": {"type": "array", "items": {"type": "string"}},
+    "createdAt": {"type": "string", "format": "date-time"}
+  }
+}
