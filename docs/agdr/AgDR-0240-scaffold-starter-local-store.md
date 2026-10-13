@@ -54,6 +54,10 @@ Before this choice, the bundle named Prisma and shipped no application tree.
 After this choice, the starter keeps rows in one SQLite file.
 Drizzle ORM reaches that file through sql.js.
 A failed environment check still uses sql.js.
+The items GET handler returns problem+json when the list fails.
+The response uses a stable code and omits the thrown error.
+Coverage include lists the source globs, so an untested file counts.
+The lock file engines field matches package.json at >=22.12.0.
 
 ## Artifacts
 

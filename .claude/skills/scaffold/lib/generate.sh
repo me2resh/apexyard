@@ -98,6 +98,7 @@ if [ "$bundle" = typescript-nextjs ]; then
         with:
           node-version: '22'
       - run: npm ci --ignore-scripts
+      - run: bash scripts/exact-pins.sh
 YAML
 fi
 for gate in lint typecheck test build audit coverage-gate; do

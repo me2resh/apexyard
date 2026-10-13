@@ -27,6 +27,7 @@ jobs:
           cache: npm
           cache-dependency-path: topologies/typescript-nextjs/starter/package-lock.json
       - run: npm ci --ignore-scripts
+      - run: bash scripts/exact-pins.sh
       - run: bash scripts/run-gate.sh lint
       - run: bash scripts/run-gate.sh typecheck
       - run: bash scripts/run-gate.sh build
@@ -57,5 +58,23 @@ jobs:
       - name: Apply seeded fault
         run: patch -p1 --forward --input="${GITHUB_WORKSPACE}/.claude/hooks/tests/fixtures/scaffold/starter-faults/${{ matrix.gate }}.patch"
       - run: npm ci --ignore-scripts
-      - name: Expect the gate to fail
-        run: bash "${GITHUB_WORKSPACE}/.claude/hooks/tests/fixtures/scaffold/starter-faults/expect-fault.sh" bash scripts/run-gate.sh "${{ matrix.gate }}"
+      - name: Run the gate
+        id: gate
+        env:
+          GATE: ${{ matrix.gate }}
+        run: |
+          set +e
+          bash scripts/run-gate.sh "$GATE"
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          printf 'gate=%s exit_code=%s\n' "$GATE" "$code"
+      - name: Assert the gate exit code
+        env:
+          GATE: ${{ matrix.gate }}
+        run: |
+          code="${{ steps.gate.outputs.exit_code }}"
+          printf 'gate=%s exit_code=%s\n' "$GATE" "$code"
+          if [ -z "$code" ] || [ "$code" -eq 0 ]; then
+            printf 'expected a non-zero exit from the %s gate\n' "$GATE" >&2
+            exit 1
+          fi

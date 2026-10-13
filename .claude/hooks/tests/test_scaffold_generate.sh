@@ -48,6 +48,7 @@ for pair in 'node:web app' 'python:API service' 'go:data pipeline' 'custom:other
     check contains "$tmp/$kind/src/infrastructure/session.ts" 'SameSite=Lax'
     check contains "$tmp/$kind/src/infrastructure/problem.ts" 'application/problem+json'
     check contains "$tmp/$kind/.github/workflows/ci.yml" "node-version: '22'"
+    check contains "$tmp/$kind/.github/workflows/ci.yml" "scripts/exact-pins.sh"
     check contains "$tmp/$kind/scripts/ci/lint.sh" 'eslint .'
     check contains "$tmp/$kind/scripts/ci/test.sh" 'coverage.reporter=json-summary'
     check contains "$tmp/$kind/docs/agdr/AgDR-0001-scaffold-choices.md" 'sql.js'

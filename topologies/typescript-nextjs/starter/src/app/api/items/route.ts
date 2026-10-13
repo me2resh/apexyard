@@ -30,7 +30,15 @@ export function POST(request: Request): Promise<Response> {
   return createItemResponse(request, addItem);
 }
 
-export async function GET(): Promise<Response> {
-  const found = await listItems();
-  return Response.json({ items: found });
+export async function listItemsResponse(list: typeof listItems): Promise<Response> {
+  try {
+    const found = await list();
+    return Response.json({ items: found });
+  } catch {
+    return problem(500, "internal-error", "Internal error");
+  }
+}
+
+export function GET(): Promise<Response> {
+  return listItemsResponse(listItems);
 }

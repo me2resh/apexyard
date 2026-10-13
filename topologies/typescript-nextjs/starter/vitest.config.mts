@@ -8,8 +8,15 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "json-summary"],
       reportsDirectory: "coverage",
-      include: ["src/**/*.ts", "src/**/*.mjs"],
-      exclude: ["src/**/*.test.ts", "src/**/*.d.ts", "src/**/*.d.mts"],
+      include: ["src/**/*.{ts,tsx,mjs}"],
+      exclude: [
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx",
+        "**/*.d.ts",
+        "**/*.d.mts",
+        "next.config.ts",
+        "next-env.d.ts",
+      ],
       thresholds: {
         lines: 80,
       },

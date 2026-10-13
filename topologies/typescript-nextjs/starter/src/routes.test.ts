@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET as getHealth } from "./app/api/health/route";
-import { GET as getItems, POST, createItemResponse } from "./app/api/items/route";
+import { GET as getItems, POST, createItemResponse, listItemsResponse } from "./app/api/items/route";
 import { closeDb, resetData } from "./infrastructure/db.mjs";
 
 let dir = "";
@@ -80,6 +80,20 @@ describe("routes", () => {
     expect(response.status).toBe(500);
     expect(response.headers.get("content-type")).toBe("application/problem+json");
     expect(await response.json()).toMatchObject({ code: "internal-error" });
+  });
+
+  it("returns a stable list error code", async () => {
+    const response = await listItemsResponse(() => {
+      throw new Error("boom");
+    });
+    expect(response.status).toBe(500);
+    expect(response.headers.get("content-type")).toBe("application/problem+json");
+    expect(await response.json()).toEqual({
+      type: "about:blank",
+      title: "Internal error",
+      status: 500,
+      code: "internal-error",
+    });
   });
 
   it("resets stored items to the seed", async () => {
