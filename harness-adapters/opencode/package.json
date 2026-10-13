@@ -16,7 +16,7 @@
     "toml": "^4.2.0"
   },
   "devDependencies": {
-    "@types/node": "^26.6.4",
+    "@types/node": "^26.6.5",
     "typescript": "^7.0.2"
   },
   "engines": {
