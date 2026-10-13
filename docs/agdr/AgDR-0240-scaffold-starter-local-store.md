@@ -58,6 +58,20 @@ The items GET handler returns problem+json when the list fails.
 The response uses a stable code and omits the thrown error.
 Coverage include lists the source globs, so an untested file counts.
 The lock file engines field matches package.json at >=22.12.0.
+The generated test command passes `--coverage.reporter=json-summary` once.
+The starter test script already passes `--coverage`.
+A second `--coverage` flag makes Vitest reject the command.
+The starter ignore file lists `.env*`.
+It allows `.env.example`.
+The copy step skips every other `.env*` file.
+The copy step prunes `node_modules`, `.next`, `coverage`, and `data` only at the starter root.
+A nested directory with one of those names remains in the copy.
+The copy skips `*.tsbuildinfo`.
+The topology stack line names Drizzle ORM with sql.js.
+A fault job passes only when `npm ci` exits 0 and the gate exits non-zero.
+A registry outage makes `npm ci` exit non-zero.
+That non-zero install fails the fault job.
+The generated gate job runs each floor script in a project that generate.sh builds from good.json.
 
 ## Artifacts
 

@@ -8,7 +8,10 @@ copy_starter() {
     dir=$(dirname "$rel")
     mkdir -p "$dest/$dir"
     cp "$src/$rel" "$dest/$rel"
-  done < <(cd "$src" && find . -type d \( -name node_modules -o -name .next -o -name coverage -o -name data \) -prune -o -type f ! -name '*.tsbuildinfo' -print0)
+  done < <(cd "$src" && find . \
+    \( -path ./node_modules -o -path ./.next -o -path ./coverage -o -path ./data \) -prune \
+    -o -type f ! -name '*.tsbuildinfo' \
+    \( -name '.env.example' -o ! -name '.env*' \) -print0)
   find "$dest/scripts" -name '*.sh' -exec chmod +x {} +
 }
 base=$(cd "$(dirname "$0")/.." && pwd)
@@ -109,7 +112,7 @@ for gate in lint typecheck test build audit; do
   case "$bundle:$gate" in
     typescript-nextjs:lint) command='npx --no-install eslint .' ;;
     typescript-nextjs:typecheck) command='npx --no-install tsc --noEmit' ;;
-    typescript-nextjs:test) command='npm run test -- --coverage --coverage.reporter=json-summary' ;;
+    typescript-nextjs:test) command='npm run test -- --coverage.reporter=json-summary' ;;
     typescript-nextjs:build) command='npm run build' ;;
     typescript-nextjs:audit) command='report=$(mktemp)
 trap '\''rm -f "$report"'\'' EXIT

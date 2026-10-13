@@ -101,6 +101,7 @@
       "status": "achieved",
       "evidence": [
         ".github/workflows/scaffold-starter-gates.yml proves lint, typecheck, build and coverage faults fail their gates.",
+        ".github/workflows/scaffold-starter-gates.yml job generated runs the generated project scripts/ci gates, and each exits 0 on a clean project.",
         "topologies/typescript-nextjs/starter/vitest.config.mts counts every source file for coverage."
       ],
       "explanation": "A real source tree fails below the 80 percent floor."
@@ -143,11 +144,12 @@
     },
     {
       "criterionId": "ac2-11",
-      "status": "partially-verified",
+      "status": "achieved",
       "evidence": [
-        ".github/workflows/scaffold-starter-gates.yml runs each seeded fault from .claude/hooks/tests/fixtures/scaffold/starter-faults and asserts its gate exit code."
+        ".github/workflows/scaffold-starter-gates.yml runs each seeded fault and asserts its own gate exit code after a successful npm ci.",
+        "The PR #1722 body records the added CI time: about 50 seconds wall time and 191 seconds runner time."
       ],
-      "explanation": "Missing: the added CI time from a hosted run. Next: record it from the PR #1722 run."
+      "explanation": "Each gate fails on its fault and passes on the clean starter."
     },
     {
       "criterionId": "ac2-12",

@@ -49,10 +49,12 @@ for pair in 'node:web app' 'python:API service' 'go:data pipeline' 'custom:other
     check contains "$tmp/$kind/src/infrastructure/session.ts" 'HttpOnly'
     check contains "$tmp/$kind/src/infrastructure/session.ts" 'SameSite=Lax'
     check contains "$tmp/$kind/src/infrastructure/problem.ts" 'application/problem+json'
+    check contains "$tmp/$kind/.gitignore" '.env*'
+    check contains "$tmp/$kind/.gitignore" '!.env.example'
     check contains "$tmp/$kind/.github/workflows/ci.yml" "node-version: '22'"
     check contains "$tmp/$kind/.github/workflows/ci.yml" "scripts/exact-pins.sh"
     check contains "$tmp/$kind/scripts/ci/lint.sh" 'eslint .'
-    check contains "$tmp/$kind/scripts/ci/test.sh" 'coverage.reporter=json-summary'
+    check contains "$tmp/$kind/scripts/ci/test.sh" 'npm run test -- --coverage.reporter=json-summary'
     check contains "$tmp/$kind/docs/agdr/AgDR-0001-scaffold-choices.md" 'sql.js'
     check contains "$tmp/$kind/docs/scaffold/notes.md" 'The starter source tree is copied.'
     check bash -c 'jq -e '\''[.dependencies,.devDependencies] | map(to_entries[].value) | all(.[]; test("^[0-9]+[.][0-9]+[.][0-9]+$"))'\'' "$1" >/dev/null' _ "$tmp/$kind/package.json"
@@ -198,4 +200,49 @@ check contains "$tmp/node18.out" 'fallback=sql.js'
 ) > "$tmp/envblock.out"
 check contains "$tmp/envblock.out" 'fallback=sql.js'
 check contains "$tmp/envblock.out" 'network'
+copy_lib=$tmp/copy-starter-fn.sh
+awk '
+  /^copy_starter\(\)/ { capture=1 }
+  capture { print }
+  capture && /^}$/ { exit }
+' "$lib/generate.sh" > "$copy_lib"
+# shellcheck source=/dev/null
+. "$copy_lib"
+src=$tmp/copy-src
+dest=$tmp/copy-dest
+mkdir -p "$src/node_modules" "$src/nested/node_modules" "$src/data" "$src/pkg/data" \
+  "$src/.next" "$src/nested/.next" "$src/coverage" "$src/nested/coverage" "$src/scripts"
+printf 'x\n' > "$src/node_modules/skip.txt"
+printf 'y\n' > "$src/nested/node_modules/keep.txt"
+printf 'z\n' > "$src/data/skip.txt"
+printf 'k\n' > "$src/pkg/data/keep.txt"
+printf 'n\n' > "$src/.next/skip.txt"
+printf 'n2\n' > "$src/nested/.next/keep.txt"
+printf 'c\n' > "$src/coverage/skip.txt"
+printf 'c2\n' > "$src/nested/coverage/keep.txt"
+printf 'e\n' > "$src/.env"
+printf 'ex\n' > "$src/.env.example"
+printf 'el\n' > "$src/.env.local"
+printf 'ne\n' > "$src/nested/.env"
+printf 'nx\n' > "$src/nested/.env.example"
+printf 't\n' > "$src/file.tsbuildinfo"
+printf 's\n' > "$src/keep.ts"
+printf 'sh\n' > "$src/scripts/ok.sh"
+copy_starter "$src" "$dest"
+check test ! -e "$dest/node_modules/skip.txt"
+check test -f "$dest/nested/node_modules/keep.txt"
+check test ! -e "$dest/data/skip.txt"
+check test -f "$dest/pkg/data/keep.txt"
+check test ! -e "$dest/.next/skip.txt"
+check test -f "$dest/nested/.next/keep.txt"
+check test ! -e "$dest/coverage/skip.txt"
+check test -f "$dest/nested/coverage/keep.txt"
+check test ! -e "$dest/.env"
+check test ! -e "$dest/.env.local"
+check test ! -e "$dest/nested/.env"
+check test -f "$dest/.env.example"
+check test -f "$dest/nested/.env.example"
+check test ! -e "$dest/file.tsbuildinfo"
+check test -f "$dest/keep.ts"
+check test -x "$dest/scripts/ok.sh"
 printf 'PASS: %s scaffold checks.\n' "$pass"

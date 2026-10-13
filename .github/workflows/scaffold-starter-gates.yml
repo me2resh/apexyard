@@ -57,24 +57,46 @@ jobs:
           cache-dependency-path: topologies/typescript-nextjs/starter/package-lock.json
       - name: Apply seeded fault
         run: patch -p1 --forward --input="${GITHUB_WORKSPACE}/.claude/hooks/tests/fixtures/scaffold/starter-faults/${{ matrix.gate }}.patch"
-      - run: npm ci --ignore-scripts
-      - name: Run the gate
-        id: gate
+      - name: Require a successful install and a failing gate
         env:
           GATE: ${{ matrix.gate }}
+        run: bash "${GITHUB_WORKSPACE}/.claude/hooks/tests/fixtures/scaffold/starter-faults/expect-fault.sh" bash scripts/run-gate.sh "$GATE"
+
+  generated:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v5.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: topologies/typescript-nextjs/starter/package-lock.json
+      - name: Generate the floor and run its gates
         run: |
-          set +e
-          bash scripts/run-gate.sh "$GATE"
-          code=$?
-          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
-          printf 'gate=%s exit_code=%s\n' "$GATE" "$code"
-      - name: Assert the gate exit code
-        env:
-          GATE: ${{ matrix.gate }}
-        run: |
-          code="${{ steps.gate.outputs.exit_code }}"
-          printf 'gate=%s exit_code=%s\n' "$GATE" "$code"
-          if [ -z "$code" ] || [ "$code" -eq 0 ]; then
-            printf 'expected a non-zero exit from the %s gate\n' "$GATE" >&2
+          set -euo pipefail
+          if [ -z "${RUNNER_TEMP:-}" ]; then
+            printf 'RUNNER_TEMP is unset\n' >&2
             exit 1
           fi
+          target="${RUNNER_TEMP}/scaffold-starter-generated"
+          rm -rf "$target"
+          bash .claude/skills/scaffold/lib/generate.sh \
+            --spec .claude/hooks/tests/fixtures/scaffold/good.json \
+            --target "$target" \
+            --name scaffold-starter-generated
+          cd "$target" || exit 1
+          npm ci --ignore-scripts
+          for script in \
+            scripts/ci/lint.sh \
+            scripts/ci/typecheck.sh \
+            scripts/ci/test.sh \
+            scripts/ci/build.sh \
+            scripts/ci/audit.sh \
+            scripts/ci/coverage-gate.sh \
+            scripts/exact-pins.sh
+          do
+            bash "$script"
+            printf '%s exit_code=0\n' "$script"
+          done
