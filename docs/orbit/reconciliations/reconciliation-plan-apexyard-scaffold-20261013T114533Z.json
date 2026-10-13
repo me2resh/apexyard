@@ -1,0 +1,445 @@
+{
+  "specVersion": "0.1",
+  "id": "reconciliation-plan-apexyard-scaffold-20261013T114533Z",
+  "planId": "plan-apexyard-scaffold",
+  "planRevision": 2,
+  "projectSnapshotId": "snapshot-apexyard-20261013T114533Z",
+  "reconciledAt": "2026-10-13T11:45:33.989Z",
+  "observations": [
+    "Observed me2resh/apexyard at f08a17da45e85a777f7478df8421d5987440b6d2."
+  ],
+  "criterionAssessments": [
+    {
+      "criterionId": "ac1-1",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the scale-sized interview and the scaffold spec. Next: the slice slice-scaffold-o1-interview."
+    },
+    {
+      "criterionId": "ac1-2",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the scale-sized interview and the scaffold spec. Next: the slice slice-scaffold-o1-interview."
+    },
+    {
+      "criterionId": "ac1-3",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the scale-sized interview and the scaffold spec. Next: the slice slice-scaffold-o1-interview."
+    },
+    {
+      "criterionId": "ac1-4",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the scale-sized interview and the scaffold spec. Next: the slice slice-scaffold-o1-interview."
+    },
+    {
+      "criterionId": "ac1-5",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the scale-sized interview and the scaffold spec. Next: the slice slice-scaffold-o1-interview."
+    },
+    {
+      "criterionId": "ac2-1",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the stack recommendation, the floor and the hardened starter. Next: a later slice for o2."
+    },
+    {
+      "criterionId": "ac2-2",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the stack recommendation, the floor and the hardened starter. Next: a later slice for o2."
+    },
+    {
+      "criterionId": "ac2-3",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the stack recommendation, the floor and the hardened starter. Next: a later slice for o2."
+    },
+    {
+      "criterionId": "ac2-4",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the stack recommendation, the floor and the hardened starter. Next: a later slice for o2."
+    },
+    {
+      "criterionId": "ac2-5",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the stack recommendation, the floor and the hardened starter. Next: a later slice for o2."
+    },
+    {
+      "criterionId": "ac2-6",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the stack recommendation, the floor and the hardened starter. Next: a later slice for o2."
+    },
+    {
+      "criterionId": "ac2-7",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the stack recommendation, the floor and the hardened starter. Next: a later slice for o2."
+    },
+    {
+      "criterionId": "ac2-8",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the stack recommendation, the floor and the hardened starter. Next: a later slice for o2."
+    },
+    {
+      "criterionId": "ac2-9",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the stack recommendation, the floor and the hardened starter. Next: a later slice for o2."
+    },
+    {
+      "criterionId": "ac2-10",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the stack recommendation, the floor and the hardened starter. Next: a later slice for o2."
+    },
+    {
+      "criterionId": "ac2-11",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the stack recommendation, the floor and the hardened starter. Next: a later slice for o2."
+    },
+    {
+      "criterionId": "ac2-12",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the stack recommendation, the floor and the hardened starter. Next: a later slice for o2."
+    },
+    {
+      "criterionId": "ac2-13",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the stack recommendation, the floor and the hardened starter. Next: a later slice for o2."
+    },
+    {
+      "criterionId": "ac2-14",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the stack recommendation, the floor and the hardened starter. Next: a later slice for o2."
+    },
+    {
+      "criterionId": "ac2-15",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the stack recommendation, the floor and the hardened starter. Next: a later slice for o2."
+    },
+    {
+      "criterionId": "ac3-1",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the handover gap-fill mode. Next: a later slice for o3."
+    },
+    {
+      "criterionId": "ac3-2",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the handover gap-fill mode. Next: a later slice for o3."
+    },
+    {
+      "criterionId": "ac3-3",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the handover gap-fill mode. Next: a later slice for o3."
+    },
+    {
+      "criterionId": "ac3-4",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the handover gap-fill mode. Next: a later slice for o3."
+    },
+    {
+      "criterionId": "ac3-5",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the handover gap-fill mode. Next: a later slice for o3."
+    },
+    {
+      "criterionId": "ac3-6",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the handover gap-fill mode. Next: a later slice for o3."
+    },
+    {
+      "criterionId": "ac4-1",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the infrastructure draft and the cost estimate. Next: a later slice for o4."
+    },
+    {
+      "criterionId": "ac4-2",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the infrastructure draft and the cost estimate. Next: a later slice for o4."
+    },
+    {
+      "criterionId": "ac4-3",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the infrastructure draft and the cost estimate. Next: a later slice for o4."
+    },
+    {
+      "criterionId": "ac4-4",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the infrastructure draft and the cost estimate. Next: a later slice for o4."
+    },
+    {
+      "criterionId": "ac4-5",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the infrastructure draft and the cost estimate. Next: a later slice for o4."
+    },
+    {
+      "criterionId": "ac4-6",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the infrastructure draft and the cost estimate. Next: a later slice for o4."
+    },
+    {
+      "criterionId": "ac4-7",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the infrastructure draft and the cost estimate. Next: a later slice for o4."
+    },
+    {
+      "criterionId": "ac5-1",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the python-fastapi and go-data-pipeline starters. Next: a later slice for o5."
+    },
+    {
+      "criterionId": "ac5-2",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the python-fastapi and go-data-pipeline starters. Next: a later slice for o5."
+    },
+    {
+      "criterionId": "ac5-3",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the python-fastapi and go-data-pipeline starters. Next: a later slice for o5."
+    },
+    {
+      "criterionId": "ac5-4",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the python-fastapi and go-data-pipeline starters. Next: a later slice for o5."
+    },
+    {
+      "criterionId": "ac5-5",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the python-fastapi and go-data-pipeline starters. Next: a later slice for o5."
+    },
+    {
+      "criterionId": "ac5-6",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the python-fastapi and go-data-pipeline starters. Next: a later slice for o5."
+    },
+    {
+      "criterionId": "ac6-1",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the generated fitness-function checks. Next: a later slice for o6."
+    },
+    {
+      "criterionId": "ac6-2",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the generated fitness-function checks. Next: a later slice for o6."
+    },
+    {
+      "criterionId": "ac6-3",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the generated fitness-function checks. Next: a later slice for o6."
+    },
+    {
+      "criterionId": "ac6-4",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the generated fitness-function checks. Next: a later slice for o6."
+    },
+    {
+      "criterionId": "ac7-1",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the entry-point offers. Next: a later slice for o7."
+    },
+    {
+      "criterionId": "ac7-2",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the entry-point offers. Next: a later slice for o7."
+    },
+    {
+      "criterionId": "ac7-3",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the entry-point offers. Next: a later slice for o7."
+    },
+    {
+      "criterionId": "ac7-4",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the entry-point offers. Next: a later slice for o7."
+    },
+    {
+      "criterionId": "ac7-5",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the entry-point offers. Next: a later slice for o7."
+    },
+    {
+      "criterionId": "ac7-6",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the entry-point offers. Next: a later slice for o7."
+    },
+    {
+      "criterionId": "ac7-7",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the entry-point offers. Next: a later slice for o7."
+    },
+    {
+      "criterionId": "ac7-8",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the entry-point offers. Next: a later slice for o7."
+    },
+    {
+      "criterionId": "ac8-1",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the lessons loop. Next: a later slice for o8."
+    },
+    {
+      "criterionId": "ac8-2",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the lessons loop. Next: a later slice for o8."
+    },
+    {
+      "criterionId": "ac2-16",
+      "status": "not-verified",
+      "evidence": [
+        "No .claude/skills/scaffold directory exists at f08a17d."
+      ],
+      "explanation": "Missing: the stack recommendation, the floor and the hardened starter. Next: a later slice for o2."
+    }
+  ]
+}

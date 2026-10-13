@@ -1,0 +1,37 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-scaffold-o1-interview",
+  "planId": "plan-apexyard-scaffold",
+  "outcomeId": "o1-interview-sized-to-scale",
+  "basedOn": {
+    "planRevision": 2,
+    "reconciliationId": "reconciliation-plan-apexyard-scaffold-20261013T114533Z",
+    "repositories": {}
+  },
+  "objective": "Build the /scaffold interview and the scaffold spec. The scale question comes first and sets the depth. Each question has a recommended answer with a plain reason. A JSON schema validates the spec.",
+  "why": "Every other outcome reads the scaffold spec, so the interview and the spec come first. The owner chose o1 as the first slice on 2026-10-13.",
+  "contributesTo": [
+    "ac1-1",
+    "ac1-2",
+    "ac1-3",
+    "ac1-4",
+    "ac1-5"
+  ],
+  "scope": {
+    "include": [
+      "The scale question and the question sets for each scale",
+      "Recommended answers with plain reasons",
+      "Not-sure handling that records the recommendation",
+      "Reuse of onboarding and PRD answers",
+      "The scaffold spec JSON schema and its tests",
+      "A bootstrap skill entry with a named write scope"
+    ],
+    "exclude": [
+      "Project generation and starters",
+      "The stack recommendation rules",
+      "Handover gap-fill",
+      "Infrastructure and cost",
+      "Entry-point offers"
+    ]
+  }
+}
