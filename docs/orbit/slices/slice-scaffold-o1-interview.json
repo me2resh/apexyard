@@ -23,15 +23,15 @@
       "Recommended answers with plain reasons",
       "Not-sure handling that records the recommendation",
       "Reuse of onboarding and PRD answers",
-      "The scaffold spec JSON schema and its tests",
-      "A bootstrap skill entry with a named write scope"
+      "The scaffold spec JSON schema and its tests"
     ],
     "exclude": [
       "Project generation and starters",
       "The stack recommendation rules",
       "Handover gap-fill",
       "Infrastructure and cost",
-      "Entry-point offers"
+      "Entry-point offers",
+      "The bootstrap skill entry and its write scope (ac2-14 in o2)"
     ]
   }
 }

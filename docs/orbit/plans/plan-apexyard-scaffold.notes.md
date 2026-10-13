@@ -33,6 +33,21 @@ Revision 2 adds o1 and o8. Revision 1 o1 becomes o2 with new criteria. Retrofit 
 | No source | o1-interview-sized-to-scale |
 | No source | o8-lessons-loop |
 
+Criterion changes. Revision 1 criteria that are not in this table moved word for word under the outcome mapping above. The only edits are renumbered cross-references (ac5-4, ac5-5) and the term gap-fill for retrofit (ac3-1 to ac3-5).
+
+| Revision 1 | Revision 2 | Change |
+|------------|------------|--------|
+| ac1-1 | ac2-1, ac1-2 | Split. ac2-1 holds the questions and adds deployment target and design direction. ac1-2 holds one question at a time, AskUserQuestion and the recommended answer with a reason. |
+| ac1-1 | ac1-3 | The clause "each question accepts the answer unknown" becomes "Not sure, recommend for me", which records the recommendation and its reason. |
+| ac1-2 | ac1-4 | No change. |
+| ac1-3 | ac1-5 | "Records unknown, never guesses" becomes "records the source of each answer". A recommendation is recorded as recommended (ac1-3), never as a silent guess. |
+| ac1-4 | ac2-2, ac2-16 | A spec that no golden path fits gets the custom start, not a stop. |
+| ac1-6 | ac2-4 | Adds exact versions for every dependency and an audit of generator versions. |
+| ac1-5, ac1-7 to ac1-13 | ac2-3, ac2-5, ac2-6, ac2-11 to ac2-15 | No change. |
+| No source | ac1-1, ac2-7 to ac2-10, ac3-6, ac8-1, ac8-2 | New in revision 2. |
+
+ac4-1 and ac1-3 do not conflict. ac4-1 covers scale, budget and compliance facts: the skill never guesses a fact. ac1-3 covers choices: the owner can accept a recommended choice. In these notes, golden path means a topology bundle, and handover gap-fill is the revision 2 name for retrofit mode.
+
 ## Interview
 
 - 2026-10-13, q1-outcome: Any project, new or handed over, gets its missing foundations through one /scaffold interview. Its depth matches the project's scale. Every question offers a recommended answer.
@@ -65,9 +80,9 @@ Evidence read on upstream/dev at 2854837, and checked again at 0eda785:
 
 Owner decisions, 2026-10-12:
 
-1. **Slice 1 is a thin end-to-end slice for typescript-nextjs only.** It includes four interview questions: service shape, language, host and coverage floor. It selects a topology and generates a working project with CI and gates. Other stacks and the full interview come in later slices. o2 holds this slice.
+1. **Replaced in revision 2 (see Revision 2).** **Slice 1 is a thin end-to-end slice for typescript-nextjs only.** It includes four interview questions: service shape, language, host and coverage floor. It selects a topology and generates a working project with CI and gates. Other stacks and the full interview come in later slices. o2 holds this slice.
 2. **Infra and cost stay in this initiative as a later outcome (o4).** Also when no starter template exists for a stack, the agent recommends best-practice infrastructure and a cost estimate. The estimate matches the project's scale and budget. The agent writes both as a draft and never applies them. The estimate uses a static price table with a price date and a "not a quote" statement (ac4-6). Generated Terraform strings get an ASCII-only check (ac4-3).
-3. **Build starts after the 6 Nov scope freeze.** The records can merge now. No build ticket opens before 6 Nov.
+3. **Replaced in revision 2 (see Revision 2).** **Build starts after the 6 Nov scope freeze.** The records can merge now. No build ticket opens before 6 Nov.
 4. **Records PRs use an `orbit/<initiative>-<slug>` branch with no ticket (#1673).** Only the next slice gets a ticket, after its slice record merges.
 
 5. **/scaffold has four entry points.** Each entry point offers /scaffold and starts nothing without the owner's yes. A no leaves no files.
@@ -87,7 +102,7 @@ This challenge disposition applies to revision 1.
 | Naqid change | Disposition |
 |--------------|-------------|
 | 1. Harnessability high for typescript-nextjs only | Applied: ac2-12 and ac5-6. |
-| 2. The scoring test runs no scoring | Applied: ac5-6 adds an executable scoring script. Slice 1 records a /handover step 4.5 run as its proof. |
+| 2. The scoring test runs no scoring | Applied: ac5-6 adds an executable scoring script. The o2 slice records a /handover step 4.5 run as the proof of ac2-12. |
 | 3. ac6-2 shared code against C9 | Applied: revision 1 accepts the /handover refactor with a regression test (ac5-5). C9 now says so. |
 | 4. Slice 1 as a thin vertical | Applied: owner decision 1, outcome o2. |
 | 5. Cut the interview to four questions | Applied: ac2-1 and ac1-2. Each later question moves to the outcome that needs its answer (ac5-1, ac6-2, ac4-1). |
@@ -166,7 +181,7 @@ The initiative record schema has no proof field, so the proof for each criterion
 | ac1-4 | A fixture with a filled tech_stack block, where the transcript skips those questions. |
 | ac1-5 | The schema file, and a test that validates a good and a bad spec. The valid spec includes scale and owner, recommendation, onboarding and PRD sources. |
 | ac2-1 | A fixture transcript asks one question per turn about service shape, language, deployment target, coverage floor and design direction. A none-yet answer writes an open question in the project plan notes. |
-| ac2-2 | The rule table, and a test that a non-Next.js spec stops with a named gap. |
+| ac2-2 | The rule table, and a test that a spec no golden path fits takes the custom start of ac2-16. |
 | ac2-3 | The skill text, and a spec written after an override. |
 | ac2-4 | The starter directory, its lock file and the VERSION diff. An audit fixture checks generator versions before pinning. A manifest check confirms exact versions for production dependencies and development tools. |
 | ac2-5 | The copy script, and `check-secrets.sh` output on the generated tree. |

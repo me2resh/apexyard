@@ -58,7 +58,7 @@
     {
       "id": "ac1-2",
       "outcomeId": "o1-interview-sized-to-scale",
-      "statement": "Each question shows the recommended answer first, with one plain-language sentence that gives the reason."
+      "statement": "The interview asks one question at a time through AskUserQuestion. Each question shows the recommended answer first, with one plain-language sentence that gives the reason."
     },
     {
       "id": "ac1-3",
@@ -153,27 +153,27 @@
     {
       "id": "ac3-1",
       "outcomeId": "o3-handover-gap-fill",
-      "statement": "For an existing repository, /handover offers /scaffold retrofit mode. It starts only after the owner says yes. A no leaves no files."
+      "statement": "For an existing repository, /handover offers /scaffold gap-fill mode. It starts only after the owner says yes. A no leaves no files."
     },
     {
       "id": "ac3-2",
       "outcomeId": "o3-handover-gap-fill",
-      "statement": "The retrofit report compares the repository with the closest topology. It lists missing CI pipelines, quality gates and fitness functions, with reasons for the topology choice."
+      "statement": "The gap-fill report compares the repository with the closest topology. It lists missing CI pipelines, quality gates and fitness functions, with reasons for the topology choice."
     },
     {
       "id": "ac3-3",
       "outcomeId": "o3-handover-gap-fill",
-      "statement": "After the owner says yes, retrofit mode proposes the missing additions on a branch and opens a PR for review."
+      "statement": "After the owner says yes, gap-fill mode proposes the missing additions on a branch and opens a PR for review."
     },
     {
       "id": "ac3-4",
       "outcomeId": "o3-handover-gap-fill",
-      "statement": "Retrofit mode never overwrites an existing file without an explicit yes from the owner for that file."
+      "statement": "Gap-fill mode never overwrites an existing file without an explicit yes from the owner for that file."
     },
     {
       "id": "ac3-5",
       "outcomeId": "o3-handover-gap-fill",
-      "statement": "The retrofit report records harnessability scores before and after the proposed changes. It uses the same five dimensions and shows the change in each score."
+      "statement": "The gap-fill report records harnessability scores before and after the proposed changes. It uses the same five dimensions and shows the change in each score."
     },
     {
       "id": "ac3-6",
@@ -233,12 +233,12 @@
     {
       "id": "ac5-4",
       "outcomeId": "o5-more-stacks",
-      "statement": "Generated CI for each new bundle enforces the ac1-8 gates. Each bundle fixture installs only its own toolchain, and the PR records the added CI time."
+      "statement": "Generated CI for each new bundle enforces the ac2-6 gates. Each bundle fixture installs only its own toolchain, and the PR records the added CI time."
     },
     {
       "id": "ac5-5",
       "outcomeId": "o5-more-stacks",
-      "statement": "/handover step 5.5 calls the ac1-7 copy script. A regression test proves /handover writes the same files for an existing repository as before."
+      "statement": "/handover step 5.5 calls the ac2-5 copy script. A regression test proves /handover writes the same files for an existing repository as before."
     },
     {
       "id": "ac5-6",
