@@ -1,0 +1,15 @@
+{
+  "specVersion": "0.1",
+  "id": "snapshot-apexyard-20261013T183551Z",
+  "project": {
+    "id": "apexyard"
+  },
+  "observedAt": "2026-10-13T18:35:51.725Z",
+  "repositories": [
+    {
+      "repositoryId": "me2resh/apexyard",
+      "branch": "orbit/apexyard-token-efficiency-slice-pr-proposes-next",
+      "commit": "fa31b7042a87f1929087b5f0c42aed93f0770fb3"
+    }
+  ]
+}

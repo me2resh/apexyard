@@ -4,8 +4,8 @@
   "planId": "plan-apexyard-token-efficiency",
   "outcomeId": "o8-records-light",
   "basedOn": {
-    "planRevision": 4,
-    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261013T165249Z",
+    "planRevision": 5,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261013T183551Z",
     "repositories": {}
   },
   "objective": "The /orbit skill lints records before the PR and ships one records PR per planning cycle. It writes a reconciliation only when a status changes and shows status live.",

@@ -4,8 +4,8 @@
   "planId": "plan-apexyard-token-efficiency",
   "outcomeId": "o3-refresh-rounds-stopped",
   "basedOn": {
-    "planRevision": 4,
-    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261013T165249Z",
+    "planRevision": 5,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261013T183551Z",
     "repositories": {}
   },
   "objective": "Stop Rex rounds after a base-branch refresh that the merge gate already carries over. Change the rule text only; the gate stays as it is.",

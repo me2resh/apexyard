@@ -4,8 +4,8 @@
   "planId": "plan-apexyard-token-efficiency",
   "outcomeId": "o1-cost-measured",
   "basedOn": {
-    "planRevision": 4,
-    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261013T165249Z",
+    "planRevision": 5,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261013T183551Z",
     "repositories": {}
   },
   "objective": "Ship one framework script that reports token and time cost per session, reviewer and PR. Commit a dated baseline of the 2026-10-10 numbers under docs/perf/.",

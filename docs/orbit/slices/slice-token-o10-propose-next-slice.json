@@ -1,0 +1,39 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-token-o10-propose-next-slice",
+  "planId": "plan-apexyard-token-efficiency",
+  "outcomeId": "o10-slice-pr-proposes-next",
+  "basedOn": {
+    "planRevision": 5,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261013T183551Z",
+    "repositories": {}
+  },
+  "objective": "Make a slice PR propose the next slice record, so the next slice is ready when the PR merges. The owner still confirms its scope, and files its ticket only after a yes.",
+  "why": "Slice PRs now carry their own progress (#1714). The next slice still waits for a records PR. The owner chose to propose it in the slice PR on 2026-10-13. Naqid found the race and guard-branch risks, so the guards are part of this slice.",
+  "contributesTo": [
+    "ac10-1",
+    "ac10-2",
+    "ac10-3",
+    "ac10-4",
+    "ac10-5",
+    "ac10-6"
+  ],
+  "scope": {
+    "include": [
+      "The orbit skill step that drafts the next slice from the plan order and the PR Reconciliation, with a Naqid challenge",
+      "Owner confirmation in the PR review; a basedOn-only change needs no new confirmation",
+      "One Next line in /approve-merge that names the proposed slice",
+      "/orbit handoff checks the slice record on the branch the PR merged into",
+      "Lint: at most one slice record per slice PR, on that PR plan revision and Reconciliation",
+      "Lint: fail when dev already has a slice record with no ticket for the same outcome",
+      "A withdrawn state in the plan notes for a no at handoff",
+      "No proposal when every outcome is achieved, stated in the PR body",
+      "Tests for each rule, including two concurrent proposals and a withdrawn slice"
+    ],
+    "exclude": [
+      "Automatic ticket filing",
+      "Changes to merge gates or to the ticket-creation guard hook beyond the branch it reads",
+      "Changes to the pane rendering"
+    ]
+  }
+}

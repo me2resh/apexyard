@@ -1,4 +1,4 @@
-# Notes for plan-apexyard-token-efficiency (current: revision 4)
+# Notes for plan-apexyard-token-efficiency (current: revision 5)
 
 These notes sit beside the Plan record because the ORBIT v0.1 Plan schema has no fields for constraints, decisions, dependencies or evidence. The Plan record stays valid ORBIT.
 
@@ -94,6 +94,20 @@ o1 first, because every later change and the harness o4 slice measure with its s
 - Rex on PR #1622: the o4 hook uses the active-reviewer marker only for a subagent with no type, because the marker covers the whole session. The orchestrator is never blocked.
 - Correction to the message of commit 3bf5e52 (PR #1620): the wrong range came from a faulty first parse, not from the four most common sizes. In a correct parse the most common sizes are 3,925 to 3,930 bytes.
 
+## Revision 5 (2026-10-13)
+
+- **Owner decision.** A slice PR proposes the next slice, so the next slice record is ready when the PR merges. The owner still chooses each slice. New outcome o10 with ac10-1 to ac10-6.
+- **Naqid (2026-10-13): proceed with changes.** All points are applied:
+  - Two concurrent slice PRs can propose the same next slice: ac10-5 fails when dev already has a slice record with no ticket for that outcome.
+  - The ticket guard reads the default branch, but slice PRs merge to dev: ac10-3 checks the record on the branch the PR merged into.
+  - A branch update changes basedOn: ac10-2 needs no new confirmation for a basedOn change, only for a scope change.
+  - A no at handoff left a record with no ticket: ac10-6 marks it withdrawn.
+  - /approve-merge is near its 14,000-byte cap (ac6-1): it prints one Next line only, and /orbit handoff does the work.
+  - Proof goes in the ## Proof section, because the lint warns on proof inside a criterion.
+- **Order.** This revision merged after #1714, because the #1714 Reconciliation used revision 4.
+- **Owner waiver not needed.** o10 is a new outcome, so its slice is the only open o10 slice (C6).
+- **History.** Revision 4, its two Reconciliations and the delivered o8 progress slice (#1714) move to docs/orbit/history/. The other slices point to the revision 5 Reconciliation only because the validator requires it.
+
 ## Revision 4 (2026-10-13)
 
 - **Problem.** The ORBIT pane reads only Reconciliations merged on dev. A slice PR merges, but its progress waits days for a separate records PR.
@@ -119,6 +133,12 @@ Revision 4 keeps proof out of the new criterion statements. The older criteria k
 - ac8-8: the workflow and a test.
 - ac8-9: a test with two concurrent slice PRs.
 - ac8-10: the skill text and a test.
+- ac10-1: the skill text and the next slice PR.
+- ac10-2: the skill text and a slice PR review thread.
+- ac10-3: the skill text and a handoff test on a dev-only record.
+- ac10-4: the skill text and a test with every outcome achieved.
+- ac10-5: a lint test with two concurrent proposals.
+- ac10-6: the skill text and a test of a withdrawn slice.
 
 ## Interview
 
@@ -128,6 +148,12 @@ Revision 4 keeps proof out of the new criterion statements. The older criteria k
 - 2026-10-13, q4-acceptance: (revision 4) Add ac8-6 to ac8-8 as drafted, then ac8-9 and ac8-10 after the Naqid challenge.
 - 2026-10-13, q5-constraints: (revision 4) A missing Reconciliation warns and never blocks. A merge alone moves no status. CI lint plus Rex on the diff check the Reconciliation.
 - 2026-10-13, q6-save: (revision 4) Save revision 4 as revised after the Naqid challenge.
+- 2026-10-13, q1-outcome: (revision 5) When a slice PR merges, the next slice record already exists on dev. Filing its ticket takes one confirmation.
+- 2026-10-13, q2-intent: (revision 5) Unchanged.
+- 2026-10-13, q3-outcomes: (revision 5) Add a new outcome o10, so o8 stays about records and o10 needs no C6 waiver.
+- 2026-10-13, q4-acceptance: (revision 5) Add ac10-1 to ac10-5 as drafted. After the Naqid challenge, amend ac10-2, ac10-3 and ac10-5, and add ac10-6.
+- 2026-10-13, q5-constraints: (revision 5) The owner confirms the scope in the PR review. The ticket is filed only after merge and a yes. With no outcome left, propose nothing. Naqid challenges each proposal.
+- 2026-10-13, q6-save: (revision 5) Save as revised after the Naqid challenge.
 
 ## Revision 3 (2026-10-11)
 
