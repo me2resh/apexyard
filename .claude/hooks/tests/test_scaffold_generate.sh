@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Prove each floor gate with local fake tools.
 set -euo pipefail
+# shellcheck source=./_test-session-isolation.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
 root=${APEXYARD_TEST_SRC_ROOT:-$(cd "$(dirname "$0")/../../.." && pwd)}
 lib=$root/.claude/skills/scaffold/lib
 fix=$root/.claude/hooks/tests/fixtures/scaffold

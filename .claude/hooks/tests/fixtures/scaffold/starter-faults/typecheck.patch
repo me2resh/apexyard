@@ -1,6 +1,5 @@
 diff --git a/src/type-fault.ts b/src/type-fault.ts
 new file mode 100644
-index 0000000..2222222
 --- /dev/null
 +++ b/src/type-fault.ts
 @@ -0,0 +1 @@
