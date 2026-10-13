@@ -4,12 +4,12 @@
   "planId": "plan-apexyard-scaffold",
   "outcomeId": "o2-floor-and-recommended-path",
   "basedOn": {
-    "planRevision": 3,
-    "reconciliationId": "reconciliation-plan-apexyard-scaffold-20261013T160741Z",
+    "planRevision": 4,
+    "reconciliationId": "reconciliation-plan-apexyard-scaffold-20261013T162919Z",
     "repositories": {}
   },
   "objective": "Make /scaffold generate a new project for any stack at the stack-agnostic floor. One copy script writes the CI gates, the dependency audit, the general handbooks, the topology anchor and the scaffold AgDR into workspace/<name>/. A spec that no golden path fits gets the custom start.",
-  "why": "o1 is achieved at 27de5bd: the spec and the rules table exist, but /scaffold writes no project files yet. Every stack gets the floor, so the floor comes before the typescript-nextjs starter (owner choice, 2026-10-13). This slice meets ac2-5, ac2-6 and ac2-16 only in part; the starter slice completes them.",
+  "why": "o1 is achieved at 27de5bd. The spec and the rules table exist, but /scaffold writes no project files yet. Every stack gets the floor, so the floor comes before the typescript-nextjs starter (owner choice, 2026-10-13). This slice meets ac2-5, ac2-6 and ac2-16 only in part. The starter slice completes them.",
   "contributesTo": [
     "ac2-1",
     "ac2-3",

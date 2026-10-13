@@ -1,6 +1,15 @@
-# Notes for the scaffold initiative (current: revision 3)
+# Notes for the scaffold initiative (current: revision 4)
 
 These notes sit beside the initiative record. The ORBIT v0.1 schema for that record type has no fields for constraints, decisions, dependencies or proof. The initiative record stays valid ORBIT. The record type and the file names keep the `plan-` prefix (AgDR-0226).
+
+## Revision 4
+
+Owner direction, 2026-10-13: the initiative name must be clear in the ORBIT pane. The pane shows only the first words of a title.
+
+- The title changes to "Scaffold: start every project at one quality floor". The old title was "Start or catch up a project from a golden path, through an interview sized to its scale".
+- ac2-16 drops the words "to file", so it has 50 words, the limit. Its meaning does not change.
+- The intent, the outcomes, the other criteria and the constraints do not change.
+- The owner chose to skip the Naqid challenge for this revision, because it changes only the title and two words.
 
 ## Revision 3
 
@@ -82,6 +91,12 @@ ac4-1 and ac1-3 do not conflict. ac4-1 covers scale, budget and compliance facts
 - 2026-10-13, q4-acceptance (revision 3): Ask where the project runs first and recommend the technology and pipeline. Remove the cost, currency and test questions. Amend ac1-1, ac1-5, ac2-1, ac4-1, ac4-2, ac4-5, ac4-6, ac5-1 and ac6-2.
 - 2026-10-13, q5-constraints (revision 3): Netlify is the default managed hosting service. Outcome o4 shows a rough cost range and asks no budget question.
 - 2026-10-13, q6-save (revision 3): Apply the converged roundtable design, with a plan amendment and a short AgDR.
+- 2026-10-13, q1-outcome (revision 4): Unchanged. The owner chose the clear title "Scaffold: start every project at one quality floor".
+- 2026-10-13, q2-intent (revision 4): Unchanged.
+- 2026-10-13, q3-outcomes (revision 4): Unchanged. The eight outcomes stay.
+- 2026-10-13, q4-acceptance (revision 4): Unchanged, except that ac2-16 is shortened to 50 words with the same meaning.
+- 2026-10-13, q5-constraints (revision 4): Unchanged.
+- 2026-10-13, q6-save (revision 4): Save revision 4 and skip the Naqid challenge, because only the title and two words change.
 
 ## Where the initiative comes from
 

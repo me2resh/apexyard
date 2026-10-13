@@ -1,10 +1,10 @@
 {
   "specVersion": "0.1",
-  "id": "reconciliation-plan-apexyard-scaffold-20261013T160741Z",
+  "id": "reconciliation-plan-apexyard-scaffold-20261013T162919Z",
   "planId": "plan-apexyard-scaffold",
-  "planRevision": 3,
+  "planRevision": 4,
   "projectSnapshotId": "snapshot-apexyard-20261013T160741Z",
-  "reconciledAt": "2026-10-13T16:07:42.039Z",
+  "reconciledAt": "2026-10-13T16:29:19.284Z",
   "observations": [
     "Observed me2resh/apexyard at 27de5bdb11f5ab2049330ce5e2e15ef254233e52, after #1709 merged the o1 interview."
   ],
@@ -111,7 +111,7 @@
       "evidence": [
         "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
       ],
-      "explanation": "Missing: the hardened typescript-nextjs starter. Next: a later slice for the o2 starter."
+      "explanation": "Missing: the install-time environment check for generator tools. Next: a later slice for the o2 starter."
     },
     {
       "criterionId": "ac2-9",
@@ -127,7 +127,7 @@
       "evidence": [
         "At 27de5bd, .claude/skills/scaffold holds only the o1 interview: questions, rules table, spec schema and validator."
       ],
-      "explanation": "Missing: the hardened typescript-nextjs starter. Next: a later slice for the o2 starter."
+      "explanation": "Missing: the commands that run and reset the project locally. Next: a later slice for the o2 starter."
     },
     {
       "criterionId": "ac2-11",

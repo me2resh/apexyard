@@ -1,0 +1,324 @@
+{
+  "specVersion": "0.1",
+  "id": "plan-apexyard-scaffold",
+  "revision": 4,
+  "project": {
+    "id": "apexyard"
+  },
+  "title": "Scaffold: start every project at one quality floor",
+  "intent": "Every project in ApexYard starts from, or catches up to, the same quality floor. The /scaffold skill serves new projects and /handover. It interviews the owner one question at a time. It asks where the project runs first, and the depth follows the project's scale. Every question offers a recommended answer with a plain reason, so a non-engineer can accept safe defaults. The skill records the answers in a scaffold spec and recommends a stack. A tested golden path is preferred, and any other stack gets the same floor. It generates a hardened local project whose CI enforces the quality gates, a dependency audit and the fitness functions that the spec sets. For an existing repository, it sizes each gap by scale and proposes the fixes through a PR. It writes a draft infrastructure recommendation and a rough monthly cost range, and it never applies them. It never pushes, never creates a remote repository without the owner's yes, and never writes a secret. Review findings on generated projects feed back into the starter and the interview.",
+  "outcomes": [
+    {
+      "id": "o1-interview-sized-to-scale",
+      "title": "The /scaffold interview asks where the project runs first, matches its depth to the scale, and offers a recommended answer for every question.",
+      "intent": "A non-engineer can accept safe defaults, and an engineer answers only what is open."
+    },
+    {
+      "id": "o2-floor-and-recommended-path",
+      "title": "/scaffold recommends a stack from the answers. Every project gets the stack-agnostic floor, and a golden-path stack also gets its tested starter.",
+      "intent": "A few tested golden paths are the paved roads, not the only roads. Any stack starts at the same quality floor."
+    },
+    {
+      "id": "o3-handover-gap-fill",
+      "title": "/handover uses the same interview to fill the gaps of an existing repository, sized by scale, through a PR.",
+      "intent": "Existing repositories catch up to the golden path."
+    },
+    {
+      "id": "o4-infra-and-cost",
+      "title": "/scaffold writes a draft infrastructure recommendation and a monthly cost estimate matched to scale and budget, and never applies the infrastructure.",
+      "intent": "Every stack gets best-practice infrastructure advice and a cost estimate, also when no starter template exists for it."
+    },
+    {
+      "id": "o5-more-stacks",
+      "title": "/scaffold generates python-fastapi and go-data-pipeline projects, names each gap that no bundle covers, and shares its copy script with /handover.",
+      "intent": ""
+    },
+    {
+      "id": "o6-fitness-functions",
+      "title": "Generated CI checks layer boundaries and the bundle-size budget, and one file lists each gate and the spec answer that set it.",
+      "intent": ""
+    },
+    {
+      "id": "o7-entry-points",
+      "title": "/write-spec, /onboard and ORBIT handoffs offer /scaffold with reused answers. The scaffold reaches a remote through a PR and offers /walking-skeleton.",
+      "intent": ""
+    },
+    {
+      "id": "o8-lessons-loop",
+      "title": "A review finding on a generated project that traces to the starter or the interview becomes a change to /scaffold.",
+      "intent": "Each project the framework scaffolds makes the next one safer."
+    }
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "ac1-1",
+      "outcomeId": "o1-interview-sized-to-scale",
+      "statement": "The interview asks where the project runs first. Then it asks what the project is and who uses it, which sets the scale. A demo asks 3 questions, a small product 4 and a production service 5."
+    },
+    {
+      "id": "ac1-2",
+      "outcomeId": "o1-interview-sized-to-scale",
+      "statement": "The interview asks one question at a time through AskUserQuestion. Each question shows the recommended answer first, with one plain-language sentence that gives the reason."
+    },
+    {
+      "id": "ac1-3",
+      "outcomeId": "o1-interview-sized-to-scale",
+      "statement": "The answer 'Not sure, recommend for me' records the recommended value, its reason and the mark recommended. The skill never records a silent guess."
+    },
+    {
+      "id": "ac1-4",
+      "outcomeId": "o1-interview-sized-to-scale",
+      "statement": "Before it asks, the skill reads the tech_stack block of onboarding.yaml and any PRD for the project. It asks only what those files leave open."
+    },
+    {
+      "id": "ac1-5",
+      "outcomeId": "o1-interview-sized-to-scale",
+      "statement": "The skill writes the answers to a scaffold spec file that a JSON schema validates. The spec records the scale and the source of each answer: owner, recommendation, onboarding, PRD, default or derived."
+    },
+    {
+      "id": "ac2-1",
+      "outcomeId": "o2-floor-and-recommended-path",
+      "statement": "The skill recommends a stack and a pipeline from the host and the shape through a rules table, with a plain reason. Language, coverage floor and design become defaults that the summary shows. A host of none yet adds an open question to the project plan notes."
+    },
+    {
+      "id": "ac2-2",
+      "outcomeId": "o2-floor-and-recommended-path",
+      "statement": "A rule table in the framework maps the spec to a golden path. In o2 the table holds typescript-nextjs with a starter. A spec that no golden path fits gets the custom start of ac2-16, not a stop."
+    },
+    {
+      "id": "ac2-3",
+      "outcomeId": "o2-floor-and-recommended-path",
+      "statement": "The skill shows the pick and the spec answers that decided it. The owner confirms or overrides the pick, and the skill records the choice in the spec."
+    },
+    {
+      "id": "ac2-4",
+      "outcomeId": "o2-floor-and-recommended-path",
+      "statement": "The typescript-nextjs bundle ships a starter directory with a minimal source tree, its tool configuration and exact pinned versions. The bundle VERSION gets a minor bump. Every dependency, development tools included, has an exact version. The skill audits each version that a generator proposes before it pins the version."
+    },
+    {
+      "id": "ac2-5",
+      "outcomeId": "o2-floor-and-recommended-path",
+      "statement": "One copy script copies the starter, handbooks, CI files and topology anchor into workspace/<name>/. The generated tree passes check-secrets.sh."
+    },
+    {
+      "id": "ac2-6",
+      "outcomeId": "o2-floor-and-recommended-path",
+      "statement": "Generated CI fails below the coverage floor and on a lint, typecheck or build fault. The floor is 80 percent, or the spec value when it is higher."
+    },
+    {
+      "id": "ac2-7",
+      "outcomeId": "o2-floor-and-recommended-path",
+      "statement": "Generated CI runs a dependency audit. A high or critical advisory in a production dependency fails the build."
+    },
+    {
+      "id": "ac2-8",
+      "outcomeId": "o2-floor-and-recommended-path",
+      "statement": "Before the skill picks a tool that needs install scripts or network access at install time, it checks the build environment. When the check fails, it picks a fallback and records both in the AgDR."
+    },
+    {
+      "id": "ac2-9",
+      "outcomeId": "o2-floor-and-recommended-path",
+      "statement": "For a web service shape, the starter sets session cookies HttpOnly and SameSite with one rule for Secure. State-changing API routes accept JSON only. Errors use problem+json with stable codes."
+    },
+    {
+      "id": "ac2-10",
+      "outcomeId": "o2-floor-and-recommended-path",
+      "statement": "One command migrates, seeds and starts the project locally. One command resets local data to the seed."
+    },
+    {
+      "id": "ac2-11",
+      "outcomeId": "o2-floor-and-recommended-path",
+      "statement": "A typescript-nextjs fixture has one seeded fault for each gate. A framework CI test proves each gate fails on its fault and passes on the clean starter. The PR records the added CI time."
+    },
+    {
+      "id": "ac2-12",
+      "outcomeId": "o2-floor-and-recommended-path",
+      "statement": "The /handover harnessability assessment rates the generated typescript-nextjs project high on all five dimensions."
+    },
+    {
+      "id": "ac2-13",
+      "outcomeId": "o2-floor-and-recommended-path",
+      "statement": "The skill writes one proposed AgDR for the scaffold. The AgDR lists each stack choice and the spec answers that drove it."
+    },
+    {
+      "id": "ac2-14",
+      "outcomeId": "o2-floor-and-recommended-path",
+      "statement": "/scaffold is a bootstrap skill, and its bootstrap scope names each path it writes. Hakim reviews that scope and approves it before the slice PR merges."
+    },
+    {
+      "id": "ac2-15",
+      "outcomeId": "o2-floor-and-recommended-path",
+      "statement": "The skill text and each generated Markdown file pass bin/check-writing-profile.sh with zero faults. CLAUDE.md, README.md, AGENTS.md, docs/whats-inside.md and topologies/README.md list /scaffold with correct skill counts."
+    },
+    {
+      "id": "ac3-1",
+      "outcomeId": "o3-handover-gap-fill",
+      "statement": "For an existing repository, /handover offers /scaffold gap-fill mode. It starts only after the owner says yes. A no leaves no files."
+    },
+    {
+      "id": "ac3-2",
+      "outcomeId": "o3-handover-gap-fill",
+      "statement": "The gap-fill report compares the repository with the closest topology. It lists missing CI pipelines, quality gates and fitness functions, with reasons for the topology choice."
+    },
+    {
+      "id": "ac3-3",
+      "outcomeId": "o3-handover-gap-fill",
+      "statement": "After the owner says yes, gap-fill mode proposes the missing additions on a branch and opens a PR for review."
+    },
+    {
+      "id": "ac3-4",
+      "outcomeId": "o3-handover-gap-fill",
+      "statement": "Gap-fill mode never overwrites an existing file without an explicit yes from the owner for that file."
+    },
+    {
+      "id": "ac3-5",
+      "outcomeId": "o3-handover-gap-fill",
+      "statement": "The gap-fill report records harnessability scores before and after the proposed changes. It uses the same five dimensions and shows the change in each score."
+    },
+    {
+      "id": "ac3-6",
+      "outcomeId": "o3-handover-gap-fill",
+      "statement": "Each gap in the report has a size from the scale: must, should or later. The interview asks only about gaps and recommends an answer for each gap."
+    },
+    {
+      "id": "ac4-1",
+      "outcomeId": "o4-infra-and-cost",
+      "statement": "The interview asks no cost, budget or currency question. Scale comes from who uses the project. Compliance comes from the data answer. The skill never guesses a fact."
+    },
+    {
+      "id": "ac4-2",
+      "outcomeId": "o4-infra-and-cost",
+      "statement": "For every host, the skill writes a draft infrastructure recommendation, also when no IaC template exists. It names each service, its size and the reason from the spec answers. A host of none yet gives an open question, not a draft."
+    },
+    {
+      "id": "ac4-3",
+      "outcomeId": "o4-infra-and-cost",
+      "statement": "For an AWS host, the draft includes Terraform that passes terraform validate and tflint without cloud credentials. A check also fails on any non-ASCII string in the .tf files."
+    },
+    {
+      "id": "ac4-4",
+      "outcomeId": "o4-infra-and-cost",
+      "statement": "The generated Terraform CI has its apply job off. Only the owner turns it on, in a later PR."
+    },
+    {
+      "id": "ac4-5",
+      "outcomeId": "o4-infra-and-cost",
+      "statement": "The summary shows a rough monthly cost range, low to high, with the three largest cost drivers and the assumptions. The skill asks no budget question and makes no budget comparison."
+    },
+    {
+      "id": "ac4-6",
+      "outcomeId": "o4-infra-and-cost",
+      "statement": "The cost range uses a static price table with a price date and states that the figures are not a quote. Framework CI fails when the price date is older than 6 months."
+    },
+    {
+      "id": "ac4-7",
+      "outcomeId": "o4-infra-and-cost",
+      "statement": "The skill never runs terraform apply or any cloud write call, and it needs no cloud credentials."
+    },
+    {
+      "id": "ac5-1",
+      "outcomeId": "o5-more-stacks",
+      "statement": "The rule table adds python-fastapi and go-data-pipeline. The language comes from the golden path, and the summary shows a clash with the onboarding language."
+    },
+    {
+      "id": "ac5-2",
+      "outcomeId": "o5-more-stacks",
+      "statement": "The skill lists each spec need that no bundle covers as a gap, for example a second service shape. When no bundle fits, it offers a custom start and an upstream topology request."
+    },
+    {
+      "id": "ac5-3",
+      "outcomeId": "o5-more-stacks",
+      "statement": "The python-fastapi and go-data-pipeline bundles ship starter directories with exact pinned versions. Each bundle VERSION gets a minor bump."
+    },
+    {
+      "id": "ac5-4",
+      "outcomeId": "o5-more-stacks",
+      "statement": "Generated CI for each new bundle enforces the ac2-6 gates. Each bundle fixture installs only its own toolchain, and the PR records the added CI time."
+    },
+    {
+      "id": "ac5-5",
+      "outcomeId": "o5-more-stacks",
+      "statement": "/handover step 5.5 calls the ac2-5 copy script. A regression test proves /handover writes the same files for an existing repository as before."
+    },
+    {
+      "id": "ac5-6",
+      "outcomeId": "o5-more-stacks",
+      "statement": "A framework script computes the five harnessability scores. typescript-nextjs scores high on each dimension. The other bundles reach their best reachable bucket on each dimension."
+    },
+    {
+      "id": "ac6-1",
+      "outcomeId": "o6-fitness-functions",
+      "statement": "Generated CI checks architecture layer boundaries for each topology bundle. TypeScript projects use the dependency-cruiser config from the harness golden-path initiative."
+    },
+    {
+      "id": "ac6-2",
+      "outcomeId": "o6-fitness-functions",
+      "statement": "For a web shape, the spec holds a page-size budget, 500 KB by default, that the owner can change in the summary. Generated CI fails above it."
+    },
+    {
+      "id": "ac6-3",
+      "outcomeId": "o6-fitness-functions",
+      "statement": "The generated project has one fitness-functions file that lists each gate, its threshold and the spec answer that set it."
+    },
+    {
+      "id": "ac6-4",
+      "outcomeId": "o6-fitness-functions",
+      "statement": "Each new gate has a seeded fault in each bundle fixture. The framework CI test proves the gate fails on its fault and passes on the clean case."
+    },
+    {
+      "id": "ac7-1",
+      "outcomeId": "o7-entry-points",
+      "statement": "For a new fork, /onboard offers /scaffold when the owner selects start a new project. It recommends /scaffold and keeps light registration."
+    },
+    {
+      "id": "ac7-2",
+      "outcomeId": "o7-entry-points",
+      "statement": "The skill adds a registry entry that passes validation. After the owner says yes, it creates the remote with a README-only default branch and opens the scaffold as a PR."
+    },
+    {
+      "id": "ac7-3",
+      "outcomeId": "o7-entry-points",
+      "statement": "At the end, /scaffold offers /walking-skeleton and passes the layers and the deploy target from the spec as defaults."
+    },
+    {
+      "id": "ac7-4",
+      "outcomeId": "o7-entry-points",
+      "statement": "After /write-spec produces an approved PRD for a new product, it offers /scaffold. The interview reuses PRD answers and asks only for gaps."
+    },
+    {
+      "id": "ac7-5",
+      "outcomeId": "o7-entry-points",
+      "statement": "The /write-spec offer starts /scaffold only after the owner says yes. A no leaves no files."
+    },
+    {
+      "id": "ac7-6",
+      "outcomeId": "o7-entry-points",
+      "statement": "The /onboard interview reuses recorded answers and asks only for gaps. The offer starts /scaffold only after the owner says yes. A no leaves no files."
+    },
+    {
+      "id": "ac7-7",
+      "outcomeId": "o7-entry-points",
+      "statement": "When an ORBIT slice handoff needs a new repository, it offers /scaffold. The spec uses the initiative outcomes and constraints without asking recorded answers again."
+    },
+    {
+      "id": "ac7-8",
+      "outcomeId": "o7-entry-points",
+      "statement": "The ORBIT handoff offer starts /scaffold only after the owner says yes. A no leaves no files."
+    },
+    {
+      "id": "ac8-1",
+      "outcomeId": "o8-lessons-loop",
+      "statement": "A finding that traces to the starter or the interview becomes a scaffold change: a starter fix, a new question or a new check."
+    },
+    {
+      "id": "ac8-2",
+      "outcomeId": "o8-lessons-loop",
+      "statement": "Each scaffold change of this kind adds one changelog line. The line names the class of finding and never names the project."
+    },
+    {
+      "id": "ac2-16",
+      "outcomeId": "o2-floor-and-recommended-path",
+      "statement": "For a stack with no golden path, the custom start applies the stack-agnostic floor with the stack's own tools. The floor covers CI gates, a dependency audit, exact pins, the security baseline and the general handbooks. The skill marks the project custom and drafts a golden-path request for the owner."
+    }
+  ]
+}
