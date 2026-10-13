@@ -12,6 +12,13 @@ real_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
 sb=$(make_sandbox)
 orbit_root=$(fixtures_write_orbit_root "$sb")
 fixtures_install_mock_orbit "$sb"
+# New Plan fixtures include the required operator interview.
+{
+  echo '## Interview'
+  for key in q1-outcome q2-intent q3-outcomes q4-acceptance q5-constraints q6-save; do
+    printf -- '- 2026-10-12, %s: Fixture answer.\n' "$key"
+  done
+} > "$orbit_root/plans/plan-demo-widget.notes.md"
 mkdir -p "$sb/.claude/hooks" "$sb/.claude/skills/orbit/lib"
 cp "$real_root/.claude/hooks/check-private-refs-runtime.sh" "$real_root"/.claude/hooks/_lib-*.sh "$sb/.claude/hooks/"
 cp "$real_root/.claude/skills/orbit/lib/records-lint.sh" "$sb/.claude/skills/orbit/lib/"
@@ -108,6 +115,14 @@ set_expl "Missing: fresh evidence. Next: inspect the slice."
 expect "referenced changed snapshot" 0 "records-lint: OK"
 jq '.planId = "plan-other"' "$rec" > "$rec.t" && mv "$rec.t" "$rec"
 expect "cross initiative reconciliation" 15 "Record belongs to another initiative."
+jq --arg p "$plan" '.planId = $p' "$rec" > "$rec.t" && mv "$rec.t" "$rec"
+# A superseded reconciliation in history/ is owned through .planId, not .id.
+mkdir -p "$orbit_root/history"
+jq '.id = "reconciliation-demo-widget-r0"' "$rec" > "$orbit_root/history/reconciliation-demo-r0.json"
+expect "own initiative history reconciliation" 0 "records-lint: OK"
+jq '.planId = "plan-other"' "$orbit_root/history/reconciliation-demo-r0.json" > "$rec.t" && mv "$rec.t" "$orbit_root/history/reconciliation-demo-r0.json"
+expect "cross initiative history reconciliation" 15 "Record belongs to another initiative."
+rm "$orbit_root/history/reconciliation-demo-r0.json"
 git -C "$sb" checkout -qb orbit/unknown-cycle
 expect "unknown initiative" 15 "No matching plan record"
 

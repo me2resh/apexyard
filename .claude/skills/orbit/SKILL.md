@@ -203,13 +203,14 @@ Lint the records before a records PR (AgDR-0225). `/orbit` runs this step itself
   --orbit-root "$orbit_root" --repo "$project_repo"
 ```
 
-The script checks the record files changed against `origin/dev`. Pass `--base <ref>` to change the base. Pass `--all` to check every record file. It checks initiative ownership on `orbit/` branches (exit 15), then runs five checks in order and stops on the first fault:
+The script checks the record files changed against `origin/dev`. Pass `--base <ref>` to change the base. Pass `--all` to check every record file. It checks initiative ownership on `orbit/` branches (exit 15), then runs six checks in order and stops on the first fault:
 
 1. `orbit validate --all`. Exit 10.
 2. The leak scrub, `check-private-refs-runtime.sh`. Exit 11.
 3. The sentence check: no sentence of a record text field has more than 25 words. Exit 12.
 4. The `Missing: ... Next: ...` rule: a criterion that is not `achieved` has an explanation in this form. Exit 13.
 5. The local-path check: no record or notes file holds an absolute local path. Exit 14.
+6. The Plan interview check: new or changed Plans need six dated answers in their notes. Exit 16.
 
 The message names the check, the file, and the fault. Fix the fault, then run the lint again. Report the exit code and message when the lint stops.
 
@@ -355,6 +356,10 @@ The operator may pass `--no-challenge` when a challenge was already run for the 
 
 ### Plan interview
 
+Run this six-question interview. Ask questions 1–5 BEFORE drafting, then complete question 6 after showing the draft.
+Write the operator's answers in their words under `## Interview` in `docs/orbit/plans/<plan-id>.notes.md`.
+Use one dated bullet per question: `- YYYY-MM-DD, <key>: <answer>`. Records lint enforces all six answers.
+
 Each acceptance criterion has one or two sentences, each with at most 25 words (the STE100 descriptive limit).
 The statement says what must be true, never how to prove it. Proof belongs elsewhere.
 
@@ -362,12 +367,12 @@ Until the ORBIT schema has a proof field, store proof instructions in `docs/orbi
 Use one bullet per criterion ID, for example `- ac1-2: <command or artifact>`.
 Record observed results in the Reconciliation evidence.
 
-1. `What project outcome are you trying to achieve?`
-2. `What durable intent should the Plan preserve?`
-3. `What outcomes must be true when the work is complete?`
-4. `What acceptance criteria state what must be true for each outcome?`
-5. `What constraints or assumptions must the Plan record?`
-6. Show the complete Plan JSON, run Naqid, then ask: `Save this Plan revision?`
+1. `q1-outcome`: `What project outcome are you trying to achieve?`
+2. `q2-intent`: `What durable intent should the Plan preserve?`
+3. `q3-outcomes`: `What outcomes must be true when the work is complete?`
+4. `q4-acceptance`: `What acceptance criteria state what must be true for each outcome?`
+5. `q5-constraints`: `What constraints or assumptions must the Plan record?`
+6. `q6-save`: Show the complete Plan JSON, run Naqid, then ask: `Save this Plan revision?`
 
 If the operator declines, revise only the requested fields and show the draft again. Do not write a Plan without confirmation.
 

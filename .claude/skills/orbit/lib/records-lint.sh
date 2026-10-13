@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # records-lint.sh — lint ORBIT records before a records PR (AgDR-0225, ac8-1).
 #
-# Runs five checks in order and stops on the first fault:
+# Runs six checks in order and stops on the first fault:
 #   1. orbit validate --all
 #   2. leak scrub (check-private-refs-runtime.sh) on record text
 #   3. sentence check: at most 25 words in a sentence of a record text field
 #   4. "Missing: ... Next:" rule for a non-achieved explanation
 #   5. local-path check
-# Checks 2 to 5 read the record files changed against --base (default
+#   6. Plan interview: six dated operator answers in the Plan notes
+# Checks 2 to 6 read the record files changed against --base (default
 # origin/dev), or every record file with --all.
 # By default, checks 3 and 4 read only the text that changed against the merge
 # base. A JSON record is compared field by field. A notes file is compared line
@@ -17,7 +18,7 @@
 #
 # Usage: records-lint.sh --orbit-root <dir> [--repo <owner/name>] [--base <ref>] [--all]
 # Exit: 0 clean; 10 validate; 11 leak scrub; 12 sentence; 13 Missing/Next;
-#       14 local path; 15 initiative; 20 usage or missing tool.
+#       14 local path; 15 initiative; 16 interview; 20 usage or missing tool.
 
 set -u
 
@@ -99,7 +100,9 @@ case "$branch" in orbit/*)
     if [ -f "$scope_top/$f" ]; then record=$(cat "$scope_top/$f")
     else record=$(git -C "$scope_top" show "$scope_base:$f") || fail 15 initiative "$f" "Cannot read deleted record."; fi
     case "$f" in
-      docs/orbit/plans/*|docs/orbit/history/*) owner=$(printf '%s' "$record" | jq -er '.id') ;;
+      docs/orbit/plans/*) owner=$(printf '%s' "$record" | jq -er '.id') ;;
+      # A history file is a superseded plan (owner in .id) or reconciliation (owner in .planId).
+      docs/orbit/history/*) owner=$(printf '%s' "$record" | jq -er '.planId // .id') ;;
       docs/orbit/slices/*|docs/orbit/reconciliations/*) owner=$(printf '%s' "$record" | jq -er '.planId') ;;
       docs/orbit/snapshots/*)
         id=$(printf '%s' "$record" | jq -er '.id') || fail 15 initiative "$f" "Cannot read snapshot ID."
@@ -113,7 +116,7 @@ case "$branch" in orbit/*)
   done
 ;; esac
 
-# Select the files for checks 2 to 5.
+# Select the files for checks 2 to 6.
 files=()
 use_diff=0
 if [ "$check_all" -eq 0 ]; then
@@ -258,6 +261,23 @@ pattern='(/Users/|/home/[A-Za-z]|/private/tmp|/var/folders/|/tmp/|[A-Za-z]:\\\\|
 for f in "${sel[@]}"; do
   hit=$(grep -nE "$pattern" "$f" | head -1)
   [ -z "$hit" ] || fail 14 local-path "$f" "a local path appears at line ${hit%%:*}. Use a repository-relative path."
+done
+
+# 6. Interview evidence for each new or changed Plan (all Plans with --all).
+for f in "${sel[@]}"; do
+  case "$f" in */plans/*.json) ;; *) continue ;; esac
+  plan_id=$(jq -er '.id' "$f") || fail 16 interview "$f" "Cannot read Plan ID."
+  notes="$(dirname "$f")/$plan_id.notes.md"
+  [ -f "$notes" ] && grep -qE '^## Interview[[:space:]]*$' "$notes" ||
+    fail 16 interview "$notes" "Missing ## Interview section."
+  for question in q1-outcome q2-intent q3-outcomes q4-acceptance q5-constraints q6-save; do
+    awk -v question="$question" '
+      /^## Interview[[:space:]]*$/ { interview=1; next }
+      /^#{1,2}[[:space:]]/ { interview=0 }
+      interview && $0 ~ "^- [0-9]{4}-[0-9]{2}-[0-9]{2}, " question ":[[:space:]]*[^[:space:]]" { found=1 }
+      END { exit !found }
+    ' "$notes" || fail 16 interview "$notes" "Missing dated answer for $question in ## Interview."
+  done
 done
 
 echo "records-lint: OK (${#sel[@]} file(s) checked)"
