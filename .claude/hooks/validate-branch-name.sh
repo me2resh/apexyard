@@ -9,16 +9,24 @@
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -r "$HOOK_DIR/_lib-git-global.sh" ]; then
+  # shellcheck disable=SC1091
+  . "$HOOK_DIR/_lib-git-global.sh"
+fi
+
 if [ -z "$COMMAND" ]; then
   . "$(dirname "$0")/_lib-fail-closed-json.sh"
-  if raw_payload_command_matches "$INPUT" 'git[[:space:]]+push'; then
+  _branch_pat='git[[:space:]]+push'
+  if command -v git_subcommand_payload_pattern >/dev/null 2>&1; then
+    _branch_pat="$(git_subcommand_payload_pattern push)"
+  fi
+  if raw_payload_command_matches "$INPUT" "$_branch_pat"; then
     echo "BLOCKED: branch-name hook cannot parse this push command. Restore jq and retry." >&2
     exit 2
   fi
   exit 0
 fi
-
-HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Only check on git push. This presence check MUST run against the RAW,
 # unfiltered command — never against heredoc-stripped text. A security
@@ -31,7 +39,9 @@ HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 # _lib-strip-heredoc.sh's governance comment and
 # docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md for the incident and
 # the additive-(safe)-vs-subtractive-(dangerous) framing that fixes it.
-if ! echo "$COMMAND" | grep -qE '\bgit\s+push\b'; then
+if command -v command_has_git_subcommand >/dev/null 2>&1; then
+  command_has_git_subcommand "$COMMAND" push || exit 0
+elif ! echo "$COMMAND" | grep -qE '\bgit\s+push\b'; then
   exit 0
 fi
 
@@ -111,6 +121,11 @@ if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
   SCAN_LAST_REF=""
   if is_tag_push "$COMMAND"; then
     STRIPPED_FOR_SCAN=$(echo "$COMMAND" | sed 's/[[:space:]][0-9]*[>|].*$//')
+    if command -v git_push_segment_re >/dev/null 2>&1; then
+      _branch_seg_re="$(git_push_segment_re)"
+    else
+      _branch_seg_re='\bgit[[:space:]]+push\b[^|;&]*'
+    fi
     while IFS= read -r SEGMENT; do
       [ -z "$SEGMENT" ] && continue
       HAS_EVIDENCE=0
@@ -128,7 +143,7 @@ if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
         case "$SEG_REF" in orbit/*) ;; *) continue ;; esac
       fi
       [ -n "$SEG_REF" ] && SCAN_LAST_REF="$SEG_REF"
-    done < <(echo "$STRIPPED_FOR_SCAN" | grep -oE '\bgit\s+push\b[^|;&]*')
+    done < <(echo "$STRIPPED_FOR_SCAN" | grep -oE "$_branch_seg_re")
 
     if [ -z "$SCAN_LAST_REF" ]; then
       exit 0
@@ -194,7 +209,17 @@ fi
 # When there's no leading `cd` (or <path> isn't a git tree), this is a no-op
 # and the fallback stays byte-for-byte equivalent to the pre-#693 behaviour.
 BRANCH_DIR=""
-if [ -f "$HOOK_DIR/_lib-pr-repo.sh" ]; then
+PAYLOAD_CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null || true)
+if command -v git_prepare_invocation >/dev/null 2>&1; then
+  git_prepare_invocation "$COMMAND" push "$PAYLOAD_CWD"
+  if [ -n "${GIT_DASH_C:-}" ]; then
+    DASH_C_TOP=$(git -C "$GIT_DASH_C" rev-parse --show-toplevel 2>/dev/null)
+    if [ -n "$DASH_C_TOP" ]; then
+      BRANCH_DIR="$DASH_C_TOP"
+    fi
+  fi
+fi
+if [ -z "$BRANCH_DIR" ] && [ -f "$HOOK_DIR/_lib-pr-repo.sh" ]; then
   # shellcheck disable=SC1090,SC1091
   . "$HOOK_DIR/_lib-pr-repo.sh"
   CD_TARGET=$(pr_cmd_cd_target "$COMMAND")

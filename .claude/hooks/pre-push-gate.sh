@@ -90,11 +90,26 @@ fi
 # reminder. This hook runs no commands and blocks nothing, so a false
 # match here costs one extra reminder line, never a security decision —
 # unlike the pre-#1366 version, precision does not matter for safety.
-if ! printf '%s' "$COMMAND" | grep -qE '\bgit[[:space:]]+push\b'; then
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -r "$HOOK_DIR/_lib-git-global.sh" ]; then
+  # shellcheck disable=SC1091
+  . "$HOOK_DIR/_lib-git-global.sh"
+fi
+if command -v command_has_git_subcommand >/dev/null 2>&1; then
+  command_has_git_subcommand "$COMMAND" push || exit 0
+elif ! printf '%s' "$COMMAND" | grep -qE '\bgit[[:space:]]+push\b'; then
   exit 0
 fi
 
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+PAYLOAD_CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null || true)
+if command -v git_prepare_invocation >/dev/null 2>&1; then
+  git_prepare_invocation "$COMMAND" push "$PAYLOAD_CWD"
+fi
+if command -v git_target >/dev/null 2>&1; then
+  REPO_ROOT=$(git_target rev-parse --show-toplevel 2>/dev/null)
+else
+  REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+fi
 if [ -z "$REPO_ROOT" ]; then
   exit 0
 fi

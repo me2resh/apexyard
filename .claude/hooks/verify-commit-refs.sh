@@ -44,7 +44,14 @@ fi
 # skipped ref verification altogether, regardless of any cwd-resolution fix
 # below. Round-3 review caught this: the WORKDIR resolver's `-C`-bound-to-
 # commit priority level was otherwise unreachable in practice.
-if ! echo "$COMMAND" | grep -qE '\bgit[[:space:]]+(-C[[:space:]]+("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:]]+)[[:space:]]+)?commit\b'; then
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -r "$HOOK_DIR/_lib-git-global.sh" ]; then
+  # shellcheck disable=SC1091
+  . "$HOOK_DIR/_lib-git-global.sh"
+fi
+if command -v command_has_git_subcommand >/dev/null 2>&1; then
+  command_has_git_subcommand "$COMMAND" commit || exit 0
+elif ! echo "$COMMAND" | grep -qE '\bgit[[:space:]]+(-C[[:space:]]+("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:]]+)[[:space:]]+)?commit\b'; then
   exit 0
 fi
 
@@ -240,11 +247,14 @@ resolve_commit_workdir_from_command() {
     prefix="$cmd"
   fi
 
-  # `-C <path>` immediately preceding THIS commit (`git -C <path> commit`).
-  # Anchored at the END of prefix so a `-C` on an earlier, unrelated git
-  # invocation in the same compound command does not match.
+  # `-C <path>` on THIS commit, including when another global option sits
+  # between -C and commit (`git -C <path> -c name=value commit`). The helper
+  # binds -C to the commit verb, so an earlier `git -C /other status` does
+  # not match. Only an absolute path is trusted (AgDR-0163).
   dir=""
-  if echo "$prefix" | grep -qE 'git[[:space:]]+-C[[:space:]]+"[^"]*"[[:space:]]*$'; then
+  if command -v git_invocation_dash_c >/dev/null 2>&1; then
+    dir=$(git_invocation_dash_c "${prefix} commit" commit)
+  elif echo "$prefix" | grep -qE 'git[[:space:]]+-C[[:space:]]+"[^"]*"[[:space:]]*$'; then
     dir=$(echo "$prefix" | sed -E 's/^.*git[[:space:]]+-C[[:space:]]+"([^"]*)"[[:space:]]*$/\1/')
   elif echo "$prefix" | grep -qE "git[[:space:]]+-C[[:space:]]+'[^']*'[[:space:]]*\$"; then
     dir=$(echo "$prefix" | sed -E "s/^.*git[[:space:]]+-C[[:space:]]+'([^']*)'[[:space:]]*\$/\1/")

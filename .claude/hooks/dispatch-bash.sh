@@ -331,16 +331,23 @@ if [ -r "$HOOK_DIR/_lib-awk-fallback.sh" ]; then
 else
   _scan_failed=1
 fi
-_git_opt_val='("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:];&|]+)'
-_git_sub_re='(^|[^[:alnum:]_.-])git([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env))[[:space:]]+'"${_git_opt_val}"'|--?[A-Za-z][A-Za-z-]*(=[^[:space:];&|]+)?))*[[:space:]]+'
+# The matcher lives in _lib-git-global.sh so the gates use the same
+# expression (#1730, #1731). A missing library fails closed: run both
+# gate groups rather than skip a push or commit the scan cannot see.
+if [ "$_scan_failed" -eq 0 ] && [ -r "$HOOK_DIR/_lib-git-global.sh" ]; then
+  # shellcheck disable=SC1091
+  . "$HOOK_DIR/_lib-git-global.sh"
+else
+  _scan_failed=1
+fi
 if [ "$_scan_failed" -eq 1 ]; then
   run_push_gates
   run_commit_gates
 else
-  if LC_ALL=C grep -qE "${_git_sub_re}push([^[:alnum:]_.-]|\$)" <<<"$_scan_cmd"; then
+  if command_has_git_subcommand "$_scan_cmd" push; then
     run_push_gates
   fi
-  if LC_ALL=C grep -qE "${_git_sub_re}commit([^[:alnum:]_.-]|\$)" <<<"$_scan_cmd"; then
+  if command_has_git_subcommand "$_scan_cmd" commit; then
     run_commit_gates
   fi
 fi

@@ -75,10 +75,25 @@
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 
+_PUSH_HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -r "$_PUSH_HOOK_DIR/_lib-git-global.sh" ]; then
+  # shellcheck disable=SC1091
+  . "$_PUSH_HOOK_DIR/_lib-git-global.sh"
+fi
+
 if [ -z "$COMMAND" ]; then
   . "$(dirname "$0")/_lib-fail-closed-json.sh"
-  if raw_payload_command_matches "$INPUT" 'git[[:space:]]+push'; then
+  _push_pat='git[[:space:]]+push'
+  if command -v git_subcommand_payload_pattern >/dev/null 2>&1; then
+    _push_pat="$(git_subcommand_payload_pattern push)"
+  fi
+  if raw_payload_command_matches "$INPUT" "$_push_pat"; then
     echo "BLOCKED: protected-branch hook cannot parse this push command. Restore jq and retry." >&2
+    exit 2
+  fi
+  if command -v git_subcommand_payload_pattern >/dev/null 2>&1 \
+    && raw_payload_command_matches "$INPUT" "$(git_subcommand_payload_pattern commit)"; then
+    echo "BLOCKED: protected-branch hook cannot parse this commit command. Restore jq and retry." >&2
     exit 2
   fi
   exit 0
@@ -253,7 +268,12 @@ fi
 # ---------------------------------------------------------------------------
 PUSH_DST=""
 SKIP_PUSH_BRANCH_CHECK=0
-if echo "$COMMAND" | grep -qE '\bgit\s+push\b'; then
+if command -v command_has_git_subcommand >/dev/null 2>&1; then
+  command_has_git_subcommand "$COMMAND" push && _HAS_GIT_PUSH=1 || _HAS_GIT_PUSH=0
+else
+  echo "$COMMAND" | grep -qE '\bgit\s+push\b' && _HAS_GIT_PUSH=1 || _HAS_GIT_PUSH=0
+fi
+if [ "$_HAS_GIT_PUSH" -eq 1 ]; then
   # Source the shared push-ref extractor if available.
   if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
     # shellcheck disable=SC1090,SC1091
@@ -436,7 +456,14 @@ MSG
       # for #549. Uses the RAW command — see the file-level note on why
       # cd-detection never consults heredoc-stripped text.
       PUSH_WORKTREE_PATH=""
-      if echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])cd[[:space:]]+\S'; then
+      PAYLOAD_CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null || true)
+      if command -v git_prepare_invocation >/dev/null 2>&1; then
+        git_prepare_invocation "$COMMAND" push "$PAYLOAD_CWD"
+        if [ -n "${GIT_DASH_C:-}" ]; then
+          PUSH_WORKTREE_PATH="$GIT_DASH_C"
+        fi
+      fi
+      if [ -z "$PUSH_WORKTREE_PATH" ] && echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])cd[[:space:]]+\S'; then
         PUSH_WORKTREE_PATH=$(echo "$COMMAND" \
           | grep -oE "cd[[:space:]]+(\"[^\"]*\"|'[^']*'|[^[:space:];&|]+)" \
           | tail -n 1 \
@@ -490,7 +517,12 @@ fi
 # For plain `git commit` (no `cd` prefix) fall back to the session cwd —
 # preserving the original behaviour for the normal single-worktree case.
 # ---------------------------------------------------------------------------
-if echo "$COMMAND" | grep -qE '\bgit\s+commit\b'; then
+if command -v command_has_git_subcommand >/dev/null 2>&1; then
+  command_has_git_subcommand "$COMMAND" commit && _HAS_GIT_COMMIT=1 || _HAS_GIT_COMMIT=0
+else
+  echo "$COMMAND" | grep -qE '\bgit\s+commit\b' && _HAS_GIT_COMMIT=1 || _HAS_GIT_COMMIT=0
+fi
+if [ "$_HAS_GIT_COMMIT" -eq 1 ]; then
   # Detect `cd <path>` prefix in compound commands, e.g.:
   #   cd ../wt && git commit -m "msg"
   #   cd /abs/path && git commit …
@@ -500,7 +532,14 @@ if echo "$COMMAND" | grep -qE '\bgit\s+commit\b'; then
   # is nothing here for heredoc-stripping to safely improve, only a
   # presence question that must stay on raw text.
   WORKTREE_PATH=""
-  if echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])cd[[:space:]]+\S'; then
+  PAYLOAD_CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null || true)
+  if command -v git_prepare_invocation >/dev/null 2>&1; then
+    git_prepare_invocation "$COMMAND" commit "$PAYLOAD_CWD"
+    if [ -n "${GIT_DASH_C:-}" ]; then
+      WORKTREE_PATH="$GIT_DASH_C"
+    fi
+  fi
+  if [ -z "$WORKTREE_PATH" ] && echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])cd[[:space:]]+\S'; then
     # Resolve the LAST `cd <path>` in the chain (so `cd a && cd b && git commit`
     # targets b, not a) and STRIP surrounding quotes. Quote-stripping is the
     # security-critical part: without it, `cd "path" && git commit` would pass

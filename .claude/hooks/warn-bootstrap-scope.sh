@@ -30,13 +30,30 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
-# Only inspect git commit commands.
-if ! printf '%s' "$COMMAND" | grep -qE '\bgit\s+commit\b'; then
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -r "$HOOK_DIR/_lib-git-global.sh" ]; then
+  # shellcheck disable=SC1091
+  . "$HOOK_DIR/_lib-git-global.sh"
+fi
+
+# Only inspect git commit commands. Global options may sit between git and commit.
+if command -v command_has_git_subcommand >/dev/null 2>&1; then
+  command_has_git_subcommand "$COMMAND" commit || exit 0
+elif ! printf '%s' "$COMMAND" | grep -qE '\bgit\s+commit\b'; then
   exit 0
 fi
 
+PAYLOAD_CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null || true)
+if command -v git_prepare_invocation >/dev/null 2>&1; then
+  git_prepare_invocation "$COMMAND" commit "$PAYLOAD_CWD"
+fi
+
 # Only warn when the bootstrap marker is active.
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
+if command -v git_target >/dev/null 2>&1; then
+  REPO_ROOT=$(git_target rev-parse --show-toplevel 2>/dev/null || true)
+else
+  REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
+fi
 if [ -z "$REPO_ROOT" ]; then
   exit 0
 fi

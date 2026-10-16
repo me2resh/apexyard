@@ -79,6 +79,7 @@ setup_dispatch_sandbox() {
   cp "$hooks_src/dispatch-bash.sh" "$dest/hooks/dispatch-bash.sh"
   cp "$(dirname "$hooks_src/dispatch-bash.sh")/_lib-awk-fallback.sh" "$dest/hooks/_lib-awk-fallback.sh"
   [ -f "$hooks_src/_lib-extract-pr.sh" ] && cp "$hooks_src/_lib-extract-pr.sh" "$dest/hooks/_lib-extract-pr.sh"
+  [ -f "$hooks_src/_lib-git-global.sh" ] && cp "$hooks_src/_lib-git-global.sh" "$dest/hooks/_lib-git-global.sh"
   [ -f "$hooks_src/_lib-command-scrub.sh" ] && cp "$hooks_src/_lib-command-scrub.sh" "$dest/hooks/_lib-command-scrub.sh"
   # _lib-extract-pr.sh sources the tracker library. Copy it so the sandbox
   # does not depend on finding it through the surrounding git checkout.

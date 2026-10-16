@@ -27,22 +27,43 @@
 
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -r "$HOOK_DIR/_lib-git-global.sh" ]; then
+  # shellcheck disable=SC1091
+  . "$HOOK_DIR/_lib-git-global.sh"
+fi
 
 if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
-if ! echo "$COMMAND" | grep -qE '\bgit\s+commit\b'; then
+if command -v command_has_git_subcommand >/dev/null 2>&1; then
+  command_has_git_subcommand "$COMMAND" commit || exit 0
+elif ! echo "$COMMAND" | grep -qE '\bgit\s+commit\b'; then
   exit 0
 fi
 
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+PAYLOAD_CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null || true)
+if command -v git_prepare_invocation >/dev/null 2>&1; then
+  git_prepare_invocation "$COMMAND" commit "$PAYLOAD_CWD"
+fi
+
+if command -v git_target >/dev/null 2>&1; then
+  REPO_ROOT=$(git_target rev-parse --show-toplevel 2>/dev/null)
+else
+  REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+fi
 if [ -z "$REPO_ROOT" ]; then
   exit 0
 fi
 
 # Get staged files. If nothing is staged, let git commit fail on its own terms.
-STAGED=$(git diff --cached --name-only 2>/dev/null)
+# -C selects the index of the repository the commit writes (#1731).
+if command -v git_target >/dev/null 2>&1; then
+  STAGED=$(git_target diff --cached --name-only 2>/dev/null)
+else
+  STAGED=$(git diff --cached --name-only 2>/dev/null)
+fi
 if [ -z "$STAGED" ]; then
   exit 0
 fi

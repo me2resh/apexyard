@@ -103,6 +103,7 @@ SAFETY_EXPECTED=(
   ".claude/hooks/_lib-read-config.sh"
   ".claude/hooks/_lib-ops-root.sh"
   ".claude/hooks/_lib-extract-pr.sh"
+  ".claude/hooks/_lib-git-global.sh"
   "EXTRACTION_MANIFEST.json"
 )
 for f in "${SAFETY_EXPECTED[@]}"; do

@@ -49,8 +49,15 @@ if [ "$TOOL_NAME" != "Bash" ] || [ -z "$COMMAND" ]; then
   exit 0
 fi
 
-# Only fire on git push
-if ! echo "$COMMAND" | grep -qE '\bgit\s+push\b'; then
+# Only fire on git push. Global options may sit between git and push (#1730).
+HOOK_DIR_STALE="$(cd "$(dirname "$0")" && pwd)"
+if [ -r "$HOOK_DIR_STALE/_lib-git-global.sh" ]; then
+  # shellcheck disable=SC1091
+  . "$HOOK_DIR_STALE/_lib-git-global.sh"
+fi
+if command -v command_has_git_subcommand >/dev/null 2>&1; then
+  command_has_git_subcommand "$COMMAND" push || exit 0
+elif ! echo "$COMMAND" | grep -qE '\bgit\s+push\b'; then
   exit 0
 fi
 
@@ -73,14 +80,21 @@ if [ -n "$PUSH_COMBINED" ] && echo "$PUSH_COMBINED" | grep -qEi '\b(rejected|fai
 fi
 
 # Source the marker path helper (#485) so we can construct the right glob.
-HOOK_DIR_STALE="$(cd "$(dirname "$0")" && pwd)"
 if [ -f "$HOOK_DIR_STALE/_lib-review-markers.sh" ]; then
   # shellcheck source=/dev/null
   . "$HOOK_DIR_STALE/_lib-review-markers.sh"
 fi
 
 # -------- Resolve repo root + session/reviews dir --------
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+PAYLOAD_CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null || true)
+if command -v git_prepare_invocation >/dev/null 2>&1; then
+  git_prepare_invocation "$COMMAND" push "$PAYLOAD_CWD"
+fi
+if command -v git_target >/dev/null 2>&1; then
+  REPO_ROOT=$(git_target rev-parse --show-toplevel 2>/dev/null)
+else
+  REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+fi
 if [ -z "$REPO_ROOT" ]; then
   exit 0
 fi
@@ -100,7 +114,7 @@ fi
 # #765/#898. Resolve from the checkout's own `origin` remote FIRST; an
 # unscoped gh call is only the last resort when origin itself can't be
 # determined (e.g. no git remote configured at all).
-_origin_url=$(git remote get-url origin 2>/dev/null)
+_origin_url=$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null)
 # Strip the `.git` suffix FIRST, then the protocol/host prefix — a single
 # combined regex here is greedy-match-prone (`[^/]+` happily absorbs a
 # literal `.git` as part of the repo-name segment since `.` isn't excluded
@@ -150,7 +164,7 @@ else
 fi
 if [ -z "$PR_HEAD" ]; then
   echo "WARN: warn-stale-review-markers.sh could not resolve PR #${PR_NUMBER} HEAD via gh — falling back to local HEAD." >&2
-  PR_HEAD=$(git rev-parse HEAD 2>/dev/null)
+  PR_HEAD=$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null)
 fi
 if [ -z "$PR_HEAD" ]; then
   # Neither gh nor git could give us a HEAD — exit silently rather than spam.

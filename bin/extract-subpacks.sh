@@ -131,6 +131,7 @@ SAFETY_HOOK_LIBS=(
   _lib-read-config.sh
   _lib-ops-root.sh
   _lib-extract-pr.sh
+  _lib-git-global.sh
 )
 
 # ----- extract audit-pack ----------------------------------------------------

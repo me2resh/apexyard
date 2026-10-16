@@ -93,6 +93,47 @@ if [ -n "$HOOK_LIB_DIR" ] && [ -f "$HOOK_LIB_DIR/_lib-strip-heredoc.sh" ]; then
   . "$HOOK_LIB_DIR/_lib-strip-heredoc.sh"
 fi
 
+# shellcheck source=./_lib-git-global.sh
+if [ -n "$HOOK_LIB_DIR" ] && [ -f "$HOOK_LIB_DIR/_lib-git-global.sh" ]; then
+  # shellcheck disable=SC1091
+  . "$HOOK_LIB_DIR/_lib-git-global.sh"
+fi
+
+# Segment pattern and argument strip. Fall back to the adjacent-word form
+# when the shared matcher is absent, so a copied hook tree still parses
+# `git push`.
+_push_verb_pattern() {
+  if command -v git_subcommand_re >/dev/null 2>&1; then
+    git_subcommand_re push
+  else
+    printf '%s' '\bgit[[:space:]]+push\b'
+  fi
+}
+
+_push_segment_pattern() {
+  if command -v git_push_segment_re >/dev/null 2>&1; then
+    git_push_segment_re
+  else
+    printf '%s' '\bgit[[:space:]]+push\b[^|;&]*'
+  fi
+}
+
+_each_push_segment() {
+  printf '%s\n' "$1" | LC_ALL=C grep -oE "$(_push_segment_pattern)" || true
+}
+
+_push_args_from_segment() {
+  local segment="$1"
+  if command -v git_push_args >/dev/null 2>&1; then
+    git_push_args "$segment"
+    return 0
+  fi
+  segment="${segment#*git}"
+  segment="${segment#"${segment%%[![:space:]]*}"}"
+  segment="${segment#push}"
+  printf '%s' "$segment"
+}
+
 # Returns true (0) when the command is a tag push that has no branch ref at all.
 # Tag pushes must be a no-op for a *branch*-name validator.
 #
@@ -130,12 +171,12 @@ is_tag_push() {
   clean_cmd=$(echo "$cmd" | sed 's/[[:space:]][0-9]*[>|].*$//')
 
   # --tags flag: `git push [opts] --tags [remote]`
-  if echo "$clean_cmd" | grep -qE '\bgit\s+push\b.*\s--tags(\s|$)'; then
+  if printf '%s\n' "$clean_cmd" | LC_ALL=C grep -qE "$(_push_verb_pattern)"'.*--tags([[:space:]]|$)'; then
     return 0
   fi
 
   # `git push <remote> tag <name>` (explicit `tag` keyword before ref)
-  if echo "$clean_cmd" | grep -qE '\bgit\s+push\b.*\stag\s+\S'; then
+  if printf '%s\n' "$clean_cmd" | LC_ALL=C grep -qE "$(_push_verb_pattern)"'.*[[:space:]]tag[[:space:]]+[^[:space:]]'; then
     return 0
   fi
 
@@ -191,7 +232,7 @@ _extract_push_ref_core() {
   local push_segment ref
 
   # Bail on `--delete` / `-d` shapes — they don't have a source ref.
-  if echo "$cmd" | grep -qE '\bgit\s+push\b[^|;&]*(--delete\b|[[:space:]]-d\b)'; then
+  if printf '%s\n' "$cmd" | LC_ALL=C grep -qE "$(_push_verb_pattern)"'[^|;&]*(--delete\b|[[:space:]]-d\b)'; then
     echo ""
     return 0
   fi
@@ -217,20 +258,15 @@ _extract_push_ref_core() {
   # (|, ;, &&, &) so `git push origin foo && echo bar` doesn't pick up `echo`
   # tokens.  (After stripping redirections above, the push segment is usually
   # the whole remaining string, but the separator guard is a useful safety net.)
-  push_segment=$(echo "$stripped_cmd" | grep -oE '\bgit\s+push\b[^|;&]*' | head -1)
+  push_segment=$(_each_push_segment "$stripped_cmd" | head -1)
   if [ -z "$push_segment" ]; then
     echo ""
     return 0
   fi
 
-  # Strip the `git push` prefix so the remaining tokens are args/flags only.
-  # BSD sed (macOS) does not support `\b`, so use POSIX-only constructs.
-  # Since `git push` is always the first match for the segment we just
-  # extracted, a literal-prefix removal via parameter expansion is enough.
-  push_segment="${push_segment#*git}"
-  # Drop leading whitespace then the literal `push`.
-  push_segment="${push_segment#"${push_segment%%[![:space:]]*}"}"
-  push_segment="${push_segment#push}"
+  # Drop `git`, its global options, and the `push` verb. A `-C <dir>` value
+  # must not become the remote name (#1730).
+  push_segment=$(_push_args_from_segment "$push_segment")
 
   # Walk the remaining tokens, skipping flags + their values + the remote.
   # The first non-flag, non-remote positional is the refspec (or branch).
@@ -418,7 +454,7 @@ _extract_all_push_refs_core() {
   # WHOLE command before segmenting.
   stripped_cmd=$(echo "$cmd" | sed 's/[[:space:]][0-9]*[>|].*$//')
 
-  echo "$stripped_cmd" | grep -oE '\bgit\s+push\b[^|;&]*' | while IFS= read -r segment; do
+  _each_push_segment "$stripped_cmd" | while IFS= read -r segment; do
     [ -z "$segment" ] && continue
 
     # --delete / -d shapes have no source ref — skip this occurrence, keep
@@ -427,10 +463,8 @@ _extract_all_push_refs_core() {
       continue
     fi
 
-    # Strip the "git push" prefix so remaining tokens are args/flags only.
-    segment="${segment#*git}"
-    segment="${segment#"${segment%%[![:space:]]*}"}"
-    segment="${segment#push}"
+    # Drop git, its global options, and the push verb (#1730).
+    segment=$(_push_args_from_segment "$segment")
 
     local positional_count=0
     local skip_next=0
@@ -588,9 +622,7 @@ _command_has_untagged_refless_push() {
     # Determine whether THIS segment has an explicit positional ref —
     # same token walk as _extract_all_push_refs_core, applied per segment
     # so evidence and ref-presence are checked on the SAME occurrence.
-    seg="${segment#*git}"
-    seg="${seg#"${seg%%[![:space:]]*}"}"
-    seg="${seg#push}"
+    seg=$(_push_args_from_segment "$segment")
     positional_count=0
     skip_next=0
     ref=""
@@ -627,7 +659,7 @@ _command_has_untagged_refless_push() {
       found=0
     fi
   done <<PUSH_SEGMENTS
-$(echo "$stripped_cmd" | grep -oE '\bgit\s+push\b[^|;&]*')
+$(_each_push_segment "$stripped_cmd")
 PUSH_SEGMENTS
 
   return "$found"
