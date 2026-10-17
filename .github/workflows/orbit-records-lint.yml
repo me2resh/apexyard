@@ -55,10 +55,20 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
+          # Use this source for framework records.
+          upstream_slug='me2resh/apexyard'
+          upstream_args=()
+          if [ "$GITHUB_REPOSITORY" != "$upstream_slug" ]; then
+            if git fetch --no-tags "https://github.com/$upstream_slug.git" dev:refs/remotes/apexyard-upstream/dev; then
+              upstream_args=(--upstream refs/remotes/apexyard-upstream/dev)
+            else
+              echo '::warning::Cannot fetch upstream dev. Lint checks every changed record.'
+            fi
+          fi
           wrapper="$RUNNER_TEMP/orbit"
           printf '#!/usr/bin/env bash\nexec node "%s/.orbit-cli/bin/orbit.js" "$@"\n' "$GITHUB_WORKSPACE" > "$wrapper"
           chmod +x "$wrapper"
           export ORBIT_BIN="$wrapper"
           bash .claude/skills/orbit/lib/records-lint.sh --orbit-root docs/orbit \
             --base "origin/$BASE_REF" --pr "$PR_NUMBER" --pr-body "$RUNNER_TEMP/orbit-pr-body" \
-            --tickets "$RUNNER_TEMP/orbit-tickets"
+            --tickets "$RUNNER_TEMP/orbit-tickets" "${upstream_args[@]}"

@@ -4,7 +4,7 @@
 
 # records-lint.sh — lint ORBIT records before a records PR (AgDR-0225, ac8-1).
 #
-# Runs six checks in order and stops on the first fault:
+# Runs the checks in order and stops on the first fault:
 #   1. orbit validate --all
 #   2. leak scrub (check-private-refs-runtime.sh) on record text
 #   3. sentence check: at most 25 words in a sentence of a record text field
@@ -23,7 +23,10 @@
 # "basedOn" has no changed text, so it gets the validate and leak-scrub checks
 # but no sentence or Missing/Next check. --all checks all text.
 #
-# Usage: records-lint.sh --orbit-root <dir> [--repo <owner/name>] [--base <ref>] [--all]
+# With --upstream, skip changed records whose HEAD blobs match the upstream ref.
+# Reject an upstream ref that does not resolve.
+#
+# Usage: records-lint.sh --orbit-root <dir> [--repo <owner/name>] [--base <ref>] [--upstream <ref>] [--all]
 # Exit: 0 clean; 10 validate; 11 leak scrub; 12 sentence; 13 Missing/Next;
 #       14 local path; 15 initiative; 16 interview; 17 scope; 18 evidence;
 #       19 provenance; 20 usage or missing tool.
@@ -36,10 +39,11 @@ orbit_root=""
 repo="me2resh/apexyard"
 base="origin/dev"
 check_all=0
+upstream=""
 slice_id=""; pr_body=""; pr_number=""; tickets=""
 
 usage() {
-  echo "Usage: records-lint.sh --orbit-root <dir> [--repo <owner/name>] [--base <ref>] [--all]" >&2
+  echo "Usage: records-lint.sh --orbit-root <dir> [--repo <owner/name>] [--base <ref>] [--upstream <ref>] [--all]" >&2
   exit 20
 }
 
@@ -47,6 +51,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --orbit-root) [ $# -ge 2 ] || usage; orbit_root="$2"; shift 2 ;;
     --repo) [ $# -ge 2 ] || usage; repo="$2"; shift 2 ;;
+    --upstream) [ $# -ge 2 ] || usage; upstream="$2"; shift 2 ;;
     --base) [ $# -ge 2 ] || usage; base="$2"; shift 2 ;;
     --tickets) [ $# -ge 2 ] || usage; tickets="$2"; [ -f "$tickets" ] || usage; shift 2 ;;
     --all) check_all=1; shift ;;
@@ -73,6 +78,34 @@ fail() { # code check file message
   exit "$1"
 }
 
+# Compare committed blobs at the same path. Keep files absent from either ref.
+upstream_skipped=()
+if [ -n "$upstream" ]; then
+  upstream_top=$(git -C "$orbit_root" rev-parse --show-toplevel) ||
+    fail 20 upstream "" "Cannot resolve the repository."
+  upstream_top=$(cd "$upstream_top" && pwd -P)
+  upstream=$(git -C "$upstream_top" rev-parse --verify --end-of-options "$upstream^{commit}" 2>/dev/null) ||
+    fail 20 upstream "" "Cannot resolve the upstream ref."
+  trap 'echo "records-lint: notice: skipped ${#upstream_skipped[@]} upstream record(s)." >&2' EXIT
+fi
+
+skip_upstream_record() {
+  [ -n "$upstream" ] || return 1
+  local path="$1" head_blob upstream_blob seen
+  case "$path" in
+    /*) path="$(cd "$(dirname "$path")" && pwd -P)/${path##*/}" ;;
+  esac
+  path="${path#"$upstream_top"/}"
+  head_blob=$(git -C "$upstream_top" rev-parse --verify "HEAD:$path" 2>/dev/null) || return 1
+  upstream_blob=$(git -C "$upstream_top" rev-parse --verify "$upstream:$path" 2>/dev/null) || return 1
+  [ "$head_blob" = "$upstream_blob" ] || return 1
+  for seen in ${upstream_skipped[@]+"${upstream_skipped[@]}"}; do
+    [ "$seen" != "$path" ] || return 0
+  done
+  upstream_skipped+=("$path")
+  return 0
+}
+
 # 1. Validate.
 if ! out=$("$ORBIT_BIN" validate --all --root "$orbit_root" 2>&1); then
   fail 10 validate "" "orbit validate --all failed: $out"
@@ -93,6 +126,11 @@ case "$branch" in orbit/*)
   while IFS= read -r -d '' f; do scope_files+=("$f"); done < <(
     { git -C "$scope_top" diff --name-only --no-renames -z "$scope_base" -- docs/orbit/
       git -C "$scope_top" ls-files --others --exclude-standard -z -- docs/orbit/; })
+  kept_scope_files=()
+  for f in ${scope_files[@]+"${scope_files[@]}"}; do
+    skip_upstream_record "$f" || kept_scope_files+=("$f")
+  done
+  scope_files=(${kept_scope_files[@]+"${kept_scope_files[@]}"})
   snapshots=()
   for f in ${scope_files[@]+"${scope_files[@]}"}; do
     case "$f" in docs/orbit/reconciliations/*.json)
@@ -163,6 +201,7 @@ fi
 # Keep records and notes, drop everything else.
 sel=()
 for f in ${files[@]+"${files[@]}"}; do
+  skip_upstream_record "$f" && continue
   case "$f" in */history/*) continue ;; esac  # frozen Plan revisions
   case "$f" in *.json|*.md) sel+=("$f") ;; esac
 done

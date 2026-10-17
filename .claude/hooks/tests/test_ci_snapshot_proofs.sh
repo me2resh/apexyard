@@ -46,6 +46,11 @@ check_absent() {
 }
 
 check_text "$WORKFLOW" 'refs/pull/1466/head' 'CI fetches the reviewed PR snapshot ref'
+check_text "$WORKFLOW" 'snapshot_upstream=me2resh/apexyard' 'CI defines the upstream snapshot repository'
+check_text "$WORKFLOW" '"$GITHUB_SERVER_URL/$snapshot_upstream.git"' 'CI fetches snapshots from upstream'
+check_absent "$WORKFLOW" 'GITHUB_SERVER_URL/\$GITHUB_REPOSITORY[.]git' 'CI does not fetch snapshots from the fork'
+check_text "$WORKFLOW" 'from ${snapshot_upstream}' 'CI names the fetched repository in its error'
+
 check_text "$WORKFLOW" 'APEXYARD_SNAPSHOT_REPO=' 'CI passes its temporary snapshot repository'
 check_text "$WORKFLOW" 'REQUIRE_SNAPSHOTS=1' 'CI requires every snapshot'
 
