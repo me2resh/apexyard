@@ -2,8 +2,8 @@
 # Check push targets in command chains. Do not execute the command text.
 set -u
 # shellcheck disable=SC1091
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_test-session-isolation.sh"
-ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../../.." && pwd)
 HOOKS="$ROOT/.claude/hooks"
 TEMP=$(mktemp -d)
 trap 'rm -rf "$TEMP"' EXIT
