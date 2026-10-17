@@ -59,6 +59,8 @@ _ticket_path_canonicalize_raw() {
   # so the old code joined the path onto $PWD and .claude/ and docs/ never
   # matched (me2resh/apexyard#1724). _windows_path_to_posix lives in
   # _lib-path-resolve.sh, which require-active-ticket.sh sources first.
+  # When cygpath is present, that helper applies the Git Bash mount table
+  # before this function resolves the path (me2resh/apexyard#1743).
   if command -v _windows_path_to_posix >/dev/null 2>&1; then
     p=$(_windows_path_to_posix "$p")
   fi

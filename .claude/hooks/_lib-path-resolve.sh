@@ -76,19 +76,45 @@ _resolve_real_path() {
   fi
 }
 
-# Map a Windows drive-letter path to the Git Bash form.
-# C:/Users/a b/repo and C:\Users\a b\repo both become /c/Users/a b/repo.
-# A POSIX path is unchanged. A drive-relative path such as C:foo is unchanged:
-# it is not absolute. This is a string transform. It does not call cygpath
-# and it does not touch the filesystem. The same rule is in
-# _portfolio_canonicalize (me2resh/apexyard#1018). Callers that compare a
-# git toplevel with a pwd -P path must run both sides through this function
-# first (me2resh/apexyard#1724, #1725, #1737).
+# Map a Windows drive-letter path to one POSIX form.
+# C:/Users/a b/repo and C:\Users\a b\repo both become /c/Users/a b/repo
+# when cygpath is absent.
+# A POSIX path is unchanged. A drive-relative path such as C:foo is unchanged.
+# It is not absolute.
+#
+# Git Bash mounts C:/Users/<user>/AppData/Local/Temp at /tmp.
+# pwd -P prints /tmp for that directory.
+# The string transform prints /c/Users/.../Temp.
+# Those two strings are one directory (me2resh/apexyard#1743).
+# When cygpath is on PATH, a drive-letter path uses `cygpath -u --`.
+# The function keeps that output when it is not empty and starts with /.
+# When that directory exists, the function resolves it with pwd -P.
+# Use the string transform when cygpath is absent.
+# Use it when cygpath exits non-zero, prints nothing, or prints a path that
+# does not start with /. That fallback does not call pwd -P.
+# The function does not call cygpath for a path that already starts with /.
+# Linux and macOS do not ship cygpath. Those hosts keep the string transform.
+# The same string rule is in _portfolio_canonicalize (me2resh/apexyard#1018).
 _windows_path_to_posix() {
-  local p="$1" drive rest
+  local p="$1" drive rest converted="" phys=""
   [ -n "$p" ] || return 0
   case "$p" in
     [A-Za-z]:/*|[A-Za-z]:\\*)
+      if command -v cygpath >/dev/null 2>&1; then
+        converted=$(cygpath -u -- "$p" 2>/dev/null) || converted=""
+        case "$converted" in
+          /*)
+            if [ -d "$converted" ]; then
+              phys=$(cd "$converted" 2>/dev/null && pwd -P) || phys=""
+              if [ -n "$phys" ]; then
+                converted="$phys"
+              fi
+            fi
+            printf '%s' "$converted"
+            return 0
+            ;;
+        esac
+      fi
       drive="${p%%:*}"
       rest="${p#*:}"
       rest="$(printf '%s' "$rest" | tr '\\' '/')"
@@ -102,8 +128,11 @@ _windows_path_to_posix() {
 }
 
 # Return 0 when CANDIDATE is ROOT or a path under ROOT.
-# Both sides are compared after _windows_path_to_posix. An empty side is
-# not contained. This rejects a prefix trick such as /repo-evil under /repo.
+# Both sides pass through _windows_path_to_posix first.
+# An empty side is not contained.
+# A failed conversion that leaves the /c/Users/.../Temp form does not match
+# a pwd -P result under /tmp. The check rejects that pair.
+# This rejects a prefix trick such as /repo-evil under /repo.
 path_is_under_root() {
   local root="$1" candidate="$2"
   root=$(_windows_path_to_posix "$root")

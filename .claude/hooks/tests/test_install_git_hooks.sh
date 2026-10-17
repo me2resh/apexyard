@@ -456,6 +456,103 @@ case_installer_own_lib_missing_no_clobber() {
   rm -rf "$sandbox"
 }
 
+# ---------------------------------------------------------------------------
+# CASE 16 (#1743): git rev-parse prints a Windows Temp path.
+# A stub cygpath maps that prefix to this fixture (pwd -P).
+# .githooks is inside the repo. --hooks-dir ../outside-hooks is not.
+# A cygpath that prints nothing does not install.
+# ---------------------------------------------------------------------------
+case_windows_mount_toplevel() {
+  local sandbox mount repo win bindir git_real out rc
+  sandbox=$(mktemp -d)
+  mount=$(cd "$sandbox" && pwd -P)
+  repo="$mount/repo"
+  win="C:/Users/u/AppData/Local/Temp/repo"
+  bindir="$mount/bin"
+  git_real=$(command -v git)
+  mkdir -p "$repo/.githooks" "$mount/outside-hooks" "$bindir"
+  printf '#!/bin/sh\nexit 0\n' > "$repo/.githooks/pre-push"
+  git -C "$repo" init -q
+
+  cat > "$bindir/cygpath" <<'EOF'
+#!/bin/bash
+path=""
+for arg in "$@"; do
+  case "$arg" in
+    -u|--|-*) ;;
+    *) path="$arg" ;;
+  esac
+done
+if [ "${CYGPATH_EMPTY:-}" = "1" ]; then
+  exit 0
+fi
+case "$path" in
+  /*) printf '%s' "$path"; exit 0 ;;
+esac
+norm=$(printf '%s' "$path" | tr '\\' '/')
+prefix="C:/Users/u/AppData/Local/Temp"
+mount="${CYGPATH_MOUNT:?}"
+case "$norm" in
+  "$prefix"|"$prefix"/*)
+    rest="${norm#"$prefix"}"
+    printf '%s%s' "$mount" "$rest"
+    exit 0
+    ;;
+esac
+case "$norm" in
+  [A-Za-z]:/*)
+    drive=$(printf '%.1s' "$norm" | tr '[:upper:]' '[:lower:]')
+    rest="${norm#?:}"
+    printf '/%s%s' "$drive" "$rest"
+    exit 0
+    ;;
+esac
+printf '%s' "$path"
+EOF
+  cat > "$bindir/git" <<'EOF'
+#!/bin/bash
+real="${GIT_REAL:?}"
+win="${GIT_WINDOWS_TOPLEVEL:?}"
+prev=""
+for arg in "$@"; do
+  if [ "$prev" = "rev-parse" ] && [ "$arg" = "--show-toplevel" ]; then
+    printf '%s\n' "$win"
+    exit 0
+  fi
+  prev="$arg"
+done
+exec "$real" "$@"
+EOF
+  chmod +x "$bindir/cygpath" "$bindir/git"
+
+  out=$(PATH="$bindir:$PATH" GIT_REAL="$git_real" GIT_WINDOWS_TOPLEVEL="$win" \
+    CYGPATH_MOUNT="$mount" bash "$SCRIPT_SRC" --repo-dir "$repo" 2>&1)
+  rc=$?
+  assert_eq "windows mount toplevel: exit code" "0" "$rc"
+  assert_match "windows mount toplevel: message" "set to \.githooks.*was unset" "$out"
+  assert_eq "windows mount toplevel: config value" ".githooks" \
+    "$(git -C "$repo" config --get core.hooksPath)"
+
+  git -C "$repo" config --unset core.hooksPath
+  out=$(PATH="$bindir:$PATH" GIT_REAL="$git_real" GIT_WINDOWS_TOPLEVEL="$win" \
+    CYGPATH_MOUNT="$mount" bash "$SCRIPT_SRC" --repo-dir "$repo" \
+    --hooks-dir ../outside-hooks 2>&1)
+  rc=$?
+  assert_eq "windows mount outside hooks: exit code" "2" "$rc"
+  assert_match "windows mount outside hooks: message says outside" "outside" "$out"
+  assert_eq "windows mount outside hooks: config UNCHANGED" "" \
+    "$(git -C "$repo" config --get core.hooksPath 2>/dev/null || true)"
+
+  out=$(PATH="$bindir:$PATH" GIT_REAL="$git_real" GIT_WINDOWS_TOPLEVEL="$win" \
+    CYGPATH_MOUNT="$mount" CYGPATH_EMPTY=1 bash "$SCRIPT_SRC" --repo-dir "$repo" 2>&1)
+  rc=$?
+  assert_eq "windows mount silent cygpath: exit code" "2" "$rc"
+  assert_eq "windows mount silent cygpath: config UNCHANGED" "" \
+    "$(git -C "$repo" config --get core.hooksPath 2>/dev/null || true)"
+
+  rm -rf "$sandbox"
+}
+
 if [ ! -f "$SCRIPT_SRC" ]; then
   echo "FAIL: bin/install-git-hooks.sh not found at $SCRIPT_SRC" >&2
   exit 1
@@ -476,6 +573,7 @@ case_hooks_dir_traversal_refused
 case_symlinked_hooks_dir_refused
 case_config_lock_fails_closed
 case_installer_own_lib_missing_no_clobber
+case_windows_mount_toplevel
 
 echo ""
 echo "==================================="
