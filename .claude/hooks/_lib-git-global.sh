@@ -119,6 +119,11 @@ _git_take_global() {
       name="${_GIT_SCAN%%=*}"
       _GIT_SCAN="${_GIT_SCAN#"$name="}"
       _git_take_value || return 1
+      # Keep a tilde literal after an option's equals sign.
+      # shellcheck disable=SC2088
+      case "$_GIT_TAKEN" in
+        '~'*) _GIT_TAKEN="./$_GIT_TAKEN" ;;
+      esac
       case "$name" in
         --git-dir) _GIT_RAW_GIT_DIR="$_GIT_TAKEN" ;;
         --work-tree) _GIT_RAW_WORK_TREE="$_GIT_TAKEN" ;;
@@ -254,9 +259,9 @@ _git_chain_cwd() {
   _GIT_CHAIN_CWD="$base"
   _GIT_CHAIN_CHANGED=0
   # Capture first. A POSIX-sourced lib must not use process substitution.
-  # A heredoc keeps the loop in this shell, so the cwd updates persist.
+  # Read from fd 3 to keep commands from consuming the segment list.
   segments=$(_git_chain_segments "$cmd")
-  while IFS= read -r segment; do
+  while IFS= read -r segment <&3; do
     segment="${segment#"${segment%%[![:space:]]*}"}"
     case "$segment" in
       cd|cd[[:space:]]*)
@@ -279,14 +284,14 @@ _git_chain_cwd() {
         ;;
     esac
     matches=$(git_invocation_prefixes "$segment" "$sub")
-    while IFS= read -r match; do
+    while IFS= read -r match <&3; do
       [ -n "$match" ] || continue
       remaining=$((remaining - 1))
-    done <<EOF
+    done 3<<EOF
 $matches
 EOF
     [ "$remaining" -gt 0 ] || break
-  done <<EOF
+  done 3<<EOF
 $segments
 EOF
   _GIT_CHAIN_CHANGED="$changed"
@@ -390,7 +395,7 @@ git_visit_invocations() {
           fi
         done
         "$callback"
-      )
+      ) </dev/null
       rc=$?
       if [ "$mode" = block ] && [ "$rc" -ne 0 ]; then
         return "$rc"

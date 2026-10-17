@@ -233,9 +233,9 @@ fi
 # list. See me2resh/apexyard#888.
 REPO_ROOT_FOR_TRUNK=$(git rev-parse --show-toplevel 2>/dev/null)
 TRUNK_BRANCHES=""
-if [ -n "$REPO_ROOT_FOR_TRUNK" ] && [ -f "$REPO_ROOT_FOR_TRUNK/.claude/hooks/_lib-read-config.sh" ]; then
+if [ -n "$REPO_ROOT_FOR_TRUNK" ] && [ -f "$HOOK_DIR/_lib-read-config.sh" ]; then
   # shellcheck disable=SC1090,SC1091
-  . "$REPO_ROOT_FOR_TRUNK/.claude/hooks/_lib-read-config.sh"
+  . "$HOOK_DIR/_lib-read-config.sh"
   TRUNK_BRANCHES=$(config_get '.branch.trunk_whitelist[]')
 fi
 # Fallback if config unavailable (jq missing, standalone install, no config
@@ -336,9 +336,9 @@ fi
 # Load the branch-type whitelist from project config.
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 # shellcheck source=./_lib-read-config.sh
-if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" ]; then
+if [ -n "$REPO_ROOT" ] && [ -f "$HOOK_DIR/_lib-read-config.sh" ]; then
   # shellcheck disable=SC1090,SC1091
-  . "$REPO_ROOT/.claude/hooks/_lib-read-config.sh"
+  . "$HOOK_DIR/_lib-read-config.sh"
   TYPES=$(config_get '.branch.type_whitelist[]' | paste -sd'|' -)
 fi
 # Fallback if config unavailable (jq missing, standalone install, etc.)
@@ -353,9 +353,9 @@ fi
 # override `.tracker.id_pattern` in project-config.json. See AgDR-0033 and
 # `.claude/hooks/_lib-tracker.sh`.
 TRACKER_ID_PATTERN=""
-if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-tracker.sh" ]; then
+if [ -n "$REPO_ROOT" ] && [ -f "$HOOK_DIR/_lib-tracker.sh" ]; then
   # shellcheck disable=SC1090,SC1091
-  . "$REPO_ROOT/.claude/hooks/_lib-tracker.sh"
+  . "$HOOK_DIR/_lib-tracker.sh"
   TRACKER_ID_PATTERN=$(tracker_id_pattern)
 fi
 
