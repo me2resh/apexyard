@@ -1,6 +1,6 @@
 # AgDR-0200 — A config-listed external repo is exempt from the PR-title and branch-ticket gates
 
-> In the context of adopters who contribute to upstream open-source projects as well as governing their own, facing a PR-create gate that applies this framework's `type(TICKET): description` convention to every target and so refuses a PR that is correct for its destination, I decided to add an opt-in `external_contributions` list in project-config that exempts a listed repo from the title-shape and branch-ticket checks only, with the registry winning, an ambiguous target failing closed (PR-create segment of the first line only; prior-chain / comment `--repo` ignored), and a self-list of the checkout's origin ignored, to make upstream contribution possible without a manual bypass, accepting that this is a config-driven relaxation of a trust-chain gate and that `validate-branch-name.sh` stays unchanged for now.
+> In the context of adopters who contribute to upstream open-source projects as well as governing their own, facing a PR-create gate that applies this framework's `type(TICKET): description` convention to every target and so refuses a PR that is correct for its destination, I decided to add an opt-in `external_contributions` list in project-config that exempts a listed repo from the title-shape, branch-ticket, and body-completeness checks, with the registry winning, an ambiguous target failing closed (PR-create segment of the first line only; prior-chain / comment `--repo` ignored), and a self-list of the checkout's origin ignored, to make upstream contribution possible without a manual bypass, accepting that this is a config-driven relaxation of a trust-chain gate and that `validate-branch-name.sh` stays unchanged for now.
 
 ## Context
 
@@ -25,7 +25,10 @@ Chosen: **(d)**.
 
 1. **`external_contributions` lives in `.claude/project-config.json`**, an array of `owner/name` slugs (or URL / SSH forms that normalise to that) matched after normalisation. The shipped default is `[]`, so a fork that never opts in behaves exactly as before. This mirrors `leak_protection.public_framework_repos`, which already classifies repos for hook behaviour from config.
 
-2. **Scope is the title-shape check and the branch-ticket check**, both inside `validate-pr-create.sh`. #1448 asked for "title and branch conventions"; the branch-ticket check is the branch half that actually fires on a PR-create, and a contributor's branch lives on their own fork under the destination project's naming conventions.
+2. **Scope includes the title-shape check and the branch-ticket check**, both inside `validate-pr-create.sh`. #1448 asked for "title and branch conventions"; the branch-ticket check is the branch half that actually fires on a PR-create, and a contributor's branch lives on their own fork under the destination project's naming conventions.
+
+For #1723, the exemption also skips required body sections and the Closes/Refs requirement because upstream projects use their own conventions.
+The hook still checks multiple closing references and applies every other existing check.
 
 3. **The registry wins, via the registry parser rather than a bespoke grep.** If a listed repo is also a managed project, the exemption does not apply. The first implementation hand-rolled a line-anchored grep and missed the inline `repos: [a, b]` and trailing-comment shapes, so a governed repo in both places *was* exempt — the documented guarantee was false. `_mrt_parse_registry` in `_lib-multi-repo-trace.sh` already normalises every supported shape, and is now the single source for this question.
 

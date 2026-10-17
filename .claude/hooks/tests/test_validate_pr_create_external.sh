@@ -144,6 +144,24 @@ run_case() {
   PASS=$((PASS+1))
 }
 
+# #1723: upstream bodies follow the destination project's conventions.
+UPSTREAM_BODY="This change fixes tuple merging. Tested with the upstream suite."
+BODY_NOTE="NOTE: validate-pr-create.sh: .*apexyard body rules do not apply to an external contribution"
+BODY="$UPSTREAM_BODY" run_case "external body-file skips body rules" \
+  '["openfga/vscode-ext"]' "openfga/vscode-ext" 0 "$BODY_NOTE"
+BODY="$UPSTREAM_BODY" run_case "unlisted body-file still requires sections" \
+  '["openfga/vscode-ext"]' "some-org/other-repo" 2 "missing required '## Summary'"
+BODY="$UPSTREAM_BODY" run_case "unlisted body-file still requires ticket reference" \
+  '["openfga/vscode-ext"]' "some-org/other-repo" 2 "missing required Closes or Refs line"
+run_case "external inline body skips body rules" \
+  '["openfga/vscode-ext"]' "" 0 "$BODY_NOTE" "" "scalar" \
+  "gh pr create --repo openfga/vscode-ext --title \"$FOREIGN_TITLE\" --body \"$UPSTREAM_BODY\""
+BODY="$UPSTREAM_BODY" run_case "external short body-file skips body rules" \
+  '["openfga/vscode-ext"]' "" 0 "$BODY_NOTE" "" "scalar" \
+  'gh pr create --repo openfga/vscode-ext --title "fix tuple merging" -F BODY_FILE'
+BODY=$'Closes #1\nCloses #2' run_case "external body still rejects multiple closes" \
+  '["openfga/vscode-ext"]' "openfga/vscode-ext" 2 "2 distinct closing references"
+
 # 1. The feature: a listed repo accepts its own project's title convention,
 #    and the operator is told the framework convention was not applied.
 run_case "listed repo is exempt" \

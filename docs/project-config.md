@@ -139,6 +139,8 @@ List those repositories as `owner/name` slugs:
 For a listed repository, `validate-pr-create.sh` does not apply the
 `type(TICKET): description` title convention, and prints a one-line note
 saying why.
+It also skips the branch ticket ID, required body sections, and Closes/Refs requirement for external contributions.
+All other checks still apply.
 
 Three properties worth knowing:
 
