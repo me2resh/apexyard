@@ -10,7 +10,7 @@
       "me2resh/apexyard": "0890c021ac3655646606153c41d3bbbf10f46dc1"
     }
   },
-  "objective": "Add an /orbit handoff operation that turns one validated execution slice into one GitHub issue through the existing orbit sync github adapter, after a dry-run preview, a leak scrub and operator confirmation, and that refuses when the ORBIT CLI is absent or validation fails.",
+  "objective": "Add an /orbit handoff operation that turns one validated execution slice into one GitHub issue through the existing orbit sync github adapter. It runs after a dry-run preview, a leak scrub and operator confirmation. It refuses when the ORBIT CLI is absent or validation fails.",
   "why": "The saved reconciliation marks ac1-1, ac1-2 and ac1-3 not-verified, ac1-4 partially-verified, and ac1-6 and ac1-12 contradicted by AgDR-0164. The missing handoff operation is the root gap that most O1 criteria depend on.",
   "contributesTo": [
     "ac1-1",
