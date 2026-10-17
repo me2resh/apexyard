@@ -1,7 +1,15 @@
-# Share the git global-option matcher
+---
+id: AgDR-0242
+timestamp: 2026-10-16T13:00:57Z
+agent: claude-code
+model: claude-opus-5-5
+session: 1db99c62-d1aa-4904-b503-9d08b57ba95e
+trigger: user-prompt
+status: executed
+category: security
+---
 
-Status: executed.
-Timestamp: 2026-10-16T13:00:57Z.
+# Share the git global-option matcher
 
 > In the context of me2resh/apexyard#1730 and #1731, facing gates that skip a git global option, I decided to share the dispatcher matcher and replay `-C`.
 > The gates then check the named repository.
