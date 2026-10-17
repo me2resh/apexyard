@@ -121,15 +121,21 @@ ghp_classify() {
   local repo_root="$1" hooks_dir_name="$2"
   local current current_resolved target_resolved repo_cmp
 
-  # git rev-parse can print C:/... while pwd -P prints /c/... for the same
-  # directory. Compare both sides after that map. A drive-letter hooks path
-  # is absolute. Joining it onto the repo makes an existing directory look
-  # missing, and the installer then replaces it without --force.
+  # git rev-parse can print C:/... for a Temp directory.
+  # pwd -P prints /tmp/... for that same directory on Git Bash.
+  # _windows_path_to_posix uses cygpath -u when cygpath is present.
+  # That output follows the mount table. The string transform does not.
+  # A drive-letter hooks path is absolute.
+  # Joining it onto the repo makes an existing directory look missing.
+  # The installer then replaces it without --force.
   repo_cmp="$repo_root"
   if command -v _windows_path_to_posix >/dev/null 2>&1; then
     repo_cmp=$(_windows_path_to_posix "$repo_root")
   fi
-  current=$(git -C "$repo_root" config --get core.hooksPath 2>/dev/null || true)
+  # Read config from the converted root.
+  # Later checks compare that same path.
+  # git -C uses the mount path when cygpath returns one.
+  current=$(git -C "$repo_cmp" config --get core.hooksPath 2>/dev/null || true)
   target_resolved=$(_resolve_real_path "$repo_cmp/$hooks_dir_name")
 
   if [ -z "$current" ]; then

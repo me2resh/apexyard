@@ -512,6 +512,8 @@ _ratc_evaluate_target() {
   # A drive-letter path is absolute. The slash tests below do not see a
   # leading slash in C:\..., so the old code joined that path onto $PWD.
   # A source write from a non-git directory then looked ungoverned.
+  # _windows_path_to_posix uses cygpath -u when cygpath is present.
+  # That call applies the Git Bash mount table before the slash tests.
   if [ -n "$FILE_PATH" ] && command -v _windows_path_to_posix >/dev/null 2>&1; then
     FILE_PATH=$(_windows_path_to_posix "$FILE_PATH")
   fi
