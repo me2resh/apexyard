@@ -279,7 +279,10 @@ git_visit_invocations() {
   local cmd cwd sub prefix rc count=0 arg
   cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null)
   cwd=$(printf '%s' "$input" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null)
+  local prefixes
   for sub in "$@"; do
+    # Capture first. A POSIX-sourced lib must not use process substitution.
+    prefixes=$(git_invocation_prefixes "$cmd" "$sub")
     while IFS= read -r prefix; do
       [ -n "$prefix" ] || continue
       count=$((count + 1))
@@ -313,7 +316,9 @@ git_visit_invocations() {
       if [ "$mode" = block ] && [ "$rc" -ne 0 ]; then
         return "$rc"
       fi
-    done < <(git_invocation_prefixes "$cmd" "$sub")
+    done <<EOF
+$prefixes
+EOF
   done
   if [ "$count" -eq 0 ]; then
     ( "$callback" )
