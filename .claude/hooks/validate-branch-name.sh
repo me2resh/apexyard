@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # Validates branch naming convention before push.
 # Format: {type}/{TICKET-ID}-{description}
 #
@@ -6,7 +7,9 @@
 # .claude/project-config.json (.branch.type_whitelist). Defaults ship at
 # .claude/project-config.defaults.json. See apexyard#109 for the schema.
 
-INPUT=$(cat)
+# Run one target check. The visitor isolates each call in a subshell.
+_git_gate_body() {
+INPUT="$_GIT_GATE_INPUT"
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -235,10 +238,12 @@ fi
 
 if [ -n "$PUSH_REF" ]; then
   CURRENT_BRANCH="$PUSH_REF"
+elif [ -n "${GIT_DASH_C:-}${_GIT_RAW_GIT_DIR:-}${_GIT_RAW_WORK_TREE:-}" ]; then
+  CURRENT_BRANCH=$(git_target branch --show-current 2>/dev/null)
 elif [ -n "$BRANCH_DIR" ]; then
   CURRENT_BRANCH=$(git -C "$BRANCH_DIR" branch --show-current 2>/dev/null)
 else
-  CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
+  CURRENT_BRANCH=$(if command -v git_target >/dev/null 2>&1; then git_target branch --show-current; else git branch --show-current; fi 2>/dev/null)
 fi
 
 # Allow trunk and shared integration branches.
@@ -440,3 +445,17 @@ MSG
 fi
 
 exit 0
+
+}
+
+_GIT_GATE_INPUT=$(cat)
+_GIT_GATE_LIB="$(cd "$(dirname "$0")" && pwd)/_lib-git-global.sh"
+if [ -r "$_GIT_GATE_LIB" ]; then
+  # shellcheck disable=SC1090
+  . "$_GIT_GATE_LIB"
+fi
+if command -v git_visit_invocations >/dev/null 2>&1; then
+  git_visit_invocations _git_gate_body block "$_GIT_GATE_INPUT" push
+  exit $?
+fi
+_git_gate_body

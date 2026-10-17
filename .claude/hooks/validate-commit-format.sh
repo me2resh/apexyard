@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # PreToolUse hook on `git commit`: validates the commit message subject line
 # against the conventional commit format defined in
 # .claude/rules/git-conventions.md:
@@ -20,7 +21,9 @@
 # superset — if a project wants to use scopes in commits, that's fine, but
 # the scope is not required.
 
-INPUT=$(cat)
+# Run one target check. The visitor isolates each call in a subshell.
+_git_gate_body() {
+INPUT="$_GIT_GATE_INPUT"
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [ -r "$HOOK_DIR/_lib-git-global.sh" ]; then
@@ -430,3 +433,17 @@ MSG_END
 fi
 
 exit 0
+
+}
+
+_GIT_GATE_INPUT=$(cat)
+_GIT_GATE_LIB="$(cd "$(dirname "$0")" && pwd)/_lib-git-global.sh"
+if [ -r "$_GIT_GATE_LIB" ]; then
+  # shellcheck disable=SC1090
+  . "$_GIT_GATE_LIB"
+fi
+if command -v git_visit_invocations >/dev/null 2>&1; then
+  git_visit_invocations _git_gate_body block "$_GIT_GATE_INPUT" commit
+  exit $?
+fi
+_git_gate_body

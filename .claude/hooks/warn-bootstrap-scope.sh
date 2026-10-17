@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # PreToolUse advisory hook on `git commit`: fires when the bootstrap
 # exemption marker is active (.claude/session/active-bootstrap) but the
 # commit message does NOT reference expected handover outputs.
@@ -15,9 +16,11 @@
 # This hook is ADVISORY ONLY — exit 0 in every path. It never blocks.
 # Shape mirrors check-upstream-drift.sh and detect-role-trigger.sh.
 
+# Run one target check. The visitor isolates each call in a subshell.
+_git_gate_body() {
 set -u
 
-INPUT=$(cat)
+INPUT="$_GIT_GATE_INPUT"
 
 # Only act on Bash tool calls.
 TOOL_NAME=$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
@@ -111,3 +114,17 @@ cat >&2 <<'BANNER'
 BANNER
 
 exit 0
+
+}
+
+_GIT_GATE_INPUT=$(cat)
+_GIT_GATE_LIB="$(cd "$(dirname "$0")" && pwd)/_lib-git-global.sh"
+if [ -r "$_GIT_GATE_LIB" ]; then
+  # shellcheck disable=SC1090
+  . "$_GIT_GATE_LIB"
+fi
+if command -v git_visit_invocations >/dev/null 2>&1; then
+  git_visit_invocations _git_gate_body advisory "$_GIT_GATE_INPUT" commit
+  exit $?
+fi
+_git_gate_body

@@ -340,6 +340,9 @@ if [ "$_scan_failed" -eq 0 ] && [ -r "$HOOK_DIR/_lib-git-global.sh" ]; then
 else
   _scan_failed=1
 fi
+if ! command -v command_has_git_subcommand >/dev/null 2>&1; then
+  _scan_failed=1
+fi
 if [ "$_scan_failed" -eq 1 ]; then
   run_push_gates
   run_commit_gates

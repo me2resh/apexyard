@@ -43,7 +43,7 @@ The matcher stays on the raw command.
 
 - An absolute `-C` selects the repository for the secret scan, the architecture check, the onboarding check, and a bare push.
 - A relative `-C` resolves against the harness cwd.
-- `verify-commit-refs.sh` still accepts only an absolute `-C`.
+- `verify-commit-refs.sh` uses the resolved `-C` target.
 - The orbit simple-push allowlist still rejects a git option.
 - A missing library in a gate uses the old adjacent-word check.
 - A missing library in the dispatcher runs both gate groups.
@@ -62,3 +62,15 @@ Quoted text that names `git push` still routes the push gates.
 - `.claude/hooks/_lib-git-global.sh`
 - me2resh/apexyard#1730
 - me2resh/apexyard#1731
+
+## Review round 2
+
+Each gate checks every matching invocation in a separate subshell.
+The gate keeps the full raw command and its existing `cd` policy.
+Each `-C` resolves against the previous directory.
+Relative `--git-dir` and `--work-tree` values resolve after the last `-C`.
+Blocking gates reject substitutions, invalid syntax, and missing target directories.
+The parser expands a leading `~` to the home directory.
+Advisory gates skip targets that they cannot resolve.
+The dispatcher runs both gate groups if the matcher function is absent.
+Diff and log checks disable external diff commands, text conversion, and the filesystem monitor.

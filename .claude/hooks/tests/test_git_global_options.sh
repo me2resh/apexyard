@@ -14,6 +14,8 @@ HOOKS="$ROOT/.claude/hooks"
 # shellcheck disable=SC1090
 . "$LIB"
 
+test_tmp=$(mktemp -d)
+trap 'rm -rf "$test_tmp" "${sb:-}" "${other:-}" "${feature:-}" "${protected:-}"' EXIT
 fail=0
 check() {
   local name="$1" want="$2" got="$3"
@@ -96,14 +98,14 @@ git -C "$sb" add secret.txt
 payload=$(jq -nc --arg command "git -C $sb commit -m \"fix: add secret\"" --arg cwd "$other" \
   '{tool_input:{command:$command,cwd:$cwd},cwd:$cwd}')
 set +e
-printf '%s' "$payload" | bash "$HOOKS/check-secrets.sh" >/tmp/git-global-secrets.out 2>/tmp/git-global-secrets.err
+printf '%s' "$payload" | bash "$HOOKS/check-secrets.sh" >"$test_tmp/secrets.out" 2>"$test_tmp/secrets.err"
 rc=$?
 set -e
-if [ "$rc" -eq 2 ] && grep -q 'hardcoded secrets' /tmp/git-global-secrets.err; then
+if [ "$rc" -eq 2 ] && grep -q 'hardcoded secrets' "$test_tmp/secrets.err"; then
   echo PASS secrets-dash-c
 else
   echo "FAIL secrets-dash-c rc=$rc" >&2
-  cat /tmp/git-global-secrets.err >&2
+  cat "$test_tmp/secrets.err" >&2
   fail=1
 fi
 
@@ -111,28 +113,28 @@ fi
 payload=$(jq -nc --arg command "git -C $sb commit -m \"bad message without a type\"" \
   '{tool_input:{command:$command}}')
 set +e
-printf '%s' "$payload" | bash "$HOOKS/validate-commit-format.sh" >/dev/null 2>/tmp/git-global-fmt.err
+printf '%s' "$payload" | bash "$HOOKS/validate-commit-format.sh" >/dev/null 2>"$test_tmp/fmt.err"
 rc=$?
 set -e
 if [ "$rc" -eq 2 ]; then
   echo PASS format-bad-dash-c
 else
   echo "FAIL format-bad-dash-c rc=$rc" >&2
-  cat /tmp/git-global-fmt.err >&2
+  cat "$test_tmp/fmt.err" >&2
   fail=1
 fi
 
 payload=$(jq -nc --arg command "git -c core.quotepath=off commit -m \"fix: probe message\"" \
   '{tool_input:{command:$command}}')
 set +e
-printf '%s' "$payload" | bash "$HOOKS/validate-commit-format.sh" >/dev/null 2>/tmp/git-global-fmt.err
+printf '%s' "$payload" | bash "$HOOKS/validate-commit-format.sh" >/dev/null 2>"$test_tmp/fmt.err"
 rc=$?
 set -e
 if [ "$rc" -eq 0 ]; then
   echo PASS format-good-dash-c
 else
   echo "FAIL format-good-dash-c rc=$rc" >&2
-  cat /tmp/git-global-fmt.err >&2
+  cat "$test_tmp/fmt.err" >&2
   fail=1
 fi
 
@@ -159,9 +161,9 @@ run_hook() {
   local hook="$1" command="$2" cwd="$3"
   local payload rc
   payload=$(jq -nc --arg command "$command" --arg cwd "$cwd" \
-    '{tool_input:{command:$command,cwd:$cwd},cwd:$cwd}')
+    '{tool_name:"Bash",tool_input:{command:$command,cwd:$cwd},cwd:$cwd}')
   set +e
-  printf '%s' "$payload" | (cd "$cwd" && bash "$hook") >/tmp/git-global-hook.out 2>/tmp/git-global-hook.err
+  printf '%s' "$payload" | (cd "$cwd" && bash "$hook") >"$test_tmp/hook.out" 2>"$test_tmp/hook.err"
   rc=$?
   set -e
   printf '%s' "$rc"
@@ -171,7 +173,7 @@ if [ "$rc" -eq 2 ]; then
   echo PASS block-protected-dash-c
 else
   echo "FAIL block-protected-dash-c rc=$rc" >&2
-  cat /tmp/git-global-hook.err >&2
+  cat "$test_tmp/hook.err" >&2
   fail=1
 fi
 rc=$(run_hook "$HOOKS/block-main-push.sh" "git -C $feature push origin feature/GH-1-x" "$other")
@@ -179,7 +181,7 @@ if [ "$rc" -eq 0 ]; then
   echo PASS block-feature-dash-c
 else
   echo "FAIL block-feature-dash-c rc=$rc" >&2
-  cat /tmp/git-global-hook.err >&2
+  cat "$test_tmp/hook.err" >&2
   fail=1
 fi
 rc=$(run_hook "$HOOKS/block-main-push.sh" "git stash push -m wip" "$other")
@@ -187,7 +189,7 @@ if [ "$rc" -eq 0 ]; then
   echo PASS block-stash-push
 else
   echo "FAIL block-stash-push rc=$rc" >&2
-  cat /tmp/git-global-hook.err >&2
+  cat "$test_tmp/hook.err" >&2
   fail=1
 fi
 rc=$(run_hook "$HOOKS/block-main-push.sh" "git -C $feature push" "$protected")
@@ -195,7 +197,7 @@ if [ "$rc" -eq 0 ]; then
   echo PASS block-bare-dash-c
 else
   echo "FAIL block-bare-dash-c rc=$rc" >&2
-  cat /tmp/git-global-hook.err >&2
+  cat "$test_tmp/hook.err" >&2
   fail=1
 fi
 rc=$(run_hook "$HOOKS/validate-branch-name.sh" "git -C $feature push origin fix/no-ticket-name" "$other")
@@ -203,7 +205,7 @@ if [ "$rc" -eq 2 ]; then
   echo PASS branch-bad-dash-c
 else
   echo "FAIL branch-bad-dash-c rc=$rc" >&2
-  cat /tmp/git-global-hook.err >&2
+  cat "$test_tmp/hook.err" >&2
   fail=1
 fi
 rc=$(run_hook "$HOOKS/validate-branch-name.sh" "git -C $feature push origin feature/GH-1-x" "$other")
@@ -211,7 +213,7 @@ if [ "$rc" -eq 0 ]; then
   echo PASS branch-good-dash-c
 else
   echo "FAIL branch-good-dash-c rc=$rc" >&2
-  cat /tmp/git-global-hook.err >&2
+  cat "$test_tmp/hook.err" >&2
   fail=1
 fi
 rc=$(run_hook "$HOOKS/validate-branch-name.sh" "git log --grep=push" "$other")
@@ -219,12 +221,110 @@ if [ "$rc" -eq 0 ]; then
   echo PASS branch-grep-push
 else
   echo "FAIL branch-grep-push rc=$rc" >&2
-  cat /tmp/git-global-hook.err >&2
+  cat "$test_tmp/hook.err" >&2
   fail=1
 fi
 
-rm -rf "$sb" "$other" "$feature" "$protected"
-rm -f /tmp/git-global-secrets.out /tmp/git-global-secrets.err /tmp/git-global-fmt.err
+# Use real repositories for each review probe.
+git -C "$sb" symbolic-ref HEAD refs/heads/main
+check b1-secrets-plain 2 "$(run_hook "$HOOKS/check-secrets.sh" "git -C $feature commit -m 'fix: first' && git commit -m 'fix: second'" "$sb")"
+check b1-protected-commit 2 "$(run_hook "$HOOKS/block-main-push.sh" "git -C $feature commit -m 'fix: first' && git commit -m 'fix: second'" "$sb")"
+check b1-secrets-unquoted 2 "$(run_hook "$HOOKS/check-secrets.sh" "git -C $feature commit -m a && git commit -m b" "$sb")"
+check b1-commit-unquoted 2 "$(run_hook "$HOOKS/block-main-push.sh" "git -C $feature commit -m a && git commit -m b" "$sb")"
+check b1-no-space-separator 2 "$(run_hook "$HOOKS/check-secrets.sh" "git -C $feature commit;git commit" "$sb")"
+check b1-protected-push 2 "$(run_hook "$HOOKS/block-main-push.sh" "git -C $feature push && git push" "$sb")"
+check b1-quoted-prefix 2 "$(run_hook "$HOOKS/check-secrets.sh" "echo \"git -C $other commit\" && git commit -m x" "$sb")"
+
+# Use a missing-ticket branch for the second push target.
+git -C "$sb" symbolic-ref HEAD refs/heads/fix/no-ticket-name
+check b1-branch 2 "$(run_hook "$HOOKS/validate-branch-name.sh" "git -C $feature push && git push" "$sb")"
+printf 'FROM scratch\n' > "$sb/Dockerfile"
+git -C "$sb" add Dockerfile
+check b1-agdr 2 "$(run_hook "$HOOKS/require-agdr-for-arch-changes.sh" "git -C $feature commit -m 'fix: first' && git commit -m 'fix: second'" "$sb")"
+# Stage private configuration directly in the index. Do not create the file.
+blob=$(printf 'company: private\n' | git -C "$sb" hash-object -w --stdin)
+git -C "$sb" update-index --add --cacheinfo "100644,$blob,onboarding.yaml"
+check b1-onboarding 2 "$(run_hook "$HOOKS/block-onboarding-in-git.sh" "git -C $feature commit -m 'fix: first' && git commit -m 'fix: second'" "$sb")"
+
+# Keep bootstrap markers inside the disposable fixture.
+mkdir -p "$sb/.claude/session"
+printf handover > "$sb/.claude/session/active-bootstrap"
+check b1-bootstrap-status 0 "$(run_hook "$HOOKS/warn-bootstrap-scope.sh" "git -C $feature commit -m 'fix: first' && git commit -m 'fix: second'" "$sb")"
+if grep -q 'Bootstrap exemption is active' "$test_tmp/hook.err"; then
+  echo PASS b1-bootstrap-warning
+else
+  echo FAIL b1-bootstrap-warning >&2
+  fail=1
+fi
+
+git -C "$sb" symbolic-ref HEAD refs/heads/main
+work=$(dirname "$sb")
+leaf=$(basename "$sb")
+for cmd in "git -C $work -C $leaf commit" "git -C $sb -C . commit"; do
+  check b2-secrets 2 "$(run_hook "$HOOKS/check-secrets.sh" "$cmd" "$other")"
+  check b2-protected-commit 2 "$(run_hook "$HOOKS/block-main-push.sh" "$cmd" "$other")"
+done
+check b2-protected-push 2 "$(run_hook "$HOOKS/block-main-push.sh" "git -C $work -C $leaf push" "$other")"
+check h1-relative-git-dir 2 "$(run_hook "$HOOKS/check-secrets.sh" "git -C $sb --git-dir=.git commit" "$other")"
+check h1-relative-work-tree 2 "$(run_hook "$HOOKS/block-main-push.sh" "git -C $sb --git-dir=.git --work-tree=. commit" "$other")"
+
+for gate in check-secrets block-main-push validate-commit-format require-agdr-for-arch-changes block-onboarding-in-git validate-branch-name block-agent-routing-drift verify-commit-refs; do
+  verb=commit
+  [ "$gate" != validate-branch-name ] || verb=push
+  for path in '"$HOME/x"' '/nonexistent' '"/a"b' '"`pwd`"' '"$(pwd)"' '$(printf /a)' '`printf /a`'; do
+    check "h2-$gate-$path" 2 "$(run_hook "$HOOKS/$gate.sh" "git -C $path $verb" "$other")"
+    if ! grep -q 'cannot resolve the git -C target; use a literal path' "$test_tmp/hook.err"; then
+      echo "FAIL h2-message-$gate" >&2
+      fail=1
+    fi
+  done
+done
+# Use a disposable home directory for shell-style tilde expansion.
+mkdir -p "$test_tmp/home/realdir"
+git -C "$test_tmp/home/realdir" init -q -b main
+HOME="$test_tmp/home" check h2-tilde 2 "$(HOME="$test_tmp/home" run_hook "$HOOKS/block-main-push.sh" 'git -C ~/realdir commit' "$other")"
+if grep -q 'Cannot commit directly' "$test_tmp/hook.err"; then
+  echo PASS h2-tilde-target
+else
+  echo FAIL h2-tilde-target >&2
+  fail=1
+fi
+mkdir -p "$other/~/realdir"
+git -C "$other/~/realdir" init -q -b feature/GH-1-literal
+check h2-quoted-tilde 0 "$(HOME="$test_tmp/home" run_hook "$HOOKS/block-main-push.sh" 'git -C "~/realdir" commit' "$other")"
+check h2-single-quoted-tilde 0 "$(HOME="$test_tmp/home" run_hook "$HOOKS/block-main-push.sh" "git -C '~/realdir' commit" "$other")"
+for option in --git-dir --work-tree; do
+  check "h2-$option-substitution" 2 "$(run_hook "$HOOKS/check-secrets.sh" "git $option=\"\$HOME/x\" commit" "$other")"
+  check "h2-$option-command-substitution" 2 "$(run_hook "$HOOKS/check-secrets.sh" "git $option=\"\$(printf /a)\" commit" "$other")"
+  check "h2-$option-missing" 2 "$(run_hook "$HOOKS/check-secrets.sh" "git $option=/nonexistent commit" "$other")"
+done
+for gate in pre-push-gate warn-stale-review-markers warn-bootstrap-scope; do
+  verb=push
+  [ "$gate" != warn-bootstrap-scope ] || verb=commit
+  check "h2-advisory-$gate" 0 "$(run_hook "$HOOKS/$gate.sh" "git -C /nonexistent $verb" "$other")"
+done
+
+# Diff checks must not execute repository conversion or monitor commands.
+printf '#!/bin/bash\necho ran >> "%s"\nprintf sanitized\n' "$test_tmp/executed" > "$test_tmp/unsafe-diff"
+chmod +x "$test_tmp/unsafe-diff"
+git -C "$sb" config diff.external "$test_tmp/unsafe-diff"
+git -C "$sb" config core.fsmonitor "$test_tmp/unsafe-diff"
+git -C "$sb" config diff.probe.textconv "$test_tmp/unsafe-diff"
+printf 'secret.txt diff=probe\n' > "$sb/.gitattributes"
+check h6-secret-diff 2 "$(run_hook "$HOOKS/check-secrets.sh" "git -C $sb commit" "$other")"
+check h6-no-execution no "$(if [ -e "$test_tmp/executed" ]; then printf yes; else printf no; fi)"
+
+# A loaded marker must not disable dispatcher routing.
+mkdir -p "$test_tmp/dispatch"
+cp "$HOOKS/dispatch-bash.sh" "$HOOKS/_lib-git-global.sh" "$HOOKS/_lib-extract-pr.sh" "$HOOKS/_lib-command-scrub.sh" "$HOOKS/_lib-awk-fallback.sh" "$test_tmp/dispatch/"
+for gate in $(sed -nE 's/^# APEXYARD_DISPATCH_GATE: Bash[^|]*\|[^|]*\|([^ ]+)\.sh$/\1/p' "$HOOKS/dispatch-bash.sh" | sort -u); do
+  printf '#!/bin/bash\ncat >/dev/null\necho %s >> "$DISPATCH_LOG"\n' "$gate" > "$test_tmp/dispatch/$gate.sh"
+  chmod +x "$test_tmp/dispatch/$gate.sh"
+done
+payload=$(jq -nc '{tool_name:"Bash",tool_input:{command:"echo hello"}}')
+printf '%s' "$payload" | _LIB_GIT_GLOBAL_LOADED=1 DISPATCH_LOG="$test_tmp/dispatch.log" bash "$test_tmp/dispatch/dispatch-bash.sh" >/dev/null 2>"$test_tmp/dispatch.err"
+check h5-commit-routed yes "$(grep -q check-secrets "$test_tmp/dispatch.log" && printf yes)"
+check h5-push-routed yes "$(grep -q pre-push-gate "$test_tmp/dispatch.log" && printf yes)"
 
 if [ "$fail" -ne 0 ]; then
   echo FAIL

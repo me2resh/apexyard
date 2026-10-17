@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # pre-push-gate.sh — advisory reminder for local pre-push checks.
 #
 # REDESIGNED (me2resh/apexyard#1366, AgDR-0173). This hook used to pick a
@@ -71,9 +72,11 @@
 #
 # See docs/agdr/AgDR-0173-git-native-pre-push-command-execution.md.
 
+# Run one target check. The visitor isolates each call in a subshell.
+_git_gate_body() {
 HOOK_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd -P)"
 
-INPUT=$(cat)
+INPUT="$_GIT_GATE_INPUT"
 COMMAND=""
 if command -v jq >/dev/null 2>&1; then
   COMMAND=$(jq -r '.tool_input.command // empty' <<<"$INPUT" 2>/dev/null) || COMMAND=""
@@ -185,3 +188,17 @@ Until then, CI is the only backstop for .pre_push.commands on this
 clone. See .claude/rules/git-conventions.md and AgDR-0173.
 MSG
 exit 0
+
+}
+
+_GIT_GATE_INPUT=$(cat)
+_GIT_GATE_LIB="$(cd "$(dirname "$0")" && pwd)/_lib-git-global.sh"
+if [ -r "$_GIT_GATE_LIB" ]; then
+  # shellcheck disable=SC1090
+  . "$_GIT_GATE_LIB"
+fi
+if command -v git_visit_invocations >/dev/null 2>&1; then
+  git_visit_invocations _git_gate_body advisory "$_GIT_GATE_INPUT" push
+  exit $?
+fi
+_git_gate_body

@@ -15,9 +15,9 @@ if [ -n "${_LIB_GIT_GLOBAL_LOADED:-}" ]; then
 fi
 _LIB_GIT_GLOBAL_LOADED=1
 
-# Keep this expression identical to the #1527 dispatcher scan.
-_git_opt_val='("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:];&|]+)'
-_git_sub_re='(^|[^[:alnum:]_.-])git([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env))[[:space:]]+'"${_git_opt_val}"'|--?[A-Za-z][A-Za-z-]*(=[^[:space:];&|]+)?))*[[:space:]]+'
+# Share this expression with the dispatcher and the gates.
+_git_opt_val='("[^"]*"|'"'"'[^'"'"']*'"'"'|\$\([^)]*\)|`[^`]*`|[^[:space:];&|]+)'
+_git_sub_re='(^|[^[:alnum:]_.-])git([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env))[[:space:]]+'"${_git_opt_val}"'|--(git-dir|work-tree|namespace|super-prefix|config-env)='"${_git_opt_val}"'|--?[A-Za-z][A-Za-z-]*(=[^[:space:];&|]+)?))*[[:space:]]+'
 
 # Regex for `git [global options] <sub>` on raw text.
 # The match may include one leading boundary character.
@@ -85,11 +85,24 @@ _git_take_value() {
       _GIT_SCAN=$(printf '%s' "$s" | sed -n 's/^[^[:space:];&|]*//p')
       ;;
   esac
+  case "$_GIT_SCAN" in
+    ""|[[:space:]]*|';'*|'&'*|'|'*) ;;
+    *) return 1 ;;
+  esac
+  # Keep a quoted tilde literal.
+  case "$s" in
+    \"*|\'*)
+      # shellcheck disable=SC2088
+      case "$_GIT_TAKEN" in
+        '~'|'~/'*) _GIT_TAKEN="./$_GIT_TAKEN" ;;
+      esac
+      ;;
+  esac
   [ -n "$_GIT_TAKEN" ]
 }
 
 # Consume one global option from $_GIT_SCAN.
-# Records the last -C, --git-dir, and --work-tree values.
+# Record each -C and the last --git-dir and --work-tree values.
 _git_take_global() {
   local name
   case "$_GIT_SCAN" in
@@ -97,6 +110,7 @@ _git_take_global() {
       _GIT_SCAN="${_GIT_SCAN:2}"
       _git_take_value || return 1
       _GIT_RAW_DASH_C="$_GIT_TAKEN"
+      _GIT_RAW_C_CHAIN+=("$_GIT_TAKEN")
       ;;
     -c[[:space:]]*)
       _GIT_SCAN="${_GIT_SCAN:2}"
@@ -134,6 +148,7 @@ _git_take_global() {
 # On success, $_GIT_SCAN is the text after that subcommand.
 _git_scan_globals() {
   local sub="$1"
+  _GIT_RAW_C_CHAIN=()
   _GIT_RAW_DASH_C=""
   _GIT_RAW_GIT_DIR=""
   _GIT_RAW_WORK_TREE=""
@@ -151,13 +166,18 @@ _git_scan_globals() {
   return 1
 }
 
-# Load the first `git [global options] <sub>` invocation in <cmd>.
+# Load the selected invocation. Use the first match for direct helper calls.
 _git_load_invocation() {
   local cmd="$1" sub="$2" inv
+  _GIT_RAW_C_CHAIN=()
   _GIT_RAW_DASH_C=""
   _GIT_RAW_GIT_DIR=""
   _GIT_RAW_WORK_TREE=""
-  inv=$(printf '%s\n' "$cmd" | LC_ALL=C grep -oE "$(git_subcommand_re "$sub")" | head -1) || true
+  if [ "${_GIT_VISIT_SUB:-}" = "$sub" ]; then
+    inv="$_GIT_VISIT_PREFIX"
+  else
+    inv=$(printf '%s\n' "$cmd" | LC_ALL=C grep -oE "$(git_subcommand_re "$sub")" | head -1) || true
+  fi
   [ -n "$inv" ] || return 1
   case "$inv" in
     git*) ;;
@@ -187,41 +207,117 @@ git_push_args() {
   fi
 }
 
+# Resolve a literal path. Do not evaluate shell substitutions.
 _git_resolve_dir() {
-  local dir="$1" cwd="${2:-}"
+  local dir="$1" cwd="${2:-$PWD}"
+  # shellcheck disable=SC2088
   case "$dir" in
-    /*) printf '%s' "$dir" ;;
-    *)
-      if [ -n "$cwd" ]; then
-        printf '%s' "${cwd%/}/$dir"
-      else
-        printf '%s' "$dir"
-      fi
-      ;;
+    *'$'*|*'`'*|*'\\'*|*'"'*|*"'"*) return 1 ;;
+    '~') dir="$HOME" ;;
+    '~/'*) dir="$HOME/${dir#??}" ;;
+    '~'*) return 1 ;;
   esac
+  case "$dir" in
+    /*) ;;
+    *) dir="${cwd%/}/$dir" ;;
+  esac
+  printf '%s' "$dir"
 }
 
-# Fill GIT_REPLAY_ARGS and GIT_DASH_C for the first <sub> invocation.
-# A relative -C, --git-dir, or --work-tree resolves against <cwd> when set.
+# Resolve each -C in order. Resolve repository paths after the last -C.
 git_prepare_invocation() {
-  local cmd="$1" sub="$2" cwd="${3:-}" dir
+  local cmd="$1" sub="$2" cwd="${3:-$PWD}" dir raw base
   GIT_REPLAY_ARGS=()
   GIT_DASH_C=""
-  _git_load_invocation "$cmd" "$sub" || return 0
-  if [ -n "${_GIT_RAW_DASH_C:-}" ]; then
-    dir=$(_git_resolve_dir "$_GIT_RAW_DASH_C" "$cwd")
-    # Callers in other hooks read GIT_DASH_C after this function returns.
-    # shellcheck disable=SC2034
+  _git_load_invocation "$cmd" "$sub" || return 1
+  base="${cwd:-$PWD}"
+  for raw in ${_GIT_RAW_C_CHAIN[@]+"${_GIT_RAW_C_CHAIN[@]}"}; do
+    dir=$(_git_resolve_dir "$raw" "$base") || return 1
     GIT_DASH_C="$dir"
-    GIT_REPLAY_ARGS+=(-C "$dir")
+    base="$dir"
+    if [ "${_GIT_VALIDATE_TARGET:-0}" -eq 1 ]; then
+      [ -d "$base" ] || return 1
+    fi
+  done
+  if [ -n "$GIT_DASH_C" ]; then
+    GIT_REPLAY_ARGS+=(-C "$GIT_DASH_C")
+  elif [ -n "$cwd" ]; then
+    GIT_REPLAY_ARGS+=(-C "$cwd")
   fi
   if [ -n "${_GIT_RAW_GIT_DIR:-}" ]; then
-    dir=$(_git_resolve_dir "$_GIT_RAW_GIT_DIR" "$cwd")
+    dir=$(_git_resolve_dir "$_GIT_RAW_GIT_DIR" "$base") || return 1
     GIT_REPLAY_ARGS+=(--git-dir="$dir")
   fi
   if [ -n "${_GIT_RAW_WORK_TREE:-}" ]; then
-    dir=$(_git_resolve_dir "$_GIT_RAW_WORK_TREE" "$cwd")
+    dir=$(_git_resolve_dir "$_GIT_RAW_WORK_TREE" "$base") || return 1
     GIT_REPLAY_ARGS+=(--work-tree="$dir")
+  fi
+  return 0
+}
+
+# Preserve the trailing boundary for the next match.
+git_invocation_prefixes() {
+  local rest="$1" sub="$2" match tail
+  while :; do
+    match=$(printf '%s\n' "$rest" | LC_ALL=C grep -oE "$(git_subcommand_re "$sub")" | head -1) || true
+    [ -n "$match" ] || break
+    printf '%s\n' "$match"
+    tail="${rest#*"$match"}"
+    case "$match" in
+      *"$sub") rest="$tail" ;;
+      *) rest="${match: -1}$tail" ;;
+    esac
+    [ -n "$rest" ] || break
+  done
+}
+
+# Check each raw invocation in a separate subshell. Keep the full command.
+# The gate retains its existing ref parser and cd policy.
+git_visit_invocations() {
+  local callback="$1" mode="$2" input="$3"
+  shift 3
+  local cmd cwd sub prefix rc count=0 arg
+  cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null)
+  cwd=$(printf '%s' "$input" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null)
+  for sub in "$@"; do
+    while IFS= read -r prefix; do
+      [ -n "$prefix" ] || continue
+      count=$((count + 1))
+      (
+        _GIT_VALIDATE_TARGET=1
+        _GIT_VISIT_SUB="$sub"
+        _GIT_VISIT_PREFIX="$prefix"
+        if ! git_prepare_invocation "$cmd" "$sub" "$cwd"; then
+          if [ "$mode" = block ]; then
+            echo 'BLOCKED: cannot resolve the git -C target; use a literal path' >&2
+            exit 2
+          fi
+          exit 0
+        fi
+        for arg in "${GIT_REPLAY_ARGS[@]}"; do
+          case "$arg" in
+            -C) continue ;;
+            --git-dir=*|--work-tree=*) arg="${arg#*=}" ;;
+          esac
+          if [ ! -d "$arg" ]; then
+            if [ "$mode" = block ]; then
+              echo 'BLOCKED: cannot resolve the git -C target; use a literal path' >&2
+              exit 2
+            fi
+            exit 0
+          fi
+        done
+        "$callback"
+      )
+      rc=$?
+      if [ "$mode" = block ] && [ "$rc" -ne 0 ]; then
+        return "$rc"
+      fi
+    done < <(git_invocation_prefixes "$cmd" "$sub")
+  done
+  if [ "$count" -eq 0 ]; then
+    ( "$callback" )
+    return $?
   fi
   return 0
 }
@@ -230,6 +326,13 @@ git_prepare_invocation() {
 # Call plain git, as the gates did before. A caller can then replace git
 # with a shell function, as the /scaffold scan shim does.
 git_target() {
+  case "${1:-}" in
+    diff|log)
+      local verb="$1"
+      shift
+      set -- -c core.fsmonitor=false "$verb" --no-ext-diff --no-textconv "$@"
+      ;;
+  esac
   if [ "${#GIT_REPLAY_ARGS[@]}" -gt 0 ]; then
     git "${GIT_REPLAY_ARGS[@]}" "$@"
   else

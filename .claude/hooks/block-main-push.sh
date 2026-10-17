@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # CLASS: BACKSTOP — blocking, but not the primary control (AgDR-0114).
 #
 # Blocks direct pushes and commits to long-lived integration branches from
@@ -72,7 +73,9 @@
 #   prefix, resolve the current branch from that path (same pattern used by
 #   the commit section above).
 
-INPUT=$(cat)
+# Run one target check. The visitor isolates each call in a subshell.
+_git_gate_body() {
+INPUT="$_GIT_GATE_INPUT"
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 
 _PUSH_HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -469,11 +472,13 @@ MSG
           | tail -n 1 \
           | sed -E "s/^cd[[:space:]]+//; s/^[\"']//; s/[\"']\$//")
       fi
-      if [ -n "$PUSH_WORKTREE_PATH" ]; then
+      if [ -n "${GIT_DASH_C:-}${_GIT_RAW_GIT_DIR:-}${_GIT_RAW_WORK_TREE:-}" ]; then
+        TARGET_PUSH_BRANCH=$(git_target branch --show-current 2>/dev/null)
+      elif [ -n "$PUSH_WORKTREE_PATH" ]; then
         TARGET_PUSH_BRANCH=$(git -C "$PUSH_WORKTREE_PATH" branch --show-current 2>/dev/null)
       else
         # Plain `git push -u origin` with no `cd` prefix — use session cwd.
-        TARGET_PUSH_BRANCH=$(git branch --show-current 2>/dev/null)
+        TARGET_PUSH_BRANCH=$(if command -v git_target >/dev/null 2>&1; then git_target branch --show-current; else git branch --show-current; fi 2>/dev/null)
       fi
     fi
 
@@ -554,12 +559,14 @@ if [ "$_HAS_GIT_COMMIT" -eq 1 ]; then
       | sed -E "s/^cd[[:space:]]+//; s/^[\"']//; s/[\"']\$//")
   fi
 
-  if [ -n "$WORKTREE_PATH" ]; then
+  if [ -n "${GIT_DASH_C:-}${_GIT_RAW_GIT_DIR:-}${_GIT_RAW_WORK_TREE:-}" ]; then
+    CURRENT_BRANCH=$(git_target branch --show-current 2>/dev/null)
+  elif [ -n "$WORKTREE_PATH" ]; then
     # Resolve branch in the target worktree, not the session cwd.
     CURRENT_BRANCH=$(git -C "$WORKTREE_PATH" branch --show-current 2>/dev/null)
   else
     # Plain `git commit` with no `cd` — use session cwd (original behaviour).
-    CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
+    CURRENT_BRANCH=$(if command -v git_target >/dev/null 2>&1; then git_target branch --show-current; else git branch --show-current; fi 2>/dev/null)
   fi
 
   if is_protected_branch "$CURRENT_BRANCH"; then
@@ -592,3 +599,17 @@ MSG
 fi
 
 exit 0
+
+}
+
+_GIT_GATE_INPUT=$(cat)
+_GIT_GATE_LIB="$(cd "$(dirname "$0")" && pwd)/_lib-git-global.sh"
+if [ -r "$_GIT_GATE_LIB" ]; then
+  # shellcheck disable=SC1090
+  . "$_GIT_GATE_LIB"
+fi
+if command -v git_visit_invocations >/dev/null 2>&1; then
+  git_visit_invocations _git_gate_body block "$_GIT_GATE_INPUT" push commit
+  exit $?
+fi
+_git_gate_body

@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # PreToolUse hook on `git commit -m / -F`: scans the commit message for
 # issue references (Closes #N, Refs #N, Fixes #N, Resolves #N, Related to #N)
 # and blocks the commit if any reference points at an issue that doesn't
@@ -29,7 +30,9 @@
 # Short-circuit: try the primary tracker first, only fall back to upstream on
 # miss. No double query for refs that resolve in origin.
 
-INPUT=$(cat)
+# Run one target check. The visitor isolates each call in a subshell.
+_git_gate_body() {
+INPUT="$_GIT_GATE_INPUT"
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 
 if [ -z "$COMMAND" ]; then
@@ -294,6 +297,12 @@ CMD_SANS_MSG=$(strip_message_from_command "$COMMAND" "$MSG")
 WORKDIR=""
 WORKDIR_SOURCE="fallback"
 WORKDIR=$(resolve_commit_workdir_from_command "$CMD_SANS_MSG")
+if command -v git_prepare_invocation >/dev/null 2>&1; then
+  git_prepare_invocation "$COMMAND" commit "${PAYLOAD_CWD:-}"
+  if [ -n "${GIT_DASH_C:-}" ]; then
+    WORKDIR="$GIT_DASH_C"
+  fi
+fi
 if [ -n "$WORKDIR" ]; then
   WORKDIR_SOURCE="scraped_command"
 elif [ -n "$PAYLOAD_CWD" ] && [ "${PAYLOAD_CWD#/}" != "$PAYLOAD_CWD" ]; then
@@ -328,7 +337,15 @@ fi
 #     Both REPO_ROOT and the resolve_ops_root walk now start from WORKDIR
 #     (the commit's own directory) instead of $PWD — see above.
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT=$(git -C "$WORKDIR" rev-parse --show-toplevel 2>/dev/null)
+commit_repo_git() {
+  if command -v git_target >/dev/null 2>&1 && [ -n "${GIT_DASH_C:-}${_GIT_RAW_GIT_DIR:-}${_GIT_RAW_WORK_TREE:-}" ]; then
+    git_target "$@"
+  else
+    git -C "$WORKDIR" "$@"
+  fi
+}
+
+REPO_ROOT=$(commit_repo_git rev-parse --show-toplevel 2>/dev/null)
 CONFIG_ROOT=""
 if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
   # shellcheck disable=SC1090,SC1091
@@ -344,7 +361,7 @@ if [ -n "$CONFIG_ROOT" ] && [ -f "${CONFIG_ROOT}/.claude/project-config.json" ];
   TRACKER_REPO=$(jq -r '.tracker_repo // empty' "${CONFIG_ROOT}/.claude/project-config.json" 2>/dev/null)
 fi
 if [ -z "$TRACKER_REPO" ]; then
-  ORIGIN_URL=$(git -C "$WORKDIR" remote get-url origin 2>/dev/null)
+  ORIGIN_URL=$(commit_repo_git remote get-url origin 2>/dev/null)
   TRACKER_REPO=$(echo "$ORIGIN_URL" | sed -nE 's|.*[:/]([^/:]+/[^/]+)\.git$|\1|p; s|.*[:/]([^/:]+/[^/]+)$|\1|p' | head -1)
 fi
 
@@ -400,8 +417,8 @@ fi
 # Upstream fallback only applies to the gh kind. Linear / Jira / Asana
 # don't have a fork-of-a-tracker concept.
 UPSTREAM_REPO=""
-if [ "$TRACKER_KIND" = "gh" ] && git -C "$WORKDIR" remote get-url upstream >/dev/null 2>&1; then
-  UPSTREAM_URL=$(git -C "$WORKDIR" remote get-url upstream 2>/dev/null)
+if [ "$TRACKER_KIND" = "gh" ] && commit_repo_git remote get-url upstream >/dev/null 2>&1; then
+  UPSTREAM_URL=$(commit_repo_git remote get-url upstream 2>/dev/null)
   UPSTREAM_REPO=$(echo "$UPSTREAM_URL" | sed -nE 's|.*[:/]([^/:]+/[^/]+)\.git$|\1|p; s|.*[:/]([^/:]+/[^/]+)$|\1|p' | head -1)
   # Don't double-check if upstream resolves to the same repo as the primary
   # tracker (e.g. running INSIDE the framework repo itself, where origin and
@@ -527,3 +544,17 @@ MSG
 fi
 
 exit 0
+
+}
+
+_GIT_GATE_INPUT=$(cat)
+_GIT_GATE_LIB="$(cd "$(dirname "$0")" && pwd)/_lib-git-global.sh"
+if [ -r "$_GIT_GATE_LIB" ]; then
+  # shellcheck disable=SC1090
+  . "$_GIT_GATE_LIB"
+fi
+if command -v git_visit_invocations >/dev/null 2>&1; then
+  git_visit_invocations _git_gate_body block "$_GIT_GATE_INPUT" commit
+  exit $?
+fi
+_git_gate_body

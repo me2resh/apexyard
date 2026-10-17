@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # PostToolUse hook on `git push`: surfaces invalidated review markers at
 # push-time instead of waiting until merge-time.
 #
@@ -41,7 +42,9 @@
 # TODO(apexyard#109): switch to the shared project-config reader once it lands.
 # For now we inline the default and read from config only if the file exists.
 
-INPUT=$(cat)
+# Run one target check. The visitor isolates each call in a subshell.
+_git_gate_body() {
+INPUT="$_GIT_GATE_INPUT"
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 
@@ -235,3 +238,17 @@ for MARKER in "$REVIEWS_DIR"/$MARKER_GLOB; do
 done
 
 exit 0
+
+}
+
+_GIT_GATE_INPUT=$(cat)
+_GIT_GATE_LIB="$(cd "$(dirname "$0")" && pwd)/_lib-git-global.sh"
+if [ -r "$_GIT_GATE_LIB" ]; then
+  # shellcheck disable=SC1090
+  . "$_GIT_GATE_LIB"
+fi
+if command -v git_visit_invocations >/dev/null 2>&1; then
+  git_visit_invocations _git_gate_body advisory "$_GIT_GATE_INPUT" push
+  exit $?
+fi
+_git_gate_body
