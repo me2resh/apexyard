@@ -2192,10 +2192,15 @@ def run_audit(args: argparse.Namespace) -> Tuple[AuditReport, int]:
             if e not in detected:
                 pass
 
-    # Exit 3 for unsupported files only when the tree has no npm or Python
-    # manifest and the operator did not pass an ecosystem filter.
-    unsupported_only = bool(unsupported) and not supported_found and eco_filter is None
     dep_sets = group_dependency_sets(root, manifests)
+    # Exit 3 for unsupported files only when no npm or Python dependency set
+    # is selected for checks and the operator did not pass an ecosystem
+    # filter. A not_applicable set (a tooling-only pyproject.toml) is not
+    # checked, so it does not count.
+    checkable_found = any(
+        ds.coverage not in ("excluded", "not_applicable") for ds in dep_sets
+    )
+    unsupported_only = bool(unsupported) and not checkable_found and eco_filter is None
     report = AuditReport(
         project=root.name,
         started_at=_now_iso(),

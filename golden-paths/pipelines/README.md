@@ -96,7 +96,7 @@ cp ~/apexyard/golden-paths/pipelines/ci.yml .github/workflows/
 
 **Agent**: Guardian (Dependency Auditor)
 
-**Ecosystems** (AgDR-0176 / issue #1359): npm and Python via a finite runner map. Other ecosystems stay out of scope for this first pass. Helper revision 4 lists known unsupported manifests in `not_scanned`. The helper exits 3 for those files only when no supported npm or Python manifest exists and no `--ecosystem` filter is set. A Critical finding still exits 1. Every other case keeps the normal exit code.
+**Ecosystems** (AgDR-0176 / issue #1359): npm and Python via a finite runner map. Other ecosystems stay out of scope for this first pass. Helper revision 4 lists known unsupported manifests in `not_scanned`. The helper exits 3 for those files only when no npm or Python dependency set is selected for checks and no `--ecosystem` filter is set. A Critical finding still exits 1. Every other case keeps the normal exit code.
 
 **Checks performed**:
 

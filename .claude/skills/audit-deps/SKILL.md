@@ -79,7 +79,7 @@ The helper does not add a NuGet runner.
 Discovery uses the same walk and the same ignored directories as npm and Python.
 
 The helper exits 3 for unsupported manifests only when both conditions are true.
-No supported npm or Python manifest is present.
+No npm or Python dependency set is selected for checks. A tooling-only `pyproject.toml` does not count, because it has no dependencies to check.
 No `--ecosystem` filter is given.
 The `--language` flag selects the same filter.
 A Critical finding still exits 1.
@@ -164,7 +164,7 @@ Produce one report. Include per-directory dependency sets and per-ecosystem sect
 | 4 | Complete selected coverage with Unknown vulnerability findings. |
 
 The helper exits 3 for unsupported manifests only when both conditions are true.
-No supported npm or Python manifest is present.
+No npm or Python dependency set is selected for checks. A tooling-only `pyproject.toml` does not count, because it has no dependencies to check.
 No `--ecosystem` filter is given.
 A Critical finding still exits 1.
 Every other case keeps the normal exit code.

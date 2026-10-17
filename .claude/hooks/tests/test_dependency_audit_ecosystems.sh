@@ -1584,6 +1584,31 @@ else
   fail "GH1744-dotnet-only-exits-3" "rc=$dotnet_rc err=$(head -c 200 "$SB/dotnet-only.err") body=$(head -c 400 "$SB/dotnet-only.json")"
 fi
 
+# A tooling-only pyproject.toml is not checked, so it must not turn an
+# unsupported-only tree into a clean pass.
+mkdir -p "$SB/projects/dotnet-tooling-py"
+cp "$SB/projects/dotnet-only/App.csproj" "$SB/projects/dotnet-tooling-py/App.csproj"
+printf '%s\n' '[tool.ruff]' 'line-length = 100' \
+  > "$SB/projects/dotnet-tooling-py/pyproject.toml"
+set +e
+python3 -I "$HELPER" "$SB/projects/dotnet-tooling-py" \
+  >"$SB/dotnet-tooling-py.json" 2>"$SB/dotnet-tooling-py.err"
+tooling_rc=$?
+set -e
+if python3 - "$SB/dotnet-tooling-py.json" "$tooling_rc" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+assert int(sys.argv[2]) == d["exit_code"] == 3
+assert d["unsupported_only"] is True
+assert [(item["path"], item["ecosystem"]) for item in d["not_scanned"]] == [("App.csproj", "nuget")]
+assert all(s["coverage"] == "not_applicable" for s in d["dependency_sets"])
+PY
+then
+  pass "GH1744-dotnet-plus-tooling-pyproject-exits-3"
+else
+  fail "GH1744-dotnet-plus-tooling-pyproject-exits-3" "rc=$tooling_rc err=$(head -c 200 "$SB/dotnet-tooling-py.err") body=$(head -c 400 "$SB/dotnet-tooling-py.json")"
+fi
+
 if python3 - "$SB/npm-and-go.json" "$npm_go_rc" "$SB/npm-and-go.md" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1], encoding="utf-8"))
