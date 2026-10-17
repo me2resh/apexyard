@@ -20,7 +20,7 @@
     "include": [
       "Cut the auto-code-review banner to at most 300 bytes. It keeps exit 2 and the pending-review marker and says: wait with a Monitor; then spawn Rex",
       "Say the same in the /code-review skill",
-      "A hook that blocks gh pr checks --watch and gh run watch and sleep of 60 seconds or more for review agents; it also blocks a second gh pr checks in one review run",
+      "A hook blocks gh pr checks --watch and gh run watch for review agents. It blocks sleep of 60 seconds or more. It also blocks a second gh pr checks in one review run.",
       "The hook names review agents by an allowlist of agent slugs in hook input. It uses the active-reviewer marker only when the input names a subagent with no type. Otherwise it allows the command, so the orchestrator is never blocked",
       "Hook tests for the banner size and each blocked command and an allowed single gh pr checks and an orchestrator command that is not blocked",
       "A first step that confirms what agent identity the hook input carries and records it in the PR",

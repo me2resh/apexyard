@@ -8,7 +8,7 @@
     "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261010T145545Z",
     "repositories": {}
   },
-  "objective": "Cut the input tokens per review for Rex and Hakim against a recorded baseline by setting omitClaudeMd with a short floor-rules block and trimming the Rex prompt, with no per-entry review-quality change beyond the measured run-to-run variance.",
+  "objective": "Cut the input tokens per review for Rex and Hakim against a recorded baseline. Set omitClaudeMd with a short floor-rules block and trim the Rex prompt. Allow no per-entry review-quality change beyond the measured run-to-run variance.",
   "why": "ac4-1 to ac4-3 are not-verified. Neither agent sets omitClaudeMd. .claude/agents/code-reviewer.md is about 73 KB and CLAUDE.md about 22 KB. code-reviewer.md does not repeat the always-on floor rules (ticket vocabulary and 80% coverage and git add rules) it enforces from CLAUDE.md. /eval-agents records no token usage, and docs/eval-agents/corpus/hakim.json has 4 entries. Every PR pays for at least one Rex review, so the saving repeats on every merge.",
   "contributesTo": [
     "ac4-1",

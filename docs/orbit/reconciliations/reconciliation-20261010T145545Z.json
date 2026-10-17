@@ -7,7 +7,7 @@
   "reconciledAt": "2026-10-10T14:55:45.174Z",
   "observations": [
     "Observed me2resh/apexyard at 53f0baeac19dd7855a59a38762c6696016e5092f.",
-    "Plan revision 3 rewords ac3-1, ac3-3 and ac4-1 to ac4-3 after vendor-doc checks: Codex managed hooks need a machine-wide sudo install, and autoCompactWindow is not a subagent setting. Other assessments carry over from revision 2."
+    "Plan revision 3 rewords ac3-1, ac3-3 and ac4-1 to ac4-3 after vendor-doc checks. Codex managed hooks need a machine-wide sudo install. autoCompactWindow is not a subagent setting. Other assessments carry over from revision 2."
   ],
   "criterionAssessments": [
     {
@@ -16,7 +16,7 @@
       "evidence": [
         "No per-hook timing profile exists in the repo at 53f0bae."
       ],
-      "explanation": "The profile has not been taken."
+      "explanation": "Missing: The profile has not been taken. Next: Record the per-hook timing profile."
     },
     {
       "criterionId": "ac1-2",
@@ -25,7 +25,7 @@
         "grep -n onFailure .claude/settings.json returns nothing.",
         "Only one hook sets a timeout today: .claude/settings.json line 107 (3 s, the context injector)."
       ],
-      "explanation": "No hook sets onFailure; a crashed hook fails open. Timeouts must come from the ac1-1 profile."
+      "explanation": "Missing: No hook sets onFailure, so a crashed hook fails open. Next: Take timeouts from the ac1-1 profile."
     },
     {
       "criterionId": "ac1-3",
@@ -33,7 +33,7 @@
       "evidence": [
         "No escape-hatch variable or settings override for fail-closed hooks is documented or tested."
       ],
-      "explanation": "Depends on ac1-2."
+      "explanation": "Missing: This criterion depends on ac1-2. Next: Finish ac1-2."
     },
     {
       "criterionId": "ac1-4",
@@ -42,7 +42,7 @@
         ".claude-plugin/marketplace.json exists on dev (from #1608).",
         "grep -rln 'plugin validate' .github/workflows returns nothing."
       ],
-      "explanation": "The manifest exists, but CI does not validate it."
+      "explanation": "Missing: CI does not validate the manifest. Next: Validate the manifest in CI."
     },
     {
       "criterionId": "ac2-1",
@@ -53,7 +53,7 @@
         "The Cursor CLI changelog (https://cursor.com/docs/cli/changelog, v2026.08.11) and https://cursor.com/docs/reference/third-party-hooks say Claude settings.json and plugin hooks load.",
         "bin/quality-regression.sh line 198 already runs cursor-agent -p --trust, so a test harness exists."
       ],
-      "explanation": "No recorded test artifact shows, gate by gate, whether .claude/settings.json hooks fire under cursor-agent -p. The repo claim is about hooks.json; the broader 'ignores hooks' wording is unproven."
+      "explanation": "Missing: No recorded test artifact shows whether .claude/settings.json hooks fire under cursor-agent -p. Next: Record that test. The repo claim is about hooks.json. The broader ignores-hooks wording is unproven."
     },
     {
       "criterionId": "ac2-2",
@@ -61,7 +61,7 @@
       "evidence": [
         "bin/install-cursor-adapter.sh line 161 prints that cursor-agent is NOT covered."
       ],
-      "explanation": "The docs state a claim with no recorded test artifact; they change after ac2-1."
+      "explanation": "Missing: The docs state a claim with no recorded test artifact. Next: Change the docs after ac2-1."
     },
     {
       "criterionId": "ac3-1",
@@ -70,7 +70,7 @@
         "bin/sync-codex-adapter.sh generates .codex/hooks.json from .claude/settings.json, with test_sync_codex_adapter.sh (AgDR-0088, #730).",
         "No setup step or check covers the Codex per-user hook trust state."
       ],
-      "explanation": "Codex skips untrusted hooks without a warning, so the trust step and the warning are both missing."
+      "explanation": "Missing: Codex skips untrusted hooks without a warning. Next: Add the trust step and the warning."
     },
     {
       "criterionId": "ac3-2",
@@ -78,16 +78,16 @@
       "evidence": [
         "grep -n apply_patch bin/sync-codex-adapter.sh returns nothing."
       ],
-      "explanation": "No shim maps apply_patch patch text to file paths."
+      "explanation": "Missing: No shim maps apply_patch patch text to file paths. Next: Add that shim."
     },
     {
       "criterionId": "ac3-3",
       "status": "partially-verified",
       "evidence": [
-        "No executable path passes the flag: .github/workflows/conformance.yml lines 194-198 seed ~/.codex/hooks.json instead, and bin/quality-regression.sh line 199 omits it.",
-        "Docs and skills offer the flag as one of three ways to grant hook trust: docs/harnesses/codex.md lines 3 and 52, docs/harnesses/README.md lines 28 and 51, .claude/skills/setup/SKILL.md line 509, .claude/skills/handover/SKILL.md line 245, .agents/skills/setup/SKILL.md line 500, .agents/skills/handover/SKILL.md line 270, docs/spike-848/findings.md line 154."
+        "No executable path passes the flag. .github/workflows/conformance.yml lines 194-198 seed the user Codex hooks file instead. bin/quality-regression.sh line 199 omits it.",
+        "Docs and skills offer the flag as one of three ways to grant hook trust. The offer is in docs/harnesses/codex.md lines 3 and 52, and in docs/harnesses/README.md lines 28 and 51. It is in .claude/skills/setup/SKILL.md line 509 and .claude/skills/handover/SKILL.md line 245. It is in .agents/skills/setup/SKILL.md line 500 and .agents/skills/handover/SKILL.md line 270. It is in docs/spike-848/findings.md line 154."
       ],
-      "explanation": "Scripts and workflows already avoid the flag; guidance still offers it, so the remaining work is docs and skills only."
+      "explanation": "Missing: Guidance still offers the flag. Next: Update docs and skills only. Scripts and workflows already avoid the flag."
     },
     {
       "criterionId": "ac3-4",
@@ -95,7 +95,7 @@
       "evidence": [
         "No test runs the Edit-matcher hooks in parallel."
       ],
-      "explanation": "Not tested."
+      "explanation": "Missing: This criterion is not tested. Next: Add the test."
     },
     {
       "criterionId": "ac4-1",
@@ -104,7 +104,7 @@
         "The Rex and Hakim agent files do not set omitClaudeMd at 53f0bae.",
         ".claude/agents/code-reviewer.md is about 73 KB."
       ],
-      "explanation": "Not started. omitClaudeMd needs Claude Code v2.1.271 or later."
+      "explanation": "Missing: The work has not started. Next: Set omitClaudeMd. It needs Claude Code v2.1.271 or later."
     },
     {
       "criterionId": "ac4-2",
@@ -113,7 +113,7 @@
         "No recorded input-token baseline per review exists.",
         "/eval-agents does not record token usage."
       ],
-      "explanation": "Not started. The measurement method is part of the slice."
+      "explanation": "Missing: The work has not started. Next: Define the measurement method in the slice."
     },
     {
       "criterionId": "ac4-3",
@@ -121,7 +121,7 @@
       "evidence": [
         "docs/eval-agents/corpus/rex.json has 10 entries; docs/eval-agents/corpus/hakim.json has 4."
       ],
-      "explanation": "The Hakim corpus is too small to detect a one-defect miss."
+      "explanation": "Missing: The Hakim corpus is too small to detect a one-defect miss. Next: Grow the corpus."
     },
     {
       "criterionId": "ac5-1",
@@ -129,7 +129,7 @@
       "evidence": [
         "golden-paths/ contains only pipelines/; no dependency-cruiser config exists in the repo."
       ],
-      "explanation": "Not started."
+      "explanation": "Missing: The work has not started. Next: Start this criterion."
     },
     {
       "criterionId": "ac5-2",
@@ -137,7 +137,7 @@
       "evidence": [
         "golden-paths/pipelines/code-quality.yml has no dependency-cruiser step."
       ],
-      "explanation": "Not started."
+      "explanation": "Missing: The work has not started. Next: Start this criterion."
     },
     {
       "criterionId": "ac5-3",
@@ -146,7 +146,7 @@
         "handbooks/architecture/clean-architecture-layers.md line 4 reads Enforcement: advisory.",
         "The handbook does not mention CI enforcement."
       ],
-      "explanation": "Advisory already, but the CI statement would be false until ac5-2 lands. Blocked by ac5-2."
+      "explanation": "Missing: The CI statement would be false until ac5-2 lands. Next: Land ac5-2. The handbook is advisory already."
     },
     {
       "criterionId": "ac6-1",
@@ -155,7 +155,7 @@
         ".claude/rules/code-standards.md has no logging section; grep -i log matches only line 40 (coverage).",
         "grep for aws-lambda-powertools in .claude/rules and golden-paths returns nothing."
       ],
-      "explanation": "Not started. Portfolio survey on 2026-10-10: one managed project uses Powertools."
+      "explanation": "Missing: The work has not started. Next: Record the logging recommendation. Portfolio survey on 2026-10-10: one managed project uses Powertools."
     },
     {
       "criterionId": "ac6-2",
@@ -164,7 +164,7 @@
         "handbooks/general/ holds only commit-message-quality.md.",
         ".claude/agents/code-reviewer.md has no logging or PII-in-logs rule; .claude/agents/security-reviewer.md line 167 checks PII handling in general."
       ],
-      "explanation": "Not started. The blocking handbook route avoids editing the Rex agent file, which o4 also changes."
+      "explanation": "Missing: The work has not started. Next: Add the blocking handbook without editing the Rex agent file. That file also changes in o4."
     },
     {
       "criterionId": "ac6-3",
@@ -172,7 +172,7 @@
       "evidence": [
         "No Logger port or adapter exists under golden-paths/."
       ],
-      "explanation": "Not started. Depends on ac5-1 for the dependency-cruiser rules."
+      "explanation": "Missing: The work has not started. Next: Finish ac5-1 for the dependency-cruiser rules."
     },
     {
       "criterionId": "ac7-1",
@@ -180,7 +180,7 @@
       "evidence": [
         "No wrapper script or result schema for codex exec or cursor-agent exists in bin/."
       ],
-      "explanation": "Builds are reported from the build agent's own text today."
+      "explanation": "Missing: Builds are reported from the build agent's own text today. Next: Replace that report with a checked result."
     },
     {
       "criterionId": "ac7-2",
@@ -188,7 +188,7 @@
       "evidence": [
         "No offload guidance points at a wrapper."
       ],
-      "explanation": "Depends on ac7-1."
+      "explanation": "Missing: This criterion depends on ac7-1. Next: Finish ac7-1."
     }
   ]
 }

@@ -8,7 +8,7 @@
     "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261010T145545Z",
     "repositories": {}
   },
-  "objective": "Make the dispatch-bash.sh and ticket-first gates fail closed with timeouts taken from a recorded per-hook timing profile, document and test the disableAllHooks launch override as the escape hatch, and validate the plugin marketplace in CI.",
+  "objective": "Make the dispatch-bash.sh and ticket-first gates fail closed. Take timeouts from a recorded per-hook timing profile. Document and test the disableAllHooks launch override as the escape hatch. Validate the plugin marketplace in CI.",
   "why": "The reconciliation finds all four o1 criteria not-verified. No hook entry in .claude/settings.json sets onFailure and only line 107 sets a timeout, so a crashed or hung gate lets the tool call through. Inside dispatch-bash.sh run_hook (lines 59-80) turns any sub-gate exit other than 2 into a WARN, so a crashed ticket-first gate also fails open there. The four merge gates already fail closed through run_merge_gate_hook (#1403). .claude-plugin/marketplace.json has no description, so claude plugin validate --strict fails today, and no workflow runs it. o2 and o3 add more gates, so the gate failure mode must be fixed first.",
   "contributesTo": [
     "ac1-1",
@@ -22,7 +22,7 @@
       "Set onFailure block on the dispatch-bash.sh and require-active-ticket.sh entries with a timeout of at least 5 x p95 and never under 10 s",
       "Route ticket-first inside dispatch-bash.sh through the fail-closed path the merge gates use",
       "Record the minimum Claude Code version for onFailure (v2.1.295) and what older clients do with the field",
-      "Document claude --settings with disableAllHooks true as the operator escape hatch and add a CI test that hooks are on by default and off under the override",
+      "Document claude --settings with disableAllHooks true as the operator escape hatch. Add a CI test that hooks are on by default and off under the override.",
       "Add the missing description to .claude-plugin/marketplace.json",
       "Add a CI step with a pinned Claude Code version that runs claude plugin validate --strict on .claude-plugin/marketplace.json"
     ],

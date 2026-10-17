@@ -2,6 +2,15 @@
 
 These notes sit beside the Plan record because the ORBIT v0.1 Plan schema has no fields for constraints, decisions, or revision history. The Plan record stays valid ORBIT.
 
+## Interview
+
+- 2026-10-10, q1-outcome: Gates fail closed without locking the operator out. Hook cost is measured. Gates run in Claude Code, Codex, and Cursor.
+- 2026-10-10, q2-intent: Keep one DDD rule set, one logging standard, and native gates on each harness. Do not mandate one logger.
+- 2026-10-10, q3-outcomes: Seven outcomes: fail-closed gates, Cursor coverage, Codex native gates, review-agent token trim, DDD boundaries, a logging standard, and an offload result schema.
+- 2026-10-10, q4-acceptance: Each outcome has acceptance criteria in the Plan record. Proof stays in these notes.
+- 2026-10-10, q5-constraints: C1 governance wins. C2 one slice, one ticket, one PR. C3 opt-in for adopters. C4 no machine-wide install.
+- 2026-10-10, q6-save: Saved with the plan record on 2026-10-10. Revision history below records revisions 1 to 3.
+
 ## Constraints
 
 - **C1. ApexYard governance wins.** No slice bypasses tickets, reviews, review markers, or merges.

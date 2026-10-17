@@ -78,6 +78,7 @@ The override applies once. After a successful sync, the anchor is rewritten from
 | `v5.6.2-to-v5.6.3.sh` | No file move. Prints the Cursor overlay reinstall commands. A leftover full `~/.cursor/hooks.json` can lock the IDE (AgDR-0151). | Cursor adopters who installed the old generated adapter. |
 | `v5.6.3-to-v5.7.0.sh` | No file move. Prints how to turn off the new behind-base check in `/approve-merge` (#1406) with `merge.require_up_to_date: false`. | Adopters who do not want `/approve-merge` to stop on a PR that is behind its base. |
 | `v5.7.0-to-v5.8.0.sh` | No file move. Reports unused `mcp_search` config keys left after the search MCP integration was removed (#1537), and notes that edits under `.claude/worktrees/` now need an active ticket (#1531). | Adopters who set `mcp_search`, or who edit files in agent worktrees. |
+| `v5.8.0-to-v5.9.0.sh` | No file move. Notes that `/start-ticket` writes a second marker into the git dir and that each linked worktree needs its own `/start-ticket` (#1576). Notes that the dispatcher and the ticket gate fail closed and need Claude Code 2.1.295 or later for `onFailure` (#1623). | Adopters who use linked worktrees, or who run Claude Code older than 2.1.295. |
 
 When a future release adds a migration, this table is the source of truth — the release PR template requires a row to be added here.
 

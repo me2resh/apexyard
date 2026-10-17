@@ -18,12 +18,12 @@
     "include": [
       "Flips use the #1652 definition and its baseline-variance rule: a flip is an after verdict that never appeared in the baseline runs of that entry",
       "Hakim, step 1: trim security-reviewer.md to 12,000 bytes with CLAUDE.md kept, and run one /eval-agents cycle",
-      "Hakim, step 2: compare the baseline and omitClaudeMd transcripts on hakim-1546-f78c8ae25, move any CLAUDE.md content Hakim used into its prompt, add omitClaudeMd, and run a second cycle. hakim-1546-f78c8ae25 runs at k=19 with 0 misses, which bounds the miss rate below about 15%",
+      "Hakim, step 2: compare the baseline and omitClaudeMd transcripts on hakim-1546-f78c8ae25. Move any CLAUDE.md content Hakim used into its prompt. Add omitClaudeMd, and run a second cycle. hakim-1546-f78c8ae25 runs at k=19 with 0 misses, which bounds the miss rate below about 15%",
       "If step 2 finds no movable content or Hakim flips, Hakim keeps CLAUDE.md, ac5-1 stays partial for Hakim, and the PR records this. The other agents still ship",
       "Build docs/eval-agents/corpus/tariq.json from real Tariq rounds with a confirmed_fix oracle: at least 5 GOOD_CATCH and 2 clean entries. If they do not exist, stop before the Tariq cut and report",
       "Trim solution-architect.md to 12,000 bytes and set omitClaudeMd, then run one Tariq cycle with zero flips",
       "omitClaudeMd and a floor block in contrarian, qa-engineer, dependency-auditor and penetration-tester. Each agent gets a per-agent floor block with only the rules it uses",
-      "Smoke check for those four: spawn each once on a fixed input with and without CLAUDE.md, and compare the output shape and the o1 first-turn context in the PR",
+      "Smoke check for those four. Spawn each once on a fixed input with and without CLAUDE.md. Compare the output shape and the o1 first-turn context in the PR.",
       "test_reviewer_floor_block.sh fails when one of the seven agents lacks omitClaudeMd or its floor block, and when a build agent sets omitClaudeMd",
       "Rationale moves under docs/agents/, the ops-root and marker text is one line, and each moved rule has a text-pin test",
       "The o1 first-turn context per agent type, before and after, in the PR"

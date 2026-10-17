@@ -1,4 +1,4 @@
-# AgDR-0241: Compare Windows paths in one POSIX form
+# AgDR-0246: Compare Windows paths in one POSIX form
 
 > Issues 1724, 1725, 1737, and 1738 share one fix.
 > Drive-letter paths use one string transform.

@@ -1,4 +1,6 @@
-## [Unreleased]
+## [v5.9.0] — 2026-10-15
+
+Minor release — 25 features, 6 fixes, 41 improvements.
 
 Behaviour change: the active ticket now lives in each working tree's git dir (#1576, AgDR-0222). `/start-ticket` writes `apexyard-ticket` into the git dir of the tree you run it in. Each linked worktree needs its own `/start-ticket`. `git worktree remove` deletes the marker with the worktree.
 
@@ -31,6 +33,101 @@ Behaviour change: the active ticket now lives in each working tree's git dir (#1
 - `/approve-merge` offers to remove the merged PR's worktree. It asks first and never uses `--force`.
 - The macOS hook test run is cheaper (#1613, AgDR-0229). `_lib-extract-pr.sh` skips five process launches whose result is known in advance, so one call of `block-merge-on-red-ci.sh` takes 81 ms instead of 139 ms on macOS. No gate decision changes. `bin/run-hook-tests.sh` packs `--shard I/N` by the measured weights in `bin/hook-test-weights.txt` and keeps round-robin when that file is missing. Five merge-gate tests write the same mock text in every case. The report is `docs/perf/hook-test-profile-2026-10-round2.md`.
 - A records PR may use the branch `orbit/<initiative-id>-<description>` and the title `docs(orbit/<initiative-id>): <description>` without a ticket (#1673). `validate-branch-name.sh`, `validate-pr-create.sh` and the PR title check allow this only when every changed file is under `docs/orbit/`. They compare the branch with a remote-tracking trunk ref. They block when they cannot tell, and the message names the normal `{type}/{TICKET-ID}-{description}` shape. The branch resolves the longest existing Plan ID prefix and blocks unknown initiatives. The PR body and commits carry `Initiative: plan-<initiative-id>`. Records lint blocks cross-initiative records and unreferenced snapshots. Review gates, merge gates and per-PR approval do not change.
+
+### Added (feat)
+
+- (#1722) ship the hardened typescript-nextjs starter — 454515c0
+- (#1721) let a slice PR propose the next slice — 9c60047a
+- (#1716) generate a project at the stack-agnostic floor — 1ddd8d73
+- (#1714) let a slice PR carry its own ORBIT progress — fa31b704
+- (#1709) add the hosting-first /scaffold interview and scaffold spec — 27de5bdb
+- (#1689) approve a merge or design review from a menu — f08a17da
+- (#1685) let a sanctioned reviewer write to its session scratchpad — 3bae7412
+- (#1687) write the rule-body exclude per clone — d83489f3
+- (#1688) let agent reviews post as an opt-in GitHub App — e7d1c5f5
+- (#1681) add the Bootcamp pane, a guided presentation beside the session — d1cea51f
+- (#1678) start review and audit agents lean and trim Hakim and Tariq — e6ce53ce
+- (#1666) add the apexyard-explainer pane plugin — 832ed3b4
+- (#1676) ORBIT pane shows initiatives and work in flight — 739888bc
+- (#1663) make the skill bodies on the execution path short — e1d1f3a3
+- (#1652) trim Rex input tokens with omitClaudeMd and a floor-rules block — 9b25c837
+- (#1651) run reviews in parallel by detecting review agents by type — 425a4ab2
+- (#1648) fail closed on the dispatcher and ticket-first gates — 48929388
+- (#1631) add the apexyard-status band as a fork-only plugin — 919081a7
+- (#1634) reviewers check CI once and never wait — be687ba7
+- (#1633) add one script that reports token and time cost — f76b86fb
+- (#1630) add records lint, cycle PR flow and live status to /orbit — 49c39add
+- (#1629) mine Rex-approved commits that Hakim or Tariq rejected — bbb2ba49
+- (#1608) add the apexyard plugin marketplace with the orbit plugin — d5b2095c
+- (#1584) store the ticket marker in each working tree's git dir — c40c4c79
+- (#1583) load a managed project's context on first touch — ea237219
+
+### Fixed (fix)
+
+- (#1672) add a blank line after a new Checks heading — 3ae6d00b
+- (#1668) read a brace for body like do in the reviewer CI-wait guard — 1b5454ad
+- (#1657) treat jq arguments as data in merge-command detection — 28548371
+- (#1642) lint only changed text fields in records — 3e92ebe8
+- (#1606) govern ORBIT ticket prefixes from orbit.governed_prefixes — d276b2f3
+- (#1607) read every repo flag spelling in the merge gates — 48826140
+
+### Changed (refactor / chore / docs)
+
+- (#1719) cut the o2 starter slice — 59290075
+- (#1717) slice PRs propose the next slice (revision 5) — 7d1e09d4
+- (#1712) let Rex review a Reconciliation in the PR diff (revision 4) — 31804dec
+- (#1711) show slice progress at merge (revision 4) — 73267ccb
+- (#1710) name the initiative, reconcile o1 and cut the o2 floor slice — 0890c021
+- (#1707) revision 2 and slice o1 — a9e9ab1a
+- (#1695) require a recorded operator interview before a Plan revision — 7fa4e16a
+- (#1667) fix disagreement miner grouping and verdict edge cases — e68ea138
+- (#1691) light CI per PR, full matrix on merge, nightly and release — 14e09533
+- (#1693) add scaffold initiative records — 81b0e545
+- (#1692) reconcile o6 evidence — a64323a2
+- (#1686) keep ORBIT criteria short and record proof separately — edf06198
+- (#1675) allow orbit/ records branches without a ticket — e3e2a60f
+- (#1683) accept a chain of clean base merges in carry-over — cba7a49e
+- (#1684) keep zsh path variables raw and silence the zsh export warning — e93df705
+- (#1679) refresh ready-to-merge PRs after each merge — 400db9b4
+- (#1670) add the o5 effort spike and o2 build slices — 7ace6ba6
+- (#1659) cut macOS hook test cost with exact fast paths and weighted shards — 0eda7851
+- (#1656) close remaining reviewer CI-wait patterns and cut hook cost — 3a31d4eb
+- (#1658) let adopters add review agent types to the review lock — d740fbee
+- (#1655) make the handoff leak-scrub test prove the scrub works — 5c7bee70
+- (#1654) add the o5 and o6 slices and reconcile the token plan at 9b25c83 — d2af086f
+- (#1646) record the auto-compaction window spike and recommended setting — 8c7ef8be
+- (#1647) add the o9 slice so reviews run in parallel — 7d314c04
+- (#1645) record AgDR-0226, the ORBIT Initiative replaces Plan — ba80f6cb
+- (#1643) check Rex carry-over before a refresh re-review — cf3e4070
+- (#1635) record token plan r3 cycle after o1, o4 and o8 merged — db03eb04
+- (#1628) reconcile the orbit-build plan at 49a2979 — 0234ea50
+- (#1622) record token plan r2 cycle with AgDR-0225 — 49a2979b
+- (#1621) add the o1 slice of the token-efficiency plan — 692c17e8
+- (#1620) record the ORBIT plan for token efficiency — 9ae097ac
+- (#1617) record the ORBIT plan for gate hardening and golden paths — bace9dbc
+- (#1615) profile the slowest hook tests and cut redundant work — 6d2ef1ba
+- (#1614) split the macOS hook-test job into four shards — 53f0baea
+- (#1610) share one quoted-flag parser across four hooks — 2fe379f7
+- (#1611) share one awk-with-fallback helper and one line join — 20f721c2
+- (#1605) bump TypeScript to 7.0.2 in both harness adapters — 7a142139
+- (#1609) bound project-context reads and read frontmatter safely — 072b4404
+- (#1600) credit NagyWesley as a code contributor — 7771238f
+- (#1602) batch the harness-adapter minor and patch bumps — 02392d02
+- (#1597) credit new contributors and issue authors in the README — f3b23610
+
+### Closes
+
+- Closes #1576
+- Closes #1585
+- Closes #1586
+- Closes #1587
+- Closes #1588
+- Closes #1596
+- Closes #1598
+- Closes #1599
+- Closes #1601
+- Closes #1603
+- Closes #1604
 
 ## [v5.8.0] — 2026-10-08
 

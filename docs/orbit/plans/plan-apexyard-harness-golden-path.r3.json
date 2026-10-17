@@ -6,11 +6,11 @@
     "id": "apexyard"
   },
   "title": "Harden the gates across harnesses and set golden-path standards for logging and DDD boundaries",
-  "intent": "ApexYard gates fail closed without locking the operator out, their cost is measured, and they run natively in every harness the framework builds with (Claude Code, Codex, Cursor), using the hook features those CLIs shipped in September and October 2026. Review agents cost measurably fewer tokens without losing review quality. Managed TypeScript projects get one mechanically enforced set of DDD layer rules (dependency-cruiser), shipped as copyable golden-path files; CI is the enforcement point and the clean-architecture handbook stays advisory and says so. Logging is not tied to one library: the framework states what good logging must provide, recommends @aws-lambda-powertools/logger behind a swappable Logger port, and Rex flags missing logging and blocks PII or secrets in logs.",
+  "intent": "ApexYard gates fail closed without locking the operator out. Their cost is measured. They run natively in Claude Code, Codex, and Cursor. They use the hook features those CLIs shipped in September and October 2026. Review agents cost measurably fewer tokens without losing review quality. Managed TypeScript projects get one enforced set of DDD layer rules. The rules use dependency-cruiser. They ship as copyable golden-path files. CI is the enforcement point. The clean-architecture handbook stays advisory and says so. Logging is not tied to one library. The framework states what good logging must provide. It recommends @aws-lambda-powertools/logger behind a swappable Logger port. Rex flags missing logging. Rex blocks PII or secrets in logs.",
   "outcomes": [
     {
       "id": "o1-gates-fail-closed-measured",
-      "title": "Hook cost is measured per hook, the dispatcher and ticket-first gates fail closed with measured timeouts and a tested escape hatch, and CI validates the plugin marketplace."
+      "title": "Hook cost is measured per hook. The dispatcher and ticket-first gates fail closed with measured timeouts and a tested escape hatch. CI validates the plugin marketplace."
     },
     {
       "id": "o2-cursor-gate-coverage",
@@ -30,7 +30,7 @@
     },
     {
       "id": "o6-logging-standard",
-      "title": "The framework defines what application logging must provide and recommends a library without mandating one, and Rex flags missing logging and blocks PII or secrets in log statements."
+      "title": "The framework defines what application logging must provide. It recommends a library without mandating one. Rex flags missing logging and blocks PII or secrets in log statements."
     },
     {
       "id": "o7-offload-result-schema",
@@ -41,7 +41,7 @@
     {
       "id": "ac1-1",
       "outcomeId": "o1-gates-fail-closed-measured",
-      "statement": "A per-hook timing profile from claude --debug for one representative session is recorded in the repo before any onFailure change, and it sets the timeout for each hook that ac1-2 changes."
+      "statement": "A per-hook timing profile from claude --debug for one representative session is recorded in the repo before any onFailure change. It sets the timeout for each hook that ac1-2 changes."
     },
     {
       "id": "ac1-2",
@@ -51,7 +51,7 @@
     {
       "id": "ac1-3",
       "outcomeId": "o1-gates-fail-closed-measured",
-      "statement": "A named escape hatch (an environment variable or a settings override) lets the operator recover when a fail-closed hook is broken, it is documented, and a CI test proves it works and that it is off by default."
+      "statement": "A named escape hatch lets the operator recover when a fail-closed hook is broken. The hatch is an environment variable or a settings override. It is documented. A CI test proves it works and that it is off by default."
     },
     {
       "id": "ac1-4",
@@ -71,12 +71,12 @@
     {
       "id": "ac3-1",
       "outcomeId": "o3-codex-native-gates",
-      "statement": "Setup walks each user through the Codex one-time hook trust step, a check warns when the ApexYard hooks are untrusted or their trust is stale after a hook change, and the existing bin/sync-codex-adapter.sh drift test still passes. No sudo or machine-wide install is required."
+      "statement": "Setup walks each user through the Codex one-time hook trust step. A check warns when the ApexYard hooks are untrusted. It also warns when their trust is stale after a hook change. The existing bin/sync-codex-adapter.sh drift test still passes. No sudo or machine-wide install is required."
     },
     {
       "id": "ac3-2",
       "outcomeId": "o3-codex-native-gates",
-      "statement": "An apply_patch shim gives the file-path gates the paths changed by a Codex patch, so ticket-first and leak gates block a Codex edit the same way they block a Claude edit."
+      "statement": "An apply_patch shim gives the file-path gates the paths changed by a Codex patch. Ticket-first and leak gates block a Codex edit the same way they block a Claude edit."
     },
     {
       "id": "ac3-3",
@@ -91,17 +91,17 @@
     {
       "id": "ac4-1",
       "outcomeId": "o4-review-agent-token-trim",
-      "statement": "The Rex and Hakim agent files set omitClaudeMd, carry the always-on floor rules they enforce in a short block of their own, and the Rex prompt is trimmed."
+      "statement": "The Rex and Hakim agent files set omitClaudeMd. They carry the always-on floor rules they enforce in a short block of their own. The Rex prompt is trimmed."
     },
     {
       "id": "ac4-2",
       "outcomeId": "o4-review-agent-token-trim",
-      "statement": "Input tokens per review, measured from subagent transcript usage with cache-read tokens counted separately, drop by a stated percentage against a recorded baseline for both agents."
+      "statement": "Input tokens per review drop by a stated percentage against a recorded baseline for both agents. The measure uses subagent transcript usage and counts cache-read tokens separately."
     },
     {
       "id": "ac4-3",
       "outcomeId": "o4-review-agent-token-trim",
-      "statement": "The Hakim eval corpus has at least 10 entries, and k repeated /eval-agents runs before and after the change show no per-entry verdict flips beyond the observed baseline variance."
+      "statement": "The Hakim eval corpus has at least 10 entries. k repeated /eval-agents runs before and after the change show no per-entry verdict flips beyond the observed baseline variance."
     },
     {
       "id": "ac5-1",
@@ -121,22 +121,22 @@
     {
       "id": "ac6-1",
       "outcomeId": "o6-logging-standard",
-      "statement": ".claude/rules/code-standards.md states what application logging must provide (structured output, levels, a correlation ID, log entries on error paths and external calls, no PII or secrets) and recommends @aws-lambda-powertools/logger for TypeScript backends without mandating it."
+      "statement": ".claude/rules/code-standards.md states what application logging must provide. That includes structured output, levels, a correlation ID, and log entries on error paths and external calls. It includes no PII or secrets. It recommends @aws-lambda-powertools/logger for TypeScript backends without mandating it."
     },
     {
       "id": "ac6-2",
       "outcomeId": "o6-logging-standard",
-      "statement": "handbooks/general/logging.md, marked ENFORCEMENT: blocking and loaded by Rex for application-code diffs, has Rex request changes when a log statement passes a raw request or entity object, req, body, headers, a token, a password, or a named PII field to a logger, and flag missing logging on error paths and external calls as advisory; labeled fixtures prove one blocked case, one allowed ID-only case, and one advisory case."
+      "statement": "handbooks/general/logging.md is marked ENFORCEMENT: blocking. Rex loads it for application-code diffs. Rex requests changes when a log statement passes a raw request or entity object to a logger. The same block covers req, body, headers, a token, a password, or a named PII field. Rex flags missing logging on error paths and external calls as advisory. Labeled fixtures prove one blocked case, one allowed ID-only case, and one advisory case."
     },
     {
       "id": "ac6-3",
       "outcomeId": "o6-logging-standard",
-      "statement": "golden-paths/typescript/ ships a Logger port in the application layer and a Powertools adapter in infrastructure as a swappable example, with a test, and the adapter passes the ac5-1 dependency-cruiser rules."
+      "statement": "golden-paths/typescript/ ships a Logger port in the application layer and a Powertools adapter in infrastructure. The adapter is a swappable example with a test. The adapter passes the ac5-1 dependency-cruiser rules."
     },
     {
       "id": "ac7-1",
       "outcomeId": "o7-offload-result-schema",
-      "statement": "A result JSON schema and a named wrapper script run codex exec or cursor-agent with structured output, validate the result against the schema, and exit non-zero on a schema failure."
+      "statement": "A result JSON schema and a named wrapper script run codex exec or cursor-agent with structured output. They validate the result against the schema. They exit non-zero on a schema failure."
     },
     {
       "id": "ac7-2",
