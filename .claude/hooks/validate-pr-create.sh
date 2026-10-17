@@ -907,60 +907,64 @@ if echo "$COMMAND" | grep -qE '\-\-body(-file)?\b|[[:space:]]-F[[:space:]]'; the
   # raw command (so inline --body "..." also matches).
   HAYSTACK=$(printf '%s\n%s\n' "$BODY_CONTENT" "$COMMAND")
 
-  # Load additional required sections from project config (shared reader).
-  # Source via HOOK_DIR so this works regardless of cwd (inside a workspace
-  # clone, REPO_ROOT would point at the project — _lib-read-config.sh itself
-  # resolves the config files relative to the ops fork).
-  # shellcheck disable=SC1090,SC1091
-  REQUIRED_SECTIONS=""
-  if [ -f "$HOOK_DIR/_lib-read-config.sh" ]; then
-    . "$HOOK_DIR/_lib-read-config.sh"
-    REQUIRED_SECTIONS=$(config_get '.pr.required_sections[]' 2>/dev/null)
-  fi
-  # Fallbacks for bare checkouts predating the config schema.
-  if [ -z "$REQUIRED_SECTIONS" ]; then
-    REQUIRED_SECTIONS=$(printf 'Testing\nGlossary')
-  fi
-  # The AgDR-0161 validator is shared with Rex and Tariq. Do not treat
-  # an unreadable body as evidence that any section is missing.
-  # shellcheck source=/dev/null
-  if ! . "$HOOK_DIR/_lib-review-markers.sh"; then
-    echo "validate-pr-create.sh: review validator unavailable" >&2
-    exit 2
-  fi
-  if [ "$BODY_FILE_UNREADABLE" -eq 1 ]; then
-    _unchecked=$(printf '%s\nSummary\nTesting\nGlossary\n' "$REQUIRED_SECTIONS" | sed '/^$/d' | sed 's/^/## /' | paste -sd, - | sed 's/,/, /g')
-    ERRORS="${ERRORS}PR body file could not be read: ${BODY_FILE}\n"
-    ERRORS="${ERRORS}  The required-section check was NOT run, so these are UNVERIFIED, not missing: ${_unchecked}; Closes or Refs line.\n"
-    ERRORS="${ERRORS}  Fix the path (check for a typo, or make it absolute) and retry.\n"
+  if [ -n "$EXTERNAL_TARGET" ]; then
+    echo "NOTE: validate-pr-create.sh: ${CMD_REPO} is listed in .external_contributions — apexyard body rules do not apply to an external contribution. Follow that project's own CONTRIBUTING.md." >&2
   else
-    if [ -n "$BODY_FILE" ]; then
-      review_validate_body pr "$BODY_FILE" "$REQUIRED_SECTIONS" "${ORBIT_BODY_INITIATIVE:-}" 2>/dev/null
-    else
-      # review_validate_body requires a regular file (-f). A process-substitution
-      # fd is not a regular file on Linux, so materialise HAYSTACK via mktemp.
-      _pr_body_temp=$(mktemp) || {
-        echo "validate-pr-create.sh: could not create body check file" >&2
-        exit 2
-      }
-      printf '%s\n' "$HAYSTACK" > "$_pr_body_temp"
-      review_validate_body pr "$_pr_body_temp" "$REQUIRED_SECTIONS" "${ORBIT_BODY_INITIATIVE:-}" 2>/dev/null
-      rm -f "$_pr_body_temp"
+    # Load additional required sections from project config (shared reader).
+    # Source via HOOK_DIR so this works regardless of cwd (inside a workspace
+    # clone, REPO_ROOT would point at the project — _lib-read-config.sh itself
+    # resolves the config files relative to the ops fork).
+    # shellcheck disable=SC1090,SC1091
+    REQUIRED_SECTIONS=""
+    if [ -f "$HOOK_DIR/_lib-read-config.sh" ]; then
+      . "$HOOK_DIR/_lib-read-config.sh"
+      REQUIRED_SECTIONS=$(config_get '.pr.required_sections[]' 2>/dev/null)
     fi
-    if [ "$REVIEW_VALIDATION_RESULT" != complete ]; then
-      if [ -z "$REVIEW_VALIDATION_MISSING" ]; then
-        ERRORS="${ERRORS}PR body failed completeness validation.\n"
+    # Fallbacks for bare checkouts predating the config schema.
+    if [ -z "$REQUIRED_SECTIONS" ]; then
+      REQUIRED_SECTIONS=$(printf 'Testing\nGlossary')
+    fi
+    # The AgDR-0161 validator is shared with Rex and Tariq. Do not treat
+    # an unreadable body as evidence that any section is missing.
+    # shellcheck source=/dev/null
+    if ! . "$HOOK_DIR/_lib-review-markers.sh"; then
+      echo "validate-pr-create.sh: review validator unavailable" >&2
+      exit 2
+    fi
+    if [ "$BODY_FILE_UNREADABLE" -eq 1 ]; then
+      _unchecked=$(printf '%s\nSummary\nTesting\nGlossary\n' "$REQUIRED_SECTIONS" | sed '/^$/d' | sed 's/^/## /' | paste -sd, - | sed 's/,/, /g')
+      ERRORS="${ERRORS}PR body file could not be read: ${BODY_FILE}\n"
+      ERRORS="${ERRORS}  The required-section check was NOT run, so these are UNVERIFIED, not missing: ${_unchecked}; Closes or Refs line.\n"
+      ERRORS="${ERRORS}  Fix the path (check for a typo, or make it absolute) and retry.\n"
+    else
+      if [ -n "$BODY_FILE" ]; then
+        review_validate_body pr "$BODY_FILE" "$REQUIRED_SECTIONS" "${ORBIT_BODY_INITIATIVE:-}" 2>/dev/null
       else
-        while IFS= read -r section; do
-          [ -z "$section" ] && continue
-          if [ "$section" = 'Closes or Refs line' ]; then
-            ERRORS="${ERRORS}PR body missing required Closes or Refs line.\n"
-          else
-            ERRORS="${ERRORS}PR body missing required '## ${section}' section.\n"
-          fi
-        done <<EOF
+        # review_validate_body requires a regular file (-f). A process-substitution
+        # fd is not a regular file on Linux, so materialise HAYSTACK via mktemp.
+        _pr_body_temp=$(mktemp) || {
+          echo "validate-pr-create.sh: could not create body check file" >&2
+          exit 2
+        }
+        printf '%s\n' "$HAYSTACK" > "$_pr_body_temp"
+        review_validate_body pr "$_pr_body_temp" "$REQUIRED_SECTIONS" "${ORBIT_BODY_INITIATIVE:-}" 2>/dev/null
+        rm -f "$_pr_body_temp"
+      fi
+      if [ "$REVIEW_VALIDATION_RESULT" != complete ]; then
+        if [ -z "$REVIEW_VALIDATION_MISSING" ]; then
+          ERRORS="${ERRORS}PR body failed completeness validation.\n"
+        else
+          while IFS= read -r section; do
+            [ -z "$section" ] && continue
+            if [ "$section" = 'Closes or Refs line' ]; then
+              ERRORS="${ERRORS}PR body missing required Closes or Refs line.\n"
+            else
+              ERRORS="${ERRORS}PR body missing required '## ${section}' section.\n"
+            fi
+          done <<EOF
 ${REVIEW_VALIDATION_MISSING}
 EOF
+        fi
       fi
     fi
   fi
