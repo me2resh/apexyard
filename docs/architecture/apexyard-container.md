@@ -62,7 +62,7 @@ The diagram captures which "container" does what *when interpreted by the right 
 ## Key relationships
 
 - **CLAUDE.md → rules** is the single most important arrow. CLAUDE.md indexes every rule file by name. The agent Reads a named file when the work needs it. Hooks remain the mechanical gates. Without the index, rules are orphaned prose.
-- **hooks → github** — hooks call `gh` directly (e.g. `block-merge-on-red-ci.sh` runs `gh pr checks`). This is how ApexYard's mechanical enforcement reaches the remote tracker state.
+- **hooks → github** — hooks call `gh` directly (e.g. `block-merge-on-red-ci.sh` runs `gh pr checks`). When that command does not return a CI result, the hook reads commit check-runs and the combined commit status (AgDR-0244). This is how ApexYard's mechanical enforcement reaches the remote tracker state.
 - **skills → github** — skills are the user-facing portfolio-aware commands. Most call `gh` at some point; some also read the registry to iterate.
 - **skills → registry / projectdocs** — the portfolio-level read/write flow. `/inbox` / `/status` / `/projects` / `/stakeholder-update` all live here.
 - **cursor → skills** — Cursor loads `.claude/skills/` only as the fork skill root. Open the fork, not a parent that also holds `custom-skills/`. Override bak dirs keep a recoverable copy (manual restore; `/update` does not restore) but do not expose a second `SKILL.md` name (AgDR-0187 / #1377).
