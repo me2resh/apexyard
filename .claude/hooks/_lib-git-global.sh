@@ -227,11 +227,13 @@ git_prepare_invocation() {
 }
 
 # Run git in the repository selected by git_prepare_invocation.
+# Call plain git, as the gates did before. A caller can then replace git
+# with a shell function, as the /scaffold scan shim does.
 git_target() {
   if [ "${#GIT_REPLAY_ARGS[@]}" -gt 0 ]; then
-    command git "${GIT_REPLAY_ARGS[@]}" "$@"
+    git "${GIT_REPLAY_ARGS[@]}" "$@"
   else
-    command git "$@"
+    git "$@"
   fi
 }
 
