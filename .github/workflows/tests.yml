@@ -143,11 +143,13 @@ jobs:
               fi
             fi
           fi
+          # The reviewed snapshot ref exists only in upstream, not in forks.
+          snapshot_upstream=me2resh/apexyard
           snapshot_repo=$(mktemp -d)
           trap 'rm -rf "$snapshot_repo"' EXIT
           git -C "$snapshot_repo" init -q --bare
           git -C "$snapshot_repo" fetch -q --no-tags \
-            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" \
+            "$GITHUB_SERVER_URL/$snapshot_upstream.git" \
             refs/pull/1466/head:refs/heads/reviewed-snapshots
           # Pin full 40-character SHAs for the reviewed command-scrub snapshots
           # (PR #1466). Short SHAs can become ambiguous as history grows.
@@ -158,7 +160,9 @@ jobs:
             1fea7308d0a6de4412198b1bc645ada8a47a8f05
           do
             if ! git -C "$snapshot_repo" cat-file -e "${sha}^{commit}" 2>/dev/null; then
-              echo "CI snapshot proof failed: commit ${sha} is not present after fetching refs/pull/1466/head" >&2
+              echo "CI snapshot proof failed: commit ${sha}" \
+                "is not present after fetching refs/pull/1466/head" \
+                "from ${snapshot_upstream}" >&2
               exit 1
             fi
           done

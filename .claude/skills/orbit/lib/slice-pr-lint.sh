@@ -29,6 +29,14 @@ slice_pr_lint() {
     at=$(printf '%s' "$record" | jq -r '.reconciledAt')
     if [ -z "$best" ] || [[ "$at" > "$best" ]]; then latest="$record"; best="$at"; fi
   done < <(git -C "$root" ls-tree -r --name-only "$base" -- docs/orbit/reconciliations/)
+  local filtered_records=""
+  while IFS= read -r f; do
+    case "$f" in docs/orbit/*)
+      if [ -n "${upstream:-}" ] && skip_upstream_record "$f"; then continue; fi ;;
+    esac
+    filtered_records+="$f"$'\n'
+  done <<< "$records"
+  records="$filtered_records"
   local count=0
   while IFS= read -r f; do
     case "$f" in docs/orbit/reconciliations/*.json) ;; *) continue ;; esac
