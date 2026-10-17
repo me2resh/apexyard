@@ -673,6 +673,7 @@ _gh_checks_output_is_result() {
 _ci_pages_verdict() {
   local kind="$1"
   jq -s -r --arg kind "$kind" '
+    def line_string: gsub("[\u0000-\u001f\u007f]"; " ");
     def int_ok: type == "number" and . >= 0 and floor == .;
     def totals_match($got):
       (map(.total_count)) as $totals |
@@ -724,10 +725,10 @@ _ci_pages_verdict() {
             .status != "completed" or
             (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")
           ) |
-          (run_name) as $n |
-          "block\trun\t\($n)\t\(.status)\t\(.conclusion // "none")")
+          (run_name | line_string) as $n |
+          "block\trun\t\($n)\t\(.status | line_string)\t\((.conclusion // "none") | line_string)")
       else
-        (.[0].state) as $state |
+        (.[0].state | line_string) as $state |
         if $got == 0 or $state == "success" then
           "verdict\tok\t\($got)\t\($state)"
         else
@@ -739,7 +740,7 @@ _ci_pages_verdict() {
               $bad[] |
               (((.context | if type == "string" and . != "" then . else null end) //
                 "status") as $c |
-              "block\tstatus\t\($c)\t\(.state)")
+              "block\tstatus\t\($c | line_string)\t\(.state | line_string)")
             end)
         end
       end
@@ -756,6 +757,7 @@ _commit_check_fallback() {
   local checks_json status_json checks_rc status_rc
   local checks_lines status_lines line
   local checks_verdict="" status_verdict=""
+  local checks_verdict_seen=0 status_verdict_seen=0
   local checks_count="" status_count="" status_state=""
   local block_lines="" tag kind a b c
 
@@ -789,6 +791,12 @@ _commit_check_fallback() {
     IFS=$'\t' read -r tag kind a b c <<< "$line"
     case "$tag" in
       verdict)
+        # Reject each additional verdict row.
+        if [ "$checks_verdict_seen" -ne 0 ]; then
+          checks_verdict=invalid
+          continue
+        fi
+        checks_verdict_seen=1
         checks_verdict=$kind
         checks_count=$a
         ;;
@@ -806,6 +814,12 @@ _commit_check_fallback() {
     IFS=$'\t' read -r tag kind a b c <<< "$line"
     case "$tag" in
       verdict)
+        # Reject each additional verdict row.
+        if [ "$status_verdict_seen" -ne 0 ]; then
+          status_verdict=invalid
+          continue
+        fi
+        status_verdict_seen=1
         status_verdict=$kind
         status_count=$a
         status_state=$b
@@ -836,17 +850,17 @@ _commit_check_fallback() {
       ;;
   esac
 
-  if [ "$checks_count" -eq 0 ] && [ "$status_count" -eq 0 ]; then
-    echo "NOTE: PR #${pr}: used the commit check fallback because gh pr checks did not return a CI result. No check runs and no statuses are reported." >&2
-    exit 0
-  fi
-
   if [ -n "$block_lines" ]; then
     cat >&2 <<MSG
 BLOCKED: PR #${pr} has CI that has not passed for commit ${GATE_HEAD_SHA} (commit check fallback):
 ${block_lines}
 MSG
     exit 2
+  fi
+
+  if [ "$checks_count" -eq 0 ] && [ "$status_count" -eq 0 ]; then
+    echo "NOTE: PR #${pr}: used the commit check fallback because gh pr checks did not return a CI result. No check runs and no statuses are reported for commit ${GATE_HEAD_SHA}." >&2
+    exit 0
   fi
 
   if [ "$status_count" -eq 0 ] || [ "$status_state" = "success" ]; then

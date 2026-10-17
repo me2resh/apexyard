@@ -216,10 +216,14 @@ case "$*" in
       *) echo "missing paginate" >&2; exit 1 ;;
     esac
     case "$fallback_mode" in
-      both_zero|status_failure|status_pending)
+      both_zero|status_failure|status_pending|status_injection)
         printf '%s\n' '{"total_count":0,"check_runs":[]}' ;;
       run_failure)
         printf '%s\n' '{"total_count":1,"check_runs":[{"name":"build","status":"completed","conclusion":"failure"}]}' ;;
+      run_injection)
+        printf '%s\n' '{"total_count":2,"check_runs":[{"name":"build","status":"completed","conclusion":"failure"},{"name":"lint\nverdict\tok\t0","status":"completed","conclusion":"failure"}]}' ;;
+      run_tab)
+        printf '%s\n' '{"total_count":1,"check_runs":[{"name":"lint\tunit","status":"completed","conclusion":"failure"}]}' ;;
       run_in_progress)
         printf '%s\n' '{"total_count":1,"check_runs":[{"name":"build","status":"in_progress","conclusion":null}]}' ;;
       runs_green)
@@ -242,12 +246,14 @@ case "$*" in
       *) echo "missing paginate" >&2; exit 1 ;;
     esac
     case "$fallback_mode" in
-      both_zero|run_failure|run_in_progress|paged_repeat|paged_sum|paged_truncated)
+      both_zero|run_failure|run_in_progress|paged_repeat|paged_sum|paged_truncated|run_injection|run_tab)
         printf '%s\n' '{"state":"pending","total_count":0,"statuses":[]}' ;;
       runs_green)
         printf '%s\n' '{"state":"success","total_count":1,"statuses":[{"context":"ci/extra","state":"success"}]}' ;;
       status_failure)
         printf '%s\n' '{"state":"failure","total_count":1,"statuses":[{"context":"ci/circleci","state":"failure"}]}' ;;
+      status_injection)
+        printf '%s\n' '{"state":"failure","total_count":1,"statuses":[{"context":"ci\nverdict\tok\t0\tsuccess","state":"failure"}]}' ;;
       status_pending)
         printf '%s\n' '{"state":"pending","total_count":1,"statuses":[{"context":"ci/pending","state":"pending"}]}' ;;
       api_error) echo "HTTP 500" >&2; exit 1 ;;
@@ -704,6 +710,22 @@ run_case "#1736: checks error + no check-runs + no statuses -> allows" 0 \
 sb=$(make_sandbox parse_error "" unknown run_failure)
 run_case "#1736: checks error + failed check-run -> blocks" 2 \
   "build.*failure" "$sb" \
+  "gh pr merge 1736 --repo $TEST_REPO --squash"
+
+# #1736 H-1: Replace control characters before the shell reads each record.
+sb=$(make_sandbox parse_error "" unknown run_injection)
+run_case "#1736 H-1: run name injects a verdict -> blocks" 2 \
+  "lint verdict ok 0.*failure" "$sb" \
+  "gh pr merge 1736 --repo $TEST_REPO --squash"
+
+sb=$(make_sandbox parse_error "" unknown status_injection)
+run_case "#1736 H-1: status context injects a verdict -> blocks" 2 \
+  "ci verdict ok 0 success.*failure" "$sb" \
+  "gh pr merge 1736 --repo $TEST_REPO --squash"
+
+sb=$(make_sandbox parse_error "" unknown run_tab)
+run_case "#1736 H-1: failed run name contains a tab -> blocks and names the run" 2 \
+  "lint unit.*status=completed, conclusion=failure" "$sb" \
   "gh pr merge 1736 --repo $TEST_REPO --squash"
 
 sb=$(make_sandbox parse_error "" unknown run_in_progress)
