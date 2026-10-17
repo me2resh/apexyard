@@ -16,7 +16,7 @@ fi
 _LIB_GIT_GLOBAL_LOADED=1
 
 # Share this expression with the dispatcher and the gates.
-_git_opt_val='("[^"]*"|'"'"'[^'"'"']*'"'"'|\$\([^)]*\)|`[^`]*`|[^[:space:];&|]+)'
+_git_opt_val='("[^"]*"|'"'"'[^'"'"']*'"'"'|\$\([^)]*\)|`[^`]*`|[^[:space:];&|"'"'"']+)+'
 _git_sub_re='(^|[^[:alnum:]_.-])git([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env))[[:space:]]+'"${_git_opt_val}"'|--(git-dir|work-tree|namespace|super-prefix|config-env)='"${_git_opt_val}"'|--?[A-Za-z][A-Za-z-]*(=[^[:space:];&|]+)?))*[[:space:]]+'
 
 # Regex for `git [global options] <sub>` on raw text.
@@ -64,33 +64,23 @@ git_global_option_width() {
 # Quoted words keep their contents and lose the quotes.
 _git_take_value() {
   _GIT_SCAN="${_GIT_SCAN#"${_GIT_SCAN%%[![:space:]]*}"}"
-  local s q
-  s="$_GIT_SCAN"
-  [ -n "$s" ] || return 1
-  case "$s" in
-    \"*)
-      q="${s:1}"
-      _GIT_TAKEN="${q%%\"*}"
-      [ "$_GIT_TAKEN" != "$q" ] || return 1
-      _GIT_SCAN="${q#"${_GIT_TAKEN}\""}"
-      ;;
-    \'*)
-      q="${s:1}"
-      _GIT_TAKEN="${q%%\'*}"
-      [ "$_GIT_TAKEN" != "$q" ] || return 1
-      _GIT_SCAN="${q#"${_GIT_TAKEN}'"}"
-      ;;
-    *)
-      _GIT_TAKEN=$(printf '%s' "$s" | sed -n 's/^\([^[:space:];&|]*\).*/\1/p')
-      _GIT_SCAN=$(printf '%s' "$s" | sed -n 's/^[^[:space:];&|]*//p')
-      ;;
-  esac
-  case "$_GIT_SCAN" in
-    ""|[[:space:]]*|';'*|'&'*|'|'*) ;;
-    *) return 1 ;;
-  esac
-  # Keep a quoted tilde literal.
-  case "$s" in
+  local original="$_GIT_SCAN" char quote="" taken="" i
+  for ((i=0; i<${#_GIT_SCAN}; i++)); do
+    char="${_GIT_SCAN:i:1}"
+    if [ -n "$quote" ]; then
+      if [ "$char" = "$quote" ]; then quote=""; else taken+="$char"; fi
+      continue
+    fi
+    case "$char" in
+      \"|\') quote="$char" ;;
+      [[:space:]]|';'|'&'|'|') break ;;
+      *) taken+="$char" ;;
+    esac
+  done
+  [ -z "$quote" ] || return 1
+  _GIT_SCAN="${_GIT_SCAN:i}"
+  _GIT_TAKEN="$taken"
+  case "$original" in
     \"*|\'*)
       # shellcheck disable=SC2088
       case "$_GIT_TAKEN" in
@@ -224,13 +214,96 @@ _git_resolve_dir() {
   printf '%s' "$dir"
 }
 
-# Resolve each -C in order. Resolve repository paths after the last -C.
+# Print chain segments. Keep separators inside quotes in the same segment.
+_git_chain_segments() {
+  local text="$1" part="" quote="" char i escaped=0
+  for ((i=0; i<${#text}; i++)); do
+    char="${text:i:1}"
+    if [ "$escaped" -eq 1 ]; then
+      part+="$char"
+      escaped=0
+      continue
+    fi
+    if [ "$char" = "\\" ] && [ "$quote" != "'" ]; then
+      part+="$char"
+      escaped=1
+      continue
+    fi
+    if [ -n "$quote" ]; then
+      part+="$char"
+      [ "$char" != "$quote" ] || quote=""
+      continue
+    fi
+    case "$char" in
+      \"|\') quote="$char"; part+="$char" ;;
+      '&'|';'|$'\n') printf '%s\n' "$part"; part="" ;;
+      *) part+="$char" ;;
+    esac
+  done
+  printf '%s\n' "$part"
+}
+
+# Track literal cd commands before the selected invocation.
+# Reject unresolved targets without executing command text.
+_git_chain_cwd() {
+  local cmd="$1" sub="$2" base="$3" segment path next changed=0 match remaining=1
+  local segments matches
+  if [ "${_GIT_VISIT_SUB:-}" = "$sub" ]; then
+    remaining="${_GIT_VISIT_INDEX:-1}"
+  fi
+  _GIT_CHAIN_CWD="$base"
+  _GIT_CHAIN_CHANGED=0
+  # Capture first. A POSIX-sourced lib must not use process substitution.
+  # A heredoc keeps the loop in this shell, so the cwd updates persist.
+  segments=$(_git_chain_segments "$cmd")
+  while IFS= read -r segment; do
+    segment="${segment#"${segment%%[![:space:]]*}"}"
+    case "$segment" in
+      cd|cd[[:space:]]*)
+        _GIT_SCAN="${segment#cd}"
+        if [ -z "${_GIT_SCAN//[[:space:]]/}" ]; then
+          path="$HOME"
+        else
+          _git_take_value || return 1
+          path="$_GIT_TAKEN"
+        fi
+        if [ "$path" = -- ]; then
+          _git_take_value || return 1
+          path="$_GIT_TAKEN"
+        fi
+        [ -z "${_GIT_SCAN//[[:space:]]/}" ] || return 1
+        next=$(_git_resolve_dir "$path" "$_GIT_CHAIN_CWD") || return 1
+        next=$(cd "$next" 2>/dev/null && pwd -P) || return 1
+        changed=1
+        _GIT_CHAIN_CWD="$next"
+        ;;
+    esac
+    matches=$(git_invocation_prefixes "$segment" "$sub")
+    while IFS= read -r match; do
+      [ -n "$match" ] || continue
+      remaining=$((remaining - 1))
+    done <<EOF
+$matches
+EOF
+    [ "$remaining" -gt 0 ] || break
+  done <<EOF
+$segments
+EOF
+  _GIT_CHAIN_CHANGED="$changed"
+}
+
+# Resolve cd, then each -C, then repository paths for the selected invocation.
 git_prepare_invocation() {
   local cmd="$1" sub="$2" cwd="${3:-$PWD}" dir raw base
   GIT_REPLAY_ARGS=()
   GIT_DASH_C=""
   _git_load_invocation "$cmd" "$sub" || return 1
-  base="${cwd:-$PWD}"
+  _git_chain_cwd "$cmd" "$sub" "${cwd:-$PWD}" || return 1
+  base="$_GIT_CHAIN_CWD"
+  cwd="$base"
+  if [ "$_GIT_CHAIN_CHANGED" -eq 1 ]; then
+    GIT_DASH_C="$base"
+  fi
   for raw in ${_GIT_RAW_C_CHAIN[@]+"${_GIT_RAW_C_CHAIN[@]}"}; do
     dir=$(_git_resolve_dir "$raw" "$base") || return 1
     GIT_DASH_C="$dir"
@@ -252,6 +325,9 @@ git_prepare_invocation() {
     dir=$(_git_resolve_dir "$_GIT_RAW_WORK_TREE" "$base") || return 1
     GIT_REPLAY_ARGS+=(--work-tree="$dir")
   fi
+  if [ "$_GIT_CHAIN_CHANGED" -eq 1 ]; then
+    git_target rev-parse --git-dir >/dev/null 2>&1 || return 1
+  fi
   return 0
 }
 
@@ -272,22 +348,25 @@ git_invocation_prefixes() {
 }
 
 # Check each raw invocation in a separate subshell. Keep the full command.
-# The gate retains its existing ref parser and cd policy.
+# Resolve the cd chain separately for each selected invocation.
 git_visit_invocations() {
   local callback="$1" mode="$2" input="$3"
   shift 3
-  local cmd cwd sub prefix rc count=0 arg
+  local cmd cwd sub prefix rc count=0 arg index
   cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null)
   cwd=$(printf '%s' "$input" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null)
   local prefixes
   for sub in "$@"; do
     # Capture first. A POSIX-sourced lib must not use process substitution.
     prefixes=$(git_invocation_prefixes "$cmd" "$sub")
+    index=0
     while IFS= read -r prefix; do
       [ -n "$prefix" ] || continue
       count=$((count + 1))
+      index=$((index + 1))
       (
         _GIT_VALIDATE_TARGET=1
+        _GIT_VISIT_INDEX="$index"
         _GIT_VISIT_SUB="$sub"
         _GIT_VISIT_PREFIX="$prefix"
         if ! git_prepare_invocation "$cmd" "$sub" "$cwd"; then
@@ -344,5 +423,79 @@ git_target() {
     git "$@"
   fi
 }
+
+# Allow one simple push only if the target remote has no branch heads.
+# Reject complex text before the probe. Do not execute command text.
+git_first_push_to_empty_remote() (
+  local cmd="$1" cwd="$2" segment args remote="" branch token heads timer="" pid watcher rc
+  [ "$(printf '%s\n' "$cmd" | LC_ALL=C grep -oE "$(git_subcommand_re push)" | wc -l | tr -d ' ')" = 1 ] || return 1
+  # Match literal shell syntax. Do not expand it.
+  # shellcheck disable=SC2016
+  case "$cmd" in *'<<'*|*'`'*|*'$('*|*'|'*) return 1 ;; esac
+  segment=$(printf '%s\n' "$cmd" | LC_ALL=C grep -oE "$(git_push_segment_re)")
+  args=$(git_push_args "$segment")
+  _GIT_SCAN="$args"
+  while _git_take_value; do
+    token="$_GIT_TAKEN"
+    case "$token" in
+      -u|--set-upstream|--no-verify|--dry-run|--quiet|--verbose) ;;
+      -*|+*|:*) return 1 ;;
+      *) [ -n "$remote" ] || remote="$token" ;;
+    esac
+  done
+  # Select directories only. Do not copy other command options to the probe.
+  git_prepare_invocation "$cmd" push "$cwd" || return 1
+  [ -z "${_GIT_RAW_GIT_DIR:-}${_GIT_RAW_WORK_TREE:-}" ] || return 1
+  GIT_REPLAY_ARGS=(-C "${GIT_DASH_C:-${cwd:-$PWD}}")
+  if [ -z "$remote" ]; then
+    branch=$(git_target symbolic-ref --quiet --short HEAD 2>/dev/null) || return 1
+    remote=$(git_target config --get "branch.$branch.remote" 2>/dev/null) || remote=""
+    remote="${remote:-origin}"
+  fi
+  # Resolve named remotes before the network request. Reject helper syntax.
+  local url
+  case "$remote" in -*|*::* ) return 1 ;; esac
+  url=$(git_target remote get-url -- "$remote" 2>/dev/null) || url="$remote"
+  case "$url" in ''|-*|*::* ) return 1 ;; esac
+  local policy=(-c protocol.allow=never -c protocol.https.allow=always
+    -c protocol.ssh.allow=always -c protocol.git.allow=always
+    -c protocol.file.allow=always)
+  export GIT_PROTOCOL_FROM_USER=0
+  # Disable prompt programs. Keep credential helpers for stored credentials.
+  unset GIT_ASKPASS SSH_ASKPASS
+  export GIT_TERMINAL_PROMPT=0
+  # Keep the trusted repository SSH command when it exists.
+  if [ -z "${GIT_SSH_COMMAND+x}" ] &&
+     ! git_target config --get core.sshCommand >/dev/null 2>&1; then
+    export GIT_SSH_COMMAND='ssh -o BatchMode=yes'
+  fi
+  # Override core.askPass so Git cannot start a configured prompt program.
+  if command -v timeout >/dev/null 2>&1; then
+    timer=timeout
+  elif command -v gtimeout >/dev/null 2>&1; then
+    timer=gtimeout
+  fi
+  if [ -n "$timer" ]; then
+    git() { command "$timer" 10 git "$@"; }
+    heads=$(git_target "${policy[@]}" -c core.askPass= ls-remote --heads -- "$url" 2>/dev/null) || return 1
+  else
+    # Terminate the probe after ten seconds on systems without timeout.
+    local output
+    output=$(mktemp) || return 1
+    git() { exec git "$@"; }
+    git_target "${policy[@]}" -c core.askPass= ls-remote --heads -- "$url" >"$output" 2>/dev/null &
+    pid=$!
+    (sleep 10; kill -KILL "$pid" 2>/dev/null) &
+    watcher=$!
+    wait "$pid"; rc=$?
+    kill "$watcher" 2>/dev/null
+    wait "$watcher" 2>/dev/null
+    heads=$(cat "$output")
+    rm -f "$output"
+    [ "$rc" -eq 0 ] || return 1
+  fi
+  [ -z "$heads" ] || return 1
+  echo "first push to an empty remote: allowed" >&2
+)
 
 true
