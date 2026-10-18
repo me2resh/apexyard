@@ -1,5 +1,6 @@
 #!/bin/bash
-# #1748: every ambiguous global-option or alias form must fail closed.
+# #1748: every ambiguous global-option form must fail closed.
+# Alias resolution is split out of #1756; see the #1748 issue.
 set -u
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 HOOKS="${GIT_GLOBAL_TEST_HOOKS:-$ROOT/.claude/hooks}"
@@ -30,8 +31,6 @@ for gate in $(sed -nE 's/^# APEXYARD_DISPATCH_GATE: Bash[^|]*\|[^|]*\|([^ ]+)\.s
   printf '#!/bin/bash\ncat >/dev/null\nexit %s\n' "$code" > "$test_tmp/dispatch/$gate.sh"
   chmod +x "$test_tmp/dispatch/$gate.sh"
 done
-git init -q "$test_tmp/safe"
-git -C "$test_tmp/safe" config alias.x status
 fail=0
 probe() {
   local name="$target-$1" want="$2" hook="$3" cmd="$4" nojq="${5:-0}" payload rc
@@ -57,16 +56,10 @@ for verb in commit push; do
   probe "$verb-escaped-space" 2 "$hook" "git -C $escaped $verb"
   probe "$verb-quoted-git-dir" 2 "$hook" "git --git-dir=\"$repo/.git\" $verb"
   probe "$verb-quoted-work-tree" 2 "$hook" "git --work-tree=\"$repo\" $verb"
-  probe "$verb-inline-alias" 2 "$hook" "git -c alias.x=$verb x"
-  git -C "$repo" config alias.x "$verb"
-  probe "$verb-config-alias" 2 "$hook" "git -C \"$repo\" x"
-  probe "$verb-inline-overrides-config" 0 "$hook" 'git -c alias.x=status x'
-  probe "$verb-second-alias-target" 2 "$hook" "git -C $test_tmp/safe x; git -C \"$repo\" x"
-  # An unknown verb with no alias is an external git-<verb> command: allowed.
+  # External git-<verb> commands and quoted text that mentions git stay allowed.
   probe "$verb-external-command" 0 "$hook" 'git unresolved1748'
   probe "$verb-git-lfs" 0 "$hook" 'git lfs ls-files'
-  probe "$verb-shell-alias" 2 "$hook" "git -c 'alias.x=!git $verb' x"
-  probe "$verb-opaque-alias" 2 "$hook" "git -c 'alias.x=!opaque' x"
+  probe "$verb-quoted-git-text" 0 "$hook" 'cd /tmp && echo "git gates"'
   probe "$verb-no-jq" 2 "$hook" "git -C \"$repo\" $verb" 1
   probe "$verb-normal-C" 2 "$hook" "git -C \"$repo\" $verb"
   probe "$verb-normal-git-dir" 2 "$hook" "git --git-dir=.git $verb"

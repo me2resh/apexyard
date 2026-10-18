@@ -347,12 +347,6 @@ if [ "$_scan_failed" -eq 1 ]; then
   run_push_gates
   run_commit_gates
 else
-  # #1748: alias resolution is local and must also guard dispatcher routing.
-  _alias_cwd=$(printf '%s' "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null) || _alias_cwd=""
-  if ! git_check_aliases "$_scan_cmd" "${_alias_cwd:-$PWD}"; then
-    echo "BLOCKED: dispatcher cannot safely check git alias or unknown subcommand (#1748)." >&2
-    exit 2
-  fi
   if command_has_git_subcommand "$_scan_cmd" push; then
     run_push_gates
   fi
@@ -390,8 +384,7 @@ if [ -z "$COMMAND" ]; then
     }
   fi
   if raw_payload_command_matches "$INPUT" "$(git_subcommand_payload_pattern push)" \
-    || raw_payload_command_matches "$INPUT" "$(git_subcommand_payload_pattern commit)" \
-    || raw_payload_command_matches "$INPUT" 'alias\.'; then
+    || raw_payload_command_matches "$INPUT" "$(git_subcommand_payload_pattern commit)"; then
     echo "BLOCKED: dispatcher cannot parse this git command. Restore jq and retry." >&2
     exit 2
   fi
