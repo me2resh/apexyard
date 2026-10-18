@@ -262,8 +262,16 @@ else
   fail=1
 fi
 
+# Keep protected-commit probes outside the unborn-HEAD exemption.
+seed_history() {
+  local repo="$1" tree commit
+  tree=$(git -C "$repo" mktree </dev/null)
+  commit=$(git -C "$repo" -c user.name=Test -c user.email=test@example.invalid commit-tree "$tree" -m fixture)
+  git -C "$repo" update-ref HEAD "$commit"
+}
 # Use real repositories for each review probe.
 git -C "$sb" symbolic-ref HEAD refs/heads/main
+seed_history "$sb"
 check b1-secrets-plain 2 "$(run_hook "$HOOKS/check-secrets.sh" "git -C $feature commit -m 'fix: first' && git commit -m 'fix: second'" "$sb")"
 check b1-protected-commit 2 "$(run_hook "$HOOKS/block-main-push.sh" "git -C $feature commit -m 'fix: first' && git commit -m 'fix: second'" "$sb")"
 check b1-secrets-unquoted 2 "$(run_hook "$HOOKS/check-secrets.sh" "git -C $feature commit -m a && git commit -m b" "$sb")"
@@ -319,6 +327,7 @@ done
 # Use a disposable home directory for shell-style tilde expansion.
 mkdir -p "$test_tmp/home/realdir"
 git -C "$test_tmp/home/realdir" init -q -b main
+seed_history "$test_tmp/home/realdir"
 HOME="$test_tmp/home" check h2-tilde 2 "$(HOME="$test_tmp/home" run_hook "$HOOKS/block-main-push.sh" 'git -C ~/realdir commit' "$other")"
 if grep -q 'Cannot commit directly' "$test_tmp/hook.err"; then
   echo PASS h2-tilde-target

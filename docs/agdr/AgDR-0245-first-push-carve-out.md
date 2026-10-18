@@ -9,52 +9,81 @@ status: executed
 category: security
 ---
 
-# Allow the First Push to an Empty Remote
-
-> In the context of setup, I decided to permit a simple first push after an empty remote probe, accepting a remote-state race.
+# Allow the First Push to a Never-Fetched Remote
 
 ## Context
 
-Issue #1739 covers setup Step 2b. Setup creates a sibling repository and pushes its first commit to main.
-The operator approved an exception for remotes without branches.
-
-## Options Considered
-
-| Option | Pros | Cons |
-|--------|------|------|
-| Block every protected push | Requires no remote query | Blocks initial setup |
-| Probe remote branches | Permits initial setup | Adds latency and a remote-state race |
+Issue #1739 covers /setup Step 2b. Setup creates a sibling repository.
+The fork's protected-branch list still applies to that repository.
+The carve-out permits its first push to a protected branch.
 
 ## Decision
 
-Chosen: **Probe remote branches**, as the operator requested.
-Resolve the remote in the target repository. Use the explicit remote, the branch remote, or origin, in that order.
-Allow only a successful probe with no heads. Reject force, mirror, bulk, and delete options.
-Keep ambiguous commands blocked. Keep later protected pushes blocked.
+Use local Git state. Do not probe the remote.
+Allow the carve-out only for a configured remote name.
+Resolve the remote in this order: explicit argument, branch.<cur>.pushRemote,
+remote.pushDefault, branch.<cur>.remote, then origin.
+Require `git for-each-ref --count=1 refs/remotes/<remote>/` to print nothing.
+Read this state in the resolved target repository.
 
-Disable terminal prompts and remove askpass environment variables. Override core.askPass with an empty value.
-Keep credential helpers so stored credentials remain available. Apply SSH BatchMode when GIT_SSH_COMMAND has no value.
-Limit the probe to ten seconds. Use timeout or gtimeout when available. Otherwise terminate the probe with a watchdog.
+Reject force, mirror, delete, bulk, tag, and glob pushes.
+Reject `+` and deletion refspecs.
+Reject program selectors and push options.
+Reject invocation config from `-c`, `--config-env`, or a `GIT_*=` prefix.
+Reject commands containing `git remote` or `git config`.
+These commands can change the destination before the push.
+Reject a configured `remote.<name>.pushurl`.
 
-## Probe safety
+Do not copy command config to a local read.
+Do not run a remote helper or make a network request.
 
-The PreToolUse hook runs before the operator approves the command.
-The probe copies only directory selection from `cd` and `-C`.
-It does not copy other Git global options. Commands with `--git-dir` or `--work-tree` remain blocked.
-The probe resolves named remote URLs before it connects. It rejects URLs with `::` or an initial `-`.
-It rejects push options that select a program or transmit push options.
-It never passes `--upload-pack` to `ls-remote`. It puts the URL after `--`.
-A fixed protocol policy permits only HTTPS, SSH, Git, and file protocols. The probe sets `GIT_PROTOCOL_FROM_USER=0`.
-Target repository configuration is local trusted state. This includes configured `core.sshCommand` values and credential helpers.
-Command text cannot change that trusted configuration for the probe.
-The additive ref scan checks every possible destination after the remote. Quoted values cannot hide a later protected destination.
+Without a fetch, the local repository cannot hold the remote's commits.
+Git rejects a non-force push to a non-empty remote branch as non-fast-forward.
+The guard relaxes only the never-fetched case.
+The push exemption applies to one push invocation. Commit checks still run.
+
+## Initial commit
+
+Allow one commit invocation on a protected branch when HEAD is unborn.
+An unborn HEAD names a branch but has no commit.
+Require `git rev-parse -q --verify HEAD` to fail in the resolved target repository.
+Require `git symbolic-ref -q HEAD` to name that branch.
+Use local reads only.
+Reject `-c`, `--config-env`, `GIT_*=` prefixes, and `--amend` for that invocation.
+Use a separate flag for each commit invocation. Continue all other checks.
+
+The hook reads state before the command executes.
+Thus, `git commit && git commit` can pass both checks on an unborn protected branch.
+The hook cannot know that the first commit will create history.
+This is a known limit.
+
+The dispatcher sends commits to this backstop. The branch-name gate checks pushes only.
+The native `.githooks/pre-commit` hook retains its stricter protected-branch rule.
+It cannot inspect the original invocation to enforce these exclusions.
+Repositories with that native hook installed still block an initial protected-branch commit.
+
+## Command target resolution
+
+Resolve the target in this order: payload cwd, cd chain, each `-C`, then
+`--git-dir` and `--work-tree`.
+Follow a literal leading-segment `cd` before `&&`, `;`, or a newline.
+Support `cd X || exit N` and `cd X || return N` before `;` or `&&`.
+These tails retain X as the current directory.
+Block unresolvable, missing, or non-leading directory commands.
+Block unsupported `cd`, `pushd`, `popd`, and `builtin cd` forms.
+Reject directory changes inside parentheses, braces, and conditional commands.
+Report an unresolved cd target as a cd target.
+
+Commit gates follow the cd chain too.
+A commit after a cd to a missing directory blocks.
+Case 10 in `test_verify_commit_refs_cwd.sh` records this behavior.
 
 ## Consequences
 
-- The hook can permit the first commit and push chain during setup.
-- Probe errors leave the existing block in effect.
-- Another writer can create a branch after the probe. The probe does not reserve remote state.
-- Git-native hooks retain their existing rules.
+Local reads need no network access or prompt controls.
+A tracking ref keeps the protected-push block in effect.
+A URL or path destination cannot use the carve-out.
+Git-native hooks retain their existing rules.
 
 ## Artifacts
 

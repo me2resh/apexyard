@@ -197,7 +197,7 @@ MSG
 fi
 
 # Resolve implicit pushes in the repo selected by cd and git options.
-# Use the original directory if the target is not a readable git repo.
+# The invocation visitor blocks unresolved targets before this check.
 BRANCH_DIR=""
 PAYLOAD_CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null || true)
 if command -v git_prepare_invocation >/dev/null 2>&1; then

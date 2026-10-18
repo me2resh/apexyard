@@ -5,7 +5,7 @@
 # Blocks direct pushes and commits to long-lived integration branches from
 # Claude Code sessions (a PreToolUse hook, evaluated before the shell ever
 # runs). Use pull requests after the first push.
-# Allow a simple first push only when the remote probe succeeds without heads.
+# Allow a simple first push only when the named remote has no tracking refs.
 # Block force, bulk, mirror, and delete pushes. See AgDR-0245.
 #
 # THE controls for protected-branch enforcement are the git-native hooks:
@@ -278,6 +278,8 @@ if command -v command_has_git_subcommand >/dev/null 2>&1; then
 else
   echo "$COMMAND" | grep -qE '\bgit\s+push\b' && _HAS_GIT_PUSH=1 || _HAS_GIT_PUSH=0
 fi
+# A visitor checks only its selected verb. Keep command-wide scans within it.
+[ "${_GIT_VISIT_SUB:-push}" = push ] || _HAS_GIT_PUSH=0
 if [ "$_HAS_GIT_PUSH" -eq 1 ]; then
   # Source the shared push-ref extractor if available.
   if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
@@ -304,9 +306,16 @@ if [ "$_HAS_GIT_PUSH" -eq 1 ]; then
     if declare -F _extract_all_push_refs_core > /dev/null 2>&1; then
       while IFS= read -r ANY_PUSH_DST; do
         [ -z "$ANY_PUSH_DST" ] && continue
+        case "$ANY_PUSH_DST" in
+          *'*'*|*'?'*|*'['*)
+            echo 'BLOCKED: cannot resolve a glob push destination' >&2
+            exit 2
+            ;;
+        esac
         if is_protected_branch "$ANY_PUSH_DST"; then
           if git_first_push_to_empty_remote "$COMMAND" "$(printf '%s' "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty')"; then
-            exit 0
+            SKIP_PUSH_BRANCH_CHECK=1
+            continue
           fi
           cat >&2 <<MSG
 BLOCKED: Cannot push directly to a protected branch ('${ANY_PUSH_DST}').
@@ -472,8 +481,10 @@ MSG
 
     if is_protected_branch "$TARGET_PUSH_BRANCH"; then
       if git_first_push_to_empty_remote "$COMMAND" "$(printf '%s' "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty')"; then
-        exit 0
+        SKIP_PUSH_BRANCH_CHECK=1
       fi
+    fi
+    if is_protected_branch "$TARGET_PUSH_BRANCH" && [ "$SKIP_PUSH_BRANCH_CHECK" != 1 ]; then
       cat >&2 <<MSG
 BLOCKED: Cannot push directly to a protected branch ('${TARGET_PUSH_BRANCH}').
 
@@ -518,6 +529,7 @@ if command -v command_has_git_subcommand >/dev/null 2>&1; then
 else
   echo "$COMMAND" | grep -qE '\bgit\s+commit\b' && _HAS_GIT_COMMIT=1 || _HAS_GIT_COMMIT=0
 fi
+[ "${_GIT_VISIT_SUB:-commit}" = commit ] || _HAS_GIT_COMMIT=0
 if [ "$_HAS_GIT_COMMIT" -eq 1 ]; then
   # Use the shared directory tracker for commits in the same chain.
   WORKTREE_PATH=""
@@ -539,7 +551,12 @@ if [ "$_HAS_GIT_COMMIT" -eq 1 ]; then
     CURRENT_BRANCH=$(if command -v git_target >/dev/null 2>&1; then git_target branch --show-current; else git branch --show-current; fi 2>/dev/null)
   fi
 
-  if is_protected_branch "$CURRENT_BRANCH"; then
+  SKIP_COMMIT_BRANCH_CHECK=0
+  if is_protected_branch "$CURRENT_BRANCH" &&
+     git_initial_commit_on_unborn_head "$COMMAND"; then
+    SKIP_COMMIT_BRANCH_CHECK=1
+  fi
+  if [ "$SKIP_COMMIT_BRANCH_CHECK" -eq 0 ] && is_protected_branch "$CURRENT_BRANCH"; then
     cat >&2 <<MSG
 BLOCKED: Cannot commit directly on protected branch '${CURRENT_BRANCH}'.
 

@@ -241,7 +241,14 @@ _git_chain_segments() {
     fi
     case "$char" in
       \"|\') quote="$char"; part+="$char" ;;
-      '&'|';'|$'\n') printf '%s\n' "$part"; part="" ;;
+      '&')
+        if [ "${text:i+1:1}" = '&' ]; then
+          i=$((i + 1))
+        else
+          part+=' __git_background__'
+        fi
+        printf '%s\n' "$part"; part="" ;;
+      ';'|$'\n') printf '%s\n' "$part"; part="" ;;
       *) part+="$char" ;;
     esac
   done
@@ -252,7 +259,7 @@ _git_chain_segments() {
 # Reject unresolved targets without executing command text.
 _git_chain_cwd() {
   local cmd="$1" sub="$2" base="$3" segment path next changed=0 match remaining=1
-  local segments matches
+  local segments matches prefix unquoted tail
   if [ "${_GIT_VISIT_SUB:-}" = "$sub" ]; then
     remaining="${_GIT_VISIT_INDEX:-1}"
   fi
@@ -263,6 +270,14 @@ _git_chain_cwd() {
   segments=$(_git_chain_segments "$cmd")
   while IFS= read -r segment <&3; do
     segment="${segment#"${segment%%[![:space:]]*}"}"
+    prefix="$segment"
+    matches=$(git_invocation_prefixes "$segment" "$sub")
+    if [ -n "$matches" ]; then
+      match="${matches%%$'\n'*}"
+      prefix="${segment%%"$match"*}"
+    fi
+    # Remove quoted text before the directory-command check.
+    unquoted=$(printf '%s\n' "$prefix" | sed -E "s/\"[^\"]*\"//g; s/'[^']*'//g")
     case "$segment" in
       cd|cd[[:space:]]*)
         _GIT_SCAN="${segment#cd}"
@@ -276,12 +291,23 @@ _git_chain_cwd() {
           _git_take_value || return 1
           path="$_GIT_TAKEN"
         fi
-        [ -z "${_GIT_SCAN//[[:space:]]/}" ] || return 1
+        tail="${_GIT_SCAN#"${_GIT_SCAN%%[![:space:]]*}"}"
+        if [ -n "$tail" ]; then
+          printf '%s\n' "$tail" | grep -qE '^\|\|[[:space:]]*(exit|return)([[:space:]]+[0-9]+)?[[:space:]]*$' || return 1
+        fi
         next=$(_git_resolve_dir "$path" "$_GIT_CHAIN_CWD") || return 1
         next=$(cd "$next" 2>/dev/null && pwd -P) || return 1
         changed=1
         _GIT_CHAIN_CWD="$next"
         ;;
+      *)
+        if printf '%s\n' "$unquoted" | grep -qE '(^|[^[:alnum:]_. /-])(cd|pushd|popd)([^[:alnum:]_.-]|$)|(^|[[:space:]])(cd|pushd|popd)([[:space:]]|$)'; then
+          return 1
+        fi
+        ;;
+    esac
+    case "$prefix" in
+      *__git_background__*) return 1 ;;
     esac
     matches=$(git_invocation_prefixes "$segment" "$sub")
     while IFS= read -r match <&3; do
@@ -303,7 +329,9 @@ git_prepare_invocation() {
   GIT_REPLAY_ARGS=()
   GIT_DASH_C=""
   _git_load_invocation "$cmd" "$sub" || return 1
+  _GIT_TARGET_KIND="cd"
   _git_chain_cwd "$cmd" "$sub" "${cwd:-$PWD}" || return 1
+  _GIT_TARGET_KIND="git -C"
   base="$_GIT_CHAIN_CWD"
   cwd="$base"
   if [ "$_GIT_CHAIN_CHANGED" -eq 1 ]; then
@@ -331,6 +359,10 @@ git_prepare_invocation() {
     GIT_REPLAY_ARGS+=(--work-tree="$dir")
   fi
   if [ "$_GIT_CHAIN_CHANGED" -eq 1 ]; then
+    if [ "${#_GIT_RAW_C_CHAIN[@]}" -eq 0 ] &&
+       [ -z "${_GIT_RAW_GIT_DIR:-}${_GIT_RAW_WORK_TREE:-}" ]; then
+      _GIT_TARGET_KIND="cd"
+    fi
     git_target rev-parse --git-dir >/dev/null 2>&1 || return 1
   fi
   return 0
@@ -376,7 +408,7 @@ git_visit_invocations() {
         _GIT_VISIT_PREFIX="$prefix"
         if ! git_prepare_invocation "$cmd" "$sub" "$cwd"; then
           if [ "$mode" = block ]; then
-            echo 'BLOCKED: cannot resolve the git -C target; use a literal path' >&2
+            echo "BLOCKED: cannot resolve the ${_GIT_TARGET_KIND:-git -C} target; use a literal path" >&2
             exit 2
           fi
           exit 0
@@ -388,7 +420,7 @@ git_visit_invocations() {
           esac
           if [ ! -d "$arg" ]; then
             if [ "$mode" = block ]; then
-              echo 'BLOCKED: cannot resolve the git -C target; use a literal path' >&2
+              echo "BLOCKED: cannot resolve the ${_GIT_TARGET_KIND:-git -C} target; use a literal path" >&2
               exit 2
             fi
             exit 0
@@ -429,14 +461,48 @@ git_target() {
   fi
 }
 
-# Allow one simple push only if the target remote has no branch heads.
-# Reject complex text before the probe. Do not execute command text.
+# Allow the selected commit only when HEAD names a branch without a commit.
+# Read local state only. Do not execute command text.
+git_initial_commit_on_unborn_head() (
+  local cmd="$1" segments segment matches count remaining ref
+  remaining="${_GIT_VISIT_INDEX:-1}"
+  segments=$(_git_chain_segments "$cmd")
+  while IFS= read -r segment; do
+    matches=$(git_invocation_prefixes "$segment" commit)
+    [ -n "$matches" ] || continue
+    count=$(printf '%s\n' "$matches" | wc -l | tr -d ' ')
+    if [ "$remaining" -gt "$count" ]; then
+      remaining=$((remaining - count))
+      continue
+    fi
+    [ "$count" -eq 1 ] || return 1
+    if printf '%s\n' "$segment" | grep -qE '(^|[[:space:];&|])GIT_[A-Za-z0-9_]*=|(^|[[:space:]])-c([^[:space:]]|[[:space:]])|--config-env|--amend'; then
+      return 1
+    fi
+    git_target rev-parse -q --verify HEAD >/dev/null 2>&1 && return 1
+    ref=$(git_target symbolic-ref -q HEAD 2>/dev/null) || return 1
+    [ "$ref" = "refs/heads/$CURRENT_BRANCH" ] || return 1
+    return 0
+  done <<EOF
+$segments
+EOF
+  return 1
+)
+
+# Allow a simple push to a named remote with no tracking refs.
+# Read local state only. Do not execute command text.
 git_first_push_to_empty_remote() (
-  local cmd="$1" cwd="$2" segment args remote="" branch token heads timer="" pid watcher rc
+  local cmd="$1" cwd="$2" segment args remote="" branch token refs names
   [ "$(printf '%s\n' "$cmd" | LC_ALL=C grep -oE "$(git_subcommand_re push)" | wc -l | tr -d ' ')" = 1 ] || return 1
-  # Match literal shell syntax. Do not expand it.
   # shellcheck disable=SC2016
-  case "$cmd" in *'<<'*|*'`'*|*'$('*|*'|'*) return 1 ;; esac
+  case "$cmd" in *'<<'*|*'`'*|*'$('* ) return 1 ;; esac
+  if printf '%s\n' "$cmd" | grep -qE '(^|[[:space:];&|])GIT_[A-Za-z0-9_]*=|(^|[[:space:]])-c([^[:space:]]|[[:space:]])|--config-env'; then
+    return 1
+  fi
+  # Earlier mutations invalidate the local snapshot. Reject conservatively.
+  if command_has_git_subcommand "$cmd" remote || command_has_git_subcommand "$cmd" config; then
+    return 1
+  fi
   segment=$(printf '%s\n' "$cmd" | LC_ALL=C grep -oE "$(git_push_segment_re)")
   args=$(git_push_args "$segment")
   _GIT_SCAN="$args"
@@ -444,63 +510,27 @@ git_first_push_to_empty_remote() (
     token="$_GIT_TAKEN"
     case "$token" in
       -u|--set-upstream|--no-verify|--dry-run|--quiet|--verbose) ;;
-      -*|+*|:*) return 1 ;;
+      -*|+*|:*|*'*'*|*'?'*|*'['*) return 1 ;;
       *) [ -n "$remote" ] || remote="$token" ;;
     esac
   done
-  # Select directories only. Do not copy other command options to the probe.
   git_prepare_invocation "$cmd" push "$cwd" || return 1
-  [ -z "${_GIT_RAW_GIT_DIR:-}${_GIT_RAW_WORK_TREE:-}" ] || return 1
-  GIT_REPLAY_ARGS=(-C "${GIT_DASH_C:-${cwd:-$PWD}}")
   if [ -z "$remote" ]; then
-    branch=$(git_target symbolic-ref --quiet --short HEAD 2>/dev/null) || return 1
-    remote=$(git_target config --get "branch.$branch.remote" 2>/dev/null) || remote=""
+    branch=$(git_target --no-optional-locks symbolic-ref --quiet --short HEAD 2>/dev/null) || return 1
+    remote=$(git_target --no-optional-locks config --get "branch.$branch.pushRemote" 2>/dev/null) || remote=""
+    [ -n "$remote" ] || remote=$(git_target --no-optional-locks config --get remote.pushDefault 2>/dev/null) || remote=""
+    [ -n "$remote" ] || remote=$(git_target --no-optional-locks config --get "branch.$branch.remote" 2>/dev/null) || remote=""
     remote="${remote:-origin}"
   fi
-  # Resolve named remotes before the network request. Reject helper syntax.
-  local url
-  case "$remote" in -*|*::* ) return 1 ;; esac
-  url=$(git_target remote get-url -- "$remote" 2>/dev/null) || url="$remote"
-  case "$url" in ''|-*|*::* ) return 1 ;; esac
-  local policy=(-c protocol.allow=never -c protocol.https.allow=always
-    -c protocol.ssh.allow=always -c protocol.git.allow=always
-    -c protocol.file.allow=always)
-  export GIT_PROTOCOL_FROM_USER=0
-  # Disable prompt programs. Keep credential helpers for stored credentials.
-  unset GIT_ASKPASS SSH_ASKPASS
-  export GIT_TERMINAL_PROMPT=0
-  # Keep the trusted repository SSH command when it exists.
-  if [ -z "${GIT_SSH_COMMAND+x}" ] &&
-     ! git_target config --get core.sshCommand >/dev/null 2>&1; then
-    export GIT_SSH_COMMAND='ssh -o BatchMode=yes'
+  names=$(git_target --no-optional-locks remote 2>/dev/null) || return 1
+  printf '%s\n' "$names" | grep -Fx -- "$remote" >/dev/null || return 1
+  # A push URL can select a different destination from the fetched remote.
+  if git_target --no-optional-locks config --get-all "remote.$remote.pushurl" >/dev/null 2>&1; then
+    return 1
   fi
-  # Override core.askPass so Git cannot start a configured prompt program.
-  if command -v timeout >/dev/null 2>&1; then
-    timer=timeout
-  elif command -v gtimeout >/dev/null 2>&1; then
-    timer=gtimeout
-  fi
-  if [ -n "$timer" ]; then
-    git() { command "$timer" 10 git "$@"; }
-    heads=$(git_target "${policy[@]}" -c core.askPass= ls-remote --heads -- "$url" 2>/dev/null) || return 1
-  else
-    # Terminate the probe after ten seconds on systems without timeout.
-    local output
-    output=$(mktemp) || return 1
-    git() { exec git "$@"; }
-    git_target "${policy[@]}" -c core.askPass= ls-remote --heads -- "$url" >"$output" 2>/dev/null &
-    pid=$!
-    (sleep 10; kill -KILL "$pid" 2>/dev/null) &
-    watcher=$!
-    wait "$pid"; rc=$?
-    kill "$watcher" 2>/dev/null
-    wait "$watcher" 2>/dev/null
-    heads=$(cat "$output")
-    rm -f "$output"
-    [ "$rc" -eq 0 ] || return 1
-  fi
-  [ -z "$heads" ] || return 1
-  echo "first push to an empty remote: allowed" >&2
+  refs=$(git_target --no-optional-locks for-each-ref --count=1 "refs/remotes/$remote/" 2>/dev/null) || return 1
+  [ -z "$refs" ] || return 1
+  echo "first push to a never-fetched remote: allowed" >&2
 )
 
 true
