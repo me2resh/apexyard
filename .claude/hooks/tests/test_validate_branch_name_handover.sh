@@ -62,6 +62,7 @@ make_sandbox() {
   )
   mkdir -p "$sb/.claude/hooks"
   cp "$HOOK_SRC" "$sb/.claude/hooks/validate-branch-name.sh"
+  cp "$SRC_ROOT/.claude/hooks/_lib-git-global.sh" "$sb/.claude/hooks/"
   cp "$LIB_SRC"  "$sb/.claude/hooks/_lib-extract-push-ref.sh"
   [ -f "$LIB_STRIP_HEREDOC_SRC" ] && cp "$LIB_STRIP_HEREDOC_SRC" "$sb/.claude/hooks/_lib-strip-heredoc.sh"
   [ -f "$LIB_CONFIG_SRC" ] && cp "$LIB_CONFIG_SRC" "$sb/.claude/hooks/_lib-read-config.sh"

@@ -512,6 +512,8 @@ _ratc_evaluate_target() {
   # A drive-letter path is absolute. The slash tests below do not see a
   # leading slash in C:\..., so the old code joined that path onto $PWD.
   # A source write from a non-git directory then looked ungoverned.
+  # _windows_path_to_posix uses cygpath -u when cygpath is present.
+  # That call applies the Git Bash mount table before the slash tests.
   if [ -n "$FILE_PATH" ] && command -v _windows_path_to_posix >/dev/null 2>&1; then
     FILE_PATH=$(_windows_path_to_posix "$FILE_PATH")
   fi
@@ -934,9 +936,9 @@ EOF_REVIEW_MARKERS
     active_bootstrap=$(tr -d '[:space:]' < "$BOOTSTRAP_MARKER" 2>/dev/null)
     if [ -n "$active_bootstrap" ]; then
       # Source the config reader and look up bootstrap_skills.
-      if [ -f "$MARKER_HOME/.claude/hooks/_lib-read-config.sh" ]; then
+      if [ -f "$_RATC_HOOK_DIR/_lib-read-config.sh" ]; then
         # shellcheck source=/dev/null
-        . "$MARKER_HOME/.claude/hooks/_lib-read-config.sh"
+        . "$_RATC_HOOK_DIR/_lib-read-config.sh"
         if command -v config_get >/dev/null 2>&1; then
           # `config_get '.ticket.bootstrap_skills[]'` outputs one skill per
           # line. Use grep -wF for whole-word, fixed-string match.
