@@ -399,10 +399,10 @@ assert_case() {
   rm -rf "$base" "$spacey" "$ops"
 }
 
-# ---- Case 10: a RELATIVE cd path must not be trusted (round-2 hijack, ----
-# ---- row 5) — only absolute scraped paths are honored; a relative one ----
-# ---- falls through to the hook's own cwd rather than an ambiguous     ----
-# ---- resolution against an unknown base.                              ----
+# ---- Case 10: a RELATIVE cd path is never resolved against a guessed  ----
+# ---- base (round-2 hijack, row 5). Since #1739 the shared lib resolves ----
+# ---- it against the payload cwd or the hook's cwd. A missing target    ----
+# ---- blocks. It does not fall back to the hook's own repo.            ----
 {
   ops=$(make_repo "managed-org/example")
   mock_gh_install "$ops"
@@ -411,8 +411,8 @@ assert_case() {
   cmd=$(build_command 'fix: relative cd is not trusted\n\nCloses #510' "cd ../some-sibling && ")
   out=$(run_hook "$ops" "" "$cmd")
   rc=$?
-  assert_case "a relative cd path is not trusted; falls back to the hook's own cwd" \
-    "$out" "$rc" 0 ""
+  assert_case "a relative cd path to a missing dir blocks; no fallback to the hook's own repo" \
+    "$out" "$rc" 2 "cannot resolve"
   rm -rf "$ops"
 }
 

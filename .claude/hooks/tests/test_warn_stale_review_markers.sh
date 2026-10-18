@@ -442,6 +442,32 @@ case10() {
   rm -rf "$sb"
 }
 
+# The target repository must not supply executable helpers.
+case11() {
+  local sb sha payload marker rc
+  sb=$(make_sandbox)
+  sha=$(printf '9%.0s' {1..40})
+  write_gh_stub "$sb" "pr:42:$sha"
+  marker="$sb/helper-executed"
+  printf 'touch "%s"\n' "$marker" > "$sb/.claude/hooks/_lib-read-config.sh"
+  printf '%s\n' "$(printf '0%.0s' {1..40})" > "$sb/.claude/session/reviews/acme__repo__42-rex.approved"
+  payload=$(jq -nc --arg command "git -C '$sb' push origin feature/GH-1739-probe" --arg cwd "$sb" \
+    '{tool_name:"Bash",tool_input:{command:$command},cwd:$cwd,tool_response:{exit_code:0}}')
+  # Use the installed hook and a local gh stub.
+  printf '%s' "$payload" | PATH="$sb/bin:$PATH" bash "$HOOK_SRC" >"$sb/out" 2>"$sb/err"
+  rc=$?
+  if [ "$rc" -eq 0 ] && [ ! -e "$marker" ] && grep -q 'Stale review marker' "$sb/err"; then
+    echo "PASS [target-helper-not-sourced]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [target-helper-not-sourced]: rc=$rc" >&2
+    cat "$sb/err" >&2
+    FAIL=$((FAIL+1))
+    FAILED_CASES="$FAILED_CASES target-helper-not-sourced"
+  fi
+  rm -rf "$sb"
+}
+
 # Run all cases.
 case1
 case2
@@ -453,6 +479,7 @@ case7
 case8
 case9
 case10
+case11
 
 echo ""
 echo "==================================="

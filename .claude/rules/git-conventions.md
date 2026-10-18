@@ -68,7 +68,25 @@ This is enforced by the `block-git-add-all.sh` hook.
 
 ## No Direct Main
 
-Every change must go through a PR. Zero exceptions. No commits directly to `main`/`master`. Enforced at the git layer by `.githooks/pre-push` (terminal `git push`) and `.githooks/pre-commit` (terminal `git commit`) — both read git's own ground-truth ref/branch resolution, no command-text parsing (me2resh/apexyard#1086). `.claude/hooks/block-main-push.sh` is a blocking **backstop** on top: a Claude Code PreToolUse hook, so it stays effective against `--no-verify` (which structurally bypasses the two git-native hooks above) and on managed-project clones that haven't installed `core.hooksPath` (#1088). See [AgDR-0114](../../docs/agdr/AgDR-0114-block-main-push-honest-naming-blocking-backstop.md) for the full control-vs-backstop rationale.
+Use a PR for every change after the first push. No commits directly to `main`/`master`. Enforced at the git layer by `.githooks/pre-push` (terminal `git push`) and `.githooks/pre-commit` (terminal `git commit`) — both read git's own ground-truth ref/branch resolution, no command-text parsing (me2resh/apexyard#1086). `.claude/hooks/block-main-push.sh` is a blocking **backstop** on top: a Claude Code PreToolUse hook, so it stays effective against `--no-verify` (which structurally bypasses the two git-native hooks above) and on managed-project clones that haven't installed `core.hooksPath` (#1088). See [AgDR-0114](../../docs/agdr/AgDR-0114-block-main-push-honest-naming-blocking-backstop.md) for the full control-vs-backstop rationale.
+
+The push backstop allows a simple push to a protected branch when the named remote has no local tracking refs. Resolve the remote from the explicit argument, branch pushRemote, remote.pushDefault, branch remote, then origin. Reject URL and path destinations. Reject invocation config, GIT_* assignments, force, mirror, delete, bulk, tag, glob, program selectors, and push options. Use local reads only. Git rejects a non-force push that cannot fast-forward the remote branch. The carve-out unblocks /setup Step 2b. The fork's protected list still applies to sibling repos. Commit checks still run (AgDR-0245).
+
+Reject commands containing `git remote` or `git config`.
+These commands can change the destination before the push.
+Reject a configured `remote.<name>.pushurl`.
+
+The commit backstop allows an initial commit on a protected branch with an unborn HEAD.
+An unborn HEAD names a branch but has no commit.
+In the resolved target, require `git rev-parse -q --verify HEAD` to fail.
+Require `git symbolic-ref -q HEAD` to name that branch.
+Reject `-c`, `--config-env`, `GIT_*=` prefixes, and `--amend` for that invocation.
+The exemption applies to one invocation. All other checks continue.
+The hook reads state before command execution.
+Thus, two chained commits can both pass while HEAD is unborn.
+The native pre-commit hook retains its stricter rule because it cannot inspect the original invocation.
+
+Resolve command targets from payload cwd, the cd chain, each `-C`, then `--git-dir` and `--work-tree`. Follow literal leading `cd` commands before `&&`, `;`, or a newline. Support `cd X || exit N` and `cd X || return N` tails. Block missing, unresolvable, or non-leading directory commands. Commit gates use the same target rule.
 
 ## No Hardcoded Secrets
 

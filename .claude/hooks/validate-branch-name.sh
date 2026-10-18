@@ -196,21 +196,8 @@ MSG
   fi
 fi
 
-# When the push has no explicit source ref (no-arg `git push`, `git push
-# origin` relying on upstream tracking), we fall back to the current branch.
-# That fallback MUST be resolved against the repo the command actually runs
-# in — not the hook's own cwd. The harness fires this PreToolUse hook BEFORE
-# the shell executes the command, so a `cd <repo> && git push …` prefix has
-# NOT yet changed the working dir: the hook's cwd is still the ops fork (on,
-# e.g., `dev`). Without re-rooting, the fallback reads the ops-fork's branch
-# and false-blocks a push for a *different* managed repo (e.g. "Branch 'dev'
-# missing ticket ID"). Same class as #669/#687 for the merge gates + arch-PR
-# hook. See me2resh/apexyard#693.
-#
-# Re-root via pr_cmd_cd_target from _lib-pr-repo.sh: if the command begins
-# with `cd <path> && …`, resolve the fallback branch with `git -C <path>`.
-# When there's no leading `cd` (or <path> isn't a git tree), this is a no-op
-# and the fallback stays byte-for-byte equivalent to the pre-#693 behaviour.
+# Resolve implicit pushes in the repo selected by cd and git options.
+# The invocation visitor blocks unresolved targets before this check.
 BRANCH_DIR=""
 PAYLOAD_CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null || true)
 if command -v git_prepare_invocation >/dev/null 2>&1; then
@@ -220,19 +207,6 @@ if command -v git_prepare_invocation >/dev/null 2>&1; then
     if [ -n "$DASH_C_TOP" ]; then
       BRANCH_DIR="$DASH_C_TOP"
     fi
-  fi
-fi
-if [ -z "$BRANCH_DIR" ] && [ -f "$HOOK_DIR/_lib-pr-repo.sh" ]; then
-  # shellcheck disable=SC1090,SC1091
-  . "$HOOK_DIR/_lib-pr-repo.sh"
-  CD_TARGET=$(pr_cmd_cd_target "$COMMAND")
-  if [ -n "$CD_TARGET" ]; then
-    CD_TOPLEVEL=$(git -C "$CD_TARGET" rev-parse --show-toplevel 2>/dev/null)
-    if [ -n "$CD_TOPLEVEL" ]; then
-      BRANCH_DIR="$CD_TOPLEVEL"
-    fi
-    # If <path> is not a readable git tree, fall through with BRANCH_DIR empty
-    # — the fallback uses the hook's own cwd, no worse than pre-#693.
   fi
 fi
 
@@ -259,9 +233,9 @@ fi
 # list. See me2resh/apexyard#888.
 REPO_ROOT_FOR_TRUNK=$(git rev-parse --show-toplevel 2>/dev/null)
 TRUNK_BRANCHES=""
-if [ -n "$REPO_ROOT_FOR_TRUNK" ] && [ -f "$REPO_ROOT_FOR_TRUNK/.claude/hooks/_lib-read-config.sh" ]; then
+if [ -n "$REPO_ROOT_FOR_TRUNK" ] && [ -f "$HOOK_DIR/_lib-read-config.sh" ]; then
   # shellcheck disable=SC1090,SC1091
-  . "$REPO_ROOT_FOR_TRUNK/.claude/hooks/_lib-read-config.sh"
+  . "$HOOK_DIR/_lib-read-config.sh"
   TRUNK_BRANCHES=$(config_get '.branch.trunk_whitelist[]')
 fi
 # Fallback if config unavailable (jq missing, standalone install, no config
@@ -362,9 +336,9 @@ fi
 # Load the branch-type whitelist from project config.
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 # shellcheck source=./_lib-read-config.sh
-if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" ]; then
+if [ -n "$REPO_ROOT" ] && [ -f "$HOOK_DIR/_lib-read-config.sh" ]; then
   # shellcheck disable=SC1090,SC1091
-  . "$REPO_ROOT/.claude/hooks/_lib-read-config.sh"
+  . "$HOOK_DIR/_lib-read-config.sh"
   TYPES=$(config_get '.branch.type_whitelist[]' | paste -sd'|' -)
 fi
 # Fallback if config unavailable (jq missing, standalone install, etc.)
@@ -379,9 +353,9 @@ fi
 # override `.tracker.id_pattern` in project-config.json. See AgDR-0033 and
 # `.claude/hooks/_lib-tracker.sh`.
 TRACKER_ID_PATTERN=""
-if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-tracker.sh" ]; then
+if [ -n "$REPO_ROOT" ] && [ -f "$HOOK_DIR/_lib-tracker.sh" ]; then
   # shellcheck disable=SC1090,SC1091
-  . "$REPO_ROOT/.claude/hooks/_lib-tracker.sh"
+  . "$HOOK_DIR/_lib-tracker.sh"
   TRACKER_ID_PATTERN=$(tracker_id_pattern)
 fi
 

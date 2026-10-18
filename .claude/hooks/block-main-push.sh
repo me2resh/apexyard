@@ -4,7 +4,9 @@
 #
 # Blocks direct pushes and commits to long-lived integration branches from
 # Claude Code sessions (a PreToolUse hook, evaluated before the shell ever
-# runs). All changes must go through pull requests.
+# runs). Use pull requests after the first push.
+# Allow a simple first push only when the named remote has no tracking refs.
+# Block force, bulk, mirror, and delete pushes. See AgDR-0245.
 #
 # THE controls for protected-branch enforcement are the git-native hooks:
 #   .githooks/pre-push     — terminal `git push`, ground truth via git's own
@@ -276,6 +278,8 @@ if command -v command_has_git_subcommand >/dev/null 2>&1; then
 else
   echo "$COMMAND" | grep -qE '\bgit\s+push\b' && _HAS_GIT_PUSH=1 || _HAS_GIT_PUSH=0
 fi
+# A visitor checks only its selected verb. Keep command-wide scans within it.
+[ "${_GIT_VISIT_SUB:-push}" = push ] || _HAS_GIT_PUSH=0
 if [ "$_HAS_GIT_PUSH" -eq 1 ]; then
   # Source the shared push-ref extractor if available.
   if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
@@ -302,7 +306,17 @@ if [ "$_HAS_GIT_PUSH" -eq 1 ]; then
     if declare -F _extract_all_push_refs_core > /dev/null 2>&1; then
       while IFS= read -r ANY_PUSH_DST; do
         [ -z "$ANY_PUSH_DST" ] && continue
+        case "$ANY_PUSH_DST" in
+          *'*'*|*'?'*|*'['*)
+            echo 'BLOCKED: cannot resolve a glob push destination' >&2
+            exit 2
+            ;;
+        esac
         if is_protected_branch "$ANY_PUSH_DST"; then
+          if git_first_push_to_empty_remote "$COMMAND" "$(printf '%s' "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty')"; then
+            SKIP_PUSH_BRANCH_CHECK=1
+            continue
+          fi
           cat >&2 <<MSG
 BLOCKED: Cannot push directly to a protected branch ('${ANY_PUSH_DST}').
 
@@ -445,19 +459,8 @@ MSG
     if [ -n "$PUSH_DST" ]; then
       TARGET_PUSH_BRANCH="$PUSH_DST"
     else
-      # No explicit ref in the command (e.g. `git push -u origin` or bare
-      # `git push`): the push targets the current branch of the repo the
-      # command runs in. For a compound `cd <path> && git push -u origin`
-      # (the worktree case — #727), we must resolve the branch of the
-      # TARGET worktree via the `cd` destination, NOT the hook's session
-      # cwd. Without this, a developer on a feature-branch worktree who
-      # runs `git push -u origin` is falsely blocked because the hook's
-      # session cwd (the primary checkout) may sit on a protected branch
-      # like `dev`.
-      #
-      # This mirrors the same pattern used in the commit section below
-      # for #549. Uses the RAW command — see the file-level note on why
-      # cd-detection never consults heredoc-stripped text.
+      # Resolve the branch in the repo selected by cd and git options.
+      # Resolve relative paths from the payload directory.
       PUSH_WORKTREE_PATH=""
       PAYLOAD_CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null || true)
       if command -v git_prepare_invocation >/dev/null 2>&1; then
@@ -465,12 +468,6 @@ MSG
         if [ -n "${GIT_DASH_C:-}" ]; then
           PUSH_WORKTREE_PATH="$GIT_DASH_C"
         fi
-      fi
-      if [ -z "$PUSH_WORKTREE_PATH" ] && echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])cd[[:space:]]+\S'; then
-        PUSH_WORKTREE_PATH=$(echo "$COMMAND" \
-          | grep -oE "cd[[:space:]]+(\"[^\"]*\"|'[^']*'|[^[:space:];&|]+)" \
-          | tail -n 1 \
-          | sed -E "s/^cd[[:space:]]+//; s/^[\"']//; s/[\"']\$//")
       fi
       if [ -n "${GIT_DASH_C:-}${_GIT_RAW_GIT_DIR:-}${_GIT_RAW_WORK_TREE:-}" ]; then
         TARGET_PUSH_BRANCH=$(git_target branch --show-current 2>/dev/null)
@@ -483,6 +480,11 @@ MSG
     fi
 
     if is_protected_branch "$TARGET_PUSH_BRANCH"; then
+      if git_first_push_to_empty_remote "$COMMAND" "$(printf '%s' "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty')"; then
+        SKIP_PUSH_BRANCH_CHECK=1
+      fi
+    fi
+    if is_protected_branch "$TARGET_PUSH_BRANCH" && [ "$SKIP_PUSH_BRANCH_CHECK" != 1 ]; then
       cat >&2 <<MSG
 BLOCKED: Cannot push directly to a protected branch ('${TARGET_PUSH_BRANCH}').
 
@@ -527,15 +529,9 @@ if command -v command_has_git_subcommand >/dev/null 2>&1; then
 else
   echo "$COMMAND" | grep -qE '\bgit\s+commit\b' && _HAS_GIT_COMMIT=1 || _HAS_GIT_COMMIT=0
 fi
+[ "${_GIT_VISIT_SUB:-commit}" = commit ] || _HAS_GIT_COMMIT=0
 if [ "$_HAS_GIT_COMMIT" -eq 1 ]; then
-  # Detect `cd <path>` prefix in compound commands, e.g.:
-  #   cd ../wt && git commit -m "msg"
-  #   cd /abs/path && git commit …
-  # Match `cd` as the first meaningful token before any separator. Uses the
-  # RAW command throughout this section — the commit-check has no "which
-  # ref" refinement step at all (it only checks current branch), so there
-  # is nothing here for heredoc-stripping to safely improve, only a
-  # presence question that must stay on raw text.
+  # Use the shared directory tracker for commits in the same chain.
   WORKTREE_PATH=""
   PAYLOAD_CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null || true)
   if command -v git_prepare_invocation >/dev/null 2>&1; then
@@ -543,20 +539,6 @@ if [ "$_HAS_GIT_COMMIT" -eq 1 ]; then
     if [ -n "${GIT_DASH_C:-}" ]; then
       WORKTREE_PATH="$GIT_DASH_C"
     fi
-  fi
-  if [ -z "$WORKTREE_PATH" ] && echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])cd[[:space:]]+\S'; then
-    # Resolve the LAST `cd <path>` in the chain (so `cd a && cd b && git commit`
-    # targets b, not a) and STRIP surrounding quotes. Quote-stripping is the
-    # security-critical part: without it, `cd "path" && git commit` would pass
-    # `"path"` (quotes included) to `git -C`, which errors → empty branch → the
-    # protected-branch check is skipped and a commit into a protected-branch
-    # worktree slips through. That false-negative was caught in the #580 review
-    # of this fix (#549). Handles double-quoted, single-quoted (incl. spaces),
-    # and bare paths.
-    WORKTREE_PATH=$(echo "$COMMAND" \
-      | grep -oE "cd[[:space:]]+(\"[^\"]*\"|'[^']*'|[^[:space:];&|]+)" \
-      | tail -n 1 \
-      | sed -E "s/^cd[[:space:]]+//; s/^[\"']//; s/[\"']\$//")
   fi
 
   if [ -n "${GIT_DASH_C:-}${_GIT_RAW_GIT_DIR:-}${_GIT_RAW_WORK_TREE:-}" ]; then
@@ -569,7 +551,12 @@ if [ "$_HAS_GIT_COMMIT" -eq 1 ]; then
     CURRENT_BRANCH=$(if command -v git_target >/dev/null 2>&1; then git_target branch --show-current; else git branch --show-current; fi 2>/dev/null)
   fi
 
-  if is_protected_branch "$CURRENT_BRANCH"; then
+  SKIP_COMMIT_BRANCH_CHECK=0
+  if is_protected_branch "$CURRENT_BRANCH" &&
+     git_initial_commit_on_unborn_head "$COMMAND"; then
+    SKIP_COMMIT_BRANCH_CHECK=1
+  fi
+  if [ "$SKIP_COMMIT_BRANCH_CHECK" -eq 0 ] && is_protected_branch "$CURRENT_BRANCH"; then
     cat >&2 <<MSG
 BLOCKED: Cannot commit directly on protected branch '${CURRENT_BRANCH}'.
 
