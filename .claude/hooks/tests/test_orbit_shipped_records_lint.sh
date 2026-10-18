@@ -12,7 +12,15 @@ if [ ! -d "$root/docs/orbit" ]; then
   exit 0
 fi
 
-out=$(bash "$root/.claude/skills/orbit/lib/records-lint.sh" \
+# Hook-test runners do not install the ORBIT CLI. Stub its schema check:
+# the records-lint workflow runs the real CLI. The format rules this test
+# guards (sentence length and the rest) live in records-lint.sh itself.
+sb=$(mktemp -d)
+trap 'rm -rf "$sb"' EXIT
+printf '#!/bin/sh\nexit 0\n' > "$sb/orbit"
+chmod +x "$sb/orbit"
+
+out=$(ORBIT_BIN="$sb/orbit" bash "$root/.claude/skills/orbit/lib/records-lint.sh" \
   --orbit-root "$root/docs/orbit" --repo me2resh/apexyard --all 2>&1)
 rc=$?
 if [ "$rc" -eq 0 ]; then
