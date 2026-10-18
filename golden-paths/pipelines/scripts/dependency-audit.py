@@ -28,8 +28,14 @@ try:
 except ImportError:  # pragma: no cover — CI uses 3.12+
     tomllib = None  # type: ignore[assignment]
 
-HELPER_REVISION = "3"
+HELPER_REVISION = "4"
 HELPER_ID = "apexyard-dependency-audit"
+# Revision 4 records known unsupported manifests in not_scanned.
+# Exit 3 for those files only when both conditions are true.
+# No supported npm or Python manifest was found.
+# No --ecosystem filter was given.
+# A Critical finding still exits 1.
+# Every other case keeps the normal exit code.
 
 REQUIRED_PIP_AUDIT = "2.10.0"
 REQUIRED_PACKAGING = "25.0"
@@ -93,6 +99,37 @@ PYTHON_MANIFEST_NAMES = {
     "uv.lock",
 }
 REQUIREMENTS_RE = re.compile(r"^(?:requirements.*|dev-requirements)\.txt$", re.IGNORECASE)
+
+# Known manifests this helper does not scan.
+# Discovery uses walk_project_files and SKIP_DIR_NAMES.
+# A pattern that starts with "*." matches that file-name suffix.
+# The helper does not add a runner for these ecosystems.
+UNSUPPORTED_MANIFESTS: Tuple[Tuple[str, str], ...] = (
+    ("*.csproj", "nuget"),
+    ("*.fsproj", "nuget"),
+    ("*.vbproj", "nuget"),
+    ("packages.config", "nuget"),
+    ("Directory.Packages.props", "nuget"),
+    ("libman.json", "libman"),
+    ("go.mod", "go"),
+    ("Cargo.toml", "cargo"),
+    ("Gemfile", "bundler"),
+    ("pom.xml", "maven"),
+    ("build.gradle", "gradle"),
+    ("build.gradle.kts", "gradle"),
+    ("composer.json", "composer"),
+    ("Package.swift", "swift"),
+    ("pubspec.yaml", "pub"),
+    ("mix.exs", "mix"),
+)
+UNSUPPORTED_NOT_SCANNED_REASON = (
+    "known unsupported manifest. This helper scans npm and Python only."
+)
+NO_MANIFEST_NOTE = "no dependency manifests found"
+UNSUPPORTED_COVERAGE_NOTE = (
+    "Known unsupported manifests were not scanned. "
+    "Selected coverage is incomplete."
+)
 EXACT_PIN_RE = re.compile(
     r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*==\s*([^\s\\;]+)"
 )
@@ -213,6 +250,13 @@ class OutdatedFinding:
 
 
 @dataclass
+class NotScanned:
+    path: str
+    ecosystem: str
+    reason: str
+
+
+@dataclass
 class DependencySet:
     directory: str
     ecosystem: str
@@ -237,6 +281,9 @@ class AuditReport:
     tool_versions: Dict[str, str]
     excluded_ecosystems: List[str] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
+    not_scanned: List[NotScanned] = field(default_factory=list)
+    # True only when not_scanned is the whole scan and no filter was set.
+    unsupported_only: bool = False
 
     def severity_totals(self) -> Dict[str, int]:
         totals = {k: 0 for k in ("Critical", "High", "Medium", "Low", "Unknown")}
@@ -284,6 +331,36 @@ def detect_manifests(root: Path) -> Dict[str, List[Path]]:
             found["python"].append(path)
     for eco in found:
         found[eco].sort(key=lambda p: str(p))
+    return found
+
+
+def unsupported_ecosystem(filename: str) -> Optional[str]:
+    """Return the ecosystem for a known unsupported manifest name."""
+    for pattern, ecosystem in UNSUPPORTED_MANIFESTS:
+        if pattern.startswith("*."):
+            suffix = pattern[1:]
+            if filename.endswith(suffix) and filename != suffix:
+                return ecosystem
+        elif filename == pattern:
+            return ecosystem
+    return None
+
+
+def detect_unsupported_manifests(root: Path) -> List[NotScanned]:
+    """List known unsupported manifests. Paths are relative to root."""
+    found: List[NotScanned] = []
+    for path in walk_project_files(root):
+        ecosystem = unsupported_ecosystem(path.name)
+        if ecosystem is None:
+            continue
+        found.append(
+            NotScanned(
+                path=_rel(root, path),
+                ecosystem=ecosystem,
+                reason=UNSUPPORTED_NOT_SCANNED_REASON,
+            )
+        )
+    found.sort(key=lambda item: (item.path, item.ecosystem))
     return found
 
 
@@ -1829,6 +1906,12 @@ def choose_exit_code(report: AuditReport) -> int:
             "pending",
         ):
             return 3
+    # Exit 3 for unsupported manifests only in the unsupported-only case.
+    # That case has no npm or Python manifest and no ecosystem filter.
+    # A Critical finding already returned 1.
+    # The not_scanned list stays in the report in every case.
+    if report.unsupported_only:
+        return 3
     if totals.get("Unknown", 0) > 0:
         return 4
     return 0
@@ -1845,6 +1928,15 @@ def report_to_dict(report: AuditReport) -> Dict[str, Any]:
         "tool_versions": report.tool_versions,
         "severity_totals": report.severity_totals(),
         "notes": report.notes,
+        "not_scanned": [
+            {
+                "path": item.path,
+                "ecosystem": item.ecosystem,
+                "reason": item.reason,
+            }
+            for item in report.not_scanned
+        ],
+        "unsupported_only": report.unsupported_only,
         "dependency_sets": [
             {
                 "directory": ds.directory,
@@ -1963,6 +2055,12 @@ def render_markdown(report: AuditReport) -> str:
                 f"| {lic.package}@{lic.version} | {lic.licence} | {lic.disposition} |"
             )
         lines.append("")
+    if report.not_scanned:
+        lines.append("## Not scanned")
+        lines.append("")
+        for item in report.not_scanned:
+            lines.append(f"- `{item.path}` ({item.ecosystem}): {item.reason}")
+        lines.append("")
     if report.notes:
         lines.append("## Notes")
         lines.append("")
@@ -2080,6 +2178,8 @@ def run_audit(args: argparse.Namespace) -> Tuple[AuditReport, int]:
 
     deadline = Deadline()
     manifests = detect_manifests(root)
+    unsupported = detect_unsupported_manifests(root)
+    supported_found = any(manifests.values())
     detected = [e for e, paths in manifests.items() if paths]
     excluded = []
     if eco_filter is not None:
@@ -2093,6 +2193,14 @@ def run_audit(args: argparse.Namespace) -> Tuple[AuditReport, int]:
                 pass
 
     dep_sets = group_dependency_sets(root, manifests)
+    # Exit 3 for unsupported files only when no npm or Python dependency set
+    # is selected for checks and the operator did not pass an ecosystem
+    # filter. A not_applicable set (a tooling-only pyproject.toml) is not
+    # checked, so it does not count.
+    checkable_found = any(
+        ds.coverage not in ("excluded", "not_applicable") for ds in dep_sets
+    )
+    unsupported_only = bool(unsupported) and not checkable_found and eco_filter is None
     report = AuditReport(
         project=root.name,
         started_at=_now_iso(),
@@ -2110,7 +2218,13 @@ def run_audit(args: argparse.Namespace) -> Tuple[AuditReport, int]:
             "cvss_approved": str(CVSS_APPROVED).lower(),
         },
         excluded_ecosystems=excluded,
+        not_scanned=unsupported,
+        unsupported_only=unsupported_only,
     )
+    if not supported_found and not unsupported:
+        report.notes.append(NO_MANIFEST_NOTE)
+    if unsupported:
+        report.notes.append(UNSUPPORTED_COVERAGE_NOTE)
 
     fixture_dir = Path(args.fixture_http).resolve() if args.fixture_http else None
     http = HttpClient(fixture_dir=fixture_dir, deadline=deadline)

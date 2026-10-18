@@ -16,7 +16,7 @@ The skill, Munir (`.claude/agents/dependency-auditor.md`), and `golden-paths/pip
 
 `golden-paths/pipelines/scripts/dependency-audit.py`
 
-Adopters copy that helper beside the workflow as `.github/scripts/dependency-audit.py`. Compare `helper_revision` when refreshing.
+Adopters copy that helper beside the workflow as `.github/scripts/dependency-audit.py`. Compare `helper_revision` when refreshing. The current helper revision is 4.
 
 Design: [AgDR-0176](../../../docs/agdr/AgDR-0176-dependency-audit-ecosystem-dispatch.md).
 
@@ -54,6 +54,45 @@ Run against a managed project under `workspace/<name>/`, or an explicit project 
 Search the project tree. Skip `node_modules`, `.venv`, `vendor`, `dist`, `build`, `.next`, and `.git`.
 
 Default: audit every detected supported ecosystem. `--ecosystem=` filters. `--language=js|ts|python` is an alias. Reject conflicting filters. `--runner=` must match the selected ecosystem. Report detected ecosystems that the filter excludes. Report known unsupported manifests as not scanned. A tooling-only `pyproject.toml` with no dependency groups is `not_applicable`.
+
+### Known unsupported manifests
+
+The helper does not scan these files. It records each file in `not_scanned`.
+
+| Pattern | Ecosystem |
+|---------|-----------|
+| `*.csproj`, `*.fsproj`, `*.vbproj`, `packages.config`, `Directory.Packages.props` | nuget |
+| `libman.json` | libman |
+| `go.mod` | go |
+| `Cargo.toml` | cargo |
+| `Gemfile` | bundler |
+| `pom.xml` | maven |
+| `build.gradle`, `build.gradle.kts` | gradle |
+| `composer.json` | composer |
+| `Package.swift` | swift |
+| `pubspec.yaml` | pub |
+| `mix.exs` | mix |
+
+Each `not_scanned` entry has `path`, `ecosystem`, and `reason`.
+The path is relative to the scanned root.
+The helper does not add a NuGet runner.
+Discovery uses the same walk and the same ignored directories as npm and Python.
+
+The helper exits 3 for unsupported manifests only when both conditions are true.
+No npm or Python dependency set is selected for checks. A tooling-only `pyproject.toml` does not count, because it has no dependencies to check.
+No `--ecosystem` filter is given.
+The `--language` flag selects the same filter.
+A Critical finding still exits 1.
+Every other case keeps the normal exit code.
+The helper still records each file in `not_scanned`.
+The Markdown report keeps the Not scanned section.
+The helper keeps the coverage note.
+This skill and the helper use that same exit rule.
+A tree with no dependency manifest exits 0.
+The helper adds the note `no dependency manifests found`.
+
+The CI template starts a scan only when it finds an npm or Python manifest.
+Run the helper directly for a tree that has only unsupported manifests.
 
 ### 2. Invoke the shared helper
 
@@ -124,6 +163,12 @@ Produce one report. Include per-directory dependency sets and per-ecosystem sect
 | 3 | Missing selected tool, failed check, or incomplete selected coverage. |
 | 4 | Complete selected coverage with Unknown vulnerability findings. |
 
+The helper exits 3 for unsupported manifests only when both conditions are true.
+No npm or Python dependency set is selected for checks. A tooling-only `pyproject.toml` does not count, because it has no dependencies to check.
+No `--ecosystem` filter is given.
+A Critical finding still exits 1.
+Every other case keeps the normal exit code.
+The `not_scanned` list, the Not scanned section, and the coverage note stay.
 WARN or incomplete coverage does not install tools automatically. Print per-ecosystem install advice.
 
 ### 9. Install advice (missing tools)

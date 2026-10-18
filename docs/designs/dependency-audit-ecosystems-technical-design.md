@@ -190,6 +190,25 @@ Unknown vulnerabilities produce a needs-triage verdict rather than a clean verdi
 
 Known Critical findings take precedence over other exit statuses, while coverage gaps remain visible.
 Print per-ecosystem install advice when tools are missing. Never install them automatically during an operator audit.
+
+Known unsupported manifests are not a supported ecosystem.
+The helper records each file in `not_scanned`.
+Each entry has `path`, `ecosystem`, and `reason`.
+The path is relative to the scanned root.
+The helper does not scan that file.
+The helper does not add a NuGet runner.
+The helper exits 3 for those files only when both conditions are true.
+No npm or Python dependency set is selected for checks. A tooling-only `pyproject.toml` does not count, because it has no dependencies to check.
+No `--ecosystem` filter is given.
+A Critical finding still exits 1.
+Every other case keeps the normal exit code.
+The `not_scanned` list stays in the report.
+The Markdown report keeps the Not scanned section.
+The helper keeps the coverage note.
+A tree with no dependency manifest exits 0.
+The helper adds the note `no dependency manifests found`.
+The skill and the helper use the same exit rule for this gap.
+The current helper revision is 4.
 Only a successful zero-finding check within its stated coverage can report no known findings.
 Incomplete or failed checks cannot produce a clean overall verdict.
 
@@ -307,6 +326,9 @@ Verify behavior with fixtures, rather than only matching documentation strings.
 |------|--------|-----------|
 | 2026-09-29 | Fail-closed scanners (B1–B5). TOML lock parsers via `tomllib`. Manifest size cap. PEP 508/440 pin sanitisation. Symlink containment. Restore npm outdated + licence-checker. Install tools from the pin file. Hash pins deferred in AgDR-0184. | Rex review of PR #1469 found five fail-open paths that reported unscanned sets as clean, regex lock parsers that missed real Poetry/uv source tables, and a pipeline that dropped npm checks from `dev`. |
 | 2026-09-29 | Hashed audit-tool lock shipped. CI installs with `--require-hashes`. Pre-hash gate step removed. Regeneration documented via `uv pip compile --generate-hashes` (AgDR-0194 / #1478). | AgDR-0176 required hashes; AgDR-0184 deferred them. #1478 fail-closed during transition, then filled the lock so verified tools install from the compiled pin file. |
+| 2026-10-17 | List known unsupported manifests in `not_scanned`. Helper revision 4. Issue #1744. | An unsupported-only tree returned exit 0 and an empty report. That was a false pass. The helper still scans only npm and Python. |
+| 2026-10-17 | Exit 3 for known unsupported manifests only when no supported npm or Python manifest exists and no `--ecosystem` filter is set. Keep `not_scanned`, the Not scanned section, and the coverage note. Helper revision stays 4. Issue #1744. | A mixed tree with a clean supported scan was failing only because an unsupported manifest was listed. The operator limited that exit to the unsupported-only case with no ecosystem filter. A Critical finding still exits 1. |
+| 2026-10-17 | Count only dependency sets that are selected for checks when deciding exit 3. A `not_applicable` set from a tooling-only `pyproject.toml` does not count. Issue #1744. | The architecture review found that a .NET tree with a tooling-only `pyproject.toml` exited 0 although no check ran. That is the false pass #1744 reports. |
 
 ## Approvals
 

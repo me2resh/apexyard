@@ -96,7 +96,7 @@ cp ~/apexyard/golden-paths/pipelines/ci.yml .github/workflows/
 
 **Agent**: Guardian (Dependency Auditor)
 
-**Ecosystems** (AgDR-0176 / issue #1359): npm and Python via a finite runner map. Other ecosystems stay out of scope for this first pass.
+**Ecosystems** (AgDR-0176 / issue #1359): npm and Python via a finite runner map. Other ecosystems stay out of scope for this first pass. Helper revision 4 lists known unsupported manifests in `not_scanned`. The helper exits 3 for those files only when no npm or Python dependency set is selected for checks and no `--ecosystem` filter is set. A Critical finding still exits 1. Every other case keeps the normal exit code.
 
 **Checks performed**:
 
@@ -116,6 +116,7 @@ cp golden-paths/pipelines/scripts/dependency-audit-tools.requirements.txt .githu
 # Optional metadata companion (not required by the workflow install step):
 # cp golden-paths/pipelines/scripts/dependency-audit-tools.lock.json .github/scripts/
 # Compare helper_revision in the JSON report when refreshing after a framework upgrade.
+# The framework helper revision is 4.
 # dependency-audit-tools.requirements.txt is a hashed lock (#1478, AgDR-0194).
 # Regenerate it after changing a pin with the command below.
 ```

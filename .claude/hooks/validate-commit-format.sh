@@ -372,9 +372,9 @@ REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 TYPES=""
 
 # 1. Preferred: read from the unified project-config via the shared reader.
-if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" ]; then
+if [ -n "$REPO_ROOT" ] && [ -f "$HOOK_DIR/_lib-read-config.sh" ]; then
   # shellcheck disable=SC1090,SC1091
-  . "$REPO_ROOT/.claude/hooks/_lib-read-config.sh"
+  . "$HOOK_DIR/_lib-read-config.sh"
   TYPES=$(config_get '.commit.type_whitelist[]' 2>/dev/null | paste -sd'|' -)
 fi
 

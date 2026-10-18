@@ -3,6 +3,17 @@
 # Also copy golden-paths/pipelines/scripts/dependency-audit.py and
 # dependency-audit-tools.requirements.txt to .github/scripts/ (same revision).
 # Refresh when the framework helper_revision advances. See pipelines/README.md.
+# Helper revision 4 records known unsupported manifests in not_scanned.
+# The helper exits 3 for those files only when both conditions are true.
+# No npm or Python dependency set was selected for checks.
+# No --ecosystem filter was given.
+# A Critical finding still exits 1.
+# Every other case keeps the normal exit code.
+# This summary adds a note for each not_scanned item.
+# This summary leaves the incomplete flag unchanged for that list.
+# This workflow still starts jobs only for npm and Python manifests.
+# A tree with only unsupported manifests does not run the helper here.
+# Run the helper directly for that tree.
 #
 # Agent: Guardian (Dependency Auditor)
 # Trigger: weekly (Monday 9 AM UTC), manual, and on npm / Python manifest changes
@@ -388,6 +399,17 @@ jobs:
               ):
                   incomplete = True
                   notes.append(f"{path} reported exit 1 without a Critical finding")
+              for item in data.get("not_scanned") or []:
+                  if isinstance(item, dict):
+                      notes.append(
+                          "not scanned: "
+                          + str(item.get("path") or "")
+                          + " ("
+                          + str(item.get("ecosystem") or "")
+                          + ")"
+                      )
+                  else:
+                      notes.append(f"{path} not_scanned entry is not an object")
           for label in critical_exits - critical_findings:
               incomplete = True
               notes.append(f"{label} helper exited 1 without a Critical finding")

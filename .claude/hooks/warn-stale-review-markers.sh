@@ -179,9 +179,9 @@ fi
 # per-fork override. Falls back to inline default if the lib is unavailable
 # (bare checkout predating #109).
 ON_STALE="warn"
-if [ -f "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" ]; then
+if [ -f "$HOOK_DIR_STALE/_lib-read-config.sh" ]; then
   # shellcheck disable=SC1090,SC1091
-  . "$REPO_ROOT/.claude/hooks/_lib-read-config.sh"
+  . "$HOOK_DIR_STALE/_lib-read-config.sh"
   CFG=$(config_get_or '.review_markers.on_stale' 'warn' 2>/dev/null)
   if [ "$CFG" = "delete" ] || [ "$CFG" = "warn" ]; then
     ON_STALE="$CFG"

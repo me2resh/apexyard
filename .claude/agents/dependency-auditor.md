@@ -63,6 +63,16 @@ Run an audit when:
 
 Never invent a clean verdict when coverage is incomplete or a scanner failed.
 
+Read `not_scanned` in the helper JSON.
+Each entry is a known unsupported manifest.
+Exit 3 for that list only when both conditions are true.
+No npm or Python dependency set is selected for checks. A tooling-only `pyproject.toml` does not count, because it has no dependencies to check.
+No `--ecosystem` filter is given.
+A Critical finding still exits 1.
+Every other case keeps the normal exit code.
+Keep the list, the Not scanned section, and the coverage note.
+The helper revision for this contract is 4.
+
 ## Audit Checks
 
 ### 1. Vulnerability Scan

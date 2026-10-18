@@ -89,6 +89,7 @@ make_sandbox() {
   # Install hook + libs.
   mkdir -p "$sb/.claude/hooks"
   cp "$HOOK_SRC"        "$sb/.claude/hooks/block-main-push.sh"
+  cp "$SRC_ROOT/.claude/hooks/_lib-git-global.sh" "$sb/.claude/hooks/"
   cp "$LIB_SRC"         "$sb/.claude/hooks/_lib-extract-push-ref.sh"
   cp "$LIB_PROTECTED_SRC" "$sb/.claude/hooks/_lib-protected-branches.sh"
   if [ -f "$LIB_STRIP_HEREDOC_SRC" ]; then

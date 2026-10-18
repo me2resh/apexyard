@@ -1501,6 +1501,250 @@ else
   fail "F1478-design-approval-state-corrected" "approval section still claims pending"
 fi
 
+# ---------------------------------------------------------------------------
+# GH-1744 - unsupported manifests are not a clean pass
+# ---------------------------------------------------------------------------
+mkdir -p "$SB/projects/dotnet-only" \
+  "$SB/projects/npm-and-go" \
+  "$SB/projects/no-manifests" \
+  "$SB/projects/ignored-unsupported/node_modules/pkg" \
+  "$SB/projects/ignored-unsupported/.git" \
+  "$SB/bin"
+
+cat > "$SB/projects/dotnet-only/App.csproj" <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+  </ItemGroup>
+</Project>
+EOF
+printf '%s\n' '{"version":"1.0","defaultProvider":"cdnjs","libraries":[]}' \
+  > "$SB/projects/dotnet-only/libman.json"
+
+printf '%s\n' '{"name":"demo-npm","version":"1.0.0","license":"MIT"}' \
+  > "$SB/projects/npm-and-go/package.json"
+printf '%s\n' '{"name":"demo-npm","lockfileVersion":3,"requires":true,"packages":{"":{"name":"demo-npm","version":"1.0.0"}}}' \
+  > "$SB/projects/npm-and-go/package-lock.json"
+printf '%s\n' 'module example.com/demo' '' 'go 1.22' \
+  > "$SB/projects/npm-and-go/go.mod"
+
+cat > "$SB/bin/npm" <<'EOF'
+#!/bin/sh
+if [ "$1" = "audit" ]; then
+  printf '%s\n' '{"vulnerabilities":{},"metadata":{"vulnerabilities":{"info":0,"low":0,"moderate":0,"high":0,"critical":0,"total":0}}}'
+  exit 0
+fi
+echo "unexpected npm args: $*" >&2
+exit 1
+EOF
+chmod +x "$SB/bin/npm"
+
+printf '%s\n' '<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="Hidden.Pkg" Version="1.0.0" /></ItemGroup></Project>' \
+  > "$SB/projects/ignored-unsupported/node_modules/pkg/Hidden.csproj"
+printf '%s\n' '<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="Secret.Pkg" Version="1.0.0" /></ItemGroup></Project>' \
+  > "$SB/projects/ignored-unsupported/.git/Secret.csproj"
+
+set +e
+python3 -I "$HELPER" "$SB/projects/dotnet-only" \
+  --md-out "$SB/dotnet-only.md" >"$SB/dotnet-only.json" 2>"$SB/dotnet-only.err"
+dotnet_rc=$?
+PATH="$SB/bin:$PATH" python3 -I "$HELPER" "$SB/projects/npm-and-go" \
+  --md-out "$SB/npm-and-go.md" >"$SB/npm-and-go.json" 2>"$SB/npm-and-go.err"
+npm_go_rc=$?
+python3 -I "$HELPER" "$SB/projects/dotnet-only" --ecosystem npm \
+  --md-out "$SB/dotnet-filter.md" >"$SB/dotnet-filter.json" 2>"$SB/dotnet-filter.err"
+filter_rc=$?
+python3 -I "$HELPER" "$SB/projects/no-manifests" >"$SB/no-manifests.json" 2>"$SB/no-manifests.err"
+empty_rc=$?
+python3 -I "$HELPER" "$SB/projects/ignored-unsupported" >"$SB/ignored-unsupported.json" 2>"$SB/ignored-unsupported.err"
+ignored_rc=$?
+set -e
+
+if python3 - "$SB/dotnet-only.json" "$dotnet_rc" "$SB/dotnet-only.md" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+md = open(sys.argv[3], encoding="utf-8").read()
+assert int(sys.argv[2]) == d["exit_code"] == 3
+assert d["unsupported_only"] is True
+assert d["ecosystems"] == []
+assert d["findings"] == []
+assert d["severity_totals"] == {"Critical": 0, "High": 0, "Medium": 0, "Low": 0, "Unknown": 0}
+assert d["helper_revision"] == "4"
+rows = {(item["path"], item["ecosystem"]) for item in d["not_scanned"]}
+assert rows == {("App.csproj", "nuget"), ("libman.json", "libman")}, rows
+assert all(item["reason"] for item in d["not_scanned"])
+assert any("Selected coverage is incomplete." in note for note in d["notes"])
+assert "## Not scanned" in md
+assert "App.csproj" in md and "libman.json" in md
+assert "Selected coverage is incomplete." in md
+PY
+then
+  pass "GH1744-dotnet-only-exits-3"
+else
+  fail "GH1744-dotnet-only-exits-3" "rc=$dotnet_rc err=$(head -c 200 "$SB/dotnet-only.err") body=$(head -c 400 "$SB/dotnet-only.json")"
+fi
+
+# A tooling-only pyproject.toml is not checked, so it must not turn an
+# unsupported-only tree into a clean pass.
+mkdir -p "$SB/projects/dotnet-tooling-py"
+cp "$SB/projects/dotnet-only/App.csproj" "$SB/projects/dotnet-tooling-py/App.csproj"
+printf '%s\n' '[tool.ruff]' 'line-length = 100' \
+  > "$SB/projects/dotnet-tooling-py/pyproject.toml"
+set +e
+python3 -I "$HELPER" "$SB/projects/dotnet-tooling-py" \
+  >"$SB/dotnet-tooling-py.json" 2>"$SB/dotnet-tooling-py.err"
+tooling_rc=$?
+set -e
+if python3 - "$SB/dotnet-tooling-py.json" "$tooling_rc" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+assert int(sys.argv[2]) == d["exit_code"] == 3
+assert d["unsupported_only"] is True
+assert [(item["path"], item["ecosystem"]) for item in d["not_scanned"]] == [("App.csproj", "nuget")]
+assert all(s["coverage"] == "not_applicable" for s in d["dependency_sets"])
+PY
+then
+  pass "GH1744-dotnet-plus-tooling-pyproject-exits-3"
+else
+  fail "GH1744-dotnet-plus-tooling-pyproject-exits-3" "rc=$tooling_rc err=$(head -c 200 "$SB/dotnet-tooling-py.err") body=$(head -c 400 "$SB/dotnet-tooling-py.json")"
+fi
+
+if python3 - "$SB/npm-and-go.json" "$npm_go_rc" "$SB/npm-and-go.md" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+md = open(sys.argv[3], encoding="utf-8").read()
+assert int(sys.argv[2]) == d["exit_code"] == 0
+assert d["unsupported_only"] is False
+assert d["ecosystems"] == ["npm"]
+assert d["helper_revision"] == "4"
+assert d["findings"] == []
+npm = next(s for s in d["dependency_sets"] if s["ecosystem"] == "npm")
+assert npm["coverage"] == npm["check_status"] == "complete"
+assert [(item["path"], item["ecosystem"]) for item in d["not_scanned"]] == [("go.mod", "go")]
+assert any("Selected coverage is incomplete." in note for note in d["notes"])
+assert "## Not scanned" in md and "go.mod" in md
+assert "Selected coverage is incomplete." in md
+PY
+then
+  pass "GH1744-npm-and-go-not-scanned-normal-exit"
+else
+  fail "GH1744-npm-and-go-not-scanned-normal-exit" "rc=$npm_go_rc err=$(head -c 300 "$SB/npm-and-go.err") body=$(head -c 500 "$SB/npm-and-go.json")"
+fi
+
+if python3 - "$SB/dotnet-filter.json" "$filter_rc" "$SB/dotnet-filter.md" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+md = open(sys.argv[3], encoding="utf-8").read()
+assert int(sys.argv[2]) == d["exit_code"] == 0
+assert d["unsupported_only"] is False
+assert d["ecosystems"] == []
+assert d["findings"] == []
+rows = {(item["path"], item["ecosystem"]) for item in d["not_scanned"]}
+assert rows == {("App.csproj", "nuget"), ("libman.json", "libman")}, rows
+assert any("Selected coverage is incomplete." in note for note in d["notes"])
+assert "## Not scanned" in md
+assert "App.csproj" in md and "libman.json" in md
+PY
+then
+  pass "GH1744-dotnet-ecosystem-filter-normal-exit"
+else
+  fail "GH1744-dotnet-ecosystem-filter-normal-exit" "rc=$filter_rc err=$(head -c 200 "$SB/dotnet-filter.err") body=$(head -c 400 "$SB/dotnet-filter.json")"
+fi
+
+if python3 - "$SB/no-manifests.json" "$empty_rc" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+assert int(sys.argv[2]) == d["exit_code"] == 0
+assert d["ecosystems"] == []
+assert d["not_scanned"] == []
+assert d["findings"] == []
+assert "no dependency manifests found" in d["notes"]
+PY
+then
+  pass "GH1744-empty-tree-no-manifest-note"
+else
+  fail "GH1744-empty-tree-no-manifest-note" "rc=$empty_rc body=$(head -c 400 "$SB/no-manifests.json")"
+fi
+
+if python3 - "$SB/ignored-unsupported.json" "$ignored_rc" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+assert int(sys.argv[2]) == d["exit_code"] == 0
+assert d["not_scanned"] == []
+blob = json.dumps(d)
+assert "Hidden.csproj" not in blob
+assert "Secret.csproj" not in blob
+assert "no dependency manifests found" in d["notes"]
+PY
+then
+  pass "GH1744-ignored-csproj-in-node-modules-and-git"
+else
+  fail "GH1744-ignored-csproj-in-node-modules-and-git" "rc=$ignored_rc body=$(head -c 400 "$SB/ignored-unsupported.json")"
+fi
+
+if HELPER_PATH="$HELPER" python3 - <<'PY'
+import importlib.util, os, sys
+spec = importlib.util.spec_from_file_location("dep_audit_1744", os.environ["HELPER_PATH"])
+mod = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = mod
+spec.loader.exec_module(mod)
+assert mod.HELPER_REVISION == "4"
+expected = (
+    ("*.csproj", "nuget"),
+    ("*.fsproj", "nuget"),
+    ("*.vbproj", "nuget"),
+    ("packages.config", "nuget"),
+    ("Directory.Packages.props", "nuget"),
+    ("libman.json", "libman"),
+    ("go.mod", "go"),
+    ("Cargo.toml", "cargo"),
+    ("Gemfile", "bundler"),
+    ("pom.xml", "maven"),
+    ("build.gradle", "gradle"),
+    ("build.gradle.kts", "gradle"),
+    ("composer.json", "composer"),
+    ("Package.swift", "swift"),
+    ("pubspec.yaml", "pub"),
+    ("mix.exs", "mix"),
+)
+assert mod.UNSUPPORTED_MANIFESTS == expected
+assert mod.unsupported_ecosystem("App.csproj") == "nuget"
+assert mod.unsupported_ecosystem("build.gradle.kts") == "gradle"
+assert mod.unsupported_ecosystem("package.json") is None
+PY
+then
+  pass "GH1744-unsupported-manifest-constant"
+else
+  fail "GH1744-unsupported-manifest-constant" "manifest constant drifted"
+fi
+
+if grep -qF 'not_scanned' "$FIXED_SKILL" \
+  && grep -qF 'The current helper revision is 4.' "$FIXED_SKILL" \
+  && grep -qF 'Helper revision 4' "$FIXED_PIPELINE" \
+  && grep -qF 'The framework helper revision is 4.' "$SRC_ROOT/golden-paths/pipelines/README.md" \
+  && grep -qF 'not_scanned' "$FIXED_DESIGN"; then
+  pass "GH1744-revision-4-pinned-in-docs"
+else
+  fail "GH1744-revision-4-pinned-in-docs" "skill, workflow, README, or design missing revision 4"
+fi
+
+if python3 - "$FIXED_PIPELINE" <<'PY'
+from pathlib import Path
+import sys
+workflow = Path(sys.argv[1]).read_text(encoding="utf-8")
+start = workflow.index('for item in data.get("not_scanned")')
+end = workflow.index("for label in critical_exits", start)
+chunk = workflow[start:end]
+assert "incomplete = True" not in chunk, chunk
+assert "notes.append" in chunk
+assert "No --ecosystem filter was given." in workflow
+PY
+then
+  pass "GH1744-workflow-not-scanned-note-only"
+else
+  fail "GH1744-workflow-not-scanned-note-only" "not_scanned still marks the summary incomplete"
+fi
+
 echo ""
 echo "----------------------------------------"
 echo "dependency-audit #1359 tests: $PASS passed, $FAIL failed"
