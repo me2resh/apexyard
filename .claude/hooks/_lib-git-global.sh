@@ -15,6 +15,9 @@ if [ -n "${_LIB_GIT_GLOBAL_LOADED:-}" ]; then
 fi
 _LIB_GIT_GLOBAL_LOADED=1
 
+# #1748: common git builtins. Aliases never shadow these.
+_git_known_builtins='add am apply archive bisect blame branch bundle cat-file checkout cherry-pick clean clone commit commit-tree config count-objects describe diff fetch for-each-ref format-patch fsck gc grep hash-object help init log ls-files ls-remote ls-tree maintenance merge mktag mktree mv notes pull push range-diff read-tree rebase reflog remote repack replace reset restore rev-list rev-parse revert rm shortlog show show-ref sparse-checkout stash status submodule switch symbolic-ref tag update-index update-ref var verify-commit verify-tag version worktree write-tree'
+
 # Share this expression with the dispatcher and the gates.
 # #1748: escaped pairs and quoted values belong to a single option word.
 _git_opt_val='(\\.|"[^"]*"|'"'"'[^'"'"']*'"'"'|\$\([^)]*\)|`[^`]*`|[^[:space:];&|"'"'"']+)+'
@@ -417,7 +420,10 @@ git_check_aliases() (
     [ -n "$prefix" ] || continue
     seen+="$prefix"$'\n'
     verb="${prefix##*[[:space:]]}"
-    builtin=$(git --list-cmds=builtins 2>/dev/null) || builtin=""
+    # #1748: git never lets an alias shadow a builtin. Check a fixed list
+    # first, then the real binary (`command git`), so a shell function
+    # named git (the scaffold scan shim) cannot change the answer.
+    builtin=$(printf '%s\n' $_git_known_builtins; command git --list-cmds=builtins 2>/dev/null) || builtin=""
     if printf '%s\n' "$builtin" | grep -qxF "$verb"; then continue; fi
     inv="$prefix"
     case "$inv" in git*) ;; *) inv="${inv#?}" ;; esac
