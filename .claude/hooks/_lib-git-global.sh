@@ -16,7 +16,7 @@ fi
 _LIB_GIT_GLOBAL_LOADED=1
 
 # Share this expression with the dispatcher and the gates.
-_git_opt_val='("[^"]*"|'"'"'[^'"'"']*'"'"'|\$\([^)]*\)|`[^`]*`|[^[:space:];&|]+)'
+_git_opt_val='("[^"]*"|'"'"'[^'"'"']*'"'"'|\$\([^)]*\)|`[^`]*`|[^[:space:];&|"'"'"']+)+'
 _git_sub_re='(^|[^[:alnum:]_.-])git([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env))[[:space:]]+'"${_git_opt_val}"'|--(git-dir|work-tree|namespace|super-prefix|config-env)='"${_git_opt_val}"'|--?[A-Za-z][A-Za-z-]*(=[^[:space:];&|]+)?))*[[:space:]]+'
 
 # Regex for `git [global options] <sub>` on raw text.
@@ -64,33 +64,23 @@ git_global_option_width() {
 # Quoted words keep their contents and lose the quotes.
 _git_take_value() {
   _GIT_SCAN="${_GIT_SCAN#"${_GIT_SCAN%%[![:space:]]*}"}"
-  local s q
-  s="$_GIT_SCAN"
-  [ -n "$s" ] || return 1
-  case "$s" in
-    \"*)
-      q="${s:1}"
-      _GIT_TAKEN="${q%%\"*}"
-      [ "$_GIT_TAKEN" != "$q" ] || return 1
-      _GIT_SCAN="${q#"${_GIT_TAKEN}\""}"
-      ;;
-    \'*)
-      q="${s:1}"
-      _GIT_TAKEN="${q%%\'*}"
-      [ "$_GIT_TAKEN" != "$q" ] || return 1
-      _GIT_SCAN="${q#"${_GIT_TAKEN}'"}"
-      ;;
-    *)
-      _GIT_TAKEN=$(printf '%s' "$s" | sed -n 's/^\([^[:space:];&|]*\).*/\1/p')
-      _GIT_SCAN=$(printf '%s' "$s" | sed -n 's/^[^[:space:];&|]*//p')
-      ;;
-  esac
-  case "$_GIT_SCAN" in
-    ""|[[:space:]]*|';'*|'&'*|'|'*) ;;
-    *) return 1 ;;
-  esac
-  # Keep a quoted tilde literal.
-  case "$s" in
+  local original="$_GIT_SCAN" char quote="" taken="" i
+  for ((i=0; i<${#_GIT_SCAN}; i++)); do
+    char="${_GIT_SCAN:i:1}"
+    if [ -n "$quote" ]; then
+      if [ "$char" = "$quote" ]; then quote=""; else taken+="$char"; fi
+      continue
+    fi
+    case "$char" in
+      \"|\') quote="$char" ;;
+      [[:space:]]|';'|'&'|'|') break ;;
+      *) taken+="$char" ;;
+    esac
+  done
+  [ -z "$quote" ] || return 1
+  _GIT_SCAN="${_GIT_SCAN:i}"
+  _GIT_TAKEN="$taken"
+  case "$original" in
     \"*|\'*)
       # shellcheck disable=SC2088
       case "$_GIT_TAKEN" in
@@ -129,6 +119,11 @@ _git_take_global() {
       name="${_GIT_SCAN%%=*}"
       _GIT_SCAN="${_GIT_SCAN#"$name="}"
       _git_take_value || return 1
+      # Keep a tilde literal after an option's equals sign.
+      # shellcheck disable=SC2088
+      case "$_GIT_TAKEN" in
+        '~'*) _GIT_TAKEN="./$_GIT_TAKEN" ;;
+      esac
       case "$name" in
         --git-dir) _GIT_RAW_GIT_DIR="$_GIT_TAKEN" ;;
         --work-tree) _GIT_RAW_WORK_TREE="$_GIT_TAKEN" ;;
@@ -224,13 +219,129 @@ _git_resolve_dir() {
   printf '%s' "$dir"
 }
 
-# Resolve each -C in order. Resolve repository paths after the last -C.
+# Print chain segments. Keep separators inside quotes in the same segment.
+_git_chain_segments() {
+  local text="$1" part="" quote="" char i escaped=0
+  for ((i=0; i<${#text}; i++)); do
+    char="${text:i:1}"
+    if [ "$escaped" -eq 1 ]; then
+      part+="$char"
+      escaped=0
+      continue
+    fi
+    if [ "$char" = "\\" ] && [ "$quote" != "'" ]; then
+      part+="$char"
+      escaped=1
+      continue
+    fi
+    if [ -n "$quote" ]; then
+      part+="$char"
+      [ "$char" != "$quote" ] || quote=""
+      continue
+    fi
+    case "$char" in
+      \"|\') quote="$char"; part+="$char" ;;
+      '&')
+        # Redirection ampersands stay inside the command segment.
+        if [[ "${part: -1}" = '>' || "${part: -1}" = '<' || "${text:i+1:1}" = '>' ]]; then
+          part+="$char"
+          continue
+        fi
+        if [ "${text:i+1:1}" = '&' ]; then
+          i=$((i + 1))
+        else
+          part+=' __git_background__'
+        fi
+        printf '%s\n' "$part"; part="" ;;
+      ';'|$'\n') printf '%s\n' "$part"; part="" ;;
+      *) part+="$char" ;;
+    esac
+  done
+  printf '%s\n' "$part"
+}
+
+# Track literal cd commands before the selected invocation.
+# Reject unresolved targets without executing command text.
+_git_chain_cwd() {
+  local cmd="$1" sub="$2" base="$3" segment path next changed=0 match remaining=1
+  local segments matches prefix unquoted tail
+  if [ "${_GIT_VISIT_SUB:-}" = "$sub" ]; then
+    remaining="${_GIT_VISIT_INDEX:-1}"
+  fi
+  _GIT_CHAIN_CWD="$base"
+  _GIT_CHAIN_CHANGED=0
+  # Capture first. A POSIX-sourced lib must not use process substitution.
+  # Read from fd 3 to keep commands from consuming the segment list.
+  segments=$(_git_chain_segments "$cmd")
+  while IFS= read -r segment <&3; do
+    segment="${segment#"${segment%%[![:space:]]*}"}"
+    prefix="$segment"
+    matches=$(git_invocation_prefixes "$segment" "$sub")
+    if [ -n "$matches" ]; then
+      match="${matches%%$'\n'*}"
+      prefix="${segment%%"$match"*}"
+    fi
+    # Remove quoted text before the directory-command check.
+    unquoted=$(printf '%s\n' "$prefix" | sed -E "s/\"[^\"]*\"//g; s/'[^']*'//g")
+    case "$segment" in
+      cd|cd[[:space:]]*)
+        _GIT_SCAN="${segment#cd}"
+        if [ -z "${_GIT_SCAN//[[:space:]]/}" ]; then
+          path="$HOME"
+        else
+          _git_take_value || return 1
+          path="$_GIT_TAKEN"
+        fi
+        if [ "$path" = -- ]; then
+          _git_take_value || return 1
+          path="$_GIT_TAKEN"
+        fi
+        tail="${_GIT_SCAN#"${_GIT_SCAN%%[![:space:]]*}"}"
+        if [ -n "$tail" ]; then
+          printf '%s\n' "$tail" | grep -qE '^\|\|[[:space:]]*(exit|return)([[:space:]]+[0-9]+)?[[:space:]]*$' || return 1
+        fi
+        next=$(_git_resolve_dir "$path" "$_GIT_CHAIN_CWD") || return 1
+        next=$(cd "$next" 2>/dev/null && pwd -P) || return 1
+        changed=1
+        _GIT_CHAIN_CWD="$next"
+        ;;
+      *)
+        if printf '%s\n' "$unquoted" | grep -qE '(^|[^[:alnum:]_. /-])(cd|pushd|popd)([^[:alnum:]_.-]|$)|(^|[[:space:]])(cd|pushd|popd)([[:space:]]|$)'; then
+          return 1
+        fi
+        ;;
+    esac
+    case "$prefix" in
+      *__git_background__*) return 1 ;;
+    esac
+    matches=$(git_invocation_prefixes "$segment" "$sub")
+    while IFS= read -r match <&3; do
+      [ -n "$match" ] || continue
+      remaining=$((remaining - 1))
+    done 3<<EOF
+$matches
+EOF
+    [ "$remaining" -gt 0 ] || break
+  done 3<<EOF
+$segments
+EOF
+  _GIT_CHAIN_CHANGED="$changed"
+}
+
+# Resolve cd, then each -C, then repository paths for the selected invocation.
 git_prepare_invocation() {
   local cmd="$1" sub="$2" cwd="${3:-$PWD}" dir raw base
   GIT_REPLAY_ARGS=()
   GIT_DASH_C=""
   _git_load_invocation "$cmd" "$sub" || return 1
-  base="${cwd:-$PWD}"
+  _GIT_TARGET_KIND="cd"
+  _git_chain_cwd "$cmd" "$sub" "${cwd:-$PWD}" || return 1
+  _GIT_TARGET_KIND="git -C"
+  base="$_GIT_CHAIN_CWD"
+  cwd="$base"
+  if [ "$_GIT_CHAIN_CHANGED" -eq 1 ]; then
+    GIT_DASH_C="$base"
+  fi
   for raw in ${_GIT_RAW_C_CHAIN[@]+"${_GIT_RAW_C_CHAIN[@]}"}; do
     dir=$(_git_resolve_dir "$raw" "$base") || return 1
     GIT_DASH_C="$dir"
@@ -252,6 +363,13 @@ git_prepare_invocation() {
     dir=$(_git_resolve_dir "$_GIT_RAW_WORK_TREE" "$base") || return 1
     GIT_REPLAY_ARGS+=(--work-tree="$dir")
   fi
+  if [ "$_GIT_CHAIN_CHANGED" -eq 1 ]; then
+    if [ "${#_GIT_RAW_C_CHAIN[@]}" -eq 0 ] &&
+       [ -z "${_GIT_RAW_GIT_DIR:-}${_GIT_RAW_WORK_TREE:-}" ]; then
+      _GIT_TARGET_KIND="cd"
+    fi
+    git_target rev-parse --git-dir >/dev/null 2>&1 || return 1
+  fi
   return 0
 }
 
@@ -272,27 +390,30 @@ git_invocation_prefixes() {
 }
 
 # Check each raw invocation in a separate subshell. Keep the full command.
-# The gate retains its existing ref parser and cd policy.
+# Resolve the cd chain separately for each selected invocation.
 git_visit_invocations() {
   local callback="$1" mode="$2" input="$3"
   shift 3
-  local cmd cwd sub prefix rc count=0 arg
+  local cmd cwd sub prefix rc count=0 arg index
   cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null)
   cwd=$(printf '%s' "$input" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null)
   local prefixes
   for sub in "$@"; do
     # Capture first. A POSIX-sourced lib must not use process substitution.
     prefixes=$(git_invocation_prefixes "$cmd" "$sub")
+    index=0
     while IFS= read -r prefix; do
       [ -n "$prefix" ] || continue
       count=$((count + 1))
+      index=$((index + 1))
       (
         _GIT_VALIDATE_TARGET=1
+        _GIT_VISIT_INDEX="$index"
         _GIT_VISIT_SUB="$sub"
         _GIT_VISIT_PREFIX="$prefix"
         if ! git_prepare_invocation "$cmd" "$sub" "$cwd"; then
           if [ "$mode" = block ]; then
-            echo 'BLOCKED: cannot resolve the git -C target; use a literal path' >&2
+            echo "BLOCKED: cannot resolve the ${_GIT_TARGET_KIND:-git -C} target; use a literal path" >&2
             exit 2
           fi
           exit 0
@@ -304,14 +425,14 @@ git_visit_invocations() {
           esac
           if [ ! -d "$arg" ]; then
             if [ "$mode" = block ]; then
-              echo 'BLOCKED: cannot resolve the git -C target; use a literal path' >&2
+              echo "BLOCKED: cannot resolve the ${_GIT_TARGET_KIND:-git -C} target; use a literal path" >&2
               exit 2
             fi
             exit 0
           fi
         done
         "$callback"
-      )
+      ) </dev/null
       rc=$?
       if [ "$mode" = block ] && [ "$rc" -ne 0 ]; then
         return "$rc"

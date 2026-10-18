@@ -70,6 +70,8 @@ This is enforced by the `block-git-add-all.sh` hook.
 
 Every change must go through a PR. Zero exceptions. No commits directly to `main`/`master`. Enforced at the git layer by `.githooks/pre-push` (terminal `git push`) and `.githooks/pre-commit` (terminal `git commit`) — both read git's own ground-truth ref/branch resolution, no command-text parsing (me2resh/apexyard#1086). `.claude/hooks/block-main-push.sh` is a blocking **backstop** on top: a Claude Code PreToolUse hook, so it stays effective against `--no-verify` (which structurally bypasses the two git-native hooks above) and on managed-project clones that haven't installed `core.hooksPath` (#1088). See [AgDR-0114](../../docs/agdr/AgDR-0114-block-main-push-honest-naming-blocking-backstop.md) for the full control-vs-backstop rationale.
 
+Resolve command targets from payload cwd, the cd chain, each `-C`, then `--git-dir` and `--work-tree`. Follow literal leading `cd` commands before `&&`, `;`, or a newline. Support `cd X || exit N` and `cd X || return N` tails. Block missing, unresolvable, or non-leading directory commands. Commit gates use the same target rule.
+
 ## No Hardcoded Secrets
 
 No API keys, passwords, tokens, or credentials in code. Use environment variables. Patterns to avoid:

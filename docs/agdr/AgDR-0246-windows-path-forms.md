@@ -69,3 +69,58 @@ Drive-letter paths enter one transform in `_lib-path-resolve.sh` before a contai
 - Related: [AgDR-0219](AgDR-0219-worktree-ticket-gate-exemptions.md), me2resh/apexyard#1018
 - Helper: `.claude/hooks/_lib-path-resolve.sh`
 - Hooks: `.claude/hooks/_lib-ticket-path-exemptions.sh`, `.claude/hooks/require-active-ticket.sh`, `.claude/hooks/_lib-git-hooks-path.sh`, `.claude/hooks/lib/rule-excludes.py`, `bin/install-git-hooks.sh`
+
+## Addendum — Git Bash mounts Temp at /tmp (me2resh/apexyard#1743)
+
+Git for Windows can print `C:/Users/<user>/AppData/Local/Temp/<repo>`.
+The string transform in the decision above prints `/c/Users/<user>/AppData/Local/Temp/<repo>`.
+Git Bash mounts that Temp directory at `/tmp`.
+`pwd -P` then prints `/tmp/<repo>`.
+
+`path_is_under_root` compared the string form with the `pwd -P` form.
+Those two strings differ.
+`bin/install-git-hooks.sh` exited 2.
+The script refused `.githooks` as a directory outside the repository.
+`ghp_classify` used the string form for its inside-repository prefix check.
+
+### Choice
+
+`_windows_path_to_posix` calls `cygpath -u --` when `cygpath` is on PATH and the input is a drive-letter path (`X:/` or `X:\`).
+The function keeps that output when the output is not empty and starts with `/`.
+When that directory exists, the function resolves it with `pwd -P`.
+The function does not call `cygpath` for a path that already starts with `/`.
+
+The function uses the string transform when `cygpath` is absent.
+It also uses the string transform when `cygpath` exits non-zero, prints nothing, or prints a path that does not start with `/`.
+The string transform does not call `pwd -P`.
+Linux and macOS do not provide `cygpath`.
+On those hosts the string transform is unchanged.
+
+The installer stores this result as the repository root before it tests the hooks directory.
+`path_is_under_root` still rejects an empty side.
+A failed `cygpath` call leaves the `/c/Users/.../Temp` form.
+That form does not match a `/tmp` path.
+The containment check rejects the pair.
+`--hooks-dir ../outside-hooks` still exits 2.
+
+`cygpath -u` applies the mount table.
+The call does not need the directory to exist.
+`pwd -P` needs a directory that exists.
+Callers also compare a path that is not on disk.
+One helper feeds the containment check, `ghp_classify`, the ticket exemption helper, and `require-active-ticket.sh`.
+
+### Architecture evolution
+
+Before this addendum, the string transform made `C:/` and `/c/` compare as one path.
+The transform did not read the Git Bash mount table.
+A repository under Temp did not match its `/tmp` form.
+
+After this addendum, a drive-letter path uses `cygpath -u` when that program is present.
+The mount form matches `pwd -P`.
+A host with no `cygpath` keeps the string transform.
+A failed `cygpath` call does not make the containment check succeed.
+
+### Verification
+
+The tests use a stub `cygpath` on macOS.
+This addendum does not record a run on Git Bash.

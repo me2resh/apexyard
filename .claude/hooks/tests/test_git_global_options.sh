@@ -76,6 +76,28 @@ check cd-not-other "" "$c"
 git_prepare_invocation "git -C rel/repo commit -m x" commit "/base"
 check relative-c /base/rel/repo "$GIT_DASH_C"
 
+# Redirections must not become background-job separators.
+for cmd in 'npm test 2>&1 | tail -5 && git log' 'git status 2>&1; git log' 'echo note >&2; git log' 'make &> out.log && git log' 'echo note 1>&2; git log' 'make &>> out.log && git log' 'cat <&0; git log'; do
+  if git_prepare_invocation "$cmd" log "$PWD"; then rc=0; else rc=$?; fi
+  check "redirect-$cmd" 0 "$rc"
+done
+if git_prepare_invocation 'sleep 1 & git push' push "$PWD"; then rc=0; else rc=$?; fi
+check background-fails-closed 1 "$rc"
+
+# Check tilde handling without a repository probe.
+for option in --git-dir --work-tree; do
+  git_prepare_invocation "git $option=~/x commit" commit /base
+  check "tilde-equals-$option" "$option=/base/./~/x" "${GIT_REPLAY_ARGS[2]}"
+  git_prepare_invocation "git $option ~/x commit" commit /base
+  check "tilde-word-$option" "$option=$HOME/x" "${GIT_REPLAY_ARGS[2]}"
+  git_prepare_invocation "git $option='~/x' commit" commit /base
+  check "tilde-quoted-$option" "$option=/base/./~/x" "${GIT_REPLAY_ARGS[2]}"
+done
+git_prepare_invocation 'git -C ~/x commit' commit /base
+check tilde-dash-c "$HOME/x" "$GIT_DASH_C"
+git_prepare_invocation "git -C '~/x' commit" commit /base
+check tilde-quoted-dash-c /base/./~/x "$GIT_DASH_C"
+
 pat=$(git_subcommand_payload_pattern commit)
 printf '%s\n' '{"command":"git -C /tmp/repo commit -m x"}' | grep -qE "$pat" \
   && echo PASS payload-dash-c || { echo FAIL payload-dash-c >&2; fail=1; }
@@ -108,6 +130,29 @@ else
   cat "$test_tmp/secrets.err" >&2
   fail=1
 fi
+
+# A callback must not consume the remaining invocation prefixes.
+read_stdin_callback() {
+  cat >/dev/null
+  printf '%s\n' "$GIT_DASH_C" >> "$test_tmp/visited"
+  if [ -n "${scan_secret:-}" ]; then
+    git_target diff --cached | grep -q 'abcdefghijklmnopqr' && return 2
+  fi
+  return 0
+}
+payload=$(jq -nc --arg command "git -C $other commit; git -C $other commit; git -C $sb commit" \
+  --arg cwd "$other" '{tool_input:{command:$command},cwd:$cwd}')
+git_visit_invocations read_stdin_callback block "$payload" commit
+check stdin-all-visited 3 "$(wc -l < "$test_tmp/visited" | tr -d ' ')"
+scan_secret=1
+if git_visit_invocations read_stdin_callback block "$payload" commit; then
+  rc=0
+else
+  rc=$?
+fi
+check stdin-third-secret-blocks 2 "$rc"
+check stdin-secret-all-visited 6 "$(wc -l < "$test_tmp/visited" | tr -d ' ')"
+unset scan_secret
 
 # A bad subject with a global option is rejected.
 payload=$(jq -nc --arg command "git -C $sb commit -m \"bad message without a type\"" \
@@ -225,8 +270,16 @@ else
   fail=1
 fi
 
+# Give protected-commit probes existing history.
+seed_history() {
+  local repo="$1" tree commit
+  tree=$(git -C "$repo" mktree </dev/null)
+  commit=$(git -C "$repo" -c user.name=Test -c user.email=test@example.invalid commit-tree "$tree" -m fixture)
+  git -C "$repo" update-ref HEAD "$commit"
+}
 # Use real repositories for each review probe.
 git -C "$sb" symbolic-ref HEAD refs/heads/main
+seed_history "$sb"
 check b1-secrets-plain 2 "$(run_hook "$HOOKS/check-secrets.sh" "git -C $feature commit -m 'fix: first' && git commit -m 'fix: second'" "$sb")"
 check b1-protected-commit 2 "$(run_hook "$HOOKS/block-main-push.sh" "git -C $feature commit -m 'fix: first' && git commit -m 'fix: second'" "$sb")"
 check b1-secrets-unquoted 2 "$(run_hook "$HOOKS/check-secrets.sh" "git -C $feature commit -m a && git commit -m b" "$sb")"
@@ -282,6 +335,7 @@ done
 # Use a disposable home directory for shell-style tilde expansion.
 mkdir -p "$test_tmp/home/realdir"
 git -C "$test_tmp/home/realdir" init -q -b main
+seed_history "$test_tmp/home/realdir"
 HOME="$test_tmp/home" check h2-tilde 2 "$(HOME="$test_tmp/home" run_hook "$HOOKS/block-main-push.sh" 'git -C ~/realdir commit' "$other")"
 if grep -q 'Cannot commit directly' "$test_tmp/hook.err"; then
   echo PASS h2-tilde-target
