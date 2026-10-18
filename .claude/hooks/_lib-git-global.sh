@@ -16,8 +16,9 @@ fi
 _LIB_GIT_GLOBAL_LOADED=1
 
 # Share this expression with the dispatcher and the gates.
-_git_opt_val='("[^"]*"|'"'"'[^'"'"']*'"'"'|\$\([^)]*\)|`[^`]*`|[^[:space:];&|"'"'"']+)+'
-_git_sub_re='(^|[^[:alnum:]_.-])git([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env))[[:space:]]+'"${_git_opt_val}"'|--(git-dir|work-tree|namespace|super-prefix|config-env)='"${_git_opt_val}"'|--?[A-Za-z][A-Za-z-]*(=[^[:space:];&|]+)?))*[[:space:]]+'
+# #1748: escaped pairs and quoted values belong to a single option word.
+_git_opt_val='(\\.|"[^"]*"|'"'"'[^'"'"']*'"'"'|\$\([^)]*\)|`[^`]*`|[^[:space:];&|"'"'"']+)+'
+_git_sub_re='(^|[^[:alnum:]_.-])git([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env|attr-source))[[:space:]]+'"${_git_opt_val}"'|--(git-dir|work-tree|namespace|super-prefix|config-env|attr-source)='"${_git_opt_val}"'|--?[A-Za-z][A-Za-z-]*(='"${_git_opt_val}"')?))*[[:space:]]+'
 
 # Regex for `git [global options] <sub>` on raw text.
 # The match may include one leading boundary character.
@@ -40,7 +41,8 @@ command_has_git_subcommand() {
 # Stays inside a JSON string. Covers the same global-option forms.
 git_subcommand_payload_pattern() {
   local sub="$1"
-  printf '%s' 'git([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env))[[:space:]]+(\\.|[^"\\[:space:]])+|--?[A-Za-z][A-Za-z-]*(=(\\.|[^"\\[:space:]])+)?))*[[:space:]]+'"$sub"'([^[:alnum:]_.-]|$)'
+  # #1748: a JSON-escaped quoted value (-C \"a b\") is one option word.
+  printf '%s' 'git([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env|attr-source))[[:space:]]+(\\"([^"\\]|\\[^"])*\\"|\\.|[^"\\[:space:]])+|--?[A-Za-z][A-Za-z-]*(=(\\"([^"\\]|\\[^"])*\\"|\\.|[^"\\[:space:]])+)?))*[[:space:]]+'"$sub"'([^[:alnum:]_.-]|$)'
 }
 
 # 2 when the token takes the next token as its value.
@@ -48,7 +50,7 @@ git_subcommand_payload_pattern() {
 # 0 when the token is not a global option.
 git_global_option_width() {
   case "$1" in
-    -C|-c|--git-dir|--work-tree|--namespace|--super-prefix|--config-env)
+    -C|-c|--git-dir|--work-tree|--namespace|--super-prefix|--config-env|--attr-source)
       printf '2'
       ;;
     --*|-?)
@@ -72,6 +74,7 @@ _git_take_value() {
       continue
     fi
     case "$char" in
+      \\) return 1 ;; # #1748: unresolved shell escapes fail closed.
       \"|\') quote="$char" ;;
       [[:space:]]|';'|'&'|'|') break ;;
       *) taken+="$char" ;;
@@ -105,8 +108,9 @@ _git_take_global() {
     -c[[:space:]]*)
       _GIT_SCAN="${_GIT_SCAN:2}"
       _git_take_value || return 1
+      _GIT_INLINE_CONFIG+=("$_GIT_TAKEN")
       ;;
-    --git-dir[[:space:]]*|--work-tree[[:space:]]*|--namespace[[:space:]]*|--super-prefix[[:space:]]*|--config-env[[:space:]]*)
+    --git-dir[[:space:]]*|--work-tree[[:space:]]*|--namespace[[:space:]]*|--super-prefix[[:space:]]*|--config-env[[:space:]]*|--attr-source[[:space:]]*)
       name="${_GIT_SCAN%%[[:space:]]*}"
       _GIT_SCAN="${_GIT_SCAN#"$name"}"
       _git_take_value || return 1
@@ -115,7 +119,7 @@ _git_take_global() {
         --work-tree) _GIT_RAW_WORK_TREE="$_GIT_TAKEN" ;;
       esac
       ;;
-    --git-dir=*|--work-tree=*|--namespace=*|--super-prefix=*|--config-env=*)
+    --git-dir=*|--work-tree=*|--namespace=*|--super-prefix=*|--config-env=*|--attr-source=*)
       name="${_GIT_SCAN%%=*}"
       _GIT_SCAN="${_GIT_SCAN#"$name="}"
       _git_take_value || return 1
@@ -143,6 +147,7 @@ _git_take_global() {
 # On success, $_GIT_SCAN is the text after that subcommand.
 _git_scan_globals() {
   local sub="$1"
+  _GIT_INLINE_CONFIG=()
   _GIT_RAW_C_CHAIN=()
   _GIT_RAW_DASH_C=""
   _GIT_RAW_GIT_DIR=""
@@ -164,6 +169,7 @@ _git_scan_globals() {
 # Load the selected invocation. Use the first match for direct helper calls.
 _git_load_invocation() {
   local cmd="$1" sub="$2" inv
+  _GIT_INLINE_CONFIG=()
   _GIT_RAW_C_CHAIN=()
   _GIT_RAW_DASH_C=""
   _GIT_RAW_GIT_DIR=""
@@ -389,6 +395,65 @@ git_invocation_prefixes() {
   done
 }
 
+# #1748: resolve unknown verbs locally, never execute an alias or shell body.
+# Mutation aliases block explicitly: the literal-verb gates cannot inspect their
+# arguments safely. Harmless built-in aliases may proceed.
+git_check_aliases() (
+  local cmd="$1" cwd="${2:-$PWD}" prefix inv verb builtin expansion entry depth
+  local prefixes seen="" _GIT_VISIT_SUB _GIT_VISIT_PREFIX _GIT_VISIT_INDEX
+  # Ignore literal message data only for alias discovery. Raw push/commit
+  # presence checks above stay unchanged. Substitutions must remain visible.
+  local scan_cmd="$cmd" message_re
+  message_re="${_git_sub_re}"'commit[[:space:]]+(-m|--message)([[:space:]]+|=)"[^"\\$`]*"'
+  while [[ "$scan_cmd" =~ $message_re ]]; do
+    scan_cmd="${scan_cmd/"${BASH_REMATCH[0]}"/ }"
+  done
+  message_re="${_git_sub_re}commit[[:space:]]+(-m|--message)([[:space:]]+|=)'[^']*'"
+  while [[ "$scan_cmd" =~ $message_re ]]; do
+    scan_cmd="${scan_cmd/"${BASH_REMATCH[0]}"/ }"
+  done
+  prefixes=$(printf '%s\n' "$scan_cmd" | LC_ALL=C grep -oE "${_git_sub_re}[[:alnum:]_][[:alnum:]_.-]*") || true
+  while IFS= read -r prefix; do
+    [ -n "$prefix" ] || continue
+    seen+="$prefix"$'\n'
+    verb="${prefix##*[[:space:]]}"
+    builtin=$(git --list-cmds=builtins 2>/dev/null) || builtin=""
+    if printf '%s\n' "$builtin" | grep -qxF "$verb"; then continue; fi
+    inv="$prefix"
+    case "$inv" in git*) ;; *) inv="${inv#?}" ;; esac
+    _GIT_SCAN="${inv#git}"
+    _git_scan_globals "$verb" || return 2
+    local configs=(${_GIT_INLINE_CONFIG[@]+"${_GIT_INLINE_CONFIG[@]}"})
+    _GIT_VISIT_SUB="$verb"
+    _GIT_VISIT_PREFIX="$prefix"
+    _GIT_VISIT_INDEX=$(git_invocation_prefixes "$seen" "$verb" | grep -c .)
+    git_prepare_invocation "$cmd" "$verb" "$cwd" || return 2
+    for ((depth=0; depth<10; depth++)); do
+      expansion=""
+      for entry in ${configs[@]+"${configs[@]}"}; do
+        case "$entry" in "alias.$verb="*) expansion="${entry#*=}" ;; esac
+      done
+      if [ -z "$expansion" ]; then
+        expansion=$(git_target config --get "alias.$verb" 2>/dev/null) || expansion=""
+      fi
+      # #1748: no alias means an external git-<verb> command (git lfs,
+      # git flow), which is allowed. A shell (!) alias is opaque: fail closed.
+      case "$expansion" in
+        '') break ;;
+        !*) return 2 ;;
+      esac
+      _GIT_SCAN="$expansion"
+      _git_take_value || return 2
+      verb="$_GIT_TAKEN"
+      case "$verb" in push|commit) return 2 ;; esac
+      if printf '%s\n' "$builtin" | grep -qxF "$verb"; then break; fi
+    done
+    [ "$depth" -lt 10 ] || return 2
+  done <<EOF
+$prefixes
+EOF
+)
+
 # Check each raw invocation in a separate subshell. Keep the full command.
 # Resolve the cd chain separately for each selected invocation.
 git_visit_invocations() {
@@ -397,6 +462,10 @@ git_visit_invocations() {
   local cmd cwd sub prefix rc count=0 arg index
   cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null)
   cwd=$(printf '%s' "$input" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null)
+  if [ "$mode" = block ] && ! git_check_aliases "$cmd" "${cwd:-$PWD}"; then
+    echo "BLOCKED: cannot safely check git alias or unknown subcommand (#1748); use a literal git push/commit." >&2
+    return 2
+  fi
   local prefixes
   for sub in "$@"; do
     # Capture first. A POSIX-sourced lib must not use process substitution.

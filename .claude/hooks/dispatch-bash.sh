@@ -347,6 +347,12 @@ if [ "$_scan_failed" -eq 1 ]; then
   run_push_gates
   run_commit_gates
 else
+  # #1748: alias resolution is local and must also guard dispatcher routing.
+  _alias_cwd=$(printf '%s' "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null) || _alias_cwd=""
+  if ! git_check_aliases "$_scan_cmd" "${_alias_cwd:-$PWD}"; then
+    echo "BLOCKED: dispatcher cannot safely check git alias or unknown subcommand (#1748)." >&2
+    exit 2
+  fi
   if command_has_git_subcommand "$_scan_cmd" push; then
     run_push_gates
   fi
@@ -371,6 +377,24 @@ fi
 # Command parse failed. Route the raw payload to the merge gates so their
 # jq-independent fallback still blocks merge-shaped commands.
 if [ -z "$COMMAND" ]; then
+  # #1748: no jq means the raw git command cannot be checked safely.
+  if [ ! -r "$HOOK_DIR/_lib-fail-closed-json.sh" ] || ! . "$HOOK_DIR/_lib-fail-closed-json.sh"; then
+    echo "BLOCKED: dispatcher cannot load its raw-payload parser." >&2
+    exit 2
+  fi
+  if ! command -v git_subcommand_payload_pattern >/dev/null 2>&1; then
+    # shellcheck disable=SC1091
+    { [ -r "$HOOK_DIR/_lib-git-global.sh" ] && . "$HOOK_DIR/_lib-git-global.sh"; } || {
+      echo "BLOCKED: dispatcher cannot load its git matcher." >&2
+      exit 2
+    }
+  fi
+  if raw_payload_command_matches "$INPUT" "$(git_subcommand_payload_pattern push)" \
+    || raw_payload_command_matches "$INPUT" "$(git_subcommand_payload_pattern commit)" \
+    || raw_payload_command_matches "$INPUT" 'alias\.'; then
+    echo "BLOCKED: dispatcher cannot parse this git command. Restore jq and retry." >&2
+    exit 2
+  fi
   printf 'WARN: dispatcher could not parse the Bash command; running merge gates fail-closed.\n' >&2
   run_merge_gates
 fi

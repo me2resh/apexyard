@@ -102,7 +102,9 @@ pat=$(git_subcommand_payload_pattern commit)
 printf '%s\n' '{"command":"git -C /tmp/repo commit -m x"}' | grep -qE "$pat" \
   && echo PASS payload-dash-c || { echo FAIL payload-dash-c >&2; fail=1; }
 printf '%s\n' '{"command":"git commitment"}' | grep -qE "$pat" \
-  && { echo FAIL payload-commitment >&2; fail=1; } || echo PASS payload-commitment
+  && { echo FAIL payload-commitment-not-commit >&2; fail=1; } || echo PASS payload-commitment-not-commit
+printf '%s\n' '{"command":"git -C \"a b\" commit -m x"}' | grep -qE "$pat" \
+  && echo PASS payload-quoted-dash-C || { echo FAIL payload-quoted-dash-C >&2; fail=1; }
 printf '%s\n' '{"command":"git commit -m x"}' | grep -qE "$pat" \
   && echo PASS payload-plain || { echo FAIL payload-plain >&2; fail=1; }
 printf '%s\n' '{"command":"git --git-dir /some/repo/.git commit"}' | grep -qE "$pat" \
