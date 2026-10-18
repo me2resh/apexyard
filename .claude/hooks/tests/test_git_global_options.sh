@@ -76,6 +76,14 @@ check cd-not-other "" "$c"
 git_prepare_invocation "git -C rel/repo commit -m x" commit "/base"
 check relative-c /base/rel/repo "$GIT_DASH_C"
 
+# Redirections must not become background-job separators.
+for cmd in 'npm test 2>&1 | tail -5 && git log' 'git status 2>&1; git log' 'echo note >&2; git log' 'make &> out.log && git log' 'echo note 1>&2; git log' 'make &>> out.log && git log' 'cat <&0; git log'; do
+  if git_prepare_invocation "$cmd" log "$PWD"; then rc=0; else rc=$?; fi
+  check "redirect-$cmd" 0 "$rc"
+done
+if git_prepare_invocation 'sleep 1 & git push' push "$PWD"; then rc=0; else rc=$?; fi
+check background-fails-closed 1 "$rc"
+
 # Check tilde handling without a repository probe.
 for option in --git-dir --work-tree; do
   git_prepare_invocation "git $option=~/x commit" commit /base
@@ -262,7 +270,7 @@ else
   fail=1
 fi
 
-# Keep protected-commit probes outside the unborn-HEAD exemption.
+# Give protected-commit probes existing history.
 seed_history() {
   local repo="$1" tree commit
   tree=$(git -C "$repo" mktree </dev/null)

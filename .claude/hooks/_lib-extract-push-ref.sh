@@ -494,21 +494,23 @@ _extract_all_push_refs_core() {
       esac
 
       positional_count=$((positional_count + 1))
-      # Check all possible refs. Quoted values can contain spaces.
-      [ "$positional_count" -ge 2 ] || continue
-      ref="$token"
-      [ -z "$ref" ] && continue
-      # Strip a single pair of surrounding quote characters, if present --
-      # see _extract_push_ref_core's identical comment (me2resh/apexyard#1079).
-      ref="${ref#\"}"; ref="${ref#\'}"
-      ref="${ref%\"}"; ref="${ref%\'}"
-      ref="${ref#+}"
-      case "$ref" in *:*) ref="${ref#*:}" ;; esac
-      [ -z "$ref" ] && continue
-      [ "$ref" = "HEAD" ] && continue
-      ref="${ref#refs/heads/}"
-      echo "$ref"
+      if [ "$positional_count" -eq 2 ]; then
+        ref="$token"
+        break
+      fi
     done
+
+    [ -z "$ref" ] && continue
+    # Strip a single pair of surrounding quote characters, if present --
+    # see _extract_push_ref_core's identical comment (me2resh/apexyard#1079).
+    ref="${ref#\"}"; ref="${ref#\'}"
+    ref="${ref%\"}"; ref="${ref%\'}"
+    ref="${ref#+}"
+    case "$ref" in *:*) ref="${ref#*:}" ;; esac
+    [ -z "$ref" ] && continue
+    [ "$ref" = "HEAD" ] && continue
+    ref="${ref#refs/heads/}"
+    echo "$ref"
   done
 }
 

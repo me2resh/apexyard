@@ -4,9 +4,7 @@
 #
 # Blocks direct pushes and commits to long-lived integration branches from
 # Claude Code sessions (a PreToolUse hook, evaluated before the shell ever
-# runs). Use pull requests after the first push.
-# Allow a simple first push only when the named remote has no tracking refs.
-# Block force, bulk, mirror, and delete pushes. See AgDR-0245.
+# runs). All changes must go through pull requests.
 #
 # THE controls for protected-branch enforcement are the git-native hooks:
 #   .githooks/pre-push     — terminal `git push`, ground truth via git's own
@@ -306,17 +304,7 @@ if [ "$_HAS_GIT_PUSH" -eq 1 ]; then
     if declare -F _extract_all_push_refs_core > /dev/null 2>&1; then
       while IFS= read -r ANY_PUSH_DST; do
         [ -z "$ANY_PUSH_DST" ] && continue
-        case "$ANY_PUSH_DST" in
-          *'*'*|*'?'*|*'['*)
-            echo 'BLOCKED: cannot resolve a glob push destination' >&2
-            exit 2
-            ;;
-        esac
         if is_protected_branch "$ANY_PUSH_DST"; then
-          if git_first_push_to_empty_remote "$COMMAND" "$(printf '%s' "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty')"; then
-            SKIP_PUSH_BRANCH_CHECK=1
-            continue
-          fi
           cat >&2 <<MSG
 BLOCKED: Cannot push directly to a protected branch ('${ANY_PUSH_DST}').
 
@@ -480,11 +468,6 @@ MSG
     fi
 
     if is_protected_branch "$TARGET_PUSH_BRANCH"; then
-      if git_first_push_to_empty_remote "$COMMAND" "$(printf '%s' "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty')"; then
-        SKIP_PUSH_BRANCH_CHECK=1
-      fi
-    fi
-    if is_protected_branch "$TARGET_PUSH_BRANCH" && [ "$SKIP_PUSH_BRANCH_CHECK" != 1 ]; then
       cat >&2 <<MSG
 BLOCKED: Cannot push directly to a protected branch ('${TARGET_PUSH_BRANCH}').
 
@@ -551,12 +534,7 @@ if [ "$_HAS_GIT_COMMIT" -eq 1 ]; then
     CURRENT_BRANCH=$(if command -v git_target >/dev/null 2>&1; then git_target branch --show-current; else git branch --show-current; fi 2>/dev/null)
   fi
 
-  SKIP_COMMIT_BRANCH_CHECK=0
-  if is_protected_branch "$CURRENT_BRANCH" &&
-     git_initial_commit_on_unborn_head "$COMMAND"; then
-    SKIP_COMMIT_BRANCH_CHECK=1
-  fi
-  if [ "$SKIP_COMMIT_BRANCH_CHECK" -eq 0 ] && is_protected_branch "$CURRENT_BRANCH"; then
+  if is_protected_branch "$CURRENT_BRANCH"; then
     cat >&2 <<MSG
 BLOCKED: Cannot commit directly on protected branch '${CURRENT_BRANCH}'.
 

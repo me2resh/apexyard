@@ -242,6 +242,11 @@ _git_chain_segments() {
     case "$char" in
       \"|\') quote="$char"; part+="$char" ;;
       '&')
+        # Redirection ampersands stay inside the command segment.
+        if [[ "${part: -1}" = '>' || "${part: -1}" = '<' || "${text:i+1:1}" = '>' ]]; then
+          part+="$char"
+          continue
+        fi
         if [ "${text:i+1:1}" = '&' ]; then
           i=$((i + 1))
         else
@@ -460,77 +465,5 @@ git_target() {
     git "$@"
   fi
 }
-
-# Allow the selected commit only when HEAD names a branch without a commit.
-# Read local state only. Do not execute command text.
-git_initial_commit_on_unborn_head() (
-  local cmd="$1" segments segment matches count remaining ref
-  remaining="${_GIT_VISIT_INDEX:-1}"
-  segments=$(_git_chain_segments "$cmd")
-  while IFS= read -r segment; do
-    matches=$(git_invocation_prefixes "$segment" commit)
-    [ -n "$matches" ] || continue
-    count=$(printf '%s\n' "$matches" | wc -l | tr -d ' ')
-    if [ "$remaining" -gt "$count" ]; then
-      remaining=$((remaining - count))
-      continue
-    fi
-    [ "$count" -eq 1 ] || return 1
-    if printf '%s\n' "$segment" | grep -qE '(^|[[:space:];&|])GIT_[A-Za-z0-9_]*=|(^|[[:space:]])-c([^[:space:]]|[[:space:]])|--config-env|--amend'; then
-      return 1
-    fi
-    git_target rev-parse -q --verify HEAD >/dev/null 2>&1 && return 1
-    ref=$(git_target symbolic-ref -q HEAD 2>/dev/null) || return 1
-    [ "$ref" = "refs/heads/$CURRENT_BRANCH" ] || return 1
-    return 0
-  done <<EOF
-$segments
-EOF
-  return 1
-)
-
-# Allow a simple push to a named remote with no tracking refs.
-# Read local state only. Do not execute command text.
-git_first_push_to_empty_remote() (
-  local cmd="$1" cwd="$2" segment args remote="" branch token refs names
-  [ "$(printf '%s\n' "$cmd" | LC_ALL=C grep -oE "$(git_subcommand_re push)" | wc -l | tr -d ' ')" = 1 ] || return 1
-  # shellcheck disable=SC2016
-  case "$cmd" in *'<<'*|*'`'*|*'$('* ) return 1 ;; esac
-  if printf '%s\n' "$cmd" | grep -qE '(^|[[:space:];&|])GIT_[A-Za-z0-9_]*=|(^|[[:space:]])-c([^[:space:]]|[[:space:]])|--config-env'; then
-    return 1
-  fi
-  # Earlier mutations invalidate the local snapshot. Reject conservatively.
-  if command_has_git_subcommand "$cmd" remote || command_has_git_subcommand "$cmd" config; then
-    return 1
-  fi
-  segment=$(printf '%s\n' "$cmd" | LC_ALL=C grep -oE "$(git_push_segment_re)")
-  args=$(git_push_args "$segment")
-  _GIT_SCAN="$args"
-  while _git_take_value; do
-    token="$_GIT_TAKEN"
-    case "$token" in
-      -u|--set-upstream|--no-verify|--dry-run|--quiet|--verbose) ;;
-      -*|+*|:*|*'*'*|*'?'*|*'['*) return 1 ;;
-      *) [ -n "$remote" ] || remote="$token" ;;
-    esac
-  done
-  git_prepare_invocation "$cmd" push "$cwd" || return 1
-  if [ -z "$remote" ]; then
-    branch=$(git_target --no-optional-locks symbolic-ref --quiet --short HEAD 2>/dev/null) || return 1
-    remote=$(git_target --no-optional-locks config --get "branch.$branch.pushRemote" 2>/dev/null) || remote=""
-    [ -n "$remote" ] || remote=$(git_target --no-optional-locks config --get remote.pushDefault 2>/dev/null) || remote=""
-    [ -n "$remote" ] || remote=$(git_target --no-optional-locks config --get "branch.$branch.remote" 2>/dev/null) || remote=""
-    remote="${remote:-origin}"
-  fi
-  names=$(git_target --no-optional-locks remote 2>/dev/null) || return 1
-  printf '%s\n' "$names" | grep -Fx -- "$remote" >/dev/null || return 1
-  # A push URL can select a different destination from the fetched remote.
-  if git_target --no-optional-locks config --get-all "remote.$remote.pushurl" >/dev/null 2>&1; then
-    return 1
-  fi
-  refs=$(git_target --no-optional-locks for-each-ref --count=1 "refs/remotes/$remote/" 2>/dev/null) || return 1
-  [ -z "$refs" ] || return 1
-  echo "first push to a never-fetched remote: allowed" >&2
-)
 
 true
