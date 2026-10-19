@@ -548,9 +548,25 @@ MSG
   exit 2
 fi
 
+# Advisory only (AgDR-0257 / #1533): warn when the marker belongs to another
+# session or another branch. Never blocks on the mismatch alone.
+if command -v active_ticket_warn_if_mismatch >/dev/null 2>&1; then
+  _rmt_warn_tree="${AT_TREE:-}"
+  [ -n "$_rmt_warn_tree" ] || _rmt_warn_tree=$(cd "$(dirname "$FILE_PATH")" 2>/dev/null && pwd)
+  active_ticket_warn_if_mismatch "$MARKER" "${_rmt_warn_tree:-}" "${OPS_ROOT:-}" || true
+fi
+
 # --------- Parse marker for repo + issue number ---------
-TICKET_REPO=$(grep -E '^repo=' "$MARKER" | head -1 | cut -d= -f2-)
-TICKET_NUM=$(grep -E '^number=' "$MARKER" | head -1 | cut -d= -f2-)
+# First match of each key (AgDR-0257). Prefer the shared reader when present.
+if command -v active_ticket_read_field >/dev/null 2>&1; then
+  active_ticket_read_field "$MARKER" repo || true
+  TICKET_REPO="$REPLY"
+  active_ticket_read_field "$MARKER" number || true
+  TICKET_NUM="$REPLY"
+else
+  TICKET_REPO=$(grep -E '^repo=' "$MARKER" | head -1 | cut -d= -f2-)
+  TICKET_NUM=$(grep -E '^number=' "$MARKER" | head -1 | cut -d= -f2-)
+fi
 
 if [ -z "$TICKET_REPO" ] || [ -z "$TICKET_NUM" ]; then
   cat >&2 <<MSG
