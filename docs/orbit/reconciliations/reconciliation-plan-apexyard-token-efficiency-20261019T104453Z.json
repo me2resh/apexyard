@@ -3,11 +3,11 @@
   "id": "reconciliation-plan-apexyard-token-efficiency-20261019T104453Z",
   "planId": "plan-apexyard-token-efficiency",
   "planRevision": 5,
-  "projectSnapshotId": "snapshot-apexyard-20261019T123214Z",
-  "reconciledAt": "2026-10-19T12:32:14.000Z",
+  "projectSnapshotId": "snapshot-apexyard-20261019T132030Z",
+  "reconciledAt": "2026-10-19T13:20:30.000Z",
   "observations": [
-    "Observed me2resh/apexyard at the dev merge-base 64e6e103193d6087e0f7c6dc75fff7bfc1e35b49.",
-    "Slice PR: #1791; dev merge-base 64e6e103193d6087e0f7c6dc75fff7bfc1e35b49.",
+    "Observed me2resh/apexyard at the dev merge-base a791285d974de04359d8b0d1494878651231debc.",
+    "Slice PR: #1791; dev merge-base a791285d974de04359d8b0d1494878651231debc.",
     "Only ac2-2, ac2-3 and ac2-4 change. The other statuses are carried without change from reconciliation-plan-apexyard-token-efficiency-20261019T062054Z."
   ],
   "criterionAssessments": [
