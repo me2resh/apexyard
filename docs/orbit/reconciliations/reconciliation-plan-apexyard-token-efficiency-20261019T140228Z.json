@@ -1,14 +1,14 @@
 {
   "specVersion": "0.1",
-  "id": "reconciliation-plan-apexyard-token-efficiency-20261019T112515Z",
+  "id": "reconciliation-plan-apexyard-token-efficiency-20261019T140228Z",
   "planId": "plan-apexyard-token-efficiency",
   "planRevision": 5,
-  "projectSnapshotId": "snapshot-apexyard-20261019T123223Z",
-  "reconciledAt": "2026-10-19T12:32:23.000Z",
+  "projectSnapshotId": "snapshot-apexyard-20261019T140213Z",
+  "reconciledAt": "2026-10-19T14:02:28.000Z",
   "observations": [
-    "Observed me2resh/apexyard at the dev merge-base dd2065bfc8bebedbef68ff8f5a6f55eb7b41a378.",
-    "Slice PR: #1797; dev merge-base dd2065bfc8bebedbef68ff8f5a6f55eb7b41a378.",
-    "Only ac7-1, ac7-4 and ac7-6 change. The other statuses are carried without change from reconciliation-plan-apexyard-token-efficiency-20261019T062054Z."
+    "Observed me2resh/apexyard at the dev merge-base 663161f712bb6bc0cc02f6a17617794921244c78.",
+    "Slice PR: #1797; dev merge-base 663161f712bb6bc0cc02f6a17617794921244c78.",
+    "Only ac7-1, ac7-4 and ac7-6 change. The other statuses are carried without change from reconciliation-plan-apexyard-token-efficiency-20261019T104453Z."
   ],
   "criterionAssessments": [
     {
@@ -61,27 +61,34 @@
       "evidence": [
         "Baseline: mean 489,792 and p90 849,914 tokens per turn, with 18 compactions and 12 near the cap (docs/perf/token-cost-baseline-2026-10-10.md lines 30-31).",
         "PR #1663 (o6) merged on 2026-10-12, so the compact line is in place.",
-        "docs/perf has no session report after 2026-10-10 at cee2d239."
+        "The 7-day time-box after #1663 ended on 2026-10-19 with no autoCompactWindow 500000 session."
       ],
-      "explanation": "Missing: the measured drop on a session after o6. Next: run the o1 session view in the o2 build slice. The owner time-box after #1663 ends on 2026-10-19."
+      "explanation": "Missing: a measured session at autoCompactWindow 500000 inside the time-box (it ended 2026-10-19 with none). Next: measure in a later o2 slice."
     },
     {
       "criterionId": "ac2-3",
-      "status": "not-verified",
+      "status": "achieved",
       "evidence": [
-        "fan-out SKILL.md lines 154 and 219 require a self-contained prompt for each agent.",
-        "Neither parallel-work.md nor fan-out SKILL.md sets a rule for a fork against a fresh spawn.",
-        "Baseline: two forks had a first-turn context median of 430,256 and a max of 580,938. They used 160,479 tokens in total (docs/perf/token-cost-baseline-2026-10-10.md line 112)."
+        ".claude/rules/parallel-work.md sets a fresh role-appropriate spawn with a written brief as the default.",
+        ".claude/rules/parallel-work.md allows a fork only when the needed facts are not yet in a file.",
+        ".claude/skills/fan-out/SKILL.md step 2 and rule 8 apply the same default.",
+        ".claude/skills/fan-out/SKILL.md rule 8 names a role-appropriate agent type for an editing task.",
+        ".claude/hooks/tests/test_fresh_spawn_default.sh pins the fresh-spawn rule in both files."
       ],
-      "explanation": "Missing: a rule in parallel-work.md and fan-out that makes a fresh spawn the default and names when a fork is allowed. Next: the o2 build slice after its handoff. fan-out already requires a self-contained prompt for each agent."
+      "explanation": "parallel-work.md and fan-out make a fresh role-appropriate spawn the default. The text-pin test covers both files."
     },
     {
       "criterionId": "ac2-4",
-      "status": "not-verified",
+      "status": "achieved",
       "evidence": [
-        "No harness request filed"
+        "docs/orbit/plans/plan-apexyard-token-efficiency.notes.md Upstream gaps lists four owner-approved filings dated 2026-10-19.",
+        "Skill-body dedupe: https://github.com/anthropics/claude-code/issues/103425",
+        "Fork budget comment: https://github.com/anthropics/claude-code/issues/88841#issuecomment-6265152676",
+        "Names-only comment: https://github.com/anthropics/claude-code/issues/82144#issuecomment-6265151741",
+        "No skill listing: https://github.com/anthropics/claude-code/issues/103426",
+        "docs/perf/subagent-skill-listing-2026-10-19.md: one subagent skill_listing content field is 30,077 UTF-8 bytes (about 138 skill lines); the attachment JSON is 32,847 bytes."
       ],
-      "explanation": "Missing: the four requests. Next: a later o2 build slice files them with the measured numbers, after the o2 spike."
+      "explanation": "The owner approved all four texts on 2026-10-19. Two new issues and two comments are filed. The plan notes list the links. The dated note records the skill-listing size that supports the no-listing request."
     },
     {
       "criterionId": "ac3-1",
@@ -308,13 +315,13 @@
     {
       "criterionId": "ac7-6",
       "status": "partially-verified",
-      "explanation": "Missing: C4 at k=3 on all 15 entries. Next: run the full /eval-agents protocol before the prompt edits ship as verified.",
       "evidence": [
         "docs/skills/code-review-depth.md states both TTL windows and the posted-review resume rule.",
         "docs/eval-agents/reports/1773/reviewer-metric.json reports 0.00 resume rebuilds per 100 reviewer runs in this sample.",
         "docs/eval-agents/reports/1773/resume-flips.md: k=1 on five delta entries, 0 flips, 463,512 tokens.",
         "docs/eval-agents/reports/1773/verification.md records the partial C4 pass and open k=3 work."
-      ]
+      ],
+      "explanation": "Missing: C4 at k=3 on all 15 entries. Next: run the full /eval-agents protocol before the prompt edits ship as verified."
     },
     {
       "criterionId": "ac8-1",
