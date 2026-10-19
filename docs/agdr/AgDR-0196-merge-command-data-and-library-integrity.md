@@ -46,11 +46,15 @@ AgDR-0204 extends the raw fallback for unquoted `~[`, startup and `.git/hooks/` 
 
 - The matcher blocks redirections between merge phrase words at command position, including `&>`, `&>>`, and spaced `>&` targets.
 - It joins quoted spans within phrase words and matches the host name after its last slash.
-- Unknown expansions, escapes, brace expressions, and globs in command-position phrase words make a matching merge target unresolved. All four gates block it.
+- Last-segment host rule: a quoted expansion before the last slash keeps the literal last path segment as the host. An unquoted expansion keeps the host opaque. A glob that leaves a literal last segment uses that segment.
+- A phrase window needs at least one literal phrase word. A window of only opaque phrase words stays clear.
+- Behind a non-host command prefix, including a supported wrapper with its own options, the same window rule applies. Host options on the merge host still make the target unresolved (#1812).
+- Unknown expansions, escapes, brace expressions, and globs in a phrase word that still leaves a literal peer word make a matching merge target unresolved. All four gates block it.
 - Ordinary variable arguments do not start a merge phrase. Assignments and supported command wrappers can precede the host word.
-- Host options before or between phrase words make the matching merge target unresolved (#1812).
-- Shell, eval, and source command text retains nested phrase detection. This scan never evaluates shell text.
-- Commands over 120,000 characters and scanner failures block with “could not scan the command”.
+- Command-substitution, process-substitution, and nested shell, eval, and source bodies queue for a nested phrase scan. This scan never evaluates shell text.
+- Open class: a merge phrase built only from opaque words, with no literal phrase word and no following bare PR number, stays clear.
+- Open class: an unquoted expansion as the whole host word stays opaque; without a literal peer phrase word or a following bare PR number the window stays clear.
+- Commands over 120,000 characters and scanner failures block with “could not scan the command”. The unresolved-target helper also fails closed on any split-scan status other than clear.
 - Nested scans have limits of three layers, 100 queued words, and 4,096 characters per word. Exceeding these limits blocks with that message.
 - The redirect-target guard checks file targets after bash combined-output and zsh clobber operators. Descriptor duplication and closure remain data.
 - A two-step write-then-run can hide a merge: one turn writes merge text to an ordinary file, and a later turn runs that file.
@@ -74,7 +78,13 @@ The dollar-sign lookahead reads a fixed 70-character window.
 Cheap literal detectors precede the split scan.
 Gates reuse their raw scan when the target check has the same data view.
 A joined or scrubbed view requires a new scan.
+Any split-scan status other than clear fails closed in the unresolved-target check.
 Each gate requires the scanner function before it reads a command.
+
+Round 2 (#1807 review): a quoted expansion before the last slash keeps the literal last segment as the host; an unquoted expansion stays opaque.
+A non-host prefix does not end the search: a later window still matches when at least one phrase word is literal.
+Command-substitution and process-substitution bodies join the nested scan queue.
+A window with no literal phrase word stays clear so ordinary three-variable commands do not false-positive.
 
 The redirect-target guard now checks combined-output file targets and zsh clobber targets.
 Descriptor duplication and closure retain their existing data behavior.
