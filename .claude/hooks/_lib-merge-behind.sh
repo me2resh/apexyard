@@ -240,6 +240,11 @@ _rex_carry_parse_owner_name() {
   _rex_carry_name=
   case "$repo" in
     */*/*)
+      # Exactly three segments: github.com/OWNER/REPO. Four or more fail
+      # closed, as merge_repo_is_valid does (Hakim A8).
+      case "$repo" in
+        */*/*/*) return 1 ;;
+      esac
       host=$(printf '%s' "$repo" | awk -F/ '{print $1}')
       # Enterprise / other forges: fail closed with no forge call. Do not strip
       # the host and query github.com/OWNER/REPO (cross-forge twin attack).
@@ -290,7 +295,9 @@ _rex_carry_fetch_chain() {
   # stderr stays open so a per-call timeout BLOCKED line reaches the operator.
   # String variables use -f (not -F): -F coerces an all-digit value to an
   # integer and GraphQL then rejects String! / GitObjectID! (Hakim A3).
-  gql_json=$(apexyard_gh api graphql \
+  # --hostname github.com pins the call: a GH_HOST setting must not send the
+  # walk to another host (Hakim A6).
+  gql_json=$(apexyard_gh api graphql --hostname github.com \
     -f "query=$query" \
     -f "owner=$owner" \
     -f "name=$name" \
@@ -449,9 +456,13 @@ rex_approval_carries_over() {
     # "unknown". Fetch only computation inputs. Each step's parents and
     # recorded tree come from the forge, even when its object exists locally.
     local sha
+    if ! _rex_carry_parse_owner_name "$repo"; then
+      _rex_carry_emit "unknown"
+      return 0
+    fi
     for sha in "$forge_parent0" "$forge_parent1" "$base_tip"; do
       if ! git cat-file -e "${sha}^{commit}" 2>/dev/null; then
-        _rex_carry_git fetch -q "https://github.com/${repo}.git" "$sha" >/dev/null 2>&1
+        _rex_carry_git fetch -q "https://github.com/${_rex_carry_owner}/${_rex_carry_name}.git" "$sha" >/dev/null 2>&1
       fi
       if ! git cat-file -e "${sha}^{commit}" 2>/dev/null; then
         _rex_carry_emit "unknown"

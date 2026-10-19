@@ -1034,6 +1034,75 @@ EOF
   fi
   rm -rf "$repo" "$sb"
 
+  # -------------------------------------------------------------------------
+  # #1809 Hakim A6/A8/A7: pin GraphQL to github.com, exactly three segments,
+  # and build the fallback fetch URL from OWNER/REPO.
+  # -------------------------------------------------------------------------
+  repo=$(make_git_repo)
+  echo base > "$repo/base.txt"; g "$repo" add base.txt; g "$repo" commit -q -m base
+  g "$repo" checkout -q -b pr-branch
+  echo pr > "$repo/pr.txt"; g "$repo" add pr.txt; g "$repo" commit -q -m "reviewed"
+  OLD_SHA=$(g "$repo" rev-parse HEAD)
+  g "$repo" checkout -q main
+  echo more > "$repo/base2.txt"; g "$repo" add base2.txt; g "$repo" commit -q -m "base moves"
+  g "$repo" checkout -q pr-branch
+  g "$repo" merge -q --no-ff main -m "merge base"
+  NEW_SHA=$(g "$repo" rev-parse HEAD)
+  sb=$(mktemp -d)
+  make_rex_carry_gh_mock "$sb" "$repo"
+  mv "$sb/bin/gh" "$sb/bin/gh-inner"
+  cat > "$sb/bin/gh" <<EOF
+#!/bin/bash
+printf '%s\n' "\$*" >> "$sb/gh-calls"
+exec "$sb/bin/gh-inner" "\$@"
+EOF
+  chmod +x "$sb/bin/gh"
+  : > "$sb/gh-calls"
+  got=$(GH_HOST=ghe.corp carry_over_in "$repo" "$OLD_SHA" "$NEW_SHA" main "$sb/bin" "acme-org/example")
+  if [ "$got" = "true" ] && grep -q -- 'api graphql --hostname github.com' "$sb/gh-calls"; then
+    mark_pass "#1809 A6 GH_HOST set -> graphql call still pinned to --hostname github.com"
+  else
+    mark_fail "#1809 A6 hostname pin" "got='$got' calls=$(cat "$sb/gh-calls")"
+  fi
+  : > "$sb/gh-calls"
+  got=$(carry_over_in "$repo" "$OLD_SHA" "$NEW_SHA" main "$sb/bin" "github.com/acme/app/extra")
+  calls=$(wc -l < "$sb/gh-calls" | tr -d ' ')
+  if [ "$got" = "unknown" ] && [ "$calls" = "0" ]; then
+    mark_pass "#1809 A8 four-segment github.com repo -> unknown (0 forge calls)"
+  else
+    mark_fail "#1809 A8 four segments" "got='$got' calls=$calls (want unknown / 0)"
+  fi
+  got=$(carry_over_in "$repo" "$OLD_SHA" "$NEW_SHA" main "$sb/bin" "github.com/acme-org/example")
+  if [ "$got" = "true" ]; then
+    mark_pass "#1809 A8 pair: three-segment github.com/OWNER/REPO still carries over"
+  else
+    mark_fail "#1809 A8 pair" "got='$got' (want true)"
+  fi
+  # A7: the fetch URL for the explicit github.com form. Remove the parent
+  # objects from the local clone so the fetch runs, and record the URL with
+  # a git shim that fails the fetch.
+  gsb=$(mktemp -d)
+  REAL_GIT=$(command -v git)
+  cat > "$gsb/git" <<EOF
+#!/bin/bash
+for a in "\$@"; do
+  case "\$a" in https://*) printf '%s\n' "\$a" >> "$gsb/fetch-urls"; exit 1 ;; esac
+done
+exec "$REAL_GIT" "\$@"
+EOF
+  chmod +x "$gsb/git"
+  : > "$gsb/fetch-urls"
+  nrepo=$(make_git_repo)
+  GIT_DIR="$nrepo/gitdir" GIT_WORK_TREE="$nrepo" PATH="$gsb:$sb/bin:$PATH" \
+    bash -c ". '$LIB'; rex_approval_carries_over 'github.com/acme-org/example' '$OLD_SHA' '$NEW_SHA' main" >/dev/null 2>&1
+  if grep -qx 'https://github.com/acme-org/example.git' "$gsb/fetch-urls" \
+     && ! grep -q 'github.com/github.com' "$gsb/fetch-urls"; then
+    mark_pass "#1809 A7 explicit github.com form -> fetch URL https://github.com/OWNER/REPO.git"
+  else
+    mark_fail "#1809 A7 fetch URL" "urls=$(cat "$gsb/fetch-urls")"
+  fi
+  rm -rf "$repo" "$nrepo" "$sb" "$gsb"
+
 else
   echo "  SKIP: git not on PATH — rex_approval_carries_over cases skipped" >&2
 fi
