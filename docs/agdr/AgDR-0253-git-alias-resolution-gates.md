@@ -14,6 +14,7 @@ Accepted. Approved design v5. AgDR-0253.
 - 2026-10-19 review fix (PR #1804): Use the same candidate boundary class as `_git_sub_re` (`[^[:alnum:]_.-]`). Reason: a path-qualified git reached the push gates for the real verb but skipped the alias scan.
 - 2026-10-19 review fix (PR #1804): Match a single-quoted `-C` or `--git-dir` value with a space in the no-jq payload pattern. Reason: #1748 row 5 stayed open for that quote style.
 - 2026-10-19 review fix (PR #1804): Rewrite residuals R2, R3 and R6 at class level with no runnable examples. Correct R6: a backslash-escaped command word still reaches the push gates.
+- 2026-10-19 follow-up (#1816, PR #1804): Close command-word and alias classes G1 to G8. Normalise a quoted or case-variant git command word before routing. Treat an expansion in the command-word or verb position as unknown and fail closed when the rest can be a push or a commit. Decode a quoted verb with the shared word reader. Block an alias when the target repository cannot be resolved statically, or when a config path write may replace the alias before git runs. Builtin verbs other than push and commit stay allowed. Move G1 to G8 from residuals into Decisions.
 
 ## Context
 
@@ -312,16 +313,33 @@ Probe cost on macOS, git 2.56, mean of 20 runs (Observed): one view read 9.0 ms,
 - An unknown verb with no alias evidence. Git fails with "not a git command".
 - All five round-1 false-block payloads. Payloads 1, 3, 4 and 5 fall under rule 10 with an unresolved target. Payload 2 reads a non-repository view. This is Inferred from the code paths. The build PR tests must prove it.
 
+### Decisions for classes G1 to G8 (#1816)
+
+These classes were open on `dev` before #1816. Exact payloads stay private. Public text names the class only.
+
+| ID | Class | Decision |
+|---|---|---|
+| G1 | A quoted git command word | Strip quotes from the command word before routing. Match the normalised word to `git`. |
+| G2 | A git command word from an expansion | Treat the command word as unknown. When the rest of the simple command can be a push or a commit, route to both gate groups and block. |
+| G3 | A git verb from an expansion | Treat the verb as unknown. When the rest can be a push or a commit, route to both gate groups and block. |
+| G4 | A git command word in another letter case | Compare the command word case-insensitively before routing. |
+| G5 | A quoted or partly quoted real verb | Decode the verb with the shared word reader (same quote rules as the alias parser). |
+| G6 | A single-quoted repository path that holds a space, when jq is not installed | Covered by the #1748 row-5 / B3 payload pattern for single-quoted `-C` and `--git-dir` values. |
+| G7 | A repository alias reached through a path the resolver does not follow | When an alias (non-builtin verb) runs and the target cannot be resolved statically (`env -C`, a subshell `cd`, `cd -P`, or a `-C` path built from an expansion), block. Builtin verbs other than push and commit stay allowed. |
+| G8 | A repository alias from a config file written other than via `git config` | When the command text names a `.git/config` path (including `.git//config` and `.git/./config`) and then runs a non-builtin verb, block. Do not trust a stale view. |
+
+Builtin safe verbs (status, log, diff, show, fetch, branch --list) stay allowed under every class, including a quoted or uppercase command word.
+
 ### Residuals
 
 Residuals name a class and why it is accepted. They give no runnable command, payload, file-path trick or variable example.
 
 - R1. **Class: agent-written external `git-<verb>`.** An executable named `git-<verb>` on `PATH` or the exec-path runs as a normal program. Accepted because this matches any agent-written script. The native `pre-push` still applies unless the script disables hooks (AgDR-0114). Follow-up item 2.
-- R2. **Class: unresolved or mis-resolved target.** A repository-local alias runs when the gate cannot resolve the target the command uses, or resolves a different directory than git does. The class covers a target given through an expansion, a directory change the hook cannot follow, a template or prepared repository with no same-command definition evidence, and a `gitdir:` include that matches a repository created by a route other than `init`, `clone` or `worktree`. Accepted because blocking every unresolvable target brings back round-1 false blocks. The native hooks of that repository still apply. Follow-up item 1. CEO decision 1.
-- R3. **Class: split channel or definition evidence.** A channel token or definition evidence that quotes, expansions or format strings split so the literal text no longer contains the whole-word token. The class also covers definition evidence written through file copy or path normalisation that the view does not list, and content copied onto an include file the view does not list. Accepted because a full shell parser is out of scope; this extends the script, `eval` and `source` limit below. CEO decision 7; wider scope acknowledged 2026-10-19.
+- R2. **Class: soft-unresolved target without alias use.** A soft directory-chain failure (for example a `cd` whose path holds an expansion) still uses the payload-cwd view when the verb is unknown and there is no alias evidence. Hard-unresolved shapes that run an alias are G7 and now block. Soft unresolved without an alias stays allowed so round-1 false blocks do not return. CEO decision 1, narrowed by #1816.
+- R3. **Class: split channel or definition evidence.** A channel token or definition evidence that quotes, expansions or format strings split so the literal text no longer contains the whole-word token. Config path writes that the literal text still names (including slash and dot normalisation) are G8 and now block. Accepted for the remaining split forms because a full shell parser is out of scope. CEO decision 7; narrowed by #1816.
 - R4. **Class: external-existence disagreement.** The hook and git can disagree on whether an external `git-<verb>` exists when the hook-process `PATH` differs from the Bash-tool `PATH`, or when a `PATH` entry is relative. Rule 7 applies rules 8 and 9 first, checks the view for a dangerous alias, and counts only absolute `PATH` entries. A disagreement then matters only when the view also misses the alias. Accepted 2026-10-19.
 - R5. **Class: Bash-tool sourced environment.** Files that the Bash tool sources can change `HOME`, `PATH` or a `GIT_CONFIG*` variable with no command text. The class covers a `CLAUDE_ENV_FILE` script, owner-writable shell-snapshot files under `~/.claude/shell-snapshots/`, and owner-writable session-env directories under `~/.claude/session-env/`. The hook cannot see those changes. Accepted with follow-up item 5 (CEO decision 12).
-- R6. **Class: shell-level indirection of the git argv.** Forms that hide the git argv from command-text gates stay open. The class covers a quoted git word, a variable that expands to git, a shell alias or function that runs git, git through a tool that builds argv, and a verb taken from a variable or from command output. Rule 4 marks an opaque verb; rule 18 blocks only on view evidence. **Not in this class:** a backslash-escaped command word. The dispatcher still routes that form to the push gates, and the protected-branch push gate blocks it. R6 is older than this decision and is accepted as defence-in-depth scope, not as a claim that every indirection skips every gate.
+- R6. **Class: shell-level indirection beyond G1 to G5.** Forms that hide the git argv through a shell alias, a shell function, or a tool that builds argv stay open. Quoted command words, case variants, expansions in the command-word or verb position, and quoted verbs are G1 to G5 and now block when the rest can be a push or a commit. **Not in this class:** a backslash-escaped command word. The dispatcher still routes that form to the push gates. R6 is older than this decision; #1816 narrows it.
 - **Class: scripted or file-fed git.** A script file, `eval`, `source`, or a verb or options read from a file or command output, is outside every command-text gate. Rule 4 marks that form opaque; rule 18 blocks only on view evidence. Older than this decision.
 - **Class: ungated write verbs.** Verbs that create commits or send refs other than `push` and `commit` are not gated today. This decision gates exactly the verbs the gates cover.
 
