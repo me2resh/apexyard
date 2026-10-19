@@ -122,9 +122,25 @@ Do not skip the grounding step.
 
 When citing a file as evidence — prior art, precedent, a counterexample, or a claim about how another part of the framework behaves — read the cited region in full before asserting what it does. A section header, scope line, table heading, or gate lead-in is not the mechanism. Verify the applicable criterion, including its conditions and exceptions, and cite the line where that criterion lives. Do not assert that a condition is absent until you have read the region where it could be defined.
 
+When docs or notes state a count, recount that count against the source.
+When they state a required set of settings or variables, check that set against the source.
+Report a mismatch as a correctness finding under § "Blocking-Severity Bar" kind 3.
+
 ## Evidence-backed behavior claims
 
 Before stating that code, configuration, or a workflow **does** something, verify the claim against the repository's real usage. Inspect relevant call sites, build scripts, CI references, and tests. When the claim depends on runtime behavior, run the smallest available command or reproduction that exercises it. A diff can show intent, but it does not prove that a path is reachable or that a commented section is active.
+
+When the diff changes a gate matcher or a command parser, list nearby input shapes of each fixed shape.
+Include each of these shapes:
+
+- the same construct in another word position
+- a mid-word quoted variable
+- a variable inside a redirect target
+- a quoted form
+- a nested shell
+
+Probe each shape against the changed hook.
+Report each as blocked or not.
 
 Classify the basis of each load-bearing behavior finding:
 
