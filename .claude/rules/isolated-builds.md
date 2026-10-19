@@ -38,6 +38,34 @@ For a genuinely separate repo (not this one) that still needs a persistent, non-
 A managed project's `workspace/<name>` clone counts as "the local copy" for that project.
 `branch` mode can apply when that clone is the current repository and the conditions below hold.
 
+## Run more than one session on one project
+
+Use one working tree for each concurrent session on the same project.
+The first session can use the main clone.
+Each additional session uses its own worktree.
+
+1. **One tree per session.** One working tree for each concurrent session. The first session can use the main clone. Each additional session uses its own worktree.
+2. **Create the worktree.** Keep it under `.claude/worktrees/` (gitignored). Never put a worktree inside another repo.
+
+   ```bash
+   git -C <project-clone> worktree add .claude/worktrees/<type>-<ticket>-<slug> -b <branch>
+   ```
+
+   Run `/start-ticket` for the ticket from that worktree.
+3. **Set up the worktree.** Install dependencies. Copy `.env` from the main clone. Use a dev-server port that differs from the main clone's.
+4. **Warn before cleanup.** Read the warning below before you remove the worktree.
+5. **Clean up after merge.** Run the remove command without `--force`, then prune.
+6. **Limits.** Two goals on one project can still conflict at merge time. A worktree postpones that conflict. It does not remove it.
+
+> **Warning:** `git worktree remove` keeps uncommitted tracked changes (it refuses), but it deletes ignored files such as `.env` and local databases without asking. Back them up first.
+
+```bash
+git worktree remove <path>
+git worktree prune
+```
+
+**Session marker warnings (#1533).** Once PR #1794 merges, the ticket marker records `session_id` and `branch`. The ticket gate warns once per session when they do not match. `/start-ticket` asks before it overwrites another session's marker. These checks warn. They do not block.
+
 ## Lifecycle — remove the worktree once its PR merges
 
 A worktree is scoped to the ticket it was created for, not kept around after. Once the PR merges:

@@ -86,3 +86,11 @@ The orchestrator can select `branch` for a foreground build with no other active
 Tracked files must be clean before switching branches.
 Background builds, concurrent writers, another repository, and risky destructive git still require worktrees.
 The agent checks HEAD before each commit and reports its branch name.
+
+### Operator runbook for concurrent sessions (#1534)
+
+The isolation setting still chooses branch versus worktree for spawned builds.
+Operators needed a supported procedure for two human sessions on one project.
+`.claude/rules/isolated-builds.md` now has "Run more than one session on one project".
+Reason: without that runbook, operators guessed and two sessions in one clone collided silently.
+The location stays `.claude/worktrees/`. The procedure does not change the `build.isolation` setting.
