@@ -96,3 +96,7 @@ Reason: without that runbook, operators guessed and two sessions in one clone co
 The location stays `.claude/worktrees/`. The procedure does not change the `build.isolation` setting.
 The create command must pass `origin/<base-branch>` as the start point after `fetch`.
 Reason: without that start point, the new branch starts at the main clone's HEAD, which is normally the other session's ticket branch.
+The create command also passes `--no-track`.
+Reason: with the default auto-setup of tracking, the new branch would track `origin/<base-branch>`, and the first upload must set the upstream of the new branch.
+The session-marker paragraph names #1533 as future behaviour.
+Until #1533 ships, a second `/start-ticket` in the same tree overwrites the marker with no warning.

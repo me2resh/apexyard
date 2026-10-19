@@ -53,11 +53,11 @@ Each additional session uses its own worktree.
 
    If that command exits non-zero, add `.claude/worktrees/` to the project's `.gitignore`.
 
-   Then fetch and create the worktree from the project's integration branch (usually `main`; `dev` for the apexyard framework). Without an explicit start point, `git worktree add -b` starts at the main clone's HEAD, which is normally the other session's ticket branch.
+   Then fetch and create the worktree from the project's integration branch (usually `main`; `dev` for the apexyard framework). Without an explicit start point, `git worktree add -b` starts at the main clone's HEAD, which is normally the other session's ticket branch. Pass `--no-track` so the new branch does not track `origin/<base-branch>`. The first upload must set the upstream of the new branch.
 
    ```bash
    git -C <project-clone> fetch origin
-   git -C <project-clone> worktree add .claude/worktrees/<type>-<ticket>-<slug> -b <branch> origin/<base-branch>
+   git -C <project-clone> worktree add .claude/worktrees/<type>-<ticket>-<slug> -b <branch> --no-track origin/<base-branch>
    ```
 
    Run `/start-ticket` for the ticket from that worktree.
@@ -73,7 +73,7 @@ git -C <project-clone> worktree remove .claude/worktrees/<type>-<ticket>-<slug>
 git -C <project-clone> worktree prune
 ```
 
-**Session marker warnings (#1533).** The ticket marker records `session_id` and `branch`. The ticket gate warns once per session when they do not match. `/start-ticket` asks before it overwrites another session's marker. In a headless run, `/start-ticket` cancels the overwrite. These checks warn. They do not block.
+**Session marker warnings (#1533).** #1533 adds these warnings: the marker records `session_id` and `branch`, the gate warns once per session on a mismatch, and `/start-ticket` asks before it overwrites another session marker (a headless run cancels). Until #1533 ships, a second `/start-ticket` in the same tree overwrites the marker without a warning, so use one worktree per session.
 
 ## Lifecycle — remove the worktree once its PR merges
 
