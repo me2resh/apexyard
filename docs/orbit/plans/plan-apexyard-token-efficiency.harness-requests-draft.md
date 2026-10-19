@@ -1,7 +1,13 @@
 # Harness requests draft — plan-apexyard-token-efficiency ac2-4
 
-Owner-approval drafts only. Do not file, comment, or post until the owner
-approves each section. Aggregate numbers only. Leak scrub completed per
+Owner approved all four on 2026-10-19. They are filed:
+
+1. Skill-body dedupe: https://github.com/anthropics/claude-code/issues/103425
+2. Fork from a compacted parent, or with a context budget: https://github.com/anthropics/claude-code/issues/88841#issuecomment-6265152676
+3. Names-only re-injection after compaction: https://github.com/anthropics/claude-code/issues/82144#issuecomment-6265151741
+4. No skill listing for agents without the Skill tool: https://github.com/anthropics/claude-code/issues/103426
+
+Aggregate numbers only. Leak scrub completed per
 `.claude/rules/leak-protection.md` (no private project name, no local path,
 no username).
 

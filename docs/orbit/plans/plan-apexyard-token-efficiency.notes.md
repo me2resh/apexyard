@@ -83,7 +83,10 @@ o1 first, because every later change and the harness o4 slice measure with its s
 
 - me2resh/orbit-spec#21: one Plan revision per record root; superseded revisions go to `docs/orbit/history/`.
 - The Plan schema has no field for a criterion's proof, so each statement ends with a short "Shown by:" clause (me2resh/apexyard#1618 proposes the rule).
-- Harness requests under ac2-4 are filed with Claude Code, not in this repo; the links go here when they exist. Draft texts (owner approval required before filing): `docs/orbit/plans/plan-apexyard-token-efficiency.harness-requests-draft.md`. Existing matches to comment on after approval: anthropics/claude-code#88841 (fork context budget), anthropics/claude-code#82144 (post-compaction skill re-injection as names only). Topics with no match yet: skill-body dedupe inside one window; omit skill listing for agents without the Skill tool.
+- 2026-10-19, owner-approved: Skill-body dedupe: https://github.com/anthropics/claude-code/issues/103425 (new issue)
+- 2026-10-19, owner-approved: Fork from a compacted parent, or with a context budget: comment https://github.com/anthropics/claude-code/issues/88841#issuecomment-6265152676
+- 2026-10-19, owner-approved: Names-only re-injection after compaction: comment https://github.com/anthropics/claude-code/issues/82144#issuecomment-6265151741
+- 2026-10-19, owner-approved: No skill listing for agents without the Skill tool: https://github.com/anthropics/claude-code/issues/103426 (new issue)
 
 ## Revision 2 (2026-10-11)
 
