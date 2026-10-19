@@ -604,9 +604,10 @@ _merge_scrub_once() {
         }
         # Output redirects to shell startup files or .git/hooks add the raw
         # text. A target the word reader cannot read also adds the raw text
-        # when the first character is present and is not a separator. A later
-        # "$NAME" span is in that class. Look ahead only. pos returns to the
-        # operator, so the scrub below stays the same as on dev.
+        # for any word lead. A word lead is a first character that is not a
+        # separator. A later "$NAME" span is in that class. Look ahead only.
+        # pos returns to the operator, so the scrub below stays the same as
+        # on dev.
         if (c == ">") {
           start = pos
           pos++

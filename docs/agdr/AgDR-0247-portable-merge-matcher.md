@@ -28,14 +28,14 @@ The matcher fails closed. A new allow path needs a test that the matching real m
 Chosen: **count the window, require literals, and mask only inert data**, because each allow path still leaves a real merge visible.
 
 - Replace the interval with one pass over the command. A merge phrase may start at most 200 characters after the `-c` quote. The pass does not copy the unread tail. macOS awk makes that copy quadratic, and a slow gate does not block.
-- Homebrew mawk 1.3.4-20260302 accepts an ERE interval. Debian mawk 1.3.4 20200120 rejects it. The Linux CI job and the interval-lock test are the evidence for #1757.
+- `test_awk_ere_interval_lock.sh` is the evidence for #1757. No ERE interval remains in any `_lib-*.sh` file. macOS Homebrew mawk 1.3.4-20260302 accepts intervals, so it cannot reproduce #1757.
 - Scan awk program literals in every `.claude/hooks/_lib-*.sh` file. Do not flag a POSIX grep interval.
 - In `/approve-merge` step 6, pass the repo and the PR as literals. Stop when the check script returns a different host repo.
 - Blank a grep, egrep, or fgrep pattern unless a dangerous grep option is present.
 - Blank an attached `--regexp=` or `-e=` pattern in that word. A bare `--regexp` or `-e` still blanks the next word.
 - An unquoted `~[` inside a grep word keeps the raw command. AgDR-0204 requires that shape.
 - Inside a double-quoted argument of an allowlisted command, treat `$name` and `${name}` as data. `$(`, backticks, and `${` with an operator still keep the raw text.
-- A redirect target keeps the raw command when the reader fails and the first character is not a separator. A later quoted variable span is in that class. A target that starts with a double quote or a dollar sign stays in that class.
+- The redirect guard applies to any word lead. A word lead is the first character of a target that is not a separator. When the reader fails on that lead, the raw command stays. A later quoted variable span is in that class. A target that starts with a double quote or a dollar sign stays in that class.
 - Blank an inert heredoc body only when every command word is on the data list. `true` and `false` are on that list. An interpreter heredoc, a pipe to a shell, and a later executor stay visible. The rule already covered an unquoted body with no dollar sign, backtick, or backslash. This change does not widen that rule.
 - Do not call `strip_heredoc_bodies` from the merge scrub. That helper must not decide whether a merge gate fires.
 
@@ -66,11 +66,17 @@ An unquoted `~[` inside a grep word keeps the raw command again. AgDR-0204 alrea
 
 The data view already treated an unquoted heredoc body with no dollar sign, backtick, or backslash as data. This change does not widen heredoc handling. The merge scrub does not call `strip_heredoc_bodies`.
 
-Homebrew mawk 1.3.4-20260302 accepts ERE intervals. The interval lock and the Debian mawk 1.3.4 20200120 CI job show that #1757 stays fixed.
+`test_awk_ere_interval_lock.sh` is the evidence that #1757 stays fixed. No ERE interval remains in any `_lib-*.sh` file. macOS Homebrew mawk 1.3.4-20260302 accepts intervals, so it cannot reproduce #1757.
 
 ### Later variable span in a redirect target (#1761)
 
-The redirect check set the raw flag only when the target started with a double quote or a dollar sign. A later `"$NAME"` span still stopped the word reader. The scrub then hid the merge. The check now sets the raw flag when the reader fails and the first character is not a separator. An ordinary file name with a quoted variable also stays raw. That fails closed.
+The redirect check set the raw flag only when the target started with a double quote or a dollar sign. A later `"$NAME"` span still stopped the word reader. The scrub then hid the merge. The check now sets the raw flag when the reader fails on any word lead. An ordinary file name with a quoted variable also stays raw. That fails closed.
+
+### Mid-word redirect word and #1757 evidence (#1761)
+
+The redirect guard applies to any word lead. Three tests pin a variable in the middle of the target. Those targets are `~/"$NOPE".zshenv`, `.git/hooks/pre"$NOPE"-push`, and a quoted heredoc on `~/"$NOPE".bashrc`.
+
+`test_awk_ere_interval_lock.sh` is the evidence that #1757 stays fixed. No ERE interval remains in any `_lib-*.sh` file. macOS Homebrew mawk 1.3.4-20260302 accepts intervals, so it cannot reproduce #1757. The tests workflow does not run Debian mawk 1.3.4 20200120.
 
 ## Artifacts
 

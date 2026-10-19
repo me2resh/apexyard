@@ -269,7 +269,7 @@ List candidates with `.claude/skills/approve-merge/remove-worktree.sh list "<sou
 
 ### 10. Optional: post-merge child-issue closure
 
-Do this only when the user asks. Do not auto-close a child issue. Confirm each close on its own. Full rules: docs/skills/approve-merge-rationale.md.
+Do this only when the user explicitly asks. Do not auto-close a child issue. Confirm each close on its own. Full rules: docs/skills/approve-merge-rationale.md.
 
 ## --no-merge opt-out
 

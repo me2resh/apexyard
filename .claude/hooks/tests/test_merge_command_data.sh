@@ -142,6 +142,11 @@ must_detect 'S2 trailing variable on pre-commit' "echo 'gh pr merge 7' > .git/ho
 must_detect 'S2 braced variable in hook name' "echo 'gh pr merge 7' > .git/hooks/\"\${Q}\"pre-commit"
 must_detect 'S2 variable span before dot git' "echo 'gh pr merge 7' > ./\"\$Q\".git/hooks/pre-commit"
 must_detect 'S2 cat trailing variable on bashrc' "$(printf "cat > ~/.bashrc\"\$Q\" <<'EOF'\ngh pr merge 7\nEOF")"
+# Rex, review of PR #1765. A variable in the middle of the redirect word
+# keeps the raw command. An unset name expands to nothing.
+must_detect 'S2 mid-word variable before zshenv' "echo 'gh pr merge 7' > ~/\"\$NOPE\".zshenv"
+must_detect 'S2 mid-word variable in pre-push' "echo 'gh pr merge 7' > .git/hooks/pre\"\$NOPE\"-push"
+must_detect 'S2 mid-word cat variable before bashrc' "$(printf "cat > ~/\"\$NOPE\".bashrc <<'EOF'\ngh pr merge 7\nEOF")"
 must_detect 'S3 grep --filter=' "grep --filter='gh pr merge 7' notes.txt"
 must_detect 'S3 grep --pager separate' "grep --pager sh 'gh pr merge 7' notes.txt"
 must_detect 'S3 grep quoted --view' "grep '--view' sh 'gh pr merge 7' notes.txt"
