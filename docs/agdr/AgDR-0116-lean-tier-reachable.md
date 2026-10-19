@@ -78,3 +78,17 @@ The merge gates and marker library remain unchanged.
 The spawn procedure is in `docs/skills/code-review-depth.md`.
 Forge-case tests are in `.claude/hooks/tests/test_review_tier.sh`.
 The prompt changes require separate zero-flip evidence before this slice can ship.
+
+## Architecture evolution — isolate the tier interpreter (#1773, 2026-10-19)
+
+Hakim's review of PR #1797 showed that `python3 -` put the caller's cwd first on
+`sys.path` and honoured `PYTHONPATH`. A PR that planted `json.py` (or another
+pure-Python stdlib name) at the repository root could forge `Reduced-scope-allowed`
+and run code on the host when the orchestrator used that checkout as cwd.
+
+The script now starts Python with `-I`, changes to a fresh temporary directory
+before the interpreter runs, and resolves the repository argument to an absolute
+path first. Callers may invoke it from any directory. Regression tests plant
+`json.py` and `re.py` under the fixture repo, run with cwd inside that repo, and
+assert Full with no marker file from the planted modules. A `PYTHONPATH` variant
+is covered the same way.

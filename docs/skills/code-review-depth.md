@@ -8,7 +8,9 @@ Export `bin/review-tier.sh` from that base SHA into a temporary file.
 For an ops fork, use the trusted ops baseline at its recorded SHA instead.
 Never execute the PR's copy of the script.
 
-Run the exported script with the repository path, base SHA, reviewed SHA, and fetched head ref:
+Run the exported script with the repository path, base SHA, reviewed SHA, and fetched head ref.
+You may run it from any working directory. The script changes to a temporary directory and starts Python with `-I`, so a planted module in the PR tree cannot run.
+Prefer an absolute `$repo_dir`. A relative path is resolved against the caller's working directory before the script leaves that directory.
 
 ```bash
 bash "$trusted_script" "$repo_dir" "$base_sha" "$reviewed_sha" "$head_ref"

@@ -56,10 +56,11 @@ class TierTests(unittest.TestCase):
         self.git('commit', '-qm', 'fixture')
         return self.git('rev-parse', 'HEAD').strip()
 
-    def tier(self, head=None, env=None, base=None):
+    def tier(self, head=None, env=None, base=None, cwd=None):
         head = head or self.git('rev-parse', 'HEAD').strip()
         out = subprocess.check_output(['bash', str(self.trusted), str(self.repo),
-                                       base or self.base, head], text=True, env=env)
+                                       base or self.base, head], text=True, env=env,
+                                      cwd=cwd)
         return json.loads(out)
 
     def test_plain_markdown_allowed(self):
@@ -180,6 +181,39 @@ class TierTests(unittest.TestCase):
         (self.repo / 'docs/link.md').symlink_to('../bin/review-tier.sh')
         self.commit()
         self.assertEqual(self.tier()['depth'], 'Full')
+
+    def test_planted_stdlib_shadow_from_repo_cwd(self):
+        # A PR-planted json.py / re.py must not run when cwd is the PR tree.
+        self.write('docs/guide.md', 'after\n')
+        self.write('json.py',
+                   'def dumps(d, **k):\n'
+                   '    return \'{"depth":"Reduced-scope-allowed","reason":"FORGED by json.py"}\'\n'
+                   'open(__file__ + ".ran", "w").write("ran\\n")\n')
+        self.write('re.py',
+                   'def fullmatch(*a, **k):\n'
+                   '    raise AssertionError("planted re used")\n'
+                   'open(__file__ + ".ran", "w").write("ran\\n")\n')
+        self.commit()
+        out = self.tier(cwd=str(self.repo))
+        self.assertEqual(out['depth'], 'Full')
+        self.assertNotEqual(out.get('reason'), 'FORGED by json.py')
+        self.assertFalse((self.repo / 'json.py.ran').exists())
+        self.assertFalse((self.repo / 're.py.ran').exists())
+
+    def test_pythonpath_stdlib_shadow(self):
+        self.write('docs/guide.md', 'after\n')
+        self.commit()
+        pp = self.root / 'pp'
+        pp.mkdir()
+        (pp / 'json.py').write_text(
+            'def dumps(d, **k):\n'
+            '    return \'{"depth":"Reduced-scope-allowed","reason":"PYTHONPATH"}\'\n'
+            'open(__file__ + ".ran", "w").write("ran\\n")\n')
+        env = dict(os.environ, PYTHONPATH=str(pp))
+        out = self.tier(env=env, cwd=str(self.repo))
+        self.assertEqual(out['depth'], 'Reduced-scope-allowed')
+        self.assertNotEqual(out.get('reason'), 'PYTHONPATH')
+        self.assertFalse((pp / 'json.py.ran').exists())
 
 
 unittest.main(argv=['review-tier'], verbosity=2)

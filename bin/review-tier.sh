@@ -1,12 +1,42 @@
 #!/usr/bin/env bash
-# Run this file from the trusted base tree, never from the PR working tree.
+# Export this file from the trusted base tree, never from the PR working tree.
+# Safe from any working directory: isolated Python (-I) and a temporary cwd.
 # Usage: bash review-tier.sh <repo> <base-sha> <reviewed-sha> [head-ref]
 # Output permits only the existing Reduced-Scope pass. All errors mean Full.
 if ! command -v python3 >/dev/null 2>&1; then
   printf '%s\n' '{"depth":"Full","reason":"python3 unavailable"}'
   exit 0
 fi
-python3 - "$@" <<'PY'
+
+repo=${1-}
+if [ -z "$repo" ]; then
+  printf '%s\n' '{"depth":"Full","reason":"expected repo, base SHA, reviewed SHA and optional head ref"}'
+  exit 0
+fi
+# Resolve the repository to an absolute path before leaving the caller's cwd.
+case $repo in
+  /*) ;;
+  *)
+    if ! repo=$(cd -- "$repo" 2>/dev/null && pwd -P); then
+      printf '%s\n' '{"depth":"Full","reason":"repository path unavailable"}'
+      exit 0
+    fi
+    ;;
+esac
+shift
+
+neutral=$(mktemp -d) || {
+  printf '%s\n' '{"depth":"Full","reason":"neutral directory unavailable"}'
+  exit 0
+}
+cleanup() { rm -rf -- "$neutral"; }
+trap cleanup EXIT HUP INT TERM
+if ! cd -- "$neutral"; then
+  printf '%s\n' '{"depth":"Full","reason":"neutral directory unavailable"}'
+  exit 0
+fi
+
+python3 -I - "$repo" "$@" <<'PY'
 import json
 import re
 import subprocess
