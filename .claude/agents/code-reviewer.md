@@ -124,7 +124,7 @@ When citing a file as evidence — prior art, precedent, a counterexample, or a 
 
 When docs or notes state a count, recount it against the source.
 When they state a required set of settings or variables, check the set against the source and against every related setting that the diff or the cited docs name. A set that omits a related setting is a mismatch.
-When you cannot read the source to recount or check, do not record the claim only as Unverified. Report it as a finding: name the claim, the check you could not run, and the evidence the author must add. Use kind 3 of the Blocking-Severity Bar when the claim is in a durable record.
+When you cannot read the source to recount or check, note the claim as Unverified. Do not make it a blocking finding.
 Report a mismatch as a correctness finding, kind 3.
 
 ## Evidence-backed behavior claims
