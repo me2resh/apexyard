@@ -2,6 +2,23 @@
 
 One tree holds one ticket. Parallel sessions on one project no longer overwrite each other, because each linked worktree has its own marker. `git worktree remove` deletes the marker with the worktree. The marker is never tracked, so it does not appear in `git status`.
 
+## Foreign overwrite (AgDR-0257 / #1533)
+
+When `/start-ticket` would replace a marker that holds a **different** ticket
+and a **different** `session_id` (empty or missing counts as different), ask
+with `AskUserQuestion`:
+
+| Option | Action |
+|--------|--------|
+| Separate worktree | Stop. Point at the concurrent-sessions runbook in #1534. |
+| Take over | Write with `APEXYARD_START_TICKET_TAKEOVER=1`. |
+| Cancel | Leave the marker byte-for-byte unchanged. |
+
+Headless and `/fan-out` runs cancel. `active_ticket_write_from_file` also
+refuses a foreign overwrite unless that flag is set. The ticket gate warns
+once per session when `session_id` or `branch` on the marker does not match
+the current session or tree branch. The warning never blocks.
+
 The hook trusts a marker in a git dir only for the ops fork or a registered clone. A registered clone is `workspace/<project>/`, or the `workspace:` path of its registry entry. The marker is a process gate. Anyone with write access to the git dir can forge it. It is not an authorization boundary.
 
 During the move to the new layout, the skill also writes the old-layout marker under `<ops_root>/.claude/session/`. It uses the places the old skill used. The resolver in `_lib-active-ticket.sh` defines them. The hooks still read old markers wherever they read them before. A hook from before the move, after a rollback or in a session that has not reloaded its hooks, sees the ticket too. See AgDR-0222, "Backward compatibility".
