@@ -1,6 +1,6 @@
 # Slice #1773 verification
 
-The implementation is a local draft. C4 eval evidence is incomplete.
+The implementation is a local draft. C4 eval evidence is partial: k=1 on the five delta entries only.
 Do not treat schema validation or static tests as a zero-flip result.
 No Snapshot or Reconciliation was created.
 
@@ -11,10 +11,10 @@ No Snapshot or Reconciliation was created.
 - [x] Step 3: implement the 300-token hand-back cap and six-heading short delta format.
 - [x] Step 4: recompute the resume window and require the posted prior review as evidence.
 - [x] Step 5: run the o1 reviewer metric and report the comparison with its limits.
-- [ ] Run the three isolated Rex prompt comparisons. Each has a separate flip table.
+- [ ] Run the three isolated Rex prompt comparisons. Partial C4 done 2026-10-19: k=1, five delta entries, 30 reviews, 0 verdict flips, 1,382,201 tokens. Not a zero-flip claim. The k=3 run and the ten non-delta entries remain open.
 - [x] Commit each step locally. No push, branch change, PR, or merge.
 
-Flip tables remain Not run. No push, branch change, PR, or merge occurred.
+Flip tables hold a partial C4 result (k=1, delta entries only). The ten non-delta rows are Not run. No push, branch change, PR, or merge occurred.
 The orchestrator owns the PR Snapshot and Reconciliation.
 Use this checklist and the measurements below in the slice PR body.
 
@@ -91,6 +91,20 @@ The owner user setting reads `subagentPromptCacheTtl: "1h"`. Framework settings 
 | `shellcheck -S warning` on the three new shell files | 3 files | 0 warnings |
 | `git diff --check` | Clean | 0 faults |
 
-Each flip table has 0/90 planned reviews and 0/45 scored pairs.
-Across the three tables, 0/270 planned reviews ran. Verdict preservation remains unknown.
-The isolated CLI probe failed authentication. It produced no review output to score.
+## C4 partial eval, 2026-10-19
+
+CEO decision 2026-10-19: k=1, the five delta corpus entries only, for each of the three isolated Rex prompt edits.
+
+| Edit | Reviews run | Scored pairs | Verdict flips | Tokens |
+|---|---:|---:|---:|---:|
+| tier | 10 of 90 | 5 of 45 | 0 | 452,830 |
+| short-delta | 10 of 90 | 5 of 45 | 0 | 465,859 |
+| resume | 10 of 90 | 5 of 45 | 0 | 463,512 |
+| Total | 30 of 270 | 15 of 135 | 0 | 1,382,201 |
+
+Tokens are input plus cache plus output from the CLI JSON usage.
+This is a partial C4 run. It is not a zero-flip claim. One sample per cell cannot separate a flip from run noise.
+The same prompt gave APPROVED and COMMENT on rex-1711-f401d65-delta in two tables.
+Both rex-1765 and rex-1620 delta entries carry frozen HIGH defects that every run, before and after, missed.
+No edit newly missed a BLOCKING or HIGH defect, and no run raised a BLOCKING or HIGH false alarm.
+Remaining open: the k=3 run, the ten non-delta entries, and expansion to k=8 for any entry outside baseline variance.
