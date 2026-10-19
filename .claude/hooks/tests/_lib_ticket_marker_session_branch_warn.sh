@@ -9,10 +9,14 @@ tm_src_root() {
   printf '%s\n' "$TM_SRC_ROOT"
 }
 
+# Pre-#1533 / #1794 lib for AC fail-before. Pin a literal SHA (rule 10a): after
+# merge, upstream/dev holds the fix. Override with APEXYARD_AC_BEFORE_SHA.
 tm_upstream_lib() {
-  local root
+  local root sha
   root=$(tm_src_root)
-  if git -C "$root" show upstream/dev:.claude/hooks/_lib-active-ticket.sh >/tmp/apexyard-1533-before-lib.sh 2>/dev/null; then
+  sha="${APEXYARD_AC_BEFORE_SHA:-d970c194b0ff5e14aac71d486c32dd3aa976d78a}"
+  if git -C "$root" show "$sha:.claude/hooks/_lib-active-ticket.sh" \
+    >/tmp/apexyard-1533-before-lib.sh 2>/dev/null; then
     printf '%s\n' /tmp/apexyard-1533-before-lib.sh
     return 0
   fi

@@ -1255,10 +1255,12 @@ active_ticket_warn_if_mismatch() {
 
   if active_ticket_mismatch_warn_dir "$home"; then
     warn_dir="$REPLY"
-    # Claim: path plus the marker identity fields so a later foreign marker
-    # at the same path still warns once (Rex finding 1 / #1533).
+    # Claim: POSIX cksum of path plus the marker identity fields, then
+    # sanitise. A later foreign marker at the same path still warns once
+    # (Rex finding 1 / #1533). A hash keeps the name under NAME_MAX when
+    # the marker path is long (#1808).
     claim=$(printf '%s|%s|%s|%s|%s' "$marker" "$m_sid" "$m_repo" "$m_num" "$m_started" \
-      | tr -c 'A-Za-z0-9._-' '_')
+      | cksum 2>/dev/null | awk '{print $1}' | tr -c 'A-Za-z0-9._-' '_')
     if [ -n "$claim" ] && [ -e "$warn_dir/$claim" ]; then
       return 0
     fi
