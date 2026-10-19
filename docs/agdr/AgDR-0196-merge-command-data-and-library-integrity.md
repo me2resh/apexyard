@@ -25,7 +25,7 @@ Chosen: **scrub only the narrow merge-specific command list and retain a raw fal
 - Every segment must start with a literal `grep`, `egrep`, `fgrep`, `cat`, `echo`, `jq`, `head`, `tail`, or `wc` command word. `printf` is excluded: `printf -v` into an array element evaluates the subscript, which can run a command substitution.
 - The parser checks each segment across separators and newlines. It never searches whole lines for an apparent first word.
 - Any other command word preserves the entire raw command, including `gh`, `glab`, `git`, `tracker_pr_merge`, `rg`, `sort`, `xargs`, `find`, and shells.
-- Quoted arguments and confirmed heredoc bodies are data only after every command word passes this check.
+- Quoted arguments, literal echo arguments, and confirmed heredoc bodies are data only after every command word passes this check.
 - Uncertain syntax, substitutions, incomplete input, and parser failures preserve the raw scan. JSON parsing failures also use the raw scan.
 
 The merge scrubber lives in `_lib-extract-pr.sh`. Merge detection does not source `_lib-command-scrub.sh` or use its general allowlist. Non-merge consumers retain that library and its existing behavior.
@@ -44,8 +44,14 @@ AgDR-0204 extends the raw fallback for unquoted `~[`, startup and `.git/hooks/` 
 
 ## Known limits
 
-- The matcher blocks redirections between merge phrase words and concatenated quoted spans within those words.
-- Expansions within phrase words, including an expanded host CLI name, make the merge target unresolved. All four gates block it.
+- The matcher blocks redirections between merge phrase words at command position, including `&>`, `&>>`, and spaced `>&` targets.
+- It joins quoted spans within phrase words and matches the host name after its last slash.
+- Unknown expansions, escapes, brace expressions, and globs in command-position phrase words make a matching merge target unresolved. All four gates block it.
+- Ordinary variable arguments do not start a merge phrase. Assignments and supported command wrappers can precede the host word.
+- Host options before or between phrase words make the matching merge target unresolved (#1812).
+- Shell, eval, and source command text retains nested phrase detection. This scan never evaluates shell text.
+- Commands over 120,000 characters and scanner failures block with “could not scan the command”.
+- Nested scans have limits of three layers, 100 queued words, and 4,096 characters per word. Exceeding these limits blocks with that message.
 - The redirect-target guard checks file targets after bash combined-output and zsh clobber operators. Descriptor duplication and closure remain data.
 - A two-step write-then-run can hide a merge: one turn writes merge text to an ordinary file, and a later turn runs that file.
 - A grep option name padded with more than 48 characters of empty quote pairs, before or inside the name, is not recognised (AgDR-0204 reads a fixed window so the check stays linear).
@@ -59,10 +65,15 @@ Forge controls remain authoritative for these limits.
 
 The bounded data view now has an additional phrase scan.
 It removes intervening redirections and joins quoted word spans without executing shell input.
-Simple parameter expansions match unknown word spans.
+Unknown shell constructs match unknown word spans at command position.
+Host options can precede or separate the phrase words (#1812).
 The scan treats each detected split phrase as an unresolved target.
 This prevents a split call from using metadata or approvals for another call.
-Scanner failures also produce an unresolved target.
+Scanner failures use a separate scan-availability error.
+The dollar-sign lookahead reads a fixed 70-character window.
+Cheap literal detectors precede the split scan.
+Gates reuse their raw scan when the target check has the same data view.
+A joined or scrubbed view requires a new scan.
 Each gate requires the scanner function before it reads a command.
 
 The redirect-target guard now checks combined-output file targets and zsh clobber targets.
@@ -117,6 +128,8 @@ zsh uses `typeset -g +x`, which leaves the same empty unexported names.
 - Issue #1507
 - Issue #1665
 - `test_merge_command_data.sh`
+- `test_merge_split_phrase.sh`
+- `test_merge_split_rework.sh`
 - `test_merge_gate_library_functions.sh`
 - `test_merge_known_limits.sh`
 - `test_command_scrub_must_block.sh`
