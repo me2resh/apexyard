@@ -2,6 +2,24 @@
 # Dispatch Claude Code Bash calls to the matching existing ApexYard hooks.
 set -euo pipefail
 
+# PR metadata snapshot (AgDR-0256, me2resh/apexyard#1759). Remove every
+# inherited snapshot value and every control variable before any hook runs.
+# Bash imports an environment variable as a shell variable, so an inherited
+# _dispatch_complete=1 could turn a crash into exit 0, and an inherited
+# _prmeta_dir could aim the cleanup at a directory that another process
+# chose. `unset` also removes an inherited export attribute.
+for _prmeta_var in $(compgen -A variable APEXYARD_PRMETA_ 2>/dev/null || true); do
+  unset "$_prmeta_var"
+done
+unset APEXYARD_PRMETA_OWNER_PID APEXYARD_PRMETA_REPO APEXYARD_PRMETA_PR \
+  APEXYARD_PRMETA_HEAD APEXYARD_PRMETA_BRANCH APEXYARD_PRMETA_BASE \
+  APEXYARD_PRMETA_COUNT APEXYARD_PRMETA_DIR APEXYARD_PRMETA_FILES_SHA256 \
+  _prmeta_var _dispatch_complete _prmeta_have_snapshot _prmeta_dir _rc
+_dispatch_complete=0
+_prmeta_have_snapshot=0
+_prmeta_dir=
+_rc=0
+
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 INPUT=$(cat)
 # Do not let a missing or broken jq abort dispatch with exit 127. Claude
@@ -216,16 +234,181 @@ for script in \
   esac
 done
 
+# --- PR metadata prefetch (AgDR-0256, me2resh/apexyard#1759) ---
+#
+# The four merge gates used to make 9 to 13 serial forge calls. Several
+# calls fetched the same data. The prefetch fetches the PR metadata one
+# time and exports the trusted scalars to the gate processes. Only the file
+# list is on disk, and its SHA-256 digest is in the environment. Each gate
+# reads the snapshot through the readers in _lib-extract-pr.sh. A miss makes
+# the gate fetch, as before. After the four gates pass, the dispatcher reads
+# the head SHA again (recheck_pr_head).
+#
+# The prefetch runs only for a merge command with a literal PR number and a
+# literal, valid --repo (or a repo in the API path or the wrapper), on the
+# gh path. Any other merge gets no snapshot and no recheck.
+#
+# The prefetch does not depend on `set -e`. It checks each step with `if`.
+# The caller runs it as `prefetch_pr_metadata || true`, so a failure only
+# means that the gates fetch.
+prefetch_pr_metadata() {
+  local cmd="${COMMAND:-}" pr="" repo="" host="" api_repo="" json="" fields=""
+  local head="" branch="" base="" count="" list="" lines="" sum="" dir=""
+  local -a host_args=()
+  if ! command -v is_merge_command >/dev/null 2>&1 \
+    || ! command -v prmeta_sha256 >/dev/null 2>&1 \
+    || ! command -v merge_repo_is_valid >/dev/null 2>&1; then
+    return 1
+  fi
+  if ! is_merge_command "$cmd"; then
+    return 1
+  fi
+  if has_conflicting_repo_flags "$cmd"; then
+    return 1
+  fi
+  if merge_command_uses_variable "$cmd"; then
+    return 1
+  fi
+  if ! repo=$(extract_explicit_repo_from_command "$cmd") || [ -z "$repo" ]; then
+    return 1
+  fi
+  if ! merge_repo_is_valid "$repo"; then
+    return 1
+  fi
+  if ! pr=$(extract_pr_number "$cmd" text-only) || [[ ! "$pr" =~ ^[0-9]+$ ]]; then
+    return 1
+  fi
+  if [ "$(_forge_from_command "$cmd")" != gh ] || [ "$(_forge_kind_for "$repo")" != gh ]; then
+    return 1
+  fi
+
+  # Call 1: the scalars. All or none.
+  if ! json=$(gh pr view "$pr" --repo "$repo" --json headRefOid,headRefName,baseRefName,changedFiles 2>/dev/null); then
+    return 1
+  fi
+  if ! fields=$(printf '%s' "$json" | jq -r '
+      select(type == "object"
+        and (.headRefOid | type == "string")
+        and (.headRefName | type == "string") and .headRefName != ""
+        and (.baseRefName | type == "string") and .baseRefName != ""
+        and (.changedFiles | type == "number"))
+      | [.headRefOid, .headRefName, .baseRefName, (.changedFiles | tostring)]
+      | join("\n")' 2>/dev/null) || [ -z "$fields" ]; then
+    return 1
+  fi
+  head=$(printf '%s\n' "$fields" | sed -n 1p)
+  branch=$(printf '%s\n' "$fields" | sed -n 2p)
+  base=$(printf '%s\n' "$fields" | sed -n 3p)
+  count=$(printf '%s\n' "$fields" | sed -n 4p)
+  if [ "$(printf '%s\n' "$fields" | wc -l | tr -d ' ')" != 4 ]; then
+    return 1
+  fi
+  if [[ ! "$head" =~ ^[0-9a-f]{40}$ ]]; then
+    return 1
+  fi
+  if [ -z "$branch" ] || [ -z "$base" ] \
+    || [[ "$branch" == *[[:cntrl:]]* ]] || [[ "$base" == *[[:cntrl:]]* ]]; then
+    return 1
+  fi
+  if [[ ! "$count" =~ ^(0|[1-9][0-9]*)$ ]] || [ "${#count}" -gt 4 ] || [ "$count" -gt 3000 ]; then
+    return 1
+  fi
+  export APEXYARD_PRMETA_OWNER_PID="$$" APEXYARD_PRMETA_REPO="$repo" \
+    APEXYARD_PRMETA_PR="$pr" APEXYARD_PRMETA_HEAD="$head" \
+    APEXYARD_PRMETA_BRANCH="$branch" APEXYARD_PRMETA_BASE="$base" \
+    APEXYARD_PRMETA_COUNT="$count"
+  _prmeta_have_snapshot=1
+
+  # Call 2: the file list. Optional. A failure leaves the scalars in use,
+  # and the gates fetch only the list. COUNT=0 writes no file.
+  if [ "$count" -lt 1 ]; then
+    return 0
+  fi
+  api_repo="$repo"
+  if [[ "$repo" == */*/* ]]; then
+    host="${repo%%/*}"
+    api_repo="${repo#*/}"
+    host_args=(--hostname "$host")
+  fi
+  if ! list=$(gh api ${host_args[@]+"${host_args[@]}"} --paginate "repos/${api_repo}/pulls/${pr}/files?per_page=100" --jq '.[].filename' 2>/dev/null); then
+    return 0
+  fi
+  if [ -z "$list" ]; then
+    return 0
+  fi
+  lines=$(printf '%s\n' "$list" | wc -l | tr -d ' ')
+  if [ "$lines" != "$count" ]; then
+    return 0
+  fi
+  if ! sum=$(printf '%s\n' "$list" | prmeta_sha256); then
+    return 0
+  fi
+  if ! dir=$(mktemp -d "${TMPDIR:-/tmp}/apexyard-prmeta.XXXXXX" 2>/dev/null) || [ -z "$dir" ]; then
+    return 0
+  fi
+  _prmeta_dir="$dir"
+  # noclobber in a subshell, so it does not leak into the dispatcher. The
+  # writer never reads the file back.
+  if ! chmod 700 "$dir" 2>/dev/null \
+    || ! ( set -C; printf '%s\n' "$list" >"$dir/files" ) 2>/dev/null; then
+    rm -rf -- "$dir" 2>/dev/null || true
+    _prmeta_dir=
+    return 0
+  fi
+  export APEXYARD_PRMETA_DIR="$dir" APEXYARD_PRMETA_FILES_SHA256="$sum"
+  return 0
+}
+
+# Reads the head SHA again after the four gates pass. Every failure path
+# exits 2. A bare failing capture would exit 1 under `set -e`, and exit 1
+# lets the call run on a client older than 2.1.295 (AgDR-0256 D4).
+recheck_pr_head() {
+  local h="" pr="${APEXYARD_PRMETA_PR:-}" repo="${APEXYARD_PRMETA_REPO:-}" want="${APEXYARD_PRMETA_HEAD:-}"
+  if ! h=$(gh pr view "$pr" --repo "$repo" --json headRefOid -q .headRefOid 2>/dev/null); then
+    printf 'BLOCKED: could not confirm PR #%s HEAD after the merge gates passed. Retry the merge.\n' "$pr" >&2
+    exit 2
+  fi
+  if [[ ! "$h" =~ ^[0-9a-f]{40}$ ]]; then
+    printf 'BLOCKED: could not confirm PR #%s HEAD after the merge gates passed. Retry the merge.\n' "$pr" >&2
+    exit 2
+  fi
+  if [ -z "$want" ] || [ "$h" != "$want" ]; then
+    printf 'BLOCKED: PR #%s HEAD moved during gate evaluation (gates saw %s, forge now reports %s). Retry the merge so the gates check the new head.\n' \
+      "$pr" "${want:-<none>}" "$h" >&2
+    exit 2
+  fi
+}
+
+# Removes the snapshot from the environment, so a later hook does not see it.
+clear_pr_metadata() {
+  unset APEXYARD_PRMETA_OWNER_PID APEXYARD_PRMETA_REPO APEXYARD_PRMETA_PR \
+    APEXYARD_PRMETA_HEAD APEXYARD_PRMETA_BRANCH APEXYARD_PRMETA_BASE \
+    APEXYARD_PRMETA_COUNT APEXYARD_PRMETA_DIR APEXYARD_PRMETA_FILES_SHA256
+  _prmeta_have_snapshot=0
+}
+
 _merge_gates_ran=0
 run_merge_gates() {
+  # Completion-flag EXIT trap (AgDR-0256 D5). Every exit before the last
+  # statement of this file sets _dispatch_complete=1 becomes exit 2,
+  # whatever its status. A crash with status 0, 1 or any other value then
+  # blocks on every client. The trap also removes the snapshot directory.
+  # Every planned exit after this point is `exit 2`. A new planned exit
+  # must set _dispatch_complete=1 first (test_prmeta_1759.sh checks this).
+  trap '_rc=$?; if [ -n "${_prmeta_dir:-}" ]; then rm -rf -- "$_prmeta_dir" 2>/dev/null || true; fi; if [ "${_dispatch_complete:-0}" != 1 ]; then _rc=2; fi; exit "$_rc"' EXIT
   if [ "${_merge_gates_ran}" -eq 1 ]; then
     return 0
   fi
   _merge_gates_ran=1
+  prefetch_pr_metadata || true
   run_merge_gate_hook block-unreviewed-merge.sh
   run_merge_gate_hook require-design-review-for-ui.sh
   run_merge_gate_hook block-merge-on-red-ci.sh
   run_merge_gate_hook require-architecture-review.sh
+  if [ "${_prmeta_have_snapshot:-0}" = 1 ]; then
+    recheck_pr_head
+  fi
+  clear_pr_metadata
 }
 
 # The push and commit arms are run-once functions. The prefix case below and
@@ -391,3 +574,7 @@ if [ -z "$COMMAND" ]; then
   printf 'WARN: dispatcher could not parse the Bash command; running merge gates fail-closed.\n' >&2
   run_merge_gates
 fi
+
+# Last statement. The completion-flag trap in run_merge_gates turns every
+# exit before this line into exit 2 (AgDR-0256 D5). Keep this line last.
+_dispatch_complete=1
