@@ -10,6 +10,10 @@ Accepted. Approved design v5. AgDR-0253.
 
 - 2026-10-19 design: Option A raw-text candidate scan with cheap evidence, then resolve. Closes #1748 row 4 without the round-1 false blocks and quadratic cost.
 - 2026-10-19 build (CEO decision 14): Keep only the relative performance budget (dispatcher base + 0.5 s, each block-mode gate base + 0.2 s, no extra fork on the fast path). Remove the absolute 5 s total cap. Reason: the base dispatcher already exceeds its timeout on large inputs such as the 2,000-candidate payload (#1777; fix tracked in #1780). This change does not fix #1780.
+- 2026-10-19 review fix (PR #1804): Read each config view with `git config -z` and a NUL-safe temp-file parser. Reason: a newline in an alias value forged a second line under space-split parsing, and a space in an alias subsection name broke the key split.
+- 2026-10-19 review fix (PR #1804): Use the same candidate boundary class as `_git_sub_re` (`[^[:alnum:]_.-]`). Reason: a path-qualified git reached the push gates for the real verb but skipped the alias scan.
+- 2026-10-19 review fix (PR #1804): Match a single-quoted `-C` or `--git-dir` value with a space in the no-jq payload pattern. Reason: #1748 row 5 stayed open for that quote style.
+- 2026-10-19 review fix (PR #1804): Rewrite residuals R2, R3 and R6 at class level with no runnable examples. Correct R6: a backslash-escaped command word still reaches the push gates.
 
 ## Context
 
@@ -310,27 +314,16 @@ Probe cost on macOS, git 2.56, mean of 20 runs (Observed): one view read 9.0 ms,
 
 ### Residuals
 
-- R1. An agent-written external `git-<verb>` on `PATH` or the exec-path runs. This is the same as running an agent-written script. The native `pre-push` still applies unless the script passes `--no-verify` (AgDR-0114). Follow-up item 2.
-- R2. A repository-local alias in a target that the gate cannot resolve runs. It needs an alias written earlier into a repository or a template, with no evidence in the same command. An example is `git init --template=<dir> d && git -C d p`. R2 also covers a target that the hook resolves wrongly, for example `env -C <repo> git p`. R2 also covers a `gitdir:` include that matches a repository the command creates by a route other than `init`, `clone` or `worktree`, for example `mkdir` and `mv`. The native hooks of that repository still apply. Follow-up item 1.
-- R3. A channel token that quotes, expansions or `printf` formats split, and definition evidence that the literal text does not contain. Examples:
-  - `export "GIT_CONF""IG_COUNT=1"` and `printf '[ali%sas]\n' '' >> ~/.git''config`.
-  - `cd .git && cp ../prepared config && cd .. && git p`.
-  - The path forms `.git//config` and `.git/./config`.
-  - Content copied onto an include file that the view does not list.
-  - The CEO accepted R3 on 2026-10-19 and acknowledged the wider scope on the same day. R3 extends the script, `eval` and `source` limit below.
-- R4. The hook and git can disagree on whether an external `git-<verb>` exists. Causes are a hook-process `PATH` that differs from the Bash-tool `PATH`, and relative `PATH` entries. Rule 7 applies rules 8 and 9 first, checks the view for a dangerous alias, and counts only absolute `PATH` entries. A disagreement then matters only when the view also misses the alias. The CEO acknowledged R4 on 2026-10-19.
-- R5. Files that the Bash tool sources can change `HOME`, `PATH` or a `GIT_CONFIG*` variable with no command text. The hook cannot see them. The files are:
-  - A `CLAUDE_ENV_FILE` script.
-  - `~/.claude/shell-snapshots/snapshot-zsh-*.sh`. It is owner-writable and exports `PATH` and other variables (Observed by Hakim).
-  - `~/.claude/session-env/<session-id>/`. It exists and is owner-writable (Observed by Hakim). That the Bash tool sources it is Inferred.
-  - Hakim judged R5 acceptable as a residual in this wider form, with follow-up item 5. The CEO accepted R5 on that basis on 2026-10-19.
-- R6. Shell-level indirection skips every command-text gate, with or without an alias. This is older than this decision. The forms are:
-  - A quoted, escaped or variable name for git, such as `"git"`, `\git` or `$G`.
-  - A shell alias or a shell function that runs git.
-  - git through `xargs` or `find -exec`.
-  - A verb from a variable that the same command sets, such as `V=push; git $V`. Rule 4 marks `git $V` opaque, and rule 18 blocks it only on view evidence.
-- A script file, `eval`, `source`, or a verb or options read from a file or command output, such as `git $(cat f)`, is outside every command-text gate. Rule 4 marks `git $(cat f)` opaque, and rule 18 blocks it only on view evidence. This limit is older than this decision.
-- Other verbs that create commits or send refs are not gated today. Examples are `merge`, `cherry-pick`, `am`, `revert`, `send-pack` and `http-push`. This decision gates exactly the verbs the gates cover: `push` and `commit`.
+Residuals name a class and why it is accepted. They give no runnable command, payload, file-path trick or variable example.
+
+- R1. **Class: agent-written external `git-<verb>`.** An executable named `git-<verb>` on `PATH` or the exec-path runs as a normal program. Accepted because this matches any agent-written script. The native `pre-push` still applies unless the script disables hooks (AgDR-0114). Follow-up item 2.
+- R2. **Class: unresolved or mis-resolved target.** A repository-local alias runs when the gate cannot resolve the target the command uses, or resolves a different directory than git does. The class covers a target given through an expansion, a directory change the hook cannot follow, a template or prepared repository with no same-command definition evidence, and a `gitdir:` include that matches a repository created by a route other than `init`, `clone` or `worktree`. Accepted because blocking every unresolvable target brings back round-1 false blocks. The native hooks of that repository still apply. Follow-up item 1. CEO decision 1.
+- R3. **Class: split channel or definition evidence.** A channel token or definition evidence that quotes, expansions or format strings split so the literal text no longer contains the whole-word token. The class also covers definition evidence written through file copy or path normalisation that the view does not list, and content copied onto an include file the view does not list. Accepted because a full shell parser is out of scope; this extends the script, `eval` and `source` limit below. CEO decision 7; wider scope acknowledged 2026-10-19.
+- R4. **Class: external-existence disagreement.** The hook and git can disagree on whether an external `git-<verb>` exists when the hook-process `PATH` differs from the Bash-tool `PATH`, or when a `PATH` entry is relative. Rule 7 applies rules 8 and 9 first, checks the view for a dangerous alias, and counts only absolute `PATH` entries. A disagreement then matters only when the view also misses the alias. Accepted 2026-10-19.
+- R5. **Class: Bash-tool sourced environment.** Files that the Bash tool sources can change `HOME`, `PATH` or a `GIT_CONFIG*` variable with no command text. The class covers a `CLAUDE_ENV_FILE` script, owner-writable shell-snapshot files under `~/.claude/shell-snapshots/`, and owner-writable session-env directories under `~/.claude/session-env/`. The hook cannot see those changes. Accepted with follow-up item 5 (CEO decision 12).
+- R6. **Class: shell-level indirection of the git argv.** Forms that hide the git argv from command-text gates stay open. The class covers a quoted git word, a variable that expands to git, a shell alias or function that runs git, git through a tool that builds argv, and a verb taken from a variable or from command output. Rule 4 marks an opaque verb; rule 18 blocks only on view evidence. **Not in this class:** a backslash-escaped command word. The dispatcher still routes that form to the push gates, and the protected-branch push gate blocks it. R6 is older than this decision and is accepted as defence-in-depth scope, not as a claim that every indirection skips every gate.
+- **Class: scripted or file-fed git.** A script file, `eval`, `source`, or a verb or options read from a file or command output, is outside every command-text gate. Rule 4 marks that form opaque; rule 18 blocks only on view evidence. Older than this decision.
+- **Class: ungated write verbs.** Verbs that create commits or send refs other than `push` and `commit` are not gated today. This decision gates exactly the verbs the gates cover.
 
 ### Accepted false blocks
 
