@@ -357,14 +357,23 @@ walk and the gate forge path:
    use `exec sleep` and `APEXYARD_GH_CALL_TIMEOUT=1`. The suite stays well
    under 120 s. Cap unchanged.
 
-5. **Host-qualified repos stay on github.com only (#1809 H1).** The walk
-   parses `OWNER/REPO` and `github.com/OWNER/REPO`. Any other
-   `HOST/OWNER/REPO` returns `unknown` with no forge call. Reasoning: the
-   GraphQL call has no `--hostname`, so stripping a non-github host and
-   querying `github.com/OWNER/REPO` reads a different repository on a
-   different forge (cross-forge twin). On `dev`, that shape already failed
-   closed via a 404 on the REST path. This PR does not add enterprise-host
-   support.
+5. **Host-qualified repos stay on github.com only (#1809 H1, A6, A7, A8, B6).**
+   The walk parses `OWNER/REPO` and `github.com/OWNER/REPO`. Any other
+   `HOST/OWNER/REPO` returns `unknown` with no forge call. Reasoning: if
+   the walk stripped a non-github host, it would read a different
+   repository on a different forge (cross-forge twin). On `dev`, that shape
+   already failed closed via a 404 on the REST path. This PR does not add
+   enterprise-host support.
+   - Hostname rule (B6): the GraphQL call passes `--hostname github.com`
+     only for the explicit `github.com/OWNER/REPO` form. This is the rule
+     `block-merge-on-red-ci.sh` uses. A plain `OWNER/REPO` passes no
+     `--hostname` and follows `GH_HOST`, like the rest of the gate.
+   - Fetch URL (A7): for the explicit `github.com/OWNER/REPO` form, the
+     fallback fetch URL is `https://github.com/OWNER/REPO.git`. The host
+     segment is not repeated in the URL.
+   - Segments (A8): the explicit form has exactly three segments. A value
+     with four or more segments returns `unknown` with no forge call, as
+     `merge_repo_is_valid` does.
 
 6. **GraphQL string variables use `-f` (#1809 A3).** `owner`, `name`,
    `oid`, and `qname` stay strings. `-F` would coerce an all-digit value to

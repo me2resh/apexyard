@@ -1058,11 +1058,19 @@ exec "$sb/bin/gh-inner" "\$@"
 EOF
   chmod +x "$sb/bin/gh"
   : > "$sb/gh-calls"
-  got=$(GH_HOST=ghe.corp carry_over_in "$repo" "$OLD_SHA" "$NEW_SHA" main "$sb/bin" "acme-org/example")
+  got=$(GH_HOST=ghe.corp carry_over_in "$repo" "$OLD_SHA" "$NEW_SHA" main "$sb/bin" "github.com/acme-org/example")
   if [ "$got" = "true" ] && grep -q -- 'api graphql --hostname github.com' "$sb/gh-calls"; then
-    mark_pass "#1809 A6 GH_HOST set -> graphql call still pinned to --hostname github.com"
+    mark_pass "#1809 B6 explicit github.com form, GH_HOST=other -> --hostname github.com sent"
   else
-    mark_fail "#1809 A6 hostname pin" "got='$got' calls=$(cat "$sb/gh-calls")"
+    mark_fail "#1809 B6 explicit form pin" "got='$got' calls=$(cat "$sb/gh-calls")"
+  fi
+  : > "$sb/gh-calls"
+  got=$(GH_HOST=ghe.corp carry_over_in "$repo" "$OLD_SHA" "$NEW_SHA" main "$sb/bin" "acme-org/example")
+  if [ "$got" = "true" ] && grep -q -- 'api graphql' "$sb/gh-calls" \
+     && ! grep -q -- '--hostname' "$sb/gh-calls"; then
+    mark_pass "#1809 B6 plain OWNER/REPO, GH_HOST=other -> no --hostname (follows GH_HOST)"
+  else
+    mark_fail "#1809 B6 plain form" "got='$got' calls=$(cat "$sb/gh-calls")"
   fi
   : > "$sb/gh-calls"
   got=$(carry_over_in "$repo" "$OLD_SHA" "$NEW_SHA" main "$sb/bin" "github.com/acme/app/extra")

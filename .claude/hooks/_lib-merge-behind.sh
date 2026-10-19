@@ -238,6 +238,7 @@ _rex_carry_parse_owner_name() {
   local repo="$1" host
   _rex_carry_owner=
   _rex_carry_name=
+  _rex_carry_explicit_host=0
   case "$repo" in
     */*/*)
       # Exactly three segments: github.com/OWNER/REPO. Four or more fail
@@ -253,6 +254,7 @@ _rex_carry_parse_owner_name() {
       fi
       _rex_carry_owner=$(printf '%s' "$repo" | awk -F/ '{print $(NF-1)}')
       _rex_carry_name=$(printf '%s' "$repo" | awk -F/ '{print $NF}')
+      _rex_carry_explicit_host=1
       ;;
     */*)
       _rex_carry_owner=$(printf '%s' "$repo" | awk -F/ '{print $1}')
@@ -295,14 +297,24 @@ _rex_carry_fetch_chain() {
   # stderr stays open so a per-call timeout BLOCKED line reaches the operator.
   # String variables use -f (not -F): -F coerces an all-digit value to an
   # integer and GraphQL then rejects String! / GitObjectID! (Hakim A3).
-  # --hostname github.com pins the call: a GH_HOST setting must not send the
-  # walk to another host (Hakim A6).
-  gql_json=$(apexyard_gh api graphql --hostname github.com \
-    -f "query=$query" \
-    -f "owner=$owner" \
-    -f "name=$name" \
-    -f "oid=$new_sha" \
-    -f "qname=$qname")
+  # Pin --hostname github.com only for the explicit github.com/OWNER/REPO
+  # form. A plain OWNER/REPO passes no --hostname and follows GH_HOST, as the
+  # rest of the gate does (Hakim B6).
+  if [ "${_rex_carry_explicit_host:-0}" = "1" ]; then
+    gql_json=$(apexyard_gh api graphql --hostname github.com \
+      -f "query=$query" \
+      -f "owner=$owner" \
+      -f "name=$name" \
+      -f "oid=$new_sha" \
+      -f "qname=$qname")
+  else
+    gql_json=$(apexyard_gh api graphql \
+      -f "query=$query" \
+      -f "owner=$owner" \
+      -f "name=$name" \
+      -f "oid=$new_sha" \
+      -f "qname=$qname")
+  fi
   gql_rc=$?
   if [ "$gql_rc" -eq 124 ]; then
     return 124
