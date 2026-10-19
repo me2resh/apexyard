@@ -607,7 +607,7 @@ The `_lib-portfolio-paths.sh` helper exposes the resolver as `portfolio_agent_ro
 
 #### How the overrides get applied
 
-The `apply-agent-routing.sh` SessionStart hook reads `agent-routing.yaml` on every session start and rewrites the affected `.claude/agents/*.md` frontmatter in-place. Adopter routing choices land in the rendered agent files for that session and stay there until the hook re-runs.
+The `apply-agent-routing.sh` SessionStart hook reads `agent-routing.yaml` on every session start and rewrites the affected `.claude/agents/*.md` frontmatter in-place. Adopter routing choices land in the rendered agent files for that session. When an override is removed, the next run writes the saved framework model into that agent file and omits the agent from `.framework-defaults.json`. See AgDR-0251.
 
 Two **drift-prevention guards** (PreToolUse on `git commit *` and `git push *`) catch the rewritten frontmatter before it leaves the local environment so adopter overrides never leak to the public fork:
 

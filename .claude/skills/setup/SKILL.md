@@ -164,6 +164,8 @@ The full setup lives in `docs/multi-project.md` § "Split-portfolio mode — pub
 1. **Confirm the layout**: "Two repos in your account: `your-org/apexyard` (public, this fork) + `your-org/<private-name>` (new private repo for the portfolio). Both clones sit side-by-side on disk. OK?"
 2. **Pick the private repo name**: default suggestion **`your-org/<fork>-portfolio`** (e.g. `your-org/apexyard-portfolio` if you kept the fork name; `your-org/cos-portfolio` if you renamed the fork to `cos`). Compute the `<fork>` part from the public-fork repo name (`gh repo view --json name -q .name`) so the suggestion is correct even when the fork was renamed. Operator confirms or overrides — any name works, the framework only cares about the local path.
 
+Record `<owner>` and `<name>` when the operator confirms the name. Later checks use that pair. Do not derive `<owner>/<name>` from the remote URL. The reuse path skips item 3 and still uses this pair.
+
 On every run of Step 2b, apply these resume checks in order. Skip a row when its state does not match. Each check is read-only. Record `<fork-root>` before a check that uses `<abs-path>`. [AgDR-0252](../../../docs/agdr/AgDR-0252-portfolio-first-push.md) records the decision. Do not change any hook. The agent never commits on the portfolio repository. The agent never pushes to it.
 
 | State | Check | Action |
@@ -179,7 +181,7 @@ On every run of Step 2b, apply these resume checks in order. Skip a row when its
 
 When `gh repo view` fails because the repo does not exist, continue with item 3. Stop on any other error from that command.
 
-3. **Create the private repo.** Record `<owner>` and `<name>` from this item. Later checks use that pair. Do not derive `<owner>/<name>` from the remote URL. Run `gh repo create your-org/<name> --private --description "..."`. Confirm before you run it. Skip this item only when the operator chooses "Reuse `<owner>/<name>`".
+3. **Create the private repo.** Run `gh repo create your-org/<name> --private --description "..."`. Confirm before you run it. Skip this item only when the operator chooses "Reuse `<owner>/<name>`".
 
 Before item 4, run `git rev-parse --show-toplevel` in the ops fork. Record the printed path as `<fork-root>`. A later Bash call does not keep the shell directory from `cd ..`. When `<fork-root>/../<name>` already exists, run `git -C "<fork-root>/../<name>" rev-parse --show-toplevel` before the clone. Record that path as `<abs-path>`. Then apply the sibling-directory row.
 
@@ -245,14 +247,14 @@ Before item 4, run `git rev-parse --show-toplevel` in the ops fork. Record the p
 
    On "Stop here", stop. Print: "Run /setup again to continue. Nothing reached the forge." Leave the staged files in place.
 
-   **Verify on "Done".** Use these read-only commands. `<owner>/<name>` is the repo from item 3. `BR` comes from `symbolic-ref`, not from a literal `main`.
+   **Verify on "Done".** Use these read-only commands. `<owner>/<name>` is the recorded pair. `BR` comes from `symbolic-ref`, not from a literal `main`.
 
    ```bash
    P="<abs-path>"
    BR=$(git -C "$P" symbolic-ref --short HEAD)
    LOCAL=$(git -C "$P" rev-parse --verify HEAD)
    REMOTE=$(git -C "$P" ls-remote origin "refs/heads/$BR" | awk -v r="refs/heads/$BR" '$2 == r { print $1 }')
-   FORGE=$(gh api "repos/<owner>/<name>/branches/$BR" --jq .commit.sha)
+   FORGE=$(gh api "repos/<owner>/<name>/branches/$BR" --jq .commit.sha) || FORGE=""
    [ -n "$LOCAL" ] && [ "$LOCAL" = "$REMOTE" ] && [ "$LOCAL" = "$FORGE" ]
    ```
 
