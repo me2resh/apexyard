@@ -115,7 +115,7 @@ chain with one forge call for each step. PR #1770 has 4 steps:
 | macOS, real GitHub API, squash merge of #1770 | 10 / 6 | 11469 | 16542 |
 | Simulated #1759 host (recorded responses, 0.9 to 1.9 s per call) | 10 / 6 | 18986 | 14885 |
 
-#1796 batches the walk into one GraphQL call and adds a per-call `gh`
+Issue #1796 batches the walk into one GraphQL call and adds a per-call `gh`
 limit (`apexyard_gh`, default 20 s). Simulated p95 is 14885 ms (NFR-1 met).
 5 x that p95 is 74.4 seconds, so the dispatcher timeout is 75 seconds.
 
