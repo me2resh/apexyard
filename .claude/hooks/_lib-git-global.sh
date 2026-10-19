@@ -400,6 +400,9 @@ git_visit_invocations() {
   local cmd cwd sub prefix rc count=0 arg index
   cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null)
   cwd=$(printf '%s' "$input" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null)
+  if [ "$mode" = block ]; then
+    git_alias_check "$@" || return 2
+  fi
   local prefixes
   for sub in "$@"; do
     # Capture first. A POSIX-sourced lib must not use process substitution.
@@ -468,5 +471,445 @@ git_target() {
     git "$@"
   fi
 }
+
+# Raw-text alias backstop. See AgDR-0253 for the exact scope and residuals.
+
+_git_alias_block() { printf 'BLOCKED: %s\n' "$*" >&2; return 2; }
+_git_alias_lower() {
+  # Bash 3.2 has no ${value,,} expansion.
+  _GA_LOWER="$1"
+  local upper=ABCDEFGHIJKLMNOPQRSTUVWXYZ lower=abcdefghijklmnopqrstuvwxyz i
+  for ((i=0; i<26; i++)); do
+    _GA_LOWER="${_GA_LOWER//${upper:i:1}/${lower:i:1}}"
+  done
+}
+_git_alias_builtin() {
+  case "$1" in
+    add|branch|checkout|cherry-pick|clone|commit|config|diff|fetch|init|log|ls-files|merge|mv|pull|push|remote|reset|rev-parse|rm|show|status|tag|worktree) return 0 ;;
+    rebase|stash) [ "$_GA_EXEC_CHANGED" = 1 ] || return 0 ;;
+  esac
+  if [ "$_GA_SETUP" = 0 ]; then
+    _GA_BUILTINS=$(git --list-cmds=builtins 2>/dev/null) || _GA_BUILTINS=""
+    _GA_SETUP=1
+  fi
+  case $'\n'"$_GA_BUILTINS"$'\n' in *$'\n'"$1"$'\n'*) return 0 ;; esac
+  return 1
+}
+# Read a word with the shared grammar when the literal scanner rejects escapes.
+_git_alias_word() {
+  local raw="$_GIT_SCAN" re="^${_git_opt_val}"
+  if _git_take_value; then return 0; fi
+  _GIT_SCAN="${raw#"${raw%%[![:space:]]*}"}"
+  if [[ "$_GIT_SCAN" =~ $re ]]; then
+    _GIT_TAKEN="${BASH_REMATCH[0]}"
+    _GIT_SCAN="${_GIT_SCAN:${#_GIT_TAKEN}}"
+    return 0
+  fi
+  return 1
+}
+# Parse options once. Retain literal inline config and target options.
+_git_alias_parse() {
+  local word raw name quote="" c i region="" before
+  _GA_INLINE=() _GA_TARGET=() _GA_OPAQUE=0 _GA_UNREADABLE=0 _GA_VERB=""
+  _GIT_SCAN="${1#git}"
+  while :; do
+    _GIT_SCAN="${_GIT_SCAN#"${_GIT_SCAN%%[![:space:]]*}"}"
+    before="$_GIT_SCAN"
+    _git_alias_word || { _GA_OPAQUE=1; break; }
+    word="$_GIT_TAKEN"
+    region+="${before:0:${#before}-${#_GIT_SCAN}} "
+    case "$word" in
+      -c|--config-env|-C|--git-dir|--work-tree|--namespace|--super-prefix|--attr-source)
+        name="$word"; raw="$_GIT_SCAN"
+        if ! _git_take_value; then
+          case "$name" in -c|--config-env) _GA_UNREADABLE=1 ;; *) _GA_OPAQUE=1 ;; esac
+          _GIT_SCAN="$raw"
+          _git_alias_word || { _GA_OPAQUE=1; break; }
+        fi
+        word="$_GIT_TAKEN"
+        region+="${raw:0:${#raw}-${#_GIT_SCAN}} "
+        case "$name" in
+          -c) _GA_INLINE+=("$word") ;;
+          --config-env) _GA_UNREADABLE=1 ;;
+          -C) _GA_TARGET+=(-C "$word") ;;
+          --git-dir|--work-tree) _GA_TARGET+=("$name=$word") ;;
+        esac
+        ;;
+      --config-env=*) _GA_UNREADABLE=1 ;;
+      --git-dir=*|--work-tree=*) _GA_TARGET+=("$word") ;;
+      --*|-*) ;;
+      *) _GA_VERB="$word"; break ;;
+    esac
+  done
+  for raw in ${_GA_INLINE[@]+"${_GA_INLINE[@]}"}; do
+    case "$raw" in *'$'*|*'`'*|*'\'*) _GA_UNREADABLE=1 ;; esac
+  done
+  case "$_GA_VERB" in *'$'*|*'`'*|*'\'*) _GA_OPAQUE=1 ;; esac
+  # Exact unquoted expansion set: $, backtick, {, }, *, ?, [, <, >.
+  for ((i=0; i<${#region}; i++)); do
+    c="${region:i:1}"
+    if [ -n "$quote" ]; then
+      [ "$c" != "$quote" ] || quote=""
+    else
+      case "$c" in
+        \"|\') quote="$c" ;;
+        '\') i=$((i+1)) ;;
+        '$'|'`'|'{'|'}'|'*'|'?'|'['|'<'|'>') _GA_OPAQUE=1 ;;
+      esac
+    fi
+  done
+}
+# Merge both git alias key forms without executing config values.
+_git_alias_entry() {
+  local key="$1" value="$2" slot name tail i
+  _git_alias_lower "$key"; key="$_GA_LOWER"
+  case "$key" in
+    help.autocorrect) _GA_AUTO="$value"; return ;;
+    alias.*) ;;
+    *) return ;;
+  esac
+  name="${1#*.}"; tail="${key##*.}"
+  if [ "$tail" = command ] && [[ "$name" = *.* ]]; then
+    slot="E:${name%.*}"
+  else
+    _git_alias_lower "$name"; slot="I:$_GA_LOWER"
+  fi
+  for ((i=0; i<${#_GA_KEYS[@]}; i++)); do
+    if [ "${_GA_KEYS[i]}" = "$slot" ]; then _GA_VALUES[i]="$value"; return; fi
+  done
+  _GA_KEYS+=("$slot"); _GA_VALUES+=("$value")
+}
+_git_alias_unknown() {
+  local hop="$1"
+  if [ "$_GA_DEFINITION" = 1 ]; then
+    _git_alias_block "this command writes git config and runs git $_GA_ROOT. Run them as two commands. If this is prose, write it to a file and pass -F or --body-file."; return 2
+  fi
+  if [ "$_GA_CONDITION" = 1 ]; then
+    _git_alias_block "an includeIf entry can change git config during this command. Run git $_GA_ROOT in a separate command."; return 2
+  fi
+  if [ "$hop" = 0 ]; then
+    case "$_GA_AUTO" in ''|0|false|never|show) ;; *)
+      _git_alias_block "help.autocorrect is set and git $_GA_ROOT is not a command. Type the full verb."; return 2 ;;
+    esac
+  fi
+  return 0
+}
+_git_alias_external() {
+  [ "$_GA_EXTERNAL_OFF" = 0 ] || return 1
+  local dir file oldifs
+  # List executable names once. Relative PATH entries depend on git's cwd.
+  if [ "$_GA_EXTERNAL_SETUP" = 0 ]; then
+    _GA_EXEC_PATH=$(git --exec-path 2>/dev/null) || _GA_EXEC_PATH=""
+    _GA_EXTERNAL_SETUP=1
+    oldifs="$IFS"; IFS=:
+    for dir in "$_GA_EXEC_PATH" $PATH; do
+      case "$dir" in /*) ;; *) continue ;; esac
+      for file in "$dir"/git-*; do
+        [ -x "$file" ] && [ ! -d "$file" ] || continue
+        _GA_EXTERNAL_NAMES+="${file##*/git-}"$'\n'
+      done
+    done
+    IFS="$oldifs"
+  fi
+  case $'\n'"$_GA_EXTERNAL_NAMES" in *$'\n'"$1"$'\n'*) return 0 ;; esac
+  return 1
+}
+# Each recursive branch has its own inline entries. The shared view is immutable.
+_git_alias_resolve() {
+  local verb="$1" depth="$2" seen="$3" i value found=0 word key
+  local -a values=() keys=(${_GA_KEYS[@]+"${_GA_KEYS[@]}"}) saved_values=(${_GA_VALUES[@]+"${_GA_VALUES[@]}"})
+  _git_alias_lower "$verb"
+  for ((i=0; i<${#_GA_KEYS[@]}; i++)); do
+    if [ "${_GA_KEYS[i]}" = "I:$_GA_LOWER" ] || [ "${_GA_KEYS[i]}" = "E:$verb" ]; then
+      values+=("${_GA_VALUES[i]}"); found=1
+    fi
+  done
+  if [ "$found" = 0 ]; then
+    _git_alias_external "$verb" && return 0
+    _git_alias_unknown "$depth"; return $?
+  fi
+  if [ "$depth" -ge 10 ] || [[ "$seen" = *"|$verb|"* ]]; then
+    _git_alias_block "git $_GA_ROOT has an alias loop or more than 10 alias hops. Run the real verb directly."; return 2
+  fi
+  for value in ${values[@]+"${values[@]}"}; do
+    case "$value" in '!'*)
+      _git_alias_block "git $_GA_ROOT is a shell alias. Run the alias body directly so the gates can check it."; return 2 ;;
+    esac
+    _GIT_SCAN="$value"
+    while :; do
+      _git_take_value || { _git_alias_block "git $_GA_ROOT has an unreadable alias expansion. Run the real verb directly."; return 2; }
+      word="$_GIT_TAKEN"
+      case "$value" in *'"'*|*"'"*|*'\'*|*'$'*|*'`'*)
+        # Only text consumed up to the verb is relevant.
+        local consumed="${value:0:${#value}-${#_GIT_SCAN}}"
+        case "$consumed" in *'"'*|*"'"*|*'\'*|*'$'*|*'`'*)
+          _git_alias_block "git $_GA_ROOT has an unreadable alias expansion. Run the real verb directly."; return 2 ;; esac ;;
+      esac
+      case "$word" in
+        -p|--paginate) continue ;;
+        -c)
+          _git_take_value || return 2
+          key="${_GIT_TAKEN%%=*}"; _git_alias_lower "$key"
+          case "$_GA_LOWER" in
+            include.*|includeif.*|core.fsmonitor|core.hookspath|core.pager|core.editor|sequence.editor|core.sshcommand|diff.external|gpg.program|credential.helper)
+              _git_alias_block "git $_GA_ROOT is a shell alias. Run the alias body directly so the gates can check it."; return 2 ;;
+          esac
+          _git_alias_entry "$key" "${_GIT_TAKEN#*=}"; continue ;;
+        -*) _git_alias_block "git $_GA_ROOT has an unsupported alias option. Run the real verb directly."; return 2 ;;
+      esac
+      break
+    done
+    if _git_alias_builtin "$word"; then
+      case " $_GA_VERBS " in *" $word "*)
+        _git_alias_block "git $_GA_ROOT is an alias for git $word. Run git $word directly so the gates can check it."; return 2 ;;
+      esac
+    else
+      _git_alias_resolve "$word" "$((depth+1))" "$seen|$verb|" || return 2
+    fi
+    _GA_KEYS=(${keys[@]+"${keys[@]}"}); _GA_VALUES=(${saved_values[@]+"${saved_values[@]}"})
+  done
+  return 0
+}
+
+# Caller supplies cmd and cwd in the parent shell. No command text is executed.
+git_alias_check() {
+  local LC_ALL=C
+  local _GA_VERBS="$*" text positions rc pos prev rest candidate pattern seen=$'\n' count=0
+  local _GA_SETUP=0 _GA_BUILTINS="" _GA_EXEC_CHANGED=0 _GA_EXTERNAL_OFF=0
+  local _GA_EXTERNAL_SETUP=0 _GA_EXEC_PATH="" _GA_EXTERNAL_NAMES="" _GA_CHANNEL="" _GA_DEFINITION=0
+  local _GA_CREATES_REPO=0 _GA_CREATION_SCANNED=0
+  local _GA_CONDITION=0 _GA_AUTO="" _GA_ROOT="" _GA_OPAQUE=0 _GA_UNREADABLE=0 _GA_VERB=""
+  local _GA_LOWER key value line target gitdir cachekey view index i dir token clean
+  local -a _GA_INLINE=() _GA_TARGET=() _GA_KEYS=() _GA_VALUES=() cachekeys=() views=() candidates=() candidate_positions=() candidate_cwds=()
+  case "${cmd:-}" in *git*) ;; *) return 0 ;; esac
+  if ! command -v join_shell_continuations >/dev/null 2>&1; then
+    # shellcheck source=/dev/null
+    . "$(dirname "${BASH_SOURCE[0]}")/_lib-awk-fallback.sh" || return 2
+  fi
+  text=$(join_shell_continuations "$cmd") || { _git_alias_block 'cannot join git command continuations.'; return 2; }
+  positions=$(printf '%s' "$text" | grep -aboE 'git([[:space:]]|<|>)'); rc=$?
+  [ "$rc" -le 1 ] || { _git_alias_block 'cannot scan git aliases.'; return 2; }
+  pattern="${_git_sub_re#*git}"
+  local verb_word_re='(\\.|"[^"]*"|'"'"'[^'"'"']*'"'"'|\$\([^)]*\)|`[^`]*`|[^[:space:];&|"'"'"'()<>]+)+'
+  pattern="^git${pattern}${verb_word_re}"
+  # This is the no-option branch of the same anchored candidate grammar.
+  # Compile the full option grammar only when this branch cannot match.
+  local literal_re='^(git +[a-zA-Z0-9_.][a-zA-Z0-9_.-]*)([[:space:];&|()<>]|$)'
+  local window="${text:0:512}" window_start=0 relative
+  while IFS=: read -r pos rest; do
+    [ -n "$pos" ] || continue
+    relative=$((pos-window_start))
+    if [ "$((relative+64))" -gt "${#window}" ]; then
+      window_start=$((pos>0 ? pos-1 : 0))
+      window="${text:window_start:512}"
+      relative=$((pos-window_start))
+    fi
+    # Exact boundary set: start, whitespace, (, ), <, >, backtick,
+    # both quotes, semicolon, pipe, ampersand, equals. No word boundary guess.
+    if [ "$pos" -gt 0 ]; then
+      prev="${window:relative-1:1}"
+      case "$prev" in [[:space:]]|'('|')'|'<'|'>'|'`'|'"'|"'"|';'|'|'|'&'|'=') ;; *) continue ;; esac
+    fi
+    # Try a short literal word first. Long or quoted words use the full grammar.
+    rest="${window:relative:64}"
+    case "$rest" in git'<'*|git'>'*) candidate="${rest:0:4}" ;;
+      *) if [[ "$rest" =~ $literal_re ]] && { [ "${#BASH_REMATCH[1]}" -lt 64 ] || [ "$((${#text}-pos))" -le 64 ]; }; then candidate="${BASH_REMATCH[1]}"
+         else
+           rest="${text:pos}"
+           if [[ "$rest" =~ $pattern ]]; then candidate="${BASH_REMATCH[0]}"
+           else continue; fi
+         fi ;;
+    esac
+    # Encode line separators before one deduplication pass. Escaping the
+    # backslash first keeps this encoding injective for arbitrary text.
+    token="$candidate"
+    case "$token" in *'\'*|*$'\n'*)
+      token="${candidate//\\/\\\\}"
+      token="${token//$'\n'/\\n}" ;;
+    esac
+    seen+="$token"$'\n'
+    candidates[count]="$candidate"; candidate_positions[count]="$pos"; count=$((count+1))
+  done <<EOF_POSITIONS
+$positions
+EOF_POSITIONS
+  count=$(printf '%s' "$seen" | awk 'NF && !seen[$0]++ { n++ } END { print n+0 }') || {
+    _git_alias_block 'cannot deduplicate git alias candidates.'; return 2
+  }
+  [ "$count" -le 4000 ] || { _git_alias_block 'too many git mentions to check for aliases. Write the prose to a file and pass -F or --body-file.'; return 2; }
+  [ "$count" -gt 0 ] || return 0
+  clean="$text"
+  for token in HOME XDG_CONFIG_HOME GIT_DIR GIT_COMMON_DIR PATH; do
+    clean="${clean//'${'"$token"'}'/}"
+    clean="${clean//'$'"$token"/}"
+  done
+  if [[ "$text" = *--exec-path* || "$text" = *GIT_EXEC_PATH* ]]; then _GA_EXEC_CHANGED=1; fi
+  # Read forms were removed above; other literal environment names count.
+  local channel_re='(^|[^[:alnum:]_])(HOME|XDG_CONFIG_HOME|GIT_DIR|GIT_COMMON_DIR|GIT_CONFIG[A-Za-z_0-9]*)([^[:alnum:]_]|$)'
+  if [[ "$clean" =~ $channel_re ]]; then _GA_CHANNEL="${BASH_REMATCH[2]}"; fi
+  case "$clean" in *--config-env*) _GA_CHANNEL="${_GA_CHANNEL:---config-env}" ;; esac
+  if [[ "$clean" =~ (^|[^[:alnum:]_])PATH([^[:alnum:]_]|$)|GIT_EXEC_PATH|--exec-path|env[[:space:]]+(-i|-([[:space:]]|$)|-u|--unset|--ignore-environment)|exec[[:space:]]+-c ]]; then _GA_EXTERNAL_OFF=1; fi
+  local include_channel_re='-c[[:space:]]+["'"'"']?([iI][nN][cC][lL][uU][dD][eE]\.|[iI][nN][cC][lL][uU][dD][eE][iI][fF]\.)'
+  if [[ "$clean" =~ $include_channel_re ]]; then _GA_CHANNEL="${_GA_CHANNEL:-include}"; fi
+  _git_alias_lower "$clean"; clean="$_GA_LOWER"
+  case "$clean" in *alias.*|*include.*|*includeif.*|*'[alias'*|*'[include'*|*.gitconfig*|*.git/config*|*git/config*|*config.worktree*) _GA_DEFINITION=1 ;; esac
+  # Walk the directory chain only once. Failed or non-leading directory changes
+  # use the payload view, as required by residual R2.
+  local segments segment chain_cwd="${cwd:-$PWD}" segment_start=0 segment_end prefix consumed=0 ci=0 chain_bad=0
+  if [[ "$text" =~ (^|[^[:alnum:]_])(cd|pushd|popd)([[:space:]]|$) ]]; then
+    segments=$(_git_chain_segments "$text") || return 2
+    rest="$text"
+    while IFS= read -r segment; do
+      prefix="${rest%%"$segment"*}"
+      segment_start=$((consumed+${#prefix}))
+      segment_end=$((segment_start+${#segment}))
+      rest="${rest#*"$segment"}"; consumed="$segment_end"
+      local trimmed="${segment#"${segment%%[![:space:]]*}"}"
+      case "$trimmed" in
+        cd|cd[[:space:]]*)
+          _GIT_SCAN="${trimmed#cd}"
+          if [ -z "${_GIT_SCAN//[[:space:]]/}" ]; then _GIT_TAKEN="$HOME";
+          elif ! _git_take_value; then chain_bad=1; fi
+          if [ "$_GIT_TAKEN" = -- ]; then _git_take_value || chain_bad=1; fi
+          dir=$(_git_resolve_dir "$_GIT_TAKEN" "$chain_cwd") && [ -d "$dir" ] && chain_cwd="$dir" || chain_bad=1
+          local tail="${_GIT_SCAN#"${_GIT_SCAN%%[![:space:]]*}"}"
+          if [ -n "$tail" ] && ! [[ "$tail" =~ ^\|\|[[:space:]]*(exit|return)([[:space:]]+[0-9]+)?[[:space:]]*$ ]]; then chain_bad=1; fi
+          ;;
+        *) [[ "$trimmed" =~ (^|[^[:alnum:]_])(cd|pushd|popd)([[:space:]]|$) ]] && chain_bad=1 ;;
+      esac
+      for ((i=0; i<${#candidates[@]}; i++)); do
+        pos="${candidate_positions[i]}"
+        if [ "$pos" -ge "$segment_start" ] && [ "$pos" -lt "$segment_end" ]; then
+          candidate_cwds[i]="$chain_cwd"
+          [ "$chain_bad" = 0 ] || candidate_cwds[i]="${cwd:-$PWD}"
+        fi
+      done
+    done <<EOF_SEGMENTS
+$segments
+EOF_SEGMENTS
+  fi
+  local creation_re="${_git_sub_re}(init|clone|worktree)([^[:alnum:]_.-]|$)"
+  if [[ "$text" =~ $creation_re ]]; then _GA_CREATES_REPO=1; fi
+  local alias_free_payload=0 simple_re='^git[[:space:]]+[^[:space:]-][^[:space:]]*$'
+  for candidate in ${candidates[@]+"${candidates[@]}"}; do
+    if [ "$alias_free_payload" = 1 ] && [[ "$candidate" =~ $simple_re ]]; then
+      ci=$((ci+1)); continue
+    fi
+    if [ "${#candidate}" -gt 2048 ]; then
+      _GA_OPAQUE=1; _GA_VERB='(opaque)'; _GA_INLINE=(); _GA_TARGET=(); _GA_UNREADABLE=0
+    else
+      _git_alias_parse "$candidate"
+    fi
+    target="${candidate_cwds[ci]:-${cwd:-$PWD}}"; ci=$((ci+1))
+    _GA_ROOT="$_GA_VERB"
+    if [ "$_GA_OPAQUE" = 0 ] && _git_alias_builtin "$_GA_VERB"; then continue; fi
+    if [ -n "$_GA_CHANNEL" ]; then
+      _git_alias_block "this command changes git config ($_GA_CHANNEL) and runs git $_GA_ROOT. Run the real verb without the change. If this is prose, write it to a file and pass -F or --body-file."; return 2
+    fi
+    if [ "$_GA_UNREADABLE" = 1 ]; then
+      _git_alias_block 'git cannot be checked with this -c value. Quote the -c value. Use a literal key and value with no $, backtick or backslash.'; return 2
+    fi
+    # A terminal inline alias decides the first hop without a config fork.
+    # A chain that continues still needs the target view.
+    if [ "$_GA_OPAQUE" = 0 ] && [ "${#_GA_INLINE[@]}" -gt 0 ]; then
+      _GA_KEYS=(); _GA_VALUES=()
+      for line in ${_GA_INLINE[@]+"${_GA_INLINE[@]}"}; do
+        _git_alias_entry "${line%%=*}" "${line#*=}"
+      done
+      _git_alias_lower "$_GA_VERB"
+      local inline_slot="$_GA_LOWER" inline_found=0 inline_terminal=1 first
+      for ((i=0; i<${#_GA_KEYS[@]}; i++)); do
+        if [ "${_GA_KEYS[i]}" = "I:$inline_slot" ] || [ "${_GA_KEYS[i]}" = "E:$_GA_VERB" ]; then
+          inline_found=$((inline_found+1)); first="${_GA_VALUES[i]%%[[:space:]]*}"
+          case "$first" in '! '*) ;; '!'*) ;; *)
+            _git_alias_builtin "$first" || inline_terminal=0 ;;
+          esac
+        fi
+      done
+      if [ "$inline_found" -gt 0 ] && [ "$inline_terminal" = 1 ]; then
+        _git_alias_resolve "$_GA_VERB" 0 '' || return 2
+        # A harmless first hop still needs the other matching config slot.
+        [ "$inline_found" -lt 2 ] || continue
+      fi
+    fi
+    gitdir=""
+    for ((i=0; i<${#_GA_TARGET[@]}; i++)); do
+      token="${_GA_TARGET[i]}"
+      case "$token" in
+        -C) i=$((i+1)); dir=$(_git_resolve_dir "${_GA_TARGET[i]}" "$target") && [ -d "$dir" ] && target="$dir" || target="${cwd:-$PWD}" ;;
+        --git-dir=*) gitdir="${token#*=}" ;;
+      esac
+    done
+    cachekey="${#target}:$target${#gitdir}:$gitdir"; index=-1
+    for ((i=0; i<${#cachekeys[@]}; i++)); do [ "${cachekeys[i]}" != "$cachekey" ] || index="$i"; done
+    if [ "$index" -lt 0 ]; then
+      [ "${#cachekeys[@]}" -lt 8 ] || { _git_alias_block 'too many git targets to check for aliases. Split the command.'; return 2; }
+      local -a args=(-C "$target")
+      [ -z "$gitdir" ] || args+=("--git-dir=$gitdir")
+      view=$(git ${args[@]+"${args[@]}"} config --includes --get-regexp '^(alias\..*|help\.autocorrect|include\..*|includeif\..*)$' 2>/dev/null); rc=$?
+      [ "$rc" -le 1 ] || { _git_alias_block "cannot read git config for $target. Fix the config and retry."; return 2; }
+      index="${#cachekeys[@]}"; cachekeys+=("$cachekey"); views+=("$view")
+    fi
+    if [ -z "${views[index]}$_GA_CHANNEL" ] && [ "$_GA_DEFINITION" = 0 ] &&
+       [ "${#_GA_INLINE[@]}" = 0 ] && [ "${#_GA_TARGET[@]}" = 0 ] &&
+       [ "$target" = "${cwd:-$PWD}" ] && [ -z "${segments:-}" ]; then
+      alias_free_payload=1
+    fi
+    _GA_KEYS=(); _GA_VALUES=(); _GA_AUTO=""; _GA_CONDITION=0
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      key="${line%% *}"; value="${line#* }"
+      _git_alias_entry "$key" "$value"
+      case "$key" in
+        includeif.onbranch:*|includeif.hasconfig:*) _GA_CONDITION=1 ;;
+        includeif.gitdir:*|includeif.gitdir/i:*)
+          if [ "$_GA_CREATES_REPO" = 0 ] && [ "$_GA_CREATION_SCANNED" = 0 ]; then
+            # Quote concatenation can spell a builtin. Parse in a subshell
+            # once, so this check cannot overwrite the current invocation.
+            if (
+              local creation_candidate
+              for creation_candidate in ${candidates[@]+"${candidates[@]}"}; do
+                [ "${#creation_candidate}" -le 2048 ] || continue
+                _git_alias_parse "$creation_candidate"
+                case "$_GA_VERB" in init|clone|worktree) exit 0 ;; esac
+              done
+              exit 1
+            ); then _GA_CREATES_REPO=1; fi
+            _GA_CREATION_SCANNED=1
+          fi
+          [ "$_GA_CREATES_REPO" = 0 ] || _GA_CONDITION=1 ;;
+
+      esac
+      case "$key" in include.*|includeif.*)
+        token="${value##*/}"
+        if [ -n "$token" ]; then
+          _git_alias_lower "$token"; token="$_GA_LOWER"
+          # Quote the basename as ERE data, not as an expression.
+          local special
+          for special in '\' '.' '[' ']' '(' ')' '*' '+' '?' '^' '$' '{' '}' '|'; do
+            token="${token//"$special"/\\$special}"
+          done
+          local basename_re="(^|[^[:alnum:]_.-])${token}([^[:alnum:]_.-]|$)"
+          if [[ "$clean" =~ $basename_re ]]; then _GA_DEFINITION=1; fi
+        fi ;;
+
+      esac
+    done <<EOF_VIEW
+${views[index]}
+EOF_VIEW
+    for line in ${_GA_INLINE[@]+"${_GA_INLINE[@]}"}; do _git_alias_entry "${line%%=*}" "${line#*=}"; done
+    if [ "$_GA_OPAQUE" = 1 ]; then
+      if ! _git_alias_unknown 0; then return 2; fi
+      for key in ${_GA_KEYS[@]+"${_GA_KEYS[@]}"}; do
+        if ! _git_alias_resolve "${key#*:}" 0 ''; then
+          _git_alias_block 'an unquoted expansion, glob or redirection before the git verb can change the command. Quote the value.'; return 2
+        fi
+      done
+    else
+      _git_alias_resolve "$_GA_VERB" 0 '' || return 2
+    fi
+  done
+  return 0
+}
+
 
 true
