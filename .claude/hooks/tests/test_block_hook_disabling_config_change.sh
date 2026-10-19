@@ -1,0 +1,71 @@
+#!/bin/bash
+# shellcheck source=/dev/null
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+# shellcheck source=/dev/null
+. "$(dirname "$0")/_test-protected-state.sh"
+printf '{"source":"startup","session_id":"d17"}\n' | /bin/bash "$ROOT/write-session-snapshot.sh" || exit 1
+config() {
+  jq -cn --arg source "$1" --arg file "${2:-}" '{session_id:"d17",source:$source,file_path:(if $file=="" then null else $file end)}' | /bin/bash "$ROOT/block-hook-disabling-config-change.sh"
+}
+for data in '{"disableAllHooks":true}' '{"hooks":{"PreToolUse":[]}}' 'invalid'; do
+  printf '%s\n' "$data" > "$TMP/live/.claude/settings.json"
+  check 2 "$data" config project_settings
+done
+for key in APEXYARD_ALLOW_X APEXYARD_OPS_PIN_DIR PATH BASH_ENV CLAUDE_ENV_FILE 'BASH_FUNC_x%%'; do
+  jq -n --arg key "$key" '{env:{($key):"evil"}}' > "$TMP/live/.claude/settings.json"
+  check 2 "env $key" config project_settings
+done
+printf '{"claudeMdExcludes":["x"]}\n' > "$TMP/live/.claude/settings.json"
+check 0 'rule excludes' config project_settings
+printf '{"permissions":{"allow":["Read"]}}\n' > "$TMP/live/.claude/settings.local.json"
+check 0 'permission create absent file' config local_settings
+check 2 'unknown source' config unknown
+printf '{"hooks":{"x":[]}}\n' > "$TMP/scratch/.claude/settings.json"
+check 0 'non-live settings allowed' config project_settings "$TMP/scratch/.claude/settings.json"
+check 0 'block log records each block' test "$(jq -s '[.[]|select(.decision=="block")]|length' "$TMP/live/.claude/session/config-change-blocks.jsonl")" = 10
+check 0 'non-live change is logged as allow' test "$(jq -s '[.[]|select(.decision=="allow")]|length' "$TMP/live/.claude/session/config-change-blocks.jsonl")" = 1
+# User settings resolve from the source when file_path is absent.
+printf '{"permissions":{"allow":["Read"]}}\n' > "$HOME/.claude/settings.json"
+check 0 'user settings permission change' config user_settings
+printf '{"env":{"PATH":"evil"}}\n' > "$HOME/.claude/settings.json"
+check 2 'user settings env change' config user_settings
+printf '{"disableAllHooks":true}\n' > "$HOME/.claude/settings.json"
+check 2 'user settings disableAllHooks' config user_settings
+rm -f "$HOME/.claude/settings.json"
+# No-snapshot mode allows permissions, but never env or hook changes.
+rm "$APEXYARD_OPS_PIN_DIR/gate-session-d17/snapshot.json"
+check 0 'no snapshot permission' config local_settings
+printf '{"env":{"PATH":"evil"}}\n' > "$TMP/live/.claude/settings.local.json"
+check 2 'no snapshot env' config local_settings
+mkdir -p "$TMP/bin"
+printf '{}\n' > "$TMP/tracked-settings"
+export D17_BASELINE="$TMP/tracked-settings"
+cat > "$TMP/bin/git" <<'GIT'
+#!/bin/bash
+if [ "${3:-}" = show ] && [ "${4:-}" = HEAD:.claude/settings.json ]; then
+  cat "$D17_BASELINE"
+else
+  exit 1
+fi
+GIT
+chmod +x "$TMP/bin/git"
+saved_path="$PATH"
+export PATH="$TMP/bin:$PATH"
+printf '{"permissions":{"allow":["Read"]}}\n' > "$TMP/live/.claude/settings.json"
+check 0 'no snapshot project permissions match tracked hooks and env' config project_settings
+printf '{"hooks":{"PreToolUse":[]}}\n' > "$TMP/live/.claude/settings.json"
+check 2 'no snapshot project hooks differ from tracked baseline' config project_settings
+export PATH="$saved_path"
+# Reordered object keys must hash to the same baseline.
+printf '{"hooks":{"b":[],"a":[]},"env":{"B":"2","A":"1"}}\n' > "$TMP/live/.claude/settings.json"
+printf '{"source":"startup","session_id":"order"}\n' | CLAUDE_CODE_SESSION_ID=order /bin/bash "$ROOT/write-session-snapshot.sh" || exit 1
+cp "$APEXYARD_OPS_PIN_DIR/gate-session-order/snapshot.json" "$APEXYARD_OPS_PIN_DIR/gate-session-d17/snapshot.json"
+printf '{"env":{"A":"1","B":"2"},"hooks":{"a":[],"b":[]}}\n' > "$TMP/live/.claude/settings.json"
+# The order fixture has no pin. Set the expected pin to the fixture root.
+jq --arg ops "$TMP/live" '.ops_root=$ops' "$APEXYARD_OPS_PIN_DIR/gate-session-d17/snapshot.json" > "$TMP/snapshot"
+mv "$TMP/snapshot" "$APEXYARD_OPS_PIN_DIR/gate-session-d17/snapshot.json"
+check 0 'key order has no effect' config project_settings
+jq 'del(.settings.project_settings)' "$APEXYARD_OPS_PIN_DIR/gate-session-d17/snapshot.json" > "$TMP/snapshot"
+mv "$TMP/snapshot" "$APEXYARD_OPS_PIN_DIR/gate-session-d17/snapshot.json"
+check 2 'missing snapshot source' config project_settings
+finish

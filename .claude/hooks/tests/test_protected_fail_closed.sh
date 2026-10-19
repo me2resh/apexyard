@@ -1,0 +1,46 @@
+#!/bin/bash
+# shellcheck source=/dev/null
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+# shellcheck source=/dev/null
+. "$(dirname "$0")/_test-protected-state.sh"
+mkdir -p "$TMP/copy" "$TMP/nojq"
+cp "$ROOT"/_lib*.sh "$ROOT"/block-protected-target-writes.sh "$TMP/copy/"
+for cmd in cat dirname grep; do ln -s "$(command -v "$cmd")" "$TMP/nojq/$cmd"; done
+printf '{"tool_name":"Edit","tool_input":{"file_path":".claude/hooks/x"}}' > "$TMP/input"
+check 2 'no jq edit' env PATH="$TMP/nojq" /bin/bash "$ROOT/block-protected-target-writes.sh" < "$TMP/input"
+printf '{"tool_\\u006eame":"Edit","tool_input":{"file_path":".claude/hooks/x"}}' > "$TMP/input"
+check 2 'no jq escaped tool key' env PATH="$TMP/nojq" /bin/bash "$ROOT/block-protected-target-writes.sh" < "$TMP/input"
+printf '{"tool_name":"Edit","tool_input":{"file_\\u0070ath":".claude/hooks/x"}}' > "$TMP/input"
+check 2 'escaped edit target key' /bin/bash "$ROOT/block-protected-target-writes.sh" < "$TMP/input"
+printf '{"tool_name":"Edit"' > "$TMP/input"
+check 2 'malformed edit' /bin/bash "$ROOT/block-protected-target-writes.sh" < "$TMP/input"
+printf '{"tool_name":"Bash","tool_input":{"command":"echo x > .claude/hooks/x"}}' > "$TMP/input"
+rm "$TMP/copy/_lib-detect-bash-write.sh"
+check 2 'missing detector' /bin/bash "$TMP/copy/block-protected-target-writes.sh" < "$TMP/input"
+cp "$ROOT/_lib-detect-bash-write.sh" "$TMP/copy/"
+rm "$TMP/copy/_lib-git-global.sh"
+jq -cn --arg cwd "$TMP/live" '{tool_name:"Bash",cwd:$cwd,tool_input:{command:"git restore x"}}' > "$TMP/input"
+check 2 'missing git library' /bin/bash "$TMP/copy/block-protected-target-writes.sh" < "$TMP/input"
+cp "$ROOT/_lib-git-global.sh" "$TMP/copy/"
+# Without the tokenizer the gate cannot read any command, so it blocks.
+jq -cn --arg cwd "$TMP/live" '{tool_name:"Bash",cwd:$cwd,tool_input:{command:"echo ok"}}' > "$TMP/input"
+check 0 'complete copy passes a read-only command' /bin/bash "$TMP/copy/block-protected-target-writes.sh" < "$TMP/input"
+rm "$TMP/copy/_lib-protected-shell-tokens.sh"
+check 2 'missing tokenizer library' /bin/bash "$TMP/copy/block-protected-target-writes.sh" < "$TMP/input"
+printf '{"tool_name":"Bash","tool_input":{"command":"echo ok"}}' > "$TMP/input"
+check 0 'no jq read-only Bash' env PATH="$TMP/nojq" /bin/bash "$ROOT/block-protected-target-writes.sh" < "$TMP/input"
+printf '{"tool_name":"Bash","cwd":"/tmp/confirm-rm-cp","tool_input":{"command":"echo alias.x"}}' > "$TMP/input"
+check 0 'no jq write words in cwd stay outside the command match' env PATH="$TMP/nojq" /bin/bash "$ROOT/block-protected-target-writes.sh" < "$TMP/input"
+printf '{"tool_name":"Bash","cwd":"/tmp/confirm-rm-cp","tool_input":{"command":"echo x > .claude/hooks/x"}}' > "$TMP/input"
+check 2 'no jq actual protected write still blocks' env PATH="$TMP/nojq" /bin/bash "$ROOT/block-protected-target-writes.sh" < "$TMP/input"
+jq -cn --arg cwd "$TMP/live" --arg command "APEXYARD_OPS_PIN_DIR=$APEXYARD_OPS_PIN_DIR bash .claude/hooks/pin-ops-root.sh" '{tool_name:"Bash",cwd:$cwd,tool_input:{command:$command}}' > "$TMP/input"
+check 2 'state writer exception refuses live pin directory' /bin/bash "$ROOT/block-protected-target-writes.sh" < "$TMP/input"
+jq -cn --arg cwd "$TMP/live" --arg command "APEXYARD_OPS_PIN_DIR=$TMP/sandbox bash .claude/hooks/pin-ops-root.sh" '{tool_name:"Bash",cwd:$cwd,tool_input:{command:$command}}' > "$TMP/input"
+check 0 'state writer exception allows literal sandbox' /bin/bash "$ROOT/block-protected-target-writes.sh" < "$TMP/input"
+command_text='python3 -c "p='"'"'; source .claude/hooks/x'"'"';open(p.split()[-1],'"'"'w'"'"')"'
+jq -cn --arg cwd "$TMP/live" --arg command "$command_text" '{tool_name:"Bash",cwd:$cwd,tool_input:{command:$command}}' > "$TMP/input"
+check 2 'source text inside interpreter is not excluded' /bin/bash "$ROOT/block-protected-target-writes.sh" < "$TMP/input"
+command_text='source "$(git -C "$repo" rev-parse --show-toplevel)/.claude/hooks/_lib-x.sh"; python3 -c "open('"'"'/tmp/x'"'"','"'"'w'"'"')"'
+jq -cn --arg cwd "$TMP/live" --arg command "$command_text" '{tool_name:"Bash",cwd:$cwd,tool_input:{command:$command}}' > "$TMP/input"
+check 0 'nested quotes in actual source operand' /bin/bash "$ROOT/block-protected-target-writes.sh" < "$TMP/input"
+finish
