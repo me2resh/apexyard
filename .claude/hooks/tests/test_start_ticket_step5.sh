@@ -198,7 +198,8 @@ if [ -n "$PA" ] && [ "$PA" != "$PB" ]; then ok "two sessions get two fields file
 fields 31 'Session A' > "$PA"
 fields 32 'Session B' > "$PB"
 out=$(cd "$OPS" && CLAUDE_CODE_SESSION_ID=sess-a bash -c "$(step5_cmd "$OPS" "$TREE" "$PA")" 2>&1)
-if grep -qx 'number=31' "$TREE/.git/apexyard-ticket" 2>/dev/null && [ ! -e "$PA" ] && grep -qx 'number=32' "$PB" 2>/dev/null; then
+if grep -qx 'number=31' "$TREE/.git/apexyard-ticket" 2>/dev/null && [ ! -e "$PA" ] && grep -qx 'number=32' "$PB" 2>/dev/null \
+  && ! printf '%s' "$out" | grep -q 'ticket marker taken over'; then
   ok "session A writes its own ticket and leaves session B's file"
 else
   bad "session A writes its own ticket and leaves session B's file" "out=$out marker=$(cat "$TREE/.git/apexyard-ticket" 2>&1)"
@@ -210,14 +211,16 @@ out=$(cd "$OPS" && env -u APEXYARD_START_TICKET_TAKEOVER CLAUDE_CODE_SESSION_ID=
 rc_b=$?
 after_b=$(cksum < "$TREE/.git/apexyard-ticket")
 if [ "$rc_b" != 0 ] && [ "$before_b" = "$after_b" ] && grep -qx 'number=31' "$TREE/.git/apexyard-ticket" \
-  && printf '%s' "$out" | grep -q 'ticket marker not overwritten'; then
+  && printf '%s' "$out" | grep -q 'ticket marker not overwritten' \
+  && ! printf '%s' "$out" | grep -q 'ticket marker taken over'; then
   ok "session B cancels foreign overwrite (#1533)"
 else
   bad "session B cancels foreign overwrite (#1533)" "rc=$rc_b out=$out"
 fi
-# With an explicit take-over, session B may replace the marker.
+# With an explicit take-over, session B may replace the marker; audit line fires.
 out=$(cd "$OPS" && APEXYARD_START_TICKET_TAKEOVER=1 CLAUDE_CODE_SESSION_ID=sess-b bash -c "$(step5_cmd "$OPS" "$TREE" "$PB")" 2>&1)
-if grep -qx 'number=32' "$TREE/.git/apexyard-ticket" 2>/dev/null && [ ! -e "$PB" ]; then
+if grep -qx 'number=32' "$TREE/.git/apexyard-ticket" 2>/dev/null && [ ! -e "$PB" ] \
+  && printf '%s' "$out" | grep -Fq 'apexyard: ticket marker taken over: org/p1#31 (session sess-a) -> org/p1#32 (session sess-b)'; then
   ok "session B take-over writes its own ticket (#1533)"
 else
   bad "session B take-over writes its own ticket (#1533)" "out=$out marker=$(cat "$TREE/.git/apexyard-ticket" 2>&1)"

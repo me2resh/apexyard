@@ -33,7 +33,7 @@ source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
 registry=$(portfolio_registry)
 ```
 
-Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+Defaults match single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Split-portfolio overrides `portfolio.{registry, projects_dir, ideas_backlog}` in `.claude/project-config.json`. Do not hardcode those paths — the helper resolves the mode. See `docs/multi-project.md`.
 
 ## Process
 
@@ -176,9 +176,8 @@ Do not delete an old-layout file. Step 5 writes the old-layout marker for this t
 
 Before step 5, run `active_ticket_foreign_overwrite "$tree" "<owner/repo>" "<number>"`.
 When it returns 0, ask with `AskUserQuestion`: separate worktree (see #1534),
-take over (`APEXYARD_START_TICKET_TAKEOVER=1` on the write), or cancel.
-Headless and `/fan-out` runs cancel and leave the marker unchanged. Same
-ticket, or the same session switching tickets, needs no question. Details:
+take over, or cancel. Headless and `/fan-out` cancel (marker unchanged).
+Same ticket or same-session switch: no question. See step 5;
 `docs/skills/start-ticket-rationale.md`.
 
 ### 5. Write the markers
@@ -215,7 +214,7 @@ Write the markers in three steps. The issue title never goes on a command line. 
 
 When the tree fails validation, the command writes only the old-layout marker and prints a one-line note. That is not an error. The hooks read the old-layout marker for that tree as they did before.
 
-`active_ticket_write` writes `repo`, `number`, `title`, `url`, `suggested_branch`, `session_id`, `branch`, and `started_at` with `printf '%s\n'` (reject `\n`/`\r`; title one line; first-match reads; AgDR-0257). On take over set `APEXYARD_START_TICKET_TAKEOVER=1`. Legacy writer writes the same keys.
+`active_ticket_write` writes `repo`, `number`, `title`, `url`, `suggested_branch`, `session_id`, `branch`, and `started_at` with `printf '%s\n'` (reject `\n`/`\r`; title one line; first-match reads; AgDR-0257). `APEXYARD_START_TICKET_TAKEOVER=1` is a cooperative signal: set it inline on the single write after take over — never export or inherit. Headless and `/fan-out` must not set it. Residual: an agent can still set it, spoof session id, or edit the marker (as before this PR). Legacy writer writes the same keys.
 
 `active_ticket_write` refuses a tree that is not the ops fork or a registered clone. It also refuses a symlink in the path, a repo owned by another user, and a malformed `.git` file. It prints the reason to stderr. If it prints a hint about the sandbox, the session may not write into the git dir. Tell the user. The old-layout marker still covers the tree. See AgDR-0222 for the allowlist the user can add.
 
@@ -267,7 +266,7 @@ Do NOT create the branch automatically. The user may already be on a branch, or 
 - To clear a tree's marker, delete `<git dir>/apexyard-ticket`. `git worktree remove` does it for a linked worktree.
 - A tree needs its own `/start-ticket`. A marker in the main clone does not govern a linked worktree.
 - Exempt paths (`.claude/`, `docs/`, `projects/*/docs/`, any `*.md`) don't need a ticket. The skill is only required before touching source, config, or infra.
-- **Migration from the old layout**: `current-ticket` and `tickets/<project>` files under the ops fork's `.claude/session/` still work wherever they worked before. This skill still writes them. A SessionStart notice lists them. An explicitly breaking release will stop reading and writing them.
+- **Migration from the old layout**: `current-ticket` and `tickets/<project>` under `.claude/session/` still work; this skill still writes them. A SessionStart notice lists them. A breaking release will stop reading and writing them.
 
 ---
 

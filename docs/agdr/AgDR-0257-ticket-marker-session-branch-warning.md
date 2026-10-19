@@ -30,7 +30,7 @@ Issue #1533. Two sessions in the same clone overwrite `apexyard-ticket` (and the
 Chosen: **warn only**, because the issue asks for a visible warning and keeps the gate exit code unchanged.
 
 1. `/start-ticket` writers add `session_id=` and `branch=` with `printf '%s\n'`. A value that holds `\n` or `\r` is rejected. The title is flattened to one line before the write. Every reader takes the first match of each key.
-2. Before a write that would replace a different ticket from a different session (empty or missing `session_id` counts as different), `/start-ticket` asks: separate worktree (see #1534), take over, or cancel. When no answer is possible, cancel and leave the marker unchanged. `APEXYARD_START_TICKET_TAKEOVER=1` is the mechanical take-over flag.
+2. Before a write that would replace a different ticket from a different session (empty or missing `session_id` counts as different), `/start-ticket` asks: separate worktree (see #1534), take over, or cancel. When no answer is possible, cancel and leave the marker unchanged. `APEXYARD_START_TICKET_TAKEOVER=1` is a **cooperative signal**, not an operator gate: the skill sets it **inline** on the single write that follows the operator's take-over answer; it must never be exported and never inherited. Headless and `/fan-out` runs must not set it. No hook inspects the flag. A child Bash process cannot tell an inline prefix from an exported/inherited value (`declare -x` looks the same either way), so the writer does not attempt that distinction. Residual (same as before this PR): an agent can still set the flag, set its session id to match the marker, or edit the marker file directly. On each take-over that replaces another session's marker, the writer prints one stderr audit line: `apexyard: ticket marker taken over: <old ticket> (session <old id>) -> <new ticket> (session <new id>)`.
 3. `require-active-ticket.sh` and `require-migration-ticket.sh` warn on stderr when the governing marker's `session_id` or `branch` differs from the current session or tree branch. The warning names the ticket, the other session id, the marker age, and the fix. It prints once per session per marker. Warn state lives under `.claude/session/ticket-marker-warn.<safe_sid>/`. One session cannot write a path that suppresses another session's warning. No `gh` call is added to the ticket gate.
 
 ## Consequences
@@ -39,6 +39,7 @@ Chosen: **warn only**, because the issue asks for a visible warning and keeps th
 - A stale branch or foreign session still allows the edit; the operator sees the warning.
 - Old markers without `session_id` count as foreign when a session with an id starts a different ticket.
 - Separate worktrees remain the real fix for concurrent tickets (#1531, #1534).
+- The take-over flag remains cooperative. The audit line makes an unexpected take-over visible on stderr. An exported flag in a parent environment would still honour take-over, because Bash cannot distinguish it from an inline prefix.
 
 ## Architecture evolution
 
@@ -63,6 +64,15 @@ path and lets a governing old-layout marker still feed the warn path.
 The compat test now pins every old key and its value, and accepts
 `session_id` and `branch` in that fixed order. The warning still works
 from the new per-tree marker when that marker governs.
+
+### Take-over honesty (Hakim A1 / CEO 2026-10-19)
+
+The PR body once implied the take-over flag was an operator-only gate.
+Hakim A1 showed it is a plain environment variable with no hook check.
+CEO decision: keep the flag, document it as a cooperative signal set
+inline on the take-over write only, and print one stderr audit line when
+a foreign marker is replaced. Do not fake an inline-vs-inherited check:
+Bash exposes both the same way to the child.
 
 ## Artifacts
 

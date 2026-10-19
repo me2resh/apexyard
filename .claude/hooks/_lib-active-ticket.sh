@@ -1592,6 +1592,7 @@ active_ticket_pending_path() {
 # symlink.
 active_ticket_write_from_file() {
   local dir="$1" f="$2" l repo="" num="" title="" url="" branch="" wrote=1 id=""
+  local takeover_marker="" old_repo="" old_num="" old_sid="" new_sid=""
   case "$f" in
     */.claude/session/start-ticket-*.pending)
       id="${f##*/start-ticket-}"
@@ -1625,14 +1626,25 @@ active_ticket_write_from_file() {
     echo "apexyard: ticket fields not read: $f has no repo= or number= line" >&2
     return 1
   fi
-  # Different ticket + different session_id: refuse unless the operator chose
-  # take-over (APEXYARD_START_TICKET_TAKEOVER=1). Headless and /fan-out runs
-  # leave the marker byte-for-byte unchanged (AgDR-0257 / #1533).
+  # Different ticket + different session_id: refuse unless take-over was
+  # chosen. APEXYARD_START_TICKET_TAKEOVER=1 is a cooperative signal (set
+  # inline on the write only). Bash cannot tell inline from an inherited
+  # export; headless and /fan-out must not set it (AgDR-0257 / #1533).
   if active_ticket_foreign_overwrite "$dir" "$repo" "$num"; then
     if [ "${APEXYARD_START_TICKET_TAKEOVER:-}" != 1 ]; then
       echo "apexyard: ticket marker not overwritten: another session holds a different ticket at $REPLY. Use a separate worktree (see #1534), or re-run /start-ticket and choose take over." >&2
       return 1
     fi
+    takeover_marker="$REPLY"
+    active_ticket_read_field "$takeover_marker" repo || true
+    old_repo="$REPLY"
+    active_ticket_read_field "$takeover_marker" number || true
+    old_num="${REPLY#\#}"
+    active_ticket_read_field "$takeover_marker" session_id || true
+    old_sid="$REPLY"
+    active_ticket_session_id || true
+    new_sid="$REPLY"
+    echo "apexyard: ticket marker taken over: ${old_repo}#${old_num} (session ${old_sid}) -> ${repo}#${num} (session ${new_sid})" >&2
   fi
   rm -f "$f"
   active_ticket_init "$dir" || true
