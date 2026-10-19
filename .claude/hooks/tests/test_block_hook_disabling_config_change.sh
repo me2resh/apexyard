@@ -32,6 +32,18 @@ check 2 'user settings env change' config user_settings
 printf '{"disableAllHooks":true}\n' > "$HOME/.claude/settings.json"
 check 2 'user settings disableAllHooks' config user_settings
 rm -f "$HOME/.claude/settings.json"
+# Without a pin (a session after /clear), the block log goes to the project directory.
+mkdir -p "$TMP/project/.claude"
+nopin_config() { printf '{"session_id":"nopin","source":"project_settings"}' | CLAUDE_CODE_SESSION_ID=nopin CLAUDE_PROJECT_DIR="$TMP/project" /bin/bash "$ROOT/block-hook-disabling-config-change.sh"; }
+printf '{"disableAllHooks":true}\n' > "$TMP/project/.claude/settings.json"
+check 2 'no-pin block' nopin_config
+check 0 'no-pin block is logged under the project directory' test "$(jq -s 'length' "$TMP/project/.claude/session/config-change-blocks.jsonl" 2>/dev/null)" = 1
+# Paired case: with a pin, the block log stays under the pinned ops root.
+before=$(jq -s 'length' "$TMP/live/.claude/session/config-change-blocks.jsonl")
+printf '{"disableAllHooks":true}\n' > "$TMP/live/.claude/settings.json"
+check 2 'pinned block' config project_settings
+check 0 'pinned block is logged under the ops root' test "$(jq -s 'length' "$TMP/live/.claude/session/config-change-blocks.jsonl")" = "$((before+1))"
+printf '{}\n' > "$TMP/live/.claude/settings.json"
 # No-snapshot mode allows permissions, but never env or hook changes.
 rm "$APEXYARD_OPS_PIN_DIR/gate-session-d17/snapshot.json"
 check 0 'no snapshot permission' config local_settings
