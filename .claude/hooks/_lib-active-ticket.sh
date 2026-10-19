@@ -1150,8 +1150,31 @@ _at_session_differs() {
 }
 
 # REPLY is <value> with bytes below 0x20 and 0x7f removed (audit-line fields).
+# Pure bash only: no fork (process-budget case 3b / #1808).
 _at_strip_controls() {
-  REPLY=$(printf '%s' "$1" | tr -d '\000-\037\177')
+  local s="$1" out="" ch
+  while [ -n "$s" ]; do
+    ch="${s:0:1}"
+    s="${s:1}"
+    case "$ch" in
+      [[:cntrl:]]) ;;
+      *) out="${out}${ch}" ;;
+    esac
+  done
+  REPLY="$out"
+}
+
+# REPLY is a decimal hash of $1 (digits only; safe as a claim file name).
+# Pure bash: no cksum/awk/tr on the per-edit warn path (#1808).
+_at_claim_hash() {
+  local s="$1" i=0 o h=0 n
+  n=${#s}
+  while [ "$i" -lt "$n" ]; do
+    printf -v o '%d' "'${s:$i:1}"
+    h=$(( (h * 31 + o) % 2147483647 ))
+    i=$((i + 1))
+  done
+  REPLY=$h
 }
 
 # Return 0 when writing <repo>/<num> into <dir> would replace a marker that
@@ -1255,12 +1278,13 @@ active_ticket_warn_if_mismatch() {
 
   if active_ticket_mismatch_warn_dir "$home"; then
     warn_dir="$REPLY"
-    # Claim: POSIX cksum of path plus the marker identity fields, then
-    # sanitise. A later foreign marker at the same path still warns once
-    # (Rex finding 1 / #1533). A hash keeps the name under NAME_MAX when
-    # the marker path is long (#1808).
-    claim=$(printf '%s|%s|%s|%s|%s' "$marker" "$m_sid" "$m_repo" "$m_num" "$m_started" \
-      | cksum 2>/dev/null | awk '{print $1}' | tr -c 'A-Za-z0-9._-' '_')
+    # Claim: pure-bash hash of path plus the marker identity fields.
+    # A later foreign marker at the same path still warns once
+    # (Rex finding 1 / #1533). A short hash keeps the name under NAME_MAX
+    # when the marker path is long, with no extra exec on the edit path
+    # (#1808).
+    _at_claim_hash "${marker}|${m_sid}|${m_repo}|${m_num}|${m_started}"
+    claim="$REPLY"
     if [ -n "$claim" ] && [ -e "$warn_dir/$claim" ]; then
       return 0
     fi

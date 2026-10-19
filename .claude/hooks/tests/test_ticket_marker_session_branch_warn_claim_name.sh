@@ -1,5 +1,5 @@
 #!/bin/bash
-# #1808: warn-claim file is named by a sanitised POSIX cksum of the marker
+# #1808: warn-claim file is named by a pure-bash hash of the marker
 # identity, so a long marker path still warns once per session.
 # Fail-before pins commit 5734e29 (A4/A2 head that still used the raw name).
 set -u
