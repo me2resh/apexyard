@@ -1,0 +1,474 @@
+{
+  "specVersion": "0.1",
+  "id": "reconciliation-plan-apexyard-token-efficiency-20261019T062054Z",
+  "planId": "plan-apexyard-token-efficiency",
+  "planRevision": 5,
+  "projectSnapshotId": "snapshot-apexyard-20261019T062054Z",
+  "reconciledAt": "2026-10-19T06:20:54.443Z",
+  "observations": [
+    "Observed me2resh/apexyard at cee2d23994c802e33a47fda78996414580796339.",
+    "Statuses come from reconciliation-plan-apexyard-token-efficiency-20261013T194836Z. Every criterion that was not achieved was checked again at this commit.",
+    "PRs #1678 and #1683 merged before the 2026-10-13 records but their evidence was not assessed. This cycle assesses it for ac3-2, ac5-1 and ac5-2.",
+    "Figures in ac2-2 and ac2-3 now follow docs/perf/token-cost-baseline-2026-10-10.md. This closes the Figure mismatch (2026-10-12) note."
+  ],
+  "criterionAssessments": [
+    {
+      "criterionId": "ac1-1",
+      "status": "achieved",
+      "evidence": [
+        "bin/token-cost.py line 474 (measure_session) and line 1420 (the session subcommand).",
+        "docs/perf/token-cost-baseline-2026-10-10.md lines 25-56: context per turn, compactions and context share by category on the 2026-10-10 transcript.",
+        "Same file lines 60-62: skill injections per skill.",
+        ".claude/hooks/tests/test_token_cost.sh passes at this commit (PR #1633)."
+      ],
+      "explanation": "The script reports context per turn, context share by category, skill injections and compactions on the 2026-10-10 transcript."
+    },
+    {
+      "criterionId": "ac1-2",
+      "status": "achieved",
+      "evidence": [
+        "bin/token-cost.py line 850 (measure_reviewers), line 819 (cache TTL for each reviewer run) and line 1090 (measure_forge).",
+        "The reviewers output lists the cache TTL of each of the 388 reviewer runs; lines 871-872 split each reviewer by TTL.",
+        "docs/perf/token-cost-baseline-2026-10-10.md lines 77-103: first-turn context, total tokens, tool calls, CI-wait turns, cache rebuilds and runs by cache TTL.",
+        "Same file lines 126-135: Rex rounds per PR and hours from open to merge."
+      ],
+      "explanation": "The dated baseline file holds the reviewer and forge views with the 2026-10-10 numbers."
+    },
+    {
+      "criterionId": "ac1-3",
+      "status": "partially-verified",
+      "evidence": [
+        "bin/token-cost.py line 1441: the compare subcommand gives the relative change between two reports.",
+        "docs/perf/token-cost.md documents the before and after steps for each slice.",
+        "docs/spike-memos/GH-1637-compaction-threshold.md, Results: o1 session output compares context across default and tuned windows.",
+        "docs/eval-agents/reports/rex-hakim-token-trim-2026-10-11.md lines 19 and 56-60: o1 reviewers and compare output measures Rex before and after.",
+        "This reconciliation cites those measurements for ac2-1 and ac5-1; measurements for every later outcome remain missing."
+      ],
+      "explanation": "Missing: before-and-after evidence for every later outcome. Next: measure each remaining outcome. Met: ac2-1 and ac5-1 cite o1 comparisons."
+    },
+    {
+      "criterionId": "ac2-1",
+      "status": "achieved",
+      "evidence": [
+        "docs/spike-memos/GH-1637-compaction-threshold.md, Results and Findings: default means 232,894 and 245,876; 200K-window means 88,960 and 89,540.",
+        "The same memo, Setup and Limits of this evidence: the o1 session view measured eight headless 1M-context Opus runs; 500K remains untested.",
+        "docs/getting-started.md lines 225-237 recommend autoCompactWindow of 500000 in user settings and retain the extrapolation limit (PR #1646)."
+      ],
+      "explanation": "The spike measures bounded context on 1M-context Opus, and the docs recommend 500000 while preserving its extrapolation limit."
+    },
+    {
+      "criterionId": "ac2-2",
+      "status": "not-verified",
+      "evidence": [
+        "Baseline: mean 489,792 and p90 849,914 tokens per turn, with 18 compactions and 12 near the cap (docs/perf/token-cost-baseline-2026-10-10.md lines 30-31).",
+        "PR #1663 (o6) merged on 2026-10-12, so the compact line is in place.",
+        "docs/perf has no session report after 2026-10-10 at cee2d239."
+      ],
+      "explanation": "Missing: the measured drop on a session after o6. Next: run the o1 session view in the o2 build slice. The owner time-box after #1663 ends on 2026-10-19."
+    },
+    {
+      "criterionId": "ac2-3",
+      "status": "not-verified",
+      "evidence": [
+        "fan-out SKILL.md lines 154 and 219 require a self-contained prompt for each agent.",
+        "Neither parallel-work.md nor fan-out SKILL.md sets a rule for a fork against a fresh spawn.",
+        "Baseline: two forks had a first-turn context median of 430,256 and a max of 580,938. They used 160,479 tokens in total (docs/perf/token-cost-baseline-2026-10-10.md line 112)."
+      ],
+      "explanation": "Missing: a rule in parallel-work.md and fan-out that makes a fresh spawn the default and names when a fork is allowed. Next: the o2 build slice after its handoff. fan-out already requires a self-contained prompt for each agent."
+    },
+    {
+      "criterionId": "ac2-4",
+      "status": "not-verified",
+      "evidence": [
+        "No harness request filed"
+      ],
+      "explanation": "Missing: the four requests. Next: a later o2 build slice files them with the measured numbers, after the o2 spike."
+    },
+    {
+      "criterionId": "ac3-1",
+      "status": "achieved",
+      "evidence": [
+        ".claude/rules/pr-workflow.md, section Carry-over check after a refresh: run rex_approval_carries_over before a Rex delta (PR #1643).",
+        ".claude/hooks/tests/test_lib_merge_behind.sh Case 12: a hand-resolved conflict returns false. The suite passes 49 of 49 at cee2d239.",
+        ".claude/hooks/tests/test_block_unreviewed_merge.sh case CO4: a hand-resolved conflict still blocks. It passes at cee2d239."
+      ],
+      "explanation": "Step 3 checks carry-over first, and the existing adversarial tests reject a hand-edited merge tree."
+    },
+    {
+      "criterionId": "ac3-2",
+      "status": "partially-verified",
+      "evidence": [
+        ".claude/hooks/_lib-merge-behind.sh walks up to 10 base-merge steps. Each step tree must equal an isolated git merge-tree result (PR #1683).",
+        "docs/agdr/AgDR-0232-carry-approvals-across-base-merge-chains.md amends AgDR-0178. AgDR-0178 line 29 records the amendment.",
+        ".claude/hooks/tests/test_lib_merge_behind.sh has chain cases, an 11-step case and a mid-chain failure case. It passes 49 of 49 at cee2d239.",
+        ".claude/rules/pr-workflow.md: a rebase or a force-push does not qualify for carry-over.",
+        ".claude/hooks/_lib-merge-behind.sh has no git range-diff check."
+      ],
+      "explanation": "Missing: a criterion text that matches the per-step tree check. Next: reword ac3-2 to per-step tree equality in the next plan revision, then mark it achieved. A git range-diff check is redundant on merge chains. range-diff ignores merge commits and returned 0 on an evil-merge chain. The per-step tree check in _lib-merge-behind.sh catches that chain. Rebases are excluded by design in pr-workflow.md and AgDR-0178."
+    },
+    {
+      "criterionId": "ac3-3",
+      "status": "not-verified",
+      "evidence": [
+        "Markers are keyed by repository and PR number (AgDR-0060)",
+        "Baseline: one same-SHA reopen cost 178k tokens (#1580)",
+        "block-unreviewed-merge.sh lines 459-462 read the carry-over only when a Rex marker exists for the PR number."
+      ],
+      "explanation": "Missing: a reopened PR has no Rex marker under its new number. Next: parked (Revision 3 notes)."
+    },
+    {
+      "criterionId": "ac3-4",
+      "status": "not-verified",
+      "evidence": [
+        "Baseline: 31 pure-refresh rounds in the session; 15 in the 40-PR framework sample"
+      ],
+      "explanation": "Missing: the count on the next 40 merged PRs. Next: the o1 script after o3 lands."
+    },
+    {
+      "criterionId": "ac4-1",
+      "status": "achieved",
+      "evidence": [
+        ".claude/hooks/auto-code-review.sh writes the pending-review marker, prints the banner and exits 2.",
+        ".claude/hooks/tests/test_auto_code_review_banner.sh passes at cee2d239. The banner is at most 300 bytes and the fallback banner is 186 bytes.",
+        ".claude/skills/code-review/SKILL.md: the orchestrator waits for green CI with a Monitor, then spawns Rex."
+      ],
+      "explanation": "The banner is under 300 bytes, keeps exit 2 and the marker, and names the CI order; /code-review says the same."
+    },
+    {
+      "criterionId": "ac4-2",
+      "status": "achieved",
+      "evidence": [
+        ".claude/agents/code-reviewer.md line 178 and security-reviewer.md line 120 say to run gh pr checks once and never wait (PR #1652).",
+        ".claude/hooks/block-reviewer-ci-wait.sh blocks watches, sleeps of at least 60 seconds and repeat checks; dispatch-bash.sh invokes the hook.",
+        ".claude/agents/tests/test_reviewer_floor_block.sh, Check CI once, never wait: pins both agent lines and rejects the old Rex wait instruction.",
+        ".claude/hooks/tests/test_block_reviewer_ci_wait.sh: typed-reviewer cases cover gh pr checks --watch, gh run watch, sleep 60 and repeat checks."
+      ],
+      "explanation": "Both reviewer prompts prohibit CI waits, and the hook tests cover watches, long sleeps and repeat checks."
+    },
+    {
+      "criterionId": "ac4-3",
+      "status": "achieved",
+      "evidence": [
+        ".claude/hooks/block-merge-on-red-ci.sh does not source _lib-review-markers.sh. It decides on CI status only (AgDR-0213).",
+        "#1751 (AgDR-0244) adds a commit check-runs fallback for a failed checks call. Real fail and pending rows stay on the red path.",
+        ".claude/hooks/tests/test_block_merge_on_red_ci.sh case #1536 green checks + queued head run -> blocks passes. The suite gives 152 passed and 0 failed at cee2d239."
+      ],
+      "explanation": "The red-CI gate decides on CI status only and reads no approval marker, so a valid Rex marker cannot change its result. Its test covers a queued head run. A PR with queued checks therefore blocks at merge today. One documented limit stays: when the GitHub Actions API call fails, the gate fails open with an unverified-CI note (AgDR-0213)."
+    },
+    {
+      "criterionId": "ac4-4",
+      "status": "not-verified",
+      "evidence": [
+        "Baseline: 420 CI-wait turns in 185 of 388 reviewer runs on 2026-10-10 (docs/perf/token-cost-baseline-2026-10-10.md line 87).",
+        "The hook that ends reviewer waits merged at be687ba (PR #1634).",
+        "PR #1652 eval report, Method: headless runs had no CI result or linked issue; it supplies no next-40-PR CI-wait report."
+      ],
+      "explanation": "Missing: the measurement over the next 40 merged PRs. Next: the o1 script reviewer view after 40 PRs."
+    },
+    {
+      "criterionId": "ac4-5",
+      "status": "achieved",
+      "explanation": "Both texts tell adopters outside the limits of a subscription to set promptCacheTtl to 1h, and say why.",
+      "evidence": [
+        ".claude/rules/pr-workflow.md lines 61-65: the cache lifetime during a CI wait and the promptCacheTtl advice.",
+        "docs/getting-started.md line 223: the same advice for adopters."
+      ]
+    },
+    {
+      "criterionId": "ac5-1",
+      "status": "partially-verified",
+      "evidence": [
+        ".claude/agents code-reviewer, solution-architect, contrarian, qa-engineer, dependency-auditor and penetration-tester set omitClaudeMd: true (PRs #1652 and #1678).",
+        ".claude/agents/tests/test_reviewer_floor_block.sh pins the six agents and the Hakim exception. It reports 0 failures at cee2d239.",
+        "docs/eval-agents/reports/review-agents-lean-2026-10-12.md: first-turn context falls 39% to 67% for the five agents of PR #1678.",
+        "The same report: Hakim without CLAUDE.md gave no blocking verdict in 4 of 19 runs on hakim-1546.",
+        ".claude/agents/security-reviewer.md has no omitClaudeMd field at cee2d239."
+      ],
+      "explanation": "Missing: omitClaudeMd and the floor block for Hakim. Next: find why Hakim misses a HIGH defect without CLAUDE.md, then rerun its eval. Met: six of seven agents, and the test pins the exception."
+    },
+    {
+      "criterionId": "ac5-2",
+      "status": "partially-verified",
+      "evidence": [
+        "wc -c at cee2d239: solution-architect.md is 11,961 bytes and security-reviewer.md is 22,272 bytes.",
+        ".claude/agents/tests/test_reviewer_floor_block.sh checks that solution-architect.md stays within 12000 bytes. It has no check for Hakim or for the one-line rule.",
+        "docs/eval-agents/corpus/tariq.json holds 8 entries from real Tariq rounds (PR #1678).",
+        "docs/agents/solution-architect-reference.md holds the moved Tariq rationale.",
+        "docs/eval-agents/reports/review-agents-lean-2026-10-12.md: Tariq shows no flip in 58 runs on the 11,943-byte file. The Hakim trim flipped on hakim-1511 and did not ship.",
+        "PR #1685 changed solution-architect.md from 11,943 to 11,961 bytes and security-reviewer.md from 21,723 to 22,272 bytes.",
+        ".claude/agents/solution-architect.md: the Sign-off marker section is about 30 lines with a code block."
+      ],
+      "explanation": "Missing: Hakim at most 12,000 bytes with zero flips, and Tariq ops-root and marker text as one line. Next: a later o5 slice retries the Hakim trim and re-runs the Tariq eval on the current file. Hakim grew from 21,723 to 22,272 bytes in #1685. #1685 also edited Tariq after its zero-flip eval. No text-pin test covers the one-line rule. Met: Tariq meets the cap with its corpus."
+    },
+    {
+      "criterionId": "ac5-3",
+      "status": "not-verified",
+      "evidence": [
+        "rex.json has 10 entries and no delta entry",
+        "Baseline: 98 delta re-reviews at a mean of 77k tokens"
+      ],
+      "explanation": "Missing: the effort spike, the lean-effort agent file and the delta corpus entries. Next: a later ac5-3 spike slice, because the o5 slice covers only ac5-1 and ac5-2."
+    },
+    {
+      "criterionId": "ac6-1",
+      "status": "achieved",
+      "evidence": [
+        "Merged PR #1663: e1d1f3a3876471d60925019055881e7caad527c1.",
+        ".claude/skills/approve-merge/SKILL.md is 13,997 bytes at cee2d239, under the 14,000-byte cap.",
+        ".claude/skills/approve-merge/scripts/approve-merge.sh implements steps 3a, 4 and 6.",
+        ".claude/hooks/tests/test_approve_merge_script.sh passes: 25 checks."
+      ],
+      "explanation": "The body meets the cap. Step 5 and the bare merge call remain inline. The script prints JSON without merging or writing approval."
+    },
+    {
+      "criterionId": "ac6-2",
+      "status": "achieved",
+      "evidence": [
+        "Merged PR #1663: e1d1f3a3876471d60925019055881e7caad527c1.",
+        "Skill bytes at cee2d239: approve-merge 13,997, approve-design 13,074, code-review 15,930, task 10,197 and start-ticket 15,439. The cap is 16,000.",
+        ".claude/hooks/tests/test_token_efficiency_wave1.sh passes all byte caps at cee2d239.",
+        "docs/skills/approve-merge-rationale.md and docs/skills/start-ticket-rationale.md hold the moved text."
+      ],
+      "explanation": "All five bodies meet the 16000-byte cap."
+    },
+    {
+      "criterionId": "ac6-3",
+      "status": "achieved",
+      "evidence": [
+        "Merged PR #1663: e1d1f3a3876471d60925019055881e7caad527c1.",
+        "docs/skills/shared/writing-rule.md and docs/skills/shared/ops-root.md hold the shared blocks.",
+        ".claude/hooks/tests/test_skill_shared_blocks.sh passes with no repeated blocks."
+      ],
+      "explanation": "Each affected skill names the shared file in one line."
+    },
+    {
+      "criterionId": "ac6-4",
+      "status": "achieved",
+      "evidence": [
+        "Merged PR #1663: e1d1f3a3876471d60925019055881e7caad527c1.",
+        ".claude/skills/approve-merge/SKILL.md ends its successful merge report with a /compact suggestion."
+      ],
+      "explanation": "The successful merge report includes the required suggestion."
+    },
+    {
+      "criterionId": "ac6-5",
+      "status": "achieved",
+      "evidence": [
+        "Merged PR #1663: e1d1f3a3876471d60925019055881e7caad527c1.",
+        ".claude/skills/orbit/SKILL.md limits reconciliation challenges to status changes or an operator request."
+      ],
+      "explanation": "The skill requires default challenges for initiative and slice drafts."
+    },
+    {
+      "criterionId": "ac7-1",
+      "status": "not-verified",
+      "evidence": [
+        "right-size-ceremony.md and AgDR-0116",
+        "Baseline: 12 of 43 docs-only Rex runs were behavioural text; #1463 was rounded up to Full"
+      ],
+      "explanation": "Missing: no tier script; the tier is self-declared. Next: the o7 slice."
+    },
+    {
+      "criterionId": "ac7-2",
+      "status": "not-verified",
+      "evidence": [
+        "code-reviewer.md: Reduced-Scope Review section and the round-up rail, neither tied to a scripted tier",
+        "rex.json: 10 entries. rex-677 is labelled docs-only, but its PR changed .claude/agents, .claude/rules and docs/agdr files, which ac7-1 classifies as Full. No entry exercises a Lean procedure."
+      ],
+      "explanation": "Missing: the fixed Lean procedure tied to the scripted tier, the ESCALATE verdict and docs-only corpus entries. The current Reduced-Scope section is what this criterion replaces. Next: the o7 slice."
+    },
+    {
+      "criterionId": "ac7-3",
+      "status": "not-verified",
+      "evidence": [
+        "block-unreviewed-merge.sh unchanged at this commit; its test suite passes in CI"
+      ],
+      "explanation": "Missing: the paired adversarial test. Next: the o7 slice."
+    },
+    {
+      "criterionId": "ac7-4",
+      "status": "not-verified",
+      "evidence": [
+        "Baseline: 508 task notifications at a mean of 3,543 bytes; one delta round posted 3,411 bytes for a one-word fix"
+      ],
+      "explanation": "Missing: hand-backs average 3.5 KB, and delta rounds post the 13-section body. Next: the o7 slice."
+    },
+    {
+      "criterionId": "ac7-5",
+      "status": "not-verified",
+      "evidence": [
+        "Baseline: eligible Lean runs averaged 83.7k tokens"
+      ],
+      "explanation": "Missing: the measurement after o7. Next: the o1 script."
+    },
+    {
+      "criterionId": "ac7-6",
+      "status": "not-verified",
+      "explanation": "Missing: no review skill gives a resume window or a fresh-spawn brief for a delta re-review. Next: the o7 slice.",
+      "evidence": [
+        "No resume or SendMessage guidance in the code-review, security-review or design-review skill, or in pr-workflow.md",
+        "Baseline (o1 script): 21 resume rebuilds in 388 reviewer runs; 15 without CI-green messages, 3.87 per 100.",
+        "Six more rebuilds were \"CI is now green\" messages to reviewers, which o4 removes"
+      ]
+    },
+    {
+      "criterionId": "ac8-1",
+      "status": "achieved",
+      "evidence": [
+        ".claude/skills/orbit/lib/records-lint.sh line 4: five checks in order, stopping on the first fault.",
+        ".claude/skills/orbit/SKILL.md lines 188-193 (/orbit lint) and lines 315-316: the cycle runs the lint before it opens the records PR.",
+        ".claude/skills/orbit/tests/test_records_lint_faults.sh passes at this commit (PR #1630)."
+      ],
+      "explanation": "The lint runs before the records PR and stops on the first fault."
+    },
+    {
+      "criterionId": "ac8-2",
+      "status": "achieved",
+      "evidence": [
+        ".claude/skills/orbit/SKILL.md lines 307-319 require one records PR for the initiative revision and cycle slices.",
+        "Commit db03eb0 (PR #1635) merged the revision 3 initiative, reconciliation, snapshot and o2/o3 slices in one records PR."
+      ],
+      "explanation": "The next cycle shipped its initiative revision, reconciliation, snapshot and slices together in merged records PR #1635."
+    },
+    {
+      "criterionId": "ac8-3",
+      "status": "achieved",
+      "evidence": [
+        ".claude/skills/orbit/SKILL.md lines 96-129: keep a reconciliation only on a status change; otherwise add one dated Checks line.",
+        ".claude/skills/orbit/tests/test_record_check_change_only.sh passes at this commit."
+      ],
+      "explanation": "A reconciliation is kept only when a status changes."
+    },
+    {
+      "criterionId": "ac8-4",
+      "status": "achieved",
+      "evidence": [
+        ".claude/skills/orbit/SKILL.md lines 207-212 define /orbit status; status-live.sh prints orbit progress and the commits since the snapshot.",
+        "On this initiative it listed the 7 commits from 692c17e to 919081a and wrote no file.",
+        ".claude/skills/orbit/tests/test_status_live_writes_nothing.sh passes at this commit."
+      ],
+      "explanation": "The status operation shows progress plus new commits and writes no record."
+    },
+    {
+      "criterionId": "ac8-5",
+      "status": "not-verified",
+      "evidence": [
+        "Baseline: records PRs #1620 to #1622 took 2.33 Rex rounds on average (docs/perf/token-cost-baseline-2026-10-10.md line 150)."
+      ],
+      "explanation": "Missing: two planning cycles under the new flow. Next: the o1 script forge view after the next two cycles."
+    },
+    {
+      "criterionId": "ac9-1",
+      "status": "partially-verified",
+      "evidence": [
+        "PR #1647 adds docs/orbit/slices/slice-token-o9-reviews-in-parallel.json; PR #1651 implements the slice at 425a4ab.",
+        ".claude/hooks/_lib-review-markers.sh, review_caller_class and active_reviewer_marker_path: harness agent_type identifies reviewers; markers separate session, repo, PR and kind.",
+        ".claude/hooks/tests/test_review_agent_detection.sh: orchestrator commit and build agent push during active reviews succeed; reviewer mutations and missing-library cases block.",
+        ".claude/hooks/tests/test_require_active_ticket_review_scratch.sh and test_warn_review_marker_write.sh deny typed build agents the review exemptions.",
+        "bin/token-cost.py, locks subcommand; .claude/hooks/tests/token_cost/test_token_cost.py, test_lock_blocks_count_once_per_tool_call: count and deduplicate blocked calls.",
+        "No next-40-PR locks report exists at cee2d239."
+      ],
+      "explanation": "Missing: the next-40-PR count. Next: measure blocked build commits with the o1 locks view. Met: hook tests cover parallel reviews and builds."
+    },
+    {
+      "criterionId": "ac8-6",
+      "status": "achieved",
+      "evidence": [
+        ".claude/skills/orbit/SKILL.md has the section Progress in a slice PR.",
+        "Slice PR #1714 shipped its own Reconciliation.",
+        "Slice PR #1722 (slice-scaffold-o2-starter) shipped reconciliation-plan-apexyard-scaffold-20261013T205912Z with the observation Slice PR: #1722."
+      ],
+      "explanation": "The pane shows these statuses when #1714 merges."
+    },
+    {
+      "criterionId": "ac8-7",
+      "status": "achieved",
+      "evidence": [
+        ".claude/skills/orbit/lib/slice-pr-lint.sh exits 18 on a raised status with no changed path.",
+        ".claude/skills/orbit/tests/test_records_lint_slice_evidence.sh passes. A docs/orbit path does not count as evidence."
+      ],
+      "explanation": "A merge alone moves no status."
+    },
+    {
+      "criterionId": "ac8-8",
+      "status": "achieved",
+      "evidence": [
+        ".github/workflows/orbit-records-lint.yml runs the records lint on PRs that change docs/orbit or name a slice.",
+        ".claude/skills/orbit/tests/test_records_lint_slice_warn.sh passes."
+      ],
+      "explanation": "No Reconciliation gives a warning only."
+    },
+    {
+      "criterionId": "ac8-9",
+      "status": "achieved",
+      "evidence": [
+        ".claude/skills/orbit/tests/test_records_lint_slice_scope.sh passes. It covers two concurrent slice PRs.",
+        ".github/workflows/orbit-records-lint.yml runs again on each push."
+      ],
+      "explanation": "The lint compares with the newest Reconciliation on the base tip."
+    },
+    {
+      "criterionId": "ac8-10",
+      "status": "achieved",
+      "evidence": [
+        ".claude/skills/orbit/tests/test_records_lint_slice_provenance.sh passes.",
+        ".claude/skills/orbit/tests/test_status_live_squash_commit.sh passes."
+      ],
+      "explanation": "status-live.sh finds the squash commit by the PR number."
+    },
+    {
+      "criterionId": "ac10-1",
+      "status": "partially-verified",
+      "evidence": [
+        ".claude/skills/orbit/SKILL.md has the step Propose the next slice.",
+        "Counter-example: slice PR #1722 says it proposes no next slice. plan-apexyard-scaffold still had open outcomes at that time."
+      ],
+      "explanation": "Missing: a slice PR that proposes a next slice. Next: the next token-spend slice PR."
+    },
+    {
+      "criterionId": "ac10-2",
+      "status": "partially-verified",
+      "evidence": [
+        ".claude/skills/orbit/SKILL.md states the owner confirmation and the basedOn-only rule.",
+        ".claude/skills/orbit/lib/refresh-slice-record.sh changes no status or scope; .claude/skills/orbit/tests/test_refresh_slice_record.sh passes."
+      ],
+      "explanation": "Missing: a slice PR review thread where the owner confirms a proposed scope. Next: the next token-spend slice PR."
+    },
+    {
+      "criterionId": "ac10-3",
+      "status": "achieved",
+      "evidence": [
+        ".claude/skills/approve-merge/SKILL.md prints one Next line for a proposed slice.",
+        ".claude/hooks/require-orbit-slice-for-ticket.sh accepts a record on the integration branch; .claude/hooks/tests/test_require_orbit_slice_for_ticket.sh passes."
+      ],
+      "explanation": "The handoff checks the record on the branch the PR merged into."
+    },
+    {
+      "criterionId": "ac10-4",
+      "status": "achieved",
+      "evidence": [
+        ".claude/skills/orbit/lib/slice-pr-lint.sh warns when the PR body has no next-slice line and fails on No next slice with an added record.",
+        ".claude/skills/orbit/tests/test_slice_pr_proposal.sh passes."
+      ],
+      "explanation": "A PR with every outcome achieved proposes nothing and says so."
+    },
+    {
+      "criterionId": "ac10-5",
+      "status": "achieved",
+      "evidence": [
+        ".claude/skills/orbit/lib/slice-pr-lint.sh allows one slice record on the PR revision and Reconciliation and fails on an unfiled slice for the same outcome.",
+        ".claude/skills/orbit/tests/test_slice_pr_proposal.sh covers two concurrent proposals; .github/workflows/orbit-records-lint.yml re-runs on each push."
+      ],
+      "explanation": "The C6 race is closed."
+    },
+    {
+      "criterionId": "ac10-6",
+      "status": "achieved",
+      "evidence": [
+        ".claude/skills/orbit/lib/slice-pr-lint.sh reads withdrawn slices from the PR notes.",
+        ".claude/skills/orbit/tests/test_slice_pr_proposal.sh covers a withdrawn slice."
+      ],
+      "explanation": "A later slice PR may propose again."
+    }
+  ]
+}
