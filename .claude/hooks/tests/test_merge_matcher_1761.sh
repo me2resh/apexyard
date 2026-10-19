@@ -5,8 +5,10 @@
 # and under mawk when mawk is installed. The argv -c window stays 200
 # characters. A variable merge and a shell -c wrapper still block.
 # Step 2: the /approve-merge step 6 call passes literal repo and PR values.
-# Step 3: a grep pattern and an inert quoted heredoc are data. A real
-# merge, a variable merge, and a shell -c or heredoc executor still block.
+# Step 3: a grep pattern and an inert heredoc are data. An inert heredoc
+# is a quoted body, or an unquoted body with no $, backtick, or backslash.
+# This file does not widen that rule. A real merge, a variable merge, and
+# a shell -c or heredoc executor still block.
 
 set -u
 
@@ -110,6 +112,9 @@ expect_merge() {
 check_data_view() {
   local heredoc
   expect_merge "unquoted grep pattern is data" "grep -n tracker_pr_merge SKILL.md" no
+  expect_merge "attached --regexp= pattern is data" "grep --regexp=tracker_pr_merge SKILL.md" no
+  expect_merge "attached -e= pattern is data" "grep -e=tracker_pr_merge SKILL.md" no
+  expect_merge "bare --regexp still blanks the next word" "grep --regexp tracker_pr_merge SKILL.md" no
   expect_merge "double-quoted grep pattern is data" \
     "grep -n \"tracker_pr_merge \\\"\$PR_HOST_REPO\\\"\" SKILL.md" no
   heredoc=$(printf "true; cat <<'EOF'\ntracker_pr_merge \"\$PR_HOST_REPO\"\nEOF")
@@ -126,6 +131,8 @@ check_data_view() {
     "$(printf "cat > m.sh <<'EOF'\ngh pr merge 7\nEOF\nsh m.sh")" yes
   expect_merge "double-quoted substitution still blocks" 'echo "$(gh pr merge 7)"' yes
   expect_merge "grep --filter still blocks" "grep --filter=sh 'gh pr merge 7' notes.txt" yes
+  expect_merge "attached --regexp= beside --filter still blocks" \
+    "grep --filter=sh --regexp=tracker_pr_merge notes.txt" yes
   expect_merge "sh -c merge still blocks" "sh -c 'gh pr merge 7 --repo owner/repo'" yes
   expect_merge "bash -c merge still blocks" "bash -c 'gh pr merge 42 --repo owner/repo'" yes
   merge_command_uses_variable 'grep -n tracker_pr_merge SKILL.md; gh pr merge $PR --repo owner/repo'
@@ -140,9 +147,37 @@ check_data_view() {
   expect_rc "double-quoted grep is not a variable target" 1 $?
 }
 
+# Hakim, review of PR #1765: the -c window must stay linear under the
+# system awk. About 100 KB of argv -c units, with the merge phrase only
+# inside the last 200-character window, must finish within 1 second.
+check_c_window_time() {
+  local unit n big pad phrase start end elapsed got
+  unit="['sh','-c','x'] "
+  phrase=$(printf '%s %s %s' gh pr merge)
+  n=$((100000 / ${#unit}))
+  big=$(awk -v u="$unit" -v n="$n" 'BEGIN { for (i = 0; i < n; i++) printf "%s", u }')
+  pad=$(printf '%*s' 197 '' | tr ' ' 'x')
+  big="${big}['sh','-c','${pad} ${phrase} 5']"
+  start=$(python3 -c 'import time; print("%.6f" % time.time())')
+  if _has_opaque_merge_wrapper "$big"; then got=opaque; else got=clear; fi
+  end=$(python3 -c 'import time; print("%.6f" % time.time())')
+  elapsed=$(python3 -c 'import sys; print("%.3f" % (float(sys.argv[2]) - float(sys.argv[1])))' "$start" "$end")
+  if [ "$got" = opaque ]; then
+    pass "100 KB argv -c window stays opaque (${#big} bytes)"
+  else
+    fail "100 KB argv -c window stays opaque (${#big} bytes, got $got)"
+  fi
+  if python3 -c 'import sys; sys.exit(0 if float(sys.argv[1]) <= 1.0 else 1)' "$elapsed"; then
+    pass "100 KB argv -c window took ${elapsed}s under system awk (limit 1s)"
+  else
+    fail "100 KB argv -c window took ${elapsed}s under system awk (limit 1s)"
+  fi
+}
+
 check_data_view
 check_skill_literals
 check_window "bsd awk"
+check_c_window_time
 if command -v mawk >/dev/null 2>&1; then
   mawk_bin=$(mktemp -d)
   ln -s "$(command -v mawk)" "$mawk_bin/awk"
