@@ -90,5 +90,13 @@ check gate A detect-role-trigger.sh "$role" 0
 check test "$(find "$TMP/.claude/session/role-fired" -name 'B__*' | wc -l | tr -d ' ')" = 0
 check gate '' detect-role-trigger.sh "$role" 0
 check grep -q 'ROLE TRIGGER' "$TMP/err"
+# /scaffold must set marker_home before mkdir for the session dir (Hakim #1770).
+scaffold_skill="$HERE/../skills/scaffold/SKILL.md"
+scaffold_block=$(awk '/^```bash$/{p=1;next} p&&/^```$/{exit} p' "$scaffold_skill")
+mkdir_line=$(printf '%s\n' "$scaffold_block" | grep -n 'mkdir -p "$marker_home/.claude/session"' | head -1 | cut -d: -f1)
+home_line=$(printf '%s\n' "$scaffold_block" | grep -n 'marker_home="$(git rev-parse --show-toplevel)"' | head -1 | cut -d: -f1)
+check test -n "$mkdir_line"
+check test -n "$home_line"
+check test "$home_line" -lt "$mkdir_line"
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" = 0 ]
