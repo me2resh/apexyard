@@ -185,6 +185,7 @@ OK9='{"marker_home":"x","pr_host_repo":"owner/repo","strategy":"squash","head_sh
 if run9 '{}' || [ -e "$T9/sentinel" ]; then fail "step 6 stops when strategy and release_class are missing"; else pass "step 6 stops when strategy and release_class are missing"; fi
 if run9 '{"pr_host_repo":"owner/repo","strategy":"fast-forward","release_class":false}' || [ -e "$T9/sentinel" ]; then fail "step 6 stops on an invalid strategy"; else pass "step 6 stops on an invalid strategy"; fi
 if run9 '{"pr_host_repo":"owner/repo","strategy":"squash"}' || [ -e "$T9/sentinel" ]; then fail "step 6 stops on a missing release_class"; else pass "step 6 stops on a missing release_class"; fi
+if run9 '{"pr_host_repo":"other/repo","strategy":"squash","release_class":false}' || [ -e "$T9/sentinel" ]; then fail "step 6 stops when the checked host repo is not <repo>"; else pass "step 6 stops when the checked host repo is not <repo>"; fi
 if run9 "$OK9" && [ -e "$T9/sentinel" ]; then pass "step 6 merges when the script result is valid"; else fail "step 6 merges when the script result is valid"; fi
 rm -rf "$T9"
 

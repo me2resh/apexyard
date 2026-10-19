@@ -292,11 +292,13 @@ An unclear or missing answer does not mark a slice withdrawn.
    Use its PR base, with `dev` as the framework default. Check the record on `refs/remotes/origin/<base>`.
    Check that branch, not only `origin/HEAD`. Stop until its local ref contains `docs/orbit/slices/<slice-id>.json`.
    Write the adapter preview's `.body` to a temporary file, with
-   `**ORBIT slice:** \`<slice-id>\`` as its first line and one blank line before
+   `` **ORBIT slice:** `<slice-id>` `` as its first line and one blank line before
    the preview body. Use the preview's `.title`. Before the create call, write
-   `orbit` to the ops root's `.claude/session/active-issue-skill` marker. Resolve
+   `orbit` to the path from `active_issue_skill_marker_path`. Resolve
    the ops root with `resolve_ops_root` from `_lib-ops-root.sh`, as the ticket
-   creation gate does. Stop if the ops root is unknown. Remove the marker on
+   creation gate does. Source `_lib-session-markers.sh` from that root and call
+   `active_issue_skill_marker_path "$ops_root"` for the `active-issue-skill` marker. Stop if the root or session id
+   is unknown. Remove the marker on
    every exit path, including cancellation and create failure.
 
    ```bash

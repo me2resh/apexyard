@@ -367,28 +367,43 @@ _join_shell_continuations() {
   join_shell_continuations "$1"
 }
 
-# Merge-only scrub decision (AgDR-0196, AgDR-0204). The general command
-# scrubber permits programs such as git, gh, rg and sort that can execute
-# arguments or files. Do not use that allowlist here: a later program could
-# execute earlier data. Accept only literal command words from the narrow
-# list, in EVERY segment. Unknown syntax, substitutions, incomplete heredocs,
-# zsh `~[`, startup/hook redirects, grep execution options, or parser
-# failures keep the entire raw command. This function never executes the
-# command text.
-_scrub_merge_command() {
+# Merge-only scrub decision (AgDR-0196, AgDR-0204, AgDR-0247). The general
+# command scrubber permits programs such as git, gh, rg and sort that can
+# execute arguments or files. Do not use that allowlist here: a later program
+# could execute earlier data. Accept only literal command words from the
+# narrow list, in EVERY segment. Unknown syntax, substitutions, incomplete
+# heredocs, zsh `~[`, startup/hook redirects, grep execution options, or
+# parser failures keep the entire raw command. This function never executes
+# the command text.
+#
+# Returns 0 when the scrub is clean, 3 when a shape can execute the data,
+# and 2 when the raw command must stay. Callers that decide a gate use
+# _scrub_merge_command, which always returns 0.
+_merge_scrub_once() {
   local cmd="$1" result
   if [ "${#cmd}" -gt 120000 ] || ! command -v awk >/dev/null 2>&1; then
     printf '%s' "$cmd"
-    return 0
+    return 2
   fi
+  local rc=0
   result=$(MERGE_SCRUB_INPUT="$cmd" awk '
     function blank(text) { gsub(/[^\n]/, " ", text); return text }
+    # Record a grep pattern. Blank it at the end only when nothing in the
+    # command can execute that pattern (#1760).
+    function remember_pattern(text) {
+      np++
+      ps[np] = length(out) + 1
+      pl[np] = length(text)
+    }
     # printf is NOT on this list: `printf -v "a[$(cmd)]"` makes the shell
     # evaluate the array subscript, which runs the substitution (#1489 review).
+    # true and false do not run their arguments. A later word off this list
+    # still keeps the raw command.
     function allowed(word) {
       return word == "grep" || word == "egrep" || word == "fgrep" || \
              word == "cat" || word == "echo" || word == "jq" || \
-             word == "head" || word == "tail" || word == "wc"
+             word == "head" || word == "tail" || word == "wc" || \
+             word == "true" || word == "false"
     }
     function is_grep_family(word) {
       return word == "grep" || word == "egrep" || word == "fgrep"
@@ -471,7 +486,7 @@ _scrub_merge_command() {
     BEGIN {
       s = ENVIRON["MERGE_SCRUB_INPUT"]
       n = length(s); pos = 1; first = 1; out = ""; bad = 0; newbad = 0; pending = 0
-      cmdword = ""
+      cmdword = ""; seen_pat = 0; take_next = 0; np = 0
       sq = sprintf("%c", 39); dq = sprintf("%c", 34); bs = sprintf("%c", 92)
       while (pos <= n && !bad) {
         c = substr(s, pos, 1); nx = substr(s, pos + 1, 1)
@@ -510,7 +525,7 @@ _scrub_merge_command() {
           if (!allowed(word) || (after != "" && after !~ /[ \t\n;|&<>]/)) {
             bad = 1; break
           }
-          out = out word; first = 0; cmdword = word; continue
+          out = out word; first = 0; cmdword = word; seen_pat = 0; take_next = 0; continue
         }
         # Unquoted zsh dynamic named directory (~[...]) can run code.
         # newbad keeps the dev scrub and adds the raw text (see the end).
@@ -519,7 +534,34 @@ _scrub_merge_command() {
           q = c; start = pos++
           while (pos <= n && substr(s, pos, 1) != q) {
             c = substr(s, pos, 1)
-            if (q == dq && (c == "$" || c == "`" || c == bs)) { bad = 1; break }
+            # A plain $name or ${name} inside double quotes is data. $(,
+            # backticks, and ${ with an operator can run, so they keep the
+            # raw command (#1760). An escaped character is also data.
+            if (q == dq && c == "`") { bad = 1; break }
+            if (q == dq && c == bs) {
+              pos++
+              if (pos <= n) pos++
+              continue
+            }
+            if (q == dq && c == "$") {
+              nx2 = substr(s, pos + 1, 1)
+              if (nx2 == "(" || nx2 == "[" || nx2 == "`") { bad = 1; break }
+              if (nx2 == "{") {
+                if (match(substr(s, pos + 2), /^[A-Za-z_][A-Za-z0-9_]*}/)) {
+                  pos += 2 + RLENGTH
+                  continue
+                }
+                bad = 1; break
+              }
+              if (nx2 ~ /[A-Za-z_]/) {
+                pos++
+                while (pos <= n && substr(s, pos, 1) ~ /[A-Za-z0-9_]/) pos++
+                continue
+              }
+              pos++
+              if (nx2 ~ /[0-9@*#?!-]/) pos++
+              continue
+            }
             pos++
           }
           if (bad || pos > n) { bad = 1; break }
@@ -529,6 +571,10 @@ _scrub_merge_command() {
           # quoted span that starts a word can also begin an option name.
           if (is_grep_family(cmdword) && (dangerous_grep_opt(word) || \
               ((start == 1 || substr(s, start - 1, 1) ~ /[ \t\n;|&<>(]/) && grep_opt_at(start)))) newbad = 1
+          if (is_grep_family(cmdword) && (take_next || !seen_pat)) {
+            seen_pat = 1
+            take_next = 0
+          }
           out = out blank(word); continue
         }
         # Reject shell execution/expansion syntax and comments conservatively.
@@ -557,13 +603,22 @@ _scrub_merge_command() {
           out = out c nx; pos += 2; continue
         }
         # Output redirects to shell startup files or .git/hooks add the raw
-        # text. Look ahead only: pos returns to the operator, so the scrub
-        # below stays the same as on dev.
+        # text. A target the word reader cannot read also adds the raw text
+        # for any word lead. A word lead is a first character that is not a
+        # separator. A later "$NAME" span is in that class. Look ahead only.
+        # pos returns to the operator, so the scrub below stays the same as
+        # on dev.
         if (c == ">") {
           start = pos
           pos++
           if (substr(s, pos, 1) == ">" || substr(s, pos, 1) == "|") pos++
-          if (read_merge_word() && is_startup_or_hook(WORD)) newbad = 1
+          while (pos <= n && substr(s, pos, 1) ~ /[ \t]/) pos++
+          lead = (pos <= n) ? substr(s, pos, 1) : ""
+          if (read_merge_word()) {
+            if (is_startup_or_hook(WORD)) newbad = 1
+          } else if (lead != "" && lead !~ /[&;|<>()\n]/) {
+            newbad = 1
+          }
           pos = start
         }
         # Grep-family options that can run a program on some hosts add the
@@ -575,6 +630,50 @@ _scrub_merge_command() {
         if (is_grep_family(cmdword) && c == "-" && \
             (pos == 1 || substr(s, pos - 1, 1) ~ /[ \t\n;|&<>(]/)) {
           if (grep_opt_at(pos)) newbad = 1
+          wstart = pos
+          while (pos <= n) {
+            c = substr(s, pos, 1)
+            # zsh ~[ runs code. The word loop must not skip that check.
+            if (c == "~" && substr(s, pos + 1, 1) == "[") newbad = 1
+            if (c ~ /[ \t\n;|&<>(){}#]/ || c == sq || c == dq || c == bs || c == "$" || c == "`") break
+            pos++
+          }
+          word = substr(s, wstart, pos - wstart)
+          opt = word
+          sub(/=.*/, "", opt)
+          # --regexp=PAT and -e=PAT carry the pattern in this word.
+          # Test that form first. After "=" is removed, the name test
+          # also matches those words and would blank the next word.
+          if (word != opt && (opt == "--regexp" || opt == "-e")) {
+            remember_pattern(word)
+            seen_pat = 1
+            take_next = 0
+          } else if (opt == "-e" || opt == "--regexp") take_next = 1
+          out = out word
+          continue
+        }
+        # An unquoted grep pattern is data. Blank it only when the command
+        # cannot execute the pattern (#1760).
+        if (is_grep_family(cmdword) && \
+            (pos == 1 || substr(s, pos - 1, 1) ~ /[ \t\n;|&<>]/)) {
+          wstart = pos
+          while (pos <= n) {
+            c = substr(s, pos, 1)
+            # zsh ~[ runs code. The word loop must not skip that check.
+            if (c == "~" && substr(s, pos + 1, 1) == "[") newbad = 1
+            if (c ~ /[ \t\n;|&<>(){}#]/ || c == sq || c == dq || c == bs || c == "$" || c == "`") break
+            pos++
+          }
+          word = substr(s, wstart, pos - wstart)
+          if (word != "") {
+            if (take_next || !seen_pat) {
+              remember_pattern(word)
+              seen_pat = 1
+              take_next = 0
+            }
+            out = out word
+            continue
+          }
         }
         out = out c; pos++
       }
@@ -582,12 +681,33 @@ _scrub_merge_command() {
       # A newbad shape can execute the data, so the gates must see the raw
       # text. They must also still see the dev scrubbed text, where a merge
       # phrase split by quotes reads as separate words (review of PR #1517).
-      # Print both, on separate lines.
-      if (bad) printf "%s", s
-      else if (newbad) printf "%s\n%s", s, out
-      else printf "%s", out
+      # Print both, on separate lines. Do not blank a pattern in that copy.
+      if (!bad && !newbad) {
+        for (i = 1; i <= np; i++)
+          out = substr(out, 1, ps[i] - 1) blank(substr(out, ps[i], pl[i])) substr(out, ps[i] + pl[i])
+      }
+      if (bad) { printf "%s", s; exit 2 }
+      if (newbad) { printf "%s\n%s", s, out; exit 3 }
+      printf "%s", out
+      exit 0
     }
-  ' 2>/dev/null) || result="$cmd"
+  ' 2>/dev/null) || rc=$?
+  if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ] && [ "$rc" -ne 3 ]; then
+    printf '%s' "$cmd"
+    return 2
+  fi
+  printf '%s' "${result:-$cmd}"
+  return "$rc"
+}
+
+# Public scrub. Always returns 0.
+#
+# _merge_scrub_once blanks an inert heredoc body. Do not call
+# strip_heredoc_bodies here. That helper must not decide whether a merge
+# gate fires. See _lib-strip-heredoc.sh.
+_scrub_merge_command() {
+  local cmd="$1" result
+  result=$(_merge_scrub_once "$cmd") || true
   printf '%s' "${result:-$cmd}"
 }
 
@@ -682,8 +802,14 @@ _has_argv_merge() {
 # Split into characters once: macOS awk makes repeated one-character substr
 # calls quadratic on a long statement (#1552 round 3).
 # Same statement + xargs = opaque (no character window). The argv -c form
-# still requires the merge within 200 characters after '-c'. On awk failure,
-# fail closed because the whole-input classifier is unavailable.
+# still requires the merge within 200 characters after the -c quote. Mark
+# phrase starts and -c matches in one pass, then test that fixed window.
+# Do not copy the unread tail. macOS awk makes that copy quadratic, and a
+# slow gate does not block (AgDR-0204). An ERE interval is not portable:
+# Debian mawk 1.3.4 20200120 aborts on it and the fallback then blocks
+# every direct merge (#1757). Homebrew mawk 1.3.4-20260302 accepts the
+# interval, so that build is not evidence. On awk failure, fail closed
+# because the whole-input classifier is unavailable.
 _has_opaque_merge_wrapper() {
   _has_opaque_merge_wrapper_fallback() {
     # Without the whole-input parser, split-line phrases and malformed
@@ -709,14 +835,122 @@ _has_opaque_merge_wrapper() {
       p = match(t, /xargs/)
       return p && wb_before(t, p) && wb_after(t, p, 5)
     }
-    function has_sh_c_near_merge(t,    flat, q, re) {
-      # Flatten newlines so .{0,200} spans a quoted multi-line -c script.
+    # Character classes for the argv -c pattern. Use the split array below.
+    # Repeated substr on the tail is quadratic on macOS awk.
+    function hm_is_quote(c) {
+      return c == sq || c == dq || c == hm_bt
+    }
+    function hm_is_space(c) {
+      return c == " " || c == "\t" || c == "\n" || c == "\r" || c == "\f" || c == hm_vt
+    }
+    function hm_quote_len(i,    c) {
+      if (i > hm_n) return 0
+      c = hm_fc[i]
+      if (c == bs && i < hm_n && hm_is_quote(hm_fc[i + 1])) return 2
+      if (hm_is_quote(c)) return 1
+      return 0
+    }
+    function hm_shell_len(i) {
+      if (i + 3 <= hm_n && hm_fc[i] == "b" && hm_fc[i + 1] == "a" && hm_fc[i + 2] == "s" && hm_fc[i + 3] == "h") return 4
+      if (i + 2 <= hm_n && hm_fc[i] == "z" && hm_fc[i + 1] == "s" && hm_fc[i + 2] == "h") return 3
+      if (i + 1 <= hm_n && hm_fc[i] == "s" && hm_fc[i + 1] == "h") return 2
+      return 0
+    }
+    # Length of quote + shell + quote + comma + quote + -c + quote at i.
+    # Whitespace around the comma may be any length. 0 means no match.
+    function hm_c_len(i,    k, j, sl) {
+      k = hm_quote_len(i)
+      if (!k) return 0
+      j = i + k
+      sl = hm_shell_len(j)
+      if (!sl) return 0
+      j += sl
+      k = hm_quote_len(j)
+      if (!k) return 0
+      j += k
+      while (j <= hm_n && hm_is_space(hm_fc[j])) j++
+      if (j > hm_n || hm_fc[j] != ",") return 0
+      j++
+      while (j <= hm_n && hm_is_space(hm_fc[j])) j++
+      k = hm_quote_len(j)
+      if (!k) return 0
+      j += k
+      if (j + 1 > hm_n || hm_fc[j] != "-" || hm_fc[j + 1] != "c") return 0
+      j += 2
+      k = hm_quote_len(j)
+      if (!k) return 0
+      return j + k - i
+    }
+    function hm_phrase_gh(i,    j) {
+      if (i + 1 > hm_n || hm_fc[i] != "g" || hm_fc[i + 1] != "h") return 0
+      j = i + 2
+      if (j > hm_n || !hm_is_space(hm_fc[j])) return 0
+      while (j <= hm_n && hm_is_space(hm_fc[j])) j++
+      if (j + 1 > hm_n || hm_fc[j] != "p" || hm_fc[j + 1] != "r") return 0
+      j += 2
+      if (j > hm_n || !hm_is_space(hm_fc[j])) return 0
+      while (j <= hm_n && hm_is_space(hm_fc[j])) j++
+      if (j + 4 > hm_n || hm_fc[j] != "m" || hm_fc[j + 1] != "e" || hm_fc[j + 2] != "r" || hm_fc[j + 3] != "g" || hm_fc[j + 4] != "e") return 0
+      return 1
+    }
+    function hm_phrase_glab(i,    j) {
+      if (i + 3 > hm_n || hm_fc[i] != "g" || hm_fc[i + 1] != "l" || hm_fc[i + 2] != "a" || hm_fc[i + 3] != "b") return 0
+      j = i + 4
+      if (j > hm_n || !hm_is_space(hm_fc[j])) return 0
+      while (j <= hm_n && hm_is_space(hm_fc[j])) j++
+      if (j + 1 > hm_n || hm_fc[j] != "m" || hm_fc[j + 1] != "r") return 0
+      j += 2
+      if (j > hm_n || !hm_is_space(hm_fc[j])) return 0
+      while (j <= hm_n && hm_is_space(hm_fc[j])) j++
+      if (j + 4 > hm_n || hm_fc[j] != "m" || hm_fc[j + 1] != "e" || hm_fc[j + 2] != "r" || hm_fc[j + 3] != "g" || hm_fc[j + 4] != "e") return 0
+      return 1
+    }
+    function hm_mark_phrases(    i) {
+      hm_nm = 0
+      i = 1
+      while (i <= hm_n) {
+        if (hm_fc[i] == "g" && (hm_phrase_gh(i) || hm_phrase_glab(i))) {
+          hm_nm++
+          hm_ms[hm_nm] = i
+        }
+        i++
+      }
+    }
+    # Gap 0 is a phrase at e. Gap 200 is a phrase at e+200.
+    function hm_phrase_in_window(e,    lo, hi, mid, hit) {
+      lo = 1
+      hi = hm_nm
+      while (lo <= hi) {
+        mid = int((lo + hi) / 2)
+        hit = hm_ms[mid]
+        if (hit < e) lo = mid + 1
+        else if (hit > e + 200) hi = mid - 1
+        else return 1
+      }
+      return 0
+    }
+    function has_sh_c_near_merge(t,    flat, i, len, c) {
+      # Flatten newlines so the 200-character bound spans a multi-line -c script.
+      # Own array: the statement splitter also uses ch[].
+      hm_bt = sprintf("%c", 96)
+      hm_vt = sprintf("%c", 11)
       flat = t
       gsub(/\n/, " ", flat)
-      q = "[\\\\]?[\"'"'"'`]"
-      re = q "(sh|bash|zsh)" q "[[:space:]]*,[[:space:]]*" q "-c" q ".{0,200}"
-      if (match(flat, re "(gh[[:space:]]+pr[[:space:]]+merge)")) return 1
-      if (match(flat, re "(glab[[:space:]]+mr[[:space:]]+merge)")) return 1
+      hm_n = split(flat, hm_fc, "")
+      if (hm_n < 1) return 0
+      hm_mark_phrases()
+      if (hm_nm < 1) return 0
+      i = 1
+      while (i <= hm_n) {
+        c = hm_fc[i]
+        if (c != sq && c != dq && c != hm_bt && c != bs) {
+          i++
+          continue
+        }
+        len = hm_c_len(i)
+        if (len > 0 && hm_phrase_in_window(i + len)) return 1
+        i++
+      }
       return 0
     }
     function has_qw(t,    flat) {

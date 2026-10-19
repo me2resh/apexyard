@@ -66,12 +66,15 @@ The sibling `check-jq-installed.sh` SessionStart hook surfaces the same gap as a
 
 ### Step 0: Mark this session as bootstrap (REQUIRED)
 
-`/setup` runs BEFORE any portfolio is configured, so no project tickets can exist yet. The `require-active-ticket.sh` PreToolUse hook would otherwise block every Edit / Write / Bash-write the skill needs to make. To stay coherent with the ticket-first rule without forcing adopters to file a placeholder ticket against nothing, the skill writes a one-line marker at `.claude/session/active-bootstrap` containing the skill name. The hook reads the marker and exempts skills listed in `ticket.bootstrap_skills` (in `.claude/project-config.defaults.json` — `setup` is on the default list).
+`/setup` runs BEFORE any portfolio is configured, so no project tickets can exist yet. The `require-active-ticket.sh` PreToolUse hook would otherwise block every Edit / Write / Bash-write the skill needs to make. To stay coherent with the ticket-first rule without forcing adopters to file a placeholder ticket against nothing, the skill writes a one-line marker at the path from `active_bootstrap_marker_path` containing the skill name. The hook reads the marker and exempts skills listed in `ticket.bootstrap_skills` (in `.claude/project-config.defaults.json` — `setup` is on the default list).
 
 Run this **before any tool calls that edit files**:
 
 ```bash
-mkdir -p .claude/session && echo "setup" > .claude/session/active-bootstrap
+marker_home="$(git rev-parse --show-toplevel)"
+. "$marker_home/.claude/hooks/_lib-session-markers.sh"
+skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
+mkdir -p "$marker_home/.claude/session" && echo "setup" > "$skill_marker"
 ```
 
 The marker is cleared in Step 8 below (and on the next SessionStart by `clear-bootstrap-marker.sh`, in case this skill is interrupted).
@@ -163,9 +166,35 @@ The full setup lives in `docs/multi-project.md` § "Split-portfolio mode — pub
 
 1. **Confirm the layout**: "Two repos in your account: `your-org/apexyard` (public, this fork) + `your-org/<private-name>` (new private repo for the portfolio). Both clones sit side-by-side on disk. OK?"
 2. **Pick the private repo name**: default suggestion **`your-org/<fork>-portfolio`** (e.g. `your-org/apexyard-portfolio` if you kept the fork name; `your-org/cos-portfolio` if you renamed the fork to `cos`). Compute the `<fork>` part from the public-fork repo name (`gh repo view --json name -q .name`) so the suggestion is correct even when the fork was renamed. Operator confirms or overrides — any name works, the framework only cares about the local path.
-3. **Create the private repo**: `gh repo create your-org/<name> --private --description "..."`. Confirm before running.
-4. **Clone the private repo as a sibling**: `cd .. && gh repo clone your-org/<name>` (no second arg — the clone defaults to a directory named after the repo, so `your-org/apexyard-portfolio` clones into `apexyard-portfolio/`).
-5. **Initialise the portfolio (v2 layout)**: in the private repo, create:
+
+Record `<owner>` and `<name>` when the operator confirms the name. Later checks use that pair. Do not derive `<owner>/<name>` from the remote URL. The reuse path skips item 3 and still uses this pair.
+
+On every run of Step 2b, apply these resume checks in order. Skip a row when its state does not match. Each check is read-only. Record `<fork-root>` before a check that uses `<abs-path>`. [AgDR-0252](../../../docs/agdr/AgDR-0252-portfolio-first-push.md) records the decision. Do not change any hook. The agent never commits on the portfolio repository. The agent never pushes to it.
+
+| State | Check | Action |
+|-------|-------|--------|
+| The chosen repo exists on the forge | `gh repo view <owner>/<name> --json isPrivate,isEmpty` | Stop when `isPrivate` is false. Otherwise ask one `AskUserQuestion`: "Reuse `<owner>/<name>`", "Pick another name", "Stop here". Skip item 3 only on "Reuse". |
+| The repo is not empty, and no sibling clone exists | `isEmpty` is false, and `gh api repos/<owner>/<name>/contents/apexyard.projects.yaml` fails on the default branch | Stop. Report that the repo is not empty and is not a portfolio repo. When the file exists, continue with item 4. |
+| The sibling directory exists | `git -C "<abs-path>" remote get-url origin` names `<owner>/<name>` | Skip item 4. Stop when the directory is not a repo or `origin` names another repo. |
+| HEAD is unborn | `git -C "<abs-path>" rev-parse --verify -q HEAD` fails | Create only the seed files that are missing. Do not overwrite a file. Then apply the stage, print, ask, and verify rules in item 5. |
+| HEAD has a commit | `git -C "<abs-path>" ls-tree -r --name-only HEAD -- apexyard.projects.yaml projects/.gitkeep workspace/.gitkeep onboarding.yaml custom-skills/README.md custom-handbooks/README.md agent-routing.yaml .gitignore` lists all 8 paths | Stop when a path is missing. Report the missing paths. Do not seed on the protected branch. Otherwise apply the next three rows. |
+| HEAD has a commit, and the remote and forge SHAs equal HEAD | The verify commands in item 5 | Skip the commit and the push. Continue with item 6. |
+| HEAD has a commit, and the branch is absent on the remote and the forge | The verify commands in item 5 | Print only the push command. Then ask and verify, as in item 5. |
+| HEAD has a commit, and the remote or forge SHA differs from HEAD | The verify commands in item 5 | Stop. Report both SHAs. Do not offer a force push. |
+
+When `gh repo view` fails because the repo does not exist, continue with item 3. Stop on any other error from that command.
+
+3. **Create the private repo.** Run `gh repo create your-org/<name> --private --description "..."`. Confirm before you run it. Skip this item only when the operator chooses "Reuse `<owner>/<name>`".
+
+Before item 4, run `git rev-parse --show-toplevel` in the ops fork. Record the printed path as `<fork-root>`. A later Bash call does not keep the shell directory from `cd ..`. When `<fork-root>/../<name>` already exists, run `git -C "<fork-root>/../<name>" rev-parse --show-toplevel` before the clone. Record that path as `<abs-path>`. Then apply the sibling-directory row.
+
+4. **Clone the sibling, then record its root.** Clone with `cd .. && gh repo clone your-org/<name>`. Pass no second argument. The clone directory uses the repo name. Example: `your-org/apexyard-portfolio` clones into `apexyard-portfolio/`.
+
+   After the clone, run `git -C "<fork-root>/../<name>" rev-parse --show-toplevel`. Record that path as `<abs-path>`. Use `<fork-root>` and `<abs-path>` as literal text in later commands. On Git for Windows, `rev-parse` prints the `C:/dir` form. Quote that form in every command. That form works in Git Bash, PowerShell, and cmd.
+
+   When the sibling directory already exists, run `git -C "<abs-path>" remote get-url origin`. Skip the clone when `origin` names `<owner>/<name>`. Stop when the directory is not a repo. Stop when `origin` names another repo.
+
+5. **Initialise the portfolio (v2 layout).** Create these files under `<abs-path>`:
    - `apexyard.projects.yaml` with `version: 1`, `projects: []`, `defaults: {status: active, ticket_prefix: GH}`
    - empty `projects/` dir (with a `.gitkeep` so the dir survives the initial commit)
    - empty `workspace/` dir (with a `.gitkeep`) — managed-project clones land here
@@ -174,8 +203,91 @@ The full setup lives in `docs/multi-project.md` § "Split-portfolio mode — pub
    - empty **`custom-handbooks/`** dir + a one-paragraph `custom-handbooks/README.md` explaining the convention. Company-confidential coding standards live as `custom-handbooks/{architecture,general,language/<lang>}/*.md` here, mirroring the public `handbooks/` path-convention. Rex consumes both layers during code review (advisory by default, blocking with `ENFORCEMENT: blocking` at the top of the file). See `handbooks/README.md` for the format. (Added in #243.)
    - **`agent-routing.yaml`** seeded from `<fork>/agent-routing.yaml.example` (the framework's worked-examples file). This is the adopter-routing source-of-truth for split-portfolio mode — every adopter override (per-agent model, endpoint, env, timeout) lives here. The seeded file starts as the framework example so adopters see a working shape; the empty `agents: {}` block at the top means zero overrides until edited. The SessionStart sync hook (`apply-agent-routing.sh`, #357) reads it on every session start. See `docs/multi-project.md` § "Centralised agent routing — `agent-routing.yaml`" for the schema. (Added in #351 PR 3.)
    - `.gitignore` with `workspace/*/` so the inner clones don't get double-tracked in the private repo either
-   - initial commit + push
-6. **Configure path resolution in the fork** (recommended — v2 config-block mode):
+
+   The eight seed paths are `apexyard.projects.yaml`, `projects/.gitkeep`, `workspace/.gitkeep`, `onboarding.yaml`, `custom-skills/README.md`, `custom-handbooks/README.md`, `agent-routing.yaml`, and `.gitignore`.
+
+   **Stage by name.** The agent stages those eight files with one command. Never run `git add -A`. Never run `git add .`. Never run `git add --all`.
+
+   ```bash
+   git -C "<abs-path>" add -- apexyard.projects.yaml projects/.gitkeep workspace/.gitkeep \
+     onboarding.yaml custom-skills/README.md custom-handbooks/README.md agent-routing.yaml .gitignore
+   ```
+
+   Print the staged names with `git -C "<abs-path>" diff --cached --name-only`.
+
+   When `git add` exits 128 and reports `pathspec '<path>' did not match any files`, Git staged nothing. Re-create the missing seed file from the list above. Run the same `git add` command again.
+
+   **Print the operator command. Do not run it.** The commit gate blocks the commit. The push gate blocks the push. Never suggest `--no-verify`. Never add `--no-verify`, `-c`, or a force option to the printed command.
+
+   Substitute the recorded `<abs-path>`. Quote the path. Use the `C:/dir` form from `git rev-parse --show-toplevel`.
+
+   Print the Claude Code form first. The `!` prefix runs outside the agent Bash tool. `&&` runs the push only when the commit succeeds:
+
+   ```text
+   ! git -C "<abs-path>" commit -m "chore: initialise portfolio" && git -C "<abs-path>" push -u origin HEAD
+   ```
+
+   Then print this note: "In any other harness, run these two commands in a terminal. Run the second command only when the first one succeeds."
+
+   Print the plain terminal form next. Use this form in PowerShell, in cmd, and in every harness other than Claude Code:
+
+   ```text
+   git -C "<abs-path>" commit -m "chore: initialise portfolio"
+   git -C "<abs-path>" push -u origin HEAD
+   ```
+
+   Both forms use `push -u origin HEAD`. Do not write a literal branch name. Read the branch later with `git symbolic-ref --short HEAD`. The clone branch depends on the server and on `init.defaultBranch`.
+
+   When the resume row says to print only the push, omit the commit line in both forms. Print `! git -C "<abs-path>" push -u origin HEAD` and `git -C "<abs-path>" push -u origin HEAD`.
+
+   **Ask the operator.** Use one `AskUserQuestion`. Put these options in this order:
+
+   - "Done"
+   - "Commit or push failed (paste the error)"
+   - "Stop here"
+
+   When the harness has no `AskUserQuestion`, ask the same three options as a numbered list.
+
+   On "Stop here", stop. Print: "Run /setup again to continue. Nothing reached the forge." Leave the staged files in place.
+
+   **Verify on "Done".** Use these read-only commands. `<owner>/<name>` is the recorded pair. `BR` comes from `symbolic-ref`, not from a literal `main`.
+
+   ```bash
+   P="<abs-path>"
+   BR=$(git -C "$P" symbolic-ref --short HEAD)
+   LOCAL=$(git -C "$P" rev-parse --verify HEAD)
+   REMOTE=$(git -C "$P" ls-remote origin "refs/heads/$BR" | awk -v r="refs/heads/$BR" '$2 == r { print $1 }')
+   FORGE_ERR=$(mktemp)
+   FORGE=$(gh api "repos/<owner>/<name>/branches/$BR" --jq .commit.sha 2>"$FORGE_ERR") || FORGE=""
+   [ -n "$LOCAL" ] && [ "$LOCAL" = "$REMOTE" ] && [ "$LOCAL" = "$FORGE" ]
+   ```
+
+   The `awk` filter compares the ref name exactly (`$2 == r`). An `ls-remote` pattern can match the tail of another ref. Do not pass `--heads` to `ls-remote`. Do not pass `--branches` to `ls-remote`. `ls-remote` reads the fetch URL. The forge SHA covers a push that `pushurl` or `pushInsteadOf` sends to another URL.
+
+   When `FORGE` is empty, show the contents of `$FORGE_ERR` to the operator. Then remove the temp file (`rm -f "$FORGE_ERR"`). Keep `|| FORGE=""`. An empty `FORGE` never matches `LOCAL`. Map the error text to a forge failure row below.
+
+   When `LOCAL`, `REMOTE`, and `FORGE` match, continue with item 6. When a value differs, apply the failure actions below.
+
+   **Failure actions.**
+
+   | Failure | Action |
+   |---------|--------|
+   | The operator pastes a commit error, for example no git identity | Show the git message. Ask the operator to fix it. Print the command again. |
+   | A git-native hook blocks the commit, through a global `core.hooksPath` | Show the hook message. Ask the operator how to continue. Never suggest `--no-verify`. |
+   | The push fails on authentication | Suggest `gh auth status` and `gh auth setup-git`. Print the push command again. The agent does not run the push. |
+   | The push fails as non-fast-forward | Stop. Do not offer a force push. The remote has commits that `/setup` did not make. |
+   | The operator picks "Done" but did not run the command | HEAD is unborn, or the remote has no branch. Report that result. Print the command again. |
+   | The forge branch is absent (HTTP 404, or "Branch not found") | Show `$FORGE_ERR`. Report that the branch is absent on the forge. Print the push command again. |
+   | The forge check fails on authentication (HTTP 401 or 403, or "auth" in the error) | Show `$FORGE_ERR`. Suggest `gh auth status` and `gh auth login`. Do not treat this as a missing branch. |
+   | The forge check fails on a network or other error | Show `$FORGE_ERR`. Ask the operator to fix the network or the `gh` setup. Do not treat this as a missing branch. |
+   | The push went to another URL, for example through a global `pushurl` or `pushInsteadOf` | `REMOTE` matches `LOCAL`, and the forge error is HTTP 404 or "Branch not found". Stop. Show `git -C "<abs-path>" remote get-url --push --all origin`. Ask the operator to fix the config. |
+   | The operator runs the command in another directory, or edits the path | Report the value that differs. Print the command again. `git -C` uses an absolute path, so the shell directory does not matter. |
+   | The session ends during the pause | The next run applies the resume table. `clear-bootstrap-marker.sh` clears the bootstrap marker at SessionStart. Step 0 writes it again. |
+   | No operator is present | Not supported. Step 2 and item 3 already wait for an answer. |
+
+   After two failed checks in one run, stop. Print: "Run /setup again to continue. Nothing reached the forge."
+
+6. **Configure path resolution in the fork** (recommended — v2 config-block mode). Continue here only when item 5 reports that LOCAL, REMOTE, and FORGE match, or when a resume row skips the commit and the push.
    - Append `.gitignore` lines for `apexyard.projects.yaml`, `projects`, and `onboarding.yaml`. Keep the framework's `workspace/*` + `!workspace/README.md` pair: it ignores every adopter workspace entry while leaving the committed convention README visible and re-includable. Do not add a broad `workspace` rule; Git cannot re-include the README when its parent directory is excluded.
    - Untrack the upstream framework's tracked `projects/README.md` and `onboarding.yaml`: `git rm --cached -r projects onboarding.yaml 2>/dev/null || true`. **Do not untrack `workspace/README.md`** — it is a public framework artefact and stays in the fork per AgDR-0021 § G.
    - Write `.claude/project-config.json` with the v2 `portfolio:` block pointing at the sibling repo. Substitute the actual sibling-dir name the operator chose for `apexyard-portfolio` below:
@@ -765,10 +877,13 @@ Show the helper's stdout to the operator. Do not invent a key by hand. Do not st
 ### Step 8: Clear the bootstrap marker (REQUIRED)
 
 ```bash
-rm -f .claude/session/active-bootstrap
+marker_home="$(git rev-parse --show-toplevel)"
+. "$marker_home/.claude/hooks/_lib-session-markers.sh"
+skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
+rm -f "$skill_marker"
 ```
 
-Always remove the marker on a clean exit so subsequent edits in the same session go through the normal ticket gate. If `/setup` is interrupted before this step, `clear-bootstrap-marker.sh` (SessionStart hook) clears the stale marker on the next session.
+Always remove the marker on a clean exit so subsequent edits in the same session go through the normal ticket gate. If `/setup` is interrupted before this step, `clear-bootstrap-marker.sh` (SessionStart hook) clears the marker when the same session restarts.
 
 ## Rules
 

@@ -52,14 +52,11 @@ Recognise `--no-merge`. It writes approval without merging.
 
 ### 2. Sanity-check the user's intent
 
-Before doing anything, re-read the user's most recent message:
-
-- Did the user explicitly name this PR, or can I point at a direct "Ready to merge PR #X — approved?" question from me that they are responding to?
-- Is the user's message a standalone merge nod, or is it an umbrella "go" on a broader plan?
-- If the latter — **STOP**. Reply with a per-PR explicit question instead:
-  > "PR #X is ready to merge. Just confirming — explicit approval to merge PR #X, now?"
-
-Only proceed past this step if the user has given an unambiguous per-PR approval.
+Re-read the latest message and apply the one rule above.
+Treat a reply to your "Ready to merge PR #X — approved?" question as naming this PR.
+Stop on an umbrella "go" and ask:
+> "PR #X is ready to merge. Just confirming — explicit approval to merge PR #X, now?"
+Proceed only after an unambiguous per-PR approval.
 
 ### 3. Resolve the ops root
 
@@ -171,6 +168,8 @@ EOF
 
 Skip this step for `--no-merge`. Run this entire block in one shell.
 Shell variables from step 4 do not carry over. The block re-runs the script and stops on a missing or invalid strategy or release_class (#1196). Fill in `<marker_home>`, `<repo>` and `<pr>` with literal values.
+Pass those same `<repo>` and `<pr>` literals to tracker_pr_merge. The merge gate reads the command text before the shell expands variables (#1758).
+The block stops when the checked host repo is not `<repo>`.
 The tracker_pr_merge call MUST be invoked as a bare top-level statement, never inside `$(...)` or backticks. The merge-gate matcher reads the raw command text and may not fire on a wrapped call. Redirect stdout to a file, then read the result in a separate step.
 
 ```bash
@@ -182,6 +181,7 @@ RELEASE_CLASS=$(printf '%s' "$CHECK_JSON" | jq -r '.release_class | tostring') |
 [ -n "$PR_HOST_REPO" ] && [ "$PR_HOST_REPO" != null ] || exit 1
 case "$MERGE_STRATEGY" in squash|merge|rebase) ;; *) echo "Invalid strategy." >&2; exit 1 ;; esac
 case "$RELEASE_CLASS" in true|false) ;; *) echo "Invalid release_class." >&2; exit 1 ;; esac
+[ "$PR_HOST_REPO" = "<repo>" ] || { echo "Checked host repo does not match <repo>." >&2; exit 1; }
 source "$MARKER_HOME/.claude/hooks/_lib-tracker.sh" || exit 1
 RELEASE_SUBJECT=""
 RELEASE_BODY_FILE=""
@@ -200,7 +200,7 @@ if [ "$RELEASE_CLASS" = true ]; then
   fi
 fi
 MERGE_RESULT_FILE=$(mktemp) || exit 1
-tracker_pr_merge "$PR_HOST_REPO" "<pr>" "${MERGE_STRATEGY}" true "$RELEASE_SUBJECT" "$RELEASE_BODY_FILE" > "$MERGE_RESULT_FILE"
+tracker_pr_merge "<repo>" "<pr>" "${MERGE_STRATEGY}" true "$RELEASE_SUBJECT" "$RELEASE_BODY_FILE" > "$MERGE_RESULT_FILE"
 MERGE_RC=$?
 MERGE_RESULT="$(cat "$MERGE_RESULT_FILE")"
 MERGE_SHA=$(printf '%s' "$MERGE_RESULT" | jq -r '.sha // empty' 2>/dev/null)
@@ -269,7 +269,7 @@ List candidates with `.claude/skills/approve-merge/remove-worktree.sh list "<sou
 
 ### 10. Optional: post-merge child-issue closure
 
-If the PR's merge commit / PR body contains `Closes <owner/repo>#<N>` references that GitHub's auto-closer didn't catch (squash merges with cross-repo refs sometimes silently miss), you can offer to close them with a comment. This is **out of scope for the default flow** — only do it if the user explicitly asks. Don't auto-close child issues; that's another externally-visible action that needs its own per-issue confirmation.
+Do this only when the user explicitly asks. Do not auto-close a child issue. Confirm each close on its own. Full rules: docs/skills/approve-merge-rationale.md.
 
 ## --no-merge opt-out
 

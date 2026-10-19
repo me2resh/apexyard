@@ -122,7 +122,12 @@ case "$MATCHED" in
 esac
 
 # Bootstrap-skill exemption — same shape as require-active-ticket.sh.
-BOOTSTRAP_MARKER="$MARKER_HOME/.claude/session/active-bootstrap"
+# shellcheck source=/dev/null
+[ ! -r "$HOOK_DIR/_lib-session-markers.sh" ] || . "$HOOK_DIR/_lib-session-markers.sh"
+BOOTSTRAP_MARKER=""
+if command -v active_bootstrap_marker_path >/dev/null 2>&1; then
+  BOOTSTRAP_MARKER=$(active_bootstrap_marker_path "$MARKER_HOME") || BOOTSTRAP_MARKER=""
+fi
 if [ -f "$BOOTSTRAP_MARKER" ]; then
   active_bootstrap=$(tr -d '[:space:]' < "$BOOTSTRAP_MARKER" 2>/dev/null)
   if [ -n "$active_bootstrap" ] && command -v config_get >/dev/null 2>&1; then
@@ -133,7 +138,12 @@ if [ -f "$BOOTSTRAP_MARKER" ]; then
 fi
 
 # Ticket-skill marker — a structured skill is in flight.
-SKILL_MARKER="$MARKER_HOME/.claude/session/active-issue-skill"
+# shellcheck source=/dev/null
+[ ! -r "$HOOK_DIR/_lib-session-markers.sh" ] || . "$HOOK_DIR/_lib-session-markers.sh"
+SKILL_MARKER=""
+if command -v active_issue_skill_marker_path >/dev/null 2>&1; then
+  SKILL_MARKER=$(active_issue_skill_marker_path "$MARKER_HOME") || SKILL_MARKER=""
+fi
 if [ -f "$SKILL_MARKER" ]; then
   active_skill=$(tr -d '[:space:]' < "$SKILL_MARKER" 2>/dev/null)
   if [ -n "$active_skill" ]; then
