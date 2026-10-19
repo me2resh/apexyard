@@ -2,7 +2,7 @@
 
 Shape-probe and recount checks for two known Rex blind spots.
 
-Status: **Targeted eval plus the C4 no-flip run, k=3, 2026-10-19. C4 FAILS: 3 of 13 entries flip (rex-773, rex-1683, rex-1711). The k=8 follow-ups are not run.**
+Status: **Targeted eval, the C4 no-flip run and the no-flip re-run, k=3, 2026-10-19. After the fix, rex-1683 and rex-1711 no longer flip. rex-773 still flips, and rex-1620 D2 falls to 1 of 3. The pass condition fails. The k=8 follow-ups are not run.**
 
 Prompt hashes (SHA-256, first 12 hex):
 - Baseline (the PR #1797 prompt): `2656e3532425`
@@ -27,8 +27,8 @@ A hint, a suggestion, or an "Unverified" note counts as missed.
 | Criterion | Result | Evidence |
 |---|---|---|
 | AC1 | Met | 2 of 3 runs catch the redirect-target merge hide |
-| AC2 | Partly met | D2 2 of 3; D1 0 of 3 |
-| AC3 (no flip on the other 13 entries) | Not met | 3 of 13 entries flip at k=3: rex-773, rex-1683, rex-1711. See "No-flip table (C4)" |
+| AC2 | Partly met | With prompt `1ac8`: D2 2 of 3, D1 0 of 3. With prompt `a7b3` (the blocking sentence removed): D2 1 of 3 |
+| AC3 (no flip on the other 13 entries) | Not met | With `1ac8`, 3 of 13 flip. With `a7b3`, rex-773 still flips; rex-1683 and rex-1711 do not. The other 10 entries were not re-run. See the two sections below the AC table |
 | AC4 | Met | The `/code-review` cap is 15,736 of 16,000 bytes; `test_token_efficiency_wave1.sh` passes |
 
 Limit: the eval gives Rex no tools, so it cannot recount a number against the source.
@@ -87,3 +87,27 @@ k=8 on both prompts needs 5 more baseline runs and 5 more new-prompt runs per en
 That is 30 runs for the 3 flips, or 40 runs with rex-792. Ask the CEO before this spend.
 
 Runs: 36 new baseline runs plus 39 new-prompt runs, 75 in total. Tokens: 2,979,717 (1,394,396 baseline plus 1,585,321 new-prompt, from CLI JSON usage).
+
+## No-flip re-run (prompt a7b3)
+
+Prompt: `a7b38bd17fe3` (commit 77889e4f). It is the `1ac8` prompt without the sentence that made an unverifiable count or settings claim a blocking finding. An unverifiable claim is an "Unverified" note again.
+Protocol: the same as the C4 section. k=3 on four entries. Baselines are the existing v_2656 runs.
+Pass condition: no flip on rex-773, rex-1683 and rex-1711 against the v_2656 majority, and rex-1620 D2 caught 2 of 3 or better.
+
+| Entry | Baseline v_2656 | `1ac8` | `a7b3` | Flip with `a7b3` |
+|---|---|---|---|---|
+| rex-773-ca3a9400 | C, C, CR (majority C) | CR, CR, CR | CR, CR, CR | **Yes** |
+| rex-1683-f85a154-delta | A, A, A | CR, CR, CR | A, A, A | No |
+| rex-1711-f401d65-delta | A, C, A | CR, CR, CR | A, A, A | No |
+| rex-1620-6229f1c-delta | CR (6 runs) | CR, CR, CR | CR, CR, CR | No |
+
+rex-1620 D2 (the Bedrock setting is missing): `a7b3` catches it 1 of 3 (k1 as a numbered finding; k2 does not name it; k3 lists it only as Unverified). `1ac8` caught it 2 of 3. The baseline caught it 0 of 6.
+
+Result: **FAIL**. Two parts of the pass condition fail.
+
+- rex-773 still flips. The blocking findings are the cross-repository base order, the wrong mechanism in a code comment, and the wider raw-command haystack. They do not come from the removed sentence. The baseline raised the same points as suggestions or as a COMMENT.
+- rex-1620 D2 falls from 2 of 3 to 1 of 3. The removed sentence helped the D2 catch.
+
+rex-1683 and rex-1711 are back to APPROVED in all runs, which confirms the removed sentence caused those two flips.
+The other 10 entries were not re-run with `a7b3`. No more runs were made.
+Runs: 12. Tokens: 496,109 (from CLI JSON usage).
