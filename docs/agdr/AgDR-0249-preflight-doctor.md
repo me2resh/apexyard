@@ -35,7 +35,7 @@ No dependency or gate behavior changes.
 
 ## JSON output
 
-#1745 constraint 5 names an optional `--json` flag.
+\#1745 constraint 5 names an optional `--json` flag.
 This change does not add that flag.
 The terminal report is the result.
 A later change can add JSON output to the same script.
