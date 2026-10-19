@@ -5,6 +5,7 @@ Shape-probe and recount checks for two known Rex blind spots.
 Status: **Targeted eval, the C4 no-flip run, the no-flip re-run and the rex-773 k=8 run, 2026-10-19. One flip remains, on the borderline entry rex-773. rex-1683 and rex-1711 no longer flip.**
 
 Prompt hashes (SHA-256, first 12 hex):
+
 - Baseline (the PR #1797 prompt): `2656e3532425`
 - After the first #1798 commit: `3cc6d04fb7ed`
 - After the second #1798 commit: `1ac8b6976d53`
