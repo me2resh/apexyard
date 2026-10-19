@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Exercise the trusted script against real git ranges and forged inputs.
 set -euo pipefail
+# shellcheck source=./_test-session-isolation.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 python3 - "$ROOT" <<'PY'
 import json

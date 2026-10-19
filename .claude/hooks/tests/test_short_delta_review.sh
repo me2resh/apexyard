@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Test the short posted format against the unchanged production validator.
 set -euo pipefail
+# shellcheck source=./_test-session-isolation.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 # shellcheck source=../_lib-review-markers.sh
 . "$ROOT/.claude/hooks/_lib-review-markers.sh"
