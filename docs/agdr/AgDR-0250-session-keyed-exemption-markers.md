@@ -1,6 +1,6 @@
 # Session keyed exemption markers
 
-> In the context of concurrent sessions, facing shared gate exemptions, I decided to scope each exemption to its session to prevent cross-session access, accepting a required session id.
+> In the context of concurrent sessions, facing shared gate exemptions, I decided to scope each exemption to its session. This prevents cross-session access. The decision accepts a required session id.
 
 ## Context
 
@@ -44,4 +44,4 @@ These checks have not run in this build environment. Record the result and actua
 | opencode | Pending | Pending | No automatic mapping verified; record configured native id |
 | pi | Pending | Pending | No automatic mapping verified; record configured native id |
 
-The pi and opencode adapter sources do not supply an automatic mapping in this build. Their manual checks remain pending. If an adapter exports no id, both exemption gates stay closed. Configure the adapter to export its native session id; do not use a shared default.
+The pi and opencode adapter sources do not supply an automatic mapping in this build. Their manual checks remain pending. If an adapter exports no id, both exemption gates stay closed. Configure the adapter to export its native session id. Do not use a shared default.
