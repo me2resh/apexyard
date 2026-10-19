@@ -62,6 +62,10 @@ Slice PR provenance required the recorded merge-base SHA to equal `git merge-bas
 
 The lint still requires a single `Slice PR: #N; dev merge-base <sha>.` observation. Equality still passes. An older ancestor `R` also passes when HEAD and `M` contain `R` and no status-dependent plan record changed between `R` and `M`. A plan-record change between `R` and `M` fails with its own message that lists paths and names `refresh-slice-record.sh`. Snapshots, history files, and sibling slice records stay out of the diff so the check tracks status claims without falsely reding open slices. Dev code between `R` and `M` is not re-reconciled, matching `refresh-slice-record.sh`. The lint fails closed when it cannot prove ancestry or the record diff. The fail-before regression test pins the pre-change lint commit so post-merge runs stay stable.
 
+### 2026-10-19 — Manual refresh only (#1814, AgDR-0259)
+
+`refresh-ready-prs.yml` no longer runs on every push to `dev`. It runs on `workflow_dispatch` only. Branch updates that advance the merge-base still need the ancestor provenance rule above. Operators update a behind PR with `gh pr update-branch` or a manual refresh run. See [AgDR-0259](AgDR-0259-no-macos-ci-runners.md).
+
 ## Artifacts
 
 - Issue: me2resh/apexyard#1801

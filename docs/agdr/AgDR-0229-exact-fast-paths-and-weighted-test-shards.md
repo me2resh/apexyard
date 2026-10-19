@@ -68,3 +68,9 @@ When `bin/hook-test-weights.txt` exists and the shard count is above 1, the runn
 - Issue: me2resh/apexyard#1613
 - Report: `docs/perf/hook-test-profile-2026-10-round2.md`
 - Earlier round: AgDR-0120 "Update (#1613)", PR #1615
+
+## Architecture evolution
+
+### 2026-10-19 — No macOS CI runners (#1814, AgDR-0259)
+
+CI no longer runs the four macOS bash-3.2 shards. Weighted `--shard` packing in `bin/run-hook-tests.sh` stays for local use. The fast-path guards in `_lib-extract-pr.sh` stay. See [AgDR-0259](AgDR-0259-no-macos-ci-runners.md).
