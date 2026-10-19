@@ -423,6 +423,6 @@ The script exits 13 when it cannot read the PR branch or title, for any PR. This
 
 Step 10 of the skill points here. This step stays out of the default flow.
 
-Do this only when the user asks. A squash merge can leave a cross-repo `Closes <owner/repo>#<N>` reference in the merge commit or the PR body. GitHub's auto-closer can miss that reference and report no error. You may offer to close each missed issue and add a comment.
+Do this only when the user explicitly asks. A squash merge can leave a cross-repo `Closes <owner/repo>#<N>` reference in the merge commit or the PR body. GitHub's auto-closer can miss that reference and report no error. You may offer to close each missed issue and add a comment.
 
 Do not close a child issue on your own. A close is a separate visible action. Confirm that issue before you close it.

@@ -40,7 +40,7 @@ See `docs/perf/hook-fail-closed-profile-2026-10.md`.
 
 | Entry | Timeout | Basis |
 |-------|---------|-------|
-| `dispatch-bash.sh` | 20 seconds | 5 x the slowest route p95 (2748 ms) is 13.7 seconds |
+| `dispatch-bash.sh` | 60 seconds | 5 x the slowest route p95 (9661 ms, full merge route on a slow network) is 48.3 seconds |
 | `require-active-ticket.sh` | 10 seconds | 5 x p95 (207 ms) is under the 10 second floor |
 
 ### The fail-open exception
