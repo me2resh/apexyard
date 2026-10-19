@@ -106,6 +106,23 @@ must_detect() {
   printf '%s' "$2" > "$TMP/must-detect/$case_count.cmd"
   check "$1" yes "$2"
 }
+# Construct security regression inputs only in this test. Labels stay neutral.
+g='gh'; p='pr'; m='merge'; phrase="$g $p $m 7"
+must_detect 'N01' "$g >/dev/null $p $m 7"
+must_detect 'N02' "$g $p 2>x $m 7"
+must_detect 'N03' "g\"\$Q\"h $p $m 7"
+must_detect 'N04' "$g p\"\$Q\"r $m 7"
+must_detect 'N05' "$g $p mer\"\$Q\"ge 7"
+must_detect 'N06' "\"\$G\" $p $m 7"
+for op in '>&' '>!'; do
+  must_detect "N07 $op" "echo '$phrase' $op ~/.zshenv"
+  must_detect "N08 $op" "echo '$phrase' $op ~/\"\$Q\".zshenv"
+  must_detect "N09 $op" "echo '$phrase' $op\"\$HOME/.zshenv\""
+done
+for op in '>&2' '2>&1' '>&-'; do
+  check "N10 $op" no "echo '$phrase' $op"
+  must_detect "N11 $op" "echo '$phrase' $op | sh"
+done
 must_detect 'F1.1 echo then quoted API' "echo checking; gh api -X PUT 'repos/me2resh/apexyard/pulls/1497/merge' -f merge_method=squash"
 must_detect 'F1.2 grep then quoted API' 'grep -q ok status.txt && gh api --method PUT "repos/o/r/pulls/7/merge"'
 must_detect 'F1.3 quoted API then echo line' $'gh api -X PUT "repos/o/r/pulls/7/merge" -f merge_method=squash\necho merged'
@@ -209,10 +226,13 @@ chmod +x "$SB/bin/gh" "$SB/bin/glab"
 (cd "$SB" && git init -q --template=) || exit 1
 for gate in block-unreviewed-merge.sh block-merge-on-red-ci.sh require-architecture-review.sh require-design-review-for-ui.sh; do
   cp "$HOOKS/$gate" "$SB/.claude/hooks/$gate"
-  for shape in grep heredoc; do
+  for shape in grep heredoc fd1 fd2 fd3; do
     case "$shape" in
       grep) cmd="grep -nE 'gh pr merge [0-9]+' notes.txt" ;;
       heredoc) cmd="$(printf "cat > /tmp/merge-notes <<'TEXT'\ngh pr merge 7\nTEXT")" ;;
+      fd1) cmd="echo '$phrase' >&2" ;;
+      fd2) cmd="echo '$phrase' 2>&1" ;;
+      fd3) cmd="echo '$phrase' >&-" ;;
     esac
     payload=$(jq -nc --arg c "$cmd" '{tool_name:"Bash",tool_input:{command:$c}}')
     (cd "$SB" && printf '%s' "$payload" | PATH="$SB/bin:$PATH" APEXYARD_OPS_DISABLE_PIN=1 /bin/bash ".claude/hooks/$gate" >/dev/null 2>"$TMP/stderr")

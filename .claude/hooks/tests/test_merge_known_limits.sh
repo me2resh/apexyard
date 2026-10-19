@@ -32,7 +32,7 @@ check() {
   fi
 }
 
-# Documentation gate: Known limits names both residual cases.
+# Documentation gate: distinguish covered splits from the residual limit.
 if [ -f "$AGDR" ] && grep -q '^## Known limits$' "$AGDR"; then
   printf 'PASS [AgDR-0196 has Known limits heading]\n'
   PASS=$((PASS + 1))
@@ -40,11 +40,11 @@ else
   printf 'FAIL [AgDR-0196 has Known limits heading]\n' >&2
   FAIL=$((FAIL + 1))
 fi
-if [ -f "$AGDR" ] && grep -qi 'split with quotes' "$AGDR"; then
-  printf 'PASS [Known limits mentions split with quotes]\n'
+if [ -f "$AGDR" ] && grep -qi 'matcher blocks redirections' "$AGDR"; then
+  printf 'PASS [Known limits records covered splits]\n'
   PASS=$((PASS + 1))
 else
-  printf 'FAIL [Known limits mentions split with quotes]\n' >&2
+  printf 'FAIL [Known limits records covered splits]\n' >&2
   FAIL=$((FAIL + 1))
 fi
 if [ -f "$AGDR" ] && grep -qi 'write-then-run' "$AGDR"; then
