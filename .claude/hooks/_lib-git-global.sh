@@ -41,8 +41,10 @@ command_has_git_subcommand() {
 # Stays inside a JSON string. Covers the same global-option forms.
 git_subcommand_payload_pattern() {
   local sub="$1"
-  # #1748: a JSON-escaped quoted value (-C \"a b\") is one option word.
-  printf '%s' 'git([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env|attr-source))[[:space:]]+(\\"([^"\\]|\\[^"])*\\"|\\.|[^"\\[:space:]])+|--?[A-Za-z][A-Za-z-]*(=(\\"([^"\\]|\\[^"])*\\"|\\.|[^"\\[:space:]])+)?))*[[:space:]]+'"$sub"'([^[:alnum:]_.-]|$)'
+  # #1748: a JSON-escaped double-quoted value (-C \"a b\") or a single-quoted
+  # value (-C 'a b') is one option word. Single quotes need no JSON escape.
+  local _git_payload_val='(\\"([^"\\]|\\[^"])*\\"|'"'"'[^'"'"']*'"'"'|\\.|[^"'"'"'\\[:space:]])+'
+  printf '%s' 'git([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env|attr-source))[[:space:]]+'"${_git_payload_val}"'|--?[A-Za-z][A-Za-z-]*(='"${_git_payload_val}"')?))*[[:space:]]+'"$sub"'([^[:alnum:]_.-]|$)'
 }
 
 # 2 when the token takes the next token as its value.
@@ -671,6 +673,27 @@ _git_alias_resolve() {
   return 0
 }
 
+# Read one NUL-terminated config record from FD 3 into key and value.
+# Git -z form is key, newline, value, NUL. Bash 3.2 cannot hold NUL in a
+# variable from command substitution, so the caller must feed a temp file.
+_git_alias_read_z_record() {
+  local record
+  IFS= read -r -d '' record <&3 || {
+    [ -n "$record" ] || return 1
+  }
+  [ -n "$record" ] || return 1
+  case "$record" in
+    *$'\n'*)
+      key="${record%%$'\n'*}"
+      value="${record#*$'\n'}"
+      ;;
+    *)
+      return 2
+      ;;
+  esac
+  return 0
+}
+
 # Caller supplies cmd and cwd in the parent shell. No command text is executed.
 git_alias_check() {
   local LC_ALL=C
@@ -681,6 +704,12 @@ git_alias_check() {
   local _GA_CONDITION=0 _GA_AUTO="" _GA_ROOT="" _GA_OPAQUE=0 _GA_UNREADABLE=0 _GA_VERB=""
   local _GA_LOWER key value line target gitdir cachekey view index i dir token clean
   local -a _GA_INLINE=() _GA_TARGET=() _GA_KEYS=() _GA_VALUES=() cachekeys=() views=() candidates=() candidate_positions=() candidate_cwds=()
+  local -a _GA_VIEWFILES=()
+  _git_alias_cleanup_views() {
+    local f
+    for f in ${_GA_VIEWFILES[@]+"${_GA_VIEWFILES[@]}"}; do rm -f "$f"; done
+  }
+  trap '_git_alias_cleanup_views' RETURN
   case "${cmd:-}" in *git*) ;; *) return 0 ;; esac
   if ! command -v join_shell_continuations >/dev/null 2>&1; then
     # shellcheck source=/dev/null
@@ -704,11 +733,11 @@ git_alias_check() {
       window="${text:window_start:512}"
       relative=$((pos-window_start))
     fi
-    # Exact boundary set: start, whitespace, (, ), <, >, backtick,
-    # both quotes, semicolon, pipe, ampersand, equals. No word boundary guess.
+    # Same boundary class as _git_sub_re: (^|[^[:alnum:]_.-]).
+    # A path-qualified git (/usr/bin/git, ./git, ~/bin/git) must match.
     if [ "$pos" -gt 0 ]; then
       prev="${window:relative-1:1}"
-      case "$prev" in [[:space:]]|'('|')'|'<'|'>'|'`'|'"'|"'"|';'|'|'|'&'|'=') ;; *) continue ;; esac
+      case "$prev" in [[:alnum:]_.-]) continue ;; esac
     fi
     # Try a short literal word first. Long or quoted words use the full grammar.
     rest="${window:relative:64}"
@@ -845,19 +874,28 @@ EOF_SEGMENTS
       [ "${#cachekeys[@]}" -lt 8 ] || { _git_alias_block 'too many git targets to check for aliases. Split the command.'; return 2; }
       local -a args=(-C "$target")
       [ -z "$gitdir" ] || args+=("--git-dir=$gitdir")
-      view=$(git ${args[@]+"${args[@]}"} config --includes --get-regexp '^(alias\..*|help\.autocorrect|include\..*|includeif\..*)$' 2>/dev/null); rc=$?
+      # -z: key, newline, value, NUL. A newline in a value must not forge a
+      # second line, and a space in a key must not split the record.
+      view=$(mktemp) || { _git_alias_block "cannot read git config for $target. Fix the config and retry."; return 2; }
+      _GA_VIEWFILES+=("$view")
+      git ${args[@]+"${args[@]}"} config --includes -z --get-regexp '^(alias\..*|help\.autocorrect|include\..*|includeif\..*)$' >"$view" 2>/dev/null; rc=$?
       [ "$rc" -le 1 ] || { _git_alias_block "cannot read git config for $target. Fix the config and retry."; return 2; }
       index="${#cachekeys[@]}"; cachekeys+=("$cachekey"); views+=("$view")
     fi
-    if [ -z "${views[index]}$_GA_CHANNEL" ] && [ "$_GA_DEFINITION" = 0 ] &&
+    if [ ! -s "${views[index]}" ] && [ -z "$_GA_CHANNEL" ] && [ "$_GA_DEFINITION" = 0 ] &&
        [ "${#_GA_INLINE[@]}" = 0 ] && [ "${#_GA_TARGET[@]}" = 0 ] &&
        [ "$target" = "${cwd:-$PWD}" ] && [ -z "${segments:-}" ]; then
       alias_free_payload=1
     fi
     _GA_KEYS=(); _GA_VALUES=(); _GA_AUTO=""; _GA_CONDITION=0
-    while IFS= read -r line; do
-      [ -n "$line" ] || continue
-      key="${line%% *}"; value="${line#* }"
+    exec 3<"${views[index]}"
+    while :; do
+      _git_alias_read_z_record; rc=$?
+      [ "$rc" = 0 ] || {
+        exec 3<&-
+        [ "$rc" = 1 ] || { _git_alias_block "cannot parse git config for $target. Fix the config and retry."; return 2; }
+        break
+      }
       _git_alias_entry "$key" "$value"
       case "$key" in
         includeif.onbranch:*|includeif.hasconfig:*) _GA_CONDITION=1 ;;
@@ -893,9 +931,7 @@ EOF_SEGMENTS
         fi ;;
 
       esac
-    done <<EOF_VIEW
-${views[index]}
-EOF_VIEW
+    done
     for line in ${_GA_INLINE[@]+"${_GA_INLINE[@]}"}; do _git_alias_entry "${line%%=*}" "${line#*=}"; done
     if [ "$_GA_OPAQUE" = 1 ]; then
       if ! _git_alias_unknown 0; then return 2; fi
