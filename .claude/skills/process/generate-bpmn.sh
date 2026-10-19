@@ -2,14 +2,13 @@
 # /process generate-bpmn.sh
 #
 # Emit a BPMN 2.0 XML file from a structured candidate-model JSON.
-# Pipes the raw XML through `npx bpmn-auto-layout` to populate the
-# <bpmndi:BPMNDiagram> coordinates so the file opens cleanly in
-# Camunda Modeler.
+# Adds deterministic grid coordinates, including pool and lane shapes,
+# using Python 3 (standard library only).
 #
 # Usage:
 #   generate-bpmn.sh --slug=<process-slug> --model=<model.json> -o <output.bpmn>
 #                    [--pools]          # one pool per repo + message flows (vs default: swimlanes within one pool)
-#                    [--skip-layout]    # emit bare BPMN without <bpmndi> (no Node dep)
+#                    [--skip-layout]    # emit bare BPMN without <bpmndi>
 #
 # Model JSON schema (consumed):
 #   {
@@ -191,7 +190,7 @@ done <<< "$EDGES"
 incoming_for() {
   local node="$1"
   local f
-  for f in "${SEQ_FLOWS[@]}"; do
+  for f in ${SEQ_FLOWS[@]+"${SEQ_FLOWS[@]}"}; do
     IFS='|' read -r fid ffrom fto _ <<< "$f"
     [ "$fto" = "$node" ] && echo "$fid"
   done
@@ -200,7 +199,7 @@ incoming_for() {
 outgoing_for() {
   local node="$1"
   local f
-  for f in "${SEQ_FLOWS[@]}"; do
+  for f in ${SEQ_FLOWS[@]+"${SEQ_FLOWS[@]}"}; do
     IFS='|' read -r fid ffrom fto _ <<< "$f"
     [ "$ffrom" = "$node" ] && echo "$fid"
   done
@@ -232,14 +231,6 @@ HEADER
 
   # Process body. We emit one <bpmn:process> (default mode) or one per pool.
   # For simplicity the default emits a single process containing all lanes.
-  if [ -n "$LANES" ] && [ "$POOLS" -eq 0 ]; then
-    cat >> "$BARE" <<COL
-  <bpmn:collaboration id="Collaboration_${slug_esc}">
-    <bpmn:participant id="Participant_${slug_esc}" name="$(xml_escape "$META_SLUG")" processRef="Process_${slug_esc}"/>
-  </bpmn:collaboration>
-COL
-  fi
-
   cat >> "$BARE" <<PROC_OPEN
   <bpmn:process id="Process_${slug_esc}" name="$(xml_escape "$META_SLUG")" isExecutable="false">
     <bpmn:documentation>${desc_esc}
@@ -290,11 +281,21 @@ PROC_OPEN
   done <<< "$NODES"
 
   # Sequence flows
-  for f in "${SEQ_FLOWS[@]}"; do
+  for f in ${SEQ_FLOWS[@]+"${SEQ_FLOWS[@]}"}; do
     IFS='|' read -r fid ffrom fto flabel <<< "$f"
     fid_esc=$(xml_escape "$fid")
     ffrom_esc=$(xml_escape "$ffrom")
     fto_esc=$(xml_escape "$fto")
+    # Only gateway branches carry sequence-flow labels.
+    source_type=$(awk -F'\t' -v id="$ffrom" '$1=="node" && $2==id {print $3}' <<< "$NODES")
+    case "$source_type" in
+      gateway|gateway-exclusive|gateway-parallel)
+        if [ "$(outgoing_for "$ffrom" | wc -l)" -le 1 ]; then
+          flabel=""
+        fi
+        ;;
+      *) flabel="" ;;
+    esac
     flabel_esc=$(xml_escape "$flabel")
     if [ -n "$flabel" ]; then
       echo "    <bpmn:sequenceFlow id=\"${fid_esc}\" sourceRef=\"${ffrom_esc}\" targetRef=\"${fto_esc}\" name=\"${flabel_esc}\"/>" >> "$BARE"
@@ -305,21 +306,11 @@ PROC_OPEN
 
   echo '  </bpmn:process>' >> "$BARE"
 
-  # Message flows (only valid inside a collaboration). When we have a
-  # collaboration AND message flows, append them inside it. For the
-  # single-pool default case we put message flows in a new collaboration
-  # wrapping the process.
-  if [ "${#MSG_FLOWS[@]}" -gt 0 ]; then
-    if [ -z "$LANES" ] || [ "$POOLS" -eq 1 ]; then
-      echo "  <bpmn:collaboration id=\"Collaboration_${slug_esc}\">" >> "$BARE"
-      echo "    <bpmn:participant id=\"Participant_${slug_esc}\" processRef=\"Process_${slug_esc}\"/>" >> "$BARE"
-    fi
-    # If we already emitted a <bpmn:collaboration> open tag at the top,
-    # message flows go into a SECOND collaboration block — that's still
-    # valid BPMN per the spec but ugly; in practice this case is rare
-    # (cross-repo without swimlanes). Operators flagged `--pools` get the
-    # cleaner emit shape.
-    for f in "${MSG_FLOWS[@]}"; do
+  # Keep the participant and all message flows in one collaboration.
+  if [ -n "$LANES" ] || [ -n "${MSG_FLOWS[*]:-}" ]; then
+    echo "  <bpmn:collaboration id=\"Collaboration_${slug_esc}\">" >> "$BARE"
+    echo "    <bpmn:participant id=\"Participant_${slug_esc}\" name=\"${slug_esc}\" processRef=\"Process_${slug_esc}\"/>" >> "$BARE"
+    for f in ${MSG_FLOWS[@]+"${MSG_FLOWS[@]}"}; do
       IFS='|' read -r fid ffrom fto flabel <<< "$f"
       fid_esc=$(xml_escape "$fid")
       ffrom_esc=$(xml_escape "$ffrom")
@@ -331,9 +322,7 @@ PROC_OPEN
         echo "    <bpmn:messageFlow id=\"${fid_esc}\" sourceRef=\"${ffrom_esc}\" targetRef=\"${fto_esc}\"/>" >> "$BARE"
       fi
     done
-    if [ -z "$LANES" ] || [ "$POOLS" -eq 1 ]; then
-      echo '  </bpmn:collaboration>' >> "$BARE"
-    fi
+    echo '  </bpmn:collaboration>' >> "$BARE"
   fi
 
   # Trailer — no <bpmndi> yet; auto-layout pass adds it.
@@ -343,33 +332,21 @@ PROC_OPEN
 emit_bare_bpmn
 
 # ---------------------------------------------------------------------------
-# Auto-layout pass — populate <bpmndi:BPMNDiagram> via bpmn-auto-layout.
-#
-# bpmn-auto-layout reads a BPMN file on stdin and emits one on stdout with
-# the <bpmndi> block populated. If Node isn't available, we skip and emit
-# the bare file (Camunda Modeler shows "blank" but the file is valid).
+# Grid layout pass (AgDR-0248). Needs Python 3.9 or later. Without it, warn
+# and emit bare BPMN, as the earlier Node fallback did. --skip-layout needs
+# no Python. A layout error on an invalid model still exits non-zero.
 # ---------------------------------------------------------------------------
 LAYOUT_OUT="$TMP/layout.bpmn"
 
 if [ "$SKIP_LAYOUT" -eq 1 ]; then
   cp "$BARE" "$LAYOUT_OUT"
   echo "generate-bpmn.sh: --skip-layout set, emitting bare BPMN (no <bpmndi>)" >&2
-elif command -v npx >/dev/null 2>&1; then
-  # Try the auto-layout package. If npx fetch fails (no network, package
-  # missing), fall back to the bare file with a warning.
-  if npx -y bpmn-auto-layout < "$BARE" > "$LAYOUT_OUT" 2>"$TMP/layout.err"; then
-    if [ ! -s "$LAYOUT_OUT" ]; then
-      echo "generate-bpmn.sh: bpmn-auto-layout produced empty output — falling back to bare BPMN" >&2
-      cp "$BARE" "$LAYOUT_OUT"
-    fi
-  else
-    echo "generate-bpmn.sh: bpmn-auto-layout failed — falling back to bare BPMN" >&2
-    cat "$TMP/layout.err" >&2 || true
-    cp "$BARE" "$LAYOUT_OUT"
-  fi
-else
-  echo "generate-bpmn.sh: npx not found — emitting bare BPMN (no <bpmndi>). Install Node + npm and re-run for auto-layout." >&2
+elif ! command -v python3 >/dev/null 2>&1 \
+  || ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' 2>/dev/null; then
   cp "$BARE" "$LAYOUT_OUT"
+  echo "generate-bpmn.sh: WARNING — python3 3.9 or later not found; emitting bare BPMN (no <bpmndi>)" >&2
+else
+  python3 "$(dirname "$0")/layout-bpmn.py" "$BARE" "$LAYOUT_OUT"
 fi
 
 # ---------------------------------------------------------------------------

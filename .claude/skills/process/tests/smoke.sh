@@ -13,10 +13,10 @@
 #   - all three named axes (1, 2, 3) have findings
 #   - emitted BPMN parses as valid XML (via xmllint when available)
 #   - emitted BPMN contains a <bpmn:process> root element
-#   - emitted BPMN contains a <bpmndi:BPMNDiagram> block when Node+npx is available
+#   - emitted BPMN contains a <bpmndi:BPMNDiagram> block when python3 (3.9 or later) is available
 #
-# Designed to run in any sandbox without network — bpmn-auto-layout is OPTIONAL.
-# When npx isn't reachable, the test asserts the bare-BPMN fallback works.
+# Designed to run in any sandbox without network. The grid layout needs only python3 and is optional.
+# When python3 is missing, the test asserts the bare-BPMN fallback works.
 
 set -euo pipefail
 
@@ -259,7 +259,7 @@ cat > "$MODEL" <<'JSON'
 JSON
 
 BPMN_OUT=$(mktemp -t process-out-XXXXXX.bpmn)
-# Skip layout — the smoke test should run offline; bpmn-auto-layout requires npm fetch.
+# Skip layout — the smoke test needs no layout step.
 "$SKILL_DIR/generate-bpmn.sh" --slug=onboarding --model="$MODEL" -o "$BPMN_OUT" --skip-layout
 
 assert_contains "BPMN has bpmn:definitions root"  "<bpmn:definitions" "$BPMN_OUT"
@@ -290,25 +290,25 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# bpmn-auto-layout pass (when Node+npx available, with network)
+# Grid layout pass (when python3 >= 3.9 is available)
 # ---------------------------------------------------------------------------
 echo ""
-echo "5) Auto-layout via bpmn-auto-layout (optional)"
-if command -v npx >/dev/null 2>&1 && [ -z "${SKIP_NETWORK_TESTS:-}" ]; then
+echo "5) Grid layout via layout-bpmn.py (optional)"
+if command -v python3 >/dev/null 2>&1 && [ -z "${SKIP_NETWORK_TESTS:-}" ]; then
   BPMN_LAID_OUT=$(mktemp -t process-layout-XXXXXX.bpmn)
   if "$SKILL_DIR/generate-bpmn.sh" --slug=onboarding --model="$MODEL" -o "$BPMN_LAID_OUT" 2>/dev/null; then
     if grep -q '<bpmndi:BPMNDiagram' "$BPMN_LAID_OUT" 2>/dev/null; then
       echo "  PASS: <bpmndi:BPMNDiagram> populated"
       PASS=$((PASS + 1))
     else
-      echo "  SKIP: bpmn-auto-layout returned a file without <bpmndi> (likely sandbox/offline). Bare BPMN is still semantically valid."
+      echo "  SKIP: layout returned a file without <bpmndi> (python3 older than 3.9?). Bare BPMN is still semantically valid."
     fi
     rm -f "$BPMN_LAID_OUT"
   else
-    echo "  SKIP: bpmn-auto-layout invocation failed (network / sandbox) — bare BPMN already verified above."
+    echo "  SKIP: layout invocation failed — bare BPMN already verified above."
   fi
 else
-  echo "  SKIP: npx not present OR SKIP_NETWORK_TESTS set"
+  echo "  SKIP: python3 not present OR SKIP_NETWORK_TESTS set"
 fi
 
 # ---------------------------------------------------------------------------

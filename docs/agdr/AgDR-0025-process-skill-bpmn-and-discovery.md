@@ -54,6 +54,8 @@ BPMN 2.0 wins on all three.
 
 ### 2. Layout strategy
 
+> **Superseded by AgDR-0248 (2026-10-19).** `bpmn-auto-layout` has no CLI and ignores lanes and pools (issue 1726). The skill now uses a Python 3 grid layout. The text below is kept as the record of the original choice.
+
 | Option | Pros | Cons |
 |--------|------|------|
 | **`bpmn-auto-layout` npm package** | De-facto standard for programmatic BPMN layout; same project family as bpmn.io (the rendering engine inside Camunda Modeler); maintained; well-understood failure modes (cycles, dense graphs) | Requires Node + npm at run time; ships ~5MB of dependencies via npx |
