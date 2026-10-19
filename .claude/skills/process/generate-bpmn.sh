@@ -332,19 +332,20 @@ PROC_OPEN
 emit_bare_bpmn
 
 # ---------------------------------------------------------------------------
-# Grid layout pass. Fail explicitly if Python is unavailable instead of
-# silently writing a blank diagram. --skip-layout still needs no Python.
+# Grid layout pass (AgDR-0248). Needs Python 3.9 or later. Without it, warn
+# and emit bare BPMN, as the earlier Node fallback did. --skip-layout needs
+# no Python. A layout error on an invalid model still exits non-zero.
 # ---------------------------------------------------------------------------
 LAYOUT_OUT="$TMP/layout.bpmn"
 
 if [ "$SKIP_LAYOUT" -eq 1 ]; then
   cp "$BARE" "$LAYOUT_OUT"
   echo "generate-bpmn.sh: --skip-layout set, emitting bare BPMN (no <bpmndi>)" >&2
+elif ! command -v python3 >/dev/null 2>&1 \
+  || ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' 2>/dev/null; then
+  cp "$BARE" "$LAYOUT_OUT"
+  echo "generate-bpmn.sh: WARNING — python3 3.9 or later not found; emitting bare BPMN (no <bpmndi>)" >&2
 else
-  if ! command -v python3 >/dev/null 2>&1; then
-    echo "generate-bpmn.sh: python3 is required for layout (or use --skip-layout)" >&2
-    exit 2
-  fi
   python3 "$(dirname "$0")/layout-bpmn.py" "$BARE" "$LAYOUT_OUT"
 fi
 

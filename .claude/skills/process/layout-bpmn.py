@@ -37,6 +37,11 @@ def layout(source, destination):
                  'task', 'serviceTask', 'userTask', 'sendTask', 'receiveTask',
                  'subProcess', 'startEvent', 'endEvent', 'intermediateCatchEvent',
                  'exclusiveGateway', 'parallelGateway'}}
+    for flow in flows:
+        for attr in ('sourceRef', 'targetRef'):
+            if flow.get(attr) not in nodes:
+                sys.exit(f"layout-bpmn.py: flow {flow.get('id')} has {attr} "
+                         f"'{flow.get(attr)}', which is not a node in the model")
     outgoing = defaultdict(list)
     for flow in flows:
         outgoing[flow.get('sourceRef')].append(flow)

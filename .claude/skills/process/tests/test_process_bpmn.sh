@@ -132,3 +132,30 @@ LINT_SCENARIO=warnings PATH="$WORK/bin:$PATH" "$SKILL_DIR/lint.sh" "$WORK/grid.b
 [ "$status" -eq 1 ]
 LINT_SCENARIO=warnings PATH="$WORK/bin:$PATH" "$SKILL_DIR/lint.sh" "$WORK/grid.bpmn" --max-warnings=1 > /dev/null
 echo 'PASS: plural summary counts and warning thresholds'
+
+# An edge that names a missing node gives one clear error, not a traceback.
+python3 - "$WORK/ghost.json" <<'PY'
+import json, sys
+json.dump(dict(slug='ghost', lanes=[dict(id='l0', name='Team')],
+               nodes=[dict(id='a', type='event-start', label='Start', lane='l0')],
+               edges=[{'from': 'a', 'to': 'ghost'}]), open(sys.argv[1], 'w'))
+PY
+status=0
+"$SKILL_DIR/generate-bpmn.sh" --slug=ghost --model="$WORK/ghost.json" -o "$WORK/ghost.bpmn" > "$WORK/ghost.log" 2>&1 || status=$?
+[ "$status" -ne 0 ]
+grep -q "'ghost'" "$WORK/ghost.log"
+if grep -q Traceback "$WORK/ghost.log"; then
+  echo 'FAIL: missing edge target printed a traceback'
+  exit 1
+fi
+echo 'PASS: missing edge target gives one clear error'
+
+# Without python3 the layout step warns and emits bare BPMN.
+mkdir "$WORK/nopy"
+for tool in bash env jq awk sed cat cp mkdir mktemp rm dirname grep tr sort head tail cut date xmllint; do
+  p=$(command -v "$tool" 2>/dev/null) && ln -s "$p" "$WORK/nopy/$tool"
+done
+PATH="$WORK/nopy" "$SKILL_DIR/generate-bpmn.sh" --slug=grid --model="$WORK/model.json" -o "$WORK/nopy.bpmn" 2> "$WORK/nopy.log"
+grep -q 'WARNING' "$WORK/nopy.log"
+! grep -q 'BPMNDiagram' "$WORK/nopy.bpmn"
+echo 'PASS: missing python3 falls back to bare BPMN with a warning'
