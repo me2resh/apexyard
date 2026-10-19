@@ -312,16 +312,49 @@ Not filed by this build. The CEO accepted the first and third rows. The other ro
 | [Task] Decide head pinning for raw merges | Choose a gate rule for a raw merge without `--match-head-commit` or `-f sha=`: require, warn, or record as residual. |
 | [Task] Add a glab prefetch or a glab call budget | Prefetch through `glab mr view --output json`, or measure the glab route and record its budget. |
 | [Task] Test which dispatcher timeout wins on override | Test a repeated dispatcher entry in `.claude/settings.local.json`, then document the result. |
-| [Spike] Per-call time limit for merge-gate `gh` calls | Find a bash 3.2 method with no GNU `timeout` that ends one hung call early. The limit wraps each `gh` call, not the gate process. Evidence: one call in the #1770 investigation hung for 120 seconds, then passed in 2 seconds. |
-| [Task] Cut the forge calls of the carry-over chain walk | `rex_approval_carries_over` makes 1 branch call plus 1 commit call for each step, up to 10 steps, in series, and repeats the walk for a stale CEO marker. Measured on #1770 (4 steps): the route is 10 calls, p95 18986 ms on the simulated #1759 host, so 5 x p95 is 94.9 seconds, above the 60-second timeout. Options: share one walk result between the Rex and CEO checks; fetch the parents of all steps in one GraphQL query; or read the steps from the PR commits list. Each option must keep the forge as the source of the parents and the tree. Then measure again and set the timeout. |
+| [Spike] Per-call time limit for merge-gate `gh` calls | **Done in #1796** (evolution entry above). `_lib-gh-timeout.sh` / `apexyard_gh`; default 20 s; `timeout` / `gtimeout` / watchdog. |
+| [Task] Cut the forge calls of the carry-over chain walk | **Done in #1796** (evolution entry above). One GraphQL query per walk; Rex/CEO share the memo in-process. |
 | [Discovery, parked under #1762] Function and environment injection into hooks | `BASH_FUNC_<name>%%`, `BASH_ENV` and `PATH` can replace `gh`, `jq` or `shasum` in every gate. |
 | [Task] Refuse unscoped merges in the review and CI gates (optional) | Make the review and CI gates block an empty `CMD_REPO` (#887 class). |
 
+## Architecture evolution
+
+### Carry-over walk batching and per-call gh limit (#1796)
+
+The #1759 snapshot cut the plain merge route. It left the Rex carry-over walk
+on one forge call per merge-dev step. On the #1770 shape (4 steps) the route
+was 10 calls and the simulated-host p95 was 18986 ms, so NFR-1 failed and
+60 s was only 3.2 × p95.
+
+This evolution (same AgDR number — not a new decision number) changes the
+walk and the gate forge path:
+
+1. **One GraphQL call per walk.** `rex_approval_carries_over` loads the base
+   tip (`repository.ref(qualifiedName: refs/heads/...)`) and up to 10
+   first-parent commits (oid, tree, parents) in a single `gh api graphql`
+   query. The forge stays the source of parents and trees. Local git only
+   recomputes merge-tree and ancestry.
+2. **Shared memo in one gate process.** Rex and CEO call the walk in the
+   current shell (via `_REX_CARRY_LAST`), not only via `$()`. The second
+   check reuses the same chain when `(repo, new_sha, base)` match.
+3. **Per-call time limit.** `_lib-gh-timeout.sh` / `apexyard_gh` wraps each
+   merge-route `gh` call. Default 20 s (`APEXYARD_GH_CALL_TIMEOUT`). Prefers
+   `timeout`, then `gtimeout`, then a bash-native watchdog. A stall returns
+   124 and prints a BLOCKED line; the review gate treats carry-over
+   `timeout` as exit 2. The wrapper wraps the `gh` child only, so the
+   AgDR-0256 PPID binding for PR metadata still holds.
+
+Fail-closed rules are unchanged: an unreadable step, a tree mismatch, or a
+chain over 10 steps still means "does not carry over".
+
+Measurement (n=30, #1770 shape, filled in by the #1796 build after the
+suites): see the updated table under § "Carry-over chain shape (PR #1770)".
+
 ## Artifacts
 
-- me2resh/apexyard#1759, #1623, #1760, #1761
+- me2resh/apexyard#1759, #1623, #1760, #1761, #1796
 - AgDR-0104, AgDR-0109, AgDR-0120, AgDR-0162, AgDR-0169, AgDR-0244, AgDR-0247
-- `.claude/hooks/dispatch-bash.sh`, `.claude/hooks/_lib-extract-pr.sh`, the four merge gates
-- `.claude/hooks/tests/test_prmeta_1759.sh`
+- `.claude/hooks/dispatch-bash.sh`, `.claude/hooks/_lib-extract-pr.sh`, `.claude/hooks/_lib-merge-behind.sh`, `.claude/hooks/_lib-gh-timeout.sh`, the four merge gates
+- `.claude/hooks/tests/test_prmeta_1759.sh`, `.claude/hooks/tests/test_lib_merge_behind.sh`
 - `docs/perf/hook-fail-closed-profile-2026-10.md`, `docs/hooks-fail-closed.md`
 - Design reviews: Tariq (2026-10-19), Hakim security review of v4 and delta checks of v5 and v6 (2026-10-19). Hakim's v6 advisories are in this build: the crash-class tests, the control-variable unset, the whole-file digest test and the rule 27 wording.
