@@ -20,8 +20,8 @@ check 0 'rule excludes' config project_settings
 printf '{"permissions":{"allow":["Read"]}}\n' > "$TMP/live/.claude/settings.local.json"
 check 0 'permission create absent file' config local_settings
 check 2 'unknown source' config unknown
-printf '{"hooks":{"x":[]}}\n' > "$TMP/scratch/.claude/settings.json"
-check 0 'non-live settings allowed' config project_settings "$TMP/scratch/.claude/settings.json"
+printf '{"permissions":{"allow":["Read"]}}\n' > "$TMP/scratch/.claude/settings.json"
+check 0 'non-live permission change allowed' config project_settings "$TMP/scratch/.claude/settings.json"
 check 0 'block log records each block' test "$(jq -s '[.[]|select(.decision=="block")]|length' "$TMP/live/.claude/session/config-change-blocks.jsonl")" = 10
 check 0 'non-live change is logged as allow' test "$(jq -s '[.[]|select(.decision=="allow")]|length' "$TMP/live/.claude/session/config-change-blocks.jsonl")" = 1
 # User settings resolve from the source when file_path is absent.
@@ -32,6 +32,26 @@ check 2 'user settings env change' config user_settings
 printf '{"disableAllHooks":true}\n' > "$HOME/.claude/settings.json"
 check 2 'user settings disableAllHooks' config user_settings
 rm -f "$HOME/.claude/settings.json"
+# A settings file that is not live: the baseline is its committed copy.
+WT="$TMP/worktree"
+mkdir -p "$WT/.claude"
+git init -q "$WT" || exit 1
+printf '{"hooks":{"PreToolUse":[]},"permissions":{"allow":[]}}\n' > "$WT/.claude/settings.json"
+git -C "$WT" add .claude/settings.json || exit 1
+git -C "$WT" -c user.name=t -c user.email=t@example.invalid commit -q -m base || exit 1
+printf '{"permissions":{"allow":["Read"]},"hooks":{"PreToolUse":[]}}\n' > "$WT/.claude/settings.json"
+check 0 'non-live change that keeps the committed hooks' config project_settings "$WT/.claude/settings.json"
+printf '{"hooks":{"PreToolUse":[]},"env":{"D17_PROBE":"1"}}\n' > "$WT/.claude/settings.json"
+check 2 'non-live env change against the committed copy' config project_settings "$WT/.claude/settings.json"
+printf '{"hooks":{}}\n' > "$WT/.claude/settings.json"
+check 2 'non-live hooks change against the committed copy' config project_settings "$WT/.claude/settings.json"
+printf '{"hooks":{"PreToolUse":[]},"disableAllHooks":true}\n' > "$WT/.claude/settings.json"
+check 2 'non-live disableAllHooks' config project_settings "$WT/.claude/settings.json"
+printf '{"hooks":{"x":[]}}\n' > "$TMP/scratch/.claude/settings.json"
+check 2 'non-live hooks in a file that is not committed' config project_settings "$TMP/scratch/.claude/settings.json"
+printf 'invalid\n' > "$TMP/scratch/.claude/settings.json"
+check 2 'non-live invalid JSON' config project_settings "$TMP/scratch/.claude/settings.json"
+printf '{}\n' > "$TMP/scratch/.claude/settings.json"
 # Without a pin (a session after /clear), the block log goes to the project directory.
 mkdir -p "$TMP/project/.claude"
 nopin_config() { printf '{"session_id":"nopin","source":"project_settings"}' | CLAUDE_CODE_SESSION_ID=nopin CLAUDE_PROJECT_DIR="$TMP/project" /bin/bash "$ROOT/block-hook-disabling-config-change.sh"; }
