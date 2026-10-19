@@ -9,11 +9,14 @@ pt_init "$INPUT" || pt_block 'cannot read the session baseline or pin.'
 source_name=$(jq -r '.source // empty' <<<"$INPUT")
 path=$(jq -r '.file_path // empty' <<<"$INPUT")
 log_change() {
-  local decision="$1" reason="$2"
-  [ -n "$PT_OPS" ] || return 0
-  mkdir -p "$PT_OPS/.claude/session"
+  local decision="$1" reason="$2" log_root
+  # A session after /clear has no pin (capture P12b). Log under the project
+  # directory then, so a block in that session still leaves evidence.
+  log_root=${PT_OPS:-${PT_PROJECT:-}}
+  [ -n "$log_root" ] || return 0
+  mkdir -p "$log_root/.claude/session"
   jq -cn --arg source "$source_name" --arg path "$path" --arg decision "$decision" --arg reason "$reason" \
-    '{source:$source,file_path:$path,decision:$decision,reason:$reason}' >> "$PT_OPS/.claude/session/config-change-blocks.jsonl"
+    '{source:$source,file_path:$path,decision:$decision,reason:$reason}' >> "$log_root/.claude/session/config-change-blocks.jsonl"
 }
 block_change() { log_change block "$*"; pt_block "$*"; }
 if [ -z "$path" ]; then
