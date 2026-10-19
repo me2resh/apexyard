@@ -175,10 +175,10 @@ Do not delete an old-layout file. Step 5 writes the old-layout marker for this t
 #### 4e. Confirm before overwriting a foreign marker (AgDR-0257 / #1533)
 
 Before step 5, run `active_ticket_foreign_overwrite "$tree" "<owner/repo>" "<number>"`.
-When it returns 0, ask with `AskUserQuestion`: separate worktree (see #1534),
-take over, or cancel. Headless and `/fan-out` cancel (marker unchanged).
-Same ticket or same-session switch: no question. See step 5;
-`docs/skills/start-ticket-rationale.md`.
+When it returns 0, ask with `AskUserQuestion`: stay in a worktree that
+already holds your ticket (see #1534), take over, or cancel. Headless and
+`/fan-out` cancel (marker unchanged). Same ticket or same-session switch:
+no question. See step 5; `docs/skills/start-ticket-rationale.md`.
 
 ### 5. Write the markers
 
