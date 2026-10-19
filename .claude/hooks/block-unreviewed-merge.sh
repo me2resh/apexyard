@@ -189,6 +189,13 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
+_has_split_merge_phrase "$COMMAND"
+scan_status=$?
+if [ "$scan_status" -eq 2 ]; then
+  echo "BLOCKED: merge gate could not scan the command. Check awk and the command size." >&2
+  exit 2
+fi
+
 if ! is_merge_command "$COMMAND"; then
   exit 0
 fi
@@ -198,7 +205,7 @@ if has_conflicting_repo_flags "$COMMAND"; then
   exit 2
 fi
 
-if merge_command_uses_variable "$COMMAND"; then
+if merge_command_uses_variable "$COMMAND" "$scan_status"; then
   echo "BLOCKED: merge gate cannot resolve a merge command containing an unexpanded PR or repo variable. Re-run with literal values." >&2
   exit 2
 fi

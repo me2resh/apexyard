@@ -405,6 +405,13 @@ _merge_scrub_once() {
              word == "head" || word == "tail" || word == "wc" || \
              word == "true" || word == "false"
     }
+    # Echo arguments are data only after every segment passes the scrub.
+    function remember_echo() {
+      if (echo_start) {
+        np++; ps[np] = echo_start; pl[np] = length(out) - echo_start + 1
+        echo_start = 0
+      }
+    }
     function is_grep_family(word) {
       return word == "grep" || word == "egrep" || word == "fgrep"
     }
@@ -492,6 +499,7 @@ _merge_scrub_once() {
         c = substr(s, pos, 1); nx = substr(s, pos + 1, 1)
         if (c == " " || c == "\t") { out = out c; pos++; continue }
         if (c == "\n") {
+          remember_echo()
           out = out c; pos++; first = 1; cmdword = ""
           # Bodies start after the opener line, in delimiter order. Inspect
           # every command on the opener line before discarding any body.
@@ -514,7 +522,9 @@ _merge_scrub_once() {
           pending = 0
           continue
         }
-        if (c ~ /[;|&]/) { out = out c; pos++; first = 1; cmdword = ""; continue }
+        # Combined-output operators do not start a new command.
+        if (c == "&" && nx == ">") { out = out c; pos++; c = ">"; nx = substr(s, pos + 1, 1) }
+        if (c ~ /[;|&]/) { remember_echo(); out = out c; pos++; first = 1; cmdword = ""; continue }
         # No normalization of command words: quoted, escaped, assigned,
         # expanded, reserved and path-qualified words all retain raw text.
         if (first) {
@@ -525,7 +535,9 @@ _merge_scrub_once() {
           if (!allowed(word) || (after != "" && after !~ /[ \t\n;|&<>]/)) {
             bad = 1; break
           }
-          out = out word; first = 0; cmdword = word; seen_pat = 0; take_next = 0; continue
+          out = out word; first = 0; cmdword = word; seen_pat = 0; take_next = 0
+          if (word == "echo") echo_start = length(out) + 1
+          continue
         }
         # Unquoted zsh dynamic named directory (~[...]) can run code.
         # newbad keeps the dev scrub and adds the raw text (see the end).
@@ -612,7 +624,7 @@ _merge_scrub_once() {
         if (c == ">") {
           start = pos
           pos++
-          if (substr(s, pos, 1) ~ /[>|!&]/) pos++
+          while (pos <= n && substr(s, pos, 1) ~ /[>|!&]/) pos++
           while (pos <= n && substr(s, pos, 1) ~ /[ \t]/) pos++
           lead = (pos <= n) ? substr(s, pos, 1) : ""
           if (read_merge_word()) {
@@ -621,6 +633,12 @@ _merge_scrub_once() {
             newbad = 1
           }
           pos = start
+          if (nx == "&") {
+            pos++
+            while (pos <= n && substr(s, pos, 1) ~ /[>|!&]/) pos++
+            out = out substr(s, start, pos - start)
+            continue
+          }
         }
         # Grep-family options that can run a program on some hosts add the
         # raw text. A word that starts with a quote is handled in the quote branch.
@@ -678,6 +696,7 @@ _merge_scrub_once() {
         }
         out = out c; pos++
       }
+      remember_echo()
       if (pending) bad = 1
       # A newbad shape can execute the data, so the gates must see the raw
       # text. They must also still see the dev scrubbed text, where a merge
@@ -1019,71 +1038,157 @@ _has_opaque_merge_wrapper() {
 # JSON quotes are transport syntax, not shell argument boundaries.
 # Scan the bounded data view without evaluating shell input. A changed
 # phrase is opaque: its target must never borrow another call or checkout.
+# Return 0 for a split, 1 for clear text, and 2 for scan failure.
 _has_split_merge_phrase() {
   local result
-  if [ "${#1}" -gt 120000 ]; then return 0; fi
+  if [ "${#1}" -gt 120000 ]; then return 2; fi
   result=$(MERGE_SPLIT_INPUT="$1" awk '
-    function finish() {
-      if (w == "") return
-      a = b; b = d; d = "^" w "$"
-      ca = cb; cb = cd; cd = changed
-      if ((ca || cb || cd || redirected) && \
-          ((("gh" ~ a) && ("pr" ~ b)) || (("glab" ~ a) && ("mr" ~ b))) && \
-          ("merge" ~ d)) hit = 1
-      w = ""; changed = 0
+    function reset() { stage = 0; active = 1; redirected = 0; option_value = 0; api = 0 }
+    function finish(    host, value) {
+      if (w == "") {
+        if (changed && stage > 0) altered = 1
+        changed = opaque_word = 0; raw = ""; return
+      }
+      # Shell arguments can contain another command. Never evaluate them.
+      if (nested && raw ~ /[ \t]/) {
+        if (depth >= 3 || np >= 100) scan_error = 1
+        else { pending[++np] = raw; levels[np] = depth + 1 }
+      }
+      value = w
+      if (api && value ~ /(pulls|merge_requests)\/[0-9]+\/merge/ && changed) hit = 1
+      if (active && stage == 0) {
+        if (value ~ /^[A-Za-z_][A-Za-z0-9_]*=/ || value == "env" || value == "command" || value == "exec" || value == "do" || value == "then" || value == "if" || value == "elif" || value == "else" || value == "while" || value == "until") {
+          w = raw = ""; changed = opaque_word = 0; return
+        }
+        host = value; sub(/^.*\//, "", host)
+        if (opaque_word) host = ".*"
+        if ("gh" ~ ("^" host "$") || "glab" ~ ("^" host "$")) {
+          stage = 1; cli = host; altered = changed || host != value
+        } else active = 0
+      } else if (active) {
+        if (opaque_word) value = ".*"
+        if (stage == 1 && value == "api") api = 1
+        if (option_value) option_value = 0
+        else if (value ~ /^-/) {
+          if (value == "-R" || value == "--repo" || value == "--hostname" || value == "--host") option_value = 1
+          altered = 1
+        } else if (stage == 1 && \
+            ((("gh" ~ ("^" cli "$")) && ("pr" ~ ("^" value "$"))) || \
+             (("glab" ~ ("^" cli "$")) && ("mr" ~ ("^" value "$"))))) {
+          stage = 2; altered = altered || changed
+        } else if (stage == 2 && "merge" ~ ("^" value "$")) {
+          if (altered || changed || redirected || depth > 0) hit = 1
+          active = 0
+        } else active = 0
+      }
+      w = raw = ""; changed = opaque_word = 0
     }
-    BEGIN {
-      s = ENVIRON["MERGE_SPLIT_INPUT"]; n = length(s)
-      sq = sprintf("%c", 39); dq = sprintf("%c", 34)
-      a = b = d = "^!$"
+    function unknown(endchar,    level,t) {
+      if (length(w) < 128) w = w ".*"
+      changed = opaque_word = 1
+      if (endchar == "") return
+      level = 1
+      while (i < n && level) {
+        t = substr(s, ++i, 1)
+        if ((endchar == ")" && t == "(") || (endchar == "}" && t == "{")) level++
+        if (t == endchar) level--
+      }
+    }
+    function scan(text,    c,t,nx,rq,rest) {
+      s = text; n = length(s); q = w = raw = ""; changed = opaque_word = 0; reset()
       for (i = 1; i <= n; i++) {
-        c = substr(s, i, 1)
+        c = substr(s, i, 1); nx = substr(s, i + 1, 1)
         if (c == sq || c == dq) {
           if (q == c) { q = ""; changed = 1; continue }
           if (q == "") { q = c; changed = 1; continue }
         }
-        if (q != sq && c == "$") {
-          rest = substr(s, i + 1)
-          len = 0
-          if (match(rest, /^[A-Za-z_][A-Za-z0-9_]*/)) len = RLENGTH
-          else if (match(rest, /^[{][A-Za-z_][A-Za-z0-9_]*[}]/)) len = RLENGTH
-          if (len) { w = w ".*"; changed = 1; i += len; continue }
+        if (q == "" && c == "#" && (i == 1 || substr(s, i - 1, 1) ~ /[ \t\n;|&()]/)) {
+          finish()
+          while (i < n && substr(s, i + 1, 1) != "\n") i++
+          continue
         }
-        if (q == "" && c ~ /[<>]/) {
-          # A descriptor prefix belongs to the operator, not argv.
+        if (q != sq && c == bs) {
+          unknown(""); i++
+          if (length(raw) < 4094) raw = raw bs substr(s,i,1)
+          else if (nested) scan_error = 1
+          continue
+        }
+        if (q != sq && c == "$") {
+          rest = substr(s, i + 1, 70)
+          if (nx == "{") { i++; unknown("}") }
+          else if (nx == "(") { i++; unknown(")") }
+          else if (nx == sq || nx == dq) {
+            i++; unknown(nx)
+          } else {
+            unknown("")
+            if (match(rest, /^[A-Za-z_][A-Za-z0-9_]*/)) {
+              i += RLENGTH
+              while (i < n && substr(s, i + 1, 1) ~ /[A-Za-z0-9_]/) i++
+            }
+            else if (nx ~ /[0-9@*#?$!_-]/) i++
+          }
+          continue
+        }
+        if (q != sq && c == "`") { unknown("`"); continue }
+        if (q == "" && c == "{" && nx ~ /[ \t\n]/ && w == "") { finish(); reset(); continue }
+        if (q == "" && c == "{") { unknown("}"); continue }
+        if (q == "" && c ~ /[*?[]/) { unknown(c == "[" ? "]" : ""); continue }
+        if (q == "" && (c ~ /[<>]/ || (c == "&" && nx == ">"))) {
           if (w ~ /^[0-9]+$/) w = ""
           finish(); redirected = 1
-          if (substr(s, i + 1, 1) ~ /[<>|!&]/) i++
-          while (substr(s, i + 1, 1) ~ /[ \t]/ && i < n) i++
-          rq = ""
+          while (i < n && substr(s, i + 1, 1) ~ /[<>|!&]/) i++
+          while (i < n && substr(s, i + 1, 1) ~ /[ \t]/) i++
+          rq = ""; target = ""
           while (i < n) {
             t = substr(s, i + 1, 1)
             if (rq == "" && t ~ /[ \t\n;|&<>]/) break
             i++
+            if (nested && length(target) < 4096) target = target t
+            else if (nested) scan_error = 1
             if (t == sq || t == dq) {
               if (rq == t) rq = ""
               else if (rq == "") rq = t
             }
           }
+          # A shell here-string is another command source.
+          if (nested && target != "") {
+            sub(/^[\047\042]/, "", target); sub(/[\047\042]$/, "", target)
+            if (depth >= 3 || np >= 100) scan_error = 1
+            else { pending[++np] = target; levels[np] = depth + 1 }
+          }
           continue
         }
         if (q == "" && c ~ /[ \t\n;|&()]/) {
           finish()
-          if (c ~ /[\n;|&()]/) { a = b = d = "^!$"; ca = cb = cd = redirected = 0 }
+          if (c ~ /[\n;|&()]/) reset()
           continue
         }
-        # Only phrase letters participate in a literal word. Other bytes
-        # cannot become regular expression operators.
-        if (length(w) < 64) {
-          if (c ~ /[A-Za-z0-9]/) w = w c
+        if (length(raw) < 4096) raw = raw c
+        else if (nested) scan_error = 1
+        if (length(w) < 128) {
+          if (c ~ /[A-Za-z0-9_\/=-]/) w = w c
+          else if (c == ".") w = w "\\."
           else w = w "!"
         }
       }
       finish()
-      print hit ? "split" : "clear"
     }
-  ' 2>/dev/null) || return 0
-  [ "$result" != clear ]
+    BEGIN {
+      sq = sprintf("%c",39); dq = sprintf("%c",34); bs = sprintf("%c",92)
+      original = ENVIRON["MERGE_SPLIT_INPUT"]
+      nested = original ~ /(^|[ \t;|&\/])(bash|sh|zsh|eval|source)([ \t]|$)/
+      scan(original)
+      for (j = 1; j <= np && j <= 100 && !hit; j++) {
+        depth = levels[j]; scan(pending[j])
+      }
+      print scan_error ? "unavailable" : (hit ? "split" : "clear")
+    }
+  ' 2>/dev/null) || return 2
+  case "$result" in
+    split) return 0 ;;
+    clear) return 1 ;;
+    *) return 2 ;;
+  esac
 }
 
 # Scan both original and continuation-joined text. A comment must not hide
@@ -1092,9 +1197,6 @@ is_merge_command_raw() {
   local cmd joined
   joined=$(_join_shell_continuations "$1")
   for cmd in "$1" "$joined"; do
-    if _has_split_merge_phrase "$cmd"; then
-      return 0
-    fi
     if echo "$cmd" | grep -qE '\bgh\s+pr\s+merge\b'; then
       return 0
     fi
@@ -1128,6 +1230,9 @@ is_merge_command_raw() {
     if echo "$cmd" | grep -qE '\btracker_pr_merge\b'; then
       return 0
     fi
+    local scan_status
+    _has_split_merge_phrase "$cmd"; scan_status=$?
+    if [ "$scan_status" -ne 1 ]; then return 0; fi
   done
   return 1
 }
@@ -1331,8 +1436,11 @@ merge_command_uses_variable() {
   # Use the same bounded data view as is_merge_command. Uncertain or
   # executable commands keep the raw text, so variable targets still block.
   cmd=$(_scrub_merge_command "$joined") || cmd="$joined"
-  if _has_split_merge_phrase "$cmd"; then
-    return 0
+  # Gates can reuse their raw scan only when the data view is identical.
+  # Standalone callers still scan the command here.
+  if [ "$cmd" = "$1" ] && [ "${2:-}" = 0 ]; then return 0; fi
+  if [ "$cmd" != "$1" ] || [ "${2:-}" != 1 ]; then
+    if _has_split_merge_phrase "$cmd"; then return 0; fi
   fi
 
   # All four hooks call this check before PR extraction. Three intentionally

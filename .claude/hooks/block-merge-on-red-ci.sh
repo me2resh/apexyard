@@ -303,6 +303,13 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
+_has_split_merge_phrase "$COMMAND"
+scan_status=$?
+if [ "$scan_status" -eq 2 ]; then
+  echo "BLOCKED: merge gate could not scan the command. Check awk and the command size." >&2
+  exit 2
+fi
+
 if ! is_merge_command "$COMMAND"; then
   exit 0
 fi
@@ -317,7 +324,7 @@ fi
 # command text — the old code fell back to the CWD's PR and checked an
 # UNRELATED PR's CI (and passed `$REPO` to gh, producing garbage errors). A CI
 # gate must not guess. Block with a clear, accurate instruction instead.
-if merge_command_uses_variable "$COMMAND"; then
+if merge_command_uses_variable "$COMMAND" "$scan_status"; then
   cat >&2 <<'EOF'
 BLOCKED: cannot verify CI on a variable-substituted merge command.
 
