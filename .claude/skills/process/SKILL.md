@@ -21,7 +21,8 @@ Pairs with `/c4` (static system topology) and `/extract-features` (exhaustive fe
 | `git` | Anchor resolution + workspace cloning | Required |
 | `gh` | Cross-repo registry lookup | Optional — falls back to registry-only |
 | `xmllint` | XML validity check | Recommended; the smoke test needs it |
-| `node` + `npx` | `bpmn-auto-layout` for `<bpmndi>` coords AND `bpmnlint` for the gate | Without Node: the skill emits a bare BPMN (no `<bpmndi>`) and warns; with `--skip-lint`, also bypasses the lint gate. |
+| `python3` ≥ 3.9 | Grid layout (`layout-bpmn.py`, standard library only; `ET.indent` needs 3.9) for `<bpmndi>` coords | Without it: the skill warns and emits a bare BPMN (no `<bpmndi>`). `--skip-layout` needs no Python. |
+| `node` + `npx` | `bpmnlint` for the lint gate only | Without Node, the lint step cannot run; use `--skip-lint` to bypass the gate. |
 | `yq` | Registry parsing | Falls back to grep when absent |
 
 Same disclosure shape as `docs/getting-started.md` § "Optional: LSP-aware code navigation" — disclosed up front, surfaced when invoked, never silently fails.
