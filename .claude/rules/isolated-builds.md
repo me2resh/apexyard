@@ -73,7 +73,7 @@ git -C <project-clone> worktree remove .claude/worktrees/<type>-<ticket>-<slug>
 git -C <project-clone> worktree prune
 ```
 
-**Session marker warnings (#1533).** #1533 adds these warnings. The marker records `session_id` and `branch`. The gate warns once per session on a mismatch. `/start-ticket` asks before it overwrites another session marker. A headless run cancels. Until #1533 ships, a second `/start-ticket` in the same tree overwrites the marker without a warning. Use one worktree per session.
+**Session marker warnings (#1533).** The marker records `session_id` and `branch`. The gate warns once per session on a mismatch. `/start-ticket` asks before it overwrites another session marker. In a headless run, `/start-ticket` cancels. On a fork that does not yet include PR #1794, a second `/start-ticket` in the same tree overwrites the marker without a warning. Use one worktree per session.
 
 ## Lifecycle — remove the worktree once its PR merges
 

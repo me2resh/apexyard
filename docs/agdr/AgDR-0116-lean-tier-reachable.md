@@ -92,3 +92,12 @@ path first. Callers may invoke it from any directory. Regression tests plant
 `json.py` and `re.py` under the fixture repo, run with cwd inside that repo, and
 assert Full with no marker file from the planted modules. A `PYTHONPATH` variant
 is covered the same way.
+
+## Architecture evolution — plant coverage and signal exit (#1813, 2026-10-19)
+
+Hakim's advisory on PR #1797 asked for three more plant cases that still run when
+`-I` is removed but the neutral working directory stays: `subprocess.py`,
+`sitecustomize.py`, and a `.pth` file under a `PYTHONUSERBASE` user-site layout.
+Each case returns Full and leaves no run marker. The INT and TERM traps now call
+cleanup and then `exit 1`, so a signalled run is an explicit non-zero failure
+instead of cleanup-and-continue.
