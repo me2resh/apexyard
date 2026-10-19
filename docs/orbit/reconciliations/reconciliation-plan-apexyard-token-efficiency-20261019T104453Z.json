@@ -3,11 +3,11 @@
   "id": "reconciliation-plan-apexyard-token-efficiency-20261019T104453Z",
   "planId": "plan-apexyard-token-efficiency",
   "planRevision": 5,
-  "projectSnapshotId": "snapshot-apexyard-20261019T104447Z",
-  "reconciledAt": "2026-10-19T10:44:53.522Z",
+  "projectSnapshotId": "snapshot-apexyard-20261019T123214Z",
+  "reconciledAt": "2026-10-19T12:32:14.000Z",
   "observations": [
-    "Observed me2resh/apexyard at the dev merge-base 1ac23c1fb56b80ee5932a58e7c332940af50635e.",
-    "Slice PR: #1791; dev merge-base 1ac23c1fb56b80ee5932a58e7c332940af50635e.",
+    "Observed me2resh/apexyard at the dev merge-base 64e6e103193d6087e0f7c6dc75fff7bfc1e35b49.",
+    "Slice PR: #1791; dev merge-base 64e6e103193d6087e0f7c6dc75fff7bfc1e35b49.",
     "Only ac2-2, ac2-3 and ac2-4 change. The other statuses are carried without change from reconciliation-plan-apexyard-token-efficiency-20261019T062054Z."
   ],
   "criterionAssessments": [
@@ -63,7 +63,7 @@
         "PR #1663 (o6) merged on 2026-10-12, so the compact line is in place.",
         "The 7-day time-box after #1663 ended on 2026-10-19 with no autoCompactWindow 500000 session."
       ],
-      "explanation": "Missing: the 7-day time-box after #1663 (merged 2026-10-12) ended 2026-10-19 with no autoCompactWindow 500000 session. Next: a later measurement slice if the owner still wants that window measured."
+      "explanation": "Missing: a measured session at autoCompactWindow 500000 inside the time-box (it ended 2026-10-19 with none). Next: measure in a later o2 slice."
     },
     {
       "criterionId": "ac2-3",
@@ -86,9 +86,9 @@
         "Fork budget comment: https://github.com/anthropics/claude-code/issues/88841#issuecomment-6265152676",
         "Names-only comment: https://github.com/anthropics/claude-code/issues/82144#issuecomment-6265151741",
         "No skill listing: https://github.com/anthropics/claude-code/issues/103426",
-        ".claude/hooks/tests/test_fresh_spawn_default.sh is in this PR's changed paths."
+        "docs/perf/subagent-skill-listing-2026-10-19.md: one subagent skill_listing content field is 30,077 UTF-8 bytes (about 138 skill lines); the attachment JSON is 32,847 bytes."
       ],
-      "explanation": "The owner approved all four texts on 2026-10-19. Two new issues and two comments are filed. The plan notes list the links."
+      "explanation": "The owner approved all four texts on 2026-10-19. Two new issues and two comments are filed. The plan notes list the links. The dated note records the skill-listing size that supports the no-listing request."
     },
     {
       "criterionId": "ac3-1",
