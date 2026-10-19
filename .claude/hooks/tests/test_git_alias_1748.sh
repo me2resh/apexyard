@@ -4,6 +4,9 @@
 # resolver only). Full matrix (~2,122 cases, every gate + fail-before):
 #   /bin/bash .claude/hooks/tests/test_git_alias_1748.sh matrix
 #   ALIAS_1748_FULL=1 /bin/bash .claude/hooks/tests/test_git_alias_1748.sh
+# In matrix mode the fail-before tallies (gap, already-blocked, allow-pass,
+# allow-fail) are printed and not asserted. The exit check reads only fail.
+# This keeps the suite passing after merge (build rule 10a).
 # The payload is data. Never execute an unsafe git command in a fixture.
 set -eu
 # Keep host session pins and network lookups out of fixtures.
@@ -255,10 +258,15 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
         expansions=['-c a.b=c push','-p push','"pu""sh"',r'pu\sh','pu$h','pu`x`sh','-c alias.qq=push qq','--no-pager push','-C /tmp push']
         expansions += ['-c '+k+'=value push' for k in ['core.pager','core.hooksPath','core.fsmonitor','core.editor','sequence.editor','core.sshCommand','diff.external','gpg.program','credential.helper']]
         for value in expansions: case('Expansion',value,'git zz',entries=[('alias.zz',value)],shells=both)
-        for boundary in ['', ' ', '\t','\n','(',')','<','>','`','"',"'",';','|','&','=']:
+        for boundary in ['', ' ', '\t','\n','(',')','<','>','`','"',"'",';','|','&','=','/']:
             case('Inner candidates',repr(boundary),boundary+'git zp',entries=[('alias.zp','push')])
         for cmd in ['git -C "$(git zp)" status','git -c x.y="$(git zp)" status','git -C "`git zp`" status','git -c x.y="`git zp`" status']:
             case('Inner candidates',cmd,cmd,entries=[('alias.zp','push')])
+        # B2: path-qualified git must use the same boundary class as _git_sub_re.
+        case('Path-qualified','abs-block','/usr/bin/git zp',entries=[('alias.zp','push')])
+        case('Path-qualified','dot-block','./git zp',entries=[('alias.zp','push')])
+        case('Path-qualified','abs-allow','/usr/bin/git status',0,entries=[('alias.zp','push')])
+        case('Path-qualified','dot-allow','./git status',0,entries=[('alias.zp','push')])
         case('Case','quote-concatenation','git z"p"',entries=[('alias.zp','push')])
         case('Case','other-slot','git -c alias.p=status p',entries=[('alias.p.command','!echo unsafe')])
         for key,verb,want in [('alias.P.x' ,'p.x',2),('alias.P.x','P.x',2),('alias.p.X','p.x',2),('alias.P.command','P',2),('alias.P.command','p',0),('alias.p.COMMAND','p',2)]:
@@ -371,7 +379,29 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
                 for f in d.iterdir():
                     dest=nojq/f.name
                     if f.name!='jq' and f.is_file() and os.access(f,os.X_OK) and not dest.exists(): dest.symlink_to(f)
-        for cmd,want in [('git -c alias.p=push p',2),('echo alias.x',0)]:
+        # B1: newline in a value must not forge a second alias; a space in a
+        # subsection name must still resolve. Global entries so commit gates
+        # rewrite push -> commit the same way as the rest of the matrix.
+        case('Config parse','newline-block','git zp',entries=[('alias.zp','push'),('alias.zq','x\nalias.zp status')])
+        case('Config parse','newline-allow','git status',0,entries=[('alias.zp','push'),('alias.zq','x\nalias.zp status')])
+        case('Config parse','space-key-block','git "my x"',entries=[('alias.my x.command','push')])
+        case('Config parse','space-key-allow','git status',0,entries=[('alias.my x.command','push')])
+        # B3 / #1748 row 5: no-jq must match a single-quoted -C or --git-dir
+        # value that holds a space (push and commit). Paired allow cases.
+        spacedir=t/'a b'; spacedir.mkdir()
+        subprocess.run(['git','init','-q','-b','feature/GH-1748-space',str(spacedir)],env=env,check=True)
+        for cmd,want in [
+            ('git -c alias.p=push p',2),
+            ('echo alias.x',0),
+            (f"git -C '{spacedir}' push origin HEAD:main",2),
+            (f"git -C '{spacedir}' commit -m 'fix: x'",2),
+            (f"git --git-dir='{spacedir}/.git' push origin HEAD:main",2),
+            (f"git --git-dir='{spacedir}/.git' commit -m 'fix: x'",2),
+            (f"git -C '{spacedir}' status",0),
+            (f"git --git-dir='{spacedir}/.git' status",0),
+            (f'git -C "{spacedir}" push origin HEAD:main',2),
+            (f'git -C "{spacedir}" status',0),
+        ]:
             rc,out=run('dispatch-bash',cmd,extra={'PATH':str(nojq)})
             counts['No jq']['pass' if rc==want else 'fail']+=1
             if rc!=want: failures.append(('No jq '+cmd,want,rc,out))
