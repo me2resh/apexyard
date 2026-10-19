@@ -3,7 +3,7 @@
 # block-agent-routing-drift.sh (pre-commit + pre-push drift guard) —
 # the two hooks #351 PR 2 ships per AgDR-0050 § Axis 4.
 #
-# Coverage (13 cases):
+# Coverage (13 cases, plus case 14 for #442 and cases 15–18 for #1763):
 #
 #   Sync hook (apply-agent-routing.sh):
 #     1. Empty config — empty agent-routing.yaml means no-op; no agent
@@ -793,6 +793,204 @@ else
   mark_fail "case 14 (#442): routing-inactive warning" "session=$session_set banner=[$banner_output]"
 fi
 unset APEXYARD_MOCK_CURL_DIR
+rm -rf "$SB"
+
+# ===========================================================================
+# CASE 15 — #1763: add an override, apply, remove it, apply again.
+# The second run restores the snapshot model, omits that key, leaves
+# the body text, and the drift guard then accepts the restored file.
+# The same file still blocks while the override is in place.
+# ===========================================================================
+SB=$(make_fork)
+cat > "$SB/agent-routing.yaml" <<'YAML'
+version: 1
+agents:
+  backend-engineer:
+    model: opus
+YAML
+banner_output=$(cd "$SB" && bash .claude/hooks/apply-agent-routing.sh 2>&1 < /dev/null)
+first_rc=$?
+after_be=$(read_model_line "$SB/.claude/agents/backend-engineer.md")
+snap_first=""
+[ -f "$SB/.claude/agents/.framework-defaults.json" ] && snap_first=$(cat "$SB/.claude/agents/.framework-defaults.json")
+qa_copy=$(mktemp)
+lead_copy=$(mktemp)
+cp "$SB/.claude/agents/qa-engineer.md" "$qa_copy"
+cp "$SB/.claude/agents/tech-lead.md" "$lead_copy"
+printf '\nThe body keeps this model: opus text.\n' >> "$SB/.claude/agents/backend-engineer.md"
+
+(cd "$SB" && git add .claude/agents/backend-engineer.md 2>/dev/null)
+drift_while=$(hook_stdin "git commit -m 'feat: leak backend model'" | (cd "$SB" && bash .claude/hooks/block-agent-routing-drift.sh > /dev/null 2>&1); echo $?)
+(cd "$SB" && git reset -q -- .claude/agents/backend-engineer.md 2>/dev/null)
+before_be=$(cat "$SB/.claude/agents/backend-engineer.md")
+
+cat > "$SB/agent-routing.yaml" <<'YAML'
+version: 1
+agents: {}
+YAML
+banner_output2=$(cd "$SB" && bash .claude/hooks/apply-agent-routing.sh 2>&1 < /dev/null)
+second_rc=$?
+after_be_file=$(cat "$SB/.claude/agents/backend-engineer.md")
+expected_be=${before_be/model: opus/model: sonnet}
+snap=""
+[ -f "$SB/.claude/agents/.framework-defaults.json" ] && snap=$(tr -d '[:space:]' < "$SB/.claude/agents/.framework-defaults.json")
+(cd "$SB" && git add .claude/agents/backend-engineer.md 2>/dev/null)
+drift_after=$(hook_stdin "git commit -m 'feat: restore backend model'" | (cd "$SB" && bash .claude/hooks/block-agent-routing-drift.sh > /dev/null 2>&1); echo $?)
+
+banner_output3=$(cd "$SB" && bash .claude/hooks/apply-agent-routing.sh 2>&1 < /dev/null)
+third_rc=$?
+third_be=$(cat "$SB/.claude/agents/backend-engineer.md")
+snap3=""
+[ -f "$SB/.claude/agents/.framework-defaults.json" ] && snap3=$(tr -d '[:space:]' < "$SB/.claude/agents/.framework-defaults.json")
+
+if [ "$first_rc" -eq 0 ] && [ "$after_be" = "opus" ] \
+   && echo "$snap_first" | grep -q '"backend-engineer":"sonnet"' \
+   && [ "$drift_while" = "2" ] \
+   && [ "$second_rc" -eq 0 ] && [ "$after_be_file" = "$expected_be" ] \
+   && [ "$snap" = "{}" ] \
+   && [ -z "$banner_output2" ] \
+   && cmp -s "$SB/.claude/agents/qa-engineer.md" "$qa_copy" \
+   && cmp -s "$SB/.claude/agents/tech-lead.md" "$lead_copy" \
+   && [ "$drift_after" = "0" ] \
+   && [ "$third_rc" -eq 0 ] && [ "$third_be" = "$after_be_file" ] && [ "$snap3" = "{}" ]; then
+  mark_pass "case 15 (#1763): removed override restores sonnet, drops the key, keeps body text, drift allows"
+else
+  mark_fail "case 15 (#1763): restore removed override" "first_rc=$first_rc model=$after_be drift_while=$drift_while second_rc=$second_rc snap=[$snap] drift_after=$drift_after third_rc=$third_rc banner2=[$banner_output2] banner1=[$banner_output] banner3=[$banner_output3]"
+fi
+rm -f "$qa_copy" "$lead_copy"
+rm -rf "$SB"
+
+# ===========================================================================
+# CASE 16 — #1763: an agent the hook never rewrote stays byte-for-byte,
+# including a hand edit that is not the framework model.
+# ===========================================================================
+SB=$(make_fork)
+cat > "$SB/agent-routing.yaml" <<'YAML'
+version: 1
+agents:
+  qa-engineer:
+    model: opus
+YAML
+(cd "$SB" && bash .claude/hooks/apply-agent-routing.sh 2>&1 < /dev/null) >/dev/null
+# Hand-edit an agent that is not in the snapshot. The next run must
+# not reset it from git and must not rewrite its body.
+awk '
+  BEGIN { fm=0; replaced=0 }
+  /^---[[:space:]]*$/ { fm++; print; next }
+  fm==1 && !replaced && /^model:[[:space:]]*/ { print "model: haiku"; replaced=1; next }
+  { print }
+' "$SB/.claude/agents/tech-lead.md" > "$SB/.claude/agents/tech-lead.md.tmp"
+mv "$SB/.claude/agents/tech-lead.md.tmp" "$SB/.claude/agents/tech-lead.md"
+printf '\nNEVER-OVERRIDDEN model: opus\n' >> "$SB/.claude/agents/tech-lead.md"
+lead_copy=$(mktemp)
+be_copy=$(mktemp)
+cp "$SB/.claude/agents/tech-lead.md" "$lead_copy"
+cp "$SB/.claude/agents/backend-engineer.md" "$be_copy"
+cat > "$SB/agent-routing.yaml" <<'YAML'
+version: 1
+agents: {}
+YAML
+banner_output=$(cd "$SB" && bash .claude/hooks/apply-agent-routing.sh 2>&1 < /dev/null)
+hook_rc=$?
+restored_qa=$(read_model_line "$SB/.claude/agents/qa-engineer.md")
+if [ "$hook_rc" -eq 0 ] && [ "$restored_qa" = "haiku" ] \
+   && cmp -s "$SB/.claude/agents/tech-lead.md" "$lead_copy" \
+   && cmp -s "$SB/.claude/agents/backend-engineer.md" "$be_copy" \
+   && [ -z "$banner_output" ]; then
+  mark_pass "case 16 (#1763): an agent never overridden is untouched"
+else
+  mark_fail "case 16 (#1763): never overridden" "rc=$hook_rc qa=$restored_qa banner=[$banner_output]"
+fi
+rm -f "$lead_copy" "$be_copy"
+rm -rf "$SB"
+
+# ===========================================================================
+# CASE 17 — #1763: a corrupt previous snapshot does not crash and does
+# not restore. The tempting agent name in the file must not be applied.
+# ===========================================================================
+SB=$(make_fork)
+awk '
+  BEGIN { fm=0; replaced=0 }
+  /^---[[:space:]]*$/ { fm++; print; next }
+  fm==1 && !replaced && /^model:[[:space:]]*/ { print "model: opus"; replaced=1; next }
+  { print }
+' "$SB/.claude/agents/backend-engineer.md" > "$SB/.claude/agents/backend-engineer.md.tmp"
+mv "$SB/.claude/agents/backend-engineer.md.tmp" "$SB/.claude/agents/backend-engineer.md"
+printf '%s\n' '{"backend-engineer": "sonnet"' > "$SB/.claude/agents/.framework-defaults.json"
+corrupt_before=$(cat "$SB/.claude/agents/.framework-defaults.json")
+qa_copy=$(mktemp)
+lead_copy=$(mktemp)
+be_copy=$(mktemp)
+cp "$SB/.claude/agents/qa-engineer.md" "$qa_copy"
+cp "$SB/.claude/agents/tech-lead.md" "$lead_copy"
+cp "$SB/.claude/agents/backend-engineer.md" "$be_copy"
+cat > "$SB/agent-routing.yaml" <<'YAML'
+version: 1
+agents: {}
+YAML
+banner_output=$(cd "$SB" && bash .claude/hooks/apply-agent-routing.sh 2>&1 < /dev/null)
+hook_rc=$?
+corrupt_after=$(cat "$SB/.claude/agents/.framework-defaults.json")
+if [ "$hook_rc" -eq 0 ] \
+   && cmp -s "$SB/.claude/agents/backend-engineer.md" "$be_copy" \
+   && cmp -s "$SB/.claude/agents/qa-engineer.md" "$qa_copy" \
+   && cmp -s "$SB/.claude/agents/tech-lead.md" "$lead_copy" \
+   && [ "$corrupt_after" = "$corrupt_before" ] \
+   && [ -z "$banner_output" ]; then
+  mark_pass "case 17 (#1763): corrupt snapshot does not crash and restores nothing"
+else
+  mark_fail "case 17 (#1763): corrupt snapshot" "rc=$hook_rc banner=[$banner_output] model=$(read_model_line "$SB/.claude/agents/backend-engineer.md") snap=[$corrupt_after]"
+fi
+rm -f "$qa_copy" "$lead_copy" "$be_copy"
+rm -rf "$SB"
+
+# ===========================================================================
+# CASE 18 — #1763: two overrides, remove one. Restore only that agent.
+# The remaining override stays, and only its key remains in the snapshot.
+# ===========================================================================
+SB=$(make_fork)
+cat > "$SB/agent-routing.yaml" <<'YAML'
+version: 1
+agents:
+  qa-engineer:
+    model: opus
+  backend-engineer:
+    model: haiku
+YAML
+banner_first=$(cd "$SB" && bash .claude/hooks/apply-agent-routing.sh 2>&1 < /dev/null)
+first_rc=$?
+first_qa=$(read_model_line "$SB/.claude/agents/qa-engineer.md")
+first_be=$(read_model_line "$SB/.claude/agents/backend-engineer.md")
+lead_copy=$(mktemp)
+cp "$SB/.claude/agents/tech-lead.md" "$lead_copy"
+printf '\nKeep this backend body model: haiku line.\n' >> "$SB/.claude/agents/backend-engineer.md"
+before_be=$(cat "$SB/.claude/agents/backend-engineer.md")
+cat > "$SB/agent-routing.yaml" <<'YAML'
+version: 1
+agents:
+  qa-engineer:
+    model: opus
+YAML
+banner_second=$(cd "$SB" && bash .claude/hooks/apply-agent-routing.sh 2>&1 < /dev/null)
+second_rc=$?
+after_qa=$(read_model_line "$SB/.claude/agents/qa-engineer.md")
+after_be_file=$(cat "$SB/.claude/agents/backend-engineer.md")
+expected_be=${before_be/model: haiku/model: sonnet}
+snap=""
+[ -f "$SB/.claude/agents/.framework-defaults.json" ] && snap=$(tr -d '[:space:]' < "$SB/.claude/agents/.framework-defaults.json")
+if [ "$first_rc" -eq 0 ] && [ "$first_qa" = "opus" ] && [ "$first_be" = "haiku" ] \
+   && echo "$banner_first" | grep -qE 'applied 2 agent-routing override' \
+   && [ "$second_rc" -eq 0 ] && [ "$after_qa" = "opus" ] \
+   && [ "$after_be_file" = "$expected_be" ] \
+   && echo "$banner_second" | grep -qE 'applied 1 agent-routing override' \
+   && echo "$snap" | grep -q '"qa-engineer":"haiku"' \
+   && ! echo "$snap" | grep -q 'backend-engineer' \
+   && cmp -s "$SB/.claude/agents/tech-lead.md" "$lead_copy"; then
+  mark_pass "case 18 (#1763): removing one of two overrides restores only that agent"
+else
+  mark_fail "case 18 (#1763): partial restore" "first_rc=$first_rc second_rc=$second_rc qa=$after_qa snap=[$snap] banner1=[$banner_first] banner2=[$banner_second]"
+fi
+rm -f "$lead_copy"
 rm -rf "$SB"
 
 # ===========================================================================

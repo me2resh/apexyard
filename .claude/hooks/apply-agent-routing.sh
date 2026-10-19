@@ -31,6 +31,12 @@
 #          so the drift guard has a baseline regardless of whether the
 #          adopter committed the rewrite
 #       3. Rewrite the model: line in the agent file to the override
+#       3b. On a later run, read the previous defaults file first.
+#          For each saved agent with no model override now, write that
+#          saved model on the frontmatter model: line. Then omit that
+#          agent from the new defaults file. A missing or unreadable
+#          file restores nothing. The hook still exits 0. An agent
+#          the hook never rewrote is left unchanged. Body text stays.
 #       4. If endpoint: set AND reachable, write to .claude/session/
 #          agent-env/<name>.env (per-agent endpoint env file — informational
 #          in v1 until Claude Code exposes per-agent env scoping)
@@ -46,7 +52,9 @@
 #   - Idempotent: running twice with the same config produces the same
 #     state, no compounding writes (env files are truncated, not appended,
 #     when written; the framework-defaults snapshot is keyed by agent
-#     name so re-applications are noops)
+#     name so re-applications are noops). Removing an override restores
+#     the saved model once. The next run with that same config does not
+#     change the agent file again.
 #
 # Banner budget: ≤ 600 chars across all SessionStart hooks. This hook
 # emits at most ~110 chars (silent on no-op).
@@ -120,6 +128,10 @@ if [ ! -d "$AGENTS_DIR" ]; then
 fi
 
 DEFAULTS_FILE="$AGENTS_DIR/.framework-defaults.json"
+# PREV_OK=1 only when the previous defaults file is a flat string map.
+# 0 means missing, unreadable, or not that map. Restore nothing then.
+PREV_OK=0
+PREV_TSV=""
 ENV_DIR="$ROOT/.claude/session/agent-env"
 mkdir -p "$ENV_DIR"
 
@@ -267,9 +279,8 @@ PY
 }
 
 ROWS=$(parse_routing)
-if [ -z "$ROWS" ]; then
-  exit 0
-fi
+# An empty agent map is not an exit. A removed override can leave no
+# rows. Restore still runs below, then the hook exits 0.
 
 # -----------------------------------------------------------------------------
 # Local-routing prep — extends the v1 schema's `endpoint:` + `model: ollama/*`
@@ -402,10 +413,109 @@ snapshot_framework_default() {
   echo "$default_model"
 }
 
+# Replace the frontmatter model: line. Leave every other line as it is.
+# A missing file is not an error. The caller decides which file to pass.
+write_frontmatter_model() {
+  local agent_file="$1"
+  local new_model="$2"
+  local tmp_agent=""
+  [ -n "$agent_file" ] && [ -f "$agent_file" ] || return 0
+  tmp_agent=$(mktemp 2>/dev/null) || return 0
+  if awk -v new="$new_model" '
+    BEGIN { fm=0; replaced=0 }
+    /^---[[:space:]]*$/ { fm++; print; next }
+    fm==1 && !replaced && /^model:[[:space:]]*/ {
+      print "model: " new
+      replaced=1
+      next
+    }
+    { print }
+  ' "$agent_file" > "$tmp_agent"; then
+    mv "$tmp_agent" "$agent_file" || rm -f "$tmp_agent"
+  else
+    rm -f "$tmp_agent"
+  fi
+}
+
+# Read the previous defaults file into PREV_TSV as name<TAB>model lines.
+# Set PREV_OK=1 only for an empty map or a flat map of string pairs.
+# Any other content is unreadable. Leave PREV_OK=0 and restore nothing.
+load_previous_defaults() {
+  local raw="" inner="" acc="" pair="" rest="" name="" model=""
+  PREV_OK=0
+  PREV_TSV=""
+  [ -f "$DEFAULTS_FILE" ] && [ -r "$DEFAULTS_FILE" ] || return 0
+  raw=$(tr -d '[:space:]' < "$DEFAULTS_FILE" 2>/dev/null) || return 0
+  case "$raw" in
+    \{\})
+      PREV_OK=1
+      return 0
+      ;;
+    \{*\})
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+  inner="${raw#\{}"
+  inner="${inner%\}}"
+  while [ -n "$inner" ]; do
+    pair="${inner%%,*}"
+    rest="${inner#*,}"
+    if [ "$rest" = "$inner" ]; then
+      inner=""
+    else
+      # A comma with nothing after it is not a pair. Reject the file.
+      [ -n "$rest" ] || return 0
+      inner="$rest"
+    fi
+    case "$pair" in
+      \"*\":\"*\") ;;
+      *) return 0 ;;
+    esac
+    name="${pair%%\":\"*}"
+    name="${name#\"}"
+    model="${pair#*\":\"}"
+    model="${model%\"}"
+    case "$name" in
+      ""|*[!a-zA-Z0-9_-]*) return 0 ;;
+    esac
+    case "$model" in
+      ""|*[!a-zA-Z0-9_.:/+-]*) return 0 ;;
+    esac
+    acc="${acc}${name}"$'\t'"${model}"$'\n'
+  done
+  PREV_OK=1
+  PREV_TSV="$acc"
+}
+
+# Write the saved model for each previous agent that has no model
+# override in this run. Do not touch an agent that is absent here.
+restore_removed_overrides() {
+  local current_models="" name="" model=""
+  [ "$PREV_OK" -eq 1 ] || return 0
+  [ -n "$PREV_TSV" ] || return 0
+  current_models=$(printf '%s\n' "$ROWS" | awk -F'\t' '$2=="model" && $1 != "" { print $1 }')
+  while IFS=$'\t' read -r name model; do
+    [ -z "$name" ] && continue
+    if printf '%s\n' "$current_models" | grep -Fxq -- "$name"; then
+      continue
+    fi
+    write_frontmatter_model "$AGENTS_DIR/${name}.md" "$model"
+  done <<EOF
+$PREV_TSV
+EOF
+}
+
 # Build framework defaults JSON in a temp accumulator (one entry per
 # agent we touch), then write atomically.
 defaults_acc=""
 applied=0
+
+# Restore before the apply loop so a removed override is undone from
+# the previous baseline. The loop below records only current overrides.
+load_previous_defaults
+restore_removed_overrides
 
 # Use a process-substitution-free read so we run on POSIX bash without
 # requiring /dev/fd. Tab-separated input.
@@ -433,18 +543,7 @@ while IFS=$'\t' read -r agent_name key value; do
       fi
 
       # Rewrite the model: line in the agent file (inside frontmatter).
-      # We use awk to limit replacement to the first frontmatter block.
-      tmp_agent=$(mktemp)
-      awk -v new="$value" '
-        BEGIN { fm=0; replaced=0 }
-        /^---[[:space:]]*$/ { fm++; print; next }
-        fm==1 && !replaced && /^model:[[:space:]]*/ {
-          print "model: " new
-          replaced=1
-          next
-        }
-        { print }
-      ' "$agent_file" > "$tmp_agent" && mv "$tmp_agent" "$agent_file"
+      write_frontmatter_model "$agent_file" "$value"
       applied=$((applied + 1))
       ;;
 
@@ -576,6 +675,10 @@ if [ -n "$defaults_acc" ]; then
   # Strip trailing comma+newline and wrap in braces.
   body=$(printf '%s' "$defaults_acc" | sed '$ s/,$//' | tr -d '\n')
   printf '{%s}\n' "$body" > "$DEFAULTS_FILE"
+elif [ "$PREV_OK" -eq 1 ]; then
+  # Every previous key was restored, or the map was already empty.
+  # Omit those keys. An empty map replaces the old baseline.
+  printf '{}\n' > "$DEFAULTS_FILE"
 fi
 
 # -----------------------------------------------------------------------------
