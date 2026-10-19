@@ -94,3 +94,5 @@ Operators needed a supported procedure for two human sessions on one project.
 `.claude/rules/isolated-builds.md` now has "Run more than one session on one project".
 Reason: without that runbook, operators guessed and two sessions in one clone collided silently.
 The location stays `.claude/worktrees/`. The procedure does not change the `build.isolation` setting.
+The create command must pass `origin/<base-branch>` as the start point after `fetch`.
+Reason: without that start point, the new branch starts at the main clone's HEAD, which is normally the other session's ticket branch.
