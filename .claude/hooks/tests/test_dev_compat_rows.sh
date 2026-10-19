@@ -90,13 +90,18 @@ expect() {
 }
 
 # old_format <file> <repo> <number>: the old-layout marker exists, is a
-# regular file and has the keys the old /start-ticket wrote, in that order.
+# regular file and has every key the old /start-ticket wrote, in that order,
+# plus session_id= and branch= (AgDR-0257). Old readers take the first match
+# of each key=value line, so the extra keys do not change a rollback verdict.
 old_format() {
   local f="$1" keys
   [ -f "$f" ] && [ ! -L "$f" ] || return 1
   keys=$(sed -n 's/=.*//p' "$f" | tr '\n' ' ')
-  [ "$keys" = "repo number title url suggested_branch started_at " ] || return 1
-  grep -qx "repo=$2" "$f" && grep -qx "number=$3" "$f"
+  [ "$keys" = "repo number title url suggested_branch session_id branch started_at " ] || return 1
+  grep -qx "repo=$2" "$f" && grep -qx "number=$3" "$f" \
+    && grep -q '^title=' "$f" && grep -q '^url=' "$f" \
+    && grep -q '^suggested_branch=' "$f" && grep -q '^session_id=' "$f" \
+    && grep -q '^branch=' "$f" && grep -q '^started_at=' "$f"
 }
 check_old() {
   if old_format "$2" "$3" "$4"; then ok "$1"; else bad "$1" "$2: $(cat "$2" 2>&1 | tr '\n' ' ')"; fi

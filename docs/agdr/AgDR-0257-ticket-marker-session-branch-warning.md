@@ -40,7 +40,31 @@ Chosen: **warn only**, because the issue asks for a visible warning and keeps th
 - Old markers without `session_id` count as foreign when a session with an id starts a different ticket.
 - Separate worktrees remain the real fix for concurrent tickets (#1531, #1534).
 
+## Architecture evolution
+
+### Before
+
+`/start-ticket` wrote the old-layout marker
+(`.claude/session/tickets/<project>`, `tickets/<project>/<branch>`,
+`current-ticket`) with six keys only:
+`repo`, `number`, `title`, `url`, `suggested_branch`, `started_at`.
+`test_dev_compat_rows.sh` B8 and B9 pinned that exact key list so a
+rollback still saw a marker the old hooks could read (AgDR-0066 /
+AgDR-0222 transition).
+
+### After
+
+The same writers also put `session_id=` and `branch=` on the old-layout
+marker, in the same order as the per-tree `apexyard-ticket` file.
+Readers take the first match of each `key=` line
+(`active_ticket_read_field`), so an unknown key has no effect on an
+old hook. Keeping the new keys in the old-layout file keeps one write
+path and lets a governing old-layout marker still feed the warn path.
+The compat test now pins every old key and its value, and accepts
+`session_id` and `branch` in that fixed order. The warning still works
+from the new per-tree marker when that marker governs.
+
 ## Artifacts
 
 - Issue: me2resh/apexyard#1533
-- Files: `.claude/hooks/_lib-active-ticket.sh`, `.claude/hooks/require-active-ticket.sh`, `.claude/hooks/require-migration-ticket.sh`, `.claude/skills/start-ticket/SKILL.md`, `.claude/hooks/tests/test_ticket_marker_session_branch_warn_ac*.sh`
+- Files: `.claude/hooks/_lib-active-ticket.sh`, `.claude/hooks/require-active-ticket.sh`, `.claude/hooks/require-migration-ticket.sh`, `.claude/skills/start-ticket/SKILL.md`, `.claude/hooks/tests/test_ticket_marker_session_branch_warn_ac*.sh`, `.claude/hooks/tests/test_dev_compat_rows.sh`
