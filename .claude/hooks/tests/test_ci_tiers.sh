@@ -48,7 +48,7 @@ git -C "$rename_repo" -c user.name=t -c user.email=t@example.invalid commit -q -
 git -C "$rename_repo" diff --name-only --no-renames HEAD~1...HEAD > "$tmp/renamed"
 grep -Fxq .claude/rules/foo.md "$tmp/renamed" || { echo 'FAIL rename hides old path'; exit 1; }
 if /bin/bash "$selector" --docs-only "$tmp/renamed"; then echo 'FAIL rename out of .claude/ counted as docs-only'; exit 1; fi
-[ "$(grep -c 'git diff --name-only --no-renames' .github/workflows/tests.yml)" = 2 ] || { echo 'FAIL workflow diff calls must use --no-renames'; exit 1; }
+[ "$(grep -c 'git diff --name-only --no-renames' .github/workflows/tests.yml)" = 1 ] || { echo 'FAIL workflow diff calls must use --no-renames'; exit 1; }
 # Explicit list execution, empty lists, and rejection use a tiny runner fixture.
 cp bin/run-hook-tests.sh "$tmp/bin/"
 printf '%s\n' '#!/bin/bash' 'exit 0' > "$tmp/.claude/hooks/tests/test_other.sh"
@@ -108,26 +108,20 @@ function tier(event, paths, branch = '', title = '') {
 }
 for (const event of ['push', 'schedule', 'workflow_dispatch']) {
   const r = tier(event, 'README.md');
-  assert.equal(r.tier, 'heavy'); assert.equal(r.matrix.length, 6);
-  assert.deepEqual(r.matrix.filter(m => m.shard).map(m => m.shard), ['1/4', '2/4', '3/4', '4/4']);
+  assert.equal(r.tier, 'heavy'); assert.equal(r.matrix.length, 2);
+  assert.deepEqual(r.matrix.map(m => m.label), ['linux jq-1.7', 'linux jq-1.8']);
+  assert.deepEqual(r.matrix.filter(m => m.shard), []);
 }
 assert.equal(tier('pull_request', 'README.md\ndocs/image.png').tier, 'docs');
-for (const path of ['.claude/skills/demo/SKILL.md', '.claude/hooks/example.sh']) {
+for (const path of ['.claude/skills/demo/SKILL.md', '.claude/hooks/example.sh', '.claude/hooks/_lib-tracker.sh']) {
   const r = tier('pull_request', path);
-  assert.equal(r.tier, 'light'); assert.equal(r.matrix.length, 2);
-  assert.equal(r.matrix[0].label, 'linux jq-1.7');
-  assert.equal(r.matrix[1].os, 'macos-latest');
-}
-// A full selection on a regular PR runs the full suite on Linux only;
-// the macOS suite waits for the merge push and the nightly run.
-{
-  const r = tier('pull_request', '.claude/hooks/_lib-tracker.sh');
   assert.equal(r.tier, 'light'); assert.equal(r.matrix.length, 1);
   assert.equal(r.matrix[0].label, 'linux jq-1.7');
+  assert.equal(r.matrix[0].os, 'ubuntu-latest');
 }
 for (const [branch, title] of [['release/v1.0', 'docs'], ['feature/example', 'release(1.0): ship']]) {
   const r = tier('pull_request', 'README.md', branch, title);
-  assert.equal(r.tier, 'release'); assert.equal(r.matrix.length, 6);
+  assert.equal(r.tier, 'release'); assert.equal(r.matrix.length, 2);
 }
 const summary = w.jobs['hook-test-suite'].steps[0].run;
 function check(tier, matrix, conform, tierResult = 'success', on = 'true') {

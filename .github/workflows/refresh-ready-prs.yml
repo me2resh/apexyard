@@ -1,10 +1,7 @@
 name: Refresh ready PRs
 
 on:
-  push:
-    branches: [dev, main]
-  pull_request:
-    types: [synchronize]
+  workflow_dispatch:
 
 permissions:
   pull-requests: write
@@ -21,6 +18,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:

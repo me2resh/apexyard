@@ -29,8 +29,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: claude-plugin-validate-${{ github.ref }}
-  cancel-in-progress: true
+  group: claude-plugin-validate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CLAUDE_CODE_VERSION: "2.1.296"
