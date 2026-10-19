@@ -98,22 +98,22 @@ set -e
 # Always print bpmnlint's output (whether it found issues or not).
 cat "$WORK/out.txt"
 
-if [ "$RC_EXIT" -eq 0 ]; then
-  echo "lint.sh: bpmnlint clean"
-  exit 0
+# Parse the actual summary, including singular error/warning counts.
+# Missing summaries (for example, npm failures) never turn a failed run clean.
+SUMMARY=$(sed -nE 's/.* ([0-9]+) problems? \(([0-9]+) errors?, ([0-9]+) warnings?\).*/\2 \3/p' "$WORK/out.txt" | tail -1)
+ERRORS=0
+WARNS=0
+if [ -n "$SUMMARY" ]; then
+  read -r ERRORS WARNS <<< "$SUMMARY"
 fi
 
-# Count warnings vs errors (bpmnlint's default summary format).
-ERRORS=$(grep -cE '^\s*[0-9]+:[0-9]+\s+error' "$WORK/out.txt" 2>/dev/null || echo 0)
-WARNS=$(grep -cE '^\s*[0-9]+:[0-9]+\s+warning' "$WORK/out.txt" 2>/dev/null || echo 0)
-
-if [ "$ERRORS" -gt 0 ]; then
-  echo "lint.sh: $ERRORS error(s), $WARNS warning(s) — fix or re-run /process with the auto-fix/re-interview/accept loop" >&2
+if [ "$RC_EXIT" -ne 0 ] || [ "$ERRORS" -gt 0 ]; then
+  echo "lint.sh: bpmnlint failed (exit $RC_EXIT, $ERRORS error(s), $WARNS warning(s))" >&2
   exit 1
 fi
 
 if [ "$WARNS" -gt "$MAX_WARNINGS" ]; then
-  echo "lint.sh: $WARNS warning(s) exceeds --max-warnings=$MAX_WARNINGS — tighten or raise the threshold via .bpmnlintrc" >&2
+  echo "lint.sh: $WARNS warning(s) exceeds --max-warnings=$MAX_WARNINGS" >&2
   exit 1
 fi
 
