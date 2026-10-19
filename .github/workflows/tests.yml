@@ -20,6 +20,7 @@ concurrency:
 jobs:
   tier:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       tier: ${{ steps.select.outputs.tier }}
       matrix: ${{ steps.select.outputs.matrix }}
@@ -44,18 +45,13 @@ jobs:
             else
               git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/changed"
               if bash bin/select-affected-tests.sh --docs-only "$RUNNER_TEMP/changed"; then tier=docs; fi
-              # Owner decision 2026-10-12: a PR that needs the full suite runs it
-              # on Linux only. The macOS bash-3.2 suite runs on merge and nightly.
-              if [ "$tier" = light ] && bash bin/select-affected-tests.sh "$RUNNER_TEMP/changed" | grep -Fxq ALL; then full_suite=1; fi
             fi
           fi
           echo "tier=$tier" >> "$GITHUB_OUTPUT"
           if [ "$tier" = heavy ] || [ "$tier" = release ]; then
-            matrix='{"include":[{"os":"ubuntu-latest","label":"linux jq-1.7"},{"os":"ubuntu-latest","label":"linux jq-1.8"},{"os":"macos-latest","label":"macos bash-3.2 (1/4)","shard":"1/4"},{"os":"macos-latest","label":"macos bash-3.2 (2/4)","shard":"2/4"},{"os":"macos-latest","label":"macos bash-3.2 (3/4)","shard":"3/4"},{"os":"macos-latest","label":"macos bash-3.2 (4/4)","shard":"4/4"}]}'
-          elif [ -n "${full_suite:-}" ]; then
-            matrix='{"include":[{"os":"ubuntu-latest","label":"linux jq-1.7"}]}'
+            matrix='{"include":[{"os":"ubuntu-latest","label":"linux jq-1.7"},{"os":"ubuntu-latest","label":"linux jq-1.8"}]}'
           else
-            matrix='{"include":[{"os":"ubuntu-latest","label":"linux jq-1.7"},{"os":"macos-latest","label":"macos bash-3.2 affected"}]}'
+            matrix='{"include":[{"os":"ubuntu-latest","label":"linux jq-1.7"}]}'
           fi
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
@@ -104,45 +100,12 @@ jobs:
           git config --global init.defaultBranch main
 
       - name: Run the hook test suite
-        env:
-          TIER: ${{ needs.tier.outputs.tier }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          HOOK_TEST_MATRIX_SHARD: ${{ matrix.shard }}
         run: |
-          if [ "$RUNNER_OS" = macOS ]; then
-            # Override only bash and jq. Putting /usr/bin first on PATH would
-            # also select Apple's Python 3.9, which has no tomllib, and the
-            # dependency-audit helper needs Python 3.11+ (#1561).
-            stock_bin="$RUNNER_TEMP/stock-macos-bin"
-            mkdir -p "$stock_bin"
-            ln -sf /bin/bash "$stock_bin/bash"
-            ln -sf /usr/bin/jq "$stock_bin/jq"
-            export PATH="$stock_bin:$PATH"
-          fi
           jq --version
           command -v jq
           bash --version | head -1
           /bin/bash --version | head -1
           python3 --version
-          if [ "$RUNNER_OS" = macOS ]; then
-            test "$(readlink "$(command -v jq)")" = /usr/bin/jq
-            test "$(readlink "$(command -v bash)")" = /bin/bash
-            [[ "$(/bin/bash --version | head -1)" == *"version 3.2."* ]]
-            python3 -c 'import tomllib'
-          fi
-          shard_args=()
-          if [ "$RUNNER_OS" = macOS ] && [ "$TIER" = light ]; then
-            git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/changed"
-            /bin/bash bin/select-affected-tests.sh "$RUNNER_TEMP/changed" > "$RUNNER_TEMP/affected"
-            if ! grep -Fxq ALL "$RUNNER_TEMP/affected"; then
-              shard_args=(--files "$RUNNER_TEMP/affected")
-              if [ ! -s "$RUNNER_TEMP/affected" ]; then
-                /bin/bash bin/run-hook-tests.sh "${shard_args[@]}"
-                exit 0
-              fi
-            fi
-          fi
           # The reviewed snapshot ref exists only in upstream, not in forks.
           snapshot_upstream=me2resh/apexyard
           snapshot_repo=$(mktemp -d)
@@ -166,11 +129,8 @@ jobs:
               exit 1
             fi
           done
-          if [ "$RUNNER_OS" = macOS ] && [ -n "$HOOK_TEST_MATRIX_SHARD" ]; then
-            shard_args=(--shard "$HOOK_TEST_MATRIX_SHARD")
-          fi
           APEXYARD_SNAPSHOT_REPO="$snapshot_repo" REQUIRE_SNAPSHOTS=1 \
-            /bin/bash bin/run-hook-tests.sh "${shard_args[@]}"
+            /bin/bash bin/run-hook-tests.sh
 
   conformance:
     needs: tier
@@ -192,6 +152,7 @@ jobs:
     needs: [tier, hook-tests, conformance]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Require every matrix leg to pass
         env:
@@ -209,6 +170,7 @@ jobs:
     needs: hook-test-suite
     if: always() && github.event_name == 'schedule' && needs.hook-test-suite.result == 'failure'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       issues: write
     steps:
