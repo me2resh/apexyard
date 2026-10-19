@@ -66,5 +66,79 @@ else
   FAIL=$((FAIL+1)); printf 'FAIL [empty quote state stays in its word]\n' >&2
 fi
 check 'quoted command word still blocks' 0 '"gh" pr merge 7'
+
+# Finding 1: quoted expansion before a literal last segment is not a merge host.
+# Finding 2: a prefixed or nested phrase with a literal peer still blocks.
+# Placeholders are built at run time so public tests never embed a ready bypass.
+G=g; G="${G}h"; P=p; P="${P}r"; M=mer; M="${M}ge"
+home_tool=$(printf '"$%s/bin/tool" "$IN" "$OUT"' HOME)
+dir_run=$(printf '"$%s"/run.sh "$A" "$B"' DIR)
+dir_run_flag=$(printf '"$%s/run.sh" -v "$A" "$B"' DIR)
+glob_suf='./*.sh "$A" "$B"'
+three_opaque=$(printf '"$%s" "$%s" "$%s"' PY SCRIPT ARG)
+check 'quoted path last segment stays clear' 1 "$home_tool"
+check 'split-quoted path last segment stays clear' 1 "$dir_run"
+check 'quoted path with host options stays clear' 1 "$dir_run_flag"
+check 'glob with literal suffix stays clear' 1 "$glob_suf"
+check 'three opaque words stay clear' 1 "$three_opaque"
+opaque_pr=$(printf '"$%s" "$%s" "$%s" 7' G P M)
+check 'three opaque words with PR number still blocks' 0 "$opaque_pr"
+check 'three opaque words with PR number data pair' 1 "$(printf "cat <<'DATA'\n%s\nDATA" "$opaque_pr")"
+check 'quoted path last segment data pair' 1 "$(printf "cat <<'DATA'\n%s\nDATA" "$home_tool")"
+# Opaque host token built without writing the three-word phrase as one literal.
+opaque_host=$(printf '"$%s"' G)
+unsafe_prefix=$(printf 'nohup %s %s %s 7' "$opaque_host" "$P" "$M")
+unsafe_opt=$(printf 'time %s -R o/r %s %s 7' "$G" "$P" "$M")
+unsafe_sub=$(printf 'echo $( %s %s %s 7 )' "$opaque_host" "$P" "$M")
+unsafe_proc=$(printf 'cat <( %s %s %s 7 )' "$opaque_host" "$P" "$M")
+unsafe_tick=$(printf 'echo `%s %s %s 7`' "$G" "$P" "$M")
+check 'prefix with opaque host still blocks' 0 "$unsafe_prefix"
+check 'prefix with host options still blocks' 0 "$unsafe_opt"
+check 'command substitution body still blocks' 0 "$unsafe_sub"
+check 'process substitution body still blocks' 0 "$unsafe_proc"
+check 'backtick substitution body still blocks' 0 "$unsafe_tick"
+for unsafe in "$unsafe_prefix" "$unsafe_opt" "$unsafe_sub" "$unsafe_proc" "$unsafe_tick"; do
+  check 'prefixed or nested phrase data pair' 1 "$(printf "cat <<'DATA'\n%s\nDATA" "$unsafe")"
+done
+# Gate coverage for the new allow and unsafe classes.
+mkdir -p "$TMP/bin"
+cat > "$TMP/bin/gh" <<'EOS'
+#!/bin/bash
+case "$*" in
+  *"pr checks"*) printf 'build\tfail\t1m\thttps://example.invalid\n'; exit 1 ;;
+  *"pr view"*"number"*) echo 7 ;;
+  *"pr view"*"headRepository"*|*"repo view"*) echo demo/service ;;
+  *"pr view"*"headRefOid"*) echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ;;
+  *"api"*"changed_files"*) echo 2 ;;
+  *"api"*"/files"*) printf '%s\n' docs/technical-design.md src/App.tsx ;;
+  *) exit 1 ;;
+esac
+EOS
+printf '#!/bin/bash\nexit 0\n' > "$TMP/bin/glab"
+chmod +x "$TMP/bin/gh" "$TMP/bin/glab"
+for gate in block-unreviewed-merge.sh block-merge-on-red-ci.sh require-architecture-review.sh require-design-review-for-ui.sh; do
+  cp "$HOOKS/$gate" "$TMP/.claude/hooks/$gate"
+  for cmd in "$home_tool" "$dir_run" "$glob_suf"; do
+    payload=$(jq -nc --arg c "$cmd" '{tool_name:"Bash",tool_input:{command:$c}}')
+    (cd "$TMP" && printf '%s' "$payload" | PATH="$TMP/bin:$PATH" APEXYARD_OPS_DISABLE_PIN=1 /bin/bash ".claude/hooks/$gate" >/dev/null 2>"$TMP/err")
+    rc=$?
+    if [ "$rc" -eq 0 ]; then
+      PASS=$((PASS+1)); printf 'PASS [%s allow last-segment]\n' "$gate"
+    else
+      FAIL=$((FAIL+1)); printf 'FAIL [%s allow last-segment]: rc=%s\n' "$gate" "$rc" >&2
+    fi
+  done
+  for cmd in "$unsafe_prefix" "$unsafe_opt" "$unsafe_sub" "$unsafe_proc"; do
+    payload=$(jq -nc --arg c "$cmd" '{tool_name:"Bash",tool_input:{command:$c}}')
+    (cd "$TMP" && printf '%s' "$payload" | PATH="$TMP/bin:$PATH" APEXYARD_OPS_DISABLE_PIN=1 /bin/bash ".claude/hooks/$gate" >/dev/null 2>"$TMP/err")
+    rc=$?
+    if [ "$rc" -eq 2 ]; then
+      PASS=$((PASS+1)); printf 'PASS [%s block prefix/nested]\n' "$gate"
+    else
+      FAIL=$((FAIL+1)); printf 'FAIL [%s block prefix/nested]: rc=%s\n' "$gate" "$rc" >&2
+    fi
+  done
+done
+
 printf 'RESULT: %s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -737,7 +737,10 @@ if [ -x /bin/bash ]; then
       echo 'printf "%s 5 --repo o/r --body " "$m" > "$cmdfile"'
       echo 'cat "$padfile" >> "$cmdfile"'
       echo 'cmd=$(cat "$cmdfile")'
-      echo 'if merge_command_uses_variable "$cmd"; then echo "wrong result: merge_command_uses_variable returned 0" >&2; exit 1; fi'
+      # Commands over the split-scan size cap fail closed (status 2 → unresolved).
+      echo 'if merge_command_uses_variable "$cmd"; then'
+      echo '  if [ ${#cmd} -le 120000 ]; then echo "wrong result: merge_command_uses_variable returned 0" >&2; exit 1; fi'
+      echo 'fi'
       echo 'echo done > "$1"'
     } > "$perf_dir/run.sh"
     start_s=$(date +%s)
