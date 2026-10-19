@@ -1,8 +1,9 @@
 # Slice #1773 verification
 
-The implementation is a local draft. C4 eval evidence is partial: k=1 on the five delta entries only.
+Built locally, then opened as PR #1797 with snapshot-apexyard-20261019T123223Z and reconciliation-plan-apexyard-token-efficiency-20261019T112515Z.
+C4 eval evidence is partial: k=1 on the five delta entries only.
 Do not treat schema validation or static tests as a zero-flip result.
-No Snapshot or Reconciliation was created.
+After the security review, the tier script runs isolated: `python3 -I` from a neutral directory.
 
 ## Step checklist
 
@@ -12,10 +13,10 @@ No Snapshot or Reconciliation was created.
 - [x] Step 4: recompute the resume window and require the posted prior review as evidence.
 - [x] Step 5: run the o1 reviewer metric and report the comparison with its limits.
 - [ ] Run the three isolated Rex prompt comparisons. Partial C4 done 2026-10-19: k=1, five delta entries, 30 reviews, 0 verdict flips, 1,382,201 tokens. Not a zero-flip claim. The k=3 run and the ten non-delta entries remain open.
-- [x] Commit each step locally. No push, branch change, PR, or merge.
+- [x] Commit each step locally. Opened as PR #1797 with the Snapshot and Reconciliation above.
 
-Flip tables hold a partial C4 result (k=1, delta entries only). The ten non-delta rows are Not run. No push, branch change, PR, or merge occurred.
-The orchestrator owns the PR Snapshot and Reconciliation.
+Flip tables hold a partial C4 result (k=1, delta entries only). The ten non-delta rows are Not run.
+This PR is #1797. It adds the Snapshot and Reconciliation named above.
 Use this checklist and the measurements below in the slice PR body.
 
 ## Before and after
