@@ -26,8 +26,9 @@ g add base-file
 g commit -qm update
 g checkout -q feature/demo
 g merge -qm refresh base
-expect 19 --slice slice-demo-widget-o1 --pr 42
-echo 'FAIL-BEFORE refresh: the updated branch fails provenance with exit 19.'
+# AgDR-0258: provenance accepts ancestor R. Stale proposal basedOn still fails (17).
+expect 17 --slice slice-demo-widget-o1 --pr 42
+echo 'PASS refresh pre-condition: stale proposal basedOn exits 17 after base move.'
 # Extend the shared CLI mock with snapshot support.
 cp "$ORBIT_BIN" "$sb/bin/orbit-original"
 cat > "$ORBIT_BIN" <<'MOCK'

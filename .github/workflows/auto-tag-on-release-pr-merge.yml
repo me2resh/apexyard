@@ -41,10 +41,15 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: auto-tag-on-release-pr-merge-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   auto-tag:
     name: tag release + create GitHub Release
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write   # create tag (git push --tags) + gh release create
     # Only run on merged release PRs (not just any closed PR, and not on forks)

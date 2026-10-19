@@ -2,6 +2,82 @@
 # Variables come from the caller or fixture functions.
 # shellcheck disable=SC2154,SC2034
 
+# Accept recorded merge-base R when it equals M, or when R is an ancestor of M
+# and of HEAD and no status-dependent record changed between R and M (AgDR-0258).
+# Globals: root, slice_id. Uses fail().
+slice_pr_merge_base_ok() {
+  local recorded="$1" current="$2" plan_id="$3" file="$4"
+  local rc=0 rev path id body changed list changed_list
+  local -a dep_paths=()
+  if [ "$recorded" = "$current" ]; then
+    return 0
+  fi
+  git -C "$root" rev-parse --verify --end-of-options "${recorded}^{commit}" >/dev/null 2>&1 ||
+    fail 19 provenance "$file" "Cannot resolve the recorded merge-base."
+  git -C "$root" rev-parse --verify --end-of-options "${current}^{commit}" >/dev/null 2>&1 ||
+    fail 19 provenance "$file" "Cannot resolve the current merge-base."
+  git -C "$root" merge-base --is-ancestor "$recorded" "$current"
+  rc=$?
+  if [ "$rc" -eq 1 ]; then
+    fail 19 provenance "$file" "The merge-base SHA does not match."
+  elif [ "$rc" -ne 0 ]; then
+    fail 19 provenance "$file" "Cannot check merge-base ancestry."
+  fi
+  git -C "$root" merge-base --is-ancestor "$recorded" HEAD
+  rc=$?
+  if [ "$rc" -eq 1 ]; then
+    fail 19 provenance "$file" "The merge-base SHA does not match."
+  elif [ "$rc" -ne 0 ]; then
+    fail 19 provenance "$file" "Cannot check merge-base ancestry."
+  fi
+  dep_paths+=("docs/orbit/plans/${plan_id}.notes.md")
+  for rev in "$recorded" "$current"; do
+    list=$(git -C "$root" ls-tree -r --name-only "$rev" -- \
+      docs/orbit/plans/ docs/orbit/slices/ docs/orbit/reconciliations/) ||
+      fail 19 provenance "$file" "Cannot list plan records for the merge-base check."
+    while IFS= read -r path; do
+      [ -n "$path" ] || continue
+      case "$path" in
+        docs/orbit/plans/*.json)
+          body=$(git -C "$root" show "$rev:$path" 2>/dev/null) ||
+            fail 19 provenance "$file" "Cannot read plan records for the merge-base check."
+          id=$(printf '%s' "$body" | jq -r '.id // empty') ||
+            fail 19 provenance "$file" "Cannot read plan records for the merge-base check."
+          [ "$id" = "$plan_id" ] || continue
+          dep_paths+=("$path")
+          ;;
+        docs/orbit/slices/*.json)
+          body=$(git -C "$root" show "$rev:$path" 2>/dev/null) ||
+            fail 19 provenance "$file" "Cannot read slice records for the merge-base check."
+          id=$(printf '%s' "$body" | jq -r '.id // empty') ||
+            fail 19 provenance "$file" "Cannot read slice records for the merge-base check."
+          [ "$id" = "$slice_id" ] || continue
+          dep_paths+=("$path")
+          ;;
+        docs/orbit/reconciliations/*.json)
+          body=$(git -C "$root" show "$rev:$path" 2>/dev/null) ||
+            fail 19 provenance "$file" "Cannot read Reconciliation records for the merge-base check."
+          id=$(printf '%s' "$body" | jq -r '.planId // empty') ||
+            fail 19 provenance "$file" "Cannot read Reconciliation records for the merge-base check."
+          [ "$id" = "$plan_id" ] || continue
+          dep_paths+=("$path")
+          ;;
+      esac
+    done <<< "$list"
+  done
+  [ "${#dep_paths[@]}" -gt 0 ] ||
+    fail 19 provenance "$file" "Cannot resolve status-dependent records for the merge-base check."
+  changed=$(git -C "$root" diff --name-only --no-renames "$recorded" "$current" -- "${dep_paths[@]}") ||
+    fail 19 provenance "$file" "Cannot diff status-dependent records between merge-bases."
+  if [ -n "$changed" ]; then
+    changed_list=$(printf '%s' "$changed" | tr '\n' ' ' | sed 's/[[:space:]]*$//')
+    fail 19 provenance "$file" \
+      "Plan records changed between the recorded merge-base and the current merge-base (${changed_list}). Run refresh-slice-record.sh."
+  fi
+  echo "records-lint: NOTE [provenance] Recorded merge-base ${recorded}; current merge-base ${current}." >&2
+  return 0
+}
+
 # Check slice scope, evidence, and provenance. Write no record.
 slice_pr_lint() {
   local slice="" f root mb paths records latest='{}' at best='' record plan allowed bad line number sha
@@ -62,7 +138,7 @@ slice_pr_lint() {
     [ -n "$line" ] || fail 19 provenance "$f" "Add one Slice PR observation."
     number=${line#Slice PR: #}; number=${number%%;*}
     sha=${line##* }; sha=${sha%.}
-    [ "$sha" = "$mb" ] || fail 19 provenance "$f" "The merge-base SHA does not match."
+    slice_pr_merge_base_ok "$sha" "$mb" "$plan" "$f"
     [ -z "$pr_number" ] || [ "$number" = "$pr_number" ] || fail 19 provenance "$f" "The PR number does not match."
   done <<< "$records"
   local proposals=() proposal own_rec="" base_slice id outcome notes withdrawn

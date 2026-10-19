@@ -52,6 +52,7 @@ jobs:
   secrets-scan:
     name: Secrets (gitleaks)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout (full history for gitleaks git-log scan)
@@ -82,6 +83,7 @@ jobs:
   sast-shell:
     name: SAST shell scripts (Semgrep r/bash)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -190,6 +192,7 @@ jobs:
   dep-audit-na:
     name: Dependency audit (N/A)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Note — no dependency manifests in this repo
@@ -211,6 +214,7 @@ jobs:
   sbom-na:
     name: SBOM + licence check (N/A)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Note — no third-party deps; SBOM is trivial
@@ -229,6 +233,7 @@ jobs:
   security-gate:
     name: Security Gate
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: [secrets-scan, sast-shell, dep-audit-na, sbom-na]
     if: always()
 

@@ -26,6 +26,7 @@ jobs:
     name: Scorecard analysis
     if: github.repository == 'me2resh/apexyard'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       security-events: write   # upload results to code-scanning
       contents: read
