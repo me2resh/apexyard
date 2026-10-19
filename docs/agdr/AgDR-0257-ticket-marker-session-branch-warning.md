@@ -31,7 +31,7 @@ Chosen: **warn only**, because the issue asks for a visible warning and keeps th
 
 1. `/start-ticket` writers add `session_id=` and `branch=` with `printf '%s\n'`. A value that holds `\n` or `\r` is rejected. The title is flattened to one line before the write. Every reader takes the first match of each key.
 2. Before a write that would replace a different ticket from a different session (empty or missing `session_id` counts as different), `/start-ticket` asks: separate worktree (see #1534), take over, or cancel. When no answer is possible, cancel and leave the marker unchanged. `APEXYARD_START_TICKET_TAKEOVER=1` is a **cooperative signal**, not an operator gate: the skill sets it **inline** on the single write that follows the operator's take-over answer; it must never be exported and never inherited. Headless and `/fan-out` runs must not set it. No hook inspects the flag. A child Bash process cannot tell an inline prefix from an exported/inherited value (`declare -x` looks the same either way), so the writer does not attempt that distinction. Residual (same as before this PR): an agent can still set the flag, set its session id to match the marker, or edit the marker file directly. On each take-over that replaces another session's marker, the writer prints one stderr audit line: `apexyard: ticket marker taken over: <old ticket> (session <old id>) -> <new ticket> (session <new id>)`.
-3. `require-active-ticket.sh` and `require-migration-ticket.sh` warn on stderr when the governing marker's `session_id` or `branch` differs from the current session or tree branch. The warning names the ticket, the other session id, the marker age, and the fix. It prints once per session per marker. Warn state lives under `.claude/session/ticket-marker-warn.<safe_sid>/`. One session cannot write a path that suppresses another session's warning. No `gh` call is added to the ticket gate.
+3. `require-active-ticket.sh` and `require-migration-ticket.sh` warn on stderr when the governing marker's `session_id` or `branch` differs from the current session or tree branch. The warning names the ticket, the other session id, the marker age, and the fix. It prints once per session per marker identity (path + `session_id` + `repo` + `number` + `started_at`), so a later foreign marker at the same path still warns. When the current branch cannot be determined, skip the branch check and do not consume a claim. Warn state lives under `.claude/session/ticket-marker-warn.<safe_sid>/`. One session cannot write a path that suppresses another session's warning. No `gh` call is added to the ticket gate. The foreign-overwrite guard covers the per-tree marker and the old-layout path the write would replace.
 
 ## Consequences
 
@@ -57,13 +57,37 @@ AgDR-0222 transition).
 
 The same writers also put `session_id=` and `branch=` on the old-layout
 marker, in the same order as the per-tree `apexyard-ticket` file.
-Readers take the first match of each `key=` line
-(`active_ticket_read_field`), so an unknown key has no effect on an
-old hook. Keeping the new keys in the old-layout file keeps one write
-path and lets a governing old-layout marker still feed the warn path.
-The compat test now pins every old key and its value, and accepts
-`session_id` and `branch` in that fixed order. The warning still works
-from the new per-tree marker when that marker governs.
+Rollback safety rests on the old readers at `c40c4c79^` (before
+AgDR-0222), not on today's `active_ticket_read_field`. Those readers
+use anchored exact keys and take the first match: `block-ambient-tracker-repo.sh`
+(`sed -n 's/^repo=//p' | head -1`), `require-migration-ticket.sh`
+(`grep -E '^repo='` / `'^number='` with `head -1`), `status/briefing.sh`
+`read_marker_field` (exact key, first match), and the AgDR hooks
+(`^title=\[(Spike|Prototype)\]`). `require-active-ticket.sh` only
+checks that the marker file exists. No old reader reads `session_id`
+or `branch`, or checks key count or key order, so an unknown key has
+no effect on an old hook. Keeping the new keys in the old-layout file
+keeps one write path and lets a governing old-layout marker still feed
+the warn path. The compat test now pins every old key and its value,
+and accepts `session_id` and `branch` in that fixed order.
+
+### Rex findings on PR #1794 (2026-10-19)
+
+Three correctness faults in the first warn path, all fixed on this
+branch:
+
+1. The once-per-session claim was named after the marker path only. A
+   second foreign marker at the same path produced no warning. The
+   claim now includes `session_id`, `repo`, `number`, and `started_at`.
+2. An empty current branch (migration path under a not-yet-existing
+   directory, or empty `AT_TREE` for an old-layout-only tree) was
+   reported as "another branch" and consumed the claim. The warn
+   helper now skips the branch check when the branch is unknown. The
+   migration gate resolves the tree from the nearest existing ancestor.
+3. `active_ticket_foreign_overwrite` checked only the per-tree
+   `apexyard-ticket`. A headless `/start-ticket` could replace another
+   session's old-layout `current-ticket` / `tickets/<project>`. The
+   guard now checks the old-layout path the write would replace.
 
 ### Take-over honesty (Hakim A1 / CEO 2026-10-19)
 

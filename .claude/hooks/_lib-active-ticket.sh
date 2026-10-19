@@ -1151,7 +1151,9 @@ _at_session_differs() {
 
 # Return 0 when writing <repo>/<num> into <dir> would replace a marker that
 # holds a different ticket and a different session_id. Used by /start-ticket
-# before overwrite (AgDR-0257).
+# before overwrite (AgDR-0257). Checks the per-tree apexyard-ticket when
+# present; otherwise the old-layout path this write would replace
+# (current-ticket / tickets/<project>[/<branch>]).
 active_ticket_foreign_overwrite() {
   local dir="$1" new_repo="$2" new_num="$3"
   local marker="" old_repo="" old_num="" old_sid="" cur_sid=""
@@ -1161,6 +1163,9 @@ active_ticket_foreign_overwrite() {
   if active_ticket_gitdir "$dir" 2>/dev/null && [ -f "$AT_GITDIR/apexyard-ticket" ] \
     && [ ! -L "$AT_GITDIR/apexyard-ticket" ]; then
     marker="$AT_GITDIR/apexyard-ticket"
+  elif active_ticket_legacy_path "$dir" "$new_repo" 2>/dev/null \
+    && [ -n "$REPLY" ] && [ -f "$REPLY" ] && [ ! -L "$REPLY" ]; then
+    marker="$REPLY"
   else
     return 1
   fi
@@ -1202,7 +1207,10 @@ active_ticket_mismatch_warn_dir() {
 
 # Warn on stderr when the marker's session_id or branch does not match this
 # session or this tree. Never changes the exit path of the caller. Prints at
-# most once per session per marker path. $1=marker $2=tree $3=ops home.
+# most once per session per marker identity (path + session_id + repo +
+# number + started_at). When the current branch cannot be determined, skip
+# the branch check and do not consume a claim (AgDR-0257 / #1533).
+# $1=marker $2=tree $3=ops home.
 active_ticket_warn_if_mismatch() {
   local marker="$1" tree="$2" home="$3"
   local m_sid="" m_branch="" m_repo="" m_num="" m_started="" cur_sid="" cur_branch=""
@@ -1221,6 +1229,7 @@ active_ticket_warn_if_mismatch() {
   active_ticket_session_id || true
   cur_sid="$REPLY"
   # Branch of the tree that holds the edit. Prefer the validated tree.
+  # An empty tree or an unreadable branch is "unknown": do not warn on branch.
   if [ -n "$tree" ]; then
     active_ticket_tree_branch "$tree" || true
     cur_branch="$REPLY"
@@ -1231,15 +1240,15 @@ active_ticket_warn_if_mismatch() {
   fi
   if [ -n "$m_branch" ] && [ -n "$cur_branch" ] && [ "$m_branch" != "$cur_branch" ]; then
     if [ -n "$why" ]; then why="${why}+branch"; else why="branch"; fi
-  elif [ -n "$m_branch" ] && [ -z "$cur_branch" ]; then
-    if [ -n "$why" ]; then why="${why}+branch"; else why="branch"; fi
   fi
   [ -n "$why" ] || return 0
 
   if active_ticket_mismatch_warn_dir "$home"; then
     warn_dir="$REPLY"
-    # Claim file name: sanitised marker path so two markers do not collide.
-    claim=$(printf '%s' "$marker" | tr -c 'A-Za-z0-9._-' '_')
+    # Claim: path plus the marker identity fields so a later foreign marker
+    # at the same path still warns once (Rex finding 1 / #1533).
+    claim=$(printf '%s|%s|%s|%s|%s' "$marker" "$m_sid" "$m_repo" "$m_num" "$m_started" \
+      | tr -c 'A-Za-z0-9._-' '_')
     if [ -n "$claim" ] && [ -e "$warn_dir/$claim" ]; then
       return 0
     fi

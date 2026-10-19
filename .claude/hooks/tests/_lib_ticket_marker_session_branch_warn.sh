@@ -80,3 +80,49 @@ tm_run_gate() {
           bash "$ops/.claude/hooks/require-active-ticket.sh" >/dev/null
     } 2>&1)
 }
+
+# Run require-migration-ticket.sh with a mocked gh that always returns an
+# OPEN labelled migration issue. Prints stderr. Exit status is the gate's.
+tm_run_migration_gate() {
+  # $1 ops $2 file_path $3 session_id
+  local ops="$1" path="$2" sid="$3" payload bin out rc
+  bin=$(mktemp -d)
+  cat > "$bin/gh" <<'G'
+#!/bin/bash
+echo '{"state":"OPEN","title":"T","url":"https://gh/42","labels":[{"name":"migration"}],"body":"refs docs/agdr/AgDR-0001-db-migration.md"}'
+G
+  chmod +x "$bin/gh"
+  payload=$(jq -nc --arg p "$path" '{tool_name:"Write",tool_input:{file_path:$p,content:"x"}}')
+  out=$(cd "$ops" && {
+      printf '%s' "$payload" \
+        | PATH="$bin:$PATH" CLAUDE_CODE_SESSION_ID="$sid" APEXYARD_OPS_DISABLE_PIN=1 \
+          bash "$ops/.claude/hooks/require-migration-ticket.sh" >/dev/null
+    } 2>&1)
+  rc=$?
+  rm -rf "$bin"
+  printf '%s' "$out"
+  return "$rc"
+}
+
+# Install pre-fix (Rex-finding) hooks from a known ancestor into <ops>.
+# Default: 121136b3 — the commit kept under this fix. Override with
+# APEXYARD_REX_BEFORE_SHA or APEXYARD_REX_BEFORE_DIR (dir with both files).
+tm_install_rex_before_hooks() {
+  local ops="$1" root sha dir
+  root=$(tm_src_root)
+  dir="${APEXYARD_REX_BEFORE_DIR:-}"
+  sha="${APEXYARD_REX_BEFORE_SHA:-121136b32182f907afaf34cd6e9182742a0bad86}"
+  if [ -n "$dir" ] && [ -f "$dir/_lib-active-ticket.sh" ] \
+    && [ -f "$dir/require-migration-ticket.sh" ]; then
+    cp "$dir/_lib-active-ticket.sh" "$ops/.claude/hooks/"
+    cp "$dir/require-migration-ticket.sh" "$ops/.claude/hooks/"
+    return 0
+  fi
+  if git -C "$root" show "$sha:.claude/hooks/_lib-active-ticket.sh" \
+    > "$ops/.claude/hooks/_lib-active-ticket.sh" 2>/dev/null \
+    && git -C "$root" show "$sha:.claude/hooks/require-migration-ticket.sh" \
+    > "$ops/.claude/hooks/require-migration-ticket.sh" 2>/dev/null; then
+    return 0
+  fi
+  return 1
+}
