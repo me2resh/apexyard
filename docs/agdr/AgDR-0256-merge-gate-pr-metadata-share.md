@@ -240,6 +240,23 @@ Measurement: the real dispatcher and the real four gates in a sandbox ops root w
 - No document gives `.claude/settings.local.json` timeout advice.
 - A per-call time limit is a follow-up spike.
 
+#### Carry-over chain shape (PR #1770)
+
+The CEO asked for a measurement on a branch with a chain of "merge dev into branch" commits. PR #1770 (merged as `64e6e10`) has 4 such merges. When the Rex marker is on the last reviewed commit, `block-unreviewed-merge.sh` runs the carry-over walk in `_lib-merge-behind.sh` (`rex_approval_carries_over`). The walk makes one `gh api branches/<base>` call, then one `gh api commits/<sha>` call for each step, with local git work between the calls.
+
+Measurement: the real dispatcher and the real four gates in a sandbox ops root, a squash merge of #1770, the Rex marker on `f107fb9`, the other markers on the head `9ae6007`, n=30, `/bin/bash` 3.2 on macOS. "Simulated" replays recorded real responses with 0.9 to 1.9 s per call.
+
+| Host | Calls before / after | p50 before / after (ms) | p95 before / after (ms) |
+|------|----------------------|-------------------------|-------------------------|
+| macOS, real GitHub API | 15 / 10 | 12988 / 9918 | 16613 / 11469 |
+| Simulated #1759 host | 15 / 10 | 25225 / 17861 | 26572 / 18986 |
+
+- The snapshot removes 5 calls: 3 `gh pr view` calls in the review gate, the CI gate head read, and one of the two duplicate file-list pairs. The recheck adds 1.
+- The walk's 5 calls (1 branch call and 4 commit calls) are not shared. They stay serial in the review gate. A walk for a stale CEO marker would repeat them.
+- For this shape on the simulated host, NFR-1 (p95 of 15 seconds or less) is not met: 18986 ms.
+- The 60-second timeout does not hold 5 x p95 for this shape: 5 x 18986 ms is 94.9 seconds. It holds 3.2 x p95. CEO decision 4 says to tell the CEO before a timeout above 75 seconds, so this build keeps 60 seconds.
+- The walk is outside the approved v6 scope. It is a named follow-up (below), together with the per-call time limit. One `gh` call in the #1770 investigation hung for 120 seconds and then passed in 2 seconds on repeat. Only a per-call limit stops that case.
+
 ### D8. Rollback
 
 1. To revert the prefetch, remove the `prefetch_pr_metadata || true` line in `run_merge_gates`. Then there is no snapshot and no recheck, and the gates fetch.
@@ -295,7 +312,8 @@ Not filed by this build. The CEO accepted the first and third rows. The other ro
 | [Task] Decide head pinning for raw merges | Choose a gate rule for a raw merge without `--match-head-commit` or `-f sha=`: require, warn, or record as residual. |
 | [Task] Add a glab prefetch or a glab call budget | Prefetch through `glab mr view --output json`, or measure the glab route and record its budget. |
 | [Task] Test which dispatcher timeout wins on override | Test a repeated dispatcher entry in `.claude/settings.local.json`, then document the result. |
-| [Spike] Per-call time limit for merge-gate `gh` calls | Find a bash 3.2 method with no GNU `timeout` that ends one hung call early. The limit wraps each `gh` call, not the gate process. |
+| [Spike] Per-call time limit for merge-gate `gh` calls | Find a bash 3.2 method with no GNU `timeout` that ends one hung call early. The limit wraps each `gh` call, not the gate process. Evidence: one call in the #1770 investigation hung for 120 seconds, then passed in 2 seconds. |
+| [Task] Cut the forge calls of the carry-over chain walk | `rex_approval_carries_over` makes 1 branch call plus 1 commit call for each step, up to 10 steps, in series, and repeats the walk for a stale CEO marker. Measured on #1770 (4 steps): the route is 10 calls, p95 18986 ms on the simulated #1759 host, so 5 x p95 is 94.9 seconds, above the 60-second timeout. Options: share one walk result between the Rex and CEO checks; fetch the parents of all steps in one GraphQL query; or read the steps from the PR commits list. Each option must keep the forge as the source of the parents and the tree. Then measure again and set the timeout. |
 | [Discovery, parked under #1762] Function and environment injection into hooks | `BASH_FUNC_<name>%%`, `BASH_ENV` and `PATH` can replace `gh`, `jq` or `shasum` in every gate. |
 | [Task] Refuse unscoped merges in the review and CI gates (optional) | Make the review and CI gates block an empty `CMD_REPO` (#887 class). |
 

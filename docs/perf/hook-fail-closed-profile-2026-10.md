@@ -107,6 +107,19 @@ The #1759 host itself was not available. The second row replays its
 per-call latency. Its p95 is the larger one, so the profile line uses it.
 NFR-1 of AgDR-0256 (p95 of 15 seconds or less on that host) is met.
 
+A branch with a chain of "merge dev into branch" commits is slower.
+When the Rex marker is on an older commit, the review gate walks the
+chain with one forge call for each step. PR #1770 has 4 steps:
+
+| Host | Calls before / after | p95 before | p95 after |
+|------|----------------------|------------|-----------|
+| macOS, real GitHub API, squash merge of #1770 | 15 / 10 | 16613 | 11469 |
+| Simulated #1759 host (recorded responses, 0.9 to 1.9 s per call) | 15 / 10 | 26572 | 18986 |
+
+For that shape, 5 x p95 is 94.9 seconds, above the 60-second timeout.
+The timeout stays at 60 seconds until the walk calls are cut.
+AgDR-0256 names that follow-up and the per-call time limit.
+
 No document gives a timeout override in `.claude/settings.local.json`.
 Nothing yet shows which `timeout` wins when two entries merge.
 
