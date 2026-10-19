@@ -682,7 +682,9 @@ _has_argv_merge() {
 # Split into characters once: macOS awk makes repeated one-character substr
 # calls quadratic on a long statement (#1552 round 3).
 # Same statement + xargs = opaque (no character window). The argv -c form
-# still requires the merge within 200 characters after '-c'. On awk failure,
+# still requires the merge within 200 characters after the -c quote. Count
+# that window in awk. An ERE interval is not portable: mawk 1.3.4 aborts on
+# it and the fallback then blocks every direct merge (#1757). On awk failure,
 # fail closed because the whole-input classifier is unavailable.
 _has_opaque_merge_wrapper() {
   _has_opaque_merge_wrapper_fallback() {
@@ -709,14 +711,30 @@ _has_opaque_merge_wrapper() {
       p = match(t, /xargs/)
       return p && wb_before(t, p) && wb_after(t, p, 5)
     }
-    function has_sh_c_near_merge(t,    flat, q, re) {
-      # Flatten newlines so .{0,200} spans a quoted multi-line -c script.
+    function merge_starts_within(text, start,    tail) {
+      # A start at the first character is a gap of zero.
+      # A start 200 characters later is the last accepted gap.
+      if (start < 1 || start > length(text)) return 0
+      tail = substr(text, start)
+      if (match(tail, /gh[[:space:]]+pr[[:space:]]+merge/) && RSTART <= 201) return 1
+      if (match(tail, /glab[[:space:]]+mr[[:space:]]+merge/) && RSTART <= 201) return 1
+      return 0
+    }
+    function has_sh_c_near_merge(t,    flat, q, re, from, at, relen) {
+      # Flatten newlines so the 200-character bound spans a multi-line -c script.
       flat = t
       gsub(/\n/, " ", flat)
       q = "[\\\\]?[\"'"'"'`]"
-      re = q "(sh|bash|zsh)" q "[[:space:]]*,[[:space:]]*" q "-c" q ".{0,200}"
-      if (match(flat, re "(gh[[:space:]]+pr[[:space:]]+merge)")) return 1
-      if (match(flat, re "(glab[[:space:]]+mr[[:space:]]+merge)")) return 1
+      re = q "(sh|bash|zsh)" q "[[:space:]]*,[[:space:]]*" q "-c" q
+      from = 1
+      while (from <= length(flat)) {
+        if (!match(substr(flat, from), re)) return 0
+        relen = RLENGTH
+        if (relen < 1) return 0
+        at = from + RSTART - 1
+        if (merge_starts_within(flat, at + relen)) return 1
+        from = at + 1
+      }
       return 0
     }
     function has_qw(t,    flat) {
