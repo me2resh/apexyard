@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # apexyard — tiny CLI shim that exposes a subset of ApexYard skills as
-# shell-runnable commands. Today: only `apexyard status` (slide 6).
+# shell-runnable commands. Commands: `apexyard status` and `apexyard doctor`.
 #
 # Install: symlink this script into a directory on your PATH.
 #
@@ -8,6 +8,7 @@
 #
 # Usage:
 #   apexyard status [-b|--briefing]   # 4-line "where am I" briefing
+#   apexyard doctor                 # read-only environment report
 #   apexyard --help
 #
 # The script delegates to .claude/skills/status/briefing.sh inside the
@@ -44,11 +45,35 @@ find_ops_root() {
   return 1
 }
 
+# Follow each symlink to the real script. Bash 3.2 has no readlink -f.
+resolve_cli_path() {
+  local path="${BASH_SOURCE[0]}" hops=0 target dir
+  while [ -L "$path" ]; do
+    hops=$((hops + 1))
+    [ "$hops" -le 16 ] || return 1
+    target=$(readlink "$path") || return 1
+    case "$target" in
+      /*) path="$target" ;;
+      *)
+        dir=$(dirname "$path")
+        case "$dir" in
+          /*) ;;
+          *) dir=$(cd "$dir" && pwd) || return 1 ;;
+        esac
+        path="$dir/$target"
+        ;;
+    esac
+  done
+  dir=$(cd "$(dirname "$path")" && pwd -P) || return 1
+  printf '%s' "$dir/$(basename "$path")"
+}
+
 usage() {
   cat <<'EOF'
 Usage: apexyard <command> [args]
 
 Commands:
+  doctor                 Read-only environment checks (exit 0/1/2: pass/warn/fail).
   status [-b|--briefing]   Compact "where am I" briefing — workspace, ticket,
                            branch, role. Defaults to --briefing today (the
                            full /status report runs inside Claude Code).
@@ -64,6 +89,21 @@ case "$cmd" in
   ""|-h|--help|help)
     usage
     exit 0
+    ;;
+  doctor)
+    # Use the fork that contains the current directory.
+    # Outside a fork, use the real script directory. A PATH symlink must not hide it.
+    ops_root=$(find_ops_root) || ops_root=""
+    if [ -z "$ops_root" ]; then
+      cli_path=$(resolve_cli_path) || cli_path="${BASH_SOURCE[0]}"
+      ops_root=$(cd "$(dirname "$cli_path")/.." && pwd -P) || ops_root=""
+    fi
+    helper="$ops_root/.claude/skills/preflight/preflight.sh"
+    if [ ! -f "$helper" ]; then
+      echo "apexyard: preflight helper not found at $helper. Update the fork: git pull upstream dev (or run /update)." >&2
+      exit 2
+    fi
+    exec "$BASH" "$helper" "$@"
     ;;
   status)
     if ! ops_root=$(find_ops_root); then

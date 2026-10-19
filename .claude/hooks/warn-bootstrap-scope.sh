@@ -61,7 +61,12 @@ if [ -z "$REPO_ROOT" ]; then
   exit 0
 fi
 
-MARKER="$REPO_ROOT/.claude/session/active-bootstrap"
+# shellcheck source=/dev/null
+[ ! -r "$HOOK_DIR/_lib-session-markers.sh" ] || . "$HOOK_DIR/_lib-session-markers.sh"
+MARKER=""
+if command -v active_bootstrap_marker_path >/dev/null 2>&1; then
+  MARKER=$(active_bootstrap_marker_path "$REPO_ROOT") || MARKER=""
+fi
 if [ ! -f "$MARKER" ]; then
   exit 0
 fi

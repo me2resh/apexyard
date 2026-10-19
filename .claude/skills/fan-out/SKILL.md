@@ -47,19 +47,23 @@ Trim whitespace, drop empties. If the result is fewer than 2 tasks, stop: fan-ou
 
 For each task, infer the answer from the description first, then ask only when ambiguous.
 
-**Agent type** — default `general-purpose`. Use `AskUserQuestion` when inference cannot resolve the type.
-Recommend `general-purpose` first. Split the list across wizard questions. Use the options below only without the tool:
+**Agent type** — default a fresh, role-appropriate spawn with a written brief (see `.claude/rules/agent-role-selection.md`). Use `AskUserQuestion` when inference cannot resolve the type.
+Split the list across wizard questions. Use the options below only without the tool:
 
 | Agent | Use for |
 |-------|---------|
-| `general-purpose` | Implementation, multi-step research, anything mixed |
+| `backend-engineer` | Backend / domain / APIs / schema |
+| `frontend-engineer` | UI components, design-system, accessibility |
+| `platform-engineer` | CI/CD, hooks, IaC, developer tooling |
 | `Explore` | Read-only research, codebase questions, audits |
 | `code-reviewer` | Reviewing an existing PR (read-only) |
 | `security-reviewer` | Security audit of a PR (read-only) |
 | `Plan` | Plan-mode — produces a plan, no edits |
 | Custom | Any subagent in `.claude/agents/` |
 
-If a task obviously needs editing (verbs like *implement*, *add*, *fix*, *refactor*, *migrate*, *write*), reject any read-only agent type and suggest `general-purpose`.
+If a task obviously needs editing (verbs like *implement*, *add*, *fix*, *refactor*, *migrate*, *write*), reject any read-only agent type and suggest a role-appropriate editing agent (for example `backend-engineer`, `frontend-engineer`, or `platform-engineer`).
+
+**Spawn mode** — default a fresh spawn with a written brief. Fork the parent only when the facts the agent needs are not yet in a file.
 
 **Isolation** — fan-out writers always use a `worktree`, regardless of the ops-fork setting `build.isolation`. Step 6 creates each writer worktree from the task's source tree, so a managed-project task never gets a worktree of the ops fork.
 Use `shared` only when all agents are read-only research.
@@ -117,7 +121,7 @@ Print a table:
 ```
 | # | Task | Agent | Isolation | Mode |
 |---|------|-------|-----------|------|
-| 1 | …    | general-purpose | worktree | foreground |
+| 1 | …    | backend-engineer | worktree | foreground |
 | 2 | …    | Explore | shared | foreground |
 …
 ```
@@ -218,7 +222,7 @@ Background tasks running: <ids>. They'll surface results when done.
 5. **Cap at 5 concurrent agents per invocation.** If the user wants more, ask them to split into batches. Beyond 5, returns diminish (review fatigue, merge-back queue) and risk grows (rate limits, context dilution).
 6. **Each agent's prompt must be self-contained** — sub-agents do not see the parent conversation. Include task description, reference paths, expected output format, and any inherited constraints inline.
 7. **Background mode only for >2-minute estimated work.** For short tasks, foreground is faster end-to-end (no async overhead).
-8. **Refuse a read-only agent type for an editing task.** `Explore`, `code-reviewer`, `security-reviewer`, and `Plan` cannot write. If the task verb says "implement" / "fix" / "add" / "refactor", suggest `general-purpose`.
+8. **Refuse a read-only agent type for an editing task. Default to a fresh role-appropriate spawn with a written brief.** `Explore`, `code-reviewer`, `security-reviewer`, and `Plan` cannot write. If the task verb says "implement" / "fix" / "add" / "refactor", suggest a role-appropriate editing agent (for example `backend-engineer`, `frontend-engineer`, or `platform-engineer`). Fork the parent only when the facts the agent needs are not yet in a file.
 9. **Active-ticket check happens at step 3, not step 7.** Failing at plan-time is kinder than failing mid-spawn.
 10. **Pause on merge-back conflict — never auto-resolve.** The user owns the merge.
 

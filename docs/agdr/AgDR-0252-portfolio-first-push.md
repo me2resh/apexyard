@@ -136,15 +136,24 @@ Rule 1 runs around item 4. Rules 2 to 9 replace the "initial commit + push" bull
    BR=$(git -C "$P" symbolic-ref --short HEAD)
    LOCAL=$(git -C "$P" rev-parse --verify HEAD)
    REMOTE=$(git -C "$P" ls-remote origin "refs/heads/$BR" | awk -v r="refs/heads/$BR" '$2 == r { print $1 }')
-   FORGE=$(gh api "repos/<owner>/<name>/branches/$BR" --jq .commit.sha)
+   FORGE_ERR=$(mktemp)
+   FORGE=$(gh api "repos/<owner>/<name>/branches/$BR" --jq .commit.sha 2>"$FORGE_ERR") || FORGE=""
    [ -n "$LOCAL" ] && [ "$LOCAL" = "$REMOTE" ] && [ "$LOCAL" = "$FORGE" ]
    ```
 
-   - `<owner>/<name>` is the repo that item 3 created. Do not derive it from the remote URL.
+   - Record `<owner>` and `<name>` before this check. The reuse path skips item 3. Do not derive `<owner>/<name>` from the remote URL.
    - `BR` comes from `symbolic-ref`, not from a literal `main`. The clone's branch depends on the server and on `init.defaultBranch`.
    - The `awk` filter compares the ref name exactly. An `ls-remote` pattern matches the tail of a ref, even a full `refs/heads/<b>` pattern.
    - The command uses no `--heads` and no `--branches`. Git deprecates `--heads`, and older git does not have `--branches`.
    - `ls-remote` reads the fetch URL. The forge check covers a push that `pushurl` or `pushInsteadOf` sends to another URL.
+   - When `FORGE` is empty, show the contents of `$FORGE_ERR` to the operator. Then remove the temp file (`rm -f "$FORGE_ERR"`). Map the error to branch-absent (HTTP 404, or "Branch not found"), authentication (HTTP 401 or 403, or "auth" in the error), or a network or other error. Keep `|| FORGE=""`. An empty `FORGE` never matches `LOCAL`.
+
+   Note (2026-10-19, #1776): A missing branch sets `FORGE` to an empty string. The reuse path records `<owner>/<name>` before this check.
+
+   Note (2026-10-19, #1782): When `FORGE` is empty, show the `gh api` stderr and map it to the three forge failure rows. The check still fails closed. The decision does not change.
+
+   Note (2026-10-19, #1792): After the operator sees `$FORGE_ERR`, remove the temp file with `rm -f "$FORGE_ERR"`. The decision does not change.
+
 9. When all three values match, the agent continues with Step 2b item 6. When a value differs, the agent applies § "Failure modes".
 
 ### Resume rule
@@ -218,6 +227,12 @@ The criterion covers the commit and the push. Sequence:
    > Decision record: AgDR-0252. The closing PR changes `.claude/skills/setup/SKILL.md` Step 2b and `.claude/rules/git-conventions.md` § "No Direct Main".
 
 4. The closing PR changes Step 2b, amends "No Direct Main", adds this record, and says `Closes #1739`.
+
+## Architecture evolution
+
+### Remove the FORGE_ERR temp file after show (#1792)
+
+Rule 8 captured `gh api` stderr in a temp file and showed it when `FORGE` was empty. The skill did not remove that file after the show. The agent now runs `rm -f "$FORGE_ERR"` after the operator sees the text. The verify check and the three forge failure rows stay the same.
 
 ## Consequences
 
