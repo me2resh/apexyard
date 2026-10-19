@@ -235,10 +235,11 @@ Measurement: the real dispatcher and the real four gates in a sandbox ops root w
 - NFR-1 (p95 15 seconds or less on the #1759 host): met on the simulated host, 9661 ms. The real #1759 host was not available.
 - NFR-2 (macOS p95 not above 2748 ms): not comparable. 2748 ms was a route that the review gate blocked early, on a faster network. On today's network the full route went from 13015 ms to 9567 ms.
 - NFR-3: the 8-call exception path is about 8 x 1.9 + 1.2 = 16.4 seconds on the #1759 host, under the new timeout.
-- The profile line is `profile: dispatch-bash.sh p95_ms=9661`, the larger p95 of the two hosts.
-- The timeout is 60 seconds. 5 x 9661 ms is 48.3 seconds. The value is rounded up to 60 seconds to cover the 6-call and 8-call routes, which this build did not measure separately.
+- The profile line after #1759 was `profile: dispatch-bash.sh p95_ms=9661` (plain merge, simulated host).
+- The timeout after #1759 was 60 seconds. 5 x 9661 ms is 48.3 seconds. Rounded up to 60 seconds for the 6-call and 8-call routes.
+- **#1796** re-profiles on the #1770 chain (simulated p95 14885 ms) and sets the timeout to 75 seconds. See § Architecture evolution and the updated #1770 table.
 - No document gives `.claude/settings.local.json` timeout advice.
-- A per-call time limit is a follow-up spike.
+- A per-call time limit shipped in #1796 (`apexyard_gh`).
 
 #### Carry-over chain shape (PR #1770)
 
@@ -246,16 +247,18 @@ The CEO asked for a measurement on a branch with a chain of "merge dev into bran
 
 Measurement: the real dispatcher and the real four gates in a sandbox ops root, a squash merge of #1770, the Rex marker on `f107fb9`, the other markers on the head `9ae6007`, n=30, `/bin/bash` 3.2 on macOS. "Simulated" replays recorded real responses with 0.9 to 1.9 s per call.
 
-| Host | Calls before / after | p50 before / after (ms) | p95 before / after (ms) |
-|------|----------------------|-------------------------|-------------------------|
-| macOS, real GitHub API | 15 / 10 | 12988 / 9918 | 16613 / 11469 |
-| Simulated #1759 host | 15 / 10 | 25225 / 17861 | 26572 / 18986 |
+| Host | Calls after #1759 / after #1796 | p50 after #1759 / after #1796 (ms) | p95 after #1759 / after #1796 (ms) |
+|------|----------------------------------|-------------------------------------|-------------------------------------|
+| macOS, real GitHub API | 10 / 6 | 9918 / 11322 | 11469 / 16542 |
+| Simulated #1759 host | 10 / 6 | 17861 / 13656 | 18986 / 14885 |
+
+(#1759 columns: AgDR table above for the #1770 shape. #1796 columns: n=30 on this build, fair before = post-#1759 hooks at `46ffd5ff`.)
 
 - The snapshot removes 5 calls: 3 `gh pr view` calls in the review gate, the CI gate head read, and one of the two duplicate file-list pairs. The recheck adds 1.
-- The walk's 5 calls (1 branch call and 4 commit calls) are not shared. They stay serial in the review gate. A walk for a stale CEO marker would repeat them.
-- For this shape on the simulated host, NFR-1 (p95 of 15 seconds or less) is not met: 18986 ms.
-- The 60-second timeout does not hold 5 x p95 for this shape: 5 x 18986 ms is 94.9 seconds. It holds 3.2 x p95. CEO decision 4 says to tell the CEO before a timeout above 75 seconds, so this build keeps 60 seconds.
-- The walk is outside the approved v6 scope. It is a named follow-up (below), together with the per-call time limit. One `gh` call in the #1770 investigation hung for 120 seconds and then passed in 2 seconds on repeat. Only a per-call limit stops that case.
+- **#1796:** the walk is one GraphQL call (base tip + up to 10 first-parent steps). Rex and CEO share the memo in one process. Route calls: 6.
+- For this shape on the simulated host after #1796, NFR-1 is met: p95 14885 ms.
+- 5 x 14885 ms is 74.4 seconds. The dispatcher timeout is **75 seconds** (inside CEO decision 4's 60–75 band; tell the CEO before going above 75).
+- Per-call limit: `apexyard_gh` default 20 s (`_lib-gh-timeout.sh`).
 
 ### D8. Rollback
 
@@ -347,8 +350,10 @@ walk and the gate forge path:
 Fail-closed rules are unchanged: an unreadable step, a tree mismatch, or a
 chain over 10 steps still means "does not carry over".
 
-Measurement (n=30, #1770 shape, filled in by the #1796 build after the
-suites): see the updated table under § "Carry-over chain shape (PR #1770)".
+Measurement (n=30, #1770 shape): see the updated table under § "Carry-over
+chain shape (PR #1770)". Simulated p95 after #1796 is 14885 ms. The
+dispatcher timeout is 75 seconds (5 x that p95, rounded up inside the
+CEO 60–75 band). Profile line: `profile: dispatch-bash.sh p95_ms=14885`.
 
 ## Artifacts
 
