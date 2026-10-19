@@ -30,7 +30,8 @@ neutral=$(mktemp -d) || {
   exit 0
 }
 cleanup() { rm -rf -- "$neutral"; }
-trap cleanup EXIT HUP INT TERM
+trap cleanup EXIT
+trap 'cleanup; exit 1' HUP INT TERM
 if ! cd -- "$neutral"; then
   printf '%s\n' '{"depth":"Full","reason":"neutral directory unavailable"}'
   exit 0

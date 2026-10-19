@@ -9,9 +9,11 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 SCRIPT = Path(sys.argv[1]) / 'bin/review-tier.sh'
@@ -128,6 +130,8 @@ class TierTests(unittest.TestCase):
 
     def shim(self, action):
         bindir = self.root / 'shim'
+        if bindir.exists():
+            shutil.rmtree(bindir)
         bindir.mkdir()
         real = shutil.which('git')
         shim = bindir / 'git'
@@ -214,6 +218,72 @@ class TierTests(unittest.TestCase):
         self.assertEqual(out['depth'], 'Reduced-scope-allowed')
         self.assertNotEqual(out.get('reason'), 'PYTHONPATH')
         self.assertFalse((pp / 'json.py.ran').exists())
+
+    def test_planted_subprocess_shadow(self):
+        # PYTHONPATH keeps the plant reachable when -I is removed but cwd is neutral.
+        self.write('docs/guide.md', 'after\n')
+        self.write('subprocess.py',
+                   'open(__file__ + ".ran", "w").write("ran\\n")\n'
+                   'raise AssertionError("planted subprocess used")\n')
+        self.commit()
+        env = dict(os.environ, PYTHONPATH=str(self.repo))
+        out = self.tier(env=env, cwd=str(self.repo))
+        self.assertEqual(out['depth'], 'Full')
+        self.assertFalse((self.repo / 'subprocess.py.ran').exists())
+
+    def test_planted_sitecustomize(self):
+        self.write('docs/guide.md', 'after\n')
+        self.write('sitecustomize.py',
+                   'open(__file__ + ".ran", "w").write("ran\\n")\n')
+        self.commit()
+        env = dict(os.environ, PYTHONPATH=str(self.repo))
+        out = self.tier(env=env, cwd=str(self.repo))
+        self.assertEqual(out['depth'], 'Full')
+        self.assertFalse((self.repo / 'sitecustomize.py.ran').exists())
+
+    def test_planted_pth_under_pythonuserbase(self):
+        self.write('docs/guide.md', 'after\n')
+        userbase = self.repo / 'userbase'
+        userbase.mkdir()
+        # Layout differs by Python (lib/pythonX.Y vs lib/python). Ask this
+        # interpreter which path PYTHONUSERBASE maps to.
+        site = Path(subprocess.check_output(
+            [sys.executable, '-c', 'import site; print(site.getusersitepackages())'],
+            text=True, env=dict(os.environ, PYTHONUSERBASE=str(userbase))).strip())
+        site.mkdir(parents=True)
+        marker = self.root / 'pth.ran'
+        (site / 'evil.pth').write_text(
+            f'import pathlib; pathlib.Path({str(marker)!r}).write_text("ran\\n")\n')
+        self.commit()
+        env = dict(os.environ, PYTHONUSERBASE=str(userbase))
+        out = self.tier(env=env, cwd=str(self.repo))
+        self.assertEqual(out['depth'], 'Full')
+        self.assertFalse(marker.exists())
+
+    def test_int_term_trap_exits_nonzero(self):
+        # Signal the whole session so bash and its children see INT/TERM together.
+        # A bash-only signal stays deferred until the foreground child exits.
+        self.write('docs/guide.md', 'after\n')
+        self.commit()
+        head = self.git('rev-parse', 'HEAD').strip()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            with self.subTest(sig=sig):
+                env = self.shim('import time; time.sleep(30)')
+                proc = subprocess.Popen(
+                    ['bash', str(self.trusted), str(self.repo), self.base, head],
+                    env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    start_new_session=True)
+                deadline = time.time() + 5
+                while time.time() < deadline:
+                    if proc.poll() is None:
+                        break
+                    time.sleep(0.05)
+                else:
+                    self.fail('tier exited before the git shim sleep')
+                time.sleep(0.3)
+                self.assertIsNone(proc.poll(), 'tier should still be waiting on git')
+                os.killpg(proc.pid, sig)
+                self.assertNotEqual(proc.wait(timeout=5), 0)
 
 
 unittest.main(argv=['review-tier'], verbosity=2)
