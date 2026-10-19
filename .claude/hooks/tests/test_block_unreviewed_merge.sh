@@ -1627,7 +1627,7 @@ case "$args" in
     oid=""; qname=""; prev=""
     for a in "$@"; do
       case "$prev" in
-        -F)
+        -F|-f)
           case "$a" in
             oid=*) oid="${a#oid=}" ;;
             qname=*) qname="${a#qname=}" ;;

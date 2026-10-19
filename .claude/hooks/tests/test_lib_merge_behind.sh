@@ -211,12 +211,14 @@ g() {
   GIT_DIR="$repo/gitdir" GIT_WORK_TREE="$repo" git "$@"
 }
 
-# carry_over_in <repo> <old> <new> <base> — invoke rex_approval_carries_over
-# with GIT_DIR/GIT_WORK_TREE set so the function sees a real work tree.
+# carry_over_in <git_repo> <old> <new> <base> <sb_bin> [<forge_slug>]
+# Invoke rex_approval_carries_over with GIT_DIR/GIT_WORK_TREE set so the
+# function sees a real work tree. Default forge slug is acme-org/example.
 carry_over_in() {
   local repo="$1" old="$2" new="$3" base="$4" sb_bin="$5"
+  local forge_slug="${6:-acme-org/example}"
   GIT_DIR="$repo/gitdir" GIT_WORK_TREE="$repo" PATH="$sb_bin:$PATH" \
-    bash -c ". '$LIB'; rex_approval_carries_over acme-org/example '$old' '$new' '$base'"
+    bash -c ". '$LIB'; rex_approval_carries_over '$forge_slug' '$old' '$new' '$base'"
 }
 
 # make_rex_carry_gh_mock <sandbox_dir> <repo_git_dir> [<unresolvable>]
@@ -245,7 +247,7 @@ case "$args" in
     oid=""; qname=""; prev=""
     for a in "$@"; do
       case "$prev" in
-        -F)
+        -F|-f)
           case "$a" in
             oid=*) oid="${a#oid=}" ;;
             qname=*) qname="${a#qname=}" ;;
@@ -933,6 +935,80 @@ EOF
     mark_pass "#1796 stalled gh ends at limit -> timeout + BLOCKED message"
   else
     mark_fail "#1796 stalled gh" "got='$got' err=$(head -1 "$sb/err")"
+  fi
+  rm -rf "$repo" "$sb"
+
+  # -------------------------------------------------------------------------
+  # #1809 Hakim H1: non-github.com HOST/OWNER/REPO must not query github.com.
+  # Return unknown with zero forge calls. Paired: plain OWNER/REPO still works.
+  # -------------------------------------------------------------------------
+  repo=$(make_git_repo)
+  echo base > "$repo/base.txt"; g "$repo" add base.txt; g "$repo" commit -q -m base
+  g "$repo" checkout -q -b pr-branch
+  echo pr > "$repo/pr.txt"; g "$repo" add pr.txt; g "$repo" commit -q -m "reviewed"
+  OLD_SHA=$(g "$repo" rev-parse HEAD)
+  g "$repo" checkout -q main
+  echo more > "$repo/base2.txt"; g "$repo" add base2.txt; g "$repo" commit -q -m "base moves"
+  g "$repo" checkout -q pr-branch
+  g "$repo" merge -q --no-ff main -m "merge base"
+  NEW_SHA=$(g "$repo" rev-parse HEAD)
+  sb=$(mktemp -d)
+  make_rex_carry_gh_mock "$sb" "$repo"
+  mv "$sb/bin/gh" "$sb/bin/gh-inner"
+  cat > "$sb/bin/gh" <<EOF
+#!/bin/bash
+printf '1\n' >> "$sb/gh-calls"
+exec "$sb/bin/gh-inner" "\$@"
+EOF
+  chmod +x "$sb/bin/gh"
+  : > "$sb/gh-calls"
+  got=$(carry_over_in "$repo" "$OLD_SHA" "$NEW_SHA" main "$sb/bin" "ghe.corp/acme/app")
+  calls=$(wc -l < "$sb/gh-calls" | tr -d ' ')
+  if [ "$got" = "unknown" ] && [ "$calls" = "0" ]; then
+    mark_pass "#1809 H1 host-qualified non-github.com repo -> unknown (0 forge calls)"
+  else
+    mark_fail "#1809 H1 host-qualified" "got='$got' calls=$calls (want unknown / 0)"
+  fi
+  : > "$sb/gh-calls"
+  got=$(carry_over_in "$repo" "$OLD_SHA" "$NEW_SHA" main "$sb/bin" "acme-org/example")
+  calls=$(wc -l < "$sb/gh-calls" | tr -d ' ')
+  if [ "$got" = "true" ] && [ "$calls" = "1" ]; then
+    mark_pass "#1809 H1 pair: plain OWNER/REPO still carries over (1 forge call)"
+  else
+    mark_fail "#1809 H1 plain OWNER/REPO pair" "got='$got' calls=$calls (want true / 1)"
+  fi
+  rm -rf "$repo" "$sb"
+
+  # -------------------------------------------------------------------------
+  # #1809 Hakim A3: GraphQL string vars use -f so an all-digit owner stays a
+  # string ( -F would coerce it to an integer and fail the String! type ).
+  # -------------------------------------------------------------------------
+  repo=$(make_git_repo)
+  echo base > "$repo/base.txt"; g "$repo" add base.txt; g "$repo" commit -q -m base
+  g "$repo" checkout -q -b pr-branch
+  echo pr > "$repo/pr.txt"; g "$repo" add pr.txt; g "$repo" commit -q -m "reviewed"
+  OLD_SHA=$(g "$repo" rev-parse HEAD)
+  g "$repo" checkout -q main
+  echo more > "$repo/base2.txt"; g "$repo" add base2.txt; g "$repo" commit -q -m "base moves"
+  g "$repo" checkout -q pr-branch
+  g "$repo" merge -q --no-ff main -m "merge base"
+  NEW_SHA=$(g "$repo" rev-parse HEAD)
+  sb=$(mktemp -d)
+  make_rex_carry_gh_mock "$sb" "$repo"
+  mv "$sb/bin/gh" "$sb/bin/gh-inner"
+  cat > "$sb/bin/gh" <<EOF
+#!/bin/bash
+printf '%s\n' "\$*" >> "$sb/gh-calls"
+exec "$sb/bin/gh-inner" "\$@"
+EOF
+  chmod +x "$sb/bin/gh"
+  got=$(carry_over_in "$repo" "$OLD_SHA" "$NEW_SHA" main "$sb/bin" "12345/example")
+  if [ "$got" = "true" ] \
+     && grep -q -- '-f owner=12345' "$sb/gh-calls" \
+     && ! grep -qE -- '(^| )-F owner=12345( |$)' "$sb/gh-calls"; then
+    mark_pass "#1809 A3 all-digit owner uses -f and still carries over"
+  else
+    mark_fail "#1809 A3 all-digit owner" "got='$got' calls=$(cat "$sb/gh-calls")"
   fi
   rm -rf "$repo" "$sb"
 
