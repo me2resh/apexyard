@@ -1,0 +1,399 @@
+{
+  "specVersion": "0.1",
+  "id": "plan-apexyard-scaffold",
+  "revision": 5,
+  "project": {
+    "id": "apexyard"
+  },
+  "title": "Scaffold: a working DevOps base for every project",
+  "intent": "The /scaffold skill acts as the base DevOps team for every project in ApexYard. It serves new projects and /handover. It interviews the owner one question at a time, asks where the project runs first, and sizes the depth to the scale. Every question offers a recommended answer with a plain reason. The agent builds the setup from the answers and the context, not from a boilerplate. It looks up current versions in the configured registry, with a minimum age, and pins them exactly. A framework verifier proves that every project passes the same quality-floor checks locally. The skill starts the project locally in the flow, so the owner tests it. Then it walks the owner through the remote repository, the CI pipeline and the environments. It asks before each outward step, and the first CI run is green. It writes a draft infrastructure recommendation and a rough monthly cost range, and it never applies them. It never writes a secret. For an existing repository, it sizes each gap by scale and proposes the fixes through a PR. Review findings feed back into the interview and the generation rules.",
+  "outcomes": [
+    {
+      "id": "o1-interview-sized-to-scale",
+      "title": "The /scaffold interview asks where the project runs first, matches its depth to the scale, and offers a recommended answer for every question.",
+      "intent": "A non-engineer can accept safe defaults, and an engineer answers only what is open."
+    },
+    {
+      "id": "o2-floor-checks-live-versions",
+      "title": "/scaffold builds the setup from the answers with current versions from a live registry lookup, and the setup passes the floor checks.",
+      "intent": "No boilerplate ages in the framework. Any stack starts at the same quality floor, with versions that are current on the day of generation."
+    },
+    {
+      "id": "o3-handover-gap-fill",
+      "title": "/handover uses the same interview to fill the DevOps base gaps of an existing repository, sized by scale, through a PR.",
+      "intent": "Existing repositories catch up to the same DevOps base as new projects."
+    },
+    {
+      "id": "o4-infra-and-cost",
+      "title": "/scaffold writes a draft infrastructure recommendation and a monthly cost estimate matched to scale, and never applies the infrastructure.",
+      "intent": "Every stack gets best-practice infrastructure advice and a cost estimate as a reviewed draft."
+    },
+    {
+      "id": "o6-fitness-functions",
+      "title": "Generated CI checks layer boundaries and the bundle-size budget, and one file lists each gate and the spec answer that set it.",
+      "intent": ""
+    },
+    {
+      "id": "o7-entry-points",
+      "title": "/write-spec, /onboard and ORBIT handoffs offer /scaffold with reused answers. The scaffold registers the project and offers /walking-skeleton.",
+      "intent": ""
+    },
+    {
+      "id": "o8-lessons-loop",
+      "title": "A review finding on a generated project that traces to the generation rules or the interview becomes a change to /scaffold.",
+      "intent": "Each project the framework scaffolds makes the next one safer."
+    },
+    {
+      "id": "o9-local-run-in-flow",
+      "title": "/scaffold starts the generated project locally during the flow, and the owner sees it work before any remote step.",
+      "intent": "The owner tests the project on day one, before any pipeline or remote exists."
+    },
+    {
+      "id": "o10-guided-pipeline-and-environments",
+      "title": "/scaffold guides the owner through the remote repository, the CI pipeline and the environments, confirms each outward step, and the first CI run is green.",
+      "intent": "The owner gets a working pipeline without setup work, and no outward change happens without a yes."
+    }
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "ac1-1",
+      "outcomeId": "o1-interview-sized-to-scale",
+      "statement": "The interview asks where the project runs first, then what it is and who uses it, which sets the scale. A demo asks 3 questions, a small product 4 and a production service 5."
+    },
+    {
+      "id": "ac1-2",
+      "outcomeId": "o1-interview-sized-to-scale",
+      "statement": "The interview asks one question at a time through AskUserQuestion. Each question shows the recommended answer first, with one plain-language sentence that gives the reason."
+    },
+    {
+      "id": "ac1-3",
+      "outcomeId": "o1-interview-sized-to-scale",
+      "statement": "The answer 'Not sure, recommend for me' records the recommended value, its reason and the mark recommended. The skill never records a silent guess."
+    },
+    {
+      "id": "ac1-4",
+      "outcomeId": "o1-interview-sized-to-scale",
+      "statement": "Before it asks, the skill reads the tech_stack block of onboarding.yaml and any PRD for the project. It asks only what those files leave open."
+    },
+    {
+      "id": "ac1-5",
+      "outcomeId": "o1-interview-sized-to-scale",
+      "statement": "The skill writes the answers to a scaffold spec file that a JSON schema validates. The spec records the scale and the source of each answer: owner, recommendation, onboarding, PRD, default or derived."
+    },
+    {
+      "id": "ac2-1",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "The skill recommends a stack and a pipeline from the host and the shape through a rules table, with a plain reason. Language, coverage floor and design become defaults that the summary shows, and a host of none yet adds an open question to the plan notes."
+    },
+    {
+      "id": "ac2-3",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "The skill shows the pick and the spec answers that decided it. The owner confirms or overrides the pick, and the skill records the choice in the spec."
+    },
+    {
+      "id": "ac2-4",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "Every dependency, development tools included, has an exact version. Each version is the newest one at least 7 days old in the configured registry, and the setup records its source."
+    },
+    {
+      "id": "ac2-5",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "The generated tree passes check-secrets.sh. It holds secret names and placeholders only, never a secret value."
+    },
+    {
+      "id": "ac2-6",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "Generated CI fails below the coverage floor and on a lint, typecheck or build fault. The floor is 80 percent, or the spec value when it is higher."
+    },
+    {
+      "id": "ac2-7",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "Generated CI runs a dependency audit. A high or critical advisory in a production dependency fails the build."
+    },
+    {
+      "id": "ac2-8",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "Before the skill picks a tool that needs install scripts or network access at install time, it checks the build environment. When the check fails, it picks a fallback and records both in the AgDR."
+    },
+    {
+      "id": "ac2-9",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "For a web service shape, the generated project sets session cookies HttpOnly and SameSite with one rule for Secure. State-changing API routes accept JSON only, and errors use problem+json with stable codes."
+    },
+    {
+      "id": "ac2-11",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "In framework CI, the floor verifier passes on the clean test fixture and fails on each seeded fault. The PR records the added CI time."
+    },
+    {
+      "id": "ac2-12",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "The /handover harnessability assessment rates a generated web project high on all five dimensions."
+    },
+    {
+      "id": "ac2-13",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "The skill writes one proposed AgDR for the scaffold. The AgDR lists each stack choice and the spec answers that drove it."
+    },
+    {
+      "id": "ac2-14",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "/scaffold is a bootstrap skill, and its bootstrap scope names each path it writes. Hakim reviews that scope and approves it before the slice PR merges."
+    },
+    {
+      "id": "ac2-15",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "The skill text and each generated Markdown file pass bin/check-writing-profile.sh with zero faults. CLAUDE.md, README.md, AGENTS.md, docs/whats-inside.md and topologies/README.md list /scaffold with correct skill counts."
+    },
+    {
+      "id": "ac2-16",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "Every stack gets the floor with its own tools. The floor covers CI gates, a dependency audit, exact pins, the security baseline and the general handbooks."
+    },
+    {
+      "id": "ac2-17",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "When the lookup in the configured registry fails, the skill stops and tells the owner. It never writes a version from memory or a guess."
+    },
+    {
+      "id": "ac2-18",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "No starter or template file reaches a generated project. The only verbatim copies are the floor verifier and the handbooks, and the starter stays a CI test fixture."
+    },
+    {
+      "id": "ac2-19",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "The typescript-nextjs starter lives only at a test fixture path, where CI uses it to prove the floor verifier. The generator never copies it into a project."
+    },
+    {
+      "id": "ac2-20",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "The floor verifier passes locally on the generated project before the skill offers any remote step."
+    },
+    {
+      "id": "ac2-21",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "Every generated project has the fixed gate scripts: lint, typecheck, test, build, audit and coverage gate. It also has a seeded-fault manifest for these gates."
+    },
+    {
+      "id": "ac2-22",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "A framework floor verifier, copied verbatim into the project, checks each gate. Each gate passes on the clean tree, fails on its seeded fault and uses the spec threshold."
+    },
+    {
+      "id": "ac2-23",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "A placeholder gate fails the floor. The verifier rejects a gate that does no real check."
+    },
+    {
+      "id": "ac2-24",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "A scheduled, non-blocking evaluation generates projects from canonical specs. It records the floor pass rate of each run."
+    },
+    {
+      "id": "ac2-25",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "The version lookup excludes yanked and deprecated versions. It rejects a package name that is new or has near-zero downloads, and it tells the owner."
+    },
+    {
+      "id": "ac2-26",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "The package manager resolves peer dependencies for the full dependency set, not for one package at a time."
+    },
+    {
+      "id": "ac2-27",
+      "outcomeId": "o2-floor-checks-live-versions",
+      "statement": "The local install runs with install scripts disabled."
+    },
+    {
+      "id": "ac3-1",
+      "outcomeId": "o3-handover-gap-fill",
+      "statement": "For an existing repository, /handover offers /scaffold gap-fill mode, which starts only after the owner says yes. A no leaves no files."
+    },
+    {
+      "id": "ac3-2",
+      "outcomeId": "o3-handover-gap-fill",
+      "statement": "The gap-fill report compares the repository with the DevOps base. It lists missing floor checks, CI pipeline steps, environments and local run steps, with a reason for each."
+    },
+    {
+      "id": "ac3-3",
+      "outcomeId": "o3-handover-gap-fill",
+      "statement": "After the owner says yes, gap-fill mode proposes the missing additions on a branch and opens a PR for review."
+    },
+    {
+      "id": "ac3-4",
+      "outcomeId": "o3-handover-gap-fill",
+      "statement": "Gap-fill mode never overwrites an existing file without an explicit yes from the owner for that file."
+    },
+    {
+      "id": "ac3-5",
+      "outcomeId": "o3-handover-gap-fill",
+      "statement": "The gap-fill report records harnessability scores before and after the proposed changes. It uses the same five dimensions and shows the change in each score."
+    },
+    {
+      "id": "ac3-6",
+      "outcomeId": "o3-handover-gap-fill",
+      "statement": "Each gap in the report has a size from the scale: must, should or later. The interview asks only about gaps and recommends an answer for each gap."
+    },
+    {
+      "id": "ac4-1",
+      "outcomeId": "o4-infra-and-cost",
+      "statement": "The interview asks no cost, budget or currency question. Scale comes from who uses the project, compliance comes from the data answer, and the skill never guesses a fact."
+    },
+    {
+      "id": "ac4-2",
+      "outcomeId": "o4-infra-and-cost",
+      "statement": "For every host, also with no IaC template, the skill drafts an infrastructure recommendation with each service, its size and its reason from the spec. A host of none yet gives an open question, not a draft."
+    },
+    {
+      "id": "ac4-3",
+      "outcomeId": "o4-infra-and-cost",
+      "statement": "For an AWS host, the draft includes Terraform that passes terraform validate and tflint without cloud credentials. A check also fails on any non-ASCII string in the .tf files."
+    },
+    {
+      "id": "ac4-4",
+      "outcomeId": "o4-infra-and-cost",
+      "statement": "The generated Terraform CI has its apply job off. Only the owner turns it on, in a later PR."
+    },
+    {
+      "id": "ac4-5",
+      "outcomeId": "o4-infra-and-cost",
+      "statement": "The summary shows a rough monthly cost range, low to high, with the three largest cost drivers and the assumptions. The skill asks no budget question and makes no budget comparison."
+    },
+    {
+      "id": "ac4-6",
+      "outcomeId": "o4-infra-and-cost",
+      "statement": "The cost range uses a static price table with a price date and states that the figures are not a quote. Framework CI fails when the price date is older than 6 months."
+    },
+    {
+      "id": "ac4-7",
+      "outcomeId": "o4-infra-and-cost",
+      "statement": "The skill never runs terraform apply or any cloud write call, and it needs no cloud credentials."
+    },
+    {
+      "id": "ac6-1",
+      "outcomeId": "o6-fitness-functions",
+      "statement": "Generated CI checks architecture layer boundaries for each topology bundle. TypeScript projects use the dependency-cruiser config from the harness golden-path initiative."
+    },
+    {
+      "id": "ac6-2",
+      "outcomeId": "o6-fitness-functions",
+      "statement": "For a web shape, the spec holds a page-size budget, 500 KB by default, that the owner can change in the summary. Generated CI fails above it."
+    },
+    {
+      "id": "ac6-3",
+      "outcomeId": "o6-fitness-functions",
+      "statement": "The generated project has one fitness-functions file that lists each gate, its threshold and the spec answer that set it."
+    },
+    {
+      "id": "ac6-4",
+      "outcomeId": "o6-fitness-functions",
+      "statement": "Each new gate has a seeded fault in each bundle fixture. The framework CI test proves the gate fails on its fault and passes on the clean case."
+    },
+    {
+      "id": "ac7-1",
+      "outcomeId": "o7-entry-points",
+      "statement": "For a new fork, /onboard offers /scaffold when the owner selects start a new project. It recommends /scaffold and keeps light registration."
+    },
+    {
+      "id": "ac7-2",
+      "outcomeId": "o7-entry-points",
+      "statement": "The skill adds a registry entry for the new project that passes validation."
+    },
+    {
+      "id": "ac7-3",
+      "outcomeId": "o7-entry-points",
+      "statement": "At the end, /scaffold offers /walking-skeleton and passes the layers and the deploy target from the spec as defaults."
+    },
+    {
+      "id": "ac7-4",
+      "outcomeId": "o7-entry-points",
+      "statement": "After /write-spec produces an approved PRD for a new product, it offers /scaffold. The interview reuses PRD answers and asks only for gaps."
+    },
+    {
+      "id": "ac7-5",
+      "outcomeId": "o7-entry-points",
+      "statement": "The /write-spec offer starts /scaffold only after the owner says yes. A no leaves no files."
+    },
+    {
+      "id": "ac7-6",
+      "outcomeId": "o7-entry-points",
+      "statement": "The /onboard interview reuses recorded answers and asks only for gaps. The offer starts /scaffold only after the owner says yes, and a no leaves no files."
+    },
+    {
+      "id": "ac7-7",
+      "outcomeId": "o7-entry-points",
+      "statement": "When an ORBIT slice handoff needs a new repository, it offers /scaffold. The spec uses the initiative outcomes and constraints without asking recorded answers again."
+    },
+    {
+      "id": "ac7-8",
+      "outcomeId": "o7-entry-points",
+      "statement": "The ORBIT handoff offer starts /scaffold only after the owner says yes. A no leaves no files."
+    },
+    {
+      "id": "ac8-1",
+      "outcomeId": "o8-lessons-loop",
+      "statement": "A finding that traces to the generation rules or the interview becomes a scaffold change. The change is a rule fix, a new question or a new floor check."
+    },
+    {
+      "id": "ac8-2",
+      "outcomeId": "o8-lessons-loop",
+      "statement": "Each scaffold change of this kind adds one changelog line. The line names the class of finding and never names the project."
+    },
+    {
+      "id": "ac9-1",
+      "outcomeId": "o9-local-run-in-flow",
+      "statement": "One command installs, migrates, seeds and starts the project locally. One command resets local data to the seed."
+    },
+    {
+      "id": "ac9-2",
+      "outcomeId": "o9-local-run-in-flow",
+      "statement": "Before the local run, the skill checks the required local tools. It names each missing tool and its install step."
+    },
+    {
+      "id": "ac9-3",
+      "outcomeId": "o9-local-run-in-flow",
+      "statement": "During the flow, the skill runs the local start command and shows the owner the result. A web shape shows its local address and a passing health check."
+    },
+    {
+      "id": "ac9-4",
+      "outcomeId": "o9-local-run-in-flow",
+      "statement": "When the local run fails, the skill shows the fault and fixes the setup or stops. It offers no remote step after a failed run."
+    },
+    {
+      "id": "ac10-1",
+      "outcomeId": "o10-guided-pipeline-and-environments",
+      "statement": "Each outward action asks the owner first and names what it changes. A hook or an approval marker enforces each outward gh or git call, not the skill text alone."
+    },
+    {
+      "id": "ac10-2",
+      "outcomeId": "o10-guided-pipeline-and-environments",
+      "statement": "After the owner says yes, the skill creates the remote, private by default, with a README-only default branch. It opens the generated setup as the first PR."
+    },
+    {
+      "id": "ac10-3",
+      "outcomeId": "o10-guided-pipeline-and-environments",
+      "statement": "The skill proposes environments from the scale and the release-check answer. It creates only the environments that the owner confirms."
+    },
+    {
+      "id": "ac10-4",
+      "outcomeId": "o10-guided-pipeline-and-environments",
+      "statement": "The skill never writes a secret value. For each CI secret, it gives the secret name and guides the owner through the owner's own secret-store step."
+    },
+    {
+      "id": "ac10-5",
+      "outcomeId": "o10-guided-pipeline-and-environments",
+      "statement": "After the owner says yes, branch protection on the default branch requires the floor checks. The skill adds its rule and never replaces an existing rule set."
+    },
+    {
+      "id": "ac10-6",
+      "outcomeId": "o10-guided-pipeline-and-environments",
+      "statement": "The first CI run on the first PR is green. When a check fails, the skill shows the failed check and proposes a fix in that PR."
+    },
+    {
+      "id": "ac10-7",
+      "outcomeId": "o10-guided-pipeline-and-environments",
+      "statement": "Outward actions include the remote repository, the push, environments, branch protection and CI secrets. Each one targets only the repository that this run created."
+    }
+  ]
+}

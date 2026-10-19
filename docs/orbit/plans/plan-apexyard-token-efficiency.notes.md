@@ -94,6 +94,20 @@ o1 first, because every later change and the harness o4 slice measure with its s
 - Rex on PR #1622: the o4 hook uses the active-reviewer marker only for a subagent with no type, because the marker covers the whole session. The orchestrator is never blocked.
 - Correction to the message of commit 3bf5e52 (PR #1620): the wrong range came from a faulty first parse, not from the four most common sizes. In a correct parse the most common sizes are 3,925 to 3,930 bytes.
 
+## Cycle 2026-10-19 (revision 5, dev cee2d239)
+
+- **Reconciliation.** `reconciliation-plan-apexyard-token-efficiency-20261019T062054Z` re-checks every criterion that was not achieved. Two statuses change: ac3-2 and ac5-2.
+- **Carried evidence.** The 2026-10-13 records carried the o3 and o5 statuses from 400db9b. They did not assess #1678 or #1683.
+- **CEO decisions (2026-10-19).**
+  - Cut one slice this cycle: `slice-token-o7-depth-by-tier`. It is one ticket and one PR with a step checklist.
+  - After the challenge, the CEO narrowed the slice to ac7-1, ac7-4 and ac7-6. ac7-2, ac7-3 and ac7-5 stay not-verified for a later slice.
+  - In that slice, the Rex delta corpus entries come first, because C4 needs them.
+  - `slice-token-o2-compaction-build` and `slice-token-o5-effort-spike` stay unchanged. They get their handoff after this records PR merges. They are not withdrawn.
+- **Reconciliation challenge decisions (2026-10-19).**
+  - ac3-2 stays partially-verified. #1683 checks tree equality at each step of a chain of up to 10 base merges. A git range-diff check is redundant on merge chains. The next plan revision rewords ac3-2 to per-step tree equality.
+  - ac5-2 stays partially-verified. Hakim is 22,272 bytes. The Tariq marker text is not one line. #1685 edited Tariq after its zero-flip eval.
+  - The figures in ac2-2 and ac2-3 now follow docs/perf/token-cost-baseline-2026-10-10.md. This closes the Figure mismatch (2026-10-12) note.
+
 ## Revision 5 (2026-10-13)
 
 - **Owner decision.** A slice PR proposes the next slice, so the next slice record is ready when the PR merges. The owner still chooses each slice. New outcome o10 with ac10-1 to ac10-6.
@@ -162,7 +176,7 @@ Revision 4 keeps proof out of the new criterion statements. The older criteria k
 - **Baseline correction (ac7-6).** The o1 script counts 21 resume rebuilds in 388 runs. Without CI-green messages it counts 15, which is 3.87 per 100. The old figure was 4.0 per 100 in 350 runs.
 - **o9 (reviews run in parallel).** It is a new outcome, not an o7 criterion: o7 is about review depth and o9 is about concurrency. Review agents are found by agent type, as the o4 hook does, so the orchestrator and build agents are never blocked. Owner decision 2026-10-11: o9 moves ahead of the other token-plan work, because the session-wide review lock held up two build commits and five orbit-spec builds that day. The harness o1 slice (#1623) merges first, because its PR was ready first. o9 rebases on it, since both edit dispatch-bash.sh.
 - **Parked: ac3-3.** A reopened PR has no Rex marker under its new number (block-unreviewed-merge.sh lines 459-462). Carry-over would need a merge-gate edit, which breaks C1, or an agent-written marker, which is forbidden.
-- **Parked: ac3-2.** It waits until a count shows how often chained refreshes happen.
+- **Parked: ac3-2.** It waits until a count shows how often chained refreshes happen. **Update (2026-10-19):** #1683 added chain carry-over, so ac3-2 is partially-verified. See the 2026-10-19 cycle.
 - **C6 amended.** One open slice per outcome; a spike may come before the build slice. The o2 spike covers ac2-1, and a later o2 build slice covers ac2-2 to ac2-4.
 - **Delivered slices.** The o1, o4 and o8 slices are re-pointed to this reconciliation only because the validator requires their reconciliation in docs/orbit/reconciliations/. Their text is unchanged.
 - This cycle cuts the o2 spike slice (ac2-1) and the o3 slice (ac3-1 and ac3-4).

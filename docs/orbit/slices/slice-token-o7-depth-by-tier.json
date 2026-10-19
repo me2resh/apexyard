@@ -1,0 +1,55 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-token-o7-depth-by-tier",
+  "planId": "plan-apexyard-token-efficiency",
+  "outcomeId": "o7-depth-by-tier-and-round",
+  "basedOn": {
+    "planRevision": 5,
+    "reconciliationId": "reconciliation-plan-apexyard-token-efficiency-20261019T062054Z",
+    "repositories": {}
+  },
+  "objective": "Build the Rex delta corpus. Cap reviewer hand-backs and set resume rules. Replace the self-declared tier with a script that only gates the current Reduced-Scope pass.",
+  "why": "ac7-1 to ac7-6 are not-verified in reconciliation-plan-apexyard-token-efficiency-20261019T062054Z. o7 is the only outcome with unmet criteria and no slice. The harness o4 Rex trim merged in #1652, and the o5 slice merged in #1678. The tier is still self-declared in right-size-ceremony.md, and Rex decides the Reduced-Scope pass by itself. A Rex spawn now starts at 26,813 tokens in docs/eval-agents/reports/rex-hakim-token-trim-2026-10-11.md, so the resume window needs new numbers. The ac7-4 evidence gives a mean hand-back of 3,543 bytes, and delta rounds post the 13-section body. docs/perf/token-cost-baseline-2026-10-10.md line 96 gives 3.87 resume rebuilds per 100 reviewer runs. docs/eval-agents/corpus/rex.json has 10 entries and no delta entry, so C4 needs delta entries first. Near-zero Lean PRs merged per week since 2026-10-11, so ac7-2, ac7-3 and ac7-5 wait for a later slice.",
+  "contributesTo": [
+    "ac7-1",
+    "ac7-4",
+    "ac7-6"
+  ],
+  "scope": {
+    "include": [
+      "Use one PR with a step checklist. Step 1 adds the Rex delta corpus entries because they are the C4 precondition.",
+      "Step 1: add at least five Rex delta entries to docs/eval-agents/corpus/rex.json from real delta rounds. Run validate-corpus.sh on the file.",
+      "ac7-1: add a tier script whose result can only allow the existing Reduced-Scope pass. Rex keeps rail 2 and may still escalate on content.",
+      "ac7-1: the review takes the stricter result of the script and Rex.",
+      "Anti-forgery: run the script from the base branch or the ops fork at the reviewed SHA. Read the full base..HEAD range.",
+      "Anti-forgery: list both sides of each rename and copy. Fail closed to Full on a truncated file list or on any error.",
+      "The allowlist goes by extension and path. An example is .md files and images under docs/ that no prompt file names.",
+      "JSON and YAML and scripts and lock files are never on the allowlist.",
+      "Add a test for each forge case. The cases are the script edited in the PR and a hook renamed to docs.",
+      "The forge cases also include a push after the tier time and a truncated file list.",
+      "ac7-1: add an AgDR-0116 evolution entry for the scripted tier.",
+      "right-size-ceremony.md states what the script allows. The rule and the script must match.",
+      "/code-review has 70 bytes left under its 16,000-byte cap. Keep it under the cap and run test_token_efficiency_wave1.sh.",
+      "ac7-4: cap a reviewer hand-back at 300 tokens.",
+      "ac7-4: the short delta format keeps the six headings that review_validate_rex_body requires. Each heading has a short body.",
+      "ac7-4: _lib-review-markers.sh stays unedited (C1). Add a test that a short delta body passes the validator.",
+      "ac7-6: recompute the resume window from current numbers. A Rex spawn is about 26.8k tokens in the rex-hakim trim report.",
+      "ac7-6: the owner trial sets subagentPromptCacheTtl to 1h in user settings. The framework default stays 5 minutes. The window states both cases.",
+      "ac7-6: a fresh Rex reads earlier findings from the posted review by review id and commit range. It does not read an orchestrator summary.",
+      "Keep a separate flip table for each Rex prompt edit. Then either edit can be dropped as a step.",
+      "ac7-6 metric: report resume rebuilds per 100 reviewer runs with the o1 script against the baseline of 3.87.",
+      "C3: record the before and after numbers in the PR body."
+    ],
+    "exclude": [
+      "Any edit to block-unreviewed-merge.sh or block-merge-on-red-ci.sh or another merge-gate hook (C1)",
+      "A smaller model or a lower effort for Rex (C2)",
+      "Hakim and Tariq prompt edits",
+      "ac5-3 and the lean-effort delta agent file",
+      "A self-declared tier or a tier rail inside the merge gate",
+      "The o2 build slice and the o5 effort spike slice",
+      "ac7-2 fixed Lean procedure",
+      "ac7-3 paired adversarial docs-only test beyond the forge cases",
+      "ac7-5 Lean token measurement"
+    ]
+  }
+}
