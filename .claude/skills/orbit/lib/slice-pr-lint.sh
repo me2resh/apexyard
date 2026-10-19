@@ -7,7 +7,7 @@
 # Globals: root, slice_id. Uses fail().
 slice_pr_merge_base_ok() {
   local recorded="$1" current="$2" plan_id="$3" file="$4"
-  local rc=0 rev path id body changed list
+  local rc=0 rev path id body changed list changed_list
   local -a dep_paths=()
   if [ "$recorded" = "$current" ]; then
     return 0
@@ -69,7 +69,11 @@ slice_pr_merge_base_ok() {
     fail 19 provenance "$file" "Cannot resolve status-dependent records for the merge-base check."
   changed=$(git -C "$root" diff --name-only --no-renames "$recorded" "$current" -- "${dep_paths[@]}") ||
     fail 19 provenance "$file" "Cannot diff status-dependent records between merge-bases."
-  [ -z "$changed" ] || fail 19 provenance "$file" "The merge-base SHA does not match."
+  if [ -n "$changed" ]; then
+    changed_list=$(printf '%s' "$changed" | tr '\n' ' ' | sed 's/[[:space:]]*$//')
+    fail 19 provenance "$file" \
+      "Plan records changed between the recorded merge-base and the current merge-base (${changed_list}). Run refresh-slice-record.sh."
+  fi
   echo "records-lint: NOTE [provenance] Recorded merge-base ${recorded}; current merge-base ${current}." >&2
   return 0
 }

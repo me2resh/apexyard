@@ -27,32 +27,19 @@ out=$(expect 0 --slice slice-demo-widget-o1 --pr 42)
 printf '%s\n' "$out" | grep -Fq "NOTE [provenance] Recorded merge-base ${recorded_r}; current merge-base ${current_m}."
 echo "PASS (a) ancestor R with no record change: exit 0 and NOTE"
 
-# Fail-before: exact-match lint rejects the same tree when a base ref exists.
-# CI checkouts often lack upstream/dev (origin/* only, often shallow).
+# Fail-before: pin the pre-change lint (this PR's dev merge-base), not
+# upstream/dev — after merge those refs hold the fixed lint (Tariq #1802).
 lint_path=".claude/skills/orbit/lib/slice-pr-lint.sh"
-base_ref=""
-for candidate in upstream/dev origin/dev; do
-  if git -C "$real_root" rev-parse --verify --quiet "$candidate" >/dev/null 2>&1 \
-    && git -C "$real_root" cat-file -e "${candidate}:${lint_path}" 2>/dev/null; then
-    base_ref="$candidate"
-    break
-  fi
-done
-if [ -z "$base_ref" ]; then
-  changed=$(git -C "$real_root" log -1 --format=%H -- "$lint_path" 2>/dev/null || true)
-  if [ -n "$changed" ]; then
-    parent=$(git -C "$real_root" rev-parse --verify --quiet "${changed}^" 2>/dev/null || true)
-    if [ -n "$parent" ] \
-      && git -C "$real_root" cat-file -e "${parent}:${lint_path}" 2>/dev/null; then
-      base_ref="$parent"
-    fi
-  fi
-fi
-if [ -z "$base_ref" ]; then
-  echo "SKIP fail-before: no base ref"
+PRE_FIX_SHA="a791285d974de04359d8b0d1494878651231debc"
+unfixed_lib=$(mktemp)
+if ! git -C "$real_root" show "${PRE_FIX_SHA}:${lint_path}" > "$unfixed_lib" 2>/dev/null \
+  || [ ! -s "$unfixed_lib" ]; then
+  rm -f "$unfixed_lib"
+  echo "SKIP fail-before: base commit not available"
+elif grep -q 'slice_pr_merge_base_ok' "$unfixed_lib"; then
+  rm -f "$unfixed_lib"
+  echo "SKIP fail-before: copied lint already defines slice_pr_merge_base_ok"
 else
-  unfixed_lib=$(mktemp)
-  git -C "$real_root" show "${base_ref}:${lint_path}" > "$unfixed_lib"
   cp "$sb/.claude/skills/orbit/lib/slice-pr-lint.sh" "$sb/.claude/skills/orbit/lib/slice-pr-lint.sh.fixed"
   cp "$unfixed_lib" "$sb/.claude/skills/orbit/lib/slice-pr-lint.sh"
   rm -f "$unfixed_lib"
@@ -60,9 +47,9 @@ else
   before_out=$(bash "$lint" --orbit-root "$orbit_root" --base base --slice slice-demo-widget-o1 --pr 42 2>&1) || before_rc=$?
   cp "$sb/.claude/skills/orbit/lib/slice-pr-lint.sh.fixed" "$sb/.claude/skills/orbit/lib/slice-pr-lint.sh"
   rm -f "$sb/.claude/skills/orbit/lib/slice-pr-lint.sh.fixed"
-  [ "$before_rc" -eq 19 ] || { echo "FAIL-BEFORE (a): expected exit 19 from ${base_ref} lint, got $before_rc: $before_out"; exit 1; }
+  [ "$before_rc" -eq 19 ] || { echo "FAIL-BEFORE (a): expected exit 19 from ${PRE_FIX_SHA} lint, got $before_rc: $before_out"; exit 1; }
   printf '%s\n' "$before_out" | grep -Fq 'The merge-base SHA does not match.'
-  echo "FAIL-BEFORE (a) exact match via ${base_ref}: exit 19 (1 case)"
+  echo "FAIL-BEFORE (a) exact match via ${PRE_FIX_SHA}: exit 19 (1 case)"
 fi
 
 # (b) Ancestor R, plan notes / Reconciliation / slice record changed: exit 19.
@@ -133,3 +120,67 @@ if printf '%s\n' "$out" | grep -q 'NOTE \[provenance\]'; then
   exit 1
 fi
 echo "PASS (d) R equals M: exit 0, no NOTE"
+
+# (e) Same-plan Reconciliation that exists only at M: exit 19.
+slice_setup
+candidate_write
+g add docs
+g commit -qm progress
+recorded_r=$(g rev-parse base)
+g checkout -q base
+jq '.id="reconciliation-demo-widget-r2" | .reconciledAt="2026-10-19T12:00:00Z" | .observations=["Same-plan only at M."]' \
+  "$orbit_root/reconciliations/reconciliation-demo-widget-r1.json" \
+  > "$orbit_root/reconciliations/reconciliation-demo-widget-r2.json"
+g add docs/orbit/reconciliations/reconciliation-demo-widget-r2.json
+g commit -qm 'base adds same-plan Reconciliation'
+g checkout -q feature/demo
+g merge -qm refresh base
+current_m=$(g merge-base base HEAD)
+[ "$recorded_r" != "$current_m" ]
+out=$(expect 19 --slice slice-demo-widget-o1 --pr 42)
+printf '%s\n' "$out" | grep -Fq 'Plan records changed between the recorded merge-base and the current merge-base'
+printf '%s\n' "$out" | grep -Fq 'docs/orbit/reconciliations/reconciliation-demo-widget-r2.json'
+printf '%s\n' "$out" | grep -Fq 'refresh-slice-record.sh'
+echo "PASS (e) same-plan Reconciliation only at M: exit 19 and record-change message"
+
+# (f) Reconciliation of another plan: pass with NOTE.
+slice_setup
+candidate_write
+g add docs
+g commit -qm progress
+recorded_r=$(g rev-parse base)
+g checkout -q base
+jq '.id="reconciliation-other-widget-r1" | .planId="plan-other-widget" | .observations=["Other plan."]' \
+  "$orbit_root/reconciliations/reconciliation-demo-widget-r1.json" \
+  > "$orbit_root/reconciliations/reconciliation-other-widget-r1.json"
+g add docs/orbit/reconciliations/reconciliation-other-widget-r1.json
+g commit -qm 'base adds other-plan Reconciliation'
+g checkout -q feature/demo
+g merge -qm refresh base
+current_m=$(g merge-base base HEAD)
+[ "$recorded_r" != "$current_m" ]
+out=$(expect 0 --slice slice-demo-widget-o1 --pr 42)
+printf '%s\n' "$out" | grep -Fq "NOTE [provenance] Recorded merge-base ${recorded_r}; current merge-base ${current_m}."
+echo "PASS (f) other-plan Reconciliation: exit 0 and NOTE"
+
+# (g) Plan JSON change between R and M: exit 19.
+slice_setup
+candidate_write
+g add docs
+g commit -qm progress
+recorded_r=$(g rev-parse base)
+g checkout -q base
+jq '.title="Drifted demo widget plan"' \
+  "$orbit_root/plans/plan-demo-widget.r1.json" > "$sb/plan.t"
+mv "$sb/plan.t" "$orbit_root/plans/plan-demo-widget.r1.json"
+g add docs/orbit/plans/plan-demo-widget.r1.json
+g commit -qm 'base changes Plan JSON'
+g checkout -q feature/demo
+g merge -qm refresh base
+current_m=$(g merge-base base HEAD)
+[ "$recorded_r" != "$current_m" ]
+out=$(expect 19 --slice slice-demo-widget-o1 --pr 42)
+printf '%s\n' "$out" | grep -Fq 'Plan records changed between the recorded merge-base and the current merge-base'
+printf '%s\n' "$out" | grep -Fq 'docs/orbit/plans/plan-demo-widget.r1.json'
+printf '%s\n' "$out" | grep -Fq 'refresh-slice-record.sh'
+echo "PASS (g) Plan JSON change: exit 19 and record-change message"
