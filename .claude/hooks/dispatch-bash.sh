@@ -372,11 +372,18 @@ if [ "$_scan_failed" -eq 1 ]; then
   run_push_gates
   run_commit_gates
 else
-  if command_has_git_subcommand "$_scan_cmd" push; then
+  # #1816 G2/G3: expansion hides the command word or verb — fail closed.
+  if command -v git_uncertain_protected_shape >/dev/null 2>&1 \
+    && git_uncertain_protected_shape "$_scan_cmd"; then
     run_push_gates
-  fi
-  if command_has_git_subcommand "$_scan_cmd" commit; then
     run_commit_gates
+  else
+    if command_has_git_subcommand "$_scan_cmd" push; then
+      run_push_gates
+    fi
+    if command_has_git_subcommand "$_scan_cmd" commit; then
+      run_commit_gates
+    fi
   fi
 fi
 

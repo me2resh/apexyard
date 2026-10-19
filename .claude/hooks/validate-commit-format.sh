@@ -259,7 +259,12 @@ fi
 token_count=${#COMMAND_TOKENS[@]}
 commit_index=-1
 for ((i=0; i < token_count; i++)); do
-  [ "${COMMAND_TOKENS[i]}" = "git" ] || continue
+  # #1816: accept a quoted or case-variant command word and a quoted verb.
+  if command -v git_token_is_cmd_word >/dev/null 2>&1; then
+    git_token_is_cmd_word "${COMMAND_TOKENS[i]}" || continue
+  else
+    [ "${COMMAND_TOKENS[i]}" = "git" ] || continue
+  fi
   j=$((i + 1))
   while [ "$j" -lt "$token_count" ]; do
     tok="${COMMAND_TOKENS[j]}"
@@ -275,7 +280,11 @@ for ((i=0; i < token_count; i++)); do
       j=$((j + 1))
       continue
     fi
-    if [ "$tok" = "commit" ]; then
+    if command -v git_token_is_verb >/dev/null 2>&1; then
+      if git_token_is_verb "$tok" commit; then
+        commit_index=$((j + 1))
+      fi
+    elif [ "$tok" = "commit" ]; then
       commit_index=$((j + 1))
     fi
     break

@@ -18,18 +18,43 @@ _LIB_GIT_GLOBAL_LOADED=1
 # Share this expression with the dispatcher and the gates.
 # #1748: escaped pairs and quoted values belong to a single option word.
 _git_opt_val='(\\.|"[^"]*"|'"'"'[^'"'"']*'"'"'|\$\([^)]*\)|`[^`]*`|[^[:space:];&|"'"'"']+)+'
-_git_sub_re='(^|[^[:alnum:]_.-])git([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env|attr-source))[[:space:]]+'"${_git_opt_val}"'|--(git-dir|work-tree|namespace|super-prefix|config-env|attr-source)='"${_git_opt_val}"'|--?[A-Za-z][A-Za-z-]*(='"${_git_opt_val}"')?))*[[:space:]]+'
+# #1816 G1/G4: command word may be quoted and may use another letter case.
+# Keep double quotes out of ${...} inside double-quoted strings.
+# The regex vars intentionally hold literal " characters and must stay
+# unquoted at use sites (concatenated into larger ERE strings).
+# shellcheck disable=SC2089
+_git_q='("|'\'')?'
+# shellcheck disable=SC2089
+_git_cmd_word=${_git_q}'[Gg]'${_git_q}'[Ii]'${_git_q}'[Tt]'${_git_q}
+_git_sub_opts='([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env|attr-source))[[:space:]]+'"${_git_opt_val}"'|--(git-dir|work-tree|namespace|super-prefix|config-env|attr-source)='"${_git_opt_val}"'|--?[A-Za-z][A-Za-z-]*(='"${_git_opt_val}"')?))*[[:space:]]+'
+_git_sub_re='(^|[^[:alnum:]_.-])'${_git_cmd_word}${_git_sub_opts}
+
+# Letter-quoted literal for a verb. Reuses the same quote grammar as the
+# alias word decoder (#1816 G5). Keeps the verb's letter case.
+_git_quoted_literal() {
+  local s="$1" out="" i c
+  for ((i = 0; i < ${#s}; i++)); do
+    c="${s:i:1}"
+    case "$c" in
+      \\|'.'|'['|']'|'('|')'|'*'|'+'|'?'|'{'|'}'|'|'|'^'|'$')
+        c="\\$c"
+        ;;
+    esac
+    out+="${_git_q}${c}"
+  done
+  printf '%s' "${out}${_git_q}"
+}
 
 # Regex for `git [global options] <sub>` on raw text.
 # The match may include one leading boundary character.
 git_subcommand_re() {
-  printf '%s%s([^[:alnum:]_.-]|$)' "$_git_sub_re" "$1"
+  printf '%s%s([^[:alnum:]_.-]|$)' "$_git_sub_re" "$(_git_quoted_literal "$1")"
 }
 
 # One push invocation, including global options, through the first separator.
 # The match may include one leading boundary character.
 git_push_segment_re() {
-  printf '%s%s([^|;&[:alnum:]_.-][^|;&]*)?' "$_git_sub_re" "push"
+  printf '%s%s([^|;&[:alnum:]_.-][^|;&]*)?' "$_git_sub_re" "$(_git_quoted_literal push)"
 }
 
 # 0 when the raw command contains `git [global options] <sub>`.
@@ -37,14 +62,73 @@ command_has_git_subcommand() {
   printf '%s\n' "$1" | LC_ALL=C grep -qE "$(git_subcommand_re "$2")"
 }
 
+# 0 when a shell token is the git command word (#1816 G1/G4).
+git_token_is_cmd_word() {
+  local flat
+  flat=$(printf '%s' "$1" | tr -d "'\"")
+  case "$flat" in
+    [Gg][Ii][Tt]) return 0 ;;
+  esac
+  return 1
+}
+
+# 0 when a shell token decodes to the given verb (#1816 G5).
+git_token_is_verb() {
+  local want="$2" saved="$_GIT_SCAN" word
+  _GIT_SCAN="$1"
+  if _git_take_value; then
+    word="$_GIT_TAKEN"
+  else
+    word=$(printf '%s' "$1" | tr -d "'\"")
+  fi
+  _GIT_SCAN="$saved"
+  [ "$word" = "$want" ]
+}
+
+# #1816 G2/G3: an expansion hides the command word or the verb, and the rest
+# of the simple command can still be a push or a commit.
+git_uncertain_protected_shape() {
+  local text="$1"
+  local push_re commit_re exp_tok
+  push_re="$(_git_quoted_literal push)"
+  commit_re="$(_git_quoted_literal commit)"
+  # ERE: use [{] / [}] so mawk/BSD grep do not read an interval.
+  exp_tok='(\$[{]?[A-Za-z_][A-Za-z0-9_]*[}]?|\$\([^)]*\)|`[^`]*`)'
+  # Expansion as the command word only: start or a shell separator, then
+  # optional assignments, then the expansion. Do not match a -C/-c value.
+  local exp_cmd='(^|[;|&][[:space:]]*|\&\&[[:space:]]*|\|\|[[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:];|&]*[[:space:]]+)*'"${exp_tok}"
+  if printf '%s\n' "$text" | LC_ALL=C grep -qE "${exp_cmd}[[:space:]]+((-[Cc]|--[A-Za-z][A-Za-z0-9_-]*)([[:space:]]+[^[:space:];|&]+)?[[:space:]]+)*${push_re}([^[:alnum:]_.-]|$)"; then
+    return 0
+  fi
+  if printf '%s\n' "$text" | LC_ALL=C grep -qE "${exp_cmd}[[:space:]]+((-[Cc]|--[A-Za-z][A-Za-z0-9_-]*)([[:space:]]+[^[:space:];|&]+)?[[:space:]]+)*${commit_re}([^[:alnum:]_.-]|$)"; then
+    return 0
+  fi
+  # Literal git (any case / quotes), then an expansion as the next word (the
+  # verb), then at least one more argument.
+  local git_then_exp
+  git_then_exp='(^|[^[:alnum:]_.-])'${_git_cmd_word}'[[:space:]]+'${exp_tok}
+  if printf '%s\n' "$text" | LC_ALL=C grep -qE "${git_then_exp}[[:space:]]+[^[:space:];|&]"; then
+    return 0
+  fi
+  return 1
+}
+
 # JSON-string pattern for raw_payload_command_matches.
 # Stays inside a JSON string. Covers the same global-option forms.
 git_subcommand_payload_pattern() {
-  local sub="$1"
+  local sub="$1" lit
   # #1748: a JSON-escaped double-quoted value (-C \"a b\") or a single-quoted
   # value (-C 'a b') is one option word. Single quotes need no JSON escape.
+  # #1816: command word may be quoted / another case; verb may be letter-quoted.
+  # A complex $sub (alias no-jq alternation) stays raw.
   local _git_payload_val='(\\"([^"\\]|\\[^"])*\\"|'"'"'[^'"'"']*'"'"'|\\.|[^"'"'"'\\[:space:]])+'
-  printf '%s' 'git([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env|attr-source))[[:space:]]+'"${_git_payload_val}"'|--?[A-Za-z][A-Za-z-]*(='"${_git_payload_val}"')?))*[[:space:]]+'"$sub"'([^[:alnum:]_.-]|$)'
+  if [[ "$sub" =~ ^[a-z0-9-]+$ ]]; then
+    lit=$(_git_quoted_literal "$sub")
+  else
+    lit=$sub
+  fi
+  # shellcheck disable=SC2090
+  printf '%s' ${_git_cmd_word}'([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env|attr-source))[[:space:]]+'"${_git_payload_val}"'|--?[A-Za-z][A-Za-z-]*(='"${_git_payload_val}"')?))*[[:space:]]+'${lit}'([^[:alnum:]_.-]|$)'
 }
 
 # 2 when the token takes the next token as its value.
@@ -144,10 +228,32 @@ _git_take_global() {
   return 0
 }
 
+# Strip a matched git command word (quoted / any case) from the start of $1.
+# Leaves the remainder in $_GIT_SCAN. Returns 1 when the word is not git.
+_git_strip_cmd_word() {
+  local s="$1" re
+  # Do not double-quote $_git_cmd_word; it holds literal " characters.
+  re='^'${_git_cmd_word}
+  if [[ "$s" =~ $re ]]; then
+    _GIT_SCAN="${s:${#BASH_REMATCH[0]}}"
+    return 0
+  fi
+  # Match may include one leading boundary character from grep -oE.
+  s="${s#?}"
+  if [[ "$s" =~ $re ]]; then
+    _GIT_SCAN="${s:${#BASH_REMATCH[0]}}"
+    return 0
+  fi
+  return 1
+}
+
 # Walk global options in $_GIT_SCAN until <sub>.
 # On success, $_GIT_SCAN is the text after that subcommand.
+# #1816 G5: decode a quoted or partly quoted verb with _git_take_value.
+# Keep the trailing-boundary case so a match like `git push` (with a closing
+# backtick) still finds the verb.
 _git_scan_globals() {
-  local sub="$1"
+  local sub="$1" saved word
   _GIT_RAW_C_CHAIN=()
   _GIT_RAW_DASH_C=""
   _GIT_RAW_GIT_DIR=""
@@ -161,6 +267,14 @@ _git_scan_globals() {
         return 0
         ;;
     esac
+    saved="$_GIT_SCAN"
+    if _git_take_value; then
+      word="$_GIT_TAKEN"
+      if [ "$word" = "$sub" ]; then
+        return 0
+      fi
+      _GIT_SCAN="$saved"
+    fi
     _git_take_global || return 1
   done
   return 1
@@ -179,11 +293,7 @@ _git_load_invocation() {
     inv=$(printf '%s\n' "$cmd" | LC_ALL=C grep -oE "$(git_subcommand_re "$sub")" | head -1) || true
   fi
   [ -n "$inv" ] || return 1
-  case "$inv" in
-    git*) ;;
-    *) inv="${inv#?}" ;;
-  esac
-  _GIT_SCAN="${inv#git}"
+  _git_strip_cmd_word "$inv" || return 1
   _git_scan_globals "$sub"
 }
 
@@ -197,11 +307,7 @@ git_invocation_dash_c() {
 # Print the argument text after `git [global options] push` in one segment.
 git_push_args() {
   local segment="$1"
-  case "$segment" in
-    git*) ;;
-    *) segment="${segment#?}" ;;
-  esac
-  _GIT_SCAN="${segment#git}"
+  _git_strip_cmd_word "$segment" || return 0
   if _git_scan_globals push; then
     printf '%s' "$_GIT_SCAN"
   fi
@@ -404,6 +510,11 @@ git_visit_invocations() {
   cwd=$(printf '%s' "$input" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null)
   if [ "$mode" = block ]; then
     git_alias_check "$@" || return 2
+    # #1816 G2/G3: an expansion hides the command word or verb.
+    if git_uncertain_protected_shape "$cmd"; then
+      echo "BLOCKED: a shell expansion hides the git command word or verb. Use a literal git push or git commit." >&2
+      return 2
+    fi
   fi
   local prefixes
   for sub in "$@"; do
@@ -513,7 +624,12 @@ _git_alias_word() {
 _git_alias_parse() {
   local word raw name quote="" c i region="" before
   _GA_INLINE=() _GA_TARGET=() _GA_OPAQUE=0 _GA_UNREADABLE=0 _GA_VERB=""
-  _GIT_SCAN="${1#git}"
+  # #1816: accept a quoted or case-variant command word.
+  if ! _git_strip_cmd_word "$1"; then
+    _GA_OPAQUE=1
+    _GA_VERB=""
+    return 0
+  fi
   while :; do
     _GIT_SCAN="${_GIT_SCAN#"${_GIT_SCAN%%[![:space:]]*}"}"
     before="$_GIT_SCAN"
@@ -716,14 +832,15 @@ git_alias_check() {
     . "$(dirname "${BASH_SOURCE[0]}")/_lib-awk-fallback.sh" || return 2
   fi
   text=$(join_shell_continuations "$cmd") || { _git_alias_block 'cannot join git command continuations.'; return 2; }
-  positions=$(printf '%s' "$text" | grep -aboE 'git([[:space:]]|<|>)'); rc=$?
+  # #1816: find quoted and case-variant command words too.
+  # shellcheck disable=SC2090
+  positions=$(printf '%s' "$text" | grep -aboE ${_git_cmd_word}'([[:space:]]|<|>)'); rc=$?
   [ "$rc" -le 1 ] || { _git_alias_block 'cannot scan git aliases.'; return 2; }
-  pattern="${_git_sub_re#*git}"
   local verb_word_re='(\\.|"[^"]*"|'"'"'[^'"'"']*'"'"'|\$\([^)]*\)|`[^`]*`|[^[:space:];&|"'"'"'()<>]+)+'
-  pattern="^git${pattern}${verb_word_re}"
+  pattern='^'${_git_cmd_word}${_git_sub_opts}${verb_word_re}
   # This is the no-option branch of the same anchored candidate grammar.
   # Compile the full option grammar only when this branch cannot match.
-  local literal_re='^(git +[a-zA-Z0-9_.][a-zA-Z0-9_.-]*)([[:space:];&|()<>]|$)'
+  local literal_re='^('${_git_cmd_word}' +[a-zA-Z0-9_.][a-zA-Z0-9_.-]*)([[:space:];&|()<>]|$)'
   local window="${text:0:512}" window_start=0 relative
   while IFS=: read -r pos rest; do
     [ -n "$pos" ] || continue
@@ -741,7 +858,9 @@ git_alias_check() {
     fi
     # Try a short literal word first. Long or quoted words use the full grammar.
     rest="${window:relative:64}"
-    case "$rest" in git'<'*|git'>'*) candidate="${rest:0:4}" ;;
+    case "$rest" in
+      git'<'*|git'>'*|GIT'<'*|GIT'>'*|Git'<'*|Git'>'*)
+        candidate="${rest:0:4}" ;;
       *) if [[ "$rest" =~ $literal_re ]] && { [ "${#BASH_REMATCH[1]}" -lt 64 ] || [ "$((${#text}-pos))" -le 64 ]; }; then candidate="${BASH_REMATCH[1]}"
          else
            rest="${text:pos}"
@@ -780,9 +899,23 @@ EOF_POSITIONS
   local include_channel_re='-c[[:space:]]+["'"'"']?([iI][nN][cC][lL][uU][dD][eE]\.|[iI][nN][cC][lL][uU][dD][eE][iI][fF]\.)'
   if [[ "$clean" =~ $include_channel_re ]]; then _GA_CHANNEL="${_GA_CHANNEL:-include}"; fi
   _git_alias_lower "$clean"; clean="$_GA_LOWER"
-  case "$clean" in *alias.*|*include.*|*includeif.*|*'[alias'*|*'[include'*|*.gitconfig*|*.git/config*|*git/config*|*config.worktree*) _GA_DEFINITION=1 ;; esac
+  case "$clean" in *alias.*|*include.*|*includeif.*|*'[alias'*|*'[include'*|*.gitconfig*|*git/config*|*config.worktree*) _GA_DEFINITION=1 ;; esac
+  # #1816 G8: a config path write (including .git//config and .git/./config).
+  # Distinct from inline -c alias.* which still resolves normally.
+  local _GA_CONFIG_PATH_WRITE=0
+  if [[ "$clean" =~ \.git[/./]*config ]] || [[ "$clean" = *.gitconfig* ]] || [[ "$clean" = *config.worktree* ]]; then
+    _GA_DEFINITION=1
+    _GA_CONFIG_PATH_WRITE=1
+  fi
+  # #1816 G7: repository path the resolver cannot follow statically.
+  local _GA_HARD_UNRESOLVED=0
+  if [[ "$text" =~ (^|[^[:alnum:]_])env[[:space:]]+(-C|--chdir)([[:space:]]|=) ]] \
+    || [[ "$text" =~ \(cd[[:space:]] ]] \
+    || [[ "$text" =~ (^|[^[:alnum:]_])cd[[:space:]]+-P([[:space:]]|$) ]]; then
+    _GA_HARD_UNRESOLVED=1
+  fi
   # Walk the directory chain only once. Failed or non-leading directory changes
-  # use the payload view, as required by residual R2.
+  # use the payload view, as required by residual R2 (soft unresolved).
   local segments segment chain_cwd="${cwd:-$PWD}" segment_start=0 segment_end prefix consumed=0 ci=0 chain_bad=0
   if [[ "$text" =~ (^|[^[:alnum:]_])(cd|pushd|popd)([[:space:]]|$) ]]; then
     segments=$(_git_chain_segments "$text") || return 2
@@ -799,6 +932,10 @@ EOF_POSITIONS
           if [ -z "${_GIT_SCAN//[[:space:]]/}" ]; then _GIT_TAKEN="$HOME";
           elif ! _git_take_value; then chain_bad=1; fi
           if [ "$_GIT_TAKEN" = -- ]; then _git_take_value || chain_bad=1; fi
+          if [ "$_GIT_TAKEN" = -P ]; then
+            _GA_HARD_UNRESOLVED=1
+            _git_take_value || chain_bad=1
+          fi
           dir=$(_git_resolve_dir "$_GIT_TAKEN" "$chain_cwd") && [ -d "$dir" ] && chain_cwd="$dir" || chain_bad=1
           local tail="${_GIT_SCAN#"${_GIT_SCAN%%[![:space:]]*}"}"
           if [ -n "$tail" ] && ! [[ "$tail" =~ ^\|\|[[:space:]]*(exit|return)([[:space:]]+[0-9]+)?[[:space:]]*$ ]]; then chain_bad=1; fi
@@ -818,7 +955,7 @@ EOF_SEGMENTS
   fi
   local creation_re="${_git_sub_re}(init|clone|worktree)([^[:alnum:]_.-]|$)"
   if [[ "$text" =~ $creation_re ]]; then _GA_CREATES_REPO=1; fi
-  local alias_free_payload=0 simple_re='^git[[:space:]]+[^[:space:]-][^[:space:]]*$'
+  local alias_free_payload=0 simple_re='^'${_git_cmd_word}'[[:space:]]+[^[:space:]-][^[:space:]]*$'
   for candidate in ${candidates[@]+"${candidates[@]}"}; do
     if [ "$alias_free_payload" = 1 ] && [[ "$candidate" =~ $simple_re ]]; then
       ci=$((ci+1)); continue
@@ -831,6 +968,16 @@ EOF_SEGMENTS
     target="${candidate_cwds[ci]:-${cwd:-$PWD}}"; ci=$((ci+1))
     _GA_ROOT="$_GA_VERB"
     if [ "$_GA_OPAQUE" = 0 ] && _git_alias_builtin "$_GA_VERB"; then continue; fi
+    # #1816 G7: an alias (non-builtin) with a repository path we cannot follow.
+    # A builtin still reaches the push/commit gates so they can report the
+    # ordinary unresolvable -C message.
+    if [ "$_GA_HARD_UNRESOLVED" = 1 ] && ! _git_alias_builtin "$_GA_VERB"; then
+      _git_alias_block "cannot resolve the repository for this git alias. Use a literal directory change or -C path, then run the real verb."; return 2
+    fi
+    # #1816 G8: a config path write can replace an alias before git runs.
+    if [ "$_GA_CONFIG_PATH_WRITE" = 1 ] && ! _git_alias_builtin "$_GA_VERB"; then
+      _git_alias_block "this command writes git config and runs git $_GA_ROOT. Run them as two commands. If this is prose, write it to a file and pass -F or --body-file."; return 2
+    fi
     if [ -n "$_GA_CHANNEL" ]; then
       _git_alias_block "this command changes git config ($_GA_CHANNEL) and runs git $_GA_ROOT. Run the real verb without the change. If this is prose, write it to a file and pass -F or --body-file."; return 2
     fi
@@ -861,13 +1008,28 @@ EOF_SEGMENTS
       fi
     fi
     gitdir=""
+    local candidate_unresolved=0
     for ((i=0; i<${#_GA_TARGET[@]}; i++)); do
       token="${_GA_TARGET[i]}"
       case "$token" in
-        -C) i=$((i+1)); dir=$(_git_resolve_dir "${_GA_TARGET[i]}" "$target") && [ -d "$dir" ] && target="$dir" || target="${cwd:-$PWD}" ;;
+        -C)
+          i=$((i+1))
+          if dir=$(_git_resolve_dir "${_GA_TARGET[i]}" "$target") && [ -d "$dir" ]; then
+            target="$dir"
+          else
+            # #1816 G7: expansion or bad -C path — do not fall back for aliases.
+            candidate_unresolved=1
+            target="${cwd:-$PWD}"
+          fi
+          ;;
         --git-dir=*) gitdir="${token#*=}" ;;
       esac
     done
+    # Opaque -C expansions stay on the ordinary gate path (unresolvable -C).
+    # A clear non-builtin with a bad -C path is G7.
+    if [ "$candidate_unresolved" = 1 ] && [ "$_GA_OPAQUE" = 0 ] && ! _git_alias_builtin "$_GA_VERB"; then
+      _git_alias_block "cannot resolve the repository for this git alias. Use a literal directory change or -C path, then run the real verb."; return 2
+    fi
     cachekey="${#target}:$target${#gitdir}:$gitdir"; index=-1
     for ((i=0; i<${#cachekeys[@]}; i++)); do [ "${cachekeys[i]}" != "$cachekey" ] || index="$i"; done
     if [ "$index" -lt 0 ]; then
