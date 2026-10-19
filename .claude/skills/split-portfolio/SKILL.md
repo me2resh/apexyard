@@ -58,7 +58,7 @@ Refusal at any of these gates is silent on every other check — show only the r
 marker_home="$(git rev-parse --show-toplevel)"
 . "$marker_home/.claude/hooks/_lib-session-markers.sh"
 skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
-mkdir -p .claude/session && echo "split-portfolio" > "$skill_marker"
+mkdir -p "$marker_home/.claude/session" && echo "split-portfolio" > "$skill_marker"
 ```
 
 Clear the marker at the end of the migration (or on a confirmed-abort). If the skill is interrupted mid-flow, the SessionStart hook `clear-bootstrap-marker.sh` clears it at the start of the next session. See AgDR-0011 + me2resh/apexyard#150.

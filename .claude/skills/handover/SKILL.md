@@ -114,7 +114,7 @@ The prose menus below are fallbacks only when the harness lacks `AskUserQuestion
 marker_home="$(git rev-parse --show-toplevel)"
 . "$marker_home/.claude/hooks/_lib-session-markers.sh"
 skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
-mkdir -p .claude/session && echo "handover" > "$skill_marker"
+mkdir -p "$marker_home/.claude/session" && echo "handover" > "$skill_marker"
 ```
 
 Clear the marker on completion (Step "Post-Handover Checklist" below). If the skill is interrupted, the SessionStart hook `clear-bootstrap-marker.sh` clears it at the start of the next session. See AgDR-0011 + me2resh/apexyard#150.

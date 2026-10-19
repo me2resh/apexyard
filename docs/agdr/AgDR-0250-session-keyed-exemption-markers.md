@@ -16,16 +16,16 @@ Issue #1532 identifies shared bootstrap and issue-skill exemptions. Role banner 
 ## Decision
 
 Chosen: **session paths**, because a shared exemption cannot identify its owner.
-Use `active_bootstrap_marker_path` and `active_issue_skill_marker_path` in one library. Use the suffix and sanitization from `active_reviewer_marker_path`. Return no path when `CLAUDE_CODE_SESSION_ID` is empty. Do not use the review helper's shared-path fallback: these markers grant exemptions.
+Use `active_bootstrap_marker_path` and `active_issue_skill_marker_path` in one library. Use the suffix and sanitization from `active_reviewer_marker_path`. Resolve `CLAUDE_CODE_SESSION_ID` first, then `APEXYARD_SESSION_ID`. Return no path when both are empty. Do not use the review helper's shared-path fallback: these markers grant exemptions.
 
-For one migration release, detect each old file, claim an atomic notice directory, and tell the operator to restart. Ignore the old file. Keep the notice directory so repeated hooks issue no duplicate notice. Remove this detection after the migration release. There is no legacy authorization fallback.
+For one migration release, detect each old file, claim an atomic notice directory, and tell the operator to run the skill again. Ignore the old file. Keep the notice directory so repeated hooks issue no duplicate notice. Remove this detection after the migration release. There is no legacy authorization fallback.
 
 SessionStart clears only the current session's exemption files. Role banners retain other sessions' markers for seven days. Missing identity keeps role banners active.
 
 ## Consequences
 
 - Skills must use the resolver on entry and on every cleanup path.
-- Harness adapters must export a stable, unique `CLAUDE_CODE_SESSION_ID` before hooks and skill Bash blocks run. No process-id fallback is safe across separate tool calls.
+- Adapters export `APEXYARD_SESSION_ID` to hooks and skill shells. Claude Code keeps precedence. No shared default is permitted.
 - Manual harness checks remain required before release.
 
 ## Artifacts
@@ -35,13 +35,25 @@ SessionStart clears only the current session's exemption files. Role banners ret
 
 ## Manual checklist for the PR
 
-These checks have not run in this build environment. Record the result and actual adapter id before merge.
+Automated tests verify transport and marker isolation. Interactive skill completion still requires an operator run before merge.
 
 | Harness | `/setup` | `/bug` | Session id evidence |
 |---------|----------|--------|---------------------|
-| Claude Code | Pending | Pending | Record `CLAUDE_CODE_SESSION_ID` |
-| Cursor | Pending | Pending | Record mapped `session_id` from cursor-session-pin.sh |
-| opencode | Pending | Pending | No automatic mapping verified; record configured native id |
-| pi | Pending | Pending | No automatic mapping verified; record configured native id |
+| Claude Code | Resolver tested; manual run required | Resolver tested; manual run required | `CLAUDE_CODE_SESSION_ID` wins over the adapter variable |
+| Cursor | Mapping inspected; manual run required | Mapping inspected; manual run required | `cursor-session-pin.sh` maps `session_id` or `conversation_id` to `CLAUDE_CODE_SESSION_ID` through its JSON `env` output |
+| opencode | Shell transport tested; manual run required | Shell transport tested; manual run required | Native tool-call `sessionID`, exported as `APEXYARD_SESSION_ID` |
+| pi | Shell transport tested; manual run required | Shell transport tested; manual run required | `sessionManager.getSessionId()` at `session_start`, exported as `APEXYARD_SESSION_ID` |
 
-The pi and opencode adapter sources do not supply an automatic mapping in this build. Their manual checks remain pending. If an adapter exports no id, both exemption gates stay closed. Configure the adapter to export its native session id. Do not use a shared default.
+opencode carries the native id per tool call because one server can host concurrent sessions.
+The adapter passes it to hook subprocesses and prefixes Bash commands with a quoted export after gate evaluation.
+pi exports its native id in the process environment at each session start.
+A random UUID supplies a process-lifetime fallback if pi has no native id.
+Child shells and hook subprocesses inherit that environment. No new dependency is required.
+
+The adapter tests verify stable ids within sessions and different ids across sessions.
+The marker suite verifies sanitization, Claude Code precedence, cross-session denial, legacy denial, and missing-id denial.
+These checks do not prove that `/setup` or `/bug` completes interactively. AC5 remains open until those eight manual runs complete.
+
+The migration notice still uses stderr. A successful SessionStart hook can claim the notice before a blocking gate runs.
+A harness that hides stderr from successful SessionStart hooks can hide this notice. This visibility limit remains unverified.
+Run the skill again to create a keyed marker. Restart only when the loaded skill text is outdated.

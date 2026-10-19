@@ -74,7 +74,7 @@ Run this **before any tool calls that edit files**:
 marker_home="$(git rev-parse --show-toplevel)"
 . "$marker_home/.claude/hooks/_lib-session-markers.sh"
 skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
-mkdir -p .claude/session && echo "setup" > "$skill_marker"
+mkdir -p "$marker_home/.claude/session" && echo "setup" > "$skill_marker"
 ```
 
 The marker is cleared in Step 8 below (and on the next SessionStart by `clear-bootstrap-marker.sh`, in case this skill is interrupted).

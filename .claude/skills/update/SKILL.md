@@ -146,7 +146,7 @@ The banner restates the deal every invocation — an operator who used `--from-d
 marker_home="$(git rev-parse --show-toplevel)"
 . "$marker_home/.claude/hooks/_lib-session-markers.sh"
 skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
-mkdir -p .claude/session && echo "update" > "$skill_marker"
+mkdir -p "$marker_home/.claude/session" && echo "update" > "$skill_marker"
 ```
 
 Clear the marker on completion (last step of this skill). If the skill is interrupted, the SessionStart hook `clear-bootstrap-marker.sh` clears it at the start of the next session. See AgDR-0011 + me2resh/apexyard#150.

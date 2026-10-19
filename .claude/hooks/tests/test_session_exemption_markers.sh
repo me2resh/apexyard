@@ -47,6 +47,30 @@ for spec in 'active-bootstrap setup clear-bootstrap-marker.sh' 'active-issue-ski
   check test "$(grep -c "ignored legacy $name marker" "$TMP/notice")" = 1
   rm -f "$TMP/.claude/session/$name" "$TMP/.claude/session/$name.A"
 done
+# Adapter ids use the same isolation and sanitization rules.
+printf 'setup\n' > "$TMP/.claude/session/active-bootstrap.adapter_A"
+export APEXYARD_SESSION_ID='adapter/A'
+check gate '' require-active-ticket.sh "$edit" 0
+export APEXYARD_SESSION_ID=adapter_B
+check gate '' require-active-ticket.sh "$edit" 2
+printf 'setup\n' > "$TMP/.claude/session/active-bootstrap"
+check gate '' require-active-ticket.sh "$edit" 2
+export APEXYARD_SESSION_ID='adapter/A'
+check gate B require-active-ticket.sh "$edit" 2
+check gate adapter_A require-active-ticket.sh "$edit" 0
+printf 'bug\n' > "$TMP/.claude/session/active-issue-skill.adapter_A"
+check gate '' require-skill-for-issue-create.sh "$create" 0
+export APEXYARD_SESSION_ID=adapter_B
+check gate '' require-skill-for-issue-create.sh "$create" 2
+printf 'bug\n' > "$TMP/.claude/session/active-issue-skill"
+check gate '' require-skill-for-issue-create.sh "$create" 2
+check gate adapter_A require-skill-for-issue-create.sh "$create" 0
+export APEXYARD_SESSION_ID=adapter_A
+check gate B require-skill-for-issue-create.sh "$create" 2
+rm -f "$TMP/.claude/session/active-issue-skill" "$TMP/.claude/session/active-issue-skill.adapter_A"
+unset APEXYARD_SESSION_ID
+check gate '' require-active-ticket.sh "$edit" 2
+rm -f "$TMP/.claude/session/active-bootstrap" "$TMP/.claude/session/active-bootstrap.adapter_A"
 schema='{"tool_name":"Bash","tool_input":{"command":"gh issue create --title \"[Feature] test\" --body \"invalid\""}}'
 printf 'request-apexyard-feature\n' > "$TMP/.claude/session/active-issue-skill.A"
 check gate A validate-issue-structure.sh "$schema" 0

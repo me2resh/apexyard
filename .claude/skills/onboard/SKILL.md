@@ -77,7 +77,7 @@ exempts this skill's writes (it's on the `ticket.bootstrap_skills` list in
 marker_home="$(git rev-parse --show-toplevel)"
 . "$marker_home/.claude/hooks/_lib-session-markers.sh"
 skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
-mkdir -p .claude/session && echo "onboard" > "$skill_marker"
+mkdir -p "$marker_home/.claude/session" && echo "onboard" > "$skill_marker"
 ```
 
 Clear this marker on **every** exit path below (success, bail, decline) —
