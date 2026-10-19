@@ -66,12 +66,15 @@ The sibling `check-jq-installed.sh` SessionStart hook surfaces the same gap as a
 
 ### Step 0: Mark this session as bootstrap (REQUIRED)
 
-`/setup` runs BEFORE any portfolio is configured, so no project tickets can exist yet. The `require-active-ticket.sh` PreToolUse hook would otherwise block every Edit / Write / Bash-write the skill needs to make. To stay coherent with the ticket-first rule without forcing adopters to file a placeholder ticket against nothing, the skill writes a one-line marker at `.claude/session/active-bootstrap` containing the skill name. The hook reads the marker and exempts skills listed in `ticket.bootstrap_skills` (in `.claude/project-config.defaults.json` — `setup` is on the default list).
+`/setup` runs BEFORE any portfolio is configured, so no project tickets can exist yet. The `require-active-ticket.sh` PreToolUse hook would otherwise block every Edit / Write / Bash-write the skill needs to make. To stay coherent with the ticket-first rule without forcing adopters to file a placeholder ticket against nothing, the skill writes a one-line marker at the path from `active_bootstrap_marker_path` containing the skill name. The hook reads the marker and exempts skills listed in `ticket.bootstrap_skills` (in `.claude/project-config.defaults.json` — `setup` is on the default list).
 
 Run this **before any tool calls that edit files**:
 
 ```bash
-mkdir -p .claude/session && echo "setup" > .claude/session/active-bootstrap
+marker_home="$(git rev-parse --show-toplevel)"
+. "$marker_home/.claude/hooks/_lib-session-markers.sh"
+skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
+mkdir -p "$marker_home/.claude/session" && echo "setup" > "$skill_marker"
 ```
 
 The marker is cleared in Step 8 below (and on the next SessionStart by `clear-bootstrap-marker.sh`, in case this skill is interrupted).
@@ -868,10 +871,13 @@ Show the helper's stdout to the operator. Do not invent a key by hand. Do not st
 ### Step 8: Clear the bootstrap marker (REQUIRED)
 
 ```bash
-rm -f .claude/session/active-bootstrap
+marker_home="$(git rev-parse --show-toplevel)"
+. "$marker_home/.claude/hooks/_lib-session-markers.sh"
+skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
+rm -f "$skill_marker"
 ```
 
-Always remove the marker on a clean exit so subsequent edits in the same session go through the normal ticket gate. If `/setup` is interrupted before this step, `clear-bootstrap-marker.sh` (SessionStart hook) clears the stale marker on the next session.
+Always remove the marker on a clean exit so subsequent edits in the same session go through the normal ticket gate. If `/setup` is interrupted before this step, `clear-bootstrap-marker.sh` (SessionStart hook) clears the marker when the same session restarts.
 
 ## Rules
 

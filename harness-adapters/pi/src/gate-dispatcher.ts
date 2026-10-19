@@ -1,5 +1,5 @@
 /**
- * apexyard-gate-dispatcher — pi extension enforcing apexyard's mechanical
+ * apexyard gate dispatcher — pi extension enforcing apexyard's mechanical
  * governance gates by shelling out to the EXISTING, UNMODIFIED bash hooks
  * under `.claude/hooks/`. Zero logic duplication: every gate's approval
  * decision stays 100% in bash; this file is a thin transport adapter
@@ -68,6 +68,7 @@
  *     directly with no gap).
  */
 
+import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import * as path from "node:path";
@@ -275,7 +276,7 @@ export function deriveGatesFromOpsRoot(opsRoot: string, settingsRelativePath: st
   } catch (err) {
     warnOnce(
       `parse-failure:${settingsPath}`,
-      `apexyard-gate-dispatcher: WARNING — failed to parse ${settingsPath}; NO gates are enforced this session. ` +
+      `apexyard gate dispatcher: WARNING — failed to parse ${settingsPath}; NO gates are enforced this session. ` +
         `Underlying error: ${err instanceof Error ? err.message : String(err)}\n`,
     );
     return [];
@@ -309,7 +310,7 @@ function warnUnsupportedGateWiresOnce(opsRoot: string, gates: GateDefinition[]):
   for (const unsupported of findUnsupportedGateWires(gates)) {
     warnOnce(
       `unsupported:${opsRoot}:${unsupported.gateName}:${unsupported.tool}`,
-      `apexyard-gate-dispatcher: WARNING — gate "${unsupported.gateName}" is wired to pi tool "${unsupported.tool}", ` +
+      `apexyard gate dispatcher: WARNING — gate "${unsupported.gateName}" is wired to pi tool "${unsupported.tool}", ` +
         `which this adapter has no stdin builder for (buildPiToolInput only supports bash/edit/write). This gate is SILENTLY SKIPPED ` +
         `for "${unsupported.tool}" tool calls — it never runs, so it can never block one. See derive-gates.ts for details.\n`,
     );
@@ -323,6 +324,13 @@ function warnUnsupportedGateWiresOnce(opsRoot: string, gates: GateDefinition[]):
  * mock `pi` object without going through pi's own module loader.
  */
 export function registerGateDispatcher(pi: ExtensionAPI, options: DispatcherOptions = {}): void {
+  // pi shells and hook subprocesses inherit this process environment.
+  // Replace it on new/resumed sessions, including session changes in one process.
+  const fallbackId = randomUUID();
+  process.env.APEXYARD_SESSION_ID = fallbackId;
+  pi.on("session_start", async (_event, ctx) => {
+    process.env.APEXYARD_SESSION_ID = ctx.sessionManager.getSessionId() || fallbackId;
+  });
   const resolve = options.resolveOpsRoot ?? ((startCwd: string) => resolveOpsRootForPi({ startCwd }));
   const buildToolInput = options.buildToolInput ?? buildPiToolInput;
   const settingsRelativePath = options.settingsRelativePath ?? ".claude/settings.json";

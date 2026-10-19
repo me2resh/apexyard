@@ -1244,6 +1244,20 @@ fi
 rm -f "$LOCKFIX"
 
 # ---------------------------------------------------------------------------
+# #1757 / #1761: the same lock covers every hook library. It scans awk
+# program literals in .claude/hooks/_lib-*.sh. A POSIX grep interval is
+# outside that scan. The standalone test prints the per-check results.
+# ---------------------------------------------------------------------------
+LOCK_LIBS="$REPO_ROOT/.claude/hooks/tests/test_awk_ere_interval_lock.sh"
+if bash "$LOCK_LIBS"; then
+  PASS=$((PASS + 1))
+  echo "PASS: ERE interval lock covers every .claude/hooks/_lib-*.sh awk program"
+else
+  FAIL=$((FAIL + 1))
+  echo "FAIL: ERE interval lock covers every .claude/hooks/_lib-*.sh awk program" >&2
+fi
+
+# ---------------------------------------------------------------------------
 # Result
 # ---------------------------------------------------------------------------
 

@@ -74,7 +74,10 @@ exempts this skill's writes (it's on the `ticket.bootstrap_skills` list in
 `.claude/project-config.defaults.json`):
 
 ```bash
-mkdir -p .claude/session && echo "onboard" > .claude/session/active-bootstrap
+marker_home="$(git rev-parse --show-toplevel)"
+. "$marker_home/.claude/hooks/_lib-session-markers.sh"
+skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
+mkdir -p "$marker_home/.claude/session" && echo "onboard" > "$skill_marker"
 ```
 
 Clear this marker on **every** exit path below (success, bail, decline) —
@@ -453,7 +456,10 @@ fork state and never changes anything. Your depth mode carries over.
 ### 7. Clear the bootstrap marker (REQUIRED — every exit path)
 
 ```bash
-rm -f .claude/session/active-bootstrap
+marker_home="$(git rev-parse --show-toplevel)"
+. "$marker_home/.claude/hooks/_lib-session-markers.sh"
+skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
+rm -f "$skill_marker"
 ```
 
 Run this on success, on the `not-a-fork` bail, on the `configured`
