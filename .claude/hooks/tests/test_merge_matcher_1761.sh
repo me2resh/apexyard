@@ -4,6 +4,7 @@
 # Step 1: a literal merge is not a variable target, under the system awk
 # and under mawk when mawk is installed. The argv -c window stays 200
 # characters. A variable merge and a shell -c wrapper still block.
+# Step 2: the /approve-merge step 6 call passes literal repo and PR values.
 
 set -u
 
@@ -65,6 +66,36 @@ check_window() {
   expect_opaque "$prefix glab argv -c is opaque" "['bash','-c','glab mr merge 5']" opaque
 }
 
+check_skill_literals() {
+  local skill line filled
+  skill="$ROOT/.claude/skills/approve-merge/SKILL.md"
+  line=$(grep -E '^[[:space:]]*tracker_pr_merge\b' "$skill" | head -1)
+  if [ -z "$line" ]; then
+    fail "approve-merge step 6 has a tracker_pr_merge line"
+    return
+  fi
+  pass "approve-merge step 6 has a tracker_pr_merge line"
+  case "$line" in
+    *'$PR_HOST_REPO'*|*'$PR"'*)
+      fail "step 6 merge call passes a repo or PR variable"
+      ;;
+    *)
+      pass "step 6 merge call passes literal repo and PR placeholders"
+      ;;
+  esac
+  filled=$(printf '%s\n' "$line" | sed -e 's|<repo>|owner/repo|g' -e 's|<pr>|42|g')
+  merge_command_uses_variable "$filled"
+  expect_rc "filled step 6 merge call is not a variable target" 1 $?
+  if is_merge_command "$filled"; then
+    pass "filled step 6 merge call is still a merge"
+  else
+    fail "filled step 6 merge call is still a merge"
+  fi
+  merge_command_uses_variable 'tracker_pr_merge "$PR_HOST_REPO" "$PR" squash true'
+  expect_rc "unexpanded wrapper repo and PR still block" 0 $?
+}
+
+check_skill_literals
 check_window "bsd awk"
 if command -v mawk >/dev/null 2>&1; then
   mawk_bin=$(mktemp -d)

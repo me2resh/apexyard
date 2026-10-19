@@ -171,6 +171,8 @@ EOF
 
 Skip this step for `--no-merge`. Run this entire block in one shell.
 Shell variables from step 4 do not carry over. The block re-runs the script and stops on a missing or invalid strategy or release_class (#1196). Fill in `<marker_home>`, `<repo>` and `<pr>` with literal values.
+Pass those same `<repo>` and `<pr>` literals to tracker_pr_merge. The merge gate reads the command text before the shell expands variables (#1758).
+The block stops when the checked host repo is not `<repo>`.
 The tracker_pr_merge call MUST be invoked as a bare top-level statement, never inside `$(...)` or backticks. The merge-gate matcher reads the raw command text and may not fire on a wrapped call. Redirect stdout to a file, then read the result in a separate step.
 
 ```bash
@@ -182,6 +184,7 @@ RELEASE_CLASS=$(printf '%s' "$CHECK_JSON" | jq -r '.release_class | tostring') |
 [ -n "$PR_HOST_REPO" ] && [ "$PR_HOST_REPO" != null ] || exit 1
 case "$MERGE_STRATEGY" in squash|merge|rebase) ;; *) echo "Invalid strategy." >&2; exit 1 ;; esac
 case "$RELEASE_CLASS" in true|false) ;; *) echo "Invalid release_class." >&2; exit 1 ;; esac
+[ "$PR_HOST_REPO" = "<repo>" ] || { echo "Checked host repo does not match <repo>." >&2; exit 1; }
 source "$MARKER_HOME/.claude/hooks/_lib-tracker.sh" || exit 1
 RELEASE_SUBJECT=""
 RELEASE_BODY_FILE=""
@@ -200,7 +203,7 @@ if [ "$RELEASE_CLASS" = true ]; then
   fi
 fi
 MERGE_RESULT_FILE=$(mktemp) || exit 1
-tracker_pr_merge "$PR_HOST_REPO" "<pr>" "${MERGE_STRATEGY}" true "$RELEASE_SUBJECT" "$RELEASE_BODY_FILE" > "$MERGE_RESULT_FILE"
+tracker_pr_merge "<repo>" "<pr>" "${MERGE_STRATEGY}" true "$RELEASE_SUBJECT" "$RELEASE_BODY_FILE" > "$MERGE_RESULT_FILE"
 MERGE_RC=$?
 MERGE_RESULT="$(cat "$MERGE_RESULT_FILE")"
 MERGE_SHA=$(printf '%s' "$MERGE_RESULT" | jq -r '.sha // empty' 2>/dev/null)
