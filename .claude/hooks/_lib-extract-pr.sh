@@ -603,10 +603,10 @@ _merge_scrub_once() {
           out = out c nx; pos += 2; continue
         }
         # Output redirects to shell startup files or .git/hooks add the raw
-        # text. A target the word reader cannot read, and that starts with
-        # a double quote or $, does too. "$HOME/..." and ${HOME} are in
-        # that class. Look ahead only: pos returns to the operator, so the
-        # scrub below stays the same as on dev.
+        # text. A target the word reader cannot read also adds the raw text
+        # when the first character is present and is not a separator. A later
+        # "$NAME" span is in that class. Look ahead only. pos returns to the
+        # operator, so the scrub below stays the same as on dev.
         if (c == ">") {
           start = pos
           pos++
@@ -615,7 +615,7 @@ _merge_scrub_once() {
           lead = (pos <= n) ? substr(s, pos, 1) : ""
           if (read_merge_word()) {
             if (is_startup_or_hook(WORD)) newbad = 1
-          } else if (lead == dq || lead == "$") {
+          } else if (lead != "" && lead !~ /[&;|<>()\n]/) {
             newbad = 1
           }
           pos = start

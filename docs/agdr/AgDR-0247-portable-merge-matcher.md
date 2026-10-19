@@ -35,7 +35,7 @@ Chosen: **count the window, require literals, and mask only inert data**, becaus
 - Blank an attached `--regexp=` or `-e=` pattern in that word. A bare `--regexp` or `-e` still blanks the next word.
 - An unquoted `~[` inside a grep word keeps the raw command. AgDR-0204 requires that shape.
 - Inside a double-quoted argument of an allowlisted command, treat `$name` and `${name}` as data. `$(`, backticks, and `${` with an operator still keep the raw text.
-- A redirect target keeps the raw command when the reader fails and the target starts with a double quote or a dollar sign. This keeps a variable startup path and a variable hook path visible.
+- A redirect target keeps the raw command when the reader fails and the first character is not a separator. A later quoted variable span is in that class. A target that starts with a double quote or a dollar sign stays in that class.
 - Blank an inert heredoc body only when every command word is on the data list. `true` and `false` are on that list. An interpreter heredoc, a pipe to a shell, and a later executor stay visible. The rule already covered an unquoted body with no dollar sign, backtick, or backslash. This change does not widen that rule.
 - Do not call `strip_heredoc_bodies` from the merge scrub. That helper must not decide whether a merge gate fires.
 
@@ -46,6 +46,7 @@ Chosen: **count the window, require literals, and mask only inert data**, becaus
 - A grep for a merge call, and an inert heredoc that only cats that text, are not merges.
 - A variable merge, a `sh -c` or `bash -c` wrapper, and an argv `-c` wrapper still block.
 - An uncertain command stays on the raw scan.
+- A redirect target with a quoted variable after its first character stays visible.
 
 ## Architecture evolution
 
@@ -66,6 +67,10 @@ An unquoted `~[` inside a grep word keeps the raw command again. AgDR-0204 alrea
 The data view already treated an unquoted heredoc body with no dollar sign, backtick, or backslash as data. This change does not widen heredoc handling. The merge scrub does not call `strip_heredoc_bodies`.
 
 Homebrew mawk 1.3.4-20260302 accepts ERE intervals. The interval lock and the Debian mawk 1.3.4 20200120 CI job show that #1757 stays fixed.
+
+### Later variable span in a redirect target (#1761)
+
+The redirect check set the raw flag only when the target started with a double quote or a dollar sign. A later `"$NAME"` span still stopped the word reader. The scrub then hid the merge. The check now sets the raw flag when the reader fails and the first character is not a separator. An ordinary file name with a quoted variable also stays raw. That fails closed.
 
 ## Artifacts
 

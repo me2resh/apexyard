@@ -132,6 +132,16 @@ must_detect 'S2 variable redirect to zshrc' "echo 'gh pr merge 7' > \"\${HOME}/.
 must_detect 'S2 append variable redirect to zshenv' "echo 'gh pr merge 7' >> \"\$ZDOTDIR/.zshenv\""
 must_detect 'S2 variable redirect to pre-push hook' "echo 'gh pr merge 7' > \"\$PWD/.git/hooks/pre-push\""
 must_detect 'S2 cat variable redirect to bashrc' "$(printf "cat > \"\$HOME/.bashrc\" <<'EOF'\ngh pr merge 7\nEOF")"
+# Hakim, review of PR #1765. A "$NAME" span after the first character of a
+# redirect target must keep the raw command. The word reader stops on that
+# span. The first character is not a quote and not a dollar sign.
+must_detect 'S2 trailing variable on zshenv' "echo 'gh pr merge 7' > ~/.zshenv\"\$Q\""
+must_detect 'S2 variable span after tilde' "echo 'gh pr merge 7' > ~/\"\$Q\".zshenv"
+must_detect 'S2 variable span in home path' "echo 'gh pr merge 7' > /Users/\"\$USER\"/.zshenv"
+must_detect 'S2 trailing variable on pre-commit' "echo 'gh pr merge 7' > .git/hooks/pre-commit\"\$Q\""
+must_detect 'S2 braced variable in hook name' "echo 'gh pr merge 7' > .git/hooks/\"\${Q}\"pre-commit"
+must_detect 'S2 variable span before dot git' "echo 'gh pr merge 7' > ./\"\$Q\".git/hooks/pre-commit"
+must_detect 'S2 cat trailing variable on bashrc' "$(printf "cat > ~/.bashrc\"\$Q\" <<'EOF'\ngh pr merge 7\nEOF")"
 must_detect 'S3 grep --filter=' "grep --filter='gh pr merge 7' notes.txt"
 must_detect 'S3 grep --pager separate' "grep --pager sh 'gh pr merge 7' notes.txt"
 must_detect 'S3 grep quoted --view' "grep '--view' sh 'gh pr merge 7' notes.txt"
