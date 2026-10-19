@@ -21,7 +21,7 @@ if [ -n "$BEFORE_LIB" ]; then
     echo "SKIP fail-before: pinned lib already has active_ticket_warn_if_mismatch"
   fi
 else
-  echo "SKIP fail-before: no base ref d970c194b0ff5e14aac71d486c32dd3aa976d78a"
+  echo "NOTE: skip fail-before: no base ref d970c194b0ff5e14aac71d486c32dd3aa976d78a"
 fi
 
 OPS=$(tm_make_ops)

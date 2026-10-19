@@ -30,11 +30,6 @@ tm_install_hakim_before_hooks() {
     > "$ops/.claude/hooks/_lib-active-ticket.sh" 2>/dev/null; then
     return 0
   fi
-  # Build-rules order: upstream/dev, origin/dev, then parent — for skip only.
-  if git -C "$root" show upstream/dev:.claude/hooks/_lib-active-ticket.sh \
-    > /dev/null 2>&1; then
-    :
-  fi
   return 1
 }
 

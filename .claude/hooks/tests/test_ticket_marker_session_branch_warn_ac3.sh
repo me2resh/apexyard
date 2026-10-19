@@ -44,7 +44,7 @@ if [ -n "$BEFORE_LIB" ]; then
   cp "$SRC_ROOT/.claude/hooks/_lib-active-ticket.sh" "$OPS/.claude/hooks/_lib-active-ticket.sh"
   cp "$OPS/marker.before" "$GD/apexyard-ticket"
 else
-  echo "SKIP fail-before: no base ref d970c194b0ff5e14aac71d486c32dd3aa976d78a"
+  echo "NOTE: skip fail-before: no base ref d970c194b0ff5e14aac71d486c32dd3aa976d78a"
 fi
 
 PENDING="$OPS/.claude/session/start-ticket-headless.pending"

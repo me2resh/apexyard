@@ -25,7 +25,7 @@ if [ -n "$BEFORE_LIB" ]; then
     FB_FAIL=$((FB_FAIL + 1))
   fi
 else
-  echo "SKIP fail-before: no base ref d970c194b0ff5e14aac71d486c32dd3aa976d78a"
+  echo "NOTE: skip fail-before: no base ref d970c194b0ff5e14aac71d486c32dd3aa976d78a"
 fi
 
 OPS=$(tm_make_ops)
