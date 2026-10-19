@@ -27,19 +27,43 @@ out=$(expect 0 --slice slice-demo-widget-o1 --pr 42)
 printf '%s\n' "$out" | grep -Fq "NOTE [provenance] Recorded merge-base ${recorded_r}; current merge-base ${current_m}."
 echo "PASS (a) ancestor R with no record change: exit 0 and NOTE"
 
-# Fail-before: upstream exact-match check rejects the same tree.
-unfixed_lib=$(mktemp)
-git -C "$real_root" show upstream/dev:.claude/skills/orbit/lib/slice-pr-lint.sh > "$unfixed_lib"
-cp "$sb/.claude/skills/orbit/lib/slice-pr-lint.sh" "$sb/.claude/skills/orbit/lib/slice-pr-lint.sh.fixed"
-cp "$unfixed_lib" "$sb/.claude/skills/orbit/lib/slice-pr-lint.sh"
-rm -f "$unfixed_lib"
-before_rc=0
-before_out=$(bash "$lint" --orbit-root "$orbit_root" --base base --slice slice-demo-widget-o1 --pr 42 2>&1) || before_rc=$?
-cp "$sb/.claude/skills/orbit/lib/slice-pr-lint.sh.fixed" "$sb/.claude/skills/orbit/lib/slice-pr-lint.sh"
-rm -f "$sb/.claude/skills/orbit/lib/slice-pr-lint.sh.fixed"
-[ "$before_rc" -eq 19 ] || { echo "FAIL-BEFORE (a): expected exit 19 from upstream lint, got $before_rc: $before_out"; exit 1; }
-printf '%s\n' "$before_out" | grep -Fq 'The merge-base SHA does not match.'
-echo "FAIL-BEFORE (a) upstream exact match: exit 19 (1 case)"
+# Fail-before: exact-match lint rejects the same tree when a base ref exists.
+# CI checkouts often lack upstream/dev (origin/* only, often shallow).
+lint_path=".claude/skills/orbit/lib/slice-pr-lint.sh"
+base_ref=""
+for candidate in upstream/dev origin/dev; do
+  if git -C "$real_root" rev-parse --verify --quiet "$candidate" >/dev/null 2>&1 \
+    && git -C "$real_root" cat-file -e "${candidate}:${lint_path}" 2>/dev/null; then
+    base_ref="$candidate"
+    break
+  fi
+done
+if [ -z "$base_ref" ]; then
+  changed=$(git -C "$real_root" log -1 --format=%H -- "$lint_path" 2>/dev/null || true)
+  if [ -n "$changed" ]; then
+    parent=$(git -C "$real_root" rev-parse --verify --quiet "${changed}^" 2>/dev/null || true)
+    if [ -n "$parent" ] \
+      && git -C "$real_root" cat-file -e "${parent}:${lint_path}" 2>/dev/null; then
+      base_ref="$parent"
+    fi
+  fi
+fi
+if [ -z "$base_ref" ]; then
+  echo "SKIP fail-before: no base ref"
+else
+  unfixed_lib=$(mktemp)
+  git -C "$real_root" show "${base_ref}:${lint_path}" > "$unfixed_lib"
+  cp "$sb/.claude/skills/orbit/lib/slice-pr-lint.sh" "$sb/.claude/skills/orbit/lib/slice-pr-lint.sh.fixed"
+  cp "$unfixed_lib" "$sb/.claude/skills/orbit/lib/slice-pr-lint.sh"
+  rm -f "$unfixed_lib"
+  before_rc=0
+  before_out=$(bash "$lint" --orbit-root "$orbit_root" --base base --slice slice-demo-widget-o1 --pr 42 2>&1) || before_rc=$?
+  cp "$sb/.claude/skills/orbit/lib/slice-pr-lint.sh.fixed" "$sb/.claude/skills/orbit/lib/slice-pr-lint.sh"
+  rm -f "$sb/.claude/skills/orbit/lib/slice-pr-lint.sh.fixed"
+  [ "$before_rc" -eq 19 ] || { echo "FAIL-BEFORE (a): expected exit 19 from ${base_ref} lint, got $before_rc: $before_out"; exit 1; }
+  printf '%s\n' "$before_out" | grep -Fq 'The merge-base SHA does not match.'
+  echo "FAIL-BEFORE (a) exact match via ${base_ref}: exit 19 (1 case)"
+fi
 
 # (b) Ancestor R, plan notes / Reconciliation / slice record changed: exit 19.
 run_b() {
