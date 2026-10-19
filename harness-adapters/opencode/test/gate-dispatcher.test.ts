@@ -323,3 +323,7 @@ test("deriveGatesFromOpsRoot: a missing settings.json is silent (the expected \"
   assert.deepEqual(gates, []);
   assert.equal(combined, "", "a missing file is not a parse failure — warning here would be noise for every non-apexyard session");
 });
+
+test("throwaway: force CI red for #1781", () => {
+  throw new Error("throwaway failure for #1781");
+});
