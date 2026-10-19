@@ -1,0 +1,26 @@
+{
+  "capture": "P12",
+  "date": "2026-10-19",
+  "design": "AgDR-0261 section B.10",
+  "session": "<session-a>",
+  "subagent": "<agent-p12>",
+  "isolation": "worktree",
+  "worktree": "<sandbox>/.claude/worktrees/<agent-p12>",
+  "subagent_tool_calls": [
+    {
+      "tool": "Bash",
+      "input": "pwd; git rev-parse --show-toplevel; git branch --show-current"
+    },
+    {
+      "tool": "Bash",
+      "input": "cd <sandbox>/.claude/worktrees/<agent-p12> || exit 1; tail -c 1 README.md | xxd | head -1; echo 'Worktree isolation test line.' >> README.md && git diff --stat README.md"
+    },
+    {
+      "tool": "SubagentHandback",
+      "input": "The README edit worked and no hook blocked it.\n\n- **Worktree path:** <sandbox>/.claude/worktrees/<agent-p12>. `pwd` and `git rev-parse --show-toplevel` both returned this path.\n- **Branch:** `worktree-<agent-p12>`\n- **Edit:** I appended `Worktree isolation test line.` to README.md with a shell `>>` redirect. README.md already ended in a "
+    }
+  ],
+  "logged_pretooluse_events": [],
+  "observation": "The subagent wrote README.md with a Bash redirect, not the Edit tool. The capture logger matched Edit|Write only. No PreToolUse line exists, so the hook-process CLAUDE_PROJECT_DIR and cwd of a subagent call are not recorded.",
+  "verdict": "Inconclusive"
+}

@@ -1,0 +1,94 @@
+{
+  "capture": "P12b",
+  "date": "2026-10-19",
+  "design": "AgDR-0261 section B.10",
+  "bash_cd": {
+    "timestamp": "2026-10-19T19:45:07.612Z",
+    "session_cwd": "<sandbox>",
+    "input": "cd /tmp",
+    "harness_result": "Shell cwd was reset to <sandbox>"
+  },
+  "sessionstart_events": [
+    {
+      "event": "SessionStart",
+      "ts": "2026-10-19T19:28:20Z",
+      "payload": {
+        "session_id": "<session-a>",
+        "transcript_path": "<home>/.claude/projects/<project-key>/<session-a>.jsonl",
+        "cwd": "<sandbox>",
+        "scratchpad_dir": "<tmp>/<session-a>/scratchpad",
+        "hook_event_name": "SessionStart",
+        "source": "startup",
+        "model": "claude-opus-5-5"
+      },
+      "pwd": "<sandbox>",
+      "claude_project_dir": "<sandbox>",
+      "pin": ""
+    },
+    {
+      "event": "SessionStart",
+      "ts": "2026-10-19T19:45:34Z",
+      "payload": {
+        "session_id": "<session-a>",
+        "transcript_path": "<home>/.claude/projects/<project-key>/<session-a>.jsonl",
+        "cwd": "<sandbox>",
+        "scratchpad_dir": "<tmp>/<session-a>/scratchpad",
+        "prompt_id": "<prompt-id>",
+        "hook_event_name": "SessionStart",
+        "source": "compact",
+        "model": "claude-opus-5-5"
+      },
+      "pwd": "<sandbox>",
+      "claude_project_dir": "<sandbox>",
+      "pin": "<sandbox>"
+    },
+    {
+      "event": "SessionStart",
+      "ts": "2026-10-19T19:50:49Z",
+      "payload": {
+        "session_id": "<session-b>",
+        "transcript_path": "<home>/.claude/projects/<project-key>/<session-b>.jsonl",
+        "cwd": "<sandbox>",
+        "scratchpad_dir": "<tmp>/<session-b>/scratchpad",
+        "hook_event_name": "SessionStart",
+        "source": "clear"
+      },
+      "pwd": "<sandbox>",
+      "claude_project_dir": "<sandbox>",
+      "pin": ""
+    }
+  ],
+  "configchange_events": [
+    {
+      "event": "ConfigChange",
+      "ts": "2026-10-19T19:28:23Z",
+      "payload": {
+        "session_id": "<session-a>",
+        "transcript_path": "<home>/.claude/projects/<project-key>/<session-a>.jsonl",
+        "cwd": "<sandbox>",
+        "scratchpad_dir": "<tmp>/<session-a>/scratchpad",
+        "hook_event_name": "ConfigChange",
+        "source": "local_settings",
+        "file_path": "<sandbox>/.claude/settings.local.json"
+      },
+      "pwd": "<sandbox>",
+      "claude_project_dir": "<sandbox>",
+      "pin": "<sandbox>"
+    }
+  ],
+  "pin_and_snapshot": {
+    "<session-a>": {
+      "pin": "<sandbox>",
+      "pin_mtime": "20:28:21",
+      "snapshot_mtime": "20:28:21",
+      "note": "Written at startup. Unchanged after compact at 20:45:34."
+    },
+    "<session-b>": {
+      "pin": null,
+      "snapshot": null,
+      "note": "clear issued a new session id. No pin and no snapshot exist for it."
+    }
+  },
+  "observation": "compact kept the session id, the pin and the snapshot. clear issued a new session id with no pin and no snapshot, so that session runs in no-snapshot mode and unpinned. The Bash cd to /tmp was reset by the harness to the project root, so no hook ran with a moved PWD.",
+  "verdict": "Met for no rewrite. Inconclusive for a moved PWD."
+}
