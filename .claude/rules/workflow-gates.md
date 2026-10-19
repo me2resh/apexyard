@@ -50,7 +50,7 @@ A small set of **bootstrap-class skills** runs before any portfolio is configure
 
 The list lives at `.claude/project-config.defaults.json` → `ticket.bootstrap_skills`. Adopters replace this array via `.claude/project-config.json` if they have custom bootstrap skills. Config objects merge recursively, while arrays replace the inherited array wholesale, so retain the shipped entries explicitly when extending the list.
 
-**Mechanism:** each bootstrap skill writes its name to `.claude/session/active-bootstrap` on entry and removes the file on completion. The hook reads the marker and exempts skills on the configured list. The `clear-bootstrap-marker.sh` SessionStart hook sweeps stale markers from interrupted sessions so a crashed / killed skill can't leave the exemption open forever.
+**Mechanism:** each bootstrap skill writes its name to the session path from `active_bootstrap_marker_path` on entry and removes the file on completion. The hook reads the marker and exempts skills on the configured list. The `clear-bootstrap-marker.sh` SessionStart hook clears the current session's marker so a crashed / killed skill can't leave the exemption open forever.
 
 ### Out-of-repo exemption (apexyard#883)
 
