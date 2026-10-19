@@ -65,9 +65,8 @@ macOS system awk. Run those checks on your machine before you push:
 
 ```bash
 /bin/bash bin/run-hook-tests.sh
-# Optional: the same suite with mawk 1.3.4 as awk
-d=$(mktemp -d) && ln -s "$(command -v mawk)" "$d/awk" && PATH="$d:$PATH" /bin/bash bin/run-hook-tests.sh; rm -rf "$d"
-# Check: PATH="$d:$PATH" awk -W version must print "mawk"
+# Optional: the same suite with mawk 1.3.4 as awk. The first command prints the awk version; it must say mawk.
+d=$(mktemp -d) && ln -s "$(command -v mawk)" "$d/awk" && PATH="$d:$PATH" awk -W version | head -1 && PATH="$d:$PATH" /bin/bash bin/run-hook-tests.sh; rm -rf "$d"
 ```
 
 To run one shard locally, use `/bin/bash bin/run-hook-tests.sh --shard 1/4`
