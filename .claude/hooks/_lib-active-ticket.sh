@@ -1103,6 +1103,179 @@ active_ticket_read_field() {
   return 1
 }
 
+# Return 0 when <value> holds a newline or a carriage return.
+_at_has_crlf() {
+  case "$1" in
+    *$'\n'*|*$'\r'*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# REPLY is CLAUDE_CODE_SESSION_ID, else APEXYARD_SESSION_ID, else empty.
+# See AgDR-0250 for the precedence.
+active_ticket_session_id() {
+  REPLY="${CLAUDE_CODE_SESSION_ID:-${APEXYARD_SESSION_ID:-}}"
+  [ -n "$REPLY" ]
+}
+
+# REPLY is the current branch of the tree at <dir>, or empty when detached
+# or unknown. Reads HEAD with builtins when the git dir is known. May fork
+# git as a fallback. Outside the lookup budget.
+active_ticket_tree_branch() {
+  local dir="$1" gd head
+  REPLY=""
+  [ -n "$dir" ] || return 1
+  if active_ticket_init "$dir" 2>/dev/null && active_ticket_gitdir "$dir" 2>/dev/null; then
+    gd="$REPLY"
+    if [ -f "$gd/HEAD" ] && _at_readfirst "$gd/HEAD"; then
+      head="$REPLY"
+      case "$head" in
+        refs/heads/*) REPLY="${head#refs/heads/}"; return 0 ;;
+        ref:\ refs/heads/*) REPLY="${head#ref: refs/heads/}"; return 0 ;;
+      esac
+      REPLY=""
+      return 1
+    fi
+  fi
+  REPLY=$(git -C "$dir" branch --show-current 2>/dev/null) || REPLY=""
+  [ -n "$REPLY" ]
+}
+
+# Return 0 when the marker's session differs from the current session.
+# An empty or missing marker session_id always counts as different (AgDR-0257).
+_at_session_differs() {
+  local old="$1" cur="$2"
+  [ -z "$old" ] && return 0
+  [ "$old" != "$cur" ]
+}
+
+# Return 0 when writing <repo>/<num> into <dir> would replace a marker that
+# holds a different ticket and a different session_id. Used by /start-ticket
+# before overwrite (AgDR-0257). Checks the per-tree apexyard-ticket when
+# present; otherwise the old-layout path this write would replace
+# (current-ticket / tickets/<project>[/<branch>]).
+active_ticket_foreign_overwrite() {
+  local dir="$1" new_repo="$2" new_num="$3"
+  local marker="" old_repo="" old_num="" old_sid="" cur_sid=""
+  new_num="${new_num#\#}"
+  REPLY=""
+  active_ticket_init "$dir" 2>/dev/null || true
+  if active_ticket_gitdir "$dir" 2>/dev/null && [ -f "$AT_GITDIR/apexyard-ticket" ] \
+    && [ ! -L "$AT_GITDIR/apexyard-ticket" ]; then
+    marker="$AT_GITDIR/apexyard-ticket"
+  elif active_ticket_legacy_path "$dir" "$new_repo" 2>/dev/null \
+    && [ -n "$REPLY" ] && [ -f "$REPLY" ] && [ ! -L "$REPLY" ]; then
+    marker="$REPLY"
+  else
+    return 1
+  fi
+  active_ticket_read_field "$marker" repo || true
+  old_repo="$REPLY"
+  active_ticket_read_field "$marker" number || true
+  old_num="${REPLY#\#}"
+  active_ticket_read_field "$marker" session_id || true
+  old_sid="$REPLY"
+  active_ticket_session_id || true
+  cur_sid="$REPLY"
+  # Same ticket: refresh is allowed.
+  if [ -n "$old_repo" ] && [ -n "$old_num" ] \
+    && [ "$old_repo" = "$new_repo" ] && [ "$old_num" = "$new_num" ]; then
+    return 1
+  fi
+  # Different ticket + different session → confirm.
+  if _at_session_differs "$old_sid" "$cur_sid"; then
+    REPLY="$marker"
+    return 0
+  fi
+  return 1
+}
+
+# REPLY is the once-per-session warn-state directory for the current session,
+# under <home>/.claude/session/. Returns 1 when no session id is available.
+# The path includes the session id, so one session cannot write a file that
+# suppresses another session's warning (AgDR-0257, AgDR-0250).
+active_ticket_mismatch_warn_dir() {
+  local home="${1:-.}" sid safe
+  active_ticket_session_id || true
+  sid="$REPLY"
+  REPLY=""
+  [ -n "$sid" ] || return 1
+  safe=$(printf '%s' "$sid" | tr -c 'A-Za-z0-9._-' '_')
+  REPLY="${home%/}/.claude/session/ticket-marker-warn.${safe}"
+  return 0
+}
+
+# Warn on stderr when the marker's session_id or branch does not match this
+# session or this tree. Never changes the exit path of the caller. Prints at
+# most once per session per marker identity (path + session_id + repo +
+# number + started_at). When the current branch cannot be determined, skip
+# the branch check and do not consume a claim (AgDR-0257 / #1533).
+# $1=marker $2=tree $3=ops home.
+active_ticket_warn_if_mismatch() {
+  local marker="$1" tree="$2" home="$3"
+  local m_sid="" m_branch="" m_repo="" m_num="" m_started="" cur_sid="" cur_branch=""
+  local warn_dir="" claim="" age="" ticket="" why="" fix=""
+  [ -f "$marker" ] || return 0
+  active_ticket_read_field "$marker" session_id || true
+  m_sid="$REPLY"
+  active_ticket_read_field "$marker" branch || true
+  m_branch="$REPLY"
+  active_ticket_read_field "$marker" repo || true
+  m_repo="$REPLY"
+  active_ticket_read_field "$marker" number || true
+  m_num="$REPLY"
+  active_ticket_read_field "$marker" started_at || true
+  m_started="$REPLY"
+  active_ticket_session_id || true
+  cur_sid="$REPLY"
+  # Branch of the tree that holds the edit. Prefer the validated tree.
+  # An empty tree or an unreadable branch is "unknown": do not warn on branch.
+  if [ -n "$tree" ]; then
+    active_ticket_tree_branch "$tree" || true
+    cur_branch="$REPLY"
+  fi
+  why=""
+  if _at_session_differs "$m_sid" "$cur_sid"; then
+    why="session"
+  fi
+  if [ -n "$m_branch" ] && [ -n "$cur_branch" ] && [ "$m_branch" != "$cur_branch" ]; then
+    if [ -n "$why" ]; then why="${why}+branch"; else why="branch"; fi
+  fi
+  [ -n "$why" ] || return 0
+
+  if active_ticket_mismatch_warn_dir "$home"; then
+    warn_dir="$REPLY"
+    # Claim: path plus the marker identity fields so a later foreign marker
+    # at the same path still warns once (Rex finding 1 / #1533).
+    claim=$(printf '%s|%s|%s|%s|%s' "$marker" "$m_sid" "$m_repo" "$m_num" "$m_started" \
+      | tr -c 'A-Za-z0-9._-' '_')
+    if [ -n "$claim" ] && [ -e "$warn_dir/$claim" ]; then
+      return 0
+    fi
+    mkdir -p "$warn_dir" 2>/dev/null || true
+    # Only this session's directory is writable here. Refuse a symlink claim.
+    if [ -L "$warn_dir" ] || [ -L "$warn_dir/$claim" ]; then
+      return 0
+    fi
+    if [ -n "$claim" ]; then
+      printf '%s\n' "$marker" > "$warn_dir/$claim" 2>/dev/null || true
+    fi
+  fi
+
+  ticket="${m_repo:-unknown}#${m_num:-unknown}"
+  age="${m_started:-unknown}"
+  case "$why" in
+    session*)
+      fix="Run /start-ticket for your ticket, or use a separate worktree (see #1534)."
+      ;;
+    *)
+      fix="Re-run /start-ticket on this branch, or switch back to the marker branch."
+      ;;
+  esac
+  printf '%s\n' "WARN: ticket marker for ${ticket} belongs to another ${why} (marker session_id=${m_sid:-<empty>}, marker branch=${m_branch:-<empty>}, started_at=${age}). ${fix}" >&2
+  return 0
+}
+
 # ---------------------------------------------------------------------------
 # Functions that may fork (outside the lookup budget)
 # ---------------------------------------------------------------------------
@@ -1167,9 +1340,12 @@ active_ticket_init() {
 
 # The only marker writer. Validates the tree of <dir>, then writes the marker
 # atomically: mktemp, chmod and mv. It needs at most three external commands
-# after init, plus date on a bash older than 4.2.
+# after init, plus date on a bash older than 4.2. Also writes session_id= and
+# branch= (AgDR-0257). A value that still holds CR or LF after title flatten
+# is rejected.
 active_ticket_write() {
   local dir="$1" repo="$2" num="$3" title="$4" url="$5" branch="$6" G tmp ts="" hint=""
+  local sid="" git_branch=""
   if ! active_ticket_init "$dir"; then
     echo "apexyard: cannot write ticket marker in $dir: resolver context missing" >&2
     return 1
@@ -1201,6 +1377,16 @@ active_ticket_write() {
   title="${title//$'\r'/ }"; title="${title//$'\n'/ }"
   url="${url//$'\r'/ }"; url="${url//$'\n'/ }"
   branch="${branch//$'\r'/ }"; branch="${branch//$'\n'/ }"
+  active_ticket_session_id || true
+  sid="$REPLY"
+  active_ticket_tree_branch "$dir" || true
+  git_branch="$REPLY"
+  if _at_has_crlf "$repo" || _at_has_crlf "$num" || _at_has_crlf "$title" \
+    || _at_has_crlf "$url" || _at_has_crlf "$branch" || _at_has_crlf "$sid" \
+    || _at_has_crlf "$git_branch"; then
+    echo "apexyard: cannot write ticket marker in $G: a value contains a newline or carriage return" >&2
+    return 1
+  fi
   if [ "${BASH_VERSINFO[0]}" -gt 4 ] || { [ "${BASH_VERSINFO[0]}" = 4 ] && [ "${BASH_VERSINFO[1]}" -ge 2 ]; }; then
     TZ=UTC printf -v ts '%(%Y-%m-%dT%H:%M:%SZ)T' -1
   else
@@ -1222,6 +1408,8 @@ active_ticket_write() {
     printf 'title=%s\n' "$title"
     printf 'url=%s\n' "$url"
     printf 'suggested_branch=%s\n' "$branch"
+    printf 'session_id=%s\n' "$sid"
+    printf 'branch=%s\n' "$git_branch"
     printf 'started_at=%s\n' "$ts"
   } > "$tmp" 2>/dev/null || {
     rm -f "$tmp"
@@ -1322,7 +1510,7 @@ active_ticket_legacy_fallback() {
 
 active_ticket_write_legacy() {
   local dir="$1" repo="$2" num="$3" title="$4" url="$5" branch="$6"
-  local marker parent tmp ts=""
+  local marker parent tmp ts="" sid="" git_branch=""
   if [[ ! $repo =~ ^[A-Za-z0-9._/-]+$ ]] || [[ ! $num =~ ^#?[A-Za-z0-9_-]+$ ]]; then
     echo "apexyard: old-layout marker not written: repo or number has an unexpected shape" >&2
     return 1
@@ -1345,6 +1533,16 @@ active_ticket_write_legacy() {
   title="${title//$'\r'/ }"; title="${title//$'\n'/ }"
   url="${url//$'\r'/ }"; url="${url//$'\n'/ }"
   branch="${branch//$'\r'/ }"; branch="${branch//$'\n'/ }"
+  active_ticket_session_id || true
+  sid="$REPLY"
+  active_ticket_tree_branch "$dir" || true
+  git_branch="$REPLY"
+  if _at_has_crlf "$repo" || _at_has_crlf "$num" || _at_has_crlf "$title" \
+    || _at_has_crlf "$url" || _at_has_crlf "$branch" || _at_has_crlf "$sid" \
+    || _at_has_crlf "$git_branch"; then
+    echo "apexyard: old-layout marker not written: a value contains a newline or carriage return" >&2
+    return 1
+  fi
   if [ "${BASH_VERSINFO[0]}" -gt 4 ] || { [ "${BASH_VERSINFO[0]}" = 4 ] && [ "${BASH_VERSINFO[1]}" -ge 2 ]; }; then
     TZ=UTC printf -v ts '%(%Y-%m-%dT%H:%M:%SZ)T' -1
   else
@@ -1360,6 +1558,8 @@ active_ticket_write_legacy() {
     printf 'title=%s\n' "$title"
     printf 'url=%s\n' "$url"
     printf 'suggested_branch=%s\n' "$branch"
+    printf 'session_id=%s\n' "$sid"
+    printf 'branch=%s\n' "$git_branch"
     printf 'started_at=%s\n' "$ts"
   } > "$tmp" 2>/dev/null || ! chmod 0644 "$tmp" 2>/dev/null || ! mv -f "$tmp" "$marker" 2>/dev/null; then
     rm -f "$tmp"
@@ -1379,7 +1579,7 @@ active_ticket_write_legacy() {
 # random number. A second call then gives another path, so the caller passes
 # the printed path on instead of calling this again.
 active_ticket_pending_path() {
-  local sid="${CLAUDE_CODE_SESSION_ID:-}"
+  local sid="${CLAUDE_CODE_SESSION_ID:-${APEXYARD_SESSION_ID:-}}"
   sid="${sid//[!A-Za-z0-9_-]/}"
   [ -n "$sid" ] || sid="nosession-$$-$RANDOM"
   REPLY="${1%/}/.claude/session/start-ticket-${sid}.pending"
@@ -1401,6 +1601,7 @@ active_ticket_pending_path() {
 # symlink.
 active_ticket_write_from_file() {
   local dir="$1" f="$2" l repo="" num="" title="" url="" branch="" wrote=1 id=""
+  local takeover_marker="" old_repo="" old_num="" old_sid="" new_sid=""
   case "$f" in
     */.claude/session/start-ticket-*.pending)
       id="${f##*/start-ticket-}"
@@ -1429,11 +1630,32 @@ active_ticket_write_from_file() {
       suggested_branch=*) [ -n "$branch" ] || branch="${l#suggested_branch=}" ;;
     esac
   done < "$f"
-  rm -f "$f"
   if [ -z "$repo" ] || [ -z "$num" ]; then
+    rm -f "$f"
     echo "apexyard: ticket fields not read: $f has no repo= or number= line" >&2
     return 1
   fi
+  # Different ticket + different session_id: refuse unless take-over was
+  # chosen. APEXYARD_START_TICKET_TAKEOVER=1 is a cooperative signal (set
+  # inline on the write only). Bash cannot tell inline from an inherited
+  # export; headless and /fan-out must not set it (AgDR-0257 / #1533).
+  if active_ticket_foreign_overwrite "$dir" "$repo" "$num"; then
+    if [ "${APEXYARD_START_TICKET_TAKEOVER:-}" != 1 ]; then
+      echo "apexyard: ticket marker not overwritten: another session holds a different ticket at $REPLY. Use a separate worktree (see #1534), or re-run /start-ticket and choose take over." >&2
+      return 1
+    fi
+    takeover_marker="$REPLY"
+    active_ticket_read_field "$takeover_marker" repo || true
+    old_repo="$REPLY"
+    active_ticket_read_field "$takeover_marker" number || true
+    old_num="${REPLY#\#}"
+    active_ticket_read_field "$takeover_marker" session_id || true
+    old_sid="$REPLY"
+    active_ticket_session_id || true
+    new_sid="$REPLY"
+    echo "apexyard: ticket marker taken over: ${old_repo}#${old_num} (session ${old_sid}) -> ${repo}#${num} (session ${new_sid})" >&2
+  fi
+  rm -f "$f"
   active_ticket_init "$dir" || true
   if active_ticket_gitdir "$dir"; then
     active_ticket_write "$dir" "$repo" "$num" "$title" "$url" "$branch" && wrote=0

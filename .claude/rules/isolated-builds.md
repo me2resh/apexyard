@@ -38,6 +38,43 @@ For a genuinely separate repo (not this one) that still needs a persistent, non-
 A managed project's `workspace/<name>` clone counts as "the local copy" for that project.
 `branch` mode can apply when that clone is the current repository and the conditions below hold.
 
+## Run more than one session on one project
+
+Use one working tree for each concurrent session on the same project.
+The first session can use the main clone.
+Each additional session uses its own worktree.
+
+1. **One tree per session.** Give each concurrent session its own working tree.
+2. **Create the worktree.** Keep it under `.claude/worktrees/`. Never put a worktree inside another repo. Confirm the project ignores that path:
+
+   ```bash
+   git -C <project-clone> check-ignore -q .claude/worktrees/x
+   ```
+
+   If that command exits non-zero, add `.claude/worktrees/` to the project's `.gitignore`.
+
+   Then fetch and create the worktree from the project's integration branch (usually `main`, or `dev` for the apexyard framework). Without an explicit start point, `git worktree add -b` starts at the main clone's HEAD, which is normally the other session's ticket branch. Pass `--no-track` so the new branch does not track `origin/<base-branch>`. The first upload must set the upstream of the new branch.
+
+   ```bash
+   git -C <project-clone> fetch origin
+   git -C <project-clone> worktree add .claude/worktrees/<type>-<ticket>-<slug> -b <branch> --no-track origin/<base-branch>
+   ```
+
+   Run `/start-ticket` for the ticket from that worktree.
+3. **Set up the worktree.** Install dependencies. Copy `.env` from the main clone. Use a dev-server port that differs from the main clone's.
+4. **Warn before cleanup.** Read the warning below before you remove the worktree.
+5. **Clean up after merge.** Run the remove command without `--force`, then prune.
+6. **Limits.** Two goals on one project can still conflict at merge time. A worktree postpones that conflict. It does not remove it.
+
+> **Warning:** `git worktree remove` refuses when the worktree has uncommitted tracked changes or untracked files that are not ignored. It deletes ignored files such as `.env` and local databases without asking. Back them up first.
+
+```bash
+git -C <project-clone> worktree remove .claude/worktrees/<type>-<ticket>-<slug>
+git -C <project-clone> worktree prune
+```
+
+**Session marker warnings (#1533).** #1533 adds these warnings. The marker records `session_id` and `branch`. The gate warns once per session on a mismatch. `/start-ticket` asks before it overwrites another session marker. A headless run cancels. Until #1533 ships, a second `/start-ticket` in the same tree overwrites the marker without a warning. Use one worktree per session.
+
 ## Lifecycle — remove the worktree once its PR merges
 
 A worktree is scoped to the ticket it was created for, not kept around after. Once the PR merges:
