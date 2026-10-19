@@ -357,6 +357,23 @@ walk and the gate forge path:
    use `exec sleep` and `APEXYARD_GH_CALL_TIMEOUT=1`. The suite stays well
    under 120 s. Cap unchanged.
 
+5. **Host-qualified repos stay on github.com only (#1809 H1).** The walk
+   parses `OWNER/REPO` and `github.com/OWNER/REPO`. Any other
+   `HOST/OWNER/REPO` returns `unknown` with no forge call. Reasoning: the
+   GraphQL call has no `--hostname`, so stripping a non-github host and
+   querying `github.com/OWNER/REPO` reads a different repository on a
+   different forge (cross-forge twin). On `dev`, that shape already failed
+   closed via a 404 on the REST path. This PR does not add enterprise-host
+   support.
+
+6. **GraphQL string variables use `-f` (#1809 A3).** `owner`, `name`,
+   `oid`, and `qname` stay strings. `-F` would coerce an all-digit value to
+   an integer and fail the GraphQL type check.
+
+7. **`tracker_review_at_sha` uses `apexyard_gh` (#1809 A2).** The posted-
+   review check shares the same per-call limit. A stall returns rc 2 (fail
+   closed).
+
 Fail-closed rules are unchanged: an unreadable step, a tree mismatch, or a
 chain over 10 steps still means "does not carry over".
 

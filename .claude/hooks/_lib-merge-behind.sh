@@ -231,13 +231,21 @@ _rex_carry_graphql_commit_sel() {
 }
 
 # _rex_carry_parse_owner_name <repo> — sets _rex_carry_owner and _rex_carry_name
-# from OWNER/REPO or HOST/OWNER/REPO. Returns 1 when the shape is wrong.
+# from OWNER/REPO or github.com/OWNER/REPO. Returns 1 when the shape is wrong
+# or the host is not github.com (Hakim H1 on #1809: a non-github host must not
+# reach GraphQL on the default host, which is a different repository).
 _rex_carry_parse_owner_name() {
-  local repo="$1"
+  local repo="$1" host
   _rex_carry_owner=
   _rex_carry_name=
   case "$repo" in
     */*/*)
+      host=$(printf '%s' "$repo" | awk -F/ '{print $1}')
+      # Enterprise / other forges: fail closed with no forge call. Do not strip
+      # the host and query github.com/OWNER/REPO (cross-forge twin attack).
+      if [ "$host" != "github.com" ]; then
+        return 1
+      fi
       _rex_carry_owner=$(printf '%s' "$repo" | awk -F/ '{print $(NF-1)}')
       _rex_carry_name=$(printf '%s' "$repo" | awk -F/ '{print $NF}')
       ;;
@@ -280,12 +288,14 @@ _rex_carry_fetch_chain() {
     "$(_rex_carry_graphql_commit_sel 9)")
 
   # stderr stays open so a per-call timeout BLOCKED line reaches the operator.
+  # String variables use -f (not -F): -F coerces an all-digit value to an
+  # integer and GraphQL then rejects String! / GitObjectID! (Hakim A3).
   gql_json=$(apexyard_gh api graphql \
     -f "query=$query" \
-    -F "owner=$owner" \
-    -F "name=$name" \
-    -F "oid=$new_sha" \
-    -F "qname=$qname")
+    -f "owner=$owner" \
+    -f "name=$name" \
+    -f "oid=$new_sha" \
+    -f "qname=$qname")
   gql_rc=$?
   if [ "$gql_rc" -eq 124 ]; then
     return 124
