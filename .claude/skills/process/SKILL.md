@@ -392,7 +392,7 @@ Invoke `generate-bpmn.sh <project-root> <source-of-truth.md> -o <output.bpmn>`:
    - `<bpmn:startEvent>` / `<bpmn:endEvent>` for events; `<bpmn:task>` / `<bpmn:serviceTask>` / `<bpmn:userTask>` / `<bpmn:sendTask>` for tasks; `<bpmn:exclusiveGateway>` / `<bpmn:parallelGateway>` for gateways.
    - `<bpmn:sequenceFlow>` for sequence edges; `<bpmn:messageFlow>` for cross-pool / message edges (only valid inside `<bpmn:collaboration>`, not inside `<bpmn:process>`).
    - Every element carries a `<bpmn:documentation>` child citing source evidence (`src/onboarding/state.ts:42-58`, `cron config`, `operator input`).
-2. Pipe the bare XML through `npx -y bpmn-auto-layout` to populate `<bpmndi:BPMNDiagram>` coords. If Node is unavailable, emit without the `<bpmndi>` block and warn — Camunda Modeler shows "blank" but the file is still semantically valid; operators with Node can re-run later.
+2. Generate deterministic grid coordinates with Python 3 (standard library only). Columns follow longest paths after removing back edges. Lane bands separate parallel rows. Backward flows use lane-edge corridors. The collaboration plane includes participant and lane shapes. Use `--skip-layout` to emit bare XML.
 
 ### 7. Lint and the auto-fix / re-interview / accept loop
 
@@ -497,7 +497,7 @@ Interview:
   Q2: task_step2 → "Persist signup metadata"
   Q3: external touchpoint "Audit log service" → black-box
 
-Generate BPMN: 1.2 KB raw XML + bpmn-auto-layout coords → 4.8 KB total
+Generate BPMN: 1.2 KB raw XML + grid coordinates → 4.8 KB total
 Lint: bpmnlint clean (0 errors)
 
 ✓ projects/signup-svc/processes/onboarding.bpmn written
