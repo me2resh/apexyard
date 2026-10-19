@@ -52,14 +52,11 @@ Recognise `--no-merge`. It writes approval without merging.
 
 ### 2. Sanity-check the user's intent
 
-Before doing anything, re-read the user's most recent message:
-
-- Did the user explicitly name this PR, or can I point at a direct "Ready to merge PR #X — approved?" question from me that they are responding to?
-- Is the user's message a standalone merge nod, or is it an umbrella "go" on a broader plan?
-- If the latter — **STOP**. Reply with a per-PR explicit question instead:
-  > "PR #X is ready to merge. Just confirming — explicit approval to merge PR #X, now?"
-
-Only proceed past this step if the user has given an unambiguous per-PR approval.
+Re-read the latest message and apply the one rule above.
+Treat a reply to your "Ready to merge PR #X — approved?" question as naming this PR.
+Stop on an umbrella "go" and ask:
+> "PR #X is ready to merge. Just confirming — explicit approval to merge PR #X, now?"
+Proceed only after an unambiguous per-PR approval.
 
 ### 3. Resolve the ops root
 
@@ -272,7 +269,7 @@ List candidates with `.claude/skills/approve-merge/remove-worktree.sh list "<sou
 
 ### 10. Optional: post-merge child-issue closure
 
-If the PR's merge commit / PR body contains `Closes <owner/repo>#<N>` references that GitHub's auto-closer didn't catch (squash merges with cross-repo refs sometimes silently miss), you can offer to close them with a comment. This is **out of scope for the default flow** — only do it if the user explicitly asks. Don't auto-close child issues; that's another externally-visible action that needs its own per-issue confirmation.
+Do this only when the user asks. Do not auto-close a child issue. Confirm each close on its own. Full rules: docs/skills/approve-merge-rationale.md.
 
 ## --no-merge opt-out
 
