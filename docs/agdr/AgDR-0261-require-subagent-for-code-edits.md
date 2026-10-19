@@ -322,6 +322,14 @@ Pin (Security Auditor S1):
 - § B and the § C launcher compare the pin with the snapshot record on each run. A mismatch blocks: § B exits 2, and the launcher exits 2.
 - A session with no snapshot keeps the pin behaviour of today, because there is no record to compare with.
 
+Build amendment (#1806, captures P12b of 2026-10-19):
+
+- `clear` issues a new `session_id`. `compact` keeps it. So a `clear` session starts with no pin and no snapshot.
+- A Bash `cd` inside the project persists into the hook-process `$PWD`. `CLAUDE_PROJECT_DIR` stays at the launch directory in every hook call.
+- With no pin, every launcher walks up from `$PWD` on each call. A `cd` into a constructed fork tree inside the project could then select hooks that do nothing.
+- So `pin-ops-root.sh` also writes the pin on `clear` when no pin exists for the new `session_id`. It resolves from `CLAUDE_PROJECT_DIR`, never from `$PWD`. It writes no pin when `CLAUDE_PROJECT_DIR` is not set.
+- `clear` still writes no snapshot (D16). The `clear` session stays in no-snapshot mode.
+
 Order inside `dispatch-session-start.sh`:
 
 1. `run_direct pin-ops-root.sh` (line 57, unchanged).
@@ -525,6 +533,8 @@ Aliases (D21):
   - `local_settings`: `<snapshot project dir>/.claude/settings.local.json`.
   - Block when the source cannot be resolved.
 - When `file_path` names a file that is not a live settings file or a user settings file, allow the change and log it. The session does not load that file. Capture P12c checks what the harness sends for a worktree settings edit.
+  - Build amendment (#1806, capture P12c of 2026-10-19): a worktree subagent added an `env` key to its worktree `.claude/settings.json`, and no ConfigChange fired. Capture P12 showed that a worktree subagent runs the hooks of the main session.
+  - Defence in depth: for a file that is not live, block when the file sets `disableAllHooks` to `true`, does not parse, or changes `hooks` or `env` against the committed copy in its own work tree. A file that is not committed has `{}` as its baseline. Allow and log every other change.
 - Parse the file with `jq`. Treat an absent file as `{}`. Block when the parse fails.
 - Block when the snapshot record for that source is unreadable, or missing in a session that has a snapshot.
 - No-snapshot mode (Security Auditor A1):
@@ -537,6 +547,7 @@ Aliases (D21):
 - Block when the hash of `jq -S -c '.env // null'` differs from the snapshot. This covers `APEXYARD_ALLOW_*`, `APEXYARD_OPS_PIN_DIR`, `PATH`, `BASH_ENV`, `CLAUDE_ENV_FILE` and `BASH_FUNC_<name>%%`.
 - Allow any other change, such as permissions, `claudeMdExcludes` or `enabledPlugins`.
 - Append one JSON line to `<ops-root>/.claude/session/config-change-blocks.jsonl` for each block. A blocked change shows no message, so the log is the only evidence.
+  - Build amendment (#1806): when the session has no pin, write the line under the snapshot project directory, or else under `CLAUDE_PROJECT_DIR`.
 - No restore from the snapshot (D16). The blocked file stays on disk.
 - Limit: the block applies to the running session only. The next session, a `resume` or a `fork` reads the changed file at startup.
 - Limit: `policy_settings` changes cannot be blocked.
