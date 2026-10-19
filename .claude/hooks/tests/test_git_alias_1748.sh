@@ -111,7 +111,24 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
             print('GROUP',group,dict(counts[lastgroup[0]]),flush=True); lastgroup[0]=group
         configure(entries)
         for shell in shells:
-            for hook in (['resolver'] if mode=='quick' else ['dispatch-bash']+(gates if direct else [])):
+            # #1816 gate shapes: exercise the gates directly. Dispatch sets
+            # APEXYARD_OPS_SCOPE_GUARD=1 on block-main-push, which skips a
+            # scratch fixture that is not the ops root. G2/G3 also need the
+            # dispatcher so uncertain routing is covered.
+            if group=='Gate shapes':
+                if name.startswith('G2') or name.startswith('G3') or name.startswith('G7') or name.startswith('G8'):
+                    hooks_run=['dispatch-bash']
+                elif 'commit' in name or name.startswith('G4-commit'):
+                    hooks_run=['validate-commit-format']
+                elif name.startswith('allow'):
+                    hooks_run=['block-main-push','validate-commit-format']
+                else:
+                    hooks_run=['block-main-push']
+            elif mode=='quick':
+                hooks_run=['resolver']
+            else:
+                hooks_run=['dispatch-bash']+(gates if direct else [])
+            for hook in hooks_run:
                 # A direct gate checks its own verbs. Use a shell alias to test
                 # all gates, or the verb each gate actually owns.
                 expected=want
@@ -267,6 +284,43 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
         case('Path-qualified','dot-block','./git zp',entries=[('alias.zp','push')])
         case('Path-qualified','abs-allow','/usr/bin/git status',0,entries=[('alias.zp','push')])
         case('Path-qualified','dot-allow','./git status',0,entries=[('alias.zp','push')])
+        # #1816 G1-G8: class-level shapes only. Placeholders built at run time.
+        _push='pu'+'sh'
+        _commit='com'+'mit'
+        _gitw='g'+'it'
+        case('Gate shapes','G1-block','"'+_gitw+'" '+_push+' origin HEAD:main')
+        case('Gate shapes','G1-allow','"'+_gitw+'" status',0)
+        case('Gate shapes','G2-block','G='+_gitw+'; $G '+_push+' origin HEAD:main')
+        case('Gate shapes','G2-allow','$G status',0)
+        case('Gate shapes','G3-block','V='+_push+'; '+_gitw+' $V origin HEAD:main')
+        case('Gate shapes','G3-allow',_gitw+' $V',0)
+        case('Gate shapes','G4-block',_gitw.upper()+' '+_push+' origin HEAD:main')
+        case('Gate shapes','G4-allow',_gitw.upper()+' status',0)
+        case('Gate shapes','G4-commit',_gitw.capitalize()+' '+_commit+' -m x')
+        case('Gate shapes','G5-block',_gitw+' "'+_push+'" origin HEAD:main')
+        case('Gate shapes','G5-partial',_gitw+' p"u"sh origin HEAD:main')
+        case('Gate shapes','G5-allow',_gitw+' "status"',0)
+        # G6: B3 already covers single-quoted -C/--git-dir with a space under
+        # no-jq. Repeat the block/allow pair here so Gate shapes names every class.
+        _g6dir=t/'g6 a'; _g6dir.mkdir()
+        subprocess.run(['git','init','-q','-b','feature/GH-1748-g6',str(_g6dir)],env=env,check=True)
+        case('Gate shapes','G6-block',"git -C '"+str(_g6dir)+"' "+_push+' origin HEAD:main')
+        case('Gate shapes','G6-allow',"git -C '"+str(_g6dir)+"' status",0)
+        for _safe in ('status','log','diff','show','fetch','branch --list'):
+            case('Gate shapes','allow-'+_safe.replace(' ','-'),_gitw+' '+_safe,0)
+            case('Gate shapes','allow-q-'+_safe.replace(' ','-'),'"'+_gitw+'" '+_safe,0)
+            case('Gate shapes','allow-u-'+_safe.replace(' ','-'),_gitw.upper()+' '+_safe,0)
+        g7repo=t/'g7repo'; g7repo.mkdir()
+        subprocess.run(['git','init','-q','-b','main',str(g7repo)],env=env,check=True)
+        subprocess.run(['git','-C',str(g7repo),'config','alias.zp',_push],env=env,check=True)
+        case('Gate shapes','G7-env','env -C '+str(g7repo)+' git zp',entries=[('alias.zp',_push)])
+        case('Gate shapes','G7-subshell','(cd '+str(g7repo)+'; git zp)',entries=[('alias.zp',_push)])
+        case('Gate shapes','G7-cd-P','cd -P '+str(g7repo)+' && git zp',entries=[('alias.zp',_push)])
+        case('Gate shapes','G7-expand-C','git -C "$PWD/../g7missing" zp',entries=[('alias.zp',_push)])
+        case('Gate shapes','G7-allow-status','env -C '+str(g7repo)+' git status',0,entries=[('alias.zp',_push)])
+        case('Gate shapes','G8-slash','cp '+str(config)+' '+str(repo)+'/.git//config; git zp',entries=[('alias.zp',_push)])
+        case('Gate shapes','G8-dot','cp '+str(config)+' '+str(repo)+'/.git/./config; git zp',entries=[('alias.zp',_push)])
+        case('Gate shapes','G8-allow-status','cp '+str(config)+' '+str(repo)+'/.git/config; git status',0)
         case('Case','quote-concatenation','git z"p"',entries=[('alias.zp','push')])
         case('Case','other-slot','git -c alias.p=status p',entries=[('alias.p.command','!echo unsafe')])
         for key,verb,want in [('alias.P.x' ,'p.x',2),('alias.P.x','P.x',2),('alias.p.X','p.x',2),('alias.P.command','P',2),('alias.P.command','p',0),('alias.p.COMMAND','p',2)]:
