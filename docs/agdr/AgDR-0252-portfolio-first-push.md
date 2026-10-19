@@ -136,7 +136,8 @@ Rule 1 runs around item 4. Rules 2 to 9 replace the "initial commit + push" bull
    BR=$(git -C "$P" symbolic-ref --short HEAD)
    LOCAL=$(git -C "$P" rev-parse --verify HEAD)
    REMOTE=$(git -C "$P" ls-remote origin "refs/heads/$BR" | awk -v r="refs/heads/$BR" '$2 == r { print $1 }')
-   FORGE=$(gh api "repos/<owner>/<name>/branches/$BR" --jq .commit.sha) || FORGE=""
+   FORGE_ERR=$(mktemp)
+   FORGE=$(gh api "repos/<owner>/<name>/branches/$BR" --jq .commit.sha 2>"$FORGE_ERR") || FORGE=""
    [ -n "$LOCAL" ] && [ "$LOCAL" = "$REMOTE" ] && [ "$LOCAL" = "$FORGE" ]
    ```
 
@@ -145,8 +146,11 @@ Rule 1 runs around item 4. Rules 2 to 9 replace the "initial commit + push" bull
    - The `awk` filter compares the ref name exactly. An `ls-remote` pattern matches the tail of a ref, even a full `refs/heads/<b>` pattern.
    - The command uses no `--heads` and no `--branches`. Git deprecates `--heads`, and older git does not have `--branches`.
    - `ls-remote` reads the fetch URL. The forge check covers a push that `pushurl` or `pushInsteadOf` sends to another URL.
+   - When `FORGE` is empty, show the contents of `$FORGE_ERR` to the operator. Map the error to branch-absent (HTTP 404, or "Branch not found"), authentication (HTTP 401 or 403, or "auth" in the error), or a network or other error. Keep `|| FORGE=""`. An empty `FORGE` never matches `LOCAL`.
 
    Note (2026-10-19, #1776): A missing branch sets `FORGE` to an empty string. The reuse path records `<owner>/<name>` before this check.
+
+   Note (2026-10-19, #1782): When `FORGE` is empty, show the `gh api` stderr and map it to the three forge failure rows. The check still fails closed. The decision does not change.
 
 9. When all three values match, the agent continues with Step 2b item 6. When a value differs, the agent applies § "Failure modes".
 

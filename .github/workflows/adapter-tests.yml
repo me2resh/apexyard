@@ -1,0 +1,60 @@
+# Adapter unit tests — hermetic, no secrets, no model API calls.
+#
+# Runs each harness adapter's `npm test` suite on PRs and pushes to dev
+# that touch harness-adapters/, .claude/hooks/, or this workflow.
+# Distinct from conformance.yml (credentialed live harness turns).
+#
+# Ticket: me2resh/apexyard#1781
+
+name: Adapter unit tests
+
+on:
+  pull_request:
+    paths:
+      - "harness-adapters/**"
+      - ".claude/hooks/**"
+      - ".github/workflows/adapter-tests.yml"
+  push:
+    branches: [dev]
+    paths:
+      - "harness-adapters/**"
+      - ".claude/hooks/**"
+      - ".github/workflows/adapter-tests.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: adapter-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  adapter-unit-tests:
+    name: ${{ matrix.adapter }} unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # Adapters with a package.json "test" script that runs offline
+        # (no harness CLI, no API keys). Codex has no unit suite here.
+        adapter: [opencode, pi]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v5.0.0
+        with:
+          # Both adapters declare engines.node >= 22 in package.json.
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: harness-adapters/${{ matrix.adapter }}/package-lock.json
+
+      - name: Install (frozen lockfile)
+        working-directory: harness-adapters/${{ matrix.adapter }}
+        run: npm ci
+
+      - name: Run unit tests
+        working-directory: harness-adapters/${{ matrix.adapter }}
+        run: npm test

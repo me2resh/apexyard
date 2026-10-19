@@ -206,7 +206,12 @@ export function runGateHook(
   const stdinPayload = JSON.stringify({ tool_name: claudeToolName, tool_input: toolInput });
 
   try {
+    // Drop an inherited CLAUDE_CODE_SESSION_ID so APEXYARD_SESSION_ID
+    // decides the marker path (AgDR-0250 precedence; #1783).
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    delete env.CLAUDE_CODE_SESSION_ID;
     execFileSync("bash", [hookPath], {
+      env,
       input: stdinPayload,
       cwd: opsRoot,
       encoding: "utf-8",
@@ -326,9 +331,12 @@ function warnUnsupportedGateWiresOnce(opsRoot: string, gates: GateDefinition[]):
 export function registerGateDispatcher(pi: ExtensionAPI, options: DispatcherOptions = {}): void {
   // pi shells and hook subprocesses inherit this process environment.
   // Replace it on new/resumed sessions, including session changes in one process.
+  // Drop an inherited Claude Code id so the adapter id owns marker paths (#1783).
+  delete process.env.CLAUDE_CODE_SESSION_ID;
   const fallbackId = randomUUID();
   process.env.APEXYARD_SESSION_ID = fallbackId;
   pi.on("session_start", async (_event, ctx) => {
+    delete process.env.CLAUDE_CODE_SESSION_ID;
     process.env.APEXYARD_SESSION_ID = ctx.sessionManager.getSessionId() || fallbackId;
   });
   const resolve = options.resolveOpsRoot ?? ((startCwd: string) => resolveOpsRootForPi({ startCwd }));

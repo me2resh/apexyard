@@ -257,11 +257,14 @@ Before item 4, run `git rev-parse --show-toplevel` in the ops fork. Record the p
    BR=$(git -C "$P" symbolic-ref --short HEAD)
    LOCAL=$(git -C "$P" rev-parse --verify HEAD)
    REMOTE=$(git -C "$P" ls-remote origin "refs/heads/$BR" | awk -v r="refs/heads/$BR" '$2 == r { print $1 }')
-   FORGE=$(gh api "repos/<owner>/<name>/branches/$BR" --jq .commit.sha) || FORGE=""
+   FORGE_ERR=$(mktemp)
+   FORGE=$(gh api "repos/<owner>/<name>/branches/$BR" --jq .commit.sha 2>"$FORGE_ERR") || FORGE=""
    [ -n "$LOCAL" ] && [ "$LOCAL" = "$REMOTE" ] && [ "$LOCAL" = "$FORGE" ]
    ```
 
    The `awk` filter compares the ref name exactly (`$2 == r`). An `ls-remote` pattern can match the tail of another ref. Do not pass `--heads` to `ls-remote`. Do not pass `--branches` to `ls-remote`. `ls-remote` reads the fetch URL. The forge SHA covers a push that `pushurl` or `pushInsteadOf` sends to another URL.
+
+   When `FORGE` is empty, show the contents of `$FORGE_ERR` to the operator. Keep `|| FORGE=""`. An empty `FORGE` never matches `LOCAL`. Map the error text to a forge failure row below.
 
    When `LOCAL`, `REMOTE`, and `FORGE` match, continue with item 6. When a value differs, apply the failure actions below.
 
@@ -274,7 +277,10 @@ Before item 4, run `git rev-parse --show-toplevel` in the ops fork. Record the p
    | The push fails on authentication | Suggest `gh auth status` and `gh auth setup-git`. Print the push command again. The agent does not run the push. |
    | The push fails as non-fast-forward | Stop. Do not offer a force push. The remote has commits that `/setup` did not make. |
    | The operator picks "Done" but did not run the command | HEAD is unborn, or the remote has no branch. Report that result. Print the command again. |
-   | The push went to another URL, for example through a global `pushurl` or `pushInsteadOf` | `REMOTE` can match while `FORGE` is empty. Stop. Show `git -C "<abs-path>" remote get-url --push --all origin`. Ask the operator to fix the config. |
+   | The forge branch is absent (HTTP 404, or "Branch not found") | Show `$FORGE_ERR`. Report that the branch is absent on the forge. Print the push command again. |
+   | The forge check fails on authentication (HTTP 401 or 403, or "auth" in the error) | Show `$FORGE_ERR`. Suggest `gh auth status` and `gh auth login`. Do not treat this as a missing branch. |
+   | The forge check fails on a network or other error | Show `$FORGE_ERR`. Ask the operator to fix the network or the `gh` setup. Do not treat this as a missing branch. |
+   | The push went to another URL, for example through a global `pushurl` or `pushInsteadOf` | `REMOTE` matches `LOCAL`, and the forge error is HTTP 404 or "Branch not found". Stop. Show `git -C "<abs-path>" remote get-url --push --all origin`. Ask the operator to fix the config. |
    | The operator runs the command in another directory, or edits the path | Report the value that differs. Print the command again. `git -C` uses an absolute path, so the shell directory does not matter. |
    | The session ends during the pause | The next run applies the resume table. `clear-bootstrap-marker.sh` clears the bootstrap marker at SessionStart. Step 0 writes it again. |
    | No operator is present | Not supported. Step 2 and item 3 already wait for an answer. |
