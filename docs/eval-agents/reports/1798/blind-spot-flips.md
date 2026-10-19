@@ -2,7 +2,7 @@
 
 Shape-probe and recount checks for two known Rex blind spots.
 
-Status: **Targeted eval, k=3, two blind-spot entries only, 2026-10-19. The 13-entry no-flip table (C4) is not run yet. This is not a zero-flip claim.**
+Status: **Targeted eval plus the C4 no-flip run, k=3, 2026-10-19. C4 FAILS: 3 of 13 entries flip (rex-773, rex-1683, rex-1711). The k=8 follow-ups are not run.**
 
 Prompt hashes (SHA-256, first 12 hex):
 - Baseline (the PR #1797 prompt): `2656e3532425`
@@ -28,8 +28,62 @@ A hint, a suggestion, or an "Unverified" note counts as missed.
 |---|---|---|
 | AC1 | Met | 2 of 3 runs catch the redirect-target merge hide |
 | AC2 | Partly met | D2 2 of 3; D1 0 of 3 |
-| AC3 (no flip on the other 13 entries) | Not run | The 13-entry no-flip table (C4) is not run yet |
+| AC3 (no flip on the other 13 entries) | Not met | 3 of 13 entries flip at k=3: rex-773, rex-1683, rex-1711. See "No-flip table (C4)" |
 | AC4 | Met | The `/code-review` cap is 15,736 of 16,000 bytes; `test_token_efficiency_wave1.sh` passes |
 
 Limit: the eval gives Rex no tools, so it cannot recount a number against the source.
 Follow-up #1815 tests the recount check with read-only source access.
+
+## No-flip table (C4)
+
+Prompts: baseline `2656e3532425` (prompt of PR #1797); new `1ac8b6976d53` (commit fbc85b5d).
+Protocol: the same as above. Opus CLI, no tools, k=3 per prompt and entry, 13 entries (the 15 corpus entries minus the two blind-spot entries).
+Non-delta entries got the sanitized diff only. Delta entries also got the sanitized earlier review and the delta range.
+Baseline run 1 of rex-1683, rex-1711 and rex-1769 is an earlier #1773 run at the same prompt. All other runs are new.
+Scoring: a defect counts as caught only when a finding names it as blocking.
+A false alarm (FA) is a run that has a blocking finding with no frozen defect behind it. The count is runs of 3, not findings.
+A flip is a change in the majority verdict between the two prompts.
+A, C and CR in the verdict columns are APPROVED, COMMENT and CHANGES REQUESTED.
+
+| Entry | Frozen key | Baseline verdicts | New verdicts | Defects caught, baseline | Defects caught, new | FA runs, baseline | FA runs, new | Flip |
+|---|---|---|---|---|---|---|---|---|
+| rex-792-2ce6708 | A (D1 missed in record) | CR, CR, C | CR, CR, CR | D1 2/3 | D1 3/3 | 2 | 3 | No |
+| rex-770-6b19e2b5a | CR (D1, D2) | CR, CR, CR | CR, CR, CR | D1 3/3, D2 3/3 | D1 3/3, D2 3/3 | 1 | 2 | No |
+| rex-767-a99f1009 | A (D1 missed in record) | CR, CR, CR | CR, CR, CR | D1 0/3 | D1 0/3 | 3 | 3 | No |
+| rex-748-007f527c | CR (D1, D2) | CR, CR, CR | CR, CR, CR | D1 0/3, D2 0/3 | D1 0/3, D2 0/3 | 3 | 3 | No |
+| rex-686-07dc21c | A | CR, CR, CR | CR, CR, CR | none to catch | none to catch | 3 | 3 | No |
+| rex-677-c96238b | A | CR, CR, CR | CR, CR, CR | none to catch | none to catch | 3 | 3 | No |
+| rex-773-ca3a9400 | A | C, C, CR | CR, CR, CR | none to catch | none to catch | 1 | 3 | **Yes** (C to CR) |
+| rex-778-64c3ff5 | A | C, C, C | C, C, C | none to catch | none to catch | 0 | 0 | No |
+| rex-787-512d253 | A | CR, CR, CR | CR, CR, CR | none to catch | none to catch | 3 | 3 | No |
+| rex-1289-9382269f | A (D1 missed in record) | CR, CR, CR | CR, CR, CR | D1 0/3 | D1 0/3 | 3 | 3 | No |
+| rex-1683-f85a154-delta | A | A, A, A | CR, CR, CR | none to catch | none to catch | 0 | 3 | **Yes** (A to CR) |
+| rex-1711-f401d65-delta | A | A, C, A | CR, CR, CR | none to catch | none to catch | 0 | 3 | **Yes** (A to CR) |
+| rex-1769-03077369-delta | A | A, A, A | A, A, A | none to catch | none to catch | 0 | 0 | No |
+
+Flip count: 3 of 13 (rex-773, rex-1683, rex-1711). Each is a new false alarm on an entry whose key is APPROVED.
+
+### Cause of the flips
+
+The new prompt adds a rule. A count or settings claim that Rex cannot check must become a finding, not only an "Unverified" note. The rule makes it a kind 3 finding when the claim is in a durable record.
+
+- rex-1683: all 3 new runs block on a claim in AgDR-0232 (the CEO approved the wider carry-over) with no source the reviewer can see. The baseline runs approve.
+- rex-1711: all 3 new runs block on a new provenance claim (the carried evidence was observed at commit `400db9b4`) that the supplied material does not show. The baseline runs approve or comment.
+- rex-773: the new runs block on a comment that states a mechanism the test does not show, and on an unchecked cross-repo base. The baseline runs mostly give COMMENT on the same facts.
+
+In each case the cause is the unverifiable-claim rule, working with an eval that gives Rex no tools and no linked issue. This cause comes from reading the review text, not from a controlled test.
+
+### Other results
+
+- Both prompts give CHANGES REQUESTED on rex-686, rex-677, rex-787 and rex-1289, whose key is APPROVED. This is not a flip. The cause is present in the baseline. The eval hides the PR body and the ticket, and the sanitizer truncates some comments, so Rex blocks on missing evidence.
+- Both prompts miss rex-767 D1, rex-748 D1 and D2, and rex-1289 D1 in 3 of 3 runs.
+- The blind-spot gains hold: rex-792 D1 goes from 2 of 3 to 3 of 3. rex-770 D1 and D2 stay at 3 of 3. For rex-770 D2, runs k2 and k3 of the new prompt name the mock only in the required fix and the Testing check, not as a numbered blocking issue.
+- The FA counts come from reading the blocking findings of each run, including findings marked "conditionally blocking".
+
+### k=8 follow-ups (not run)
+
+Entries that need them: the 3 flips (rex-773, rex-1683, rex-1711). rex-792 also has a mixed baseline (CR, CR, C).
+k=8 on both prompts needs 5 more baseline runs and 5 more new-prompt runs per entry, because 3 runs per prompt exist.
+That is 30 runs for the 3 flips, or 40 runs with rex-792. Ask the CEO before this spend.
+
+Runs: 36 new baseline runs plus 39 new-prompt runs, 75 in total. Tokens: 2,979,717 (1,394,396 baseline plus 1,585,321 new-prompt, from CLI JSON usage).
