@@ -4,7 +4,7 @@
 set -eu
 # Keep host session pins and network lookups out of fixtures.
 # shellcheck source=/dev/null
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_test-session-isolation.sh"
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 export ROOT
 python3 - "$@" <<'PY'
@@ -24,9 +24,25 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
         return subprocess.run(['git','-C',str(repo),*args],env=env,check=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True).stdout.strip()
     git('init','-q','-b','feature/GH-1748-test'); git('config','user.name','Test'); git('config','user.email','test@example.invalid')
     git('-c','core.hooksPath=/dev/null','commit','--allow-empty','-qm','fixture')
-    # Fail-before base: ALIAS_1748_BASE_HOOKS, else archive ALIAS_1748_BASE_REF
-    # (default upstream/dev) into a scratch dir under ALIAS_1748_SCRATCH.
+    # Fail-before base: ALIAS_1748_BASE_HOOKS, else archive a resolved base
+    # ref (upstream/dev, origin/dev, then parent of the _lib-git-global.sh
+    # change). Skip fail-before when no base ref resolves (CI has no upstream).
     # Perf base: ALIAS_1748_PERF_BASE_HOOKS, else archive 23d8387 (AgDR-0253).
+    def ref_ok(ref):
+        return subprocess.run(['git','rev-parse','--verify','--quiet',ref+'^{commit}'],cwd=root,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0
+    def resolve_failbefore_ref():
+        if os.environ.get('ALIAS_1748_BASE_REF'):
+            cand=os.environ['ALIAS_1748_BASE_REF']
+            return cand if ref_ok(cand) else None
+        for cand in ('upstream/dev','origin/dev'):
+            if ref_ok(cand):
+                return cand
+        log=subprocess.run(['git','log','-1','--format=%H','--','.claude/hooks/_lib-git-global.sh'],cwd=root,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+        if log.returncode==0 and log.stdout.strip():
+            parent=log.stdout.strip()+'^'
+            if ref_ok(parent):
+                return parent
+        return None
     def archive_hooks(ref, label):
         scratch=pathlib.Path(os.environ.get('ALIAS_1748_SCRATCH') or tempfile.mkdtemp(prefix='alias-1748-base-'))
         scratch.mkdir(parents=True, exist_ok=True)
@@ -38,7 +54,12 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
     if os.environ.get('ALIAS_1748_BASE_HOOKS'):
         basehooks=pathlib.Path(os.environ['ALIAS_1748_BASE_HOOKS'])
     else:
-        basehooks=archive_hooks(os.environ.get('ALIAS_1748_BASE_REF','upstream/dev'), 'failbefore')
+        base_ref=resolve_failbefore_ref()
+        if base_ref:
+            basehooks=archive_hooks(base_ref, 'failbefore')
+        else:
+            print('SKIP fail-before: no base ref', flush=True)
+            basehooks=None
     if mode.startswith('perf'):
         if os.environ.get('ALIAS_1748_PERF_BASE_HOOKS'):
             basehooks=pathlib.Path(os.environ['ALIAS_1748_PERF_BASE_HOOKS'])
@@ -104,8 +125,8 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
                 counts[group]['pass' if rc==expected else 'fail']+=1
                 if rc!=expected:
                     failures.append((label,expected,rc,out[-1000:])); print('FAIL',label,expected,rc,out[-300:],flush=True)
-                before,bout=run(hook,actualcmd,basehooks,shell) if mode!='quick' else (0,'')
-                if mode=='quick': continue
+                before,bout=run(hook,actualcmd,basehooks,shell) if mode!='quick' and basehooks else (0,'')
+                if mode=='quick' or not basehooks: continue
                 # Each blocked test must expose the baseline gap. Existing
                 # direct-verb routing can already block outer real verbs.
                 if expected==2:
@@ -149,9 +170,11 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
         configure(); config.write_text('invalid config [')
         for hook in ['dispatch-bash',*gates]:
             for cmd,want in [('git status',0),('git unknown1748',2)]:
-                rc,out=run(hook,cmd); before,bout=run(hook,cmd,basehooks)
+                rc,out=run(hook,cmd)
                 counts['Failures extra']['pass' if rc==want else 'fail']+=1
-                counts['fail-before Failures']['gap' if want==2 and before!=2 else 'already-blocked' if want==2 else 'allow-pass' if before==0 else 'allow-fail']+=1
+                if basehooks:
+                    before,bout=run(hook,cmd,basehooks)
+                    counts['fail-before Failures']['gap' if want==2 and before!=2 else 'already-blocked' if want==2 else 'allow-pass' if before==0 else 'allow-fail']+=1
                 if rc!=want: failures.append((hook,want,rc,out))
         configure()
         nojq=t/'nojq-extra'; nojq.mkdir()
@@ -163,9 +186,10 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
                     if f.name!='jq' and f.is_file() and os.access(f,os.X_OK) and not dest.exists(): dest.symlink_to(f)
         for cmd,want in [('git -c alias.p=push p',2),('echo alias.x',0)]:
             rc,out=run('dispatch-bash',cmd,extra={'PATH':str(nojq)})
-            before,bout=run('dispatch-bash',cmd,basehooks,extra={'PATH':str(nojq)})
             counts['No jq extra']['pass' if rc==want else 'fail']+=1
-            counts['fail-before No jq']['gap' if want==2 and before!=2 else 'already-blocked' if want==2 else 'allow-pass' if before==0 else 'allow-fail']+=1
+            if basehooks:
+                before,bout=run('dispatch-bash',cmd,basehooks,extra={'PATH':str(nojq)})
+                counts['fail-before No jq']['gap' if want==2 and before!=2 else 'already-blocked' if want==2 else 'allow-pass' if before==0 else 'allow-fail']+=1
             if rc!=want: failures.append(('no jq',want,rc,out))
     if mode=='limits-baseline':
         limit_targets=[]
@@ -199,14 +223,17 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
         # The original review isolated unrelated gates. Use its same method
         # to prove zero alias blocks for these five exact payloads.
         isolated=t/'isolated-dispatch'; shutil.copytree(hooks,isolated)
-        isolatedbase=t/'isolated-base'; shutil.copytree(basehooks,isolatedbase)
-        for directory in [isolated,isolatedbase]:
+        directories=[isolated]
+        if basehooks:
+            isolatedbase=t/'isolated-base'; shutil.copytree(basehooks,isolatedbase)
+            directories=[isolatedbase,isolated]
+        for directory in directories:
             for scriptfile in directory.glob('*.sh'):
                 if scriptfile.name=='dispatch-bash.sh' or scriptfile.name.startswith('_lib-'): continue
                 scriptfile.write_text('#!/bin/bash\ncat >/dev/null\nexit 0\n'); scriptfile.chmod(0o755)
         configure()
         for n,cmd in enumerate(regressions,1):
-            for directory in [isolatedbase,isolated]:
+            for directory in directories:
                 rc,out=run('dispatch-bash',cmd,directory)
                 counts['Round-1 isolated alias layer']['pass' if rc==0 else 'fail']+=1
                 if rc: failures.append(('isolated regression '+str(n),0,rc,out))
