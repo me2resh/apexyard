@@ -1043,11 +1043,30 @@ _has_split_merge_phrase() {
   local result
   if [ "${#1}" -gt 120000 ]; then return 2; fi
   result=$(MERGE_SPLIT_INPUT="$1" awk '
-    function reset() { stage = 0; active = 1; redirected = 0; option_value = 0; api = 0 }
+    function reset() { stage = 0; active = 1; redirected = 0; option_value = 0; api = 0; phrase_lit = 0 }
+    function clear_word() { w = raw = ""; changed = opaque_word = opaque_unquoted = 0 }
+    function queue_body(body) {
+      if (body == "") return
+      if (depth >= 3 || np >= 100) scan_error = 1
+      else { pending[++np] = body; levels[np] = depth + 1 }
+    }
+    function consume_group(endchar,    level,t,start) {
+      start = i + 1; level = 1
+      while (i < n && level) {
+        t = substr(s, ++i, 1)
+        if (endchar == "`") {
+          if (t == "`") level = 0
+          continue
+        }
+        if ((endchar == ")" && t == "(") || (endchar == "}" && t == "{")) level++
+        if (t == endchar) level--
+      }
+      return substr(s, start, i - start)
+    }
     function finish(    host, value) {
       if (w == "") {
         if (changed && stage > 0) altered = 1
-        changed = opaque_word = 0; raw = ""; return
+        clear_word(); return
       }
       # Shell arguments can contain another command. Never evaluate them.
       if (nested && raw ~ /[ \t]/) {
@@ -1058,13 +1077,19 @@ _has_split_merge_phrase() {
       if (api && value ~ /(pulls|merge_requests)\/[0-9]+\/merge/ && changed) hit = 1
       if (active && stage == 0) {
         if (value ~ /^[A-Za-z_][A-Za-z0-9_]*=/ || value == "env" || value == "command" || value == "exec" || value == "do" || value == "then" || value == "if" || value == "elif" || value == "else" || value == "while" || value == "until") {
-          w = raw = ""; changed = opaque_word = 0; return
+          clear_word(); return
         }
         host = value; sub(/^.*\//, "", host)
-        if (opaque_word) host = ".*"
+        # Unquoted expansion can word-split into the host. Keep it opaque.
+        # A quoted expansion or glob before a literal last segment keeps that segment.
+        if (opaque_unquoted) host = ".*"
         if ("gh" ~ ("^" host "$") || "glab" ~ ("^" host "$")) {
           stage = 1; cli = host; altered = changed || host != value
-        } else active = 0
+          if (!opaque_word) phrase_lit = 1
+        } else {
+          # Non-host prefix: keep looking for a later phrase window.
+          clear_word(); return
+        }
       } else if (active) {
         if (opaque_word) value = ".*"
         if (stage == 1 && value == "api") api = 1
@@ -1076,16 +1101,50 @@ _has_split_merge_phrase() {
             ((("gh" ~ ("^" cli "$")) && ("pr" ~ ("^" value "$"))) || \
              (("glab" ~ ("^" cli "$")) && ("mr" ~ ("^" value "$"))))) {
           stage = 2; altered = altered || changed
+          if (!opaque_word) phrase_lit = 1
         } else if (stage == 2 && "merge" ~ ("^" value "$")) {
-          if (altered || changed || redirected || depth > 0) hit = 1
+          if (!opaque_word) phrase_lit = 1
+          # A window with no literal phrase word stays clear unless a
+          # later bare PR number confirms an opaque three-word phrase.
+          if (phrase_lit && (altered || changed || redirected || depth > 0)) {
+            hit = 1; active = 0
+          } else if (!phrase_lit && (altered || changed || redirected || depth > 0)) {
+            stage = 3
+          } else active = 0
+        } else if (stage == 3) {
+          if (value ~ /^[0-9]+$/ && !opaque_word) { hit = 1; active = 0 }
+          else {
+            stage = 0; phrase_lit = 0; altered = 0; option_value = 0
+            host = value; sub(/^.*\//, "", host)
+            if (opaque_unquoted) host = ".*"
+            if ("gh" ~ ("^" host "$") || "glab" ~ ("^" host "$")) {
+              stage = 1; cli = host; altered = changed || host != value
+              if (!opaque_word) phrase_lit = 1
+            }
+          }
+        } else if (api) {
+          # Keep api set so a later path word can still match.
           active = 0
-        } else active = 0
+        } else {
+          # Broken phrase: treat the current word as a fresh prefix window.
+          stage = 0; phrase_lit = 0; altered = 0; option_value = 0
+          host = value; sub(/^.*\//, "", host)
+          if (opaque_unquoted) host = ".*"
+          if ("gh" ~ ("^" host "$") || "glab" ~ ("^" host "$")) {
+            stage = 1; cli = host; altered = changed || host != value
+            if (!opaque_word) phrase_lit = 1
+          }
+        }
       }
-      w = raw = ""; changed = opaque_word = 0
+      clear_word()
     }
-    function unknown(endchar,    level,t) {
+    function mark_opaque() {
       if (length(w) < 128) w = w ".*"
       changed = opaque_word = 1
+      if (q == "") opaque_unquoted = 1
+    }
+    function unknown(endchar,    level,t) {
+      mark_opaque()
       if (endchar == "") return
       level = 1
       while (i < n && level) {
@@ -1094,8 +1153,8 @@ _has_split_merge_phrase() {
         if (t == endchar) level--
       }
     }
-    function scan(text,    c,t,nx,rq,rest) {
-      s = text; n = length(s); q = w = raw = ""; changed = opaque_word = 0; reset()
+    function scan(text,    c,t,nx,rq,rest,body) {
+      s = text; n = length(s); q = w = raw = ""; changed = opaque_word = opaque_unquoted = 0; reset()
       for (i = 1; i <= n; i++) {
         c = substr(s, i, 1); nx = substr(s, i + 1, 1)
         if (c == sq || c == dq) {
@@ -1116,8 +1175,11 @@ _has_split_merge_phrase() {
         if (q != sq && c == "$") {
           rest = substr(s, i + 1, 70)
           if (nx == "{") { i++; unknown("}") }
-          else if (nx == "(") { i++; unknown(")") }
-          else if (nx == sq || nx == dq) {
+          else if (nx == "(") {
+            mark_opaque(); i++
+            body = consume_group(")")
+            queue_body(body)
+          } else if (nx == sq || nx == dq) {
             i++; unknown(nx)
           } else {
             unknown("")
@@ -1129,10 +1191,26 @@ _has_split_merge_phrase() {
           }
           continue
         }
-        if (q != sq && c == "`") { unknown("`"); continue }
+        if (q != sq && c == "`") {
+          mark_opaque()
+          body = consume_group("`")
+          queue_body(body)
+          continue
+        }
         if (q == "" && c == "{" && nx ~ /[ \t\n]/ && w == "") { finish(); reset(); continue }
         if (q == "" && c == "{") { unknown("}"); continue }
-        if (q == "" && c ~ /[*?[]/) { unknown(c == "[" ? "]" : ""); continue }
+        # A lone "[" word is the test command, not a glob character class.
+        if (q == "" && c ~ /[*?[]/ && !(c == "[" && w == "" && nx ~ /[ \t\n;|&()<>]/)) {
+          unknown(c == "[" ? "]" : ""); continue
+        }
+        # Process substitution bodies are nested command sources.
+        if (q == "" && (c == "<" || c == ">") && nx == "(") {
+          finish()
+          i++
+          body = consume_group(")")
+          queue_body(body)
+          continue
+        }
         if (q == "" && (c ~ /[<>]/ || (c == "&" && nx == ">"))) {
           if (w ~ /^[0-9]+$/) w = ""
           finish(); redirected = 1
@@ -1143,7 +1221,7 @@ _has_split_merge_phrase() {
             t = substr(s, i + 1, 1)
             if (rq == "" && t ~ /[ \t\n;|&<>]/) break
             i++
-            if (nested && length(target) < 4096) target = target t
+            if (length(target) < 4096) target = target t
             else if (nested) scan_error = 1
             if (t == sq || t == dq) {
               if (rq == t) rq = ""
@@ -1153,8 +1231,7 @@ _has_split_merge_phrase() {
           # A shell here-string is another command source.
           if (nested && target != "") {
             sub(/^[\047\042]/, "", target); sub(/[\047\042]$/, "", target)
-            if (depth >= 3 || np >= 100) scan_error = 1
-            else { pending[++np] = target; levels[np] = depth + 1 }
+            queue_body(target)
           }
           continue
         }
@@ -1438,9 +1515,14 @@ merge_command_uses_variable() {
   cmd=$(_scrub_merge_command "$joined") || cmd="$joined"
   # Gates can reuse their raw scan only when the data view is identical.
   # Standalone callers still scan the command here.
-  if [ "$cmd" = "$1" ] && [ "${2:-}" = 0 ]; then return 0; fi
-  if [ "$cmd" != "$1" ] || [ "${2:-}" != 1 ]; then
-    if _has_split_merge_phrase "$cmd"; then return 0; fi
+  # Any status other than clear (1) is unresolved: fail closed (A1 / #1803).
+  if [ "$cmd" = "$1" ] && [ -n "${2:-}" ]; then
+    [ "$2" -eq 1 ] || return 0
+  else
+    local split_st=0
+    _has_split_merge_phrase "$cmd"
+    split_st=$?
+    [ "$split_st" -eq 1 ] || return 0
   fi
 
   # All four hooks call this check before PR extraction. Three intentionally
