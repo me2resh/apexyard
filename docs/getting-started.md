@@ -17,6 +17,15 @@ for the directory layout, daily workflow, upgrade path, and FAQ.
   is fixed.
 - Basic familiarity with Claude Code's `CLAUDE.md` system
 
+After cloning, run `bash bin/apexyard doctor` before `/setup`, or use
+`apexyard doctor` if the CLI is on PATH. `/preflight` runs the same checks
+inside Claude Code. The report suggests fixes and makes no changes.
+Exit codes are 0 (pass), 1 (warning), and 2 (failure).
+
+On Windows, install the optional GitHub CLI with `winget install GitHub.cli`
+and the required jq 1.6 or later with `winget install jqlang.jq`. Run the
+check in Git Bash or WSL.
+
 ---
 
 ## Step 1: Fork apexyard on GitHub

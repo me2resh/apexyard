@@ -1,6 +1,6 @@
 # `/setup` tests
 
-Sandbox-based regression tests for the `/setup` skill's file-state outcomes. Each test builds a synthetic fork under `mktemp -d`, runs the file-state actions the SKILL.md prescribes, then asserts the post-state matches the spec.
+Regression tests for the `/setup` skill. The sandbox tests build a synthetic fork under `mktemp -d`, run the file-state actions the SKILL.md prescribes, then assert the post-state matches the spec. `test_setup_first_push_text.sh` pins Step 2b text and does not build a sandbox.
 
 ## What's tested
 
@@ -9,6 +9,7 @@ Sandbox-based regression tests for the `/setup` skill's file-state outcomes. Eac
 | `test_setup_split_portfolio_v2.sh` | Split-portfolio v2 setup branch — config block with all 7 `portfolio.*` keys, `.apexyard-fork` marker, gitignore additions, `portfolio_validate` happy, `portfolio_is_v2` true, `resolve_ops_root` walks via the marker | Step 2b (config-block mode) + AgDR-0021 § B |
 | `test_setup_single_fork.sh` | Single-fork setup branch — placeholder replacement in `onboarding.yaml`, marker written even in single-fork mode, no `portfolio:` block (defaults apply), in-fork registry resolution | Step 6 (single-fork branch) |
 | `test_setup_reset.sh` | `--reset` flag — restore `onboarding.yaml` to the framework template defaults, idempotent on re-run | Step 1 (`--reset` mode detection) |
+| `test_setup_first_push_text.sh` | Text pin for the operator commit and push. Staging is by name. The skill prints two command forms and verifies the exact ref. | Step 2b items 3–5 + AgDR-0252 |
 
 ## What's NOT tested
 
