@@ -264,7 +264,7 @@ Before item 4, run `git rev-parse --show-toplevel` in the ops fork. Record the p
 
    The `awk` filter compares the ref name exactly (`$2 == r`). An `ls-remote` pattern can match the tail of another ref. Do not pass `--heads` to `ls-remote`. Do not pass `--branches` to `ls-remote`. `ls-remote` reads the fetch URL. The forge SHA covers a push that `pushurl` or `pushInsteadOf` sends to another URL.
 
-   When `FORGE` is empty, show the contents of `$FORGE_ERR` to the operator. Keep `|| FORGE=""`. An empty `FORGE` never matches `LOCAL`. Map the error text to a forge failure row below.
+   When `FORGE` is empty, show the contents of `$FORGE_ERR` to the operator. Then remove the temp file (`rm -f "$FORGE_ERR"`). Keep `|| FORGE=""`. An empty `FORGE` never matches `LOCAL`. Map the error text to a forge failure row below.
 
    When `LOCAL`, `REMOTE`, and `FORGE` match, continue with item 6. When a value differs, apply the failure actions below.
 

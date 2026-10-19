@@ -146,7 +146,7 @@ _require_lib "$(dirname "$0")/_lib-extract-pr.sh" \
   _run_awk_or_fallback join_shell_continuations _join_shell_continuations_fallback \
   _scrub_merge_command _normalize_json_escapes \
   has_conflicting_repo_flags merge_command_uses_variable extract_pr_number resolve_merge_repo \
-  resolve_ci_status_glab
+  resolve_ci_status_glab merge_repo_is_valid prmeta_get
 # Leading cd-target recovery for shared merge-repo resolution (#687/#1151).
 # Optional only for standalone hook-test sandboxes that copy a minimal lib set.
 if [ -f "$(dirname "$0")/_lib-pr-repo.sh" ]; then
@@ -445,10 +445,9 @@ if [[ "$GATE_OWNER_REPO" == */*/* ]]; then
   GATE_HOST="${GATE_OWNER_REPO%%/*}"
   GATE_API_REPO="${GATE_OWNER_REPO#*/}"
 fi
-if [[ ! "$GATE_API_REPO" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] ||
-   [[ "$GATE_API_REPO" == ./* || "$GATE_API_REPO" == ../* ||
-      "$GATE_API_REPO" == */. || "$GATE_API_REPO" == */.. ]] ||
-   { [ -n "$GATE_HOST" ] && [[ ! "$GATE_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]]; }; then
+# merge_repo_is_valid is the one repo check that this gate and the
+# dispatcher prefetch share (AgDR-0256 D1 item 5).
+if ! merge_repo_is_valid "$GATE_OWNER_REPO"; then
   echo "BLOCKED: PR #${PR_NUMBER} has an invalid owner/repo: ${GATE_OWNER_REPO:-<empty>}. Use a literal [host/]owner/repo and retry." >&2
   exit 2
 fi
@@ -491,7 +490,13 @@ fi
 
 # Workflow runs live in the base repo. Validate the head before using it
 # in an API path. A malformed PR head blocks rather than becoming an API fault.
-GATE_HEAD_SHA=$(gh pr view "$PR_NUMBER" ${REPO_ARGS[@]+"${REPO_ARGS[@]}"} --json headRefOid --jq '.headRefOid' 2>/dev/null)
+# With an explicit repo, read the dispatcher snapshot first (AgDR-0256).
+GATE_HEAD_SHA=""
+if [ -n "$CMD_REPO" ] && GATE_HEAD_SHA=$(prmeta_get head "$PR_NUMBER" "$CMD_REPO"); then
+  :
+else
+  GATE_HEAD_SHA=$(gh pr view "$PR_NUMBER" ${REPO_ARGS[@]+"${REPO_ARGS[@]}"} --json headRefOid --jq '.headRefOid' 2>/dev/null)
+fi
 if [[ ! "$GATE_HEAD_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
   echo "BLOCKED: PR #${PR_NUMBER} has an invalid head SHA. Resolve the PR head and retry." >&2
   exit 2

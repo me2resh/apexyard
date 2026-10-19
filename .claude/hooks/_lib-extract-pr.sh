@@ -1210,6 +1210,13 @@ extract_pr_number() {
 
   # 3. Last resort: ask the forge which PR/MR the current branch points at.
   #    Forge-aware (#764): a glab command falls back to `glab mr view`.
+  #    The text-only mode (second argument `text-only`) skips this step.
+  #    The dispatcher prefetch uses it, so it never calls the forge to
+  #    find the key (AgDR-0256 D1). The gates keep the default mode.
+  if [ -z "$pr" ] && [ "${2:-}" = text-only ]; then
+    echo ""
+    return 0
+  fi
   if [ -z "$pr" ]; then
     if _is_argv_only_merge_command "$cmd"; then
       echo ""
@@ -1342,6 +1349,217 @@ merge_command_uses_variable() {
 # On failure the caller should fall back to `git rev-parse HEAD` with a
 # visible warning — better to block a valid merge that the user can retry
 # than silently allow a merge on the wrong SHA.
+# --- PR metadata snapshot readers (AgDR-0256, me2resh/apexyard#1759) ---
+#
+# The dispatcher fetches the PR metadata one time for a merge and exports
+# the trusted values as APEXYARD_PRMETA_* variables. Only the file list is
+# on disk, and its SHA-256 digest is in the environment. These readers give
+# a gate a snapshot value only when every check passes. Any failed check is
+# a miss. A miss makes the caller fetch from the forge, as before. A miss
+# never allows a merge.
+#
+# A reader accepts the snapshot only when APEXYARD_PRMETA_OWNER_PID equals
+# the gate's $PPID. This stops a stale, inherited or forged value from a
+# process that is not the dispatcher. It is a guard against accidental
+# inheritance, not authentication (AgDR-0256 D2 rules 7 to 13).
+#
+# APEXYARD_DEBUG_PRMETA=1 prints one stderr line for each read: hit, or
+# miss and the reason. The line never holds the file list.
+
+# Prints a debug line when APEXYARD_DEBUG_PRMETA=1.
+_prmeta_debug() {
+  if [ "${APEXYARD_DEBUG_PRMETA:-}" = 1 ]; then
+    printf 'prmeta: %s\n' "$*" >&2
+  fi
+  return 0
+}
+
+# Returns 0 when $1 is a valid [HOST/]OWNER/REPO value for a gh call.
+# The CI gate and the dispatcher prefetch use this one check.
+merge_repo_is_valid() {
+  local repo="${1:-}" host="" api_repo=""
+  api_repo="$repo"
+  if [[ "$repo" == */*/* ]]; then
+    host="${repo%%/*}"
+    api_repo="${repo#*/}"
+  fi
+  if [[ ! "$api_repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] ||
+     [[ "$api_repo" == ./* || "$api_repo" == ../* ||
+        "$api_repo" == */. || "$api_repo" == */.. ]] ||
+     { [ -n "$host" ] && [[ ! "$host" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]]; }; then
+    return 1
+  fi
+  return 0
+}
+
+# Reads stdin and prints its SHA-256 digest as 64 lowercase hex characters.
+# Returns 1 when no digest tool is present or the output has a bad shape.
+# The tools are called with `command -p`, so the default PATH is used and
+# a shell function cannot replace them. cksum is not allowed: CRC is not
+# collision-resistant.
+prmeta_sha256() {
+  local out=""
+  if command -p -v shasum >/dev/null 2>&1; then
+    out=$(command -p shasum -a 256 2>/dev/null) || return 1
+    out="${out%% *}"
+  elif command -p -v sha256sum >/dev/null 2>&1; then
+    out=$(command -p sha256sum 2>/dev/null) || return 1
+    out="${out%% *}"
+  elif command -p -v openssl >/dev/null 2>&1; then
+    out=$(command -p openssl dgst -sha256 2>/dev/null) || return 1
+    out="${out##*= }"
+  else
+    return 1
+  fi
+  out=$(printf '%s' "$out" | command -p tr 'A-F' 'a-f') || return 1
+  if [[ ! "$out" =~ ^[0-9a-f]{64}$ ]]; then
+    return 1
+  fi
+  printf '%s\n' "$out"
+}
+
+# Returns 0 when the exported scalars are bound to this gate and to the
+# key <pr> <repo>, and every scalar has a valid shape. Prints the reason
+# for a miss to the debug line.
+_prmeta_scalars_ok() {
+  local pr="${1:-}" repo="${2:-}" what="${3:-}"
+  local owner="${APEXYARD_PRMETA_OWNER_PID:-}" count="${APEXYARD_PRMETA_COUNT:-}"
+  local branch="${APEXYARD_PRMETA_BRANCH:-}" base="${APEXYARD_PRMETA_BASE:-}"
+  if [ -z "$owner" ]; then
+    _prmeta_debug "miss $what (no snapshot)"
+    return 1
+  fi
+  if [ "$owner" != "$PPID" ]; then
+    _prmeta_debug "miss $what (owner pid is not the parent)"
+    return 1
+  fi
+  if [ -z "$pr" ] || [ -z "$repo" ] ||
+     [ "${APEXYARD_PRMETA_PR:-}" != "$pr" ] ||
+     [ "${APEXYARD_PRMETA_REPO:-}" != "$repo" ]; then
+    _prmeta_debug "miss $what (key differs)"
+    return 1
+  fi
+  if [[ ! "${APEXYARD_PRMETA_HEAD:-}" =~ ^[0-9a-f]{40}$ ]]; then
+    _prmeta_debug "miss $what (bad head shape)"
+    return 1
+  fi
+  if [ -z "$branch" ] || [ -z "$base" ] ||
+     [[ "$branch" == *[[:cntrl:]]* ]] || [[ "$base" == *[[:cntrl:]]* ]]; then
+    _prmeta_debug "miss $what (bad branch or base shape)"
+    return 1
+  fi
+  if [[ ! "$count" =~ ^(0|[1-9][0-9]*)$ ]] || [ "${#count}" -gt 4 ] || [ "$count" -gt 3000 ]; then
+    _prmeta_debug "miss $what (bad count shape)"
+    return 1
+  fi
+  return 0
+}
+
+# prmeta_get <field> <pr> <repo>: prints one snapshot scalar and returns 0
+# on a hit. <field> is head, branch, base or count. Returns 1 on a miss.
+prmeta_get() {
+  local field="${1:-}" value=""
+  if ! _prmeta_scalars_ok "${2:-}" "${3:-}" "$field"; then
+    return 1
+  fi
+  case "$field" in
+    head) value="${APEXYARD_PRMETA_HEAD:-}" ;;
+    branch) value="${APEXYARD_PRMETA_BRANCH:-}" ;;
+    base) value="${APEXYARD_PRMETA_BASE:-}" ;;
+    count) value="${APEXYARD_PRMETA_COUNT:-}" ;;
+    *)
+      _prmeta_debug "miss $field (unknown field)"
+      return 1
+      ;;
+  esac
+  _prmeta_debug "hit $field"
+  printf '%s\n' "$value"
+}
+
+# prmeta_file_list <pr> <repo>: prints the snapshot file list and returns 0
+# on a hit. Returns 1 on a miss.
+#
+# The reader reads the file one time, into memory, and uses only the value
+# that it hashed (AgDR-0256 D2 rules 15 to 20). The canonical bytes are
+# `printf '%s\n' "$L"`. The digest and the line count must match the
+# exported values. An empty list is a miss.
+prmeta_file_list() {
+  local pr="${1:-}" repo="${2:-}" dir="${APEXYARD_PRMETA_DIR:-}"
+  local want="${APEXYARD_PRMETA_FILES_SHA256:-}" count="${APEXYARD_PRMETA_COUNT:-}"
+  local list="" sum="" lines="" mode="" LC_ALL=C
+  if ! _prmeta_scalars_ok "$pr" "$repo" files; then
+    return 1
+  fi
+  if [ "$count" = 0 ]; then
+    _prmeta_debug "miss files (count is 0)"
+    return 1
+  fi
+  if [ -z "$dir" ] || [[ ! "$want" =~ ^[0-9a-f]{64}$ ]]; then
+    _prmeta_debug "miss files (no file list)"
+    return 1
+  fi
+  if [ ! -d "$dir" ] || [ -L "$dir" ] || [ ! -O "$dir" ]; then
+    _prmeta_debug "miss files (directory is not safe)"
+    return 1
+  fi
+  mode=$(command -p ls -ld "$dir" 2>/dev/null) || mode=""
+  mode="${mode%% *}"
+  case "$mode" in
+    drwx------|drwx------.|drwx------@) ;;
+    *)
+      _prmeta_debug "miss files (directory mode is not 0700)"
+      return 1
+      ;;
+  esac
+  if [ ! -f "$dir/files" ] || [ -L "$dir/files" ]; then
+    _prmeta_debug "miss files (not a regular file)"
+    return 1
+  fi
+  # Read at most 4 MiB + 1 byte. A longer result is a miss. The braces keep
+  # a bash warning about a NUL byte off the gate's stderr.
+  { list=$(command -p head -c 4194305 "$dir/files" 2>/dev/null); } 2>/dev/null || list=""
+  if [ "${#list}" -gt 4194304 ]; then
+    _prmeta_debug "miss files (file is larger than 4 MiB)"
+    return 1
+  fi
+  if [ -z "$list" ]; then
+    _prmeta_debug "miss files (empty list)"
+    return 1
+  fi
+  if ! sum=$(printf '%s\n' "$list" | prmeta_sha256); then
+    _prmeta_debug "miss files (no digest tool)"
+    return 1
+  fi
+  if [ "$sum" != "$want" ]; then
+    _prmeta_debug "miss files (digest differs)"
+    return 1
+  fi
+  lines=$(printf '%s\n' "$list" | command -p wc -l | command -p tr -d ' ')
+  if [ "$lines" != "$count" ]; then
+    _prmeta_debug "miss files (line count differs)"
+    return 1
+  fi
+  _prmeta_debug "hit files"
+  printf '%s\n' "$list"
+}
+
+# Echoes the PR's base branch name, or empty on failure. Reads the snapshot
+# first. On a miss it calls `gh pr view --json baseRefName`, as the review
+# gate did inline before AgDR-0256. Empty <repo> gives empty, as before.
+resolve_pr_base_ref() {
+  local pr_number="${1:-}" cmd_repo="${2:-}" base=""
+  if [ -z "$pr_number" ] || [ -z "$cmd_repo" ]; then
+    echo ""
+    return
+  fi
+  if base=$(prmeta_get base "$pr_number" "$cmd_repo"); then
+    echo "$base"
+    return
+  fi
+  base=$(gh pr view "$pr_number" --repo "$cmd_repo" --json baseRefName -q '.baseRefName' 2>/dev/null)
+  echo "$base"
+}
+
 resolve_pr_head() {
   local pr_number="$1"
   local cmd_repo="$2"
@@ -1349,6 +1567,12 @@ resolve_pr_head() {
 
   if [ -z "$pr_number" ]; then
     echo ""
+    return
+  fi
+
+  # Snapshot first (AgDR-0256). A miss falls through to the forge call.
+  if sha=$(prmeta_get head "$pr_number" "$cmd_repo"); then
+    echo "$sha"
     return
   fi
 
@@ -1383,6 +1607,12 @@ resolve_pr_head_branch() {
 
   if [ -z "$pr_number" ]; then
     echo ""
+    return
+  fi
+
+  # Snapshot first (AgDR-0256). A miss falls through to the forge call.
+  if branch=$(prmeta_get branch "$pr_number" "$cmd_repo"); then
+    echo "$branch"
     return
   fi
 

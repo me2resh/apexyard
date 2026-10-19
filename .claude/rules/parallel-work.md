@@ -39,6 +39,12 @@ worktree), or run serial?
 
 If the user says yes → invoke `/fan-out`. If serial → proceed normally.
 
+## Spawn mode — fresh by default
+
+When you spawn an agent (via `/fan-out` or a single `Agent` call), the default is a **fresh, role-appropriate spawn with a written brief**. Do not fork the parent conversation. Pick `subagent_type` from [`.claude/rules/agent-role-selection.md`](agent-role-selection.md). Put the facts the agent needs in the brief.
+
+A fork is allowed only when the facts the agent needs are not yet in a file (and cannot be written into a brief). Forks inherit the parent's full context — measured at 430k median / 581k max first-turn tokens in the 2026-10-10 baseline — so they are the expensive path.
+
 ## Self-check before responding
 
 Before answering a multi-item user request, scan your planned response for:

@@ -14,6 +14,11 @@ trap 'rm -rf "$TMP"' EXIT
 # running this test so a /bin/bash run really exercises Bash 3.2.
 mkdir -p "$TMP/bin"
 ln -s "$BASH" "$TMP/bin/bash"
+# The merge prefetch (AgDR-0256) calls gh for a merge with a literal repo.
+# A failing stub keeps this test off the network. A failed prefetch only
+# means that the (stub) gates fetch.
+printf '#!/bin/sh\nexit 1\n' > "$TMP/bin/gh"
+chmod +x "$TMP/bin/gh"
 PATH="$TMP/bin:$PATH"
 export PATH
 

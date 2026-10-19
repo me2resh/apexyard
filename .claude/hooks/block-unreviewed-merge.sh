@@ -116,7 +116,7 @@ _require_lib "$(dirname "$0")/_lib-extract-pr.sh" \
   _run_awk_or_fallback join_shell_continuations _join_shell_continuations_fallback \
   _scrub_merge_command _normalize_json_escapes \
   has_conflicting_repo_flags merge_command_uses_variable extract_pr_number resolve_merge_repo \
-  resolve_pr_head resolve_pr_head_branch
+  resolve_pr_head resolve_pr_head_branch resolve_pr_base_ref
 # Repo-qualified marker path helper (#485).
 _require_lib "$(dirname "$0")/_lib-review-markers.sh" \
   review_marker_path unqualified_marker_hint
@@ -343,10 +343,8 @@ fi
 # every caller of $BASE_REF_NAME already degrades correctly on empty (the
 # carry-over functions require it non-empty and return "unknown" without
 # it; print_behind_base_note already skips on empty CMD_REPO first).
-BASE_REF_NAME=""
-if [ -n "${CMD_REPO:-}" ]; then
-  BASE_REF_NAME=$(gh pr view "$PR_NUMBER" --repo "$CMD_REPO" --json baseRefName -q '.baseRefName' 2>/dev/null)
-fi
+# resolve_pr_base_ref reads the dispatcher snapshot first (AgDR-0256).
+BASE_REF_NAME=$(resolve_pr_base_ref "$PR_NUMBER" "${CMD_REPO:-}")
 
 # --- Optional behind-base note, shared by the two blocks below (#1386) ---
 # Advisory only — it adds NO new blocking condition. Both call sites already
