@@ -18,6 +18,23 @@ log_change() {
   jq -cn --arg source "$source_name" --arg path "$path" --arg decision "$decision" --arg reason "$reason" \
     '{source:$source,file_path:$path,decision:$decision,reason:$reason}' >> "$log_root/.claude/session/config-change-blocks.jsonl"
 }
+# A settings file that is not live has no snapshot record. Its baseline is the
+# committed copy in its own work tree, or {} when the file is not committed.
+committed_record() {
+  local dir top rel data
+  dir=$(dirname "$1")
+  data='{}'
+  if top=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) && [ -n "$top" ]; then
+    top=$(pt_physical "$top") || return 2
+    rel=${1#"$top"/}
+    if [ "$rel" != "$1" ] && git -C "$top" cat-file -e "HEAD:$rel" 2>/dev/null; then
+      data=$(git -C "$top" show "HEAD:$rel") || return 2
+    fi
+  fi
+  printf '%s' "$data" | jq -cS . >/dev/null 2>&1 || return 2
+  printf '%s' "$data" > "$PT_TMP_BASELINE" || return 2
+  pt_record "$PT_TMP_BASELINE"
+}
 block_change() { log_change block "$*"; pt_block "$*"; }
 if [ -z "$path" ]; then
   case "$source_name" in
@@ -33,7 +50,21 @@ for root in "${PT_ROOTS[@]}"; do
   case "$path" in "$root/.claude/settings.json"|"$root/.claude/settings.local.json") is_live=1 ;; esac
 done
 case "$path" in "$PT_USER/settings.json"|"$PT_HOME_CONFIG/settings.json") is_live=1 ;; esac
-[ "$is_live" = 1 ] || { log_change allow 'settings file is not live.'; exit 0; }
+if [ "$is_live" = 0 ]; then
+  # Defence in depth. Capture P12c showed no ConfigChange for a worktree
+  # settings file. If a future harness reports one, it can load the change,
+  # so the hook-disabling keys still block against the committed copy.
+  current=$(pt_record "$path") || block_change 'settings JSON is invalid.'
+  [ "$(jq -r '.disableAllHooks' <<<"$current")" != true ] || block_change 'disableAllHooks must remain false.'
+  PT_TMP_BASELINE=$(mktemp) || block_change 'cannot read the committed settings baseline.'
+  trap 'rm -f "$PT_TMP_BASELINE"' EXIT
+  baseline=$(committed_record "$path") || block_change 'cannot read the committed settings baseline.'
+  for key in hooks env; do
+    [ "$(jq -r --arg k "$key" '.[$k]' <<<"$current")" = "$(jq -r --arg k "$key" '.[$k]' <<<"$baseline")" ] || block_change "$key differs from the committed copy of a settings file that is not live."
+  done
+  log_change allow 'settings file is not live.'
+  exit 0
+fi
 current=$(pt_record "$path") || block_change 'settings JSON is invalid.'
 [ "$(jq -r '.disableAllHooks' <<<"$current")" != true ] || block_change 'disableAllHooks must remain false.'
 if [ "$PT_HAS_SNAPSHOT" = 1 ]; then
