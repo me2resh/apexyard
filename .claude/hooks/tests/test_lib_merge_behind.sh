@@ -902,6 +902,28 @@ EOF
   else
     mark_fail "#1796 shared walk" "got='$got' calls=$calls (want 'true true' / 1)"
   fi
+
+  # Paired mismatch: Rex marker SHA carries over, CEO marker SHA (a different
+  # SHA whose chain does not line up) does not. One dispatch, one forge call.
+  BAD_OLD=$(g "$repo" rev-parse main)
+  : > "$sb/gh-calls"
+  got=$(
+    GIT_DIR="$repo/gitdir" GIT_WORK_TREE="$repo" PATH="$sb/bin:$PATH" \
+      bash -c "
+        . '$LIB'
+        rex_approval_carries_over acme-org/example '$OLD_SHA' '$NEW_SHA' main >/dev/null
+        r1=\$_REX_CARRY_LAST
+        rex_approval_carries_over acme-org/example '$BAD_OLD' '$NEW_SHA' main >/dev/null
+        r2=\$_REX_CARRY_LAST
+        printf '%s %s\n' \"\$r1\" \"\$r2\"
+      "
+  )
+  calls=$(wc -l < "$sb/gh-calls" | tr -d ' ')
+  if [ "$got" = "true false" ] && [ "$calls" = "1" ]; then
+    mark_pass "#1796 shared walk result: Rex carries, mismatched CEO SHA does not (1 forge call)"
+  else
+    mark_fail "#1796 shared walk mismatch" "got='$got' calls=$calls (want 'true false' / 1)"
+  fi
   rm -rf "$repo" "$sb"
 
   # -------------------------------------------------------------------------
