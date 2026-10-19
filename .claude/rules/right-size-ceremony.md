@@ -37,6 +37,21 @@ A right-sizing heuristic is only safe if it fails in the harmless direction:
 1. **Security and trust-chain never go Lean.** Any change touching a production `.claude/hooks/*.sh` file, `.claude/settings.json`, `.githooks/**`, a delegated gate runner such as `bin/run-pre-push-checks.sh`, the merge-gate/marker libraries, auth, crypto, secrets, or a migration takes the Heavy path regardless of diff size. Test-only files under `.claude/hooks/tests/**` do not trigger Heavy by path alone; round up when the test changes enforcement semantics. A one-line production gate edit is exactly where you *want* the chain. This rail overrides the size signal every time.
 2. **Ambiguity rounds up.** If you're not sure which tier a change is, take the higher one. The tolerated failure is "occasionally too much review on a borderline case" — never "too little review on a risky one."
 
+## Scripted permission for Reduced-Scope review
+
+Before each Rex spawn or resume, follow `docs/skills/code-review-depth.md`.
+Run `bin/review-tier.sh` from the trusted base tree at the reviewed SHA over the full base..HEAD range.
+Never execute the PR's script. Missing scripts and all errors mean Full.
+The script allows only regular Markdown and raster images below `docs/`, except AgDRs, ORBIT records, and prompt-referenced paths.
+Its extensions are `.md`, `.png`, `.jpg`, `.jpeg`, `.gif`, and `.webp`.
+JSON, YAML, scripts, and lock files never qualify.
+Renames and copies include both paths. A truncated list means Full.
+`Reduced-scope-allowed` permits only the existing Reduced-Scope pass.
+Rex keeps both rails and can escalate on content. Use the stricter result.
+Recheck the forge head before dispatch and before accepting the review. Repeat after any push.
+This rule supersedes self-declared review eligibility, including the broader path examples above.
+Planning and implementation still use the proportionate-work guidance below.
+
 ## One ticket per trust-chain PR (me2resh/apexyard#1418)
 
 A PR that touches any path rail 1 above names as trust-chain carries one ticket. Batching several tickets into one PR stays acceptable only for a Lean docs or config-text change — the same path class rail 1 already excludes from the trust chain.
@@ -79,7 +94,7 @@ Four working rules follow from the table. They are the same size-matching instin
 
 The other half of the operator's ask ("something to watch the overengineering") is a **disproportion nudge**: when the *process* is about to cost more than the *work* — e.g. spawning a ~100k-token review for a 3-line doc PR, or opening a five-agent fan-out for three two-line edits — stop and take the Lean path instead.
 
-**The watch is your own judgment. There is no token meter in the open-source framework.** Earlier versions of this rule cited `enforce-budget.sh` as an existing hook that meters token cost — that was wrong: the hook is a **premium** component (`apexyard-premium#335`, gated on a `features.budget` entitlement) and is not tracked in this repository. Adopters running the OSS framework have no automatic disproportion signal; the nudge above is entirely self-discipline. Premium adopters do get the meter, and for them this rule is the judgment that reads it. See me2resh/apexyard#1044.
+**The watch is your own judgment. There is no token meter in the open-source framework.** Earlier versions of this rule cited `enforce-budget.sh` as an existing hook that meters token cost — that was wrong: the hook is a **premium** component (gated on a `features.budget` entitlement) and is not tracked in this repository. Adopters running the OSS framework have no automatic disproportion signal; the nudge above is entirely self-discipline. Premium adopters do get the meter, and for them this rule is the judgment that reads it. See me2resh/apexyard#1044.
 
 ## Self-check before spawning review ceremony
 

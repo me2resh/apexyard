@@ -61,3 +61,20 @@ For a **pure `.md` diff**, Lean and Standard were already mechanically identical
 - AgDR-0104 (control vs. backstop framing — why the gate can't also be the tier classifier)
 - AgDR-0107 (the original Lean-tier rule this decision corrects)
 - AgDR-0111 / AgDR-0112 (prior rounds establishing that gate trust must rest on forge-reported state, never a local self-report)
+
+## Evolution — scripted depth permission (#1773, 2026-10-19)
+
+Option 4 now requires a trusted tier script before each Rex spawn or resume.
+`bin/review-tier.sh` permits the existing Reduced-Scope pass only.
+The orchestrator exports it from the base commit, never from the PR working tree.
+It reads the complete base..reviewed range and both rename and copy paths.
+It checks an independent file list and fails to Full on any error or truncation.
+Only regular Markdown and raster images under docs qualify.
+Prompt-referenced paths, AgDRs, ORBIT records, JSON, YAML, scripts, and lock files always require Full.
+Rex retains the five eligibility conditions and both rails. The stricter result governs.
+A new head invalidates the result, so the orchestrator repeats the check after a push.
+The merge gates and marker library remain unchanged.
+
+The spawn procedure is in `docs/skills/code-review-depth.md`.
+Forge-case tests are in `.claude/hooks/tests/test_review_tier.sh`.
+The prompt changes require separate zero-flip evidence before this slice can ship.
