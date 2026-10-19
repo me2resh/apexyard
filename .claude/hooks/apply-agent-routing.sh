@@ -26,10 +26,11 @@
 #   - For each entry in agents:
 #       1. Locate .claude/agents/<name>.md — silently skip if missing
 #          (adopter may have a stale entry; harmless, not an error)
-#       2. Snapshot the framework default model: line (from HEAD of dev
-#          for the file) into .claude/agents/.framework-defaults.json
-#          so the drift guard has a baseline regardless of whether the
-#          adopter committed the rewrite
+#       2. Snapshot the framework model into
+#          .claude/agents/.framework-defaults.json.
+#          Try dev, then upstream/main, then HEAD.
+#          Then use the previous baseline.
+#          Read the working-tree file only after those.
 #       3. Rewrite the model: line in the agent file to the override
 #       3b. On a later run, read the previous defaults file first.
 #          For each saved agent with no model override now, write that
@@ -392,25 +393,64 @@ ROWS=$(printf '%s\n' "$ROWS" | awk -F'\t' -v reach="$EP_REACH" '
 # by string concat with newline-per-entry.
 #
 # Idempotency: re-running with the same config overwrites the snapshot
-# (with the same contents, since we re-read each agent file's HEAD
-# version).
+# with the same contents. Each run reads a committed baseline, not the
+# working-tree model the previous run wrote.
 # -----------------------------------------------------------------------------
+# Frontmatter model at <ref>:.claude/agents/<name>.md.
+# Empty when the ref or the file is absent.
+model_at_ref() {
+  local ref="$1"
+  local agent_name="$2"
+  git -C "$ROOT" rev-parse --verify "$ref" >/dev/null 2>&1 || return 0
+  git -C "$ROOT" show "${ref}:.claude/agents/${agent_name}.md" 2>/dev/null \
+    | awk '/^---/{count++; next} count==1 && /^model:/ {sub(/^model:[[:space:]]*/, ""); print; exit}'
+}
+
+# Model saved for this agent on the earlier run. Empty when absent.
+previous_saved_model() {
+  local agent_name="$1"
+  local name="" model=""
+  [ "${PREV_OK:-0}" -eq 1 ] || return 0
+  [ -n "${PREV_TSV:-}" ] || return 0
+  while IFS=$'\t' read -r name model; do
+    if [ "$name" = "$agent_name" ] && [ -n "$model" ]; then
+      printf '%s\n' "$model"
+      return 0
+    fi
+  done <<EOF
+$PREV_TSV
+EOF
+}
+
 snapshot_framework_default() {
   local agent_name="$1"
   local agent_file="$AGENTS_DIR/${agent_name}.md"
   local default_model=""
+  local ref=""
 
-  # Prefer the dev-branch baseline (most reliable framework default).
-  # Fall back to the current file's model: if dev isn't reachable
-  # (detached HEAD, bare checkout, hook running outside a git context).
-  if git -C "$ROOT" rev-parse --verify dev >/dev/null 2>&1; then
-    default_model=$(git -C "$ROOT" show "dev:.claude/agents/${agent_name}.md" 2>/dev/null \
-      | awk '/^---/{count++; next} count==1 && /^model:/ {sub(/^model:[[:space:]]*/, ""); print; exit}')
+  # Same order as block-agent-routing-drift.sh. A fork often has no
+  # local dev branch. Do not read the working tree first. After the
+  # first session that file holds the override.
+  for ref in dev upstream/main HEAD; do
+    default_model=$(model_at_ref "$ref" "$agent_name")
+    if [ -n "$default_model" ]; then
+      printf '%s\n' "$default_model"
+      return 0
+    fi
+  done
+
+  # Keep a value already saved. Do not replace it with the working-tree
+  # model.
+  default_model=$(previous_saved_model "$agent_name")
+  if [ -n "$default_model" ]; then
+    printf '%s\n' "$default_model"
+    return 0
   fi
-  if [ -z "$default_model" ] && [ -f "$agent_file" ]; then
+
+  if [ -f "$agent_file" ]; then
     default_model=$(awk '/^---/{count++; next} count==1 && /^model:/ {sub(/^model:[[:space:]]*/, ""); print; exit}' "$agent_file")
   fi
-  echo "$default_model"
+  printf '%s\n' "$default_model"
 }
 
 # Replace the frontmatter model: line. Leave every other line as it is.
@@ -445,7 +485,28 @@ load_previous_defaults() {
   PREV_OK=0
   PREV_TSV=""
   [ -f "$DEFAULTS_FILE" ] && [ -r "$DEFAULTS_FILE" ] || return 0
-  raw=$(tr -d '[:space:]' < "$DEFAULTS_FILE" 2>/dev/null) || return 0
+  # Drop formatting whitespace. Keep a space inside a quoted value so
+  # the parser can skip that entry instead of collapsing it.
+  raw=$(awk '
+    BEGIN { q = 0 }
+    {
+      n = length($0)
+      i = 1
+      while (i <= n) {
+        c = substr($0, i, 1)
+        if (c == "\"") {
+          q = 1 - q
+          printf "%s", c
+        } else if (q == 0 && c ~ /[[:space:]]/) {
+          # Formatting space. A space inside quotes stays.
+        } else {
+          printf "%s", c
+        }
+        i++
+      }
+    }
+    END { printf "\n" }
+  ' "$DEFAULTS_FILE" 2>/dev/null) || return 0
   case "$raw" in
     \{\})
       PREV_OK=1
@@ -481,6 +542,10 @@ load_previous_defaults() {
       ""|*[!a-zA-Z0-9_-]*) return 0 ;;
     esac
     case "$model" in
+      *[[:space:]]*)
+        # A space is not part of a model id. Skip this entry.
+        continue
+        ;;
       ""|*[!a-zA-Z0-9_.:/+-]*) return 0 ;;
     esac
     acc="${acc}${name}"$'\t'"${model}"$'\n'
@@ -532,8 +597,8 @@ while IFS=$'\t' read -r agent_name key value; do
 
   case "$key" in
     model)
-      # Snapshot framework default ONCE per agent (idempotent — we
-      # always grab from dev HEAD, never from the working-tree file).
+      # Snapshot the framework model once per agent. Read a committed
+      # ref before the working-tree file.
       if ! echo "$defaults_acc" | grep -q "^\"${agent_name}\":"; then
         fwd=$(snapshot_framework_default "$agent_name")
         if [ -n "$fwd" ]; then

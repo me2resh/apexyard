@@ -71,7 +71,7 @@ A staged file that still has an override still blocks.
 - The hook does not restore when `agent-routing.yaml` is absent. The zero-config exit stays in front of restore.
 - A routing file that parses as no agents restores every agent in a valid baseline. A syntax error parses as an empty agent map.
 - The hook replaces an existing frontmatter `model:` line. It does not insert a line that is absent.
-- The baseline value is the model string saved on the earlier run. The hook does not read git again to choose a different model.
+- The hook reads the framework model from `dev`, then `upstream/main`, then `HEAD`. It uses a saved baseline value before it reads the working-tree file.
 
 ## Architecture evolution
 
@@ -91,6 +91,10 @@ An agent the hook never rewrote stays as it is.
 A missing or unreadable baseline restores nothing and does not fail the session.
 The drift guard still blocks a staged override.
 A restored file matches the framework model, so the guard reports no drift.
+
+The hook reads that model from `dev`, then `upstream/main`, then `HEAD`.
+It uses a saved baseline value before it reads the working-tree file.
+A fork with no local `dev` branch keeps the committed model in the baseline.
 
 ## Artifacts
 

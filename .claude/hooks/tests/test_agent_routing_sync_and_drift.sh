@@ -3,7 +3,7 @@
 # block-agent-routing-drift.sh (pre-commit + pre-push drift guard) —
 # the two hooks #351 PR 2 ships per AgDR-0050 § Axis 4.
 #
-# Coverage (13 cases, plus case 14 for #442 and cases 15–18 for #1763):
+# Coverage (13 cases, plus case 14 for #442 and cases 15–21 for #1763):
 #
 #   Sync hook (apply-agent-routing.sh):
 #     1. Empty config — empty agent-routing.yaml means no-op; no agent
@@ -991,6 +991,152 @@ else
   mark_fail "case 18 (#1763): partial restore" "first_rc=$first_rc second_rc=$second_rc qa=$after_qa snap=[$snap] banner1=[$banner_first] banner2=[$banner_second]"
 fi
 rm -f "$lead_copy"
+rm -rf "$SB"
+
+# ===========================================================================
+# CASE 19 — #1763: a fork with no local dev branch (only main / HEAD).
+# Two sessions with an override must keep the committed model in the
+# snapshot. Removing the override restores that model. While the
+# override is staged, the drift guard blocks. The guard script is
+# unchanged: a correct snapshot closes the no-dev fail-open gap.
+# ===========================================================================
+SB=$(make_fork)
+(
+  cd "$SB" || exit 1
+  git branch -M main
+  git branch -D dev
+) >/dev/null 2>&1
+has_dev=0
+git -C "$SB" rev-parse --verify --quiet dev >/dev/null 2>&1 && has_dev=1
+has_upstream=0
+git -C "$SB" rev-parse --verify --quiet upstream/main >/dev/null 2>&1 && has_upstream=1
+cat > "$SB/agent-routing.yaml" <<'YAML'
+version: 1
+agents:
+  backend-engineer:
+    model: opus
+YAML
+banner_first=$(cd "$SB" && bash .claude/hooks/apply-agent-routing.sh 2>&1 < /dev/null)
+first_rc=$?
+first_model=$(read_model_line "$SB/.claude/agents/backend-engineer.md")
+snap1=""
+[ -f "$SB/.claude/agents/.framework-defaults.json" ] && snap1=$(tr -d '[:space:]' < "$SB/.claude/agents/.framework-defaults.json")
+banner_second=$(cd "$SB" && bash .claude/hooks/apply-agent-routing.sh 2>&1 < /dev/null)
+second_rc=$?
+second_model=$(read_model_line "$SB/.claude/agents/backend-engineer.md")
+snap2=""
+[ -f "$SB/.claude/agents/.framework-defaults.json" ] && snap2=$(tr -d '[:space:]' < "$SB/.claude/agents/.framework-defaults.json")
+(cd "$SB" && git add .claude/agents/backend-engineer.md 2>/dev/null)
+drift_while=$(hook_stdin "git commit -m 'feat: leak backend model'" | (cd "$SB" && bash .claude/hooks/block-agent-routing-drift.sh > /dev/null 2>&1); echo $?)
+(cd "$SB" && git reset -q -- .claude/agents/backend-engineer.md 2>/dev/null)
+cat > "$SB/agent-routing.yaml" <<'YAML'
+version: 1
+agents: {}
+YAML
+banner_third=$(cd "$SB" && bash .claude/hooks/apply-agent-routing.sh 2>&1 < /dev/null)
+third_rc=$?
+restored=$(read_model_line "$SB/.claude/agents/backend-engineer.md")
+snap3=""
+[ -f "$SB/.claude/agents/.framework-defaults.json" ] && snap3=$(tr -d '[:space:]' < "$SB/.claude/agents/.framework-defaults.json")
+if [ "$has_dev" -eq 0 ] && [ "$has_upstream" -eq 0 ] \
+   && [ "$first_rc" -eq 0 ] && [ "$first_model" = "opus" ] \
+   && [ "$snap1" = '{"backend-engineer":"sonnet"}' ] \
+   && [ "$second_rc" -eq 0 ] && [ "$second_model" = "opus" ] \
+   && [ "$snap2" = '{"backend-engineer":"sonnet"}' ] \
+   && [ "$drift_while" = "2" ] \
+   && [ "$third_rc" -eq 0 ] && [ "$restored" = "sonnet" ] \
+   && [ "$snap3" = "{}" ] && [ -z "$banner_third" ]; then
+  mark_pass "case 19 (#1763): no local dev restores sonnet and the drift guard blocks the override"
+else
+  mark_fail "case 19 (#1763): no local dev" "dev=$has_dev upstream=$has_upstream first_rc=$first_rc model1=$first_model snap1=[$snap1] second_rc=$second_rc model2=$second_model snap2=[$snap2] drift=$drift_while third_rc=$third_rc restored=$restored snap3=[$snap3] banner1=[$banner_first] banner2=[$banner_second] banner3=[$banner_third]"
+fi
+rm -rf "$SB"
+
+# ===========================================================================
+# CASE 20 — #1763: no local dev, and HEAD is not the framework model.
+# upstream/main still has sonnet. The snapshot must use that ref, not
+# HEAD and not the working tree.
+# ===========================================================================
+SB=$(make_fork)
+(
+  cd "$SB" || exit 1
+  git branch -M main
+  git branch -D dev
+  git update-ref refs/remotes/upstream/main HEAD
+  awk '
+    BEGIN { fm=0; replaced=0 }
+    /^---[[:space:]]*$/ { fm++; print; next }
+    fm==1 && !replaced && /^model:[[:space:]]*/ { print "model: opus"; replaced=1; next }
+    { print }
+  ' .claude/agents/backend-engineer.md > .claude/agents/backend-engineer.md.tmp
+  mv .claude/agents/backend-engineer.md.tmp .claude/agents/backend-engineer.md
+  git add .claude/agents/backend-engineer.md
+  git commit -q -m "fixture: commit a local model on HEAD"
+) >/dev/null 2>&1
+has_dev=0
+git -C "$SB" rev-parse --verify --quiet dev >/dev/null 2>&1 && has_dev=1
+head_model=$(git -C "$SB" show "HEAD:.claude/agents/backend-engineer.md" 2>/dev/null \
+  | awk '/^---/{count++; next} count==1 && /^model:/ {sub(/^model:[[:space:]]*/, ""); print; exit}')
+upstream_model=$(git -C "$SB" show "upstream/main:.claude/agents/backend-engineer.md" 2>/dev/null \
+  | awk '/^---/{count++; next} count==1 && /^model:/ {sub(/^model:[[:space:]]*/, ""); print; exit}')
+cat > "$SB/agent-routing.yaml" <<'YAML'
+version: 1
+agents:
+  backend-engineer:
+    model: haiku
+YAML
+banner_output=$(cd "$SB" && bash .claude/hooks/apply-agent-routing.sh 2>&1 < /dev/null)
+hook_rc=$?
+applied=$(read_model_line "$SB/.claude/agents/backend-engineer.md")
+snap=""
+[ -f "$SB/.claude/agents/.framework-defaults.json" ] && snap=$(tr -d '[:space:]' < "$SB/.claude/agents/.framework-defaults.json")
+if [ "$has_dev" -eq 0 ] && [ "$head_model" = "opus" ] && [ "$upstream_model" = "sonnet" ] \
+   && [ "$hook_rc" -eq 0 ] && [ "$applied" = "haiku" ] \
+   && [ "$snap" = '{"backend-engineer":"sonnet"}' ]; then
+  mark_pass "case 20 (#1763): upstream/main wins over a different HEAD model"
+else
+  mark_fail "case 20 (#1763): upstream/main order" "dev=$has_dev head=$head_model upstream=$upstream_model rc=$hook_rc applied=$applied snap=[$snap] banner=[$banner_output]"
+fi
+rm -rf "$SB"
+
+# ===========================================================================
+# CASE 21 — a model value that contains whitespace is skipped.
+# A sibling pair in the same file still restores. The space is not
+# collapsed into the model id.
+# ===========================================================================
+SB=$(make_fork)
+awk '
+  BEGIN { fm=0; replaced=0 }
+  /^---[[:space:]]*$/ { fm++; print; next }
+  fm==1 && !replaced && /^model:[[:space:]]*/ { print "model: haiku"; replaced=1; next }
+  { print }
+' "$SB/.claude/agents/backend-engineer.md" > "$SB/.claude/agents/backend-engineer.md.tmp"
+mv "$SB/.claude/agents/backend-engineer.md.tmp" "$SB/.claude/agents/backend-engineer.md"
+lead_before=$(cat "$SB/.claude/agents/tech-lead.md")
+cat > "$SB/.claude/agents/.framework-defaults.json" <<'JSON'
+{
+  "tech-lead": "x y",
+  "backend-engineer": "sonnet"
+}
+JSON
+cat > "$SB/agent-routing.yaml" <<'YAML'
+version: 1
+agents: {}
+YAML
+banner_output=$(cd "$SB" && bash .claude/hooks/apply-agent-routing.sh 2>&1 < /dev/null)
+hook_rc=$?
+restored=$(read_model_line "$SB/.claude/agents/backend-engineer.md")
+lead_after=$(cat "$SB/.claude/agents/tech-lead.md")
+snap=""
+[ -f "$SB/.claude/agents/.framework-defaults.json" ] && snap=$(tr -d '[:space:]' < "$SB/.claude/agents/.framework-defaults.json")
+if [ "$hook_rc" -eq 0 ] && [ "$restored" = "sonnet" ] \
+   && [ "$lead_after" = "$lead_before" ] \
+   && ! grep -q 'model: xy' "$SB/.claude/agents/tech-lead.md" \
+   && [ "$snap" = "{}" ] && [ -z "$banner_output" ]; then
+  mark_pass "case 21 (#1763): whitespace in a model value skips that entry"
+else
+  mark_fail "case 21 (#1763): whitespace model" "rc=$hook_rc restored=$restored snap=[$snap] banner=[$banner_output] lead=$(read_model_line "$SB/.claude/agents/tech-lead.md")"
+fi
 rm -rf "$SB"
 
 # ===========================================================================
