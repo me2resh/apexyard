@@ -53,7 +53,7 @@ Each additional session uses its own worktree.
 
    If that command exits non-zero, add `.claude/worktrees/` to the project's `.gitignore`.
 
-   Then fetch and create the worktree from the project's integration branch (usually `main`; `dev` for the apexyard framework). Without an explicit start point, `git worktree add -b` starts at the main clone's HEAD, which is normally the other session's ticket branch. Pass `--no-track` so the new branch does not track `origin/<base-branch>`. The first upload must set the upstream of the new branch.
+   Then fetch and create the worktree from the project's integration branch (usually `main`, or `dev` for the apexyard framework). Without an explicit start point, `git worktree add -b` starts at the main clone's HEAD, which is normally the other session's ticket branch. Pass `--no-track` so the new branch does not track `origin/<base-branch>`. The first upload must set the upstream of the new branch.
 
    ```bash
    git -C <project-clone> fetch origin
@@ -66,14 +66,14 @@ Each additional session uses its own worktree.
 5. **Clean up after merge.** Run the remove command without `--force`, then prune.
 6. **Limits.** Two goals on one project can still conflict at merge time. A worktree postpones that conflict. It does not remove it.
 
-> **Warning:** `git worktree remove` refuses when the worktree has uncommitted tracked changes or untracked files that are not ignored, but it deletes ignored files such as `.env` and local databases without asking. Back them up first.
+> **Warning:** `git worktree remove` refuses when the worktree has uncommitted tracked changes or untracked files that are not ignored. It deletes ignored files such as `.env` and local databases without asking. Back them up first.
 
 ```bash
 git -C <project-clone> worktree remove .claude/worktrees/<type>-<ticket>-<slug>
 git -C <project-clone> worktree prune
 ```
 
-**Session marker warnings (#1533).** #1533 adds these warnings: the marker records `session_id` and `branch`, the gate warns once per session on a mismatch, and `/start-ticket` asks before it overwrites another session marker (a headless run cancels). Until #1533 ships, a second `/start-ticket` in the same tree overwrites the marker without a warning, so use one worktree per session.
+**Session marker warnings (#1533).** #1533 adds these warnings. The marker records `session_id` and `branch`. The gate warns once per session on a mismatch. `/start-ticket` asks before it overwrites another session marker. A headless run cancels. Until #1533 ships, a second `/start-ticket` in the same tree overwrites the marker without a warning. Use one worktree per session.
 
 ## Lifecycle — remove the worktree once its PR merges
 
