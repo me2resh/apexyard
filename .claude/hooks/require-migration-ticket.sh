@@ -548,9 +548,38 @@ MSG
   exit 2
 fi
 
+# Advisory only (AgDR-0257 / #1533): warn when the marker belongs to another
+# session or another branch. Never blocks on the mismatch alone.
+# Resolve the tree from the nearest existing ancestor of the edited path so
+# a not-yet-created migration directory still yields a real branch. When no
+# ancestor is usable, pass an empty tree: the warn helper skips the branch
+# check and does not consume a claim.
+if command -v active_ticket_warn_if_mismatch >/dev/null 2>&1; then
+  _rmt_warn_tree="${AT_TREE:-}"
+  if [ -z "$_rmt_warn_tree" ] && [ -n "${FILE_PATH:-}" ]; then
+    _rmt_warn_cand="$FILE_PATH"
+    while [ -n "$_rmt_warn_cand" ] && [ "$_rmt_warn_cand" != / ]; do
+      if [ -d "$_rmt_warn_cand" ]; then
+        _rmt_warn_tree=$(cd "$_rmt_warn_cand" 2>/dev/null && pwd) || _rmt_warn_tree=""
+        break
+      fi
+      _rmt_warn_cand=$(dirname "$_rmt_warn_cand")
+    done
+  fi
+  active_ticket_warn_if_mismatch "$MARKER" "${_rmt_warn_tree:-}" "${OPS_ROOT:-}" || true
+fi
+
 # --------- Parse marker for repo + issue number ---------
-TICKET_REPO=$(grep -E '^repo=' "$MARKER" | head -1 | cut -d= -f2-)
-TICKET_NUM=$(grep -E '^number=' "$MARKER" | head -1 | cut -d= -f2-)
+# First match of each key (AgDR-0257). Prefer the shared reader when present.
+if command -v active_ticket_read_field >/dev/null 2>&1; then
+  active_ticket_read_field "$MARKER" repo || true
+  TICKET_REPO="$REPLY"
+  active_ticket_read_field "$MARKER" number || true
+  TICKET_NUM="$REPLY"
+else
+  TICKET_REPO=$(grep -E '^repo=' "$MARKER" | head -1 | cut -d= -f2-)
+  TICKET_NUM=$(grep -E '^number=' "$MARKER" | head -1 | cut -d= -f2-)
+fi
 
 if [ -z "$TICKET_REPO" ] || [ -z "$TICKET_NUM" ]; then
   cat >&2 <<MSG

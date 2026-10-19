@@ -75,19 +75,59 @@ A timeout that is too short would block valid merges.
 
 | Entry | Slowest p95 | 5 x p95 | Floor | Chosen timeout |
 |-------|-------------|---------|-------|----------------|
-| `dispatch-bash.sh` (Bash matcher) | 2748 (`gh pr merge`) | 13740 | 10000 | 20 seconds |
+| `dispatch-bash.sh` (Bash matcher) | 9661 (`gh pr merge`, slow-network route, see below) | 48305 | 10000 | 60 seconds |
 | `require-active-ticket.sh` (Edit, Write, MultiEdit matcher) | 207 | 1035 | 10000 | 10 seconds |
 
-The `dispatch-bash.sh` value is 20 seconds, above the 13.74 second minimum.
-The extra margin covers slow tracker responses on the merge and PR routes.
-A merge that waits longer than 20 seconds for the tracker fails closed.
+The `dispatch-bash.sh` value is 60 seconds, above the 48.3 second minimum.
+The extra margin covers the merge routes with more calls (no checks: 6 calls;
+the AgDR-0244 fallback: 8 calls) on a slow network.
+A merge that waits longer than 60 seconds for the tracker fails closed.
 The operator can retry it.
+
+### Merge route after AgDR-0256 (me2resh/apexyard#1759)
+
+The first table measured a merge that the review gate blocked early.
+A full merge route runs all four gates and the head recheck.
+It depends on the network: route p95 is about the always-on time
+plus the call count times the per-call cost.
+
+AgDR-0256 cut the full route from 9 to 13 forge calls to 5 or 6.
+The measurement below runs the real dispatcher and the real four gates
+in a sandbox ops root with fixture approval markers, through
+`/bin/bash` 3.2 on macOS, n=30, for a plain merge with checks present.
+"Before" is upstream `dev` `4ef5fee`. The other always-on hooks are stubs,
+so the rows show the merge-gate part of the route.
+
+| Host | Calls before / after | p95 before | p95 after | max after |
+|------|----------------------|------------|-----------|-----------|
+| macOS, real GitHub API (about 1.2 s per call), open 5-file PR | 9 / 5 | 13015 | 9567 | 10928 |
+| Simulated #1759 Linux host (`gh` shim, 0.9 to 1.9 s per call) | 9 / 5 | 16669 | 9661 | 11164 |
+
+The #1759 host itself was not available. The second row replays its
+per-call latency. Its p95 is the larger one, so the profile line uses it.
+NFR-1 of AgDR-0256 (p95 of 15 seconds or less on that host) is met.
+
+A branch with a chain of "merge dev into branch" commits is slower.
+When the Rex marker is on an older commit, the review gate walks the
+chain with one forge call for each step. PR #1770 has 4 steps:
+
+| Host | Calls before / after | p95 before | p95 after |
+|------|----------------------|------------|-----------|
+| macOS, real GitHub API, squash merge of #1770 | 15 / 10 | 16613 | 11469 |
+| Simulated #1759 host (recorded responses, 0.9 to 1.9 s per call) | 15 / 10 | 26572 | 18986 |
+
+For that shape, 5 x p95 is 94.9 seconds, above the 60-second timeout.
+The timeout stays at 60 seconds until the walk calls are cut.
+AgDR-0256 names that follow-up and the per-call time limit.
+
+No document gives a timeout override in `.claude/settings.local.json`.
+Nothing yet shows which `timeout` wins when two entries merge.
 
 `.claude/hooks/tests/test_settings_fail_closed.sh` reads the lines below and
 checks the two timeouts in `.claude/settings.json` against them.
 
 ```text
-profile: dispatch-bash.sh p95_ms=2748
+profile: dispatch-bash.sh p95_ms=9661
 profile: require-active-ticket.sh p95_ms=207
 ```
 
