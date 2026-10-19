@@ -107,11 +107,26 @@ export const MAX_HOOK_OUTPUT_BYTES = 10 * 1024 * 1024;
  */
 export const HOOK_EXEC_TIMEOUT_MS = 30_000;
 
+/**
+ * Env for gate hooks and skill shells. Drop an inherited
+ * `CLAUDE_CODE_SESSION_ID` so the adapter id decides the marker path
+ * (AgDR-0250 precedence; #1783). Claude Code itself still sets that
+ * variable — this strip is adapter-only.
+ */
+export function adapterSessionEnv(sessionId?: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  delete env.CLAUDE_CODE_SESSION_ID;
+  const id = sessionId ?? process.env.APEXYARD_SESSION_ID;
+  if (id !== undefined) env.APEXYARD_SESSION_ID = id;
+  else delete env.APEXYARD_SESSION_ID;
+  return env;
+}
+
 /** Real subprocess exec — the production `ExecGateHook` implementation. */
 export const execGateHookReal: ExecGateHook = (hookPath, stdinPayload, cwd, maxBufferBytes, timeoutMs, sessionId) => {
   try {
     execFileSync("bash", [hookPath], {
-      env: { ...process.env, APEXYARD_SESSION_ID: sessionId ?? process.env.APEXYARD_SESSION_ID },
+      env: adapterSessionEnv(sessionId),
       input: stdinPayload,
       cwd,
       encoding: "utf-8",
@@ -241,7 +256,9 @@ export function buildToolExecuteBeforeHook(
     }
     if (toolId === "bash" && typeof command === "string") {
       const quotedId = "'" + sessionId.replaceAll("'", "'\\''") + "'";
-      output.args.command = `export APEXYARD_SESSION_ID=${quotedId}\n${command}`;
+      // Unset first: an inherited Claude Code id would otherwise win the
+      // marker-path resolver over APEXYARD_SESSION_ID (#1783).
+      output.args.command = `unset CLAUDE_CODE_SESSION_ID\nexport APEXYARD_SESSION_ID=${quotedId}\n${command}`;
     }
   };
 }

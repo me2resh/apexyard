@@ -28,6 +28,18 @@ SessionStart clears only the current session's exemption files. Role banners ret
 - Adapters export `APEXYARD_SESSION_ID` to hooks and skill shells. Claude Code keeps precedence. No shared default is permitted.
 - Interactive harness checks remain a recorded follow-up. They are not a merge condition under the amended AC5.
 
+2026-10-19 (#1783): opencode and pi strip an inherited `CLAUDE_CODE_SESSION_ID` from hook and shell env so the adapter id decides; the resolver precedence above is unchanged.
+
+## Architecture evolution
+
+### Before
+
+An opencode or pi process started from a shell that already exported `CLAUDE_CODE_SESSION_ID` forwarded that value to gate hooks and skill shells. The resolver preferred it over `APEXYARD_SESSION_ID`, so every adapter session in that shell shared the parent Claude Code marker paths.
+
+### After
+
+Both adapters remove `CLAUDE_CODE_SESSION_ID` from the environment they pass to hooks and from the prefix they add to agent shell commands (pi also clears it on the process at session start). Marker paths then follow each adapter's own `APEXYARD_SESSION_ID`. Claude Code sessions still set and use `CLAUDE_CODE_SESSION_ID` unchanged.
+
 ## Artifacts
 
 - Issue #1532.
