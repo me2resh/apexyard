@@ -23,12 +23,13 @@ It sorts runs by the words in the first prompt. A delta run matches "delta", "re
 
 | Set | Runs | Mean uncached tokens | Mean output tokens | Output share of uncached tokens | Output share, cost-weighted |
 |---|---|---|---|---|---|
-| All Rex runs | 541 | 126,466 | 9,950 | 7.9% | 10.2% |
+| All Rex runs | 541 (at the time of the run) | 126,466 | 9,950 | 7.9% | 10.2% |
 | Delta-like runs | 261 | 92,127 | 7,731 | 8.4% | 11.1% |
 | Delta with explicit prior approval | 4 | 129,928 | 23,540 | 18.1% | 19.6% |
 
 Terms: "uncached tokens" is input plus cache creation plus output, the `total_tokens` rule of the o1 script.
 "Cost-weighted" counts output at 5x input, cache creation at 2x (1-hour cache) and cache read at 0.1x. These weights are an assumption, not a price list.
+The 261-run delta-like set stands in for the gate's group (delta rounds after a prior Rex approval).
 
 Result: even if lower effort removed all thinking and output (a limit that cannot happen), the saving is 8% to 11%.
 The gate needs more than 20%. The gate fails.
@@ -62,8 +63,8 @@ No test ran. A build slice must run `test_agent_routing_sync_and_drift.sh` with 
 - Step 2 (headless probe), step 3 (five delta corpus entries), step 4 (eval at k=3 and k=8): stopped by the step 0 kill.
 - Token numbers per run before and after: none exist. No Rex run was made. Rex runs spent: zero.
 - Verdict flips: not measured.
-- The AgDR and the eval report were not written. The orchestrator decides if a negative result needs them.
-- The slice says delta corpus entries still ship on a kill. I did not mine them. The corpus has no delta entry today.
+- The rejection decision is in [AgDR-0254](../agdr/AgDR-0254-reject-lean-effort-rex-delta.md). The eval report was not written because no Rex eval ran.
+- The slice says delta corpus entries still ship on a kill. Those entries move to o7 slice #1773, which already builds the Rex delta corpus. They were not mined in this spike.
 
 ## Frontmatter diff of the throwaway agent
 
