@@ -24,25 +24,14 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
         return subprocess.run(['git','-C',str(repo),*args],env=env,check=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True).stdout.strip()
     git('init','-q','-b','feature/GH-1748-test'); git('config','user.name','Test'); git('config','user.email','test@example.invalid')
     git('-c','core.hooksPath=/dev/null','commit','--allow-empty','-qm','fixture')
-    # Fail-before base: ALIAS_1748_BASE_HOOKS, else archive a resolved base
-    # ref (upstream/dev, origin/dev, then parent of the _lib-git-global.sh
-    # change). Skip fail-before when no base ref resolves (CI has no upstream).
+    # Fail-before base: ALIAS_1748_BASE_HOOKS, else archive the pinned
+    # pre-#1748 commit (merge-base of the first alias commit with dev).
+    # Never use upstream/dev or origin/dev: after merge those hold the fix.
+    # Skip when the pin is missing or the archived lib already has the fix.
     # Perf base: ALIAS_1748_PERF_BASE_HOOKS, else archive 23d8387 (AgDR-0253).
+    FAILBEFORE_BASE = 'e48bbc49125dc2a7e80c2945c7c6e42fe42f4486'
     def ref_ok(ref):
         return subprocess.run(['git','rev-parse','--verify','--quiet',ref+'^{commit}'],cwd=root,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0
-    def resolve_failbefore_ref():
-        if os.environ.get('ALIAS_1748_BASE_REF'):
-            cand=os.environ['ALIAS_1748_BASE_REF']
-            return cand if ref_ok(cand) else None
-        for cand in ('upstream/dev','origin/dev'):
-            if ref_ok(cand):
-                return cand
-        log=subprocess.run(['git','log','-1','--format=%H','--','.claude/hooks/_lib-git-global.sh'],cwd=root,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
-        if log.returncode==0 and log.stdout.strip():
-            parent=log.stdout.strip()+'^'
-            if ref_ok(parent):
-                return parent
-        return None
     def archive_hooks(ref, label):
         scratch=pathlib.Path(os.environ.get('ALIAS_1748_SCRATCH') or tempfile.mkdtemp(prefix='alias-1748-base-'))
         scratch.mkdir(parents=True, exist_ok=True)
@@ -51,15 +40,24 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
         archive=subprocess.run(['git','archive',ref,'.claude/hooks'],cwd=root,check=True,stdout=subprocess.PIPE).stdout
         subprocess.run(['tar','-x','-C',str(base)],input=archive,check=True)
         return base/'.claude/hooks'
+    def lib_has_alias_resolver(hooks_dir):
+        lib = pathlib.Path(hooks_dir)/'_lib-git-global.sh'
+        if not lib.is_file():
+            return False
+        return re.search(r'^git_alias_check\s*\(\)', lib.read_text(), re.M) is not None
     if os.environ.get('ALIAS_1748_BASE_HOOKS'):
         basehooks=pathlib.Path(os.environ['ALIAS_1748_BASE_HOOKS'])
-    else:
-        base_ref=resolve_failbefore_ref()
-        if base_ref:
-            basehooks=archive_hooks(base_ref, 'failbefore')
-        else:
-            print('SKIP fail-before: no base ref', flush=True)
+        if lib_has_alias_resolver(basehooks):
+            print('SKIP fail-before: base already defines alias resolver', flush=True)
             basehooks=None
+    elif ref_ok(FAILBEFORE_BASE):
+        basehooks=archive_hooks(FAILBEFORE_BASE, 'failbefore')
+        if lib_has_alias_resolver(basehooks):
+            print('SKIP fail-before: base already defines alias resolver', flush=True)
+            basehooks=None
+    else:
+        print('SKIP fail-before: base commit not available', flush=True)
+        basehooks=None
     if mode.startswith('perf'):
         if os.environ.get('ALIAS_1748_PERF_BASE_HOOKS'):
             basehooks=pathlib.Path(os.environ['ALIAS_1748_PERF_BASE_HOOKS'])
