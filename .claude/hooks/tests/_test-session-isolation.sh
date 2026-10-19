@@ -32,7 +32,7 @@
 # moves the same neutralisation into every suite, keeps a disposable pin
 # dir, and pairs with a required-helper lint plus a write-capable regression.
 
-unset CLAUDE_CODE_SESSION_ID
+unset CLAUDE_CODE_SESSION_ID APEXYARD_SESSION_ID
 
 export APEXYARD_OPS_DISABLE_PIN=1
 export APEXYARD_DISABLE_RESOLUTION_CACHE=1

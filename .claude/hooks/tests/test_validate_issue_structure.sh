@@ -15,6 +15,7 @@ set -u
 # Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
 # shellcheck disable=SC1091
 . "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+export CLAUDE_CODE_SESSION_ID=marker-test
 
 
 REPO_ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -46,6 +47,7 @@ YAML
 # Copy the real defaults + lib so the hook reads real schema.
 cp "$REPO_ROOT/.claude/project-config.defaults.json" "$TMPDIR/fork/.claude/project-config.defaults.json"
 cp "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" "$TMPDIR/fork/.claude/hooks/_lib-read-config.sh"
+cp "$(cd "$(dirname "$0")/.." && pwd)/_lib-session-markers.sh" "$TMPDIR/fork/.claude/hooks/_lib-session-markers.sh"
 cp "$REPO_ROOT/.claude/hooks/_lib-flag-value.sh" "$TMPDIR/fork/.claude/hooks/_lib-flag-value.sh"
 
 # Build a JSON tool_input payload.
@@ -434,7 +436,7 @@ export APEXYARD_OPS_DISABLE_PIN=1
 # per-case so it never leaks into the schema cases above.
 touch "$TMPDIR/fork/.apexyard-fork"
 mkdir -p "$TMPDIR/fork/.claude/session"
-MARKER="$TMPDIR/fork/.claude/session/active-issue-skill"
+MARKER="$TMPDIR/fork/.claude/session/active-issue-skill.marker-test"
 
 # A [Feature] body in the framework-request template — MISSING the project
 # [Feature] schema (User Story + Acceptance Criteria) by design.

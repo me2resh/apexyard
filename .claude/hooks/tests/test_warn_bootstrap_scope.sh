@@ -29,6 +29,7 @@ set -u
 # Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
 # shellcheck disable=SC1091
 . "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+export CLAUDE_CODE_SESSION_ID=marker-test
 
 
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
@@ -68,7 +69,7 @@ else
   FAKE_ROOT=$(cd -P "$FAKE_ROOT" && pwd)
 fi
 
-MARKER="$FAKE_ROOT/.claude/session/active-bootstrap"
+MARKER="$FAKE_ROOT/.claude/session/active-bootstrap.marker-test"
 
 set_marker() {
   printf '%s' "handover" > "$MARKER"

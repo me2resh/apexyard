@@ -5,6 +5,7 @@ set -u
 # Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
 # shellcheck disable=SC1091
 . "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+export CLAUDE_CODE_SESSION_ID=marker-test
 
 src=$(cd "$(dirname "$0")/../../.." && pwd)
 if [ ! -x "$src/.claude/hooks/require-orbit-slice-for-ticket.sh" ]; then
@@ -214,8 +215,9 @@ check other_repo_valid 0 "gh issue $verb --repo demo-org/other --title '[Feature
 check other_repo_wrong_slice 2 "gh issue $verb --repo demo-org/other --title '[Feature] Demo' --body 'ORBIT slice: slice-demo-o1'"
 cp "$src/.claude/hooks/require-skill-for-issue-create.sh" \
   "$src/.claude/hooks/validate-issue-structure.sh" "$sb/.claude/hooks/"
+cp "$src/.claude/hooks/_lib-session-markers.sh" "$sb/.claude/hooks/"
 mkdir -p "$sb/.claude/session"
-printf 'orbit\n' > "$sb/.claude/session/active-issue-skill"
+printf 'orbit\n' > "$sb/.claude/session/active-issue-skill.marker-test"
 payload=$(jq -n --arg c "gh issue $verb --repo demo-org/demo --title '[Slice] Demo' --body-file '$body_file'" '{tool_name:"Bash",tool_input:{command:$c}}')
 for gate in require-skill-for-issue-create.sh validate-issue-structure.sh require-orbit-slice-for-ticket.sh; do
   (cd "$sb" && printf '%s' "$payload" | /bin/bash ".claude/hooks/$gate") > "$sb/out" 2> "$sb/err"
