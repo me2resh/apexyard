@@ -1,5 +1,9 @@
 #!/bin/bash
-# Hermetic AgDR-0253 matrix, fail-before checks and median-of-five timings.
+# Hermetic AgDR-0253 alias suite: fail-before setup, matrix cases, timings.
+# Default (no args, CI via bin/run-hook-tests.sh): quick mode (~288 cases,
+# resolver only). Full matrix (~2,122 cases, every gate + fail-before):
+#   /bin/bash .claude/hooks/tests/test_git_alias_1748.sh matrix
+#   ALIAS_1748_FULL=1 /bin/bash .claude/hooks/tests/test_git_alias_1748.sh
 # The payload is data. Never execute an unsafe git command in a fixture.
 set -eu
 # Keep host session pins and network lookups out of fixtures.
@@ -11,7 +15,12 @@ python3 - "$@" <<'PY'
 import collections, json, os, pathlib, re, shutil, signal, statistics, subprocess, sys, tempfile, time
 root = pathlib.Path(os.environ['ROOT'])
 hooks = root / '.claude/hooks'
-mode = sys.argv[1] if len(sys.argv)>1 else 'matrix'
+if len(sys.argv) > 1:
+    mode = sys.argv[1]
+elif os.environ.get('ALIAS_1748_FULL') == '1':
+    mode = 'matrix'
+else:
+    mode = 'quick'
 gates = ['block-main-push','validate-branch-name','check-secrets','validate-commit-format','verify-commit-refs','require-agdr-for-arch-changes','block-onboarding-in-git','block-agent-routing-drift']
 counts = collections.defaultdict(collections.Counter)
 failures = []
