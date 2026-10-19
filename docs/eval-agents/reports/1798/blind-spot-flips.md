@@ -2,7 +2,7 @@
 
 Shape-probe and recount checks for two known Rex blind spots.
 
-Status: **Targeted eval, the C4 no-flip run, the no-flip re-run and the rex-773 k=8 run, 2026-10-19. Two flips remain with prompt `a7b3`, and the CEO accepted both ([#1798 comment](https://github.com/me2resh/apexyard/issues/1798#issuecomment-6279094760)): rex-773 (COMMENT to CHANGES REQUESTED, borderline) and rex-1711 (COMMENT to APPROVED, toward the frozen key). rex-1683 does not flip.**
+Status: **Targeted eval, the C4 no-flip run, the no-flip re-run and the rex-773 k=8 run, 2026-10-19. Two flips remain with prompt `a7b3`. The CEO accepted both ([#1798 comment](https://github.com/me2resh/apexyard/issues/1798#issuecomment-6279094760)): rex-773 (COMMENT to CHANGES REQUESTED, borderline) and rex-1711 (COMMENT to APPROVED, toward the frozen key). rex-1683 does not flip.**
 
 Prompt hashes (SHA-256, first 12 hex):
 
@@ -38,7 +38,7 @@ Follow-up #1815 tests the recount check with read-only source access.
 
 ## No-flip table (C4)
 
-Prompts: baseline `2656e3532425` (prompt of PR #1797); new `1ac8b6976d53`.
+Prompts: baseline `2656e3532425` (the prompt of PR #1797), and new `1ac8b6976d53`.
 Protocol: the same as above. Opus CLI, no tools, k=3 per prompt and entry, 13 entries (the 15 corpus entries minus the two blind-spot entries).
 Non-delta entries got the sanitized diff only. Delta entries also got the sanitized earlier review and the delta range.
 Baseline run 1 of rex-1683, rex-1711 and rex-1769 is an earlier #1773 run at the same prompt. All other runs are new.
