@@ -44,7 +44,9 @@ AgDR-0204 extends the raw fallback for unquoted `~[`, startup and `.git/hooks/` 
 
 ## Known limits
 
-- A merge phrase split with quotes can evade the contiguous text match after scrubbing blanks each quoted span.
+- The matcher blocks redirections between merge phrase words and concatenated quoted spans within those words.
+- Expansions within phrase words, including an expanded host CLI name, make the merge target unresolved. All four gates block it.
+- The redirect-target guard checks file targets after bash combined-output and zsh clobber operators. Descriptor duplication and closure remain data.
 - A two-step write-then-run can hide a merge: one turn writes merge text to an ordinary file, and a later turn runs that file.
 - A grep option name padded with more than 48 characters of empty quote pairs, before or inside the name, is not recognised (AgDR-0204 reads a fixed window so the check stays linear).
 - A glob such as `?-filter=` expands to an option name only when a matching file exists. The check does not read the file system, so it does not see this.
@@ -52,6 +54,21 @@ AgDR-0204 extends the raw fallback for unquoted `~[`, startup and `.git/hooks/` 
 Forge controls remain authoritative for these limits.
 
 ## Architecture evolution
+
+### #1803 detect split phrases before target extraction
+
+The bounded data view now has an additional phrase scan.
+It removes intervening redirections and joins quoted word spans without executing shell input.
+Simple parameter expansions match unknown word spans.
+The scan treats each detected split phrase as an unresolved target.
+This prevents a split call from using metadata or approvals for another call.
+Scanner failures also produce an unresolved target.
+Each gate requires the scanner function before it reads a command.
+
+The redirect-target guard now checks combined-output file targets and zsh clobber targets.
+Descriptor duplication and closure retain their existing data behavior.
+The two-step write-then-run limit remains.
+The matcher remains a bounded text check, not a shell evaluator.
 
 ### #1507 raw fallbacks for three execution shapes
 

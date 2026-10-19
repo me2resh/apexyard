@@ -599,7 +599,8 @@ _merge_scrub_once() {
         }
         # Do not mistake the ampersand in a descriptor redirect for a new
         # command. Process substitutions hit the raw fallback above.
-        if ((c == ">" || c == "<") && nx == "&") {
+        if ((c == "<" && nx == "&") || \
+            (c == ">" && nx == "&" && substr(s, pos + 2, 1) ~ /[0-9-]/)) {
           out = out c nx; pos += 2; continue
         }
         # Output redirects to shell startup files or .git/hooks add the raw
@@ -611,7 +612,7 @@ _merge_scrub_once() {
         if (c == ">") {
           start = pos
           pos++
-          if (substr(s, pos, 1) == ">" || substr(s, pos, 1) == "|") pos++
+          if (substr(s, pos, 1) ~ /[>|!&]/) pos++
           while (pos <= n && substr(s, pos, 1) ~ /[ \t]/) pos++
           lead = (pos <= n) ? substr(s, pos, 1) : ""
           if (read_merge_word()) {
@@ -1016,13 +1017,84 @@ _has_opaque_merge_wrapper() {
 
 # Raw scan for the unparseable JSON fallback. Do not scrub the encoded payload:
 # JSON quotes are transport syntax, not shell argument boundaries.
-# Scan both the original text and backslash-newline-joined text (#1564).
-# A backslash at the end of a comment line does not continue that comment,
-# so the original scan must remain available for every detector.
+# Scan the bounded data view without evaluating shell input. A changed
+# phrase is opaque: its target must never borrow another call or checkout.
+_has_split_merge_phrase() {
+  local result
+  if [ "${#1}" -gt 120000 ]; then return 0; fi
+  result=$(MERGE_SPLIT_INPUT="$1" awk '
+    function finish() {
+      if (w == "") return
+      a = b; b = d; d = "^" w "$"
+      ca = cb; cb = cd; cd = changed
+      if ((ca || cb || cd || redirected) && \
+          ((("gh" ~ a) && ("pr" ~ b)) || (("glab" ~ a) && ("mr" ~ b))) && \
+          ("merge" ~ d)) hit = 1
+      w = ""; changed = 0
+    }
+    BEGIN {
+      s = ENVIRON["MERGE_SPLIT_INPUT"]; n = length(s)
+      sq = sprintf("%c", 39); dq = sprintf("%c", 34)
+      a = b = d = "^!$"
+      for (i = 1; i <= n; i++) {
+        c = substr(s, i, 1)
+        if (c == sq || c == dq) {
+          if (q == c) { q = ""; changed = 1; continue }
+          if (q == "") { q = c; changed = 1; continue }
+        }
+        if (q != sq && c == "$") {
+          rest = substr(s, i + 1)
+          len = 0
+          if (match(rest, /^[A-Za-z_][A-Za-z0-9_]*/)) len = RLENGTH
+          else if (match(rest, /^[{][A-Za-z_][A-Za-z0-9_]*[}]/)) len = RLENGTH
+          if (len) { w = w ".*"; changed = 1; i += len; continue }
+        }
+        if (q == "" && c ~ /[<>]/) {
+          # A descriptor prefix belongs to the operator, not argv.
+          if (w ~ /^[0-9]+$/) w = ""
+          finish(); redirected = 1
+          if (substr(s, i + 1, 1) ~ /[<>|!&]/) i++
+          while (substr(s, i + 1, 1) ~ /[ \t]/ && i < n) i++
+          rq = ""
+          while (i < n) {
+            t = substr(s, i + 1, 1)
+            if (rq == "" && t ~ /[ \t\n;|&<>]/) break
+            i++
+            if (t == sq || t == dq) {
+              if (rq == t) rq = ""
+              else if (rq == "") rq = t
+            }
+          }
+          continue
+        }
+        if (q == "" && c ~ /[ \t\n;|&()]/) {
+          finish()
+          if (c ~ /[\n;|&()]/) { a = b = d = "^!$"; ca = cb = cd = redirected = 0 }
+          continue
+        }
+        # Only phrase letters participate in a literal word. Other bytes
+        # cannot become regular expression operators.
+        if (length(w) < 64) {
+          if (c ~ /[A-Za-z0-9]/) w = w c
+          else w = w "!"
+        }
+      }
+      finish()
+      print hit ? "split" : "clear"
+    }
+  ' 2>/dev/null) || return 0
+  [ "$result" != clear ]
+}
+
+# Scan both original and continuation-joined text. A comment must not hide
+# a command by joining its final backslash to the next line (#1564).
 is_merge_command_raw() {
   local cmd joined
   joined=$(_join_shell_continuations "$1")
   for cmd in "$1" "$joined"; do
+    if _has_split_merge_phrase "$cmd"; then
+      return 0
+    fi
     if echo "$cmd" | grep -qE '\bgh\s+pr\s+merge\b'; then
       return 0
     fi
@@ -1259,6 +1331,9 @@ merge_command_uses_variable() {
   # Use the same bounded data view as is_merge_command. Uncertain or
   # executable commands keep the raw text, so variable targets still block.
   cmd=$(_scrub_merge_command "$joined") || cmd="$joined"
+  if _has_split_merge_phrase "$cmd"; then
+    return 0
+  fi
 
   # All four hooks call this check before PR extraction. Three intentionally
   # skip when extraction returns empty, leaving the approval hook to report
