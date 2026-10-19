@@ -228,6 +228,126 @@
         "was_justified": false
       },
       "notes": "Rex approved at 23:13 with 'next action: merge only after the normal human merge approval'; Hakim reported the HIGH on the identical commit at 23:14. Rex's review recorded Scope: Full, so diff_range is the PR-level range bd78903e..9382269f (2 files, 7 insertions, 3 deletions) rather than the single commit — the single-commit diff is only the 2-line opt-out guard and contains neither the activating default nor the cursor call, so an agent correctly approving it would be scored a MISS. Three properties make this entry useful. Hakim reproduced the defect rather than inferring it, reporting that a workspace carrying its own bin/sync-cursor-adapter.sh printed 'project sync-cursor-adapter executed' from install mode. Hakim had already reported the same HIGH at the previous commit ee509d3b, so Rex approved while an earlier HIGH was still open. And the defect spans the diff boundary — the activating default is inside it, the installer's --root handling is not — so the entry tests whether an agent reasons past the changed lines into the code path they activate. 9382269f is not reachable from dev, because #1289 was squash-merged as e4665423; fetch the PR #1289 head ref before resolving the range locally. Surfaced while adjudicating candidates for me2resh/apexyard#1440."
+    },
+    {
+      "id": "rex-1765-31e0fd03-delta",
+      "pr": 1765,
+      "repo": "me2resh/apexyard",
+      "commit": "31e0fd034facf067a9d2525b928fca6c58ee50cf",
+      "diff_range": "4976ccd1e82cbdd102563da4a206b00007fe0237..31e0fd034facf067a9d2525b928fca6c58ee50cf",
+      "review_round": "delta",
+      "prior_review_commit": "4976ccd1e82cbdd102563da4a206b00007fe0237",
+      "oracle": {
+        "source": "confirmed_fix",
+        "established_by": "acfbdc8a adds regression cases and repairs variable spans inside redirect targets.",
+        "reference": "me2resh/apexyard#1765"
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "A variable inside a redirect target such as ~/\"$NOPE\".zshenv hides a merge from the merge gates.",
+          "severity": "HIGH",
+          "location": ".claude/hooks/_lib-extract-pr.sh"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "CHANGES REQUESTED",
+        "was_justified": true
+      },
+      "notes": "Real delta round recovered from the local posted-review artifacts. See reports/rex-delta-corpus-2026-10-19.md. Historical verdicts are not fresh eval results."
+    },
+    {
+      "id": "rex-1620-6229f1c-delta",
+      "pr": 1620,
+      "repo": "me2resh/apexyard",
+      "commit": "6229f1c28e70bc43be5af45d171ecb09de18c7be",
+      "diff_range": "758c8115a96fac9ae3fb315d84b5eb6807a36a8b..6229f1c28e70bc43be5af45d171ecb09de18c7be",
+      "review_round": "delta",
+      "prior_review_commit": "758c8115a96fac9ae3fb315d84b5eb6807a36a8b",
+      "oracle": {
+        "source": "confirmed_fix",
+        "established_by": "54d8a070 corrects the walk-up count and the Bedrock TTL claim.",
+        "reference": "me2resh/apexyard#1620"
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "The notes claim 24 inline ops-root walk-ups, but the defined walk-up has 18 matches.",
+          "severity": "HIGH",
+          "location": "docs/orbit/plans/plan-apexyard-token-efficiency.notes.md"
+        },
+        {
+          "id": "D2",
+          "description": "The notes say Bedrock needs only ENABLE_PROMPT_CACHING_1H_BEDROCK and omit ENABLE_PROMPT_CACHING_1H and the subagent effect.",
+          "severity": "HIGH",
+          "location": "docs/orbit/plans/plan-apexyard-token-efficiency.notes.md"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "CHANGES REQUESTED",
+        "was_justified": true
+      },
+      "notes": "Real delta round recovered from the local posted-review artifacts. See reports/rex-delta-corpus-2026-10-19.md. Historical verdicts are not fresh eval results."
+    },
+    {
+      "id": "rex-1683-f85a154-delta",
+      "pr": 1683,
+      "repo": "me2resh/apexyard",
+      "commit": "f85a154f0f8bf384eda6eeeb363c728903324744",
+      "diff_range": "bee035ff9aaab2fe4a8b762bb0404fb398fd40f1..f85a154f0f8bf384eda6eeeb363c728903324744",
+      "review_round": "delta",
+      "prior_review_commit": "bee035ff9aaab2fe4a8b762bb0404fb398fd40f1",
+      "oracle": {
+        "source": "no_contradiction",
+        "established_by": "The delta adds the missing decision record and off-base regression case. No later local descendant changes the test file.",
+        "reference": "me2resh/apexyard#1683"
+      },
+      "ground_truth_defects": [],
+      "recorded_verdict": {
+        "verdict": "APPROVED",
+        "was_justified": true
+      },
+      "notes": "Real delta round recovered from the local posted-review artifacts. See reports/rex-delta-corpus-2026-10-19.md. Historical verdicts are not fresh eval results."
+    },
+    {
+      "id": "rex-1711-f401d65-delta",
+      "pr": 1711,
+      "repo": "me2resh/apexyard",
+      "commit": "f401d657f1f8a131b293b9d155b2ac69c81ce952",
+      "diff_range": "a19947512fd827cf7eb99c50ca3f2bce7bf3cd63..f401d657f1f8a131b293b9d155b2ac69c81ce952",
+      "review_round": "delta",
+      "prior_review_commit": "a19947512fd827cf7eb99c50ca3f2bce7bf3cd63",
+      "oracle": {
+        "source": "no_contradiction",
+        "established_by": "The delta names existing commit 400db9b as the carried evidence and corrects the notes subject. It changes no assessment status.",
+        "reference": "me2resh/apexyard#1711"
+      },
+      "ground_truth_defects": [],
+      "recorded_verdict": {
+        "verdict": "APPROVED",
+        "was_justified": true
+      },
+      "notes": "Real delta round recovered from the local posted-review artifacts. See reports/rex-delta-corpus-2026-10-19.md. Historical verdicts are not fresh eval results."
+    },
+    {
+      "id": "rex-1769-03077369-delta",
+      "pr": 1769,
+      "repo": "me2resh/apexyard",
+      "commit": "0307736922dd697d314ac1d6e813571050a0326b",
+      "diff_range": "f77e546a58f4f587c598c21c8aaab9920d93188c..0307736922dd697d314ac1d6e813571050a0326b",
+      "review_round": "delta",
+      "prior_review_commit": "f77e546a58f4f587c598c21c8aaab9920d93188c",
+      "oracle": {
+        "source": "no_contradiction",
+        "established_by": "The delta adds upstream/main and committed-HEAD fallback tests. No later local descendant changes apply-agent-routing.sh.",
+        "reference": "me2resh/apexyard#1769"
+      },
+      "ground_truth_defects": [],
+      "recorded_verdict": {
+        "verdict": "APPROVED",
+        "was_justified": true
+      },
+      "notes": "Real delta round recovered from the local posted-review artifacts. See reports/rex-delta-corpus-2026-10-19.md. Historical verdicts are not fresh eval results."
     }
   ]
 }
