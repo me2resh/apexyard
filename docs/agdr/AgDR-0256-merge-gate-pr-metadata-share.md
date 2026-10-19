@@ -347,6 +347,16 @@ walk and the gate forge path:
    `timeout` as exit 2. The wrapper wraps the `gh` child only, so the
    AgDR-0256 PPID binding for PR metadata still holds.
 
+4. **Watchdog + command substitution (CI suite cap).** The watchdog must
+   write its timeout flag before signalling, and must TERM/KILL direct
+   children of the `gh` PID. A test stub that ran `sleep 120` under a
+   shell (not `exec sleep`) left that sleep as a child; bash `$()` in
+   `_rex_carry_fetch_chain` waited for it for the full 120 s, so
+   `test_block_unreviewed_merge.sh` hit the Linux CI per-suite cap
+   (rc=124) even though the case asserted "forge call timed out". Tests
+   use `exec sleep` and `APEXYARD_GH_CALL_TIMEOUT=1`. The suite stays well
+   under 120 s. Cap unchanged.
+
 Fail-closed rules are unchanged: an unreadable step, a tree mismatch, or a
 chain over 10 steps still means "does not carry over".
 

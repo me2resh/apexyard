@@ -1975,14 +1975,17 @@ case "$*" in
   *"pr view"*"headRefName"*) echo "feature/GH-99-test"; exit 0 ;;
   *"pr view"*"headRepository"*) echo "acme-org/example"; exit 0 ;;
   *"pr view"*"baseRefName"*) echo "$base_branch"; exit 0 ;;
-  *"api graphql"*|*"graphql"*) sleep 120; exit 0 ;;
+  # exec so the waited PID is the sleeper. A plain `sleep` child made
+  # bash `$()` wait the full 120 s under the watchdog (#1796 CI cap).
+  *"api graphql"*|*"graphql"*) exec sleep 120 ;;
   *) exit 0 ;;
 esac
 EOF
 chmod +x "$sb/bin/gh"
 write_rex_marker "$sb" 308 "$OLD_SHA"
 write_ceo_marker_structured "$sb" 308 "$OLD_SHA"
-# Short limit + watchdog so the suite stays fast on hosts without GNU timeout.
+# Short per-call limit. Prefer GNU timeout when present (Linux CI);
+# FORCE_WATCHDOG covers hosts without timeout/gtimeout.
 export APEXYARD_GH_CALL_TIMEOUT=1 APEXYARD_GH_FORCE_WATCHDOG=1
 run_case "CO9: #1796 stalled forge call -> exit 2 with timeout message" 2 "forge call timed out" "$sb" 308
 unset APEXYARD_GH_CALL_TIMEOUT APEXYARD_GH_FORCE_WATCHDOG

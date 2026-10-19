@@ -920,8 +920,8 @@ EOF
   cat > "$sb/bin/gh" <<'EOF'
 #!/bin/bash
 # Stall forever — the per-call limit must end this.
-sleep 120
-exit 0
+# exec so the waited PID is the sleeper (see #1796 watchdog / `$()` note).
+exec sleep 120
 EOF
   chmod +x "$sb/bin/gh"
   got=$(

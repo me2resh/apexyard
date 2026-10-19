@@ -33,6 +33,22 @@ apexyard_gh_call_timeout_secs() {
   esac
 }
 
+# _apexyard_gh_kill_children <pid> — TERM then KILL direct children.
+# A shell-script `gh` stub that runs `sleep` leaves that sleep as a child.
+# Bash command substitution waits for that child after the stub PID exits,
+# which held test_block_unreviewed_merge.sh past the 120 s CI suite cap
+# (#1796). Real `gh` is one process; this is a no-op when it has no children.
+# Portable: do not use Linux-only `ps -ppid` (absent on macOS).
+_apexyard_gh_kill_children() {
+  local parent="$1" child
+  for child in $(ps -eo pid=,ppid= 2>/dev/null | awk -v p="$parent" '$2 == p { print $1 }'); do
+    kill -TERM "$child" 2>/dev/null
+  done
+  for child in $(ps -eo pid=,ppid= 2>/dev/null | awk -v p="$parent" '$2 == p { print $1 }'); do
+    kill -KILL "$child" 2>/dev/null
+  done
+}
+
 # _apexyard_gh_watchdog <secs> <cmd...> — bash-native limit when timeout(1)
 # is absent. Returns the command status, or 124 when killed for time.
 _apexyard_gh_watchdog() {
@@ -47,9 +63,15 @@ _apexyard_gh_watchdog() {
   pid=$!
   (
     sleep "$secs"
-    if kill -TERM "$pid" 2>/dev/null; then
+    if kill -0 "$pid" 2>/dev/null; then
+      # Write the flag BEFORE signalling. wait returns as soon as TERM
+      # lands; the parent used to kill this helper before the flag write,
+      # so a fast kill could report rc=143 with no BLOCKED line.
       printf '1\n' >"$flag_f"
+      _apexyard_gh_kill_children "$pid"
+      kill -TERM "$pid" 2>/dev/null
       sleep 1
+      _apexyard_gh_kill_children "$pid"
       kill -KILL "$pid" 2>/dev/null
     fi
   ) >/dev/null 2>&1 &
