@@ -111,7 +111,10 @@ The prose menus below are fallbacks only when the harness lacks `AskUserQuestion
 `/handover` may run before any tracker tickets exist for the project being adopted, so the `require-active-ticket.sh` PreToolUse hook would block the registry / `projects/<name>/` writes the skill needs. Write a marker so the hook exempts this skill (it's on the default `bootstrap_skills` list in `.claude/project-config.defaults.json`):
 
 ```bash
-mkdir -p .claude/session && echo "handover" > .claude/session/active-bootstrap
+marker_home="$(git rev-parse --show-toplevel)"
+. "$marker_home/.claude/hooks/_lib-session-markers.sh"
+skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
+mkdir -p "$marker_home/.claude/session" && echo "handover" > "$skill_marker"
 ```
 
 Clear the marker on completion (Step "Post-Handover Checklist" below). If the skill is interrupted, the SessionStart hook `clear-bootstrap-marker.sh` clears it at the start of the next session. See AgDR-0011 + me2resh/apexyard#150.
@@ -122,7 +125,7 @@ The bootstrap exemption covers ONLY these writes:
 
 - `apexyard.projects.yaml` — registry append (step 7)
 - `projects/<name>/` — assessment, architecture stubs (container / context / sequence), README (steps 5, 6, 6.1)
-- `.claude/session/active-bootstrap` — the marker itself (step 0)
+- the path from `active_bootstrap_marker_path` — the marker itself (step 0)
 - Topology instantiation files (step 5.5, if a topology is picked)
 
 It does NOT cover:
@@ -612,10 +615,13 @@ If no risks match a row, omit that row. If fewer than 3 actions come out, add:
 ## Cleanup (REQUIRED before exit)
 
 ```bash
-rm -f .claude/session/active-bootstrap
+marker_home="$(git rev-parse --show-toplevel)"
+. "$marker_home/.claude/hooks/_lib-session-markers.sh"
+skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
+rm -f "$skill_marker"
 ```
 
-Always remove the bootstrap marker on a clean exit. If the skill is interrupted before this step, `clear-bootstrap-marker.sh` clears the stale marker on the next session.
+Always remove the bootstrap marker on a clean exit. If the skill is interrupted before this step, `clear-bootstrap-marker.sh` clears the marker when the same session restarts.
 
 ## Post-Handover Checklist
 

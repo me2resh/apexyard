@@ -136,15 +136,18 @@ Rule 1 runs around item 4. Rules 2 to 9 replace the "initial commit + push" bull
    BR=$(git -C "$P" symbolic-ref --short HEAD)
    LOCAL=$(git -C "$P" rev-parse --verify HEAD)
    REMOTE=$(git -C "$P" ls-remote origin "refs/heads/$BR" | awk -v r="refs/heads/$BR" '$2 == r { print $1 }')
-   FORGE=$(gh api "repos/<owner>/<name>/branches/$BR" --jq .commit.sha)
+   FORGE=$(gh api "repos/<owner>/<name>/branches/$BR" --jq .commit.sha) || FORGE=""
    [ -n "$LOCAL" ] && [ "$LOCAL" = "$REMOTE" ] && [ "$LOCAL" = "$FORGE" ]
    ```
 
-   - `<owner>/<name>` is the repo that item 3 created. Do not derive it from the remote URL.
+   - Record `<owner>` and `<name>` before this check. The reuse path skips item 3. Do not derive `<owner>/<name>` from the remote URL.
    - `BR` comes from `symbolic-ref`, not from a literal `main`. The clone's branch depends on the server and on `init.defaultBranch`.
    - The `awk` filter compares the ref name exactly. An `ls-remote` pattern matches the tail of a ref, even a full `refs/heads/<b>` pattern.
    - The command uses no `--heads` and no `--branches`. Git deprecates `--heads`, and older git does not have `--branches`.
    - `ls-remote` reads the fetch URL. The forge check covers a push that `pushurl` or `pushInsteadOf` sends to another URL.
+
+   Note (2026-10-19, #1776): A missing branch sets `FORGE` to an empty string. The reuse path records `<owner>/<name>` before this check.
+
 9. When all three values match, the agent continues with Step 2b item 6. When a value differs, the agent applies § "Failure modes".
 
 ### Resume rule

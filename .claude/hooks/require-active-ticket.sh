@@ -931,7 +931,12 @@ EOF_REVIEW_MARKERS
   # The marker is cleared at SessionStart by clear-bootstrap-marker.sh so
   # a stale marker from an interrupted session can't carry over.
   local BOOTSTRAP_MARKER active_bootstrap
-  BOOTSTRAP_MARKER="$MARKER_HOME/.claude/session/active-bootstrap"
+  # shellcheck source=/dev/null
+  [ ! -r "$_RATC_HOOK_DIR/_lib-session-markers.sh" ] || . "$_RATC_HOOK_DIR/_lib-session-markers.sh"
+  BOOTSTRAP_MARKER=""
+  if command -v active_bootstrap_marker_path >/dev/null 2>&1; then
+    BOOTSTRAP_MARKER=$(active_bootstrap_marker_path "$MARKER_HOME") || BOOTSTRAP_MARKER=""
+  fi
   if [ -f "$BOOTSTRAP_MARKER" ]; then
     active_bootstrap=$(tr -d '[:space:]' < "$BOOTSTRAP_MARKER" 2>/dev/null)
     if [ -n "$active_bootstrap" ]; then

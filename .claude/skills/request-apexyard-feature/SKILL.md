@@ -44,13 +44,19 @@ This is the framework-feedback sibling of `/feature`. The difference is the targ
 # Ops root through the session pin (docs/skills/shared/ops-root.md).
 ops_root=$(p="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID:-}"; r=""; [ -z "${APEXYARD_OPS_DISABLE_PIN:-}" ] && [ -f "$p" ] && IFS= read -r r < "$p"; [ -f "$r/.claude/hooks/_lib-ops-root.sh" ] || { r="$PWD"; while [ -n "$r" ] && [ ! -f "$r/.claude/hooks/_lib-ops-root.sh" ]; do r=${r%/*}; done; }; [ -f "$r/.claude/hooks/_lib-ops-root.sh" ] && . "$r/.claude/hooks/_lib-ops-root.sh" && resolve_ops_root) && [ -n "$ops_root" ] || { echo "No ops root. See docs/skills/shared/ops-root.md." >&2; exit 1; }
 mkdir -p "$ops_root/.claude/session"
-echo "request-apexyard-feature" > "$ops_root/.claude/session/active-issue-skill"
+marker_home="$ops_root"
+. "$marker_home/.claude/hooks/_lib-session-markers.sh"
+skill_marker=$(active_issue_skill_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
+echo "request-apexyard-feature" > "$skill_marker"
 ```
 
 Remove the marker on **every** exit path (success, cancel, error):
 
 ```bash
-rm -f "$ops_root/.claude/session/active-issue-skill"
+marker_home="$ops_root"
+. "$marker_home/.claude/hooks/_lib-session-markers.sh"
+skill_marker=$(active_issue_skill_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
+rm -f "$skill_marker"
 ```
 
 ### 1. Resolve the upstream repo

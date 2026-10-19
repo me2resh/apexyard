@@ -20,8 +20,11 @@ OIDC gives cloud access without stored keys. PRD means product requirements docu
 Write the marker before the interview, as AgDR-0011 requires:
 
 ```bash
-mkdir -p .claude/session
-printf 'scaffold\n' > .claude/session/active-bootstrap
+marker_home="$(git rev-parse --show-toplevel)"
+mkdir -p "$marker_home/.claude/session"
+. "$marker_home/.claude/hooks/_lib-session-markers.sh"
+skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
+printf 'scaffold\n' > "$skill_marker"
 ```
 
 Use the exemption only for the bootstrap scope below.
@@ -178,7 +181,7 @@ Never ask about cost, budget, currency, tests, coverage, language, database, sig
    Pass `--target` only to override that path.
    The override must end in the name.
    The target must be absent or empty. Stop on any fault.
-6. Remove `.claude/session/active-bootstrap` on completion or failure.
+6. Remove the path from `active_bootstrap_marker_path` on completion or failure.
    SessionStart also clears an interrupted marker. See AgDR-0011.
    Remove all temporary inputs.
 
@@ -186,7 +189,7 @@ Never ask about cost, budget, currency, tests, coverage, language, database, sig
 
 The exemption covers only these write targets:
 
-- `.claude/session/active-bootstrap`: the session marker.
+- the path from `active_bootstrap_marker_path`: the session marker.
 - Temporary `spec.json`, `prd-answers.json`, and `run-answers.json` files: the interview inputs and confirmed answers.
 - `workspace/<name>/.github/workflows/ci.yml`: the floor pipeline.
 - `workspace/<name>/scripts/ci/{lint,typecheck,test,build,audit,coverage-gate,audit-gate}.sh`: the gate scripts.

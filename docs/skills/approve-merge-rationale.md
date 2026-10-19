@@ -418,3 +418,11 @@ If `_lib-read-config.sh` or `jq` is unavailable, `config_get_or` degrades to the
 ## Script read errors
 
 The script exits 13 when it cannot read the PR branch or title, for any PR. This is stricter than the old inline step. It fails closed.
+
+## Optional child-issue closure
+
+Step 10 of the skill points here. This step stays out of the default flow.
+
+Do this only when the user asks. A squash merge can leave a cross-repo `Closes <owner/repo>#<N>` reference in the merge commit or the PR body. GitHub's auto-closer can miss that reference and report no error. You may offer to close each missed issue and add a comment.
+
+Do not close a child issue on your own. A close is a separate visible action. Confirm that issue before you close it.

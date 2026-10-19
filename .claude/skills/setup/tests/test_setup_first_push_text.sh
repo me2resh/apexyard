@@ -134,6 +134,22 @@ absent '--branches' "$FENCES" "verify command has no --branches"
 need 'Never suggest `--no-verify`' "$STEP" "skill never suggests --no-verify"
 absent '--no-verify' "$FENCES" "printed commands are not in bash fences with --no-verify"
 absent '--force' "$FENCES" "bash fences add no force option"
+absent '--no-verify' "$TEXT" "text fences have no --no-verify"
+absent '--force' "$TEXT" "text fences have no --force"
+need ' || FORGE=""' "$FENCES" "a missing branch leaves FORGE empty"
+need_file ' || FORGE=""' "$AGDR" "AgDR rule 8 leaves FORGE empty on a missing branch"
+need 'Record `<owner>` and `<name>` when the operator confirms the name.' "$STEP" "name confirmation records owner and name"
+need 'The reuse path skips item 3 and still uses this pair.' "$STEP" "reuse path keeps the recorded pair"
+need '`<owner>/<name>` is the recorded pair.' "$STEP" "verify uses the recorded pair"
+record_line=$(printf '%s\n' "$STEP" | grep -n 'Record `<owner>` and `<name>` when the operator confirms the name.' | head -1 | cut -d: -f1)
+item3_line=$(printf '%s\n' "$STEP" | grep -n 'Create the private repo' | head -1 | cut -d: -f1)
+forge_line=$(printf '%s\n' "$STEP" | grep -nF 'FORGE=$(gh api' | head -1 | cut -d: -f1)
+if [ -n "$record_line" ] && [ -n "$item3_line" ] && [ -n "$forge_line" ] \
+  && [ "$record_line" -lt "$item3_line" ] && [ "$item3_line" -lt "$forge_line" ]; then
+  mark_pass "reuse path records owner and name before verify"
+else
+  mark_fail "record order" "record=$record_line item3=$item3_line forge=$forge_line"
+fi
 
 need 'Reuse `<owner>/<name>`' "$STEP" "resume asks the operator to confirm reuse"
 need 'gh api repos/<owner>/<name>/contents/apexyard.projects.yaml' "$STEP" "resume stops a non-empty repo without the registry file"

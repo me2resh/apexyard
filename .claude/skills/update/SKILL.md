@@ -143,7 +143,10 @@ The banner restates the deal every invocation — an operator who used `--from-d
 `/update` edits framework-root files (resolving merge conflicts, updating CLAUDE.md imports, etc.) which the `require-active-ticket.sh` PreToolUse hook would otherwise block when the only "ticket" is the upstream-sync work itself. Write a marker so the hook exempts this skill (it's on the default `bootstrap_skills` list in `.claude/project-config.defaults.json`):
 
 ```bash
-mkdir -p .claude/session && echo "update" > .claude/session/active-bootstrap
+marker_home="$(git rev-parse --show-toplevel)"
+. "$marker_home/.claude/hooks/_lib-session-markers.sh"
+skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
+mkdir -p "$marker_home/.claude/session" && echo "update" > "$skill_marker"
 ```
 
 Clear the marker on completion (last step of this skill). If the skill is interrupted, the SessionStart hook `clear-bootstrap-marker.sh` clears it at the start of the next session. See AgDR-0011 + me2resh/apexyard#150.
@@ -245,7 +248,10 @@ Then report. Examples:
 
 ```bash
 reconcile_installed_codex_adapter || exit 1
-rm -f .claude/session/active-bootstrap
+marker_home="$(git rev-parse --show-toplevel)"
+. "$marker_home/.claude/hooks/_lib-session-markers.sh"
+skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
+rm -f "$skill_marker"
 
 echo "Fork is up to date with upstream/main. Nothing to sync."
 ```
@@ -1122,10 +1128,13 @@ The cost is **discipline at release-cut time**: skipping a release in the chain 
 ## Cleanup (REQUIRED before exit)
 
 ```bash
-rm -f .claude/session/active-bootstrap
+marker_home="$(git rev-parse --show-toplevel)"
+. "$marker_home/.claude/hooks/_lib-session-markers.sh"
+skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
+rm -f "$skill_marker"
 ```
 
-Always remove the bootstrap marker on a clean exit (after the sync branch is ready to push, or on a confirmed-abort during conflict resolution). If the skill is interrupted, `clear-bootstrap-marker.sh` clears the stale marker on the next session.
+Always remove the bootstrap marker on a clean exit (after the sync branch is ready to push, or on a confirmed-abort during conflict resolution). If the skill is interrupted, `clear-bootstrap-marker.sh` clears the marker when the same session restarts.
 
 ## Related
 

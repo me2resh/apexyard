@@ -183,7 +183,12 @@ else
   done
 fi
 
-SKILL_MARKER="${OPS_ROOT:-${REPO_ROOT:-.}}/.claude/session/active-issue-skill"
+# shellcheck source=/dev/null
+[ ! -r "$HOOK_DIR/_lib-session-markers.sh" ] || . "$HOOK_DIR/_lib-session-markers.sh"
+SKILL_MARKER=""
+if command -v active_issue_skill_marker_path >/dev/null 2>&1; then
+  SKILL_MARKER=$(active_issue_skill_marker_path "${OPS_ROOT:-${REPO_ROOT:-.}}") || SKILL_MARKER=""
+fi
 if [ -f "$SKILL_MARKER" ]; then
   ACTIVE_SKILL=$(tr -d '[:space:]' < "$SKILL_MARKER" 2>/dev/null)
   if [ -n "$ACTIVE_SKILL" ]; then

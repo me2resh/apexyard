@@ -1,5 +1,5 @@
 /**
- * apexyard-gate-dispatcher — opencode plugin enforcing apexyard's mechanical
+ * apexyard gate dispatcher — opencode plugin enforcing apexyard's mechanical
  * governance gates by shelling out to the EXISTING, UNMODIFIED bash hooks
  * under `.claude/hooks/`. Zero logic duplication: every gate's approval
  * decision stays 100% in bash; this file is a thin transport adapter
@@ -88,6 +88,7 @@ export type ExecGateHook = (
   cwd: string,
   maxBufferBytes: number,
   timeoutMs: number,
+  sessionId?: string,
 ) => { status: number | null; stderr: string; timedOut?: boolean };
 
 /**
@@ -107,9 +108,10 @@ export const MAX_HOOK_OUTPUT_BYTES = 10 * 1024 * 1024;
 export const HOOK_EXEC_TIMEOUT_MS = 30_000;
 
 /** Real subprocess exec — the production `ExecGateHook` implementation. */
-export const execGateHookReal: ExecGateHook = (hookPath, stdinPayload, cwd, maxBufferBytes, timeoutMs) => {
+export const execGateHookReal: ExecGateHook = (hookPath, stdinPayload, cwd, maxBufferBytes, timeoutMs, sessionId) => {
   try {
     execFileSync("bash", [hookPath], {
+      env: { ...process.env, APEXYARD_SESSION_ID: sessionId ?? process.env.APEXYARD_SESSION_ID },
       input: stdinPayload,
       cwd,
       encoding: "utf-8",
@@ -214,6 +216,10 @@ export function buildToolExecuteBeforeHook(
 ): NonNullable<Hooks["tool.execute.before"]> {
   return async (input, output) => {
     if (!opsRoot) return; // no apexyard fork found on this machine/session — nothing to enforce, fail toward not-blocking
+    // opencode can host concurrent sessions. Carry the native id per call.
+    const sessionId = input.sessionID;
+    const sessionExec: ExecGateHook = (hook, payload, cwd, maxBuffer, timeout) =>
+      execGateHook(hook, payload, cwd, maxBuffer, timeout, sessionId);
     const toolId = input.tool;
     const command = (output.args as Record<string, unknown> | undefined)?.command;
 
@@ -226,12 +232,16 @@ export function buildToolExecuteBeforeHook(
       const toolInput = buildToolInput(toolId, output);
       if (!toolInput) continue;
       const claudeToolName = claudeToolNameFor(toolId);
-      const result = runGateHook(opsRoot, gate, toolInput, claudeToolName, execGateHook);
+      const result = runGateHook(opsRoot, gate, toolInput, claudeToolName, sessionExec);
       if (result?.block) {
         // opencode has no `{block: true}` return contract — throwing inside
         // "tool.execute.before" is the documented way to deny a tool call.
         throw new Error(result.reason ?? `Blocked by apexyard governance gate (${gate.name})`);
       }
+    }
+    if (toolId === "bash" && typeof command === "string") {
+      const quotedId = "'" + sessionId.replaceAll("'", "'\\''") + "'";
+      output.args.command = `export APEXYARD_SESSION_ID=${quotedId}\n${command}`;
     }
   };
 }
@@ -269,7 +279,7 @@ export function deriveGatesFromOpsRoot(opsRoot: string, settingsRelativePath: st
     return [...settingsGates, ...dispatcher];
   } catch (err) {
     process.stderr.write(
-      `apexyard-gate-dispatcher: WARNING — failed to parse ${settingsPath}; NO gates are enforced this session. ` +
+      `apexyard gate dispatcher: WARNING — failed to parse ${settingsPath}; NO gates are enforced this session. ` +
         `Underlying error: ${err instanceof Error ? err.message : String(err)}\n`,
     );
     return [];
@@ -300,7 +310,7 @@ export function registerGateDispatcher(pluginInput: { directory: string; worktre
   // signal anywhere that it never actually ran.
   for (const unsupported of findUnsupportedGateWires(gates)) {
     process.stderr.write(
-      `apexyard-gate-dispatcher: WARNING — gate "${unsupported.gateName}" is wired to opencode tool "${unsupported.tool}", ` +
+      `apexyard gate dispatcher: WARNING — gate "${unsupported.gateName}" is wired to opencode tool "${unsupported.tool}", ` +
         `which this adapter has no stdin builder for (buildToolInput only supports bash/edit/write). This gate is SILENTLY SKIPPED ` +
         `for "${unsupported.tool}" tool calls — it never runs, so it can never block one. See derive-gates.ts's findUnsupportedGateWires for details.\n`,
     );
