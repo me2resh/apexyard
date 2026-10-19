@@ -38,6 +38,13 @@ Choose the allowlist option.
 
 ### Scope
 
+Amendment (AgDR-0261, #1806, D14): the git and patch matchers in
+`block-protected-target-writes.sh` and `require-subagent-for-code-edits.sh`
+may also consume the scrubbed view. This permission covers only `git checkout`,
+`git restore`, `git apply`, `git am`, `git checkout-index`, `git read-tree` and
+`patch`. These verbs are outside the data-only allowlist. Executable commands
+remain unchanged; quoted mentions remain data.
+
 Only these two consumers may read the scrubbed view:
 
 1. `_lib-detect-bash-write.sh`, for the redirect presence and target questions used by the ticket gate and the migration gate.
