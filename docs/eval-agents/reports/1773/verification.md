@@ -1,6 +1,6 @@
 # Slice #1773 verification
 
-Built locally, then opened as PR #1797 with snapshot-apexyard-20261019T123223Z and reconciliation-plan-apexyard-token-efficiency-20261019T112515Z.
+Built locally, then opened as PR #1797 with snapshot-apexyard-20261019T140213Z and reconciliation-plan-apexyard-token-efficiency-20261019T140228Z.
 C4 eval evidence is partial: k=1 on the five delta entries only.
 Do not treat schema validation or static tests as a zero-flip result.
 After the security review, the tier script runs isolated: `python3 -I` from a neutral directory.
@@ -50,7 +50,7 @@ The owner user setting reads `subagentPromptCacheTtl: "1h"`. Framework settings 
 
 ## Acceptance evidence
 
-- ac7-1: script, matching rule, spawn instructions, unchanged merge gates, and 17 tier tests.
+- ac7-1: script, matching rule, spawn instructions, unchanged merge gates, and 19 tier tests.
   The tests cover all four required forge cases and copy sources.
   The tier prompt flip table remains unverified.
 - ac7-4: the Rex prompt caps the hand-back and defines the short delta format.
@@ -70,7 +70,7 @@ The owner user setting reads `subagentPromptCacheTtl: "1h"`. Framework settings 
 
 | Command | Passed | Failed |
 |---|---:|---:|
-| `bash .claude/hooks/tests/test_review_tier.sh` | 17 | 0 |
+| `bash .claude/hooks/tests/test_review_tier.sh` | 19 | 0 |
 | `bash .claude/hooks/tests/test_short_delta_review.sh` | 7 | 0 |
 | `bash .claude/skills/eval-agents/lib/validate-corpus.sh rex docs/eval-agents/corpus/rex.json` | 15 entries | 0 schema faults |
 | `bash .claude/skills/eval-agents/tests/smoke.sh` | 8 | 0 |

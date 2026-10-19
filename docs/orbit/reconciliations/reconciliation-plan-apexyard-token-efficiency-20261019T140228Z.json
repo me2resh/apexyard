@@ -270,7 +270,7 @@
       "status": "partially-verified",
       "evidence": [
         "bin/review-tier.sh computes the ceremony tier from the trusted base range.",
-        ".claude/hooks/tests/test_review_tier.sh passes 17 forge and allowlist cases.",
+        ".claude/hooks/tests/test_review_tier.sh passes 19 forge and allowlist cases.",
         "docs/eval-agents/reports/1773/tier-flips.md: k=1 on five delta entries, 0 flips, 452,830 tokens.",
         "docs/eval-agents/reports/1773/verification.md records the partial C4 pass and open k=3 work."
       ],
