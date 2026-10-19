@@ -4,6 +4,8 @@ description: Check the local ApexYard environment before setup or when hooks fai
 allowed-tools: Bash, Read
 ---
 
+Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
+
 # /preflight
 
 Run the shared read-only check from the ops fork root:
