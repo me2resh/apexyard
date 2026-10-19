@@ -39,7 +39,7 @@ Chosen: **Linux-only hook CI, with local Bash 3.2 and awk before push.**
 - `refresh-ready-prs.yml` runs on `workflow_dispatch` only.
 - Every PR-triggered workflow uses a concurrency group that cancels a superseded PR run. Release and tag workflows keep `cancel-in-progress: false`.
 - Every job sets `timeout-minutes` at 30 or less.
-- Contributors run `/bin/bash bin/run-hook-tests.sh` locally before push. An optional mawk run on `PATH` catches ERE intervals that Debian mawk rejects.
+- Contributors run `/bin/bash bin/run-hook-tests.sh` locally before push. An optional mawk run links mawk as `awk`. `test_awk_ere_interval_lock.sh` in Linux CI is the ERE guard (AgDR-0247 records that Homebrew mawk 1.3.4 accepts ERE intervals).
 
 ## Consequences
 
@@ -56,7 +56,7 @@ Chosen: **Linux-only hook CI, with local Bash 3.2 and awk before push.**
 
 ### After
 
-Hook CI runs on Linux only. Refresh is manual. PR workflows cancel superseded runs. Every job has a timeout of 30 minutes or less. Bash 3.2 and macOS awk stay a local pre-push duty.
+Hook CI runs on Linux only. Refresh is manual. PR workflows cancel superseded runs. Every job has a timeout of 30 minutes or less. Bash 3.2 and macOS awk stay a local pre-push duty. The optional local mawk run links mawk as `awk`. `test_awk_ere_interval_lock.sh` in Linux CI is the ERE guard.
 
 ## Artifacts
 
