@@ -32,7 +32,7 @@ Chosen: **count the window, require literals, and mask only inert data**, becaus
 - In `/approve-merge` step 6, pass the repo and the PR as literals. Stop when the check script returns a different host repo.
 - Blank a grep, egrep, or fgrep pattern unless a dangerous grep option is present.
 - Inside a double-quoted argument of an allowlisted command, treat `$name` and `${name}` as data. `$(`, backticks, and `${` with an operator still keep the raw text.
-- Strip a quoted heredoc body only when every command word is on the data list. An interpreter heredoc, a pipe to a shell, and a later executor stay visible.
+- Strip a quoted heredoc body only when every command word is on the data list. `true` and `false` are on that list. An interpreter heredoc, a pipe to a shell, and a later executor stay visible.
 
 ## Consequences
 

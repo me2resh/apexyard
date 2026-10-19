@@ -5,6 +5,8 @@
 # and under mawk when mawk is installed. The argv -c window stays 200
 # characters. A variable merge and a shell -c wrapper still block.
 # Step 2: the /approve-merge step 6 call passes literal repo and PR values.
+# Step 3: a grep pattern and an inert quoted heredoc are data. A real
+# merge, a variable merge, and a shell -c or heredoc executor still block.
 
 set -u
 
@@ -95,6 +97,50 @@ check_skill_literals() {
   expect_rc "unexpanded wrapper repo and PR still block" 0 $?
 }
 
+expect_merge() {
+  local label="$1" cmd="$2" want="$3" got=no
+  if is_merge_command "$cmd"; then got=yes; fi
+  if [ "$got" = "$want" ]; then
+    pass "$label"
+  else
+    fail "$label: want $want, got $got"
+  fi
+}
+
+check_data_view() {
+  local heredoc
+  expect_merge "unquoted grep pattern is data" "grep -n tracker_pr_merge SKILL.md" no
+  expect_merge "double-quoted grep pattern is data" \
+    "grep -n \"tracker_pr_merge \\\"\$PR_HOST_REPO\\\"\" SKILL.md" no
+  heredoc=$(printf "true; cat <<'EOF'\ntracker_pr_merge \"\$PR_HOST_REPO\"\nEOF")
+  expect_merge "quoted heredoc beside true is data" "$heredoc" no
+  expect_merge "grep then a real merge still blocks" \
+    "grep -n tracker_pr_merge SKILL.md; gh pr merge 7 --repo owner/repo" yes
+  expect_merge "true then a real merge still blocks" \
+    "true; gh pr merge 7 --repo owner/repo" yes
+  expect_merge "bash heredoc merge still blocks" \
+    "$(printf "bash <<'EOF'\ngh pr merge 7 --repo owner/repo\nEOF")" yes
+  expect_merge "heredoc piped to sh still blocks" \
+    "$(printf "cat <<'EOF' | sh\ngh pr merge 7 --repo owner/repo\nEOF")" yes
+  expect_merge "heredoc then sh still blocks" \
+    "$(printf "cat > m.sh <<'EOF'\ngh pr merge 7\nEOF\nsh m.sh")" yes
+  expect_merge "double-quoted substitution still blocks" 'echo "$(gh pr merge 7)"' yes
+  expect_merge "grep --filter still blocks" "grep --filter=sh 'gh pr merge 7' notes.txt" yes
+  expect_merge "sh -c merge still blocks" "sh -c 'gh pr merge 7 --repo owner/repo'" yes
+  expect_merge "bash -c merge still blocks" "bash -c 'gh pr merge 42 --repo owner/repo'" yes
+  merge_command_uses_variable 'grep -n tracker_pr_merge SKILL.md; gh pr merge $PR --repo owner/repo'
+  expect_rc "grep then unexpanded PR still blocks" 0 $?
+  merge_command_uses_variable 'true; gh pr merge $PR --repo owner/repo'
+  expect_rc "true then unexpanded PR still blocks" 0 $?
+  merge_command_uses_variable "sh -c 'gh pr merge \$PR --repo owner/repo'"
+  expect_rc "sh -c variable merge still blocks after data view" 0 $?
+  merge_command_uses_variable "bash -c 'gh pr merge 42 --repo \$REPO'"
+  expect_rc "bash -c variable repo still blocks after data view" 0 $?
+  merge_command_uses_variable "grep -n \"tracker_pr_merge \\\"\$PR_HOST_REPO\\\"\" SKILL.md"
+  expect_rc "double-quoted grep is not a variable target" 1 $?
+}
+
+check_data_view
 check_skill_literals
 check_window "bsd awk"
 if command -v mawk >/dev/null 2>&1; then

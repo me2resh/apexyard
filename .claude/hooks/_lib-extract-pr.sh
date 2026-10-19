@@ -367,28 +367,43 @@ _join_shell_continuations() {
   join_shell_continuations "$1"
 }
 
-# Merge-only scrub decision (AgDR-0196, AgDR-0204). The general command
-# scrubber permits programs such as git, gh, rg and sort that can execute
-# arguments or files. Do not use that allowlist here: a later program could
-# execute earlier data. Accept only literal command words from the narrow
-# list, in EVERY segment. Unknown syntax, substitutions, incomplete heredocs,
-# zsh `~[`, startup/hook redirects, grep execution options, or parser
-# failures keep the entire raw command. This function never executes the
-# command text.
-_scrub_merge_command() {
+# Merge-only scrub decision (AgDR-0196, AgDR-0204, AgDR-0247). The general
+# command scrubber permits programs such as git, gh, rg and sort that can
+# execute arguments or files. Do not use that allowlist here: a later program
+# could execute earlier data. Accept only literal command words from the
+# narrow list, in EVERY segment. Unknown syntax, substitutions, incomplete
+# heredocs, zsh `~[`, startup/hook redirects, grep execution options, or
+# parser failures keep the entire raw command. This function never executes
+# the command text.
+#
+# Returns 0 when the scrub is clean, 3 when a shape can execute the data,
+# and 2 when the raw command must stay. Callers that decide a gate use
+# _scrub_merge_command, which always returns 0.
+_merge_scrub_once() {
   local cmd="$1" result
   if [ "${#cmd}" -gt 120000 ] || ! command -v awk >/dev/null 2>&1; then
     printf '%s' "$cmd"
-    return 0
+    return 2
   fi
+  local rc=0
   result=$(MERGE_SCRUB_INPUT="$cmd" awk '
     function blank(text) { gsub(/[^\n]/, " ", text); return text }
+    # Record a grep pattern. Blank it at the end only when nothing in the
+    # command can execute that pattern (#1760).
+    function remember_pattern(text) {
+      np++
+      ps[np] = length(out) + 1
+      pl[np] = length(text)
+    }
     # printf is NOT on this list: `printf -v "a[$(cmd)]"` makes the shell
     # evaluate the array subscript, which runs the substitution (#1489 review).
+    # true and false do not run their arguments. A later word off this list
+    # still keeps the raw command.
     function allowed(word) {
       return word == "grep" || word == "egrep" || word == "fgrep" || \
              word == "cat" || word == "echo" || word == "jq" || \
-             word == "head" || word == "tail" || word == "wc"
+             word == "head" || word == "tail" || word == "wc" || \
+             word == "true" || word == "false"
     }
     function is_grep_family(word) {
       return word == "grep" || word == "egrep" || word == "fgrep"
@@ -471,7 +486,7 @@ _scrub_merge_command() {
     BEGIN {
       s = ENVIRON["MERGE_SCRUB_INPUT"]
       n = length(s); pos = 1; first = 1; out = ""; bad = 0; newbad = 0; pending = 0
-      cmdword = ""
+      cmdword = ""; seen_pat = 0; take_next = 0; np = 0
       sq = sprintf("%c", 39); dq = sprintf("%c", 34); bs = sprintf("%c", 92)
       while (pos <= n && !bad) {
         c = substr(s, pos, 1); nx = substr(s, pos + 1, 1)
@@ -510,7 +525,7 @@ _scrub_merge_command() {
           if (!allowed(word) || (after != "" && after !~ /[ \t\n;|&<>]/)) {
             bad = 1; break
           }
-          out = out word; first = 0; cmdword = word; continue
+          out = out word; first = 0; cmdword = word; seen_pat = 0; take_next = 0; continue
         }
         # Unquoted zsh dynamic named directory (~[...]) can run code.
         # newbad keeps the dev scrub and adds the raw text (see the end).
@@ -519,7 +534,34 @@ _scrub_merge_command() {
           q = c; start = pos++
           while (pos <= n && substr(s, pos, 1) != q) {
             c = substr(s, pos, 1)
-            if (q == dq && (c == "$" || c == "`" || c == bs)) { bad = 1; break }
+            # A plain $name or ${name} inside double quotes is data. $(,
+            # backticks, and ${ with an operator can run, so they keep the
+            # raw command (#1760). An escaped character is also data.
+            if (q == dq && c == "`") { bad = 1; break }
+            if (q == dq && c == bs) {
+              pos++
+              if (pos <= n) pos++
+              continue
+            }
+            if (q == dq && c == "$") {
+              nx2 = substr(s, pos + 1, 1)
+              if (nx2 == "(" || nx2 == "[" || nx2 == "`") { bad = 1; break }
+              if (nx2 == "{") {
+                if (match(substr(s, pos + 2), /^[A-Za-z_][A-Za-z0-9_]*}/)) {
+                  pos += 2 + RLENGTH
+                  continue
+                }
+                bad = 1; break
+              }
+              if (nx2 ~ /[A-Za-z_]/) {
+                pos++
+                while (pos <= n && substr(s, pos, 1) ~ /[A-Za-z0-9_]/) pos++
+                continue
+              }
+              pos++
+              if (nx2 ~ /[0-9@*#?!-]/) pos++
+              continue
+            }
             pos++
           }
           if (bad || pos > n) { bad = 1; break }
@@ -529,6 +571,10 @@ _scrub_merge_command() {
           # quoted span that starts a word can also begin an option name.
           if (is_grep_family(cmdword) && (dangerous_grep_opt(word) || \
               ((start == 1 || substr(s, start - 1, 1) ~ /[ \t\n;|&<>(]/) && grep_opt_at(start)))) newbad = 1
+          if (is_grep_family(cmdword) && (take_next || !seen_pat)) {
+            seen_pat = 1
+            take_next = 0
+          }
           out = out blank(word); continue
         }
         # Reject shell execution/expansion syntax and comments conservatively.
@@ -575,6 +621,44 @@ _scrub_merge_command() {
         if (is_grep_family(cmdword) && c == "-" && \
             (pos == 1 || substr(s, pos - 1, 1) ~ /[ \t\n;|&<>(]/)) {
           if (grep_opt_at(pos)) newbad = 1
+          wstart = pos
+          while (pos <= n) {
+            c = substr(s, pos, 1)
+            if (c ~ /[ \t\n;|&<>(){}#]/ || c == sq || c == dq || c == bs || c == "$" || c == "`") break
+            pos++
+          }
+          word = substr(s, wstart, pos - wstart)
+          opt = word
+          sub(/=.*/, "", opt)
+          if (opt == "-e" || opt == "--regexp") take_next = 1
+          else if (word != opt && (opt == "--regexp" || opt == "-e")) {
+            remember_pattern(word)
+            seen_pat = 1
+            take_next = 0
+          }
+          out = out word
+          continue
+        }
+        # An unquoted grep pattern is data. Blank it only when the command
+        # cannot execute the pattern (#1760).
+        if (is_grep_family(cmdword) && \
+            (pos == 1 || substr(s, pos - 1, 1) ~ /[ \t\n;|&<>]/)) {
+          wstart = pos
+          while (pos <= n) {
+            c = substr(s, pos, 1)
+            if (c ~ /[ \t\n;|&<>(){}#]/ || c == sq || c == dq || c == bs || c == "$" || c == "`") break
+            pos++
+          }
+          word = substr(s, wstart, pos - wstart)
+          if (word != "") {
+            if (take_next || !seen_pat) {
+              remember_pattern(word)
+              seen_pat = 1
+              take_next = 0
+            }
+            out = out word
+            continue
+          }
         }
         out = out c; pos++
       }
@@ -582,12 +666,57 @@ _scrub_merge_command() {
       # A newbad shape can execute the data, so the gates must see the raw
       # text. They must also still see the dev scrubbed text, where a merge
       # phrase split by quotes reads as separate words (review of PR #1517).
-      # Print both, on separate lines.
-      if (bad) printf "%s", s
-      else if (newbad) printf "%s\n%s", s, out
-      else printf "%s", out
+      # Print both, on separate lines. Do not blank a pattern in that copy.
+      if (!bad && !newbad) {
+        for (i = 1; i <= np; i++)
+          out = substr(out, 1, ps[i] - 1) blank(substr(out, ps[i], pl[i])) substr(out, ps[i] + pl[i])
+      }
+      if (bad) { printf "%s", s; exit 2 }
+      if (newbad) { printf "%s\n%s", s, out; exit 3 }
+      printf "%s", out
+      exit 0
     }
-  ' 2>/dev/null) || result="$cmd"
+  ' 2>/dev/null) || rc=$?
+  if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ] && [ "$rc" -ne 3 ]; then
+    printf '%s' "$cmd"
+    return 2
+  fi
+  printf '%s' "${result:-$cmd}"
+  return "$rc"
+}
+
+# Public scrub. Always returns 0.
+#
+# After a clean scrub, strip quoted heredoc bodies with the shared helper
+# (#1066, #1760). A clean scrub means every command word is inert, so the
+# body is data. If stripping would hide a merge the clean view still sees,
+# keep that view. An uncertain command never reaches the helper. Load the
+# helper only when its file is present, so a sandbox that has not copied it
+# can still load this library.
+_scrub_merge_command() {
+  local cmd="$1" result rc view result2 strip_lib
+  if result=$(_merge_scrub_once "$cmd"); then
+    rc=0
+  else
+    rc=$?
+  fi
+  if [ "$rc" -eq 0 ]; then
+    if ! declare -F strip_heredoc_bodies >/dev/null 2>&1; then
+      strip_lib="${BASH_SOURCE[0]%/*}/_lib-strip-heredoc.sh"
+      if [ -f "$strip_lib" ]; then
+        # shellcheck source=/dev/null
+        . "$strip_lib"
+      fi
+    fi
+    if declare -F strip_heredoc_bodies >/dev/null 2>&1; then
+      view=$(strip_heredoc_bodies "$cmd")
+      if [ "$view" != "$cmd" ] && result2=$(_merge_scrub_once "$view"); then
+        if ! is_merge_command_raw "$result" || is_merge_command_raw "$result2"; then
+          result=$result2
+        fi
+      fi
+    fi
+  fi
   printf '%s' "${result:-$cmd}"
 }
 
