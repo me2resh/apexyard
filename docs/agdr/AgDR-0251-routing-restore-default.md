@@ -1,4 +1,4 @@
-# AgDR-0249: Restore the framework model when a routing override is removed
+# AgDR-0251: Restore the framework model when a routing override is removed
 
 > `apply-agent-routing.sh` rewrites an agent `model:` line from `agent-routing.yaml`.
 > It stores the framework model in `.framework-defaults.json`.
