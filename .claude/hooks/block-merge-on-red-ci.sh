@@ -434,7 +434,7 @@ fi
 # the current repository; keep the validated value in a Bash argument array.
 GATE_OWNER_REPO="$CMD_REPO"
 if [ -z "$GATE_OWNER_REPO" ]; then
-  GATE_OWNER_REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null)
+  GATE_OWNER_REPO=$(apexyard_gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null)
 fi
 # gh accepts [HOST/]OWNER/REPO for --repo (GitHub Enterprise). `gh pr`
 # takes the full value. `gh api` paths take OWNER/REPO, with the host in
@@ -466,8 +466,12 @@ fi
 # contained "no checks reported").
 # ${arr[@]+"${arr[@]}"}: bash 3.2 treats an empty "${arr[@]}" as unbound
 # under set -u. This form expands to nothing when the array is empty.
-CHECKS_OUTPUT=$(gh pr checks "$PR_NUMBER" ${REPO_ARGS[@]+"${REPO_ARGS[@]}"} 2>&1)
+CHECKS_OUTPUT=$(apexyard_gh pr checks "$PR_NUMBER" ${REPO_ARGS[@]+"${REPO_ARGS[@]}"} 2>&1)
 CHECKS_RC=$?
+if [ "$CHECKS_RC" -eq 124 ]; then
+  # apexyard_gh already printed the BLOCKED timeout line (#1796).
+  exit 2
+fi
 
 # "no checks reported on the 'X' branch" — allow only when BOTH: checks
 # exited non-zero, AND the entire trimmed output matches that exact CLI
@@ -495,7 +499,7 @@ GATE_HEAD_SHA=""
 if [ -n "$CMD_REPO" ] && GATE_HEAD_SHA=$(prmeta_get head "$PR_NUMBER" "$CMD_REPO"); then
   :
 else
-  GATE_HEAD_SHA=$(gh pr view "$PR_NUMBER" ${REPO_ARGS[@]+"${REPO_ARGS[@]}"} --json headRefOid --jq '.headRefOid' 2>/dev/null)
+  GATE_HEAD_SHA=$(apexyard_gh pr view "$PR_NUMBER" ${REPO_ARGS[@]+"${REPO_ARGS[@]}"} --json headRefOid --jq '.headRefOid' 2>/dev/null)
 fi
 if [[ ! "$GATE_HEAD_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
   echo "BLOCKED: PR #${PR_NUMBER} has an invalid head SHA. Resolve the PR head and retry." >&2
@@ -507,7 +511,7 @@ fi
 WORKFLOW_COUNT=""
 WORKFLOW_ERROR=""
 if [ "$NO_CHECKS" = "1" ]; then
-  WORKFLOWS_JSON=$(gh api ${API_HOST_ARGS[@]+"${API_HOST_ARGS[@]}"} "repos/${GATE_API_REPO}/actions/workflows?per_page=100" 2>/dev/null)
+  WORKFLOWS_JSON=$(apexyard_gh api ${API_HOST_ARGS[@]+"${API_HOST_ARGS[@]}"} "repos/${GATE_API_REPO}/actions/workflows?per_page=100" 2>/dev/null)
   WORKFLOW_RC=$?
   if [ "$WORKFLOW_RC" -ne 0 ]; then
     WORKFLOW_ERROR="workflow query failed"
@@ -528,7 +532,7 @@ fi
 # One head-filtered request per merge. A partial page cannot prove that
 # every run passed, so refuse a merge if the response reports more runs
 # than this request returned.
-RUNS_JSON=$(gh api ${API_HOST_ARGS[@]+"${API_HOST_ARGS[@]}"} "repos/${GATE_API_REPO}/actions/runs?head_sha=${GATE_HEAD_SHA}&per_page=100" 2>/dev/null)
+RUNS_JSON=$(apexyard_gh api ${API_HOST_ARGS[@]+"${API_HOST_ARGS[@]}"} "repos/${GATE_API_REPO}/actions/runs?head_sha=${GATE_HEAD_SHA}&per_page=100" 2>/dev/null)
 RUNS_RC=$?
 RUNS_ERROR=""
 if [ "$RUNS_RC" -ne 0 ]; then
@@ -771,12 +775,15 @@ _commit_check_fallback() {
     exit 2
   fi
 
-  checks_json=$(gh api ${API_HOST_ARGS[@]+"${API_HOST_ARGS[@]}"} --paginate \
+  checks_json=$(apexyard_gh api ${API_HOST_ARGS[@]+"${API_HOST_ARGS[@]}"} --paginate \
     "repos/${GATE_API_REPO}/commits/${GATE_HEAD_SHA}/check-runs?per_page=100" 2>/dev/null)
   checks_rc=$?
-  status_json=$(gh api ${API_HOST_ARGS[@]+"${API_HOST_ARGS[@]}"} --paginate \
+  status_json=$(apexyard_gh api ${API_HOST_ARGS[@]+"${API_HOST_ARGS[@]}"} --paginate \
     "repos/${GATE_API_REPO}/commits/${GATE_HEAD_SHA}/status?per_page=100" 2>/dev/null)
   status_rc=$?
+  if [ "$checks_rc" -eq 124 ] || [ "$status_rc" -eq 124 ]; then
+    exit 2
+  fi
   if [ "$checks_rc" -ne 0 ] || [ "$status_rc" -ne 0 ]; then
     echo "BLOCKED: PR #${pr}: gh pr checks did not return a CI result, and the commit check fallback failed. The merge stays blocked." >&2
     exit 2

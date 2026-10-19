@@ -238,7 +238,7 @@ if [ -n "$CMD_REPO" ] && CHANGED=$(prmeta_file_list "$PR_NUMBER" "$CMD_REPO") \
 else
   CHANGED=""
   TOTAL_FILES=""
-  if [ -z "$CMD_REPO" ] || ! TOTAL_FILES=$(gh api "repos/${CMD_REPO}/pulls/${PR_NUMBER}" --jq '.changed_files' 2>/dev/null) || ! printf '%s' "$TOTAL_FILES" | grep -qE '^[0-9]+$' || [ "$TOTAL_FILES" -gt 3000 ] || ! CHANGED=$(gh api --paginate "repos/${CMD_REPO}/pulls/${PR_NUMBER}/files?per_page=100" --jq '.[].filename' 2>/dev/null); then
+  if [ -z "$CMD_REPO" ] || ! TOTAL_FILES=$(apexyard_gh api "repos/${CMD_REPO}/pulls/${PR_NUMBER}" --jq '.changed_files' 2>/dev/null) || ! printf '%s' "$TOTAL_FILES" | grep -qE '^[0-9]+$' || [ "$TOTAL_FILES" -gt 3000 ] || ! CHANGED=$(apexyard_gh api --paginate "repos/${CMD_REPO}/pulls/${PR_NUMBER}/files?per_page=100" --jq '.[].filename' 2>/dev/null); then
     CHANGED_RC=1
   fi
 fi

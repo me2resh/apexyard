@@ -73,6 +73,14 @@ if [ -r "$HOOK_DIR/_lib-extract-pr.sh" ]; then
   # shellcheck source=/dev/null
   . "$HOOK_DIR/_lib-extract-pr.sh"
 fi
+# Per-call forge time limit for prefetch / recheck (#1796).
+if [ -r "$HOOK_DIR/_lib-gh-timeout.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-gh-timeout.sh"
+fi
+if ! command -v apexyard_gh >/dev/null 2>&1; then
+  apexyard_gh() { gh "$@"; }
+fi
 
 # run_hook is the FAIL-OPEN path, for advisory checks and cost guards. A crash
 # or timeout in one of these hooks warns and the dispatcher carries on.
@@ -283,7 +291,7 @@ prefetch_pr_metadata() {
   fi
 
   # Call 1: the scalars. All or none.
-  if ! json=$(gh pr view "$pr" --repo "$repo" --json headRefOid,headRefName,baseRefName,changedFiles 2>/dev/null); then
+  if ! json=$(apexyard_gh pr view "$pr" --repo "$repo" --json headRefOid,headRefName,baseRefName,changedFiles 2>/dev/null); then
     return 1
   fi
   if ! fields=$(printf '%s' "$json" | jq -r '
@@ -330,7 +338,7 @@ prefetch_pr_metadata() {
     api_repo="${repo#*/}"
     host_args=(--hostname "$host")
   fi
-  if ! list=$(gh api ${host_args[@]+"${host_args[@]}"} --paginate "repos/${api_repo}/pulls/${pr}/files?per_page=100" --jq '.[].filename' 2>/dev/null); then
+  if ! list=$(apexyard_gh api ${host_args[@]+"${host_args[@]}"} --paginate "repos/${api_repo}/pulls/${pr}/files?per_page=100" --jq '.[].filename' 2>/dev/null); then
     return 0
   fi
   if [ -z "$list" ]; then
@@ -364,7 +372,8 @@ prefetch_pr_metadata() {
 # lets the call run on a client older than 2.1.295 (AgDR-0256 D4).
 recheck_pr_head() {
   local h="" pr="${APEXYARD_PRMETA_PR:-}" repo="${APEXYARD_PRMETA_REPO:-}" want="${APEXYARD_PRMETA_HEAD:-}"
-  if ! h=$(gh pr view "$pr" --repo "$repo" --json headRefOid -q .headRefOid 2>/dev/null); then
+  # stderr open so a per-call timeout BLOCKED line reaches the operator (#1796).
+  if ! h=$(apexyard_gh pr view "$pr" --repo "$repo" --json headRefOid -q .headRefOid); then
     printf 'BLOCKED: could not confirm PR #%s HEAD after the merge gates passed. Retry the merge.\n' "$pr" >&2
     exit 2
   fi

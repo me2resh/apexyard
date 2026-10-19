@@ -1,6 +1,15 @@
 #!/bin/bash
 # shellcheck source=/dev/null
 . "${BASH_SOURCE[0]%/*}/_lib-awk-fallback.sh"
+# Per-call forge time limit for resolve_* helpers (#1796).
+if [ -z "${APEXYARD_GH_TIMEOUT_LOADED:-}" ] && [ -r "${BASH_SOURCE[0]%/*}/_lib-gh-timeout.sh" ]; then
+  # shellcheck source=/dev/null
+  . "${BASH_SOURCE[0]%/*}/_lib-gh-timeout.sh"
+  APEXYARD_GH_TIMEOUT_LOADED=1
+fi
+if ! command -v apexyard_gh >/dev/null 2>&1; then
+  apexyard_gh() { gh "$@"; }
+fi
 # Shared PR and repo extraction for merge-gate hooks. The hooks are:
 # block-unreviewed-merge.sh, require-design-review-for-ui.sh,
 # require-architecture-review.sh, and block-merge-on-red-ci.sh.
@@ -1556,7 +1565,7 @@ resolve_pr_base_ref() {
     echo "$base"
     return
   fi
-  base=$(gh pr view "$pr_number" --repo "$cmd_repo" --json baseRefName -q '.baseRefName' 2>/dev/null)
+  base=$(apexyard_gh pr view "$pr_number" --repo "$cmd_repo" --json baseRefName -q '.baseRefName' 2>/dev/null)
   echo "$base"
 }
 
@@ -1586,9 +1595,9 @@ resolve_pr_head() {
       sha=$(glab mr view "$pr_number" --output json 2>/dev/null | jq -r '.sha // .diff_refs.head_sha // empty' 2>/dev/null)
     fi
   elif [ -n "$cmd_repo" ]; then
-    sha=$(gh pr view "$pr_number" --repo "$cmd_repo" --json headRefOid --jq '.headRefOid' 2>/dev/null)
+    sha=$(apexyard_gh pr view "$pr_number" --repo "$cmd_repo" --json headRefOid --jq '.headRefOid' 2>/dev/null)
   else
-    sha=$(gh pr view "$pr_number" --json headRefOid --jq '.headRefOid' 2>/dev/null)
+    sha=$(apexyard_gh pr view "$pr_number" --json headRefOid --jq '.headRefOid' 2>/dev/null)
   fi
 
   echo "$sha"
@@ -1623,9 +1632,9 @@ resolve_pr_head_branch() {
       branch=$(glab mr view "$pr_number" --output json 2>/dev/null | jq -r '.source_branch // empty' 2>/dev/null)
     fi
   elif [ -n "$cmd_repo" ]; then
-    branch=$(gh pr view "$pr_number" --repo "$cmd_repo" --json headRefName -q '.headRefName' 2>/dev/null)
+    branch=$(apexyard_gh pr view "$pr_number" --repo "$cmd_repo" --json headRefName -q '.headRefName' 2>/dev/null)
   else
-    branch=$(gh pr view "$pr_number" --json headRefName -q '.headRefName' 2>/dev/null)
+    branch=$(apexyard_gh pr view "$pr_number" --json headRefName -q '.headRefName' 2>/dev/null)
   fi
 
   echo "$branch"

@@ -461,7 +461,14 @@ REX_SHA=$(tr -d '[:space:]' < "$REX_APPROVAL")
 _CARRY_OVER="false"
 if [ -n "$REX_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$REX_SHA" != "$CURRENT_SHA" ] \
    && command -v rex_approval_carries_over >/dev/null 2>&1; then
-  _CARRY_OVER=$(rex_approval_carries_over "${CMD_REPO:-}" "$REX_SHA" "$CURRENT_SHA" "${BASE_REF_NAME:-}")
+  # Call in this shell (not only via `$()`) so the GraphQL memo stays for
+  # the CEO check below (#1796).
+  rex_approval_carries_over "${CMD_REPO:-}" "$REX_SHA" "$CURRENT_SHA" "${BASE_REF_NAME:-}" >/dev/null
+  _CARRY_OVER="${_REX_CARRY_LAST:-unknown}"
+fi
+if [ "$_CARRY_OVER" = "timeout" ]; then
+  # apexyard_gh already printed the BLOCKED timeout line (#1796).
+  exit 2
 fi
 if [ -n "$REX_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$REX_SHA" != "$CURRENT_SHA" ] \
    && [ "$_CARRY_OVER" != "true" ]; then
@@ -789,7 +796,14 @@ fi
 _CEO_CARRY_OVER="false"
 if [ -n "$CEO_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$CEO_SHA" != "$CURRENT_SHA" ] \
    && command -v rex_approval_carries_over >/dev/null 2>&1; then
-  _CEO_CARRY_OVER=$(rex_approval_carries_over "${CMD_REPO:-}" "$CEO_SHA" "$CURRENT_SHA" "${BASE_REF_NAME:-}")
+  # Same process as the Rex walk — reuses the memoised chain when the head
+  # and base match (#1796).
+  rex_approval_carries_over "${CMD_REPO:-}" "$CEO_SHA" "$CURRENT_SHA" "${BASE_REF_NAME:-}" >/dev/null
+  _CEO_CARRY_OVER="${_REX_CARRY_LAST:-unknown}"
+fi
+if [ "$_CEO_CARRY_OVER" = "timeout" ]; then
+  # apexyard_gh already printed the BLOCKED timeout line (#1796).
+  exit 2
 fi
 if [ -n "$CEO_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$CEO_SHA" != "$CURRENT_SHA" ] \
    && [ "$_CEO_CARRY_OVER" != "true" ]; then
