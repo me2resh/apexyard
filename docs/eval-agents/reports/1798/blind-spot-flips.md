@@ -2,7 +2,7 @@
 
 Shape-probe and recount checks for two known Rex blind spots.
 
-Status: **Targeted eval, the C4 no-flip run and the no-flip re-run, k=3, 2026-10-19. After the fix, rex-1683 and rex-1711 no longer flip. rex-773 still flips, and rex-1620 D2 falls to 1 of 3. The pass condition fails. The k=8 follow-ups are not run.**
+Status: **Targeted eval, the C4 no-flip run, the no-flip re-run and the rex-773 k=8 run, 2026-10-19. One flip remains, on the borderline entry rex-773. rex-1683 and rex-1711 no longer flip.**
 
 Prompt hashes (SHA-256, first 12 hex):
 - Baseline (the PR #1797 prompt): `2656e3532425`
@@ -27,8 +27,8 @@ A hint, a suggestion, or an "Unverified" note counts as missed.
 | Criterion | Result | Evidence |
 |---|---|---|
 | AC1 | Met | 2 of 3 runs catch the redirect-target merge hide |
-| AC2 | Partly met | With prompt `1ac8`: D2 2 of 3, D1 0 of 3. With prompt `a7b3` (the blocking sentence removed): D2 1 of 3 |
-| AC3 (no flip on the other 13 entries) | Not met | With `1ac8`, 3 of 13 flip. With `a7b3`, rex-773 still flips; rex-1683 and rex-1711 do not. The other 10 entries were not re-run. See the two sections below the AC table |
+| AC2 | Partly met | Shape-probe D1 met 2 of 3. rex-1620 D2 partly met: 1 of 3 with prompt `a7b3` against 0 of 6 for the baseline. The recount and settings work continues in #1815 |
+| AC3 (no flip on the other 13 entries) | Met with one exception: one flip on a borderline entry | rex-773 flips at k=8: baseline 6 C, 2 CR; `a7b3` 1 C, 7 CR. rex-1683 and rex-1711 do not flip with `a7b3`. The other 10 entries were not re-run with `a7b3` |
 | AC4 | Met | The `/code-review` cap is 15,736 of 16,000 bytes; `test_token_efficiency_wave1.sh` passes |
 
 Limit: the eval gives Rex no tools, so it cannot recount a number against the source.
@@ -111,3 +111,18 @@ Result: **FAIL**. Two parts of the pass condition fail.
 rex-1683 and rex-1711 are back to APPROVED in all runs, which confirms the removed sentence caused those two flips.
 The other 10 entries were not re-run with `a7b3`. No more runs were made.
 Runs: 12. Tokens: 496,109 (from CLI JSON usage).
+
+## rex-773 at k=8
+
+Prompts: baseline `2656e3532425`; new `a7b38bd17fe3`. Eight runs each: the 3 earlier runs plus 5 new runs per prompt.
+Verdicts are from reading each review. A is APPROVED, C is COMMENT, CR is CHANGES REQUESTED.
+
+| Prompt | A | C | CR | Majority |
+|---|---|---|---|---|
+| Baseline `2656` | 0 | 6 | 2 | C |
+| New `a7b3` | 0 | 1 | 7 | CR |
+
+Result: the majority verdict flips from C to CR. The difference is beyond baseline variance, but only just: the baseline gives CR in 2 of 8 runs, `a7b3` in 7 of 8, and a two-sided Fisher exact test gives p of about 0.04.
+The `a7b3` blocking findings are the same points the baseline gives as suggestions or as a COMMENT: the wider raw-command haystack, the base-ref order for a cross-repository PR, and a wrong cause in the bug 1 comment. They do not come from the unverifiable-claim sentence, which `a7b3` removes.
+The entry has no frozen defect, and its key is APPROVED, so the CR verdicts are false alarms by the strict rule. This is the accepted flip on a borderline entry.
+Runs: 10. Tokens: 366,471 (from CLI JSON usage).
