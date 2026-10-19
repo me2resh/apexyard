@@ -33,6 +33,38 @@ No dependency or gate behavior changes.
 - Timing is approximate and does not establish a safe long-command limit.
 - Windows path fixtures test drive-letter and mount forms without Windows.
 
+## JSON output
+
+#1745 constraint 5 names an optional `--json` flag.
+This change does not add that flag.
+The terminal report is the result.
+A later change can add JSON output to the same script.
+
+## Architecture evolution
+
+### Before
+
+`bin/apexyard` used the directory of `BASH_SOURCE[0]` when no fork was found.
+A symlink on `PATH` made that directory the directory on `PATH`.
+The shell then exited 127 because `preflight.sh` was absent.
+The timing probe sent `SIGTERM` only to the dispatcher process.
+A child of that process kept running after the report ended.
+The Windows path check compared the raw `git` text with `pwd -P`.
+Git Bash prints `C:/...` and `pwd -P` prints `/c/...` for the same directory.
+A healthy Git Bash host then reported `WARN windows-paths`.
+
+### After
+
+The CLI resolves the real script path and then runs `preflight.sh` from that directory.
+It calls `readlink` on each symlink until the target is a normal file.
+A missing `preflight.sh` prints one message and exits 2.
+The timing probe starts in its own process group.
+Children stay in that group because the dispatcher script does not enable job control.
+The watchdog signals that group, so the dispatcher and its children stop.
+The Windows check compares both paths after `cygpath -u` when `cygpath` is present.
+With no `cygpath`, the check maps a leading `X:/` to `/x/` and then compares.
+The upstream check accepts `ssh://git@github.com/me2resh/apexyard` with or without `.git`.
+
 ## Artifacts
 
 - `.claude/skills/preflight/preflight.sh`

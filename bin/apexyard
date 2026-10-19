@@ -45,6 +45,29 @@ find_ops_root() {
   return 1
 }
 
+# Follow each symlink to the real script. Bash 3.2 has no readlink -f.
+resolve_cli_path() {
+  local path="${BASH_SOURCE[0]}" hops=0 target dir
+  while [ -L "$path" ]; do
+    hops=$((hops + 1))
+    [ "$hops" -le 16 ] || return 1
+    target=$(readlink "$path") || return 1
+    case "$target" in
+      /*) path="$target" ;;
+      *)
+        dir=$(dirname "$path")
+        case "$dir" in
+          /*) ;;
+          *) dir=$(cd "$dir" && pwd) || return 1 ;;
+        esac
+        path="$dir/$target"
+        ;;
+    esac
+  done
+  dir=$(cd "$(dirname "$path")" && pwd -P) || return 1
+  printf '%s' "$dir/$(basename "$path")"
+}
+
 usage() {
   cat <<'EOF'
 Usage: apexyard <command> [args]
@@ -68,10 +91,19 @@ case "$cmd" in
     exit 0
     ;;
   doctor)
-    # Use the fork helper when available. Outside a fork, the bundled helper
-    # reports the missing anchor with the same FAIL format.
-    ops_root=$(find_ops_root) || ops_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-    exec "$BASH" "$ops_root/.claude/skills/preflight/preflight.sh" "$@"
+    # Use the fork that contains the current directory.
+    # Outside a fork, use the real script directory. A PATH symlink must not hide it.
+    ops_root=$(find_ops_root) || ops_root=""
+    if [ -z "$ops_root" ]; then
+      cli_path=$(resolve_cli_path) || cli_path="${BASH_SOURCE[0]}"
+      ops_root=$(cd "$(dirname "$cli_path")/.." && pwd -P) || ops_root=""
+    fi
+    helper="$ops_root/.claude/skills/preflight/preflight.sh"
+    if [ ! -f "$helper" ]; then
+      echo "apexyard: preflight helper not found at $helper. Update the fork: git pull upstream dev (or run /update)." >&2
+      exit 2
+    fi
+    exec "$BASH" "$helper" "$@"
     ;;
   status)
     if ! ops_root=$(find_ops_root); then

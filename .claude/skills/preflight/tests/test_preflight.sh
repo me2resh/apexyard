@@ -94,6 +94,44 @@ unset DISPATCH_RC
 printf '{"hooks":{"PreToolUse":[{"hooks":[{"command":"dispatch-bash.sh","timeout":1}]}]}}\n' > "$TMP/fork/.claude/settings.json"
 printf '#!/bin/bash\nsleep 2\n' > "$TMP/fork/.claude/hooks/dispatch-bash.sh"
 run; check dispatcher-timeout 1 'WARN dispatcher-timing'
+# A child that outlives the dispatcher must die with the probe. It must not write its marker.
+marker="$TMP/dispatcher-child-marker"
+pidfile="$TMP/dispatcher-child.pid"
+rm -f "$marker" "$pidfile"
+cat > "$TMP/fork/.claude/hooks/dispatch-bash.sh" <<EOF
+#!/bin/bash
+(
+  printf '%s\n' "\$\$" > "$pidfile"
+  sleep 2
+  printf 'wrote\n' > "$marker"
+) &
+sleep 30
+EOF
+run
+if printf '%s\n' "$OUT" | grep -F 'Terminated' >/dev/null; then
+  RC=97
+  OUT="job notice: $OUT"
+fi
+check dispatcher-orphan 1 'WARN dispatcher-timing'
+child_alive=0
+if [ ! -f "$pidfile" ]; then
+  child_alive=1
+else
+  child=$(cat "$pidfile")
+  if kill -0 "$child" 2>/dev/null; then
+    child_alive=1
+    kill -- -"$child" 2>/dev/null || kill "$child" 2>/dev/null || true
+  fi
+fi
+sleep 3
+RC=0
+OUT='child stopped and marker absent'
+if [ "$child_alive" -ne 0 ] || [ -f "$marker" ]; then
+  RC=99
+  OUT="alive=$child_alive marker=$( [ -f "$marker" ] && printf 'yes' || printf 'no' )"
+fi
+check dispatcher-orphan-tree 0 'child stopped and marker absent'
+rm -f "$marker" "$pidfile"
 fixture
 # Native host must not run Windows checks.
 run; check non-windows 0 'OK portfolio'
@@ -117,6 +155,8 @@ case "$1" in
     case "$1" in
       /c/test/fork*) echo "$FIXTURE${1#/c/test/fork}" ;;
       C:/Users/test/AppData/Local/Temp/fork*) echo "$FIXTURE${1#C:/Users/test/AppData/Local/Temp/fork}" ;;
+      # Same directory with a different spelling, so the normalized forms differ.
+      D:/other/repo) echo "$FIXTURE/." ;;
       *) echo "$1" ;;
     esac ;;
   -m) echo 'C:/Users/test/AppData/Local/Temp/fork' ;;
@@ -126,11 +166,13 @@ chmod +x "$TMP/tools/cygpath"
 export FIXTURE
 FIXTURE=$(cd "$TMP/fork" && pwd -P)
 export WIN_GIT_ROOT='C:/Users/test/AppData/Local/Temp/fork'
-run; check mount-path-mismatch 1 'cygpath='
-check conflicting-forms 1 'git=C:/Users/test/AppData/Local/Temp/fork'
-check path-fix-link 1 'https://github.com/me2resh/apexyard/issues/1743'
+run; check git-bash-paths 0 'OK windows-paths'
+check git-bash-raw-form 0 'git=C:/Users/test/AppData/Local/Temp/fork'
 export WIN_GIT_ROOT=/c/test/fork
-run; check drive-mount-form 1 'git=/c/test/fork'
+run; check drive-mount-form 0 'OK windows-paths'
+export WIN_GIT_ROOT='D:/other/repo'
+run; check mount-path-mismatch 1 'WARN windows-paths'
+check path-fix-link 1 'https://github.com/me2resh/apexyard/issues/1743'
 unset WIN_GIT_ROOT
 run; check windows-matching 0 'OK windows-paths'
 "$REAL_GIT" -C "$TMP/fork" config core.autocrlf true
@@ -189,5 +231,32 @@ check skill-exits 0 '2 = at least one FAIL'
 # No anchor: the CLI must still print a FAIL and exit 2.
 rm "$TMP/fork/.apexyard-fork" "$TMP/fork/onboarding.yaml"
 run; check outside-fork 2 'FAIL fork'
+fixture
+"$REAL_GIT" -C "$TMP/fork" remote set-url upstream 'ssh://git@github.com/me2resh/apexyard'
+run; check upstream-ssh 0 'OK upstream: ssh://git@github.com/me2resh/apexyard'
+"$REAL_GIT" -C "$TMP/fork" remote set-url upstream 'ssh://git@github.com/me2resh/apexyard.git'
+run; check upstream-ssh-dot-git 0 'OK upstream: ssh://git@github.com/me2resh/apexyard.git'
+"$REAL_GIT" -C "$TMP/fork" config user.email 'preflight@example.com'
+"$REAL_GIT" -C "$TMP/fork" config user.name 'Preflight Test'
+"$REAL_GIT" -C "$TMP/fork" config commit.gpgsign false
+"$REAL_GIT" -C "$TMP/fork" commit --allow-empty -q -m init
+"$REAL_GIT" -C "$TMP/fork" worktree add -q "$TMP/linked-worktree" HEAD
+main_fork=$(cd "$TMP/fork" && pwd -P)
+RC=0
+OUT=$(cd "$TMP/linked-worktree" && PATH="$TMP/tools" HOME="$TMP/home" CLAUDE_CONFIG_DIR="$TMP/home/.claude" /bin/bash "$TMP/fork/bin/apexyard" doctor 2>&1) || RC=$?
+check linked-worktree 0 "OK fork: $main_fork"
+rm -rf "$TMP/linked-worktree"
+mkdir -p "$TMP/pathbin" "$TMP/outside"
+ln -s "$TMP/fork/bin/apexyard" "$TMP/pathbin/apexyard"
+RC=0
+OUT=$(cd "$TMP/outside" && PATH="$TMP/tools" HOME="$TMP/home" CLAUDE_CONFIG_DIR="$TMP/home/.claude" /bin/bash "$TMP/pathbin/apexyard" doctor 2>&1) || RC=$?
+check symlink-outside-fork 2 'FAIL fork'
+rm -f "$TMP/fork/.claude/skills/preflight/preflight.sh"
+RC=0
+OUT=$(cd "$TMP/fork" && PATH="$TMP/tools" HOME="$TMP/home" CLAUDE_CONFIG_DIR="$TMP/home/.claude" /bin/bash bin/apexyard doctor 2>&1) || RC=$?
+check missing-preflight 2 'preflight helper not found'
+RC=0
+OUT=$(cd "$TMP/outside" && PATH="$TMP/tools" HOME="$TMP/home" CLAUDE_CONFIG_DIR="$TMP/home/.claude" /bin/bash "$TMP/pathbin/apexyard" doctor 2>&1) || RC=$?
+check missing-preflight-symlink 2 'preflight helper not found'
 printf '%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -84,7 +84,7 @@ fi
 cd "$root" || exit 2
 upstream=$(git remote get-url upstream 2>/dev/null || true)
 case "$upstream" in
-  https://github.com/me2resh/apexyard|https://github.com/me2resh/apexyard.git|git@github.com:me2resh/apexyard|git@github.com:me2resh/apexyard.git|ssh://git@github.com/me2resh/apexyard.git)
+  https://github.com/me2resh/apexyard|https://github.com/me2resh/apexyard.git|git@github.com:me2resh/apexyard|git@github.com:me2resh/apexyard.git|ssh://git@github.com/me2resh/apexyard|ssh://git@github.com/me2resh/apexyard.git)
     report OK upstream "$upstream" ;;
   *)
     fix='Run git remote add upstream https://github.com/me2resh/apexyard.git.'
@@ -143,6 +143,42 @@ if [ "$jq_ready" -eq 1 ]; then
 else
   report INFO portfolio 'Skipped: jq unavailable; portfolio and onboarding checks need jq.'
 fi
+# Map one path to a POSIX form. Use cygpath -u when it exists.
+# Otherwise map a leading X:/ or X:\ to /x/.
+normalize_check_path() {
+  local p="$1" converted="" drive rest
+  [ -n "$p" ] || return 0
+  if command -v cygpath >/dev/null 2>&1; then
+    converted=$(cygpath -u -- "$p" 2>/dev/null) || converted=""
+    case "$converted" in
+      /*)
+        printf '%s' "$converted"
+        return 0
+        ;;
+    esac
+  fi
+  case "$p" in
+    [A-Za-z]:/*|[A-Za-z]:\\*)
+      drive=$(printf '%s' "${p%%:*}" | tr '[:upper:]' '[:lower:]')
+      rest=$(printf '%s' "${p#*:}" | tr '\\' '/')
+      printf '/%s%s' "$drive" "$rest"
+      ;;
+    *)
+      printf '%s' "$p"
+      ;;
+  esac
+}
+# Stop a probe when it has no process group. Stop children before the parent.
+stop_probe_tree() {
+  local pid="$1" child
+  [ -n "${pid:-}" ] || return 0
+  if command -v pgrep >/dev/null 2>&1; then
+    for child in $(pgrep -P "$pid" 2>/dev/null || true); do
+      stop_probe_tree "$child"
+    done
+  fi
+  kill "$pid" 2>/dev/null || true
+}
 system=$(uname -s)
 case "$system" in
   MINGW*|MSYS*|CYGWIN*)
@@ -150,11 +186,11 @@ case "$system" in
     if command -v cygpath >/dev/null 2>&1; then
       git_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
       shell_root=$(pwd -P)
-      converted=$(cygpath -u "$git_root" 2>/dev/null || true)
-      native=$(cygpath -m "$shell_root" 2>/dev/null || true)
-      # Report different raw forms even when cygpath maps them correctly.
-      if [ "$git_root" != "$shell_root" ] || [ "$converted" != "$shell_root" ]; then
-        report WARN windows-paths "shell=$shell_root; git=$git_root; cygpath=$converted; native=$native" 'Review https://github.com/me2resh/apexyard/issues/1743 and use cygpath -u to compare mount paths.'
+      git_norm=$(normalize_check_path "$git_root")
+      shell_norm=$(normalize_check_path "$shell_root")
+      native=$(cygpath -m -- "$shell_root" 2>/dev/null || true)
+      if [ "$git_norm" != "$shell_norm" ]; then
+        report WARN windows-paths "shell=$shell_root; git=$git_root; normalized=$git_norm; native=$native" 'Review https://github.com/me2resh/apexyard/issues/1743 and use cygpath -u to compare mount paths.'
       else
         report OK windows-paths "shell=$shell_root; git=$git_root; native=$native"
       fi
@@ -202,19 +238,30 @@ else
         # Do not execute the configurable settings command.
         payload=$(jq -nc --arg cwd "$root" '{tool_name:"Bash",tool_input:{command:":"},cwd:$cwd}')
         start=$SECONDS
-        bash "$lib/dispatch-bash.sh" <<<"$payload" >/dev/null 2>&1 &
-        dispatcher_pid=$!
-        (
-          trap 'kill "$sleeper" 2>/dev/null || true; exit 0' TERM
-          sleep "$timeout" &
-          sleeper=$!
-          wait "$sleeper" && kill "$dispatcher_pid" 2>/dev/null
-        ) >/dev/null 2>&1 &
-        watchdog_pid=$!
-        rc=0
-        wait "$dispatcher_pid" || rc=$?
-        kill "$watchdog_pid" 2>/dev/null || true
-        wait "$watchdog_pid" 2>/dev/null || true
+        # Own process group: a timeout must stop the dispatcher and its children.
+        rc=$(
+          set -m
+          bash "$lib/dispatch-bash.sh" <<<"$payload" >/dev/null 2>&1 &
+          dispatcher_pid=$!
+          (
+            trap 'kill "${sleeper:-}" 2>/dev/null || true; exit 0' TERM
+            sleep "$timeout" &
+            sleeper=$!
+            wait "$sleeper" 2>/dev/null || true
+            if ! kill -- -"$dispatcher_pid" 2>/dev/null; then
+              stop_probe_tree "$dispatcher_pid"
+            fi
+          ) >/dev/null 2>&1 &
+          watchdog_pid=$!
+          probe_rc=0
+          wait "$dispatcher_pid" >/dev/null 2>&1 || probe_rc=$?
+          kill "$watchdog_pid" 2>/dev/null || true
+          wait "$watchdog_pid" >/dev/null 2>&1 || true
+          printf '%s' "$probe_rc"
+        ) 2>/dev/null || true
+        case "${rc:-}" in
+          ''|*[!0-9]*) rc=1 ;;
+        esac
         elapsed=$((SECONDS - start))
         if [ "$rc" -ne 0 ] || [ "$((elapsed * 100))" -ge "$((timeout * 80))" ]; then
           report WARN dispatcher-timing "Trivial run: ${elapsed}s / ${timeout}s; exit=$rc." 'Split long commands into shorter calls; report slow dispatch at https://github.com/me2resh/apexyard/issues/1547. No supported local timeout override exists.'
