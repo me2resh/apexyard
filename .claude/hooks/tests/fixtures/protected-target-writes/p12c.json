@@ -1,28 +1,73 @@
 {
   "capture": "P12c",
+  "run": 2,
   "date": "2026-10-19",
   "design": "AgDR-0261 section B.10",
   "session": "<session-b>",
   "session_mode": "no pin, no snapshot (after clear)",
-  "subagent": "<agent-p12c>",
+  "subagent": "agent-<p12c>",
   "isolation": "worktree",
-  "worktree": "<sandbox>/.claude/worktrees/<agent-p12c>",
-  "subagent_tool_calls": [
+  "subagent_pretooluse_events": [
     {
-      "tool": "Bash",
-      "input": "printf '\\n' >> <sandbox>/.claude/worktrees/<agent-p12c>/.claude/settings.json"
+      "ts": "2026-10-19T20:23:14Z",
+      "event": "PreToolUse",
+      "hook_pwd": "<sandbox>/.claude/worktrees/agent-<p12c>",
+      "hook_claude_project_dir": "<sandbox>",
+      "pin_at_call": "",
+      "payload": {
+        "session_id": "<session-b>",
+        "hook_event_name": "PreToolUse",
+        "source": null,
+        "file_path": null,
+        "tool_name": "Bash",
+        "agent_id": "<p12c>",
+        "agent_type": "general-purpose",
+        "cwd": "<sandbox>/.claude/worktrees/agent-<p12c>",
+        "target": "grep -n '^  \"[a-zA-Z$]' <sandbox>/.claude/worktrees/agent-<p12c>/.claude/settings.json"
+      }
     },
     {
-      "tool": "Bash",
-      "input": "git diff --stat -- .claude/settings.json && tail -c 20 .claude/settings.json | od -c"
+      "ts": "2026-10-19T20:23:21Z",
+      "event": "PreToolUse",
+      "hook_pwd": "<sandbox>/.claude/worktrees/agent-<p12c>",
+      "hook_claude_project_dir": "<sandbox>",
+      "pin_at_call": "",
+      "payload": {
+        "session_id": "<session-b>",
+        "hook_event_name": "PreToolUse",
+        "source": null,
+        "file_path": null,
+        "tool_name": "Edit",
+        "agent_id": "<p12c>",
+        "agent_type": "general-purpose",
+        "cwd": "<sandbox>/.claude/worktrees/agent-<p12c>",
+        "target": "<sandbox>/.claude/worktrees/agent-<p12c>/.claude/settings.json"
+      }
     },
     {
-      "tool": "SubagentHandback",
-      "input": "1. Worktree: <sandbox>/.claude/worktrees/<agent-p12c>\n\n2. The write went through. No hook or permission check stopped it. I ran `printf '\\n' >> .claude/settings.json` through Bash using the absolute path. The command printed nothing and no block message appeared.\n\n3. Evidence:\n`git diff --stat -- .claude/settings.json`:\n```\n .claude/settings.json | 1"
+      "ts": "2026-10-19T20:23:29Z",
+      "event": "PreToolUse",
+      "hook_pwd": "<sandbox>/.claude/worktrees/agent-<p12c>",
+      "hook_claude_project_dir": "<sandbox>",
+      "pin_at_call": "",
+      "payload": {
+        "session_id": "<session-b>",
+        "hook_event_name": "PreToolUse",
+        "source": null,
+        "file_path": null,
+        "tool_name": "Bash",
+        "agent_id": "<p12c>",
+        "agent_type": "general-purpose",
+        "cwd": "<sandbox>/.claude/worktrees/agent-<p12c>",
+        "target": "python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps(d[\"env\"]))' <sandbox>/.claude/worktrees/agent-<p12c>/.claude/settings.json"
+      }
     }
   ],
-  "worktree_diff": "one trailing newline appended to .claude/settings.json; the JSON value did not change",
-  "logged_configchange_events": [],
-  "observation": "The write passed, as designed: the worktree is not a live root. No ConfigChange was logged. The change was whitespace only, so this does not show whether the harness watches a worktree settings file.",
-  "verdict": "Inconclusive"
+  "worktree_diff": "diff --git a/.claude/settings.json b/.claude/settings.json\nindex 18b7d3ec..729fb578 100644\n--- a/.claude/settings.json\n+++ b/.claude/settings.json\n@@ -1,5 +1,8 @@\n {\n   \"$schema\": \"https://json.schemastore.org/claude-code-settings.json\",\n+  \"env\": {\n+    \"D17_PROBE\": \"1\"\n+  },\n   \"hooks\": {\n     \"SessionStart\": [\n       {",
+  "configchange_events": [],
+  "findings": [
+    "The subagent added env.D17_PROBE to its worktree .claude/settings.json with the Edit tool. The edit passed.",
+    "No ConfigChange fired. The harness does not watch a worktree settings file of a subagent."
+  ],
+  "verdict": "Met"
 }
