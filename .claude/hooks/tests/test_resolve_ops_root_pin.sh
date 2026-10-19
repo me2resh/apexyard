@@ -260,7 +260,7 @@ case_7() {
     # Run the hook from inside the ops fork. The hook resolves $PWD via
     # walk-up and writes the pin.
     cd "$sb/workspace/demo" || exit 1
-    bash "$HOOK" >/dev/null 2>&1
+    bash "$HOOK" <<<'{"source":"startup"}' >/dev/null 2>&1
   )
 
   local pin_file="$pin_dir/ops-root-$sess"
@@ -290,7 +290,7 @@ case_8() {
     unset CLAUDE_CODE_SESSION_ID
     export APEXYARD_OPS_PIN_DIR="$pin_dir"
     cd "$sb" || exit 1
-    bash "$HOOK" >/dev/null 2>&1
+    bash "$HOOK" <<<'{"source":"startup"}' >/dev/null 2>&1
   )
 
   # Pin dir should still be empty (no file created).
@@ -362,7 +362,7 @@ case_10() {
     unset CLAUDE_CODE_SESSION_ID
     cd "$fork" || return 1
     export CLAUDE_CODE_SESSION_ID="testsess10-write"
-    bash "$HOOK" >/dev/null 2>&1
+    bash "$HOOK" <<<'{"source":"startup"}' >/dev/null 2>&1
     pinned=""
     IFS= read -r pinned < "$pin_dir/ops-root-testsess10-write" || pinned=""
     [ "$pinned" = "$expected" ] || { mark_fail "$case_name (pin write)" "expected '$expected', got '$pinned'"; return; }
@@ -405,7 +405,7 @@ case_11() {
     export CLAUDE_CODE_SESSION_ID="testsess11-write"
     export APEXYARD_OPS_PIN_DIR="$pin_dir"
     cd "$portfolio/workspace/demo" || return 1
-    bash "$HOOK" >/dev/null 2>&1
+    bash "$HOOK" <<<'{"source":"startup"}' >/dev/null 2>&1
   ) || { mark_fail "$case_name (pin write)" "hook invocation failed"; return; }
   local pinned=""
   IFS= read -r pinned < "$pin_dir/ops-root-testsess11-write" || pinned=""
