@@ -26,7 +26,7 @@ SessionStart clears only the current session's exemption files. Role banners ret
 
 - Skills must use the resolver on entry and on every cleanup path.
 - Adapters export `APEXYARD_SESSION_ID` to hooks and skill shells. Claude Code keeps precedence. No shared default is permitted.
-- Manual harness checks remain required before release.
+- Interactive harness checks remain a recorded follow-up. They are not a merge condition under the amended AC5.
 
 ## Artifacts
 
@@ -35,14 +35,16 @@ SessionStart clears only the current session's exemption files. Role banners ret
 
 ## Manual checklist for the PR
 
-Automated tests verify transport and marker isolation. Interactive skill completion still requires an operator run before merge.
+Automated tests cover Claude Code, opencode and pi for session-id transport and marker isolation. The eight interactive `/setup` and `/bug` runs are a recorded follow-up. They are not a merge condition under the amended AC5.
+
+2026-10-19: AC5 amended with CEO confirmation (see #1532).
 
 | Harness | `/setup` | `/bug` | Session id evidence |
 |---------|----------|--------|---------------------|
-| Claude Code | Resolver tested; manual run required | Resolver tested; manual run required | `CLAUDE_CODE_SESSION_ID` wins over the adapter variable |
-| Cursor | Mapping inspected; manual run required | Mapping inspected; manual run required | `cursor-session-pin.sh` maps `session_id` or `conversation_id` to `CLAUDE_CODE_SESSION_ID` through its JSON `env` output |
-| opencode | Shell transport tested; manual run required | Shell transport tested; manual run required | Native tool-call `sessionID`, exported as `APEXYARD_SESSION_ID` |
-| pi | Shell transport tested; manual run required | Shell transport tested; manual run required | `sessionManager.getSessionId()` at `session_start`, exported as `APEXYARD_SESSION_ID` |
+| Claude Code | Resolver tested; manual run follow-up | Resolver tested; manual run follow-up | `CLAUDE_CODE_SESSION_ID` wins over the adapter variable |
+| Cursor | Mapping inspected; manual run follow-up | Mapping inspected; manual run follow-up | `cursor-session-pin.sh` maps `session_id` or `conversation_id` to `CLAUDE_CODE_SESSION_ID` through its JSON `env` output |
+| opencode | Shell and hook transport tested; manual run follow-up | Shell and hook transport tested; manual run follow-up | Native tool-call `sessionID`, exported as `APEXYARD_SESSION_ID` |
+| pi | Shell and hook transport tested; manual run follow-up | Shell and hook transport tested; manual run follow-up | `sessionManager.getSessionId()` at `session_start`, exported as `APEXYARD_SESSION_ID` |
 
 opencode carries the native id per tool call because one server can host concurrent sessions.
 The adapter passes it to hook subprocesses and prefixes Bash commands with a quoted export after gate evaluation.
@@ -52,7 +54,7 @@ Child shells and hook subprocesses inherit that environment. No new dependency i
 
 The adapter tests verify stable ids within sessions and different ids across sessions.
 The marker suite verifies sanitization, Claude Code precedence, cross-session denial, legacy denial, and missing-id denial.
-These checks do not prove that `/setup` or `/bug` completes interactively. AC5 remains open until those eight manual runs complete.
+These checks do not prove that `/setup` or `/bug` completes interactively. The eight interactive runs are not done. They are not a merge condition under the amended AC5.
 
 The migration notice still uses stderr. A successful SessionStart hook can claim the notice before a blocking gate runs.
 A harness that hides stderr from successful SessionStart hooks can hide this notice. This visibility limit remains unverified.
