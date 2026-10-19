@@ -18,6 +18,7 @@ set -u
 # Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
 # shellcheck disable=SC1091
 . "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+export CLAUDE_CODE_SESSION_ID=marker-test
 
 
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
@@ -63,6 +64,7 @@ make_sandbox_template() {
   cp "$LIB_BASH" "$sb/.claude/hooks/_lib-detect-bash-write.sh"
   cp "$(dirname "$LIB_BASH")/_lib-awk-fallback.sh" "$sb/.claude/hooks/_lib-awk-fallback.sh"
   cp "$LIB_CFG"  "$sb/.claude/hooks/_lib-read-config.sh"
+  cp "$(cd "$(dirname "$0")/.." && pwd)/_lib-session-markers.sh" "$sb/.claude/hooks/_lib-session-markers.sh"
   cp "$LIB_PATH_RESOLVE" "$sb/.claude/hooks/_lib-path-resolve.sh"
   cp "$LIB_ACTIVE_TICKET" "$sb/.claude/hooks/_lib-active-ticket.sh"
   cp "$LIB_TICKET_PATH_EXEMPT" "$sb/.claude/hooks/_lib-ticket-path-exemptions.sh"
@@ -184,34 +186,34 @@ run_case "edit blocked w/o ticket no bootstrap" 2 "BLOCKED" "$in" "$sb"
 
 # 7. Edit .gitignore, no ticket, BOOTSTRAP marker (setup) → allowed
 sb=$(make_sandbox)
-echo "setup" > "$sb/.claude/session/active-bootstrap"
+echo "setup" > "$sb/.claude/session/active-bootstrap.marker-test"
 in=$(jq -nc --arg p "$sb/.gitignore" '{tool_name:"Edit", tool_input:{file_path:$p}}')
 run_case "edit allowed with setup bootstrap marker" 0 "" "$in" "$sb"
 
 # 8. Edit src/foo.ts, no ticket, BOOTSTRAP marker (handover) → allowed
 sb=$(make_sandbox)
-echo "handover" > "$sb/.claude/session/active-bootstrap"
+echo "handover" > "$sb/.claude/session/active-bootstrap.marker-test"
 in=$(jq -nc --arg p "$sb/src/foo.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
 run_case "edit allowed with handover bootstrap marker" 0 "" "$in" "$sb"
 
 # 9. Edit src/foo.ts, no ticket, BOOTSTRAP marker (UNKNOWN skill) → BLOCKED
 #    (only skills on the configured bootstrap_skills list are exempt)
 sb=$(make_sandbox)
-echo "some-random-skill" > "$sb/.claude/session/active-bootstrap"
+echo "some-random-skill" > "$sb/.claude/session/active-bootstrap.marker-test"
 in=$(jq -nc --arg p "$sb/src/foo.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
 run_case "edit blocked when bootstrap marker is for non-listed skill" 2 "BLOCKED" "$in" "$sb"
 
 # 10. Bash python write to .gitignore, BOOTSTRAP marker (setup) → allowed
 #     (this is the exact /setup-runs-into-#151-bypass scenario from #150)
 sb=$(make_sandbox)
-echo "setup" > "$sb/.claude/session/active-bootstrap"
+echo "setup" > "$sb/.claude/session/active-bootstrap.marker-test"
 in=$(jq -nc --arg c 'python3 -c "import pathlib; pathlib.Path(\".gitignore\").write_text(\"x\")"' \
   '{tool_name:"Bash", tool_input:{command:$c}}')
 run_case "bash write allowed with setup bootstrap" 0 "" "$in" "$sb"
 
 # 11. Empty bootstrap marker → no exemption (treated as no marker)
 sb=$(make_sandbox)
-: > "$sb/.claude/session/active-bootstrap"
+: > "$sb/.claude/session/active-bootstrap.marker-test"
 in=$(jq -nc --arg p "$sb/src/foo.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
 run_case "edit blocked when bootstrap marker is empty" 2 "BLOCKED" "$in" "$sb"
 
@@ -468,6 +470,7 @@ cp "$HOOK_SRC"  "$_t30_ops/.claude/hooks/require-active-ticket.sh"
 cp "$LIB_BASH"  "$_t30_ops/.claude/hooks/_lib-detect-bash-write.sh"
 cp "$(dirname "$LIB_BASH")/_lib-awk-fallback.sh" "$_t30_ops/.claude/hooks/_lib-awk-fallback.sh"
 cp "$LIB_CFG"   "$_t30_ops/.claude/hooks/_lib-read-config.sh"
+cp "$(cd "$(dirname "$0")/.." && pwd)/_lib-session-markers.sh" "$_t30_ops/.claude/hooks/_lib-session-markers.sh"
 cp "$LIB_PATH_RESOLVE" "$_t30_ops/.claude/hooks/_lib-path-resolve.sh"
 cp "$LIB_ACTIVE_TICKET" "$_t30_ops/.claude/hooks/_lib-active-ticket.sh"
 cp "$LIB_TICKET_PATH_EXEMPT" "$_t30_ops/.claude/hooks/_lib-ticket-path-exemptions.sh"

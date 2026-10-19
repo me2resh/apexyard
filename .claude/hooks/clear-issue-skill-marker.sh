@@ -49,7 +49,12 @@ if [ -z "$ROOT" ]; then
   exit 0
 fi
 
-MARKER="$ROOT/.claude/session/active-issue-skill"
+# shellcheck source=/dev/null
+[ ! -r "$HOOK_DIR/_lib-session-markers.sh" ] || . "$HOOK_DIR/_lib-session-markers.sh"
+MARKER=""
+if command -v active_issue_skill_marker_path >/dev/null 2>&1; then
+  MARKER=$(active_issue_skill_marker_path "$ROOT") || MARKER=""
+fi
 if [ -f "$MARKER" ]; then
   stale_skill=$(tr -d '[:space:]' < "$MARKER" 2>/dev/null || echo "(unreadable)")
   rm -f "$MARKER"

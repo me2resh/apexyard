@@ -6,6 +6,7 @@ set -u
 
 # shellcheck disable=SC1091
 . "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+export CLAUDE_CODE_SESSION_ID=marker-test
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 LIB="$ROOT/.claude/hooks/_lib-git-global.sh"
@@ -303,7 +304,7 @@ check b1-onboarding 2 "$(run_hook "$HOOKS/block-onboarding-in-git.sh" "git -C $f
 
 # Keep bootstrap markers inside the disposable fixture.
 mkdir -p "$sb/.claude/session"
-printf handover > "$sb/.claude/session/active-bootstrap"
+printf handover > "$sb/.claude/session/active-bootstrap.marker-test"
 check b1-bootstrap-status 0 "$(run_hook "$HOOKS/warn-bootstrap-scope.sh" "git -C $feature commit -m 'fix: first' && git commit -m 'fix: second'" "$sb")"
 if grep -q 'Bootstrap exemption is active' "$test_tmp/hook.err"; then
   echo PASS b1-bootstrap-warning

@@ -116,7 +116,7 @@ agent_slug_for() {
 # The marker is keyed on CLAUDE_CODE_SESSION_ID, so a new session starts
 # fresh with NO new SessionStart hook and NO settings.json change (keeps
 # this a Standard-tier advisory hook, not a trust-chain edit). It is
-# self-cleaning: each call sweeps markers left by other sessions, so the
+# self-cleaning: each call sweeps markers older than seven days, so the
 # dir can't grow without bound.
 #
 # Fail-open by design: no session id, no REPO_ROOT, or an unwritable
@@ -136,16 +136,9 @@ role_banner_already_fired() {
   local dir="$REPO_ROOT/.claude/session/role-fired"
   mkdir -p "$dir" 2>/dev/null || return 1   # can't record → always fire
 
-  # Self-clean: drop markers from any prior/other session so the dir
-  # doesn't accumulate across sessions (no SessionStart sweep needed).
-  local f
-  for f in "$dir"/*; do
-    [ -e "$f" ] || continue
-    case "${f##*/}" in
-      "${sid}__"*) : ;;              # keep this session's markers
-      *) rm -f "$f" 2>/dev/null ;;   # sweep other sessions'
-    esac
-  done
+  # Keep live sessions. Remove only markers older than seven days.
+  find "$dir" -type f -mmin +10080 -exec rm -f {} \; 2>/dev/null || true
+  sid=$(printf '%s' "$sid" | tr -c 'A-Za-z0-9._-' '_')
 
   local slug marker
   slug=$(printf '%s' "$file" | tr '/ ' '__')
