@@ -91,7 +91,7 @@ if tm_install_claim_before_lib "$FB_OPS"; then
     fi
   fi
 else
-  echo "SKIP fail-before: no base ref 5734e29bd51c369951763aafbc81c7dd3c97c7ab"
+  echo "NOTE: skip fail-before (cannot load pre-fix hooks from ancestor)"
 fi
 
 # --- pass-after: long path warns once -----------------------------------

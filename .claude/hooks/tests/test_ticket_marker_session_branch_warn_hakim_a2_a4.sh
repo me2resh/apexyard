@@ -232,7 +232,7 @@ if tm_install_hakim_before_hooks "$FB_OPS"; then
     fb_miss "a2-failed-write-still-audits-on-ea8d21a" "cannot install before hooks"
   fi
 else
-  echo "SKIP fail-before: no base ref ea8d21a"
+  echo "NOTE: skip fail-before (cannot load pre-fix hooks from ancestor)"
 fi
 
 # --- pass-after ------------------------------------------------------------
