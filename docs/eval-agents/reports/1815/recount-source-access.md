@@ -4,7 +4,7 @@ Status: **Phase A run, 2026-10-20. Phase B not run. With read-only source access
 
 This change ships the source-snapshot option only. It does not change the Rex prompt.
 Phase A used 1,904,884 tokens for 3 runs. That is about 3.8 times the budget of about 0.5 M tokens. Thus phase B (the draft prompt `bb87`, k=3) did not start.
-The CEO decided to ship the tooling without the untested prompt edit.
+The CEO decided to ship the tooling without the untested prompt edit (CEO decision, 2026-10-20).
 
 ## Prompt hashes
 
@@ -71,6 +71,10 @@ Summary against the #1798 no-tools runs with the same prompt:
 - Most of the cost is cache reads: each tool turn reads the full context again.
 - Phase B with the `bb87` draft needs 3 more runs, about 1.9 M tokens. Ask the CEO before this spend.
 - To cut the cost, give Rex only Grep and Glob, or a smaller snapshot. That is a new condition, so record it separately.
+
+## Condition difference for future runs
+
+The 3 phase A runs loaded the user-level settings and the installed plugins of the operator. Later runs limit them with `--setting-sources project` and an empty `--plugin-dir`, as the README shows. The context of a later run can differ from phase A for this reason. Record it as a condition difference, and do not mix the counts.
 
 ## Cost totals
 

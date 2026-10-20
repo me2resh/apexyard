@@ -52,6 +52,8 @@ bash .claude/skills/eval-agents/lib/source-snapshot.sh <commit> <run-dir>/src <d
 - The script exports the tracked files at the commit with `git archive`. The snapshot has no git history, so the reviewer cannot see a later fix.
 - `<deny-list>` holds the names of private projects, one name on each line. Keep it outside the repository.
 - The script replaces each name with `<project>` in file text and in paths. Then it checks that no name remains and makes the tree read-only.
+- The proof is literal. It does not catch encoded content: compressed, UTF-16, base64, URL-encoded, or split across lines. The script exits 2 on any binary file, because the text pass cannot redact it, and on any symbolic link.
+- Run the deny-list check on any reviewer output before you quote it publicly.
 - When the script cannot prove that the snapshot is clean, it exits 2. Do not use the snapshot then.
 
 Run the reviewer from the run folder:
@@ -61,11 +63,13 @@ cd <run-dir>
 claude -p --model opus --system-prompt-file <prompt-file> \
   --tools "Read,Grep,Glob" \
   --disallowedTools Bash Edit Write WebFetch WebSearch NotebookEdit Agent \
+  --setting-sources project --plugin-dir <empty-dir> \
   --settings '{"claudeMdExcludes":["<run-dir>/src/**"]}' \
   --permission-mode dontAsk --strict-mcp-config --no-session-persistence \
   --output-format json < <user-prompt-file> > <out-file>.json
 ```
 
+- `--setting-sources project` skips the user-level settings. `--plugin-dir <empty-dir>` points to an empty folder. Check with `claude --help` that your CLI version has both flags, and that installed plugins and skills do not load. The probes of 2026-10-20 ran without these flags.
 - Use a new run folder and a new snapshot for each run.
 - `--tools` gives the reviewer only Read, Grep and Glob. It has no shell.
 - `--permission-mode dontAsk` refuses each path outside the run folder. A probe on 2026-10-20 confirmed it: a Read, a Glob and a Grep of the live repository were all refused.

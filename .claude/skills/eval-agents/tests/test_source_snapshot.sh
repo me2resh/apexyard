@@ -76,7 +76,37 @@ if [ -n "$(find "$OUT" -perm -u+w | head -1)" ]; then bad "the snapshot is read-
 
 # 3. A name that the script cannot redact (inside a binary file) fails closed.
 check "a name left in a binary file fails with exit 2" 2 bash "$SNAPSHOT" "$BINARY" "$WORKDIR/snap-bin" "$DENY" "$REPO"
-if grep -qF 'remains in' "$OUTFILE"; then ok "the failure names the leak"; else bad "the failure names the leak"; fi
+if grep -qF 'binary file' "$OUTFILE"; then ok "the failure names the leak"; else bad "the failure names the leak"; fi
+
+# 3b. Symbolic links fail closed. Fake names only.
+ln -s acme-secret-docs "$REPO/linkdir"
+git -C "$REPO" add linkdir
+git -C "$REPO" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q -m link1
+LINK1=$(git -C "$REPO" rev-parse HEAD)
+check "a link to a deny-list name fails with exit 2" 2 bash "$SNAPSHOT" "$LINK1" "$WORKDIR/snap-l1" "$DENY" "$REPO"
+git -C "$REPO" rm -q -f linkdir
+ln -s /nonexistent/outside-target "$REPO/linkabs"
+git -C "$REPO" add linkabs
+git -C "$REPO" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q -m link2
+LINK2=$(git -C "$REPO" rev-parse HEAD)
+check "a link with an absolute outside target fails with exit 2" 2 bash "$SNAPSHOT" "$LINK2" "$WORKDIR/snap-l2" "$DENY" "$REPO"
+git -C "$REPO" rm -q -f linkabs
+
+# 3c. A binary file with no deny-list name is not redacted: fail closed.
+printf 'bin\000plain\000' > "$REPO/clean.bin"
+git -C "$REPO" rm -q -f blob.bin
+git -C "$REPO" add clean.bin
+git -C "$REPO" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q -m cleanbin
+CLEANBIN=$(git -C "$REPO" rev-parse HEAD)
+check "an unredacted binary file fails with exit 2" 2 bash "$SNAPSHOT" "$CLEANBIN" "$WORKDIR/snap-b2" "$DENY" "$REPO"
+if grep -qF 'binary file' "$OUTFILE"; then ok "the failure names the binary file"; else bad "the failure names the binary file"; fi
+
+# 3d. A failed build leaves no tree on disk.
+if [ -e "$WORKDIR/snap-bin" ]; then bad "a failed build removes the out-dir"; else ok "a failed build removes the out-dir"; fi
+
+# 3e. An out-dir that cannot be created fails with exit 2.
+touch "$WORKDIR/afile"
+check "an out-dir under a file fails with exit 2" 2 bash "$SNAPSHOT" "$CLEAN" "$WORKDIR/afile/sub" "$DENY" "$REPO"
 
 # 4. An empty deny list builds an unredacted snapshot and says so.
 : > "$WORKDIR/empty.txt"

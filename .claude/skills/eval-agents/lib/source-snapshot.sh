@@ -11,7 +11,9 @@
 #      see the later fix commit.
 #   2. It replaces each name in <deny-list> with "<project>" in file text and
 #      in file and directory names. The match is literal and ignores case.
-#   3. It checks that no name remains in any file or path.
+#   3. It checks that no name remains in any file or path. It fails on any
+#      symbolic link and on any binary file. The check is literal; it does not
+#      catch encoded content.
 #   4. It removes write permission from the whole tree.
 #
 # <deny-list> holds one name per line. Blank lines and lines that start with
@@ -48,7 +50,18 @@ if [ -e "$OUT" ]; then
 fi
 
 NAMES_FILE=$(mktemp)
-trap 'rm -f "$NAMES_FILE"' EXIT
+CREATED=0
+cleanup() {
+  local rc=$?
+  rm -f "$NAMES_FILE"
+  # On any failure, remove the partly redacted tree. No half-scrubbed copy
+  # stays on disk.
+  if [ "$rc" -ne 0 ] && [ "$CREATED" -eq 1 ]; then
+    chmod -R u+w "$OUT" 2>/dev/null || true
+    rm -rf "$OUT"
+  fi
+}
+trap cleanup EXIT
 
 # Normalize the deny list. A name shorter than 3 characters would change
 # ordinary words, so the script refuses it.
@@ -61,15 +74,23 @@ while IFS= read -r line || [ -n "$line" ]; do
   printf '%s\n' "$line" >> "$NAMES_FILE"
 done < "$DENY"
 
-mkdir -p "$OUT"
+mkdir -p "$OUT" || die "cannot create out-dir: $OUT"
+CREATED=1
 git -C "$REPO" archive --format=tar "$COMMIT" | tar -x -C "$OUT" \
   || die "git archive of $COMMIT failed"
+
+# A symbolic link can point at a deny-list name or outside the snapshot.
+# Fail closed on any link.
+links=$(find "$OUT" -type l) || die "cannot scan for symbolic links"
+[ -z "$links" ] || die "the snapshot holds a symbolic link: $(printf '%s' "$links" | head -5 | tr '\n' ' ')"
 
 redacted=0
 if [ -s "$NAMES_FILE" ]; then
   # Text files: replace each name. Longer names go first, so that a name
   # that contains a shorter name is replaced as a whole.
-  hits=$(grep -rlIiF -f "$NAMES_FILE" "$OUT" || true)
+  rc=0
+  hits=$(grep -rlIiF -f "$NAMES_FILE" "$OUT") || rc=$?
+  [ "$rc" -le 1 ] || die "the text scan failed (grep exit $rc)"
   if [ -n "$hits" ]; then
     printf '%s\n' "$hits" | while IFS= read -r f; do
       NAMES="$NAMES_FILE" perl -pi -e '
@@ -101,11 +122,24 @@ if [ -s "$NAMES_FILE" ]; then
     }, $ARGV[0]);
   ' "$OUT" || die "path redaction failed"
 
-  # Proof step. Any match left in a file (text or binary) or in a path fails
-  # the snapshot.
-  left=$(grep -rliF -f "$NAMES_FILE" "$OUT" || true)
+  # A binary file is never redacted by the text pass. Fail closed on any.
+  bins=""
+  while IFS= read -r f; do
+    grep -Iq . "$f" 2>/dev/null || bins="$bins $f"
+  done < <(find "$OUT" -type f -size +0)
+  [ -z "$bins" ] || die "a binary file was not redacted:$(printf '%s' "$bins" | cut -c1-300)"
+
+  # Proof step. The proof is literal: it does not catch encoded content.
+  # Any match left in a file or in a path fails the snapshot. A scan error
+  # (grep exit 2 or more) also fails the snapshot.
+  rc=0
+  left=$(grep -rliF -f "$NAMES_FILE" "$OUT") || rc=$?
+  [ "$rc" -le 1 ] || die "the proof scan failed (grep exit $rc)"
   [ -z "$left" ] || die "a deny-list name remains in: $(printf '%s' "$left" | head -5 | tr '\n' ' ')"
-  left=$( (cd "$OUT" && find . | grep -iF -f "$NAMES_FILE") || true)
+  paths=$(find "$OUT" -print) || die "cannot list the snapshot paths"
+  rc=0
+  left=$(printf '%s\n' "$paths" | sed "s|^$OUT||" | grep -iF -f "$NAMES_FILE") || rc=$?
+  [ "$rc" -le 1 ] || die "the path proof scan failed (grep exit $rc)"
   [ -z "$left" ] || die "a deny-list name remains in a path: $(printf '%s' "$left" | head -5 | tr '\n' ' ')"
 else
   echo "NOTE: the deny list is empty; the snapshot is not redacted." >&2
