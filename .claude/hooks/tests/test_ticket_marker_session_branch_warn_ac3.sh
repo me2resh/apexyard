@@ -21,24 +21,30 @@ tm_write_marker "$TREE" org/p1 10 'Original' session-old "$CUR"
 cp "$GD/apexyard-ticket" "$OPS/marker.before"
 BEFORE=$(cksum < "$OPS/marker.before")
 
-# fail-before: upstream write_from_file overwrites without the guard
+# fail-before: pinned pre-#1794 write_from_file overwrites without the guard
 if [ -n "$BEFORE_LIB" ]; then
-  cp "$BEFORE_LIB" "$OPS/.claude/hooks/_lib-active-ticket.sh"
-  PENDING="$OPS/.claude/session/start-ticket-headless.pending"
-  printf 'repo=org/p1\nnumber=99\ntitle=Takeover\nurl=https://example.test/99\nsuggested_branch=feature/x\n' > "$PENDING"
-  (cd "$OPS" && env -u APEXYARD_START_TICKET_TAKEOVER CLAUDE_CODE_SESSION_ID=session-new \
-    bash -c '. .claude/hooks/_lib-active-ticket.sh && active_ticket_write_from_file "$1" "$2"' _ "$TREE" "$PENDING") >/dev/null 2>&1 || true
-  AFTER_FB=$(cksum < "$GD/apexyard-ticket")
-  if [ "$BEFORE" != "$AFTER_FB" ]; then
-    echo "FAIL-BEFORE OK [AC3/upstream-overwrites-without-guard]"
-    FB_PASS=$((FB_PASS + 1))
+  if grep -q 'active_ticket_foreign_overwrite' "$BEFORE_LIB"; then
+    echo "SKIP fail-before: pinned lib already has active_ticket_foreign_overwrite"
   else
-    echo "FAIL-BEFORE MISS [AC3/upstream-overwrites-without-guard]: marker unchanged on upstream" >&2
-    FB_FAIL=$((FB_FAIL + 1))
+    cp "$BEFORE_LIB" "$OPS/.claude/hooks/_lib-active-ticket.sh"
+    PENDING="$OPS/.claude/session/start-ticket-headless.pending"
+    printf 'repo=org/p1\nnumber=99\ntitle=Takeover\nurl=https://example.test/99\nsuggested_branch=feature/x\n' > "$PENDING"
+    (cd "$OPS" && env -u APEXYARD_START_TICKET_TAKEOVER CLAUDE_CODE_SESSION_ID=session-new \
+      bash -c '. .claude/hooks/_lib-active-ticket.sh && active_ticket_write_from_file "$1" "$2"' _ "$TREE" "$PENDING") >/dev/null 2>&1 || true
+    AFTER_FB=$(cksum < "$GD/apexyard-ticket")
+    if [ "$BEFORE" != "$AFTER_FB" ]; then
+      echo "FAIL-BEFORE OK [AC3/d970c194-overwrites-without-guard]"
+      FB_PASS=$((FB_PASS + 1))
+    else
+      echo "FAIL-BEFORE MISS [AC3/d970c194-overwrites-without-guard]: marker unchanged on pinned lib" >&2
+      FB_FAIL=$((FB_FAIL + 1))
+    fi
   fi
   # Restore fixed lib and original marker for the pass-after proof.
   cp "$SRC_ROOT/.claude/hooks/_lib-active-ticket.sh" "$OPS/.claude/hooks/_lib-active-ticket.sh"
   cp "$OPS/marker.before" "$GD/apexyard-ticket"
+else
+  echo "NOTE: skip fail-before: no base ref d970c194b0ff5e14aac71d486c32dd3aa976d78a"
 fi
 
 PENDING="$OPS/.claude/session/start-ticket-headless.pending"

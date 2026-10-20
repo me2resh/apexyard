@@ -65,8 +65,10 @@ macOS system awk. Run those checks on your machine before you push:
 
 ```bash
 /bin/bash bin/run-hook-tests.sh
-# Optional: same suite with mawk 1.3.4 on PATH (catches ERE intervals)
-PATH="$(dirname "$(command -v mawk)"):$PATH" /bin/bash bin/run-hook-tests.sh
+# Optional: the same suite with mawk 1.3.4 as awk. The command prints the awk version first; it must say mawk.
+# CI runs test_awk_ere_interval_lock.sh on Linux as the ERE interval guard. Homebrew mawk 1.3.4 accepts ERE intervals, so this run does not test them.
+# mawk must be installed (`brew install mawk`); check with `command -v mawk`.
+d=$(mktemp -d) && ln -s "$(command -v mawk)" "$d/awk" && PATH="$d:$PATH" awk -W version | head -1 && PATH="$d:$PATH" /bin/bash bin/run-hook-tests.sh; s=$?; rm -rf "$d"; (exit "$s")
 ```
 
 To run one shard locally, use `/bin/bash bin/run-hook-tests.sh --shard 1/4`
