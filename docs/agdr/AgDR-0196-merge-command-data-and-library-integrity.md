@@ -54,11 +54,12 @@ AgDR-0204 extends the raw fallback for unquoted `~[`, startup and `.git/hooks/` 
 - Ordinary variable arguments do not start a merge phrase.
 - Nested scan queue: command, backtick, and process substitutions enter the queue, including substitutions in redirect targets and here-string words.
 - Shell, eval, and source words enable scanning of spaced argument words. Alias definitions and launcher arguments retain the existing conservative scan.
-- Substitution boundaries track comments, quotes, and command-position case words. An unreadable or oversized body fails closed. The scan never evaluates shell text.
+- Substitution boundaries track comments, quotes, command-position case words, and here-document bodies. A backtick body ends at the next unescaped backtick, as in the shell. In command text, a substitution body that does not close fails closed. The scan never evaluates shell text.
+- A here-document body is data for the boundary walk. The scan queues it as its own nested body, so a shell that reads it is still covered, and its quotes do not change the scan of the next command. A body without a delimiter line runs to the end of the input, as in the shell. In a here-document body, a substitution that does not close uses the parenthesis count from before #1824, because ordinary text can hold unpaired quotes and parentheses.
 - Open class: at command position, a window of only opaque phrase words with no bare PR number after it stays clear. This includes the form with no PR argument.
 - Open class: behind a non-host prefix, a window whose host word and subcommand word are both opaque stays clear.
 - Commands over 120,000 characters and scanner failures block with “could not scan the command”. The unresolved-target helper also fails closed on any split-scan status other than clear.
-- Nested scans have limits of three layers, 100 queued words, and 4,096 characters per queued body and 4,096 steps per group walk. Exceeding these limits blocks with that message.
+- Nested scans have limits of three layers and 100 queued bodies or words. In a command with a shell, eval, or source word, a spaced argument word has a limit of 4,096 characters. Exceeding these limits blocks with that message. Substitution bodies and boundary walks have no separate size limit. The 120,000-character command limit bounds them, and each walk step moves forward through the input.
 - The redirect-target guard checks file targets after bash combined-output and zsh clobber operators. Descriptor duplication and closure remain data.
 - A two-step write-then-run can hide a merge: one turn writes merge text to an ordinary file, and a later turn runs that file.
 - A grep option name padded with more than 48 characters of empty quote pairs, before or inside the name, is not recognised (AgDR-0204 reads a fixed window so the check stays linear).
@@ -81,12 +82,17 @@ The scanner cannot distinguish every opaque merge from an ordinary command witho
 | Word cap | Closed for long literal paths. The scanner retains the final path segment. | Long ordinary arguments remain allowed. |
 | Redirect and here-string substitutions | Closed as scan contexts. Fully opaque calls remain open. | Ordinary variable-only commands must remain allowed. |
 | Quoted and case-pattern parentheses | Closed as boundary contexts. Fully opaque calls remain open. | The bounded parser does not evaluate shell grammar. |
-| Expansion between host and subcommand | Closed for the tested quoted, unquoted, prefixed, and numberless forms. | A confirming literal subcommand preserves the phrase window. |
+| Expansion between host and subcommand | Closed for the tested quoted, unquoted, prefixed, and numberless forms. The host word can be literal or an expansion. | A confirming literal subcommand word preserves the phrase window. At command position, a literal verb word after expansions in the subcommand and verb slots also confirms it. |
+| Here-document bodies in substitutions | Data for the boundary walk. Ordinary bodies with unpaired quotes, ticket references in parentheses, or more than 4,096 characters remain allowed. | A here-document body that a shell reads is still scanned as a nested body. |
 
 Behind a non-host prefix, literal host or subcommand words between quoted expansions can still match ordinary argument lists.
 This narrower false-positive class remains conservative because executable wrappers use the same argument structure.
-The historical private r1807 regression sets were run against this change with the system awk and with mawk.
-No block case in those sets passes. The narrower false-positive class above is the same before and after this change.
+The private regression sets from the #1807 review were run against this change with the system awk and with mawk.
+At the first #1824 commit, five block cases in those sets passed.
+Three had an expansion as the host word, followed by an expansion word, at command position or behind a non-host prefix.
+The other two are in the open classes above: a window of only opaque phrase words with no PR number, and a prefixed window with an opaque host word and an opaque subcommand word.
+The expansion-host change above closes the first three. The two open-class cases still pass.
+The narrower false-positive class above is the same before and after this change.
 
 Forge controls remain authoritative for these limits.
 

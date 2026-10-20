@@ -68,5 +68,79 @@ for prefix in '' 'nohup '; do
     done
   done
 done
+# An expansion host word with an expansion in the subcommand slot. A later
+# literal subcommand or verb word confirms the phrase.
+gap2=$(printf '"$%s" "$X"' G)
+pair 'opaque host gap' "$gap2 $P $M 17" "$gap2 $P status 17"
+pair 'prefixed opaque host gap' "ionice $gap2 $P $M 17" "ionice $gap2 $P status 17"
+pair 'opaque host shifted verb' "$gap2 \"\$P\" $M 17" "$gap2 \"\$P\" status 17"
+# Here-document bodies inside a substitution are data for the boundary
+# walk. Each allow case is an ordinary command. Its block twin adds a merge
+# after the substitution or inside it, after the delimiter line.
+hd() { printf '%s "$(cat <<%s\n%s\n%s\n)"' "$1" "$2" "$3" "${4:-EOF}"; }
+hdin() { printf 'x=$(cat <<%s\n%s\nEOF\n%s\n)' "$1" "$2" "$3"; }
+big=$(printf 'line %04d of a long body text here.\n' $(seq 1 120))
+title='fix(#12): add the retry flag'
+coauthor=$(printf '%s\n\nCo-Authored-By: Name <name@example.invalid>' "$title")
+for spec in \
+  "commit apostrophe|git commit -m|'EOF'|Fix the user's login bug" \
+  "commit ticket title|git commit -m|'EOF'|$title" \
+  "commit ticket title and trailer|git commit -m|'EOF'|$coauthor" \
+  "commit ticket title and apostrophe|git commit -m|'EOF'|fix(#12): handle the reviewer's note" \
+  "unquoted delimiter apostrophe|git commit -m|EOF|It's done" \
+  "unpaired double quote|git commit -m|'EOF'|feat: add a 12\" ruler" \
+  "pull request ticket reference|$G $P create --title t --body|'EOF'|See (#12) for context" \
+  "issue comment ticket reference|$G issue comment 3 --body|'EOF'|Fixed in (#12)." \
+  "pull request large body|$G $P create --title t --body|'EOF'|$big" \
+  "issue large body|$G issue create --title t --body|'EOF'|$big" \
+  "commit large body|git commit -m|'EOF'|$big" \
+  "double-quoted delimiter|git commit -m|\"EOF\"|It's a (#12) fix" \
+  "unpaired substitution prose|git commit -m|'EOF'|docs: explain the \$( walk; it's data" \
+  "case word prose|git commit -m|'EOF'|case one) it's open" \
+  ; do
+  label=${spec%%|*}; rest=${spec#*|}
+  cmd=${rest%%|*}; rest=${rest#*|}
+  delim=${rest%%|*}; body=${rest#*|}
+  allow=$(hd "$cmd" "$delim" "$body")
+  pair "heredoc $label" "$allow; $phrase" "$allow"
+done
+for n in 3900 4000 4090 4100 4200; do
+  body=$(printf "%0${n}d" 0)
+  allow=$(hd 'git commit -m' "'EOF'" "$body")
+  pair "heredoc body size $n" "$allow; $phrase" "$allow"
+done
+tabbed=$(printf 'git commit -m "$(cat <<-EOF\n\tIt%ss done\n\tEOF\n)"' "'")
+pair 'heredoc tab-stripped delimiter' "$tabbed; $phrase" "$tabbed"
+twohd=$(printf 'x=$(cat <<A <<B # it%ss two\nfix(#1): a\nA\nb%ss\nB\n)' "'" "'")
+pair 'heredoc two bodies' "$twohd; $phrase" "$twohd"
+pair 'heredoc closing parenthesis' "$(hdin "'EOF'" "don't ) stop" "$phrase")" "$(hdin "'EOF'" "don't ) stop" 'echo clear')"
+pair 'heredoc merge after delimiter' "$(hdin "'EOF'" "$title" "$phrase")" "$(hdin "'EOF'" "$title" 'echo clear')"
+# A substitution body that does not close in command text fails closed.
+pair 'heredoc missing delimiter' "$(hd 'git commit -m' "'EOF'" "It's (#12)" 'END')" "$(hd 'git commit -m' "'EOF'" "It's (#12)")"
+pair 'unclosed substitution' "echo \$( echo clear" 'echo $( echo clear )'
+pair 'unclosed backtick' 'echo `echo clear' 'echo `echo clear`'
+# Long prose bodies stay data. The command limit bounds each walk.
+line='This sentence is ordinary prose for a pull request body. It has no shell syntax.'
+for size in 8192 20480; do
+  prose=''
+  while [ "${#prose}" -lt "$size" ]; do prose="$prose$line
+"; done
+  allow=$(hd "$G $P create --title t --body" "'EOF'" "$prose")
+  pair "heredoc prose body $size" "$allow; $phrase" "$allow"
+  allow=$(hd 'git commit -m' "'EOF'" "$prose")
+  pair "heredoc commit body $size" "$allow; $phrase" "$allow"
+done
+# A here-document body outside a substitution is its own nested body.
+# Its quotes do not hide the next command. A shell reader still sees it.
+top=$(printf "cat <<'EOF'\ndon't (#12)\nEOF")
+pair 'heredoc quote isolation' "$top
+$phrase" "$top
+echo clear"
+pair 'heredoc to end of input' "$(printf 'sh <<EOF\n%s' "$phrase")" "$(printf "cat <<'EOF'\nit's \$( data")"
+pair 'here-string in substitution' "echo \$(cat <<<\"it's\"); $phrase" "echo \$(cat <<<\"it's\")"
+pair 'arithmetic shift' "echo \$((1<<2)); $phrase" 'echo $((1<<2))'
+tick_quote=$(printf 'echo `echo it%ss`' "'")
+pair 'backtick apostrophe' "$tick_quote; $phrase" "$tick_quote"
+pair 'backtick escaped tick' "echo \`echo \\\` x\`; $phrase" "echo \`echo \\\` x\`"
 printf 'RESULT: %s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
