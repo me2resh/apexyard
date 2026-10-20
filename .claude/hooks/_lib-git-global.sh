@@ -85,6 +85,74 @@ git_token_is_verb() {
   [ "$word" = "$want" ]
 }
 
+# 0 when the text runs a nested shell or a directory-stack change at a
+# command position (#1816 G7, #1748 round 4). A nested shell counts when it
+# gets a command string (-c) or a stdin script (-s). The shell word can sit
+# behind any wrapper, so this form needs only a word boundary. A nested shell
+# also counts at a command position when a heredoc, a redirection or a pipe
+# feeds its script. A shell word in prose, in a heredoc body line that does
+# not start a command, or a script-file run does not count.
+_git_text_has_nested_shell() {
+  local text="$1" word_re='(^|[^[:alnum:]_.-])(pushd|popd|sh|bash|zsh|dash|ksh)([[:space:];&|<>)]|$)'
+  # No fork when no candidate word is present.
+  [[ "$text" =~ $word_re ]] || return 1
+  local at='(^|[;&|(){}!`]|\$\(|[[:space:]]-(exec|execdir|ok|okdir)[[:space:]])[[:space:]]*'
+  local wrap='((exec|command|builtin|time|nohup|nice|sudo|xargs|env|timeout|then|do|else|if|while|until)([[:space:]]+[^[:space:];&|()]+)*[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*'
+  local shell='([^[:space:];&|()<>`]*/)?(sh|bash|zsh|dash|ksh)'
+  local opts='([[:space:]]+[-+][^[:space:];&|<>()]*)*'
+  local stack="${at}${wrap}(pushd|popd)([[:space:];&|)]|$)"
+  local cmdstr="(^|[^[:alnum:]_.-])${shell}${opts}[[:space:]]+-[A-Za-z]*[cs][A-Za-z]*([[:space:];&|<>)'\"]|$)"
+  local fed="${at}${wrap}${shell}${opts}[[:space:]]*([;&|<>)]|$)"
+  printf '%s\n' "$text" | LC_ALL=C grep -qE "${stack}|${cmdstr}|${fed}"
+}
+
+# 0 when quotes or backslashes in one literal match can hide a real
+# `git push` or `git commit` (#1748 round 4).
+# The match is: optional boundary, command word, spaces, verb, optional tail.
+# A quote or backslash inside a word splits it: hidden.
+# Spaces inside one quoted string join both words into one shell word. That
+# word is prose or a pattern, not a command: not hidden.
+# Quotes only at the edges of two separate words: hidden (fail closed).
+_git_match_hides_words() {
+  local m="$1" i c state="" phase=0 letters=0 want=3 split=0 marks=0 quoted_ws=0
+  for ((i = 0; i < ${#m}; i++)); do
+    c="${m:i:1}"
+    case "$c" in
+      \"|\'|\\)
+        if [ "$phase" = 1 ] || [ "$phase" = 4 ]; then
+          split=1
+          break
+        fi
+        marks=1
+        if [ "$c" != \\ ]; then
+          if [ -z "$state" ]; then state="$c"; elif [ "$state" = "$c" ]; then state=""; fi
+        fi
+        ;;
+      [[:space:]])
+        if [ "$phase" = 2 ]; then
+          [ -z "$state" ] || quoted_ws=1
+          phase=3
+        fi
+        ;;
+      [[:alnum:]])
+        case "$phase" in
+          0) phase=1; letters=1 ;;
+          1) letters=$((letters + 1)); [ "$letters" -lt "$want" ] || phase=2 ;;
+          3)
+            phase=4; letters=1
+            case "$c" in c|C) want=6 ;; *) want=4 ;; esac
+            ;;
+          4) letters=$((letters + 1)); [ "$letters" -lt "$want" ] || break ;;
+        esac
+        ;;
+    esac
+  done
+  [ "$split" = 0 ] || return 0
+  [ "$quoted_ws" = 0 ] || return 1
+  [ "$marks" = 0 ] && return 1
+  return 0
+}
+
 # #1816 G2/G3: an expansion hides the command word or the verb, and the rest
 # of the simple command can still be a push or a commit.
 git_uncertain_protected_shape() {
@@ -96,7 +164,17 @@ git_uncertain_protected_shape() {
   direct_re='(^|[^[:alnum:]_.-])'${_git_cmd_word}'[[:space:]]+'
   literal_match=$(printf '%s\n' "$text" | LC_ALL=C grep -oE "${direct_re}(${push_re}|${commit_re})([^[:alnum:]_.-]|$)" || :)
   # Obscured protected words need no further argument interpretation.
-  case "$literal_match" in *'"'*|*"'"*|*'\'*) return 0 ;; esac
+  # One quoted string that holds both words is one shell word, not a command.
+  case "$literal_match" in
+    *'"'*|*"'"*|*'\'*)
+      local one_match
+      while IFS= read -r one_match; do
+        _git_match_hides_words "$one_match" && return 0
+      done <<EOF_LITERAL_MATCHES
+$literal_match
+EOF_LITERAL_MATCHES
+      ;;
+  esac
   # Unknown shell words can occupy the command or verb position.
   local word_part='[[:alnum:]_./"'"'"'-]*'
   exp_tok='('"${word_part}"'(\$[A-Za-z_][A-Za-z0-9_]*|\$[{][^}]*[}]|\$\([^)]*\)|`[^`]*`|\$'"'"'[^'"'"']*'"'"'|[{][^}]*[}])'"${word_part}"')'
@@ -952,7 +1030,7 @@ EOF_POSITIONS
     || [[ "$text" =~ (^|[^[:alnum:]_.-])cd[[:space:]]+-P([[:space:]]|$) ]]; then
     _GA_HARD_UNRESOLVED=1
   fi
-  if [[ "$text" =~ (^|[^[:alnum:]_.-])(pushd|popd|sh|bash)[[:space:]] ]] \
+  if _git_text_has_nested_shell "$text" \
     || [[ "$text" =~ (^|[^[:alnum:]_.-])env[[:space:]].*(-C|--chdir)([[:space:]]|=) ]]; then
     _GA_HARD_UNRESOLVED=1
   fi
@@ -1016,7 +1094,7 @@ EOF_SEGMENTS
     # A builtin still reaches the push/commit gates so they can report the
     # ordinary unresolvable -C message.
     if [ "$_GA_HARD_UNRESOLVED" = 1 ] && ! _git_alias_builtin "$_GA_VERB"; then
-      _git_alias_block "cannot resolve the repository for this git alias. Use a literal directory change or -C path, then run the real verb."; return 2
+      _git_alias_block "cannot resolve the repository for this git alias. Use a literal directory change or -C path, then run the real verb. If this is prose, write it to a file and pass -F or --body-file."; return 2
     fi
     # #1816 G8: a config path write can replace an alias before git runs.
     if [ "$_GA_CONFIG_PATH_WRITE" = 1 ] && ! _git_alias_builtin "$_GA_VERB"; then
@@ -1073,7 +1151,7 @@ EOF_SEGMENTS
     done
     # Unresolved target options cannot clear an alias in the payload repository.
     if [ "$candidate_unresolved" = 1 ] && ! _git_alias_builtin "$_GA_VERB"; then
-      _git_alias_block "cannot resolve the repository for this git alias. Use a literal directory change or -C path, then run the real verb."; return 2
+      _git_alias_block "cannot resolve the repository for this git alias. Use a literal directory change or -C path, then run the real verb. If this is prose, write it to a file and pass -F or --body-file."; return 2
     fi
     cachekey="${#target}:$target${#gitdir}:$gitdir"; index=-1
     for ((i=0; i<${#cachekeys[@]}; i++)); do [ "${cachekeys[i]}" != "$cachekey" ] || index="$i"; done

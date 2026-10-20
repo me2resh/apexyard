@@ -131,6 +131,13 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
                 if mode=='quick' and 'r3-' in name:
                     # Keep directory-reader crash probes on the real dispatcher.
                     hooks_run=['dispatch-bash'] if '-cd-' in name or '-route-' in name or name.endswith('-fuzz') else ['precheck']
+                if '-r4-' in name:
+                    # Round 4 pairs: the dispatcher and the shared precheck.
+                    # A -msg- case is a real commit carrier: precheck only, so
+                    # the commit-format gate does not judge the fixture text.
+                    hooks_run=['precheck'] if '-msg-' in name else ['dispatch-bash','precheck']
+                    if mode!='quick' and name.startswith('allow-r4') and '-msg-' not in name:
+                        hooks_run+=['block-main-push','validate-commit-format']
             elif mode=='quick':
                 hooks_run=['resolver']
             else:
@@ -175,6 +182,7 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
             ('shell','git p',[('alias.p','!echo unsafe')], 'git p is a shell alias. Run the alias body directly so the gates can check it.'),
             ('channel','HOME=/tmp git unknown1748',(), 'this command changes git config (HOME) and runs git unknown1748. Run the real verb without the change. If this is prose, write it to a file and pass -F or --body-file.'),
             ('inline','git -c alias.p="$X" p',(), 'git cannot be checked with this -c value. Quote the -c value. Use a literal key and value with no $, backtick or backslash.'),
+            ('unresolved','bash -c "git unknown1748"',(), 'cannot resolve the repository for this git alias. Use a literal directory change or -C path, then run the real verb. If this is prose, write it to a file and pass -F or --body-file.'),
             ('opaque','git -C $d status',[('alias.p','!echo unsafe')], 'an unquoted expansion, glob or redirection before the git verb can change the command. Quote the value.'),
             ('candidates','; '.join('git word'+str(i) for i in range(4001)),(), 'too many git mentions to check for aliases. Write the prose to a file and pass -F or --body-file.'),
             ('definition','git config alias.p push; git unknown1748',(), 'this command writes git config and runs git unknown1748. Run them as two commands. If this is prose, write it to a file and pass -F or --body-file.'),
@@ -378,6 +386,48 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
         case('Gate shapes','G8-slash','cp '+str(config)+' '+str(repo)+'/.git//config; git zp',entries=[('alias.zp',_push)])
         case('Gate shapes','G8-dot','cp '+str(config)+' '+str(repo)+'/.git/./config; git zp',entries=[('alias.zp',_push)])
         case('Gate shapes','G8-allow-status','cp '+str(config)+' '+str(repo)+'/.git/config; git status',0)
+        # Round 4 (PR #1804 round 3 review). Each allow case has a block twin.
+        # Class A: one quoted shell word holds the command word and the verb.
+        # The twin splits the word with a quote or puts it at command position.
+        _gc=_gitw+' '+_commit
+        quoted_word=[
+            ('search','grep -rn "'+_gc+'" docs/', 'grep -rn x docs/ && g"'+_gitw[1:]+'" '+_commit+' -m x'),
+            ('loggrep',_gitw+' log --grep="'+_gc+'"', _gitw+' log; '+_gitw+' '+_commit[:3]+"'"+_commit[3:]+"' -m x"),
+            ('comment','g'+'h pr comment 1 --body "'+_gc+' now runs the gates"', 'g'+'h pr comment 1 --body x; '+_gitw[:2]+'\\'+_gitw[2:]+' '+_commit+' -m x'),
+            ('single',"rg '"+_gc+"' .", "'"+_gitw+"' '"+_commit+"' -m x"),
+            ('echo','echo "'+_gc+' -m x"', '"'+_gitw+'" '+_commit+' -m x'),
+            ('msg',_gc+' -m "'+_gc+' hook: fix the gate"', _gc+' -m x && '+_gitw+' c"'+_commit[1:]+'" -m y'),
+        ]
+        for n,(label,allow,block) in enumerate(quoted_word):
+            infix='-msg-' if label=='msg' else '-'
+            case('Gate shapes','allow-r4'+infix+'quoted-'+label,allow,0)
+            case('Gate shapes','G2-r4'+infix+'quoted-'+label,block)
+        # Class B: a shell word or a directory-stack word in prose, or a
+        # script-file run, does not make the target unresolved. The twin runs
+        # a nested shell with a command string or a fed script, or a real
+        # directory-stack change, at command position.
+        zs=[('alias.zs','status')]
+        _sh='s'+'h'; _bash='ba'+'sh'
+        shell_word=[
+            ('msg', _gc+' -m "docs: run the '+_sh+' helper before '+_gitw+' frob"', _bash+' -c "'+_gitw+' frob"'),
+            ('comment','g'+'h pr comment 1 --body "use '+_bash+' to run '+_gitw+' frob"', _gitw+' zs && '+_sh+" -c '"+_gitw+" zs'"),
+            ('edit','g'+'h pr edit 1 --body "'+_sh+' scripts call '+_gitw+' frob"', 'env X=1 '+_bash+" -c '"+_gitw+" frob'"),
+            ('notes',"cat > notes.md <<'EOF'\nUse pushd and "+_bash+', then '+_gitw+' frob\nEOF', _bash+" <<'EOF'\ncd sub && "+_gitw+' frob\nEOF'),
+            ('script-before',_gitw+' zs && '+_sh+' ./run.sh', _gitw+' zs && '+_sh+" -c 'cd sub; "+_gitw+" zs'"),
+            ('script-after',_bash+' ./run.sh && '+_gitw+' zs', 'cat run.sh | '+_bash+'; '+_gitw+' zs'),
+            ('echo-pushd','echo "use pushd here" && '+_gitw+' zs', 'pushd sub && '+_gitw+' zs'),
+            ('echo-popd','echo popd it later; '+_gitw+' zs', 'echo x; popd; '+_gitw+' zs'),
+            ('script-opts',_sh+' -x run.sh; '+_gitw+' zs', _bash+" -lc 'cd sub; "+_gitw+" zs'"),
+        ]
+        for label,allow,block in shell_word:
+            infix='-msg-' if label=='msg' else '-'
+            case('Gate shapes','allow-r4'+infix+'shell-'+label,allow,0,entries=zs)
+            case('Gate shapes','G7-r4'+infix+'shell-'+label,block,entries=zs)
+        # A command-string shell behind any wrapper still counts.
+        case('Gate shapes','G7-r4-shell-wrapper','stdbuf -oL '+_sh+" -c 'cd sub && "+_gitw+" zs'",entries=zs)
+        case('Gate shapes','allow-r4-shell-wrapper','stdbuf -oL '+_sh+' ./run.sh && '+_gitw+' zs',0,entries=zs)
+        case('Gate shapes','allow-r4-shell-builtin',_bash+" -c '"+_gitw+" status'",0,entries=zs)
+        case('Gate shapes','allow-r4-stack-builtin','pushd sub && '+_gitw+' status',0,entries=zs)
         case('Case','quote-concatenation','git z"p"',entries=[('alias.zp','push')])
         case('Case','other-slot','git -c alias.p=status p',entries=[('alias.p.command','!echo unsafe')])
         for key,verb,want in [('alias.P.x' ,'p.x',2),('alias.P.x','P.x',2),('alias.p.X','p.x',2),('alias.P.command','P',2),('alias.P.command','p',0),('alias.p.COMMAND','p',2)]:
