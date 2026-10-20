@@ -433,7 +433,10 @@ done
 
 # #1772 N3: the redirect scan stays linear when one line holds many git
 # words. Time the dispatcher (stub gates) on the head tree and on the base
-# tree. The head run must finish within the base time plus 0.5 seconds.
+# tree. The head run must finish within the larger of 6 times the base time
+# and the base time plus 1.5 seconds. A slow CI runner showed 0.80 seconds
+# against a 0.16 second base, so the old 0.5 second margin was too tight.
+# The old super-linear code took 15 to 33 seconds, far over this limit.
 # A host that runs a short command slower than 0.15 seconds gets a larger
 # margin in the same ratio. Without a base tree, the limit uses the head
 # time for the same text with no redirection. On a very slow host the
@@ -477,7 +480,7 @@ else
   echo "NOTE: no base tree for the timing check; the limit uses the head time with no redirection"
 fi
 cal=$(dispatch_min "$TMP/th-head" "echo short")
-margin=$(awk -v c="$cal" 'BEGIN { m = 0.5; if (c > 0.15) m = 0.5 * c / 0.15; printf "%.2f", m }')
+margin=$(awk -v c="$cal" 'BEGIN { m = 1.5; if (c > 0.15) m = 1.5 * c / 0.15; printf "%.2f", m }')
 echo "timing margin ${margin}s (short command ${cal}s)"
 GT=git
 many=""
@@ -513,7 +516,7 @@ for i in 0 1 2 3 4; do
     ref_s=$(dispatch_min "$TMP/th-head" "${cmd//>/}")
     ref_kind="head with no redirection"
   fi
-  limit=$(awk -v r="$ref_s" -v m="$margin" 'BEGIN { printf "%.2f", r + m }')
+  limit=$(awk -v r="$ref_s" -v m="$margin" 'BEGIN { a = r * 6; b = r + m; printf "%.2f", (a > b) ? a : b }')
   slow=$(awk -v r="$ref_s" 'BEGIN { print (r > 5) ? 1 : 0 }')
   if awk -v t="$head_s" -v l="$limit" 'BEGIN { exit !(t <= l) }'; then
     pass "N3 time: $label: ${head_s}s, $ref_kind ${ref_s}s, limit ${limit}s"
