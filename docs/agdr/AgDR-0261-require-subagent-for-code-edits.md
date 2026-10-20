@@ -534,7 +534,7 @@ Aliases (D21):
   - Block when the source cannot be resolved.
 - When `file_path` names a file that is not a live settings file or a user settings file, allow the change and log it. The session does not load that file. Capture P12c checks what the harness sends for a worktree settings edit.
   - Build amendment (#1806, capture P12c of 2026-10-19): a worktree subagent added an `env` key to its worktree `.claude/settings.json`, and no ConfigChange fired. Capture P12 showed that a worktree subagent runs the hooks of the main session.
-  - Defence in depth: for a file that is not live, block when the file sets `disableAllHooks` to `true`, does not parse, or changes `hooks` or `env` against the committed copy in its own work tree. A file that is not committed has `{}` as its baseline. Allow and log every other change.
+  - Defence in depth: for a file that is not live, block in three cases. The file sets `disableAllHooks` to `true`. The file does not parse. The file changes `hooks` or `env` against the committed copy in its own work tree. A file that is not committed has `{}` as its baseline. Allow and log every other change.
 - Parse the file with `jq`. Treat an absent file as `{}`. Block when the parse fails.
 - Block when the snapshot record for that source is unreadable, or missing in a session that has a snapshot.
 - No-snapshot mode (Security Auditor A1):
@@ -1010,7 +1010,7 @@ Do not file these yet. Each is one ticket. § Decision "Ticket order" sets the s
 | Harden the hook launcher pin check | § C. Exit 2 when a pinned root loses `.claude/hooks`. Run every script with `bash <path>` in the launchers, `dispatch-bash.sh` and `dispatch-session-start.sh`. Validate the pin in `.claude/settings.json` and `bin/sync-cursor-adapter.sh`. |
 | Inventory main-thread skill write targets | For each of the 34 writing skills, choose delegate, scratchpad or a new orchestrator path. Include `/decide`. |
 | Fix the hatch advice in two block messages | `block-onboarding-in-git.sh:115` and `require-skill-for-issue-create.sh:168` advise `VAR=1 <command>`, which never reaches the hook process. |
-| Match `NotebookEdit` in the ticket-first gate | The entry at `.claude/settings.json:16` matches `Edit|Write|MultiEdit` only. |
+| Match `NotebookEdit` in the ticket-first gate | The entry at `.claude/settings.json:16` matches `Edit\|Write\|MultiEdit` only. |
 | Give `qa-engineer` a real tool allowlist | Replace `allowed-tools:` in `qa-engineer.md:5` with `tools:` and `disallowedTools:`. Check the other agent files. |
 | Evaluate patch matchers in the shared write detector | Decide whether `git apply`, `git am` and `patch` belong in `_lib-detect-bash-write.sh` for all four consumers. |
 | Protect `.git/config` and `.git/hooks/` in a live root | Decide whether `git config` writes and `.git/hooks/` files in a live root join the protected set (Security Auditor A4). |
