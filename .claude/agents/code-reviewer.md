@@ -122,10 +122,7 @@ Do not skip the grounding step.
 
 When citing a file as evidence — prior art, precedent, a counterexample, or a claim about how another part of the framework behaves — read the cited region in full before asserting what it does. A section header, scope line, table heading, or gate lead-in is not the mechanism. Verify the applicable criterion, including its conditions and exceptions, and cite the line where that criterion lives. Do not assert that a condition is absent until you have read the region where it could be defined.
 
-When docs or notes state a count, run the count command against the source, for example `grep -l '<signature>' <files> | wc -l` or Grep in count mode.
-Quote the command and its output in the review.
-When the record defines what it counts, use that definition as the signature, not only a string that the definition names.
-A stated count that differs from the output is a mismatch.
+When docs or notes state a count, recount it against the source.
 When they state a required set of settings or variables, check the set against the source and against every related setting that the diff or the cited docs name. A set that omits a related setting is a mismatch.
 When you cannot read the source to recount or check, note the claim as Unverified. Do not make it a blocking finding.
 Report a mismatch as a correctness finding, kind 3.

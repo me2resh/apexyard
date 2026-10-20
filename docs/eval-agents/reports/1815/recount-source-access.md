@@ -1,15 +1,17 @@
 # Rex recount check with read-only source access — #1815
 
-Status: **Phase A run, 2026-10-20. Phase B not run. With read-only source access and prompt `a7b3`, Rex catches rex-1620 D1 in 1 of 3 runs. AC2 is not met.**
+Status: **Phase A run, 2026-10-20. Phase B not run. With read-only source access and prompt `a7b3`, Rex catches rex-1620 D1 in 1 of 3 runs. AC2 stays open on #1815.**
 
-Phase A used 1,904,884 tokens for 3 runs. That is about 3.8 times the budget of about 0.5 M tokens. Thus phase B (the edited prompt `bb87`, k=3) did not start. It needs a CEO decision on the spend first.
+This change ships the source-snapshot option only. It does not change the Rex prompt.
+Phase A used 1,904,884 tokens for 3 runs. That is about 3.8 times the budget of about 0.5 M tokens. Thus phase B (the draft prompt `bb87`, k=3) did not start.
+The CEO decided to ship the tooling without the untested prompt edit.
 
 ## Prompt hashes
 
 SHA-256, first 12 hex characters, of the full `.claude/agents/code-reviewer.md` file:
 
-- `a7b38bd17fe3`: the #1798 prompt, current on `dev` at `7f82bd5e`. Phase A used it.
-- `bb87ea3ca150`: this PR. It changes the recount check. Rex must run the count command, quote the command and its output, and use the record's own definition as the signature. No eval run used it.
+- `a7b38bd17fe3`: the #1798 prompt, current on `dev` at `7f82bd5e`. Phase A used it. This change keeps it.
+- `bb87ea3ca150`: a draft, not shipped. It makes Rex run the count command, quote the command and its output, and count by the record's own definition. The draft text is kept in the private eval folder, not in this repository. No eval run used it.
 
 ## Protocol
 
@@ -49,7 +51,7 @@ Summary against the #1798 no-tools runs with the same prompt:
   - k1 does not recount the walk-ups. It checks only that the records agree on 24.
   - k2 counts the anchor string `.apexyard-fork` (24) and stops there.
   - k3 also counts the walk-up test (18) and reads the 6 other files.
-  - Thus the k2 miss is a wrong signature, and the k1 miss is a skipped count. The `bb87` edit targets both misses. It tells Rex to run the count and quote the output, and to count the defined thing, not a string that the definition names.
+  - Thus the k2 miss is a wrong signature, and the k1 miss is a skipped count. The `bb87` draft targets both misses.
 - D2: the snapshot cannot prove D2. The related setting `ENABLE_PROMPT_CACHING_1H` and the rule that an explicit `promptCacheTtl` takes precedence are not in the repository at `6229f1c2`. Only the notes under review name a Bedrock flag. A D2 catch needs product knowledge, not source access. The change from 1 of 3 to 0 of 3 is within run-to-run noise at k=3.
 - Verdicts: k1 and k3 block on a second finding, a missing condition in the ac4-3 fail-open sentence. k2 gives the same point as a suggestion. That finding is not in the frozen key. The 1798 report does not record it for the no-tools runs.
 - Cost: cache reads are 1,741,018 of the 1,904,884 tokens. Each tool turn reads the full context again. The runs had 16, 28 and 20 turns. A source-access run costs 9 to 19 times a no-tools run (about 40k).
@@ -59,12 +61,16 @@ Summary against the #1798 no-tools runs with the same prompt:
 | Criterion | Result | Evidence |
 |---|---|---|
 | AC1: the protocol describes the read-only source option, and the report states which entries used it | Met | `docs/eval-agents/README.md` § "Read-only source access (option)", the SKILL.md Step 3d note, and the entry list in the README and in this report |
-| AC2: with read-only source access at k=3, Rex names rex-1620 D1 in at least 2 of 3 runs | Not met | `a7b3`: 1 of 3. `bb87` is not run, because phase A used about 3.8 times the token budget |
-| AC3: the Rex prompt stays under the caps that `test_token_efficiency_wave1.sh` checks | Met | The test passes with `bb87`. The `/code-review` skill body is 15,736 of 16,000 bytes |
+| AC2: with read-only source access at k=3, Rex names rex-1620 D1 in at least 2 of 3 runs | Not met. Open on #1815 | `a7b3`: 1 of 3. The `bb87` draft is not shipped and not run |
+| AC3: the Rex prompt stays under the caps that `test_token_efficiency_wave1.sh` checks | Met | The prompt is unchanged (`a7b3`), and the test passes. The `/code-review` skill body is 15,736 of 16,000 bytes |
 
-## Next step
+## Planning note for the next attempt
 
-Phase B needs 3 more runs at about 0.6 M tokens each, about 1.9 M tokens in total. Ask the CEO before this spend. To cut the cost, a run can give Rex only Grep and Glob, or a smaller snapshot. That changes the condition, so record it as a separate condition.
+- Real cost: 3 source-access runs used 1,904,884 tokens, 368k to 773k each.
+- A source-access run costs 9 to 19 times a no-tools run (about 40k).
+- Most of the cost is cache reads: each tool turn reads the full context again.
+- Phase B with the `bb87` draft needs 3 more runs, about 1.9 M tokens. Ask the CEO before this spend.
+- To cut the cost, give Rex only Grep and Glob, or a smaller snapshot. That is a new condition, so record it separately.
 
 ## Cost totals
 
