@@ -48,11 +48,12 @@ Build one snapshot for each run:
 bash .claude/skills/eval-agents/lib/source-snapshot.sh <commit> <run-dir>/src <deny-list>
 ```
 
+- Put `<run-dir>` on a path with no symbolic link (on macOS `/tmp` and `/var` are links), or resolve it first with `pwd -P`.
 - `<commit>` is the entry's `commit`, the reviewed head.
 - The script exports the tracked files at the commit with `git archive`. The snapshot has no git history, so the reviewer cannot see a later fix.
 - `<deny-list>` holds the names of private projects, one name on each line. Keep it outside the repository.
 - The script replaces each name with `<project>` in file text and in paths. Then it checks that no name remains and makes the tree read-only.
-- The proof is literal. It does not catch encoded content: compressed, UTF-16, base64, URL-encoded, or split across lines. The script exits 2 on any binary file, because the text pass cannot redact it, and on any symbolic link.
+- The proof is literal. It does not catch encoded content: compressed, UTF-16, base64, URL-encoded, or split across lines. The script exits 2 on any binary file when the deny list is not empty, because the text pass cannot redact it, and on any symbolic link.
 - Run the deny-list check on any reviewer output before you quote it publicly.
 - When the script cannot prove that the snapshot is clean, it exits 2. Do not use the snapshot then.
 

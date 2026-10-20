@@ -55,7 +55,7 @@ while [ "${#OUT}" -gt 1 ] && [ "${OUT%/}" != "$OUT" ]; do OUT="${OUT%/}"; done
 PARENT=$(dirname "$OUT")
 while [ ! -d "$PARENT" ]; do PARENT=$(dirname "$PARENT"); done
 LOGICAL=$(cd "$PARENT" && pwd) || die "cannot resolve the out-dir parent: $PARENT"
-PHYSICAL=$(cd "$PARENT" && pwd -P) || die "cannot resolve the out-dir parent: $PARENT"
+PHYSICAL=$(cd -P "$PARENT" && pwd -P) || die "cannot resolve the out-dir parent: $PARENT"
 [ "$LOGICAL" = "$PHYSICAL" ] \
   || die "the out-dir parent resolves through a symbolic link: $PARENT"
 if [ -e "$OUT" ]; then
@@ -152,7 +152,7 @@ if [ -s "$NAMES_FILE" ]; then
   [ -z "$left" ] || die "a deny-list name remains in: $(printf '%s' "$left" | head -5 | tr '\n' ' ')"
   # List the paths relative to the out-dir. No pattern is built from the
   # out-dir name, so any out-dir name is safe.
-  paths=$(cd "$OUT" && find . -print) || die "cannot list the snapshot paths"
+  paths=$(cd -P "$OUT" && find . -print) || die "cannot list the snapshot paths"
   rc=0
   left=$(printf '%s\n' "$paths" | grep -iF -f "$NAMES_FILE") || rc=$?
   [ "$rc" -le 1 ] || die "the path proof scan failed (grep exit $rc)"

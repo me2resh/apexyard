@@ -160,11 +160,31 @@ rc=$?
 if [ "$rc" -eq 2 ] && grep -qF 'remains in a path' "$OUTFILE"; then ok "CDPATH does not change a relative out-dir"; else bad "CDPATH does not change a relative out-dir (exit $rc)"; fi
 
 # 3k. A symbolic out-dir with trailing slashes and a symbolic parent are refused.
-check "a symbolic out-dir with a trailing slash fails with exit 2" 2 bash "$SNAPSHOT" "$CLEAN" "$WORKDIR/linkout/" "$DENY" "$REPO"
-check "a symbolic out-dir with two trailing slashes fails with exit 2" 2 bash "$SNAPSHOT" "$CLEAN" "$WORKDIR/linkout//" "$DENY" "$REPO"
-check "an out-dir under a symbolic parent fails with exit 2" 2 bash "$SNAPSHOT" "$CLEAN" "$WORKDIR/linkout/sub" "$DENY" "$REPO"
+# Each check has its own link and target, so no result depends on order.
+for k in one two par; do
+  mkdir -p "$WORKDIR/k-$k-real"
+  ln -s "$WORKDIR/k-$k-real" "$WORKDIR/k-$k-link"
+done
+check "a symbolic out-dir with a trailing slash fails with exit 2" 2 bash "$SNAPSHOT" "$CLEAN" "$WORKDIR/k-one-link/" "$DENY" "$REPO"
+if [ -z "$(ls -A "$WORKDIR/k-one-real")" ]; then ok "a one-slash link target stays empty"; else bad "a one-slash link target stays empty"; fi
+check "a symbolic out-dir with two trailing slashes fails with exit 2" 2 bash "$SNAPSHOT" "$CLEAN" "$WORKDIR/k-two-link//" "$DENY" "$REPO"
+if [ -z "$(ls -A "$WORKDIR/k-two-real")" ]; then ok "a two-slash link target stays empty"; else bad "a two-slash link target stays empty"; fi
+check "an out-dir under a symbolic parent fails with exit 2" 2 bash "$SNAPSHOT" "$CLEAN" "$WORKDIR/k-par-link/sub" "$DENY" "$REPO"
 if grep -qF 'symbolic link' "$OUTFILE"; then ok "the symbolic parent failure is named"; else bad "the symbolic parent failure is named"; fi
-if [ -z "$(ls -A "$WORKDIR/realdir")" ]; then ok "a symbolic parent target stays empty"; else bad "a symbolic parent target stays empty"; fi
+if [ -z "$(ls -A "$WORKDIR/k-par-real")" ]; then ok "a symbolic parent target stays empty"; else bad "a symbolic parent target stays empty"; fi
+
+# 3l. A ".." segment after a symbolic link must resolve physically (B3).
+# An empty folder with the out-dir name sits next to the link. A logical cd
+# would go there and hide the real target.
+mkdir -p "$WORKDIR/l-far/target" "$WORKDIR/l-run/xq" "$WORKDIR/l-run/xt"
+ln -s "$WORKDIR/l-far/target" "$WORKDIR/l-run/link"
+check "link/../name fails with exit 2" 2 bash "$SNAPSHOT" "$CLEAN" "$WORKDIR/l-run/link/../xq" "$DENY" "$REPO"
+if [ "$(ls -A "$WORKDIR/l-far")" = "target" ] && [ -z "$(ls -A "$WORKDIR/l-far/target")" ]; then ok "link/../name leaves the physical place untouched"; else bad "link/../name leaves the physical place untouched"; fi
+if [ -z "$(ls -A "$WORKDIR/l-run/xq")" ]; then ok "link/../name leaves the logical folder empty"; else bad "link/../name leaves the logical folder empty"; fi
+(cd "$WORKDIR/l-run/link" && bash "$SNAPSHOT" "$CLEAN" ../xt "$DENY" "$REPO") >"$OUTFILE" 2>&1
+rc=$?
+if [ "$rc" -eq 2 ]; then ok "../name from a working folder behind a link fails with exit 2"; else bad "../name from a working folder behind a link fails with exit 2 (exit $rc)"; fi
+if [ -z "$(ls -A "$WORKDIR/l-far/target")" ] && [ "$(ls -A "$WORKDIR/l-far")" = "target" ]; then ok "the working-folder case leaves the targets untouched"; else bad "the working-folder case leaves the targets untouched"; fi
 
 # 4. An empty deny list builds an unredacted snapshot and says so.
 : > "$WORKDIR/empty.txt"
