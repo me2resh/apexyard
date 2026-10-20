@@ -12,8 +12,8 @@
 #   2. It replaces each name in <deny-list> with "<project>" in file text and
 #      in file and directory names. The match is literal and ignores case.
 #   3. It checks that no name remains in any file or path. It fails on any
-#      symbolic link and on any binary file. The check is literal; it does not
-#      catch encoded content.
+#      symbolic link. It fails on any binary file when the deny list is not
+#      empty. The check is literal; it does not catch encoded content.
 #   4. It removes write permission from the whole tree.
 #
 # <deny-list> holds one name per line. Blank lines and lines that start with
@@ -27,6 +27,8 @@
 
 set -euo pipefail
 export LC_ALL=C
+# A set CDPATH can make `cd` print a path and change its target.
+unset CDPATH
 
 die() {
   echo "source-snapshot: $*" >&2
@@ -44,8 +46,18 @@ fi
 [ -f "$DENY" ] && [ -r "$DENY" ] || die "cannot read deny list: $DENY"
 git -C "$REPO" cat-file -e "$COMMIT^{commit}" 2>/dev/null \
   || die "unknown commit: $COMMIT"
+# Remove trailing slashes, so that "link/" is tested as "link".
+while [ "${#OUT}" -gt 1 ] && [ "${OUT%/}" != "$OUT" ]; do OUT="${OUT%/}"; done
 # A symbolic out-dir could send the tree outside the place the operator chose.
 [ ! -L "$OUT" ] || die "out-dir is a symbolic link: $OUT"
+# The nearest existing parent must not resolve through a symbolic link.
+# Compare its logical path with its physical path.
+PARENT=$(dirname "$OUT")
+while [ ! -d "$PARENT" ]; do PARENT=$(dirname "$PARENT"); done
+LOGICAL=$(cd "$PARENT" && pwd) || die "cannot resolve the out-dir parent: $PARENT"
+PHYSICAL=$(cd "$PARENT" && pwd -P) || die "cannot resolve the out-dir parent: $PARENT"
+[ "$LOGICAL" = "$PHYSICAL" ] \
+  || die "the out-dir parent resolves through a symbolic link: $PARENT"
 if [ -e "$OUT" ]; then
   [ -d "$OUT" ] || die "out-dir is not a directory: $OUT"
   [ -z "$(ls -A "$OUT")" ] || die "out-dir is not empty: $OUT"

@@ -10,7 +10,7 @@ SNAPSHOT="$SCRIPT_DIR/../lib/source-snapshot.sh"
 pass=0
 fail=0
 
-WORKDIR="$(mktemp -d)"
+WORKDIR="$(cd "$(mktemp -d)" && pwd -P)"
 cleanup() {
   chmod -R u+w "$WORKDIR" 2>/dev/null || true
   rm -rf "$WORKDIR"
@@ -114,10 +114,13 @@ REPO2="$WORKDIR/repo2"
 mkdir -p "$REPO2/docs/zzz-note"
 git -C "$REPO2" init -q
 printf 'plain\n' > "$REPO2/docs/zzz-note/a.txt"
-printf '\n\n' > "$REPO2/newlines.txt"
-git -C "$REPO2" add docs/zzz-note/a.txt newlines.txt
+git -C "$REPO2" add docs/zzz-note/a.txt
 git -C "$REPO2" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q -m slash
 SLASH=$(git -C "$REPO2" rev-parse HEAD)
+printf '\n\n' > "$REPO2/newlines.txt"
+git -C "$REPO2" add newlines.txt
+git -C "$REPO2" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q -m newlines
+NLFILE=$(git -C "$REPO2" rev-parse HEAD)
 DENYSLASH="$WORKDIR/denyslash.txt"
 printf 'docs/zzz-note\n' > "$DENYSLASH"
 check "a path proof catches a name with a slash" 2 bash "$SNAPSHOT" "$SLASH" "$WORKDIR/plain-out" "$DENYSLASH" "$REPO2"
@@ -147,7 +150,21 @@ check "a symbolic out-dir fails with exit 2" 2 bash "$SNAPSHOT" "$CLEAN" "$WORKD
 if [ -z "$(ls -A "$WORKDIR/realdir")" ]; then ok "a symbolic out-dir target stays empty"; else bad "a symbolic out-dir target stays empty"; fi
 
 # 3i. A file that holds only newlines is text, not binary.
-check "a newline-only file is not binary" 0 bash "$SNAPSHOT" "$SLASH" "$WORKDIR/snap-nl" "$DENY" "$REPO2"
+check "a newline-only file is not binary" 0 bash "$SNAPSHOT" "$NLFILE" "$WORKDIR/snap-nl" "$DENY" "$REPO2"
+
+# 3j. CDPATH must not change the out-dir test (B2). A folder on CDPATH that
+# holds an empty folder with the out-dir name must not make the check pass.
+mkdir -p "$WORKDIR/cdp/cdout" "$WORKDIR/cdrun"
+(cd "$WORKDIR/cdrun" && CDPATH="$WORKDIR/cdp" bash "$SNAPSHOT" "$SLASH" cdout "$DENYSLASH" "$REPO2") >"$OUTFILE" 2>&1
+rc=$?
+if [ "$rc" -eq 2 ] && grep -qF 'remains in a path' "$OUTFILE"; then ok "CDPATH does not change a relative out-dir"; else bad "CDPATH does not change a relative out-dir (exit $rc)"; fi
+
+# 3k. A symbolic out-dir with trailing slashes and a symbolic parent are refused.
+check "a symbolic out-dir with a trailing slash fails with exit 2" 2 bash "$SNAPSHOT" "$CLEAN" "$WORKDIR/linkout/" "$DENY" "$REPO"
+check "a symbolic out-dir with two trailing slashes fails with exit 2" 2 bash "$SNAPSHOT" "$CLEAN" "$WORKDIR/linkout//" "$DENY" "$REPO"
+check "an out-dir under a symbolic parent fails with exit 2" 2 bash "$SNAPSHOT" "$CLEAN" "$WORKDIR/linkout/sub" "$DENY" "$REPO"
+if grep -qF 'symbolic link' "$OUTFILE"; then ok "the symbolic parent failure is named"; else bad "the symbolic parent failure is named"; fi
+if [ -z "$(ls -A "$WORKDIR/realdir")" ]; then ok "a symbolic parent target stays empty"; else bad "a symbolic parent target stays empty"; fi
 
 # 4. An empty deny list builds an unredacted snapshot and says so.
 : > "$WORKDIR/empty.txt"
