@@ -38,6 +38,56 @@ This is the same mining method spike #825 used for its own labeled set (`docs/sp
 
 Every score `/eval-agents` reports is downstream of two LLM steps, not a fixed measurement: the candidate spawn re-reviewing the diff, and the defect-overlap match against the frozen `ground_truth_defects` key. The key itself is frozen — that's the whole point of AgDR-0089 — but *comparing a fresh run's findings to that key* is a semantic judgment call, not a byte-for-byte diff, and can land differently on a borderline entry from one run to the next. A score delta between two runs of the same corpus against the same agent is **not automatically a real regression**; it can be run-to-run noise in the matching step. Read a delta by checking which specific entries flipped and re-reading the agent's actual output for those entries — never by trend-lining the raw percentage alone.
 
+## Read-only source access (option)
+
+The default CLI protocol gives the reviewer no tools. The reviewer gets only the sanitized diff, and for a delta entry also the sanitized earlier review. Thus the reviewer cannot recount a number or check a setting against the source. The read-only source option gives the reviewer a sanitized source snapshot and three read tools (#1815).
+
+Build one snapshot for each run:
+
+```
+bash .claude/skills/eval-agents/lib/source-snapshot.sh <commit> <run-dir>/src <deny-list>
+```
+
+- Put `<run-dir>` on a path with no symbolic link (on macOS `/tmp` and `/var` are links), or resolve it first with `pwd -P`.
+- `<commit>` is the entry's `commit`, the reviewed head.
+- The script exports the tracked files at the commit with `git archive`. The snapshot has no git history, so the reviewer cannot see a later fix.
+- `<deny-list>` holds the names of private projects, one name on each line. Keep it outside the repository.
+- The script replaces each name with `<project>` in file text and in paths. Then it checks that no name remains and makes the tree read-only.
+- The proof is literal. It does not catch encoded content: compressed, UTF-16, base64, URL-encoded, or split across lines. The script exits 2 on any binary file when the deny list is not empty, because the text pass cannot redact it, and on any symbolic link.
+- Run the deny-list check on any reviewer output before you quote it publicly.
+- When the script cannot prove that the snapshot is clean, it exits 2. Do not use the snapshot then.
+
+Run the reviewer from the run folder:
+
+```
+cd <run-dir>
+claude -p --model opus --system-prompt-file <prompt-file> \
+  --tools "Read,Grep,Glob" \
+  --disallowedTools Bash Edit Write WebFetch WebSearch NotebookEdit Agent \
+  --setting-sources project --plugin-dir <empty-dir> \
+  --settings '{"claudeMdExcludes":["<run-dir>/src/**"]}' \
+  --permission-mode dontAsk --strict-mcp-config --no-session-persistence \
+  --output-format json < <user-prompt-file> > <out-file>.json
+```
+
+- `--setting-sources project` skips the user-level settings. `--plugin-dir <empty-dir>` points to an empty folder. Check with `claude --help` that your CLI version has both flags, and that installed plugins and skills do not load. The probes of 2026-10-20 ran without these flags.
+- Use a new run folder and a new snapshot for each run.
+- `--tools` gives the reviewer only Read, Grep and Glob. It has no shell.
+- `--permission-mode dontAsk` refuses each path outside the run folder. A probe on 2026-10-20 confirmed it: a Read, a Glob and a Grep of the live repository were all refused.
+- `claudeMdExcludes` stops the CLAUDE.md and rule files of the snapshot from loading as memory. Thus the context is the same as in the no-tools protocol, except for the tools and the snapshot.
+- In the user prompt, replace the no-tools sentence with a source-access sentence. It tells the reviewer these facts:
+  - `./src` holds the repository files at the head commit, with no git history.
+  - Some private project names in it are replaced with `<project>`.
+  - The reviewer can use Read, Grep and Glob on `./src` and cannot run shell commands.
+- Score a run in the usual way: a defect counts as caught only when a finding names it as blocking.
+- A source-access run and a no-tools run are two different conditions. Record the condition for each run, and do not put the two in one count.
+
+Entries that used read-only source access:
+
+| Entry | Report |
+|---|---|
+| `rex-1620-6229f1c-delta` | [`reports/1815/recount-source-access.md`](reports/1815/recount-source-access.md) |
+
 ## Growing the corpus
 
 Corpus growth is deliberately manual and human-adjudicated in v1 — `/eval-agents` validates an entry's *schema*, not its *truth*. To add an entry:

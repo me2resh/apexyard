@@ -72,6 +72,13 @@ Every change must go through a PR. One operator action is the only exception. Th
 
 Resolve command targets from payload cwd, the cd chain, each `-C`, then `--git-dir` and `--work-tree`. Follow literal leading `cd` commands before `&&`, `;`, or a newline. Support `cd X || exit N` and `cd X || return N` tails. Block missing, unresolvable, or non-leading directory commands. Commit gates use the same target rule.
 
+Git aliases that reach push or commit block. Run the real verb so the gates can
+check it. Shell aliases block; run the alias body directly. The dispatcher and
+each block-mode gate use the resolver in [AgDR-0253](../../docs/agdr/AgDR-0253-git-alias-resolution-gates.md).
+Its “Block messages” table gives the exact messages for config channels,
+unreadable inline config, opaque verbs, candidate and target limits,
+definition evidence, conditional includes, autocorrect and config read failures.
+
 ## No Hardcoded Secrets
 
 No API keys, passwords, tokens, or credentials in code. Use environment variables. Patterns to avoid:

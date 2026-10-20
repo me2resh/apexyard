@@ -526,24 +526,56 @@ fi
 # The matcher lives in _lib-git-global.sh so the gates use the same
 # expression (#1730, #1731). A missing library fails closed: run both
 # gate groups rather than skip a push or commit the scan cannot see.
+_alias_library_loaded=0
 if [ "$_scan_failed" -eq 0 ] && [ -r "$HOOK_DIR/_lib-git-global.sh" ]; then
+  # Bash 3.2 exits on a sourced failure even inside an if condition.
+  # Capture the load status with errexit off, then restore dispatcher policy.
+  set +e
   # shellcheck disable=SC1091
   . "$HOOK_DIR/_lib-git-global.sh"
+  _alias_load_rc=$?
+  set -e
+  if [ "$_alias_load_rc" -eq 0 ]; then
+    _alias_library_loaded=1
+  else
+    _scan_failed=1
+  fi
 else
   _scan_failed=1
 fi
 if ! command -v command_has_git_subcommand >/dev/null 2>&1; then
   _scan_failed=1
 fi
+if [ "$_alias_library_loaded" = 1 ] && command -v git_alias_check >/dev/null 2>&1; then
+  # cmd and cwd are read by git_alias_check in this shell.
+  # shellcheck disable=SC2034
+  cmd="$COMMAND"
+  # shellcheck disable=SC2034
+  cwd=$(jq -r '.cwd // .tool_input.cwd // empty' <<<"$INPUT" 2>/dev/null) || cwd=""
+  git_alias_check push commit || exit 2
+else
+  _alias_fallback_re='[gG][iI][tT].*([aA][lL][iI][aA][sS]\.|--[cC][oO][nN][fF][iI][gG]-[eE][nN][vV])'
+  if [[ "$COMMAND" =~ $_alias_fallback_re ]]; then
+    echo "BLOCKED: dispatcher cannot load its git alias check." >&2
+    exit 2
+  fi
+fi
 if [ "$_scan_failed" -eq 1 ]; then
   run_push_gates
   run_commit_gates
 else
-  if command_has_git_subcommand "$_scan_cmd" push; then
+  # #1816 G2/G3: expansion hides the command word or verb — fail closed.
+  if command -v git_uncertain_protected_shape >/dev/null 2>&1 \
+    && git_uncertain_protected_shape "$_scan_cmd"; then
     run_push_gates
-  fi
-  if command_has_git_subcommand "$_scan_cmd" commit; then
     run_commit_gates
+  else
+    if command_has_git_subcommand "$_scan_cmd" push; then
+      run_push_gates
+    fi
+    if command_has_git_subcommand "$_scan_cmd" commit; then
+      run_commit_gates
+    fi
   fi
 fi
 
@@ -575,7 +607,8 @@ if [ -z "$COMMAND" ]; then
       exit 2
     }
   fi
-  if raw_payload_command_matches "$INPUT" "$(git_subcommand_payload_pattern push)" \
+  if raw_payload_command_matches "$INPUT" "$(git_subcommand_payload_pattern '(-c[[:space:]]+[^[:space:]]*[Aa][Ll][Ii][Aa][Ss]\.[^[:space:]]+|--config-env)')" \
+    || raw_payload_command_matches "$INPUT" "$(git_subcommand_payload_pattern push)" \
     || raw_payload_command_matches "$INPUT" "$(git_subcommand_payload_pattern commit)"; then
     echo "BLOCKED: dispatcher cannot parse this git command. Restore jq and retry." >&2
     exit 2
