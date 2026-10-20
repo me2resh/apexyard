@@ -175,7 +175,10 @@ _git_match_hides_words() {
 # past that target, so the caller fails closed.
 # #1772 N1: a quote or a substitution that is not closed on its line goes on
 # to the next line. Then a push or commit word on a later line also counts.
-# #1772 N3: the scan stays linear in the text length.
+# #1772 N3: the scan is linear in the text length for words separated by
+# blanks. It is quadratic for a long run with no blank and for many targets
+# that hold a quoted blank. The dispatcher time limit then blocks (fail
+# closed). AgDR-0264 Decision 8 records this accepted residual.
 # - Lines after the last push or commit word cannot give a result. The scan
 #   stops before them.
 # - Each line is split into pieces at each space and tab. A word step works
@@ -258,7 +261,9 @@ EOF_REDIR_PIECES
             _GIT_SCAN="${pieces[wpi]}"
             continue
           fi
-          case "$_GIT_SCAN" in [\;\&\|]*) break ;; esac
+          # #1772 R2-1: `&>` and its zsh forms are operators, not a
+          # separator. Let them through to the operator test below.
+          case "$_GIT_SCAN" in '&>'*) ;; [\;\&\|]*) break ;; esac
           # The point in the line names the rest of this walk.
           key=$((endp[wpi] - ${#_GIT_SCAN}))
           [ -z "${walked[key]:-}" ] || break
@@ -564,6 +569,18 @@ _git_take_redir() {
   local re='^'"${_git_redir_fd}${_git_redir_op}"
   [[ "$_GIT_SCAN" =~ $re ]] || return 1
   _GIT_SCAN="${_GIT_SCAN:${#BASH_REMATCH[0]}}"
+  # #1772 R2-2: an operator that ends in `!`, followed by a blank, has two
+  # readings. Zsh reads the operator and then the next word as the target.
+  # Bash reads `>` (or `>>`, `&>`, `>&`) with the target `!`, and the next
+  # word is an argument. The two readings can give different options or a
+  # different verb. Fail closed.
+  case "${BASH_REMATCH[0]}" in
+    *'!')
+      case "$_GIT_SCAN" in
+        [[:space:]]*) return 2 ;;
+      esac
+      ;;
+  esac
   _GIT_SCAN="${_GIT_SCAN#"${_GIT_SCAN%%[![:space:]]*}"}"
   # A bare operator with no target is still a redirection token.
   [ -n "$_GIT_SCAN" ] || return 0

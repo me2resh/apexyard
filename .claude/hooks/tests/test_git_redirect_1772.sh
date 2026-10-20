@@ -92,6 +92,14 @@ cases_uncertain=(
   # #1772 N2: a zsh form with a target that the grammar cannot match.
   'git >! $(a $(b)) push origin feature/GH-1805-x'
   'git {fd}>"a b push origin feature/GH-1805-x'
+  # #1772 R2-1: `&>` and `&>>` are operators, not a separator. A target
+  # that the grammar cannot match, or that goes on to the next line, fails
+  # closed after them too.
+  'git &>$(a $(b c)) push origin feature/GH-1805-x'
+  'git &>>$(a $(b c)) commit -m x'
+  $'git &>"a\nb" push origin feature/GH-1805-x'
+  $'git &>>\'a\nb\' commit -m x'
+  'git &>! $(a $(b)) push origin feature/GH-1805-x'
 )
 # #1772 N1 allow twins: a target that goes on to the next line, with no push
 # or commit word after it, is not uncertain.
@@ -103,6 +111,8 @@ cases_not_uncertain=(
   'git log >! "a b.txt" && grep push "a b.txt"'
   'git log {fd}>"a b" && grep commit "a b"'
   'git log >>| out.txt; echo commit'
+  # #1772 R2-1 allow twin: an `&>` target that the grammar reads.
+  'git log &> "a b.txt" && grep push "a b.txt"'
 )
 
 # Fail-before: archive the hooks tree at a pinned dev commit. The pin is the
@@ -217,7 +227,7 @@ for cmd in 'git >! out.txt log' 'git {fd}>/dev/null log' 'git log >>| push.txt' 
 done
 
 # #1772 N2: the gate scanner skips a zsh form and a named descriptor.
-for cmd in 'git >! f log' 'git >>|f log' 'git &>! f log' 'git {fd}>/dev/null log' 'git 2>! f -C . log'; do
+for cmd in 'git >!f log' 'git >>|f log' 'git >>| f log' 'git &>!f log' 'git {fd}>/dev/null log' 'git 2>!f -C . log'; do
   if /bin/bash -c '
     . "$1" || exit 1
     git_prepare_invocation "$2" log "$PWD"
@@ -225,6 +235,20 @@ for cmd in 'git >! f log' 'git >>|f log' 'git &>! f log' 'git {fd}>/dev/null log
     pass "prepare skips zsh redirect: $cmd"
   else
     fail "prepare skips zsh redirect: $cmd"
+  fi
+done
+# #1772 R2-2: an operator that ends in `!` and then a blank has a bash
+# reading and a zsh reading. The gate scanner cannot know the shell, so it
+# fails closed.
+for cmd in 'git >! f log' 'git >>! f log' 'git &>! f log' 'git &>>! f log' 'git >&! f log' \
+  'git 2>! f -C . log' 'git {fd}>! f log'; do
+  if /bin/bash -c '
+    . "$1" || exit 1
+    git_prepare_invocation "$2" log "$PWD"
+  ' _ "$HOOKS/_lib-git-global.sh" "$cmd"; then
+    fail "prepare fails closed on a ! operator and a blank: $cmd"
+  else
+    pass "prepare fails closed on a ! operator and a blank: $cmd"
   fi
 done
 
@@ -331,7 +355,9 @@ fi
 # unparsed nested target both reach the push gates.
 for cmd in 'git >"a b" push origin feature/GH-1805-x' 'git >$(a $(b c)) push origin feature/GH-1805-x' \
   $'git >"a\nb" push origin feature/GH-1805-x' 'git >! f push origin feature/GH-1805-x' \
-  'git {fd}>/dev/null push origin feature/GH-1805-x'; do
+  'git {fd}>/dev/null push origin feature/GH-1805-x' \
+  'git &>$(a $(b c)) push origin feature/GH-1805-x' $'git &>"a\nb" push origin feature/GH-1805-x' \
+  'git &>! $(a $(b)) push origin feature/GH-1805-x' 'git&>$(a $(b)) push origin feature/GH-1805-x'; do
   payload=$(python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$cmd")
   : > "$TMP/log"
   printf '%s' "$payload" | DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh" >/dev/null
@@ -342,12 +368,26 @@ for cmd in 'git >"a b" push origin feature/GH-1805-x' 'git >$(a $(b c)) push ori
     cat "$TMP/log" >&2 || true
   fi
 done
+# #1772 R2-1: an unreadable `&>>` target before a commit routes the commit
+# gates.
+for cmd in 'git &>>$(a $(b)) commit -m x' 'git &>| $(a $(b)) commit -m x'; do
+  payload=$(python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$cmd")
+  : > "$TMP/log"
+  printf '%s' "$payload" | DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh" >/dev/null
+  if grep -qx 'check-secrets.sh' "$TMP/log" && grep -qx 'validate-commit-format.sh' "$TMP/log"; then
+    pass "dispatcher routes commit gates: $cmd"
+  else
+    fail "dispatcher routes commit gates: $cmd"
+    cat "$TMP/log" >&2 || true
+  fi
+done
 
 # The visitor blocks the unparsed target (real block-main-push gate).
 cp "$HOOKS/block-main-push.sh" "$TMP/real-bmp.sh"
 for lib in "$HOOKS"/_lib-*.sh; do cp "$lib" "$TMP/"; done
 for cmd in 'git >$(a $(b c)) push origin feature/GH-1805-x' 'git >${X:-a b} push origin feature/GH-1805-x' \
-  $'git >"a\nb" push origin feature/GH-1805-x' $'git >\'a\nb\' push origin feature/GH-1805-x'; do
+  $'git >"a\nb" push origin feature/GH-1805-x' $'git >\'a\nb\' push origin feature/GH-1805-x' \
+  'git &>$(a $(b c)) push origin feature/GH-1805-x' $'git &>"a\nb" push origin feature/GH-1805-x'; do
   payload=$(python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]},"cwd":sys.argv[2]}))' \
     "$cmd" "$TMP")
   rc=0
@@ -359,9 +399,10 @@ for cmd in 'git >$(a $(b c)) push origin feature/GH-1805-x' 'git >${X:-a b} push
   fi
 done
 # #1772 N2: `git >! push ...` has two readings. Bash runs `git push` and
-# zsh writes to a file named push. The gate scanner uses the zsh reading,
-# which does not reach the verb that the dispatcher found, so it blocks.
-for cmd in 'git >! push origin feature/GH-1805-x' 'git 2>! push origin feature/GH-1805-x'; do
+# zsh writes to a file named push. The gate scanner cannot know the shell,
+# so it blocks (#1772 R2-2: any `!` operator and then a blank).
+for cmd in 'git >! push origin feature/GH-1805-x' 'git 2>! push origin feature/GH-1805-x' \
+  'git >! f push origin feature/GH-1805-x'; do
   payload=$(python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]},"cwd":sys.argv[2]}))' \
     "$cmd" "$TMP")
   rc=0
@@ -372,9 +413,9 @@ for cmd in 'git >! push origin feature/GH-1805-x' 'git 2>! push origin feature/G
     fail "push gate blocks a zsh form with two readings (rc=$rc): $cmd: $(printf '%s' "$out" | head -2)"
   fi
 done
-# Allow twins: the same gate allows a plain push and a zsh form with one
-# reading to a feature branch.
-for cmd in 'git push origin feature/GH-1805-x' 'git >! f push origin feature/GH-1805-x'; do
+# Allow twins: the same gate allows a plain push and a glued zsh form (one
+# reading in each shell) to a feature branch.
+for cmd in 'git push origin feature/GH-1805-x' 'git >!f push origin feature/GH-1805-x'; do
   payload=$(python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]},"cwd":sys.argv[2]}))' \
     "$cmd" "$TMP")
   rc=0
@@ -385,6 +426,59 @@ for cmd in 'git push origin feature/GH-1805-x' 'git >! f push origin feature/GH-
     fail "push gate allows (rc=$rc): $cmd: $(printf '%s' "$out" | head -2)"
   fi
 done
+
+# #1772 R2-2: both readings reach the verb, with different repositories.
+# The working directory is a repository on a feature branch that holds a
+# file named `!`. A second repository is on main. Bash writes to `!` and
+# pushes from the second repository. Zsh writes to the option word and
+# pushes from the working directory. The gates must block.
+cp "$HOOKS/validate-branch-name.sh" "$TMP/real-vbn.sh"
+ZR="$TMP/zr"
+mkdir -p "$ZR/cwd" "$ZR/o"
+for r in "$ZR/cwd" "$ZR/o"; do
+  (
+    cd "$r" || exit 1
+    git init -q
+    git -c user.email=test@example.com -c user.name=Test -c core.hooksPath=/dev/null -c commit.gpgsign=false \
+      commit -q --allow-empty -m init
+    git checkout -q -B main
+  )
+done
+(cd "$ZR/cwd" && git checkout -q -B feature/GH-1772-x && : > '!')
+GW="gi""t"
+gate_rc() {
+  local gate="$1" cmd="$2" payload rc=0
+  payload=$(python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]},"cwd":sys.argv[2]}))' \
+    "$cmd" "$ZR/cwd")
+  (cd "$ZR/cwd" && printf '%s' "$payload" | /bin/bash "$gate" >/dev/null 2>&1) || rc=$?
+  printf '%s' "$rc"
+}
+for f in ">! --$GW-dir=$ZR/o/.$GW" ">>! --$GW-dir=$ZR/o/.$GW" "&>! --$GW-dir=$ZR/o/.$GW" \
+  "2>! -C $ZR/o" ">&! --$GW-dir=$ZR/o/.$GW --work-tree=$ZR/o" "{fd}>! -C $ZR/o"; do
+  cmd="$GW $f push"
+  for gate in "$TMP/real-bmp.sh" "$TMP/real-vbn.sh"; do
+    rc=$(gate_rc "$gate" "$cmd")
+    if [ "$rc" = 2 ]; then
+      pass "gate blocks two readings that both reach the verb (${gate##*/}): ${cmd//$ZR/ZR}"
+    else
+      fail "gate blocks two readings that both reach the verb (${gate##*/}, rc=$rc): ${cmd//$ZR/ZR}"
+    fi
+  done
+done
+# Glued forms have one reading. The gate still resolves the option after
+# the target (blocks on main) and allows the working directory branch.
+rc=$(gate_rc "$TMP/real-bmp.sh" "$GW >!x -C $ZR/o push")
+if [ "$rc" = 2 ]; then
+  pass "glued ! form still reads the option after it"
+else
+  fail "glued ! form still reads the option after it (rc=$rc)"
+fi
+rc=$(gate_rc "$TMP/real-bmp.sh" "$GW >!x push")
+if [ "$rc" = 0 ]; then
+  pass "glued ! form on a feature branch is allowed"
+else
+  fail "glued ! form on a feature branch is allowed (rc=$rc)"
+fi
 
 # No jq: the dispatcher cannot read the command, so a redirect-shaped push or
 # commit in the raw payload blocks. Keep every executable except jq.
