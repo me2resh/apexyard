@@ -245,15 +245,22 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
         sys.exit(bool(failures))
     if mode in ('matrix','quick','round1','includes'):
         # PR #1756 round-1 payloads. These strings are data, never commands.
+        # The cd target is a fixture directory. Do not use a host path such
+        # as /private/tmp: it exists on macOS only. On Linux the cd target is
+        # then missing, and the B9 rule correctly blocks the alias check.
+        cdtarget=t/'cd-target'; cdtarget.mkdir()
         regressions=[
             'cd "$(git rev-parse --show-toplevel)" && grep -rn "git hooks" docs/',
-            'cd /private/tmp && echo "git gates"',
-            'pushd /private/tmp; echo "git gates"; popd',
+            f'cd {cdtarget} && echo "git gates"',
+            f'pushd {cdtarget}; echo "git gates"; popd',
             "git commit -F - <<'MSG'\ndocs: explain cd and git hooks\nMSG",
             "git commit -m \"$(cat <<'MSG'\nfix: run cd before the git hooks\nMSG\n)\""
         ]
         for n,cmd in enumerate(regressions):
             case('Round-1 regressions',str(n+1),cmd,2 if n in (0,2) else 0)
+        # Pair for case 2: a cd target that does not exist cannot be resolved.
+        # B9 must block it on every host.
+        case('Round-1 regressions','2-missing-target',f'cd {t/"absent-cd-target"} && echo "git gates"',2,direct=False)
         # R2 now blocks unresolved non-builtin mentions. Keep the isolated
         # baseline allow checks and assert the stricter current result.
         isolated=t/'isolated-dispatch'; shutil.copytree(hooks,isolated)
