@@ -172,6 +172,44 @@ else
   fail "prepare skips redirect before log"
 fi
 
+# #1772 B1: a redirect target that starts with a digit and runs on is one
+# shell word. The replay arguments must hold no --git-dir or --work-tree.
+b1_replay() {
+  /bin/bash -c '
+    . "$1" || exit 1
+    git_prepare_invocation "$2" "$3" "$4" || exit 3
+    printf "%s\n" "${GIT_REPLAY_ARGS[@]}"
+  ' _ "$HOOKS/_lib-git-global.sh" "$1" "$2" "$3"
+}
+GD_VAL="/gd-placeholder"
+WT_VAL="/wt-placeholder"
+GITW="gi""t"
+for sub in push commit; do
+  if [ "$sub" = push ]; then rest='origin feature/GH-1772-x'; else rest='-m x'; fi
+  for opt in "--git-dir=$GD_VAL" "--work-tree=$WT_VAL"; do
+    for op in '>' '2>' '&>' '<'; do
+      cmd="$GITW ${op}1${opt} $sub $rest"
+      out=$(b1_replay "$cmd" "$sub" "$PWD") || true
+      if printf '%s\n' "$out" | grep -qE -- '^--(git-dir|work-tree)'; then
+        fail "digit-led redirect target is one word (no replay option): $cmd"
+      else
+        pass "digit-led redirect target is one word (no replay option): $cmd"
+      fi
+    done
+  done
+  # Allow twin: a real fd target still ends at its boundary, and a following
+  # real option is still read.
+  for fdform in '2>&1' '>&2' '1>/dev/null' '2>&-'; do
+    cmd="$GITW $fdform --git-dir=$GD_VAL $sub $rest"
+    out=$(b1_replay "$cmd" "$sub" "$PWD") || true
+    if printf '%s\n' "$out" | grep -qxF -- "--git-dir=$GD_VAL"; then
+      pass "fd target still ends at its boundary: $cmd"
+    else
+      fail "fd target still ends at its boundary: $cmd"
+    fi
+  done
+done
+
 # Dispatcher routes push gates for a redirect-shaped push (stub gates).
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP" "${scratch:-}"' EXIT

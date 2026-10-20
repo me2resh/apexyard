@@ -406,8 +406,10 @@ _git_take_redir() {
     [\;\&\|]|[\;\&\|]*) return 0 ;;
   esac
   # Digit-only target for >&1 / <&0 / >&- forms.
-  if [[ "$_GIT_SCAN" =~ ^([0-9]+|-) ]]; then
-    _GIT_SCAN="${_GIT_SCAN:${#BASH_REMATCH[0]}}"
+  # The target must end at a word boundary. A digit that runs into more text
+  # is one file name, so the raw-word reader takes the whole word.
+  if [[ "$_GIT_SCAN" =~ ^([0-9]+|-)([[:space:];&|]|$) ]]; then
+    _GIT_SCAN="${_GIT_SCAN:${#BASH_REMATCH[1]}}"
     return 0
   fi
   _git_take_raw_word || return 2
