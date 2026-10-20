@@ -144,9 +144,9 @@ _require_lib() {
 _require_lib "$(dirname "$0")/_lib-extract-pr.sh" \
   is_merge_command is_merge_command_raw \
   _run_awk_or_fallback join_shell_continuations _join_shell_continuations_fallback \
-  _scrub_merge_command _normalize_json_escapes \
+  _scrub_merge_command _has_split_merge_phrase _normalize_json_escapes \
   has_conflicting_repo_flags merge_command_uses_variable extract_pr_number resolve_merge_repo \
-  resolve_ci_status_glab
+  resolve_ci_status_glab merge_repo_is_valid prmeta_get
 # Leading cd-target recovery for shared merge-repo resolution (#687/#1151).
 # Optional only for standalone hook-test sandboxes that copy a minimal lib set.
 if [ -f "$(dirname "$0")/_lib-pr-repo.sh" ]; then
@@ -303,6 +303,13 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
+_has_split_merge_phrase "$COMMAND"
+scan_status=$?
+if [ "$scan_status" -eq 2 ]; then
+  echo "BLOCKED: merge gate could not scan the command. Check awk and the command size." >&2
+  exit 2
+fi
+
 if ! is_merge_command "$COMMAND"; then
   exit 0
 fi
@@ -317,7 +324,7 @@ fi
 # command text — the old code fell back to the CWD's PR and checked an
 # UNRELATED PR's CI (and passed `$REPO` to gh, producing garbage errors). A CI
 # gate must not guess. Block with a clear, accurate instruction instead.
-if merge_command_uses_variable "$COMMAND"; then
+if merge_command_uses_variable "$COMMAND" "$scan_status"; then
   cat >&2 <<'EOF'
 BLOCKED: cannot verify CI on a variable-substituted merge command.
 
@@ -434,7 +441,7 @@ fi
 # the current repository; keep the validated value in a Bash argument array.
 GATE_OWNER_REPO="$CMD_REPO"
 if [ -z "$GATE_OWNER_REPO" ]; then
-  GATE_OWNER_REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null)
+  GATE_OWNER_REPO=$(apexyard_gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null)
 fi
 # gh accepts [HOST/]OWNER/REPO for --repo (GitHub Enterprise). `gh pr`
 # takes the full value. `gh api` paths take OWNER/REPO, with the host in
@@ -445,10 +452,9 @@ if [[ "$GATE_OWNER_REPO" == */*/* ]]; then
   GATE_HOST="${GATE_OWNER_REPO%%/*}"
   GATE_API_REPO="${GATE_OWNER_REPO#*/}"
 fi
-if [[ ! "$GATE_API_REPO" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] ||
-   [[ "$GATE_API_REPO" == ./* || "$GATE_API_REPO" == ../* ||
-      "$GATE_API_REPO" == */. || "$GATE_API_REPO" == */.. ]] ||
-   { [ -n "$GATE_HOST" ] && [[ ! "$GATE_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]]; }; then
+# merge_repo_is_valid is the one repo check that this gate and the
+# dispatcher prefetch share (AgDR-0256 D1 item 5).
+if ! merge_repo_is_valid "$GATE_OWNER_REPO"; then
   echo "BLOCKED: PR #${PR_NUMBER} has an invalid owner/repo: ${GATE_OWNER_REPO:-<empty>}. Use a literal [host/]owner/repo and retry." >&2
   exit 2
 fi
@@ -467,8 +473,12 @@ fi
 # contained "no checks reported").
 # ${arr[@]+"${arr[@]}"}: bash 3.2 treats an empty "${arr[@]}" as unbound
 # under set -u. This form expands to nothing when the array is empty.
-CHECKS_OUTPUT=$(gh pr checks "$PR_NUMBER" ${REPO_ARGS[@]+"${REPO_ARGS[@]}"} 2>&1)
+CHECKS_OUTPUT=$(apexyard_gh pr checks "$PR_NUMBER" ${REPO_ARGS[@]+"${REPO_ARGS[@]}"} 2>&1)
 CHECKS_RC=$?
+if [ "$CHECKS_RC" -eq 124 ]; then
+  # apexyard_gh already printed the BLOCKED timeout line (#1796).
+  exit 2
+fi
 
 # "no checks reported on the 'X' branch" — allow only when BOTH: checks
 # exited non-zero, AND the entire trimmed output matches that exact CLI
@@ -491,7 +501,13 @@ fi
 
 # Workflow runs live in the base repo. Validate the head before using it
 # in an API path. A malformed PR head blocks rather than becoming an API fault.
-GATE_HEAD_SHA=$(gh pr view "$PR_NUMBER" ${REPO_ARGS[@]+"${REPO_ARGS[@]}"} --json headRefOid --jq '.headRefOid' 2>/dev/null)
+# With an explicit repo, read the dispatcher snapshot first (AgDR-0256).
+GATE_HEAD_SHA=""
+if [ -n "$CMD_REPO" ] && GATE_HEAD_SHA=$(prmeta_get head "$PR_NUMBER" "$CMD_REPO"); then
+  :
+else
+  GATE_HEAD_SHA=$(apexyard_gh pr view "$PR_NUMBER" ${REPO_ARGS[@]+"${REPO_ARGS[@]}"} --json headRefOid --jq '.headRefOid' 2>/dev/null)
+fi
 if [[ ! "$GATE_HEAD_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
   echo "BLOCKED: PR #${PR_NUMBER} has an invalid head SHA. Resolve the PR head and retry." >&2
   exit 2
@@ -502,7 +518,7 @@ fi
 WORKFLOW_COUNT=""
 WORKFLOW_ERROR=""
 if [ "$NO_CHECKS" = "1" ]; then
-  WORKFLOWS_JSON=$(gh api ${API_HOST_ARGS[@]+"${API_HOST_ARGS[@]}"} "repos/${GATE_API_REPO}/actions/workflows?per_page=100" 2>/dev/null)
+  WORKFLOWS_JSON=$(apexyard_gh api ${API_HOST_ARGS[@]+"${API_HOST_ARGS[@]}"} "repos/${GATE_API_REPO}/actions/workflows?per_page=100" 2>/dev/null)
   WORKFLOW_RC=$?
   if [ "$WORKFLOW_RC" -ne 0 ]; then
     WORKFLOW_ERROR="workflow query failed"
@@ -523,7 +539,7 @@ fi
 # One head-filtered request per merge. A partial page cannot prove that
 # every run passed, so refuse a merge if the response reports more runs
 # than this request returned.
-RUNS_JSON=$(gh api ${API_HOST_ARGS[@]+"${API_HOST_ARGS[@]}"} "repos/${GATE_API_REPO}/actions/runs?head_sha=${GATE_HEAD_SHA}&per_page=100" 2>/dev/null)
+RUNS_JSON=$(apexyard_gh api ${API_HOST_ARGS[@]+"${API_HOST_ARGS[@]}"} "repos/${GATE_API_REPO}/actions/runs?head_sha=${GATE_HEAD_SHA}&per_page=100" 2>/dev/null)
 RUNS_RC=$?
 RUNS_ERROR=""
 if [ "$RUNS_RC" -ne 0 ]; then
@@ -766,12 +782,15 @@ _commit_check_fallback() {
     exit 2
   fi
 
-  checks_json=$(gh api ${API_HOST_ARGS[@]+"${API_HOST_ARGS[@]}"} --paginate \
+  checks_json=$(apexyard_gh api ${API_HOST_ARGS[@]+"${API_HOST_ARGS[@]}"} --paginate \
     "repos/${GATE_API_REPO}/commits/${GATE_HEAD_SHA}/check-runs?per_page=100" 2>/dev/null)
   checks_rc=$?
-  status_json=$(gh api ${API_HOST_ARGS[@]+"${API_HOST_ARGS[@]}"} --paginate \
+  status_json=$(apexyard_gh api ${API_HOST_ARGS[@]+"${API_HOST_ARGS[@]}"} --paginate \
     "repos/${GATE_API_REPO}/commits/${GATE_HEAD_SHA}/status?per_page=100" 2>/dev/null)
   status_rc=$?
+  if [ "$checks_rc" -eq 124 ] || [ "$status_rc" -eq 124 ]; then
+    exit 2
+  fi
   if [ "$checks_rc" -ne 0 ] || [ "$status_rc" -ne 0 ]; then
     echo "BLOCKED: PR #${pr}: gh pr checks did not return a CI result, and the commit check fallback failed. The merge stays blocked." >&2
     exit 2

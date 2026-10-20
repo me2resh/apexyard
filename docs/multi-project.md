@@ -884,6 +884,8 @@ A typical morning as a CTO / Chief of Staff using apexyard:
 6. Work the ticket — the role file drives behaviour, the lifecycle demo in the hero of the landing site walks through the full flow
 7. Back at the fork root, **`/stakeholder-update weekly`** on Fridays to generate the summary
 
+For two sessions on one project, see [Run more than one session on one project](../.claude/rules/isolated-builds.md#run-more-than-one-session-on-one-project).
+
 ### `apexyard status` — the CLI briefing
 
 `bin/apexyard` is a small bash shim that exposes the briefing at the shell. Install once by symlinking it onto your PATH:
@@ -1087,5 +1089,6 @@ Do not enable verbose HTTP tracing inside `create_command`, `list_command`, `rev
 - `projects/README.md` — the per-project docs convention
 - `onboarding.yaml` — company + team + stack config
 - `.claude/rules/role-triggers.md` — when to activate which role
+- `.claude/rules/isolated-builds.md` — worktrees, build isolation, and [more than one session on one project](../.claude/rules/isolated-builds.md#run-more-than-one-session-on-one-project)
 - `.claude/skills/projects/SKILL.md` — the `/projects` skill spec
 - `.claude/skills/handover/SKILL.md` — the `/handover` skill spec

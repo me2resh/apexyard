@@ -71,6 +71,7 @@ make_sandbox_template() {
   cp "$(dirname "$LIB_PR")/_lib-awk-fallback.sh" "$sb/.claude/hooks/_lib-awk-fallback.sh"
   cp "$LIB_MARKERS" "$sb/.claude/hooks/_lib-review-markers.sh"
   cp "$LIB_BEHIND"  "$sb/.claude/hooks/_lib-merge-behind.sh"
+  cp "$SRC_ROOT/.claude/hooks/_lib-gh-timeout.sh" "$sb/.claude/hooks/_lib-gh-timeout.sh"
   cp "$SRC_ROOT/.claude/hooks/_lib-menu-approval.sh" "$sb/.claude/hooks/_lib-menu-approval.sh"
   chmod +x "$sb/.claude/hooks/block-unreviewed-merge.sh"
   # The hook sources the shared config reader (me2resh/apexyard#957, the
@@ -1604,8 +1605,8 @@ fi
 
 write_gh_mock_head() {
   # Overwrite the sandbox's gh mock so headRefOid, baseRefName, and the
-  # forge commit-lookup / branches-tip calls rex_approval_carries_over
-  # makes all reflect real SHAs built in the sandbox's own git history.
+  # #1796 GraphQL carry-over fetch (plus legacy REST) all reflect real SHAs
+  # built in the sandbox's own git history.
   local sb="$1" head_sha="$2" base_branch="${3:-dev}"
   printf '%s\n' "$head_sha" > "$sb/mock-head_sha"
   printf '%s\n' "$base_branch" > "$sb/mock-base_branch"
@@ -1614,19 +1615,75 @@ write_gh_mock_head() {
 sb=${0%/bin/gh}
 IFS= read -r head_sha < "$sb/mock-head_sha"
 IFS= read -r base_branch < "$sb/mock-base_branch"
-case "$*" in
-  *"pr view"*"headRefOid"*)        echo "$head_sha" ;;
-  *"pr view"*"headRefName"*)       echo "feature/GH-99-test" ;;
-  *"pr view"*"headRepository"*)    echo "acme-org/example" ;;
-  *"pr view"*"mergeStateStatus"*)  echo "${MOCK_MERGE_STATE:-CLEAN}" ;;
-  *"pr view"*"baseRefName"*)       echo "$base_branch" ;;
-  *"api "*"compare/"*)             echo "${MOCK_BEHIND_BY:-0}" ;;
+args="$*"
+case "$args" in
+  *"pr view"*"headRefOid"*)        echo "$head_sha"; exit 0 ;;
+  *"pr view"*"headRefName"*)       echo "feature/GH-99-test"; exit 0 ;;
+  *"pr view"*"headRepository"*)    echo "acme-org/example"; exit 0 ;;
+  *"pr view"*"mergeStateStatus"*)  echo "${MOCK_MERGE_STATE:-CLEAN}"; exit 0 ;;
+  *"pr view"*"baseRefName"*)       echo "$base_branch"; exit 0 ;;
+  *"api "*"compare/"*)             echo "${MOCK_BEHIND_BY:-0}"; exit 0 ;;
+  *"api graphql"*|*"graphql"*)
+    oid=""; qname=""; prev=""
+    for a in "$@"; do
+      case "$prev" in
+        -F|-f)
+          case "$a" in
+            oid=*) oid="${a#oid=}" ;;
+            qname=*) qname="${a#qname=}" ;;
+          esac
+          ;;
+      esac
+      prev="$a"
+    done
+    [ -n "$oid" ] && [ -n "$qname" ] || exit 1
+    ref="${qname#refs/heads/}"
+    base_tip=$(git rev-parse "refs/heads/$ref" 2>/dev/null) || exit 1
+    spine=$(mktemp) || exit 1
+    cur="$oid"
+    depth=0
+    while [ "$depth" -lt 10 ]; do
+      if ! git cat-file -e "${cur}^{commit}" 2>/dev/null; then
+        break
+      fi
+      parents=$(git show -s --format='%P' "$cur")
+      tree=$(git rev-parse "${cur}^{tree}")
+      p0=$(printf '%s' "$parents" | awk '{print $1}')
+      p1=$(printf '%s' "$parents" | awk '{print $2}')
+      p2=$(printf '%s' "$parents" | awk '{print $3}')
+      ap=""
+      [ -n "$p0" ] && ap="{\"oid\":\"$p0\"}"
+      [ -n "$p1" ] && ap="${ap}${ap:+,}{\"oid\":\"$p1\"}"
+      [ -n "$p2" ] && ap="${ap}${ap:+,}{\"oid\":\"$p2\"}"
+      printf '%s\t%s\t%s\n' "$cur" "$tree" "$ap" >> "$spine"
+      [ -z "$p0" ] && break
+      cur="$p0"
+      depth=$((depth + 1))
+    done
+    nested="null"
+    while IFS=$'\t' read -r csha ctree cap; do
+      [ -z "$csha" ] && continue
+      if [ "$nested" = "null" ]; then
+        nested=$(printf '{"oid":"%s","tree":{"oid":"%s"},"allParents":{"nodes":[%s]}}' \
+          "$csha" "$ctree" "$cap")
+      else
+        nested=$(printf '{"oid":"%s","tree":{"oid":"%s"},"allParents":{"nodes":[%s]},"firstParent":{"nodes":[%s]}}' \
+          "$csha" "$ctree" "$cap" "$nested")
+      fi
+    done <<SPINE
+$(sed '1!G;h;$!d' "$spine")
+SPINE
+    rm -f "$spine"
+    printf '{"data":{"repository":{"ref":{"target":{"oid":"%s"}},"c0":%s}}}\n' "$base_tip" "$nested"
+    exit 0
+    ;;
   *"/branches/"*)
     ref=$(printf '%s' "$*" | sed -E 's#.*branches/([^ ]+).*#\1#')
     ref=$(printf '%s' "$ref" | sed 's/%2[Ff]/\//g')
     sha=$(git rev-parse "refs/heads/$ref" 2>/dev/null)
     [ -z "$sha" ] && exit 1
     echo "$sha"
+    exit 0
     ;;
   *"commits/"*)
     target=$(printf '%s' "$*" | sed -E 's#.*commits/([^ ]+).*#\1#')
@@ -1645,6 +1702,7 @@ case "$*" in
       pj="[]"
     fi
     printf '{"sha":"%s","parents":%s,"commit":{"tree":{"sha":"%s"}}}\n' "$target" "$pj" "$tree"
+    exit 0
     ;;
   *) ;;
 esac
@@ -1883,6 +1941,54 @@ write_gh_mock_head "$sb" "$NEW_SHA" "$BASE_BRANCH"
 write_rex_marker "$sb" 307 "$OLD_SHA" "acme-org/example"
 write_ceo_marker_structured "$sb" 307 "$OLD_SHA" "acme-org/example"
 run_case "CO8: #1456 local merge driver cannot force carry-over -> blocks" 2 "New commits were pushed" "$sb" 307 "acme-org/example"
+
+# CO9 (#1796): a stalled forge call ends at the per-call limit and the gate
+# exits 2 with a clear timeout message. Fail-before: the call hung for 120 s.
+sb=$(make_sandbox)
+BASE_BRANCH=$(sb_git "$sb" symbolic-ref --short HEAD)
+(
+  cd "$sb" || exit 1
+  export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb"
+  git checkout -q -b pr-branch
+  echo pr > pr.txt; git add pr.txt; git commit -q -m "pr work"
+)
+OLD_SHA=$(sb_git "$sb" rev-parse HEAD)
+(
+  cd "$sb" || exit 1
+  export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb"
+  git checkout -q "$BASE_BRANCH"
+  echo more > base2.txt; git add base2.txt; git commit -q -m "base moves"
+  git checkout -q pr-branch
+  git merge -q --no-ff "$BASE_BRANCH" -m "merge base"
+)
+NEW_SHA=$(sb_git "$sb" rev-parse HEAD)
+write_gh_mock_head "$sb" "$NEW_SHA" "$BASE_BRANCH"
+# Replace graphql answers with a hang; keep pr view fast so the gate reaches
+# the carry-over walk.
+cat > "$sb/bin/gh" <<'EOF'
+#!/bin/bash
+sb=${0%/bin/gh}
+IFS= read -r head_sha < "$sb/mock-head_sha"
+IFS= read -r base_branch < "$sb/mock-base_branch"
+case "$*" in
+  *"pr view"*"headRefOid"*) echo "$head_sha"; exit 0 ;;
+  *"pr view"*"headRefName"*) echo "feature/GH-99-test"; exit 0 ;;
+  *"pr view"*"headRepository"*) echo "acme-org/example"; exit 0 ;;
+  *"pr view"*"baseRefName"*) echo "$base_branch"; exit 0 ;;
+  # exec so the waited PID is the sleeper. A plain `sleep` child made
+  # bash `$()` wait the full 120 s under the watchdog (#1796 CI cap).
+  *"api graphql"*|*"graphql"*) exec sleep 120 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$sb/bin/gh"
+write_rex_marker "$sb" 308 "$OLD_SHA"
+write_ceo_marker_structured "$sb" 308 "$OLD_SHA"
+# Short per-call limit. Prefer GNU timeout when present (Linux CI);
+# FORCE_WATCHDOG covers hosts without timeout/gtimeout.
+export APEXYARD_GH_CALL_TIMEOUT=1 APEXYARD_GH_FORCE_WATCHDOG=1
+run_case "CO9: #1796 stalled forge call -> exit 2 with timeout message" 2 "forge call timed out" "$sb" 308
+unset APEXYARD_GH_CALL_TIMEOUT APEXYARD_GH_FORCE_WATCHDOG
 
 # --- Summary ----------------------------------------------------------
 

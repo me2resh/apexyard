@@ -383,10 +383,9 @@ The workflow never grants merge approval. Existing carry-over checks and per-PR 
 ### Framework hook-test tiers
 
 The framework's `tests.yml` uses a light PR tier, a heavy tier, and a release tier.
-Regular PRs run the full Linux jq-1.7 suite and affected macOS bash-3.2 tests.
-`bin/select-affected-tests.sh` maps changed hooks, tests, skills, and agents to tests.
-Shared libraries and CI inputs select the full suite, which runs on Linux only on a PR; the macOS suite runs on merge and nightly.
+Regular PRs run the full Linux jq-1.7 suite.
 Docs-only PRs skip hook jobs and retain the required `hook test suite` summary.
-Pushes to `dev` and `main`, nightly runs on `dev`, and manual runs execute the six-job matrix.
-Release PRs execute that matrix. They require the reusable conformance workflow through the summary when the repository variable `CONFORMANCE_ON_RELEASE` is `true`.
-See [AgDR-0236](../../docs/agdr/AgDR-0236-tiered-ci.md) for selection rules and risks.
+Pushes to `dev` and `main`, nightly runs on `dev`, and manual runs add the Linux jq-1.8 leg.
+Release PRs also require the reusable conformance workflow through the summary when the repository variable `CONFORMANCE_ON_RELEASE` is `true`.
+CI does not run `/bin/bash` 3.2 or macOS system awk. Run `/bin/bash bin/run-hook-tests.sh` locally before you push.
+See [AgDR-0236](../../docs/agdr/AgDR-0236-tiered-ci.md) and [AgDR-0259](../../docs/agdr/AgDR-0259-no-macos-ci-runners.md) for selection rules and risks.

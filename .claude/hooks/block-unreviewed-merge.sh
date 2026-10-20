@@ -114,9 +114,9 @@ _require_lib() {
 _require_lib "$(dirname "$0")/_lib-extract-pr.sh" \
   is_merge_command is_merge_command_raw \
   _run_awk_or_fallback join_shell_continuations _join_shell_continuations_fallback \
-  _scrub_merge_command _normalize_json_escapes \
+  _scrub_merge_command _has_split_merge_phrase _normalize_json_escapes \
   has_conflicting_repo_flags merge_command_uses_variable extract_pr_number resolve_merge_repo \
-  resolve_pr_head resolve_pr_head_branch
+  resolve_pr_head resolve_pr_head_branch resolve_pr_base_ref
 # Repo-qualified marker path helper (#485).
 _require_lib "$(dirname "$0")/_lib-review-markers.sh" \
   review_marker_path unqualified_marker_hint
@@ -189,6 +189,13 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
+_has_split_merge_phrase "$COMMAND"
+scan_status=$?
+if [ "$scan_status" -eq 2 ]; then
+  echo "BLOCKED: merge gate could not scan the command. Check awk and the command size." >&2
+  exit 2
+fi
+
 if ! is_merge_command "$COMMAND"; then
   exit 0
 fi
@@ -198,7 +205,7 @@ if has_conflicting_repo_flags "$COMMAND"; then
   exit 2
 fi
 
-if merge_command_uses_variable "$COMMAND"; then
+if merge_command_uses_variable "$COMMAND" "$scan_status"; then
   echo "BLOCKED: merge gate cannot resolve a merge command containing an unexpanded PR or repo variable. Re-run with literal values." >&2
   exit 2
 fi
@@ -343,10 +350,8 @@ fi
 # every caller of $BASE_REF_NAME already degrades correctly on empty (the
 # carry-over functions require it non-empty and return "unknown" without
 # it; print_behind_base_note already skips on empty CMD_REPO first).
-BASE_REF_NAME=""
-if [ -n "${CMD_REPO:-}" ]; then
-  BASE_REF_NAME=$(gh pr view "$PR_NUMBER" --repo "$CMD_REPO" --json baseRefName -q '.baseRefName' 2>/dev/null)
-fi
+# resolve_pr_base_ref reads the dispatcher snapshot first (AgDR-0256).
+BASE_REF_NAME=$(resolve_pr_base_ref "$PR_NUMBER" "${CMD_REPO:-}")
 
 # --- Optional behind-base note, shared by the two blocks below (#1386) ---
 # Advisory only — it adds NO new blocking condition. Both call sites already
@@ -463,7 +468,14 @@ REX_SHA=$(tr -d '[:space:]' < "$REX_APPROVAL")
 _CARRY_OVER="false"
 if [ -n "$REX_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$REX_SHA" != "$CURRENT_SHA" ] \
    && command -v rex_approval_carries_over >/dev/null 2>&1; then
-  _CARRY_OVER=$(rex_approval_carries_over "${CMD_REPO:-}" "$REX_SHA" "$CURRENT_SHA" "${BASE_REF_NAME:-}")
+  # Call in this shell (not only via `$()`) so the GraphQL memo stays for
+  # the CEO check below (#1796).
+  rex_approval_carries_over "${CMD_REPO:-}" "$REX_SHA" "$CURRENT_SHA" "${BASE_REF_NAME:-}" >/dev/null
+  _CARRY_OVER="${_REX_CARRY_LAST:-unknown}"
+fi
+if [ "$_CARRY_OVER" = "timeout" ]; then
+  # apexyard_gh already printed the BLOCKED timeout line (#1796).
+  exit 2
 fi
 if [ -n "$REX_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$REX_SHA" != "$CURRENT_SHA" ] \
    && [ "$_CARRY_OVER" != "true" ]; then
@@ -791,7 +803,14 @@ fi
 _CEO_CARRY_OVER="false"
 if [ -n "$CEO_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$CEO_SHA" != "$CURRENT_SHA" ] \
    && command -v rex_approval_carries_over >/dev/null 2>&1; then
-  _CEO_CARRY_OVER=$(rex_approval_carries_over "${CMD_REPO:-}" "$CEO_SHA" "$CURRENT_SHA" "${BASE_REF_NAME:-}")
+  # Same process as the Rex walk — reuses the memoised chain when the head
+  # and base match (#1796).
+  rex_approval_carries_over "${CMD_REPO:-}" "$CEO_SHA" "$CURRENT_SHA" "${BASE_REF_NAME:-}" >/dev/null
+  _CEO_CARRY_OVER="${_REX_CARRY_LAST:-unknown}"
+fi
+if [ "$_CEO_CARRY_OVER" = "timeout" ]; then
+  # apexyard_gh already printed the BLOCKED timeout line (#1796).
+  exit 2
 fi
 if [ -n "$CEO_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$CEO_SHA" != "$CURRENT_SHA" ] \
    && [ "$_CEO_CARRY_OVER" != "true" ]; then

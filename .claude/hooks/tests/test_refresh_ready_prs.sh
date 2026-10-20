@@ -4,7 +4,11 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/../../.." && pwd)
 cd "$root"
 workflow=.github/workflows/refresh-ready-prs.yml
-cmp "$workflow" golden-paths/pipelines/refresh-ready-prs.yml
+# The fork workflow is manual-only (#1814) and the adopter template keeps its
+# triggers. The job logic must stay identical, so compare from "jobs:" on and
+# ignore the fork-only job timeout line.
+cmp <(sed -n '/^jobs:/,$p' "$workflow" | grep -v '^    timeout-minutes:') \
+  <(sed -n '/^jobs:/,$p' golden-paths/pipelines/refresh-ready-prs.yml | grep -v '^    timeout-minutes:')
 for file in "$workflow" golden-paths/pipelines/refresh-ready-prs.yml; do
   grep -Fq 'pr.head.repo.id === pr.base.repo?.id' "$file"
   [[ $(grep -Fc 'if (!sameRepo(pr)) {' "$file") -eq 2 ]]
@@ -27,8 +31,7 @@ const fs = require('fs');
 const assert = require('assert/strict');
 const workflow = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 assert.deepEqual(workflow.permissions, { 'pull-requests': 'write', contents: 'read' });
-assert.deepEqual(workflow.on.push.branches, ['dev', 'main']);
-assert.deepEqual(workflow.on.pull_request.types, ['synchronize']);
+assert.deepEqual(Object.keys(workflow.on).sort(), ['workflow_dispatch']);
 assert.equal(workflow.env.INTEGRATION_BRANCHES, 'dev');
 const step = workflow.jobs.refresh.steps[0];
 assert.equal(step.with['github-token'], '${{ secrets.APEXYARD_BOT_TOKEN || github.token }}');

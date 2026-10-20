@@ -25,7 +25,7 @@ Chosen: **scrub only the narrow merge-specific command list and retain a raw fal
 - Every segment must start with a literal `grep`, `egrep`, `fgrep`, `cat`, `echo`, `jq`, `head`, `tail`, or `wc` command word. `printf` is excluded: `printf -v` into an array element evaluates the subscript, which can run a command substitution.
 - The parser checks each segment across separators and newlines. It never searches whole lines for an apparent first word.
 - Any other command word preserves the entire raw command, including `gh`, `glab`, `git`, `tracker_pr_merge`, `rg`, `sort`, `xargs`, `find`, and shells.
-- Quoted arguments and confirmed heredoc bodies are data only after every command word passes this check.
+- Quoted arguments, literal echo arguments, and confirmed heredoc bodies are data only after every command word passes this check.
 - Uncertain syntax, substitutions, incomplete input, and parser failures preserve the raw scan. JSON parsing failures also use the raw scan.
 
 The merge scrubber lives in `_lib-extract-pr.sh`. Merge detection does not source `_lib-command-scrub.sh` or use its general allowlist. Non-merge consumers retain that library and its existing behavior.
@@ -44,7 +44,22 @@ AgDR-0204 extends the raw fallback for unquoted `~[`, startup and `.git/hooks/` 
 
 ## Known limits
 
-- A merge phrase split with quotes can evade the contiguous text match after scrubbing blanks each quoted span.
+- The matcher blocks redirections between merge phrase words at command position, including `&>`, `&>>`, and spaced `>&` targets.
+- It joins quoted spans within phrase words and matches the host name after its last slash.
+- Last-segment host rule: a quoted expansion before the last slash keeps the literal last path segment as the host. An unquoted expansion keeps the host opaque. An unquoted glob in the host word also keeps the host opaque, even when the glob leaves a literal last segment.
+- Command position: the first word of a command, after assignments and the words `env`, `command`, `exec`, `builtin`, `time`, `nohup`, `!`, and the control words. Any other first word is a non-host prefix.
+- At command position, a phrase window needs at least one literal phrase word. A window of only opaque phrase words matches only when a bare PR number follows it.
+- Behind a non-host prefix, including a wrapper with its own options, the host word or the subcommand word must be literal. A literal verb word alone does not match, and a bare PR number does not confirm a window of only opaque words. This keeps ordinary argument lists clear. Host options on the merge host still make the target unresolved (#1812).
+- Unknown expansions, escapes, brace expressions, and globs in a phrase word that still leaves a literal peer word make a matching merge target unresolved. All four gates block it.
+- Ordinary variable arguments do not start a merge phrase.
+- Nested scan queue: the body of a command substitution, a backtick substitution, or a process substitution in a command word goes into the nested phrase scan. When a shell, eval, or source word appears in the command, each word that holds a space or a tab also goes into it. A redirect target or a here-string word goes into it only in that case. The scan never evaluates shell text.
+- Open class, owned by #1824: a command substitution in a redirect target or a here-string word, in a command with no shell, eval, or source word. The scan reads that word as data.
+- Open class, owned by #1824: a substitution body that holds a closing parenthesis inside quotes or as a `case` pattern. The body scan ends at that parenthesis, so the rest of the body is not scanned as a command.
+- Open class: at command position, a window of only opaque phrase words with no bare PR number after it stays clear. This includes the form with no PR argument.
+- Open class: behind a non-host prefix, a window whose host word and subcommand word are both opaque stays clear.
+- Commands over 120,000 characters and scanner failures block with “could not scan the command”. The unresolved-target helper also fails closed on any split-scan status other than clear.
+- Nested scans have limits of three layers, 100 queued words, and 4,096 characters per word. Exceeding these limits blocks with that message.
+- The redirect-target guard checks file targets after bash combined-output and zsh clobber operators. Descriptor duplication and closure remain data.
 - A two-step write-then-run can hide a merge: one turn writes merge text to an ordinary file, and a later turn runs that file.
 - A grep option name padded with more than 48 characters of empty quote pairs, before or inside the name, is not recognised (AgDR-0204 reads a fixed window so the check stays linear).
 - A glob such as `?-filter=` expands to an option name only when a matching file exists. The check does not read the file system, so it does not see this.
@@ -52,6 +67,38 @@ AgDR-0204 extends the raw fallback for unquoted `~[`, startup and `.git/hooks/` 
 Forge controls remain authoritative for these limits.
 
 ## Architecture evolution
+
+### #1803 detect split phrases before target extraction
+
+The bounded data view now has an additional phrase scan.
+It removes intervening redirections and joins quoted word spans without executing shell input.
+Unknown shell constructs match unknown word spans at command position.
+Host options can precede or separate the phrase words (#1812).
+The scan treats each detected split phrase as an unresolved target.
+This prevents a split call from using metadata or approvals for another call.
+Scanner failures use a separate scan-availability error.
+The dollar-sign lookahead reads a fixed 70-character window.
+Cheap literal detectors precede the split scan.
+Gates reuse their raw scan when the target check has the same data view.
+A joined or scrubbed view requires a new scan.
+Any split-scan status other than clear fails closed in the unresolved-target check.
+Each gate requires the scanner function before it reads a command.
+
+Round 2 (#1807 review): a quoted expansion before the last slash keeps the literal last segment as the host; an unquoted expansion stays opaque.
+A non-host prefix does not end the search: a later window still matches when at least one phrase word is literal.
+Command-substitution and process-substitution bodies join the nested scan queue.
+A window with no literal phrase word stays clear so ordinary three-variable commands do not false-positive.
+
+Round 4 (#1807 review): a bare PR number confirms a window of only opaque words only at command position.
+Behind a non-host prefix, the host word or the subcommand word must be literal.
+This stops ordinary argument lists, such as a script with three quoted arguments and a number, from matching.
+The words `builtin`, `time`, `nohup`, and `!` keep the next word at command position.
+The redirect-target and here-string contexts and the quoted-parenthesis body limit stay open under #1824.
+
+The redirect-target guard now checks combined-output file targets and zsh clobber targets.
+Descriptor duplication and closure retain their existing data behavior.
+The two-step write-then-run limit remains.
+The matcher remains a bounded text check, not a shell evaluator.
 
 ### #1507 raw fallbacks for three execution shapes
 
@@ -100,6 +147,8 @@ zsh uses `typeset -g +x`, which leaves the same empty unexported names.
 - Issue #1507
 - Issue #1665
 - `test_merge_command_data.sh`
+- `test_merge_split_phrase.sh`
+- `test_merge_split_rework.sh`
 - `test_merge_gate_library_functions.sh`
 - `test_merge_known_limits.sh`
 - `test_command_scrub_must_block.sh`

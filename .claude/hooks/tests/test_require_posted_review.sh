@@ -75,6 +75,7 @@ make_sandbox() {
   cp "$LIB_MARKERS" "$sb/.claude/hooks/_lib-review-markers.sh"
   cp "$LIB_TRACKER" "$sb/.claude/hooks/_lib-tracker.sh"
   cp "$LIB_BEHIND"  "$sb/.claude/hooks/_lib-merge-behind.sh"
+  cp "$SRC_ROOT/.claude/hooks/_lib-gh-timeout.sh" "$sb/.claude/hooks/_lib-gh-timeout.sh"
   [ -f "$LIB_CONFIG" ] && cp "$LIB_CONFIG" "$sb/.claude/hooks/_lib-read-config.sh"
   [ -f "$SRC_ROOT/.claude/project-config.defaults.json" ] && \
     cp "$SRC_ROOT/.claude/project-config.defaults.json" "$sb/.claude/project-config.defaults.json"
@@ -279,6 +280,42 @@ m2() {
   rm -rf "$sb"
 }
 m2
+
+# #1809 Hakim A2 — tracker_review_at_sha must use the per-call gh limit.
+# A stalled reviews API returns rc=2 (fail closed), not hang until the
+# dispatcher timeout. Fail-before: bare `gh` with no limit hung for 120 s.
+a2_timeout() {
+  local sb; sb=$(make_sandbox); set_flag "$sb" true
+  cat > "$sb/bin/gh" <<'EOF'
+#!/bin/bash
+# Stall forever — apexyard_gh must end this. exec so `$()` does not wait
+# on a leftover sleep child (#1796 suite-cap note).
+exec sleep 120
+EOF
+  chmod +x "$sb/bin/gh"
+  local t0 t1 rc out
+  t0=$(date +%s)
+  out=$(cd "$sb" && PATH="$sb/bin:$PATH" \
+    APEXYARD_GH_CALL_TIMEOUT=1 APEXYARD_GH_FORCE_WATCHDOG=1 \
+    bash -c '
+      . .claude/hooks/_lib-read-config.sh 2>/dev/null
+      . .claude/hooks/_lib-tracker.sh
+      tracker_review_at_sha "'"$TEST_REPO"'" 42 "'"$HEAD_SHA"'"
+      echo rc=$?
+    ' 2>"$sb/err")
+  t1=$(date +%s)
+  rc=$(printf '%s' "$out" | sed -n 's/^rc=//p' | tail -1)
+  if [ "$rc" = "2" ] \
+     && [ $((t1 - t0)) -lt 10 ] \
+     && grep -q 'forge call timed out' "$sb/err"; then
+    echo "PASS [A2: stalled reviews API -> rc=2 within limit + BLOCKED message]"; PASS=$((PASS+1))
+  else
+    echo "FAIL [A2: stalled reviews timeout]: out=[$out] elapsed=$((t1 - t0))s err=$(head -1 "$sb/err")" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="$FAILED_CASES A2-timeout"
+  fi
+  rm -rf "$sb"
+}
+a2_timeout
 
 # Sourcing a truncated/corrupt lib SUCCEEDS but leaves the function undefined.
 # Without an explicit check, `tracker_review_at_sha` would be a command-not-found

@@ -996,6 +996,11 @@ EOF_REVIEW_MARKERS
     fi
   fi
   if [ -n "$MARKER" ]; then
+    # Advisory only (AgDR-0257 / #1533): warn when the marker belongs to
+    # another session or another branch. Never changes this exit code.
+    if command -v active_ticket_warn_if_mismatch >/dev/null 2>&1; then
+      active_ticket_warn_if_mismatch "$MARKER" "${AT_TREE:-}" "$OPS_ROOT" || true
+    fi
     return 0
   fi
 

@@ -36,7 +36,7 @@ See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the ful
 
 ## Running tests in a scratch clone
 
-Rex may need to run tests or attack probes against the PR head, outside this repository's working tree. Use a plain `git clone` into a literal scratch path. Or export with `git archive <ref> | tar -x -C <scratchpad>` into this session's scratchpad. A sanctioned review needs no ticket for that write. The agent file states the path rule. If a hook blocks a command, stop that step. Report the exact command, the hook, and its message to the orchestrator. Never rephrase, split, encode, or disguise a command to get past a hook. Full pattern: `.claude/agents/code-reviewer.md` § "Running tests in a scratch clone".
+For tests and probes, use the scratch-clone pattern in `.claude/agents/code-reviewer.md` § "Running tests in a scratch clone". If a hook blocks a command, stop and report the command, hook, and message. Never disguise a command to bypass a hook.
 
 The reviewer mutation lock blocks `git clone`, `git fetch`, and `git checkout` while the active-reviewer marker exists. Prepare the scratch clone and fetch the PR head before step 0 arms the marker.
 
@@ -53,9 +53,10 @@ Retain its required sections and give each checklist result a reason or evidence
 Before submission, check the report against that format and repair omissions.
 Do not write a process transcript.
 
-### CI order: wait for green CI first (me2resh/apexyard#1625)
+### CI order and depth
 
-The orchestrator waits for green CI with a Monitor, then spawns Rex. Do not spawn Rex while CI is still running. Rex checks CI once and never waits. A review agent that runs `gh pr checks --watch`, `gh run watch`, or `sleep` of 60 seconds or more is blocked by `block-reviewer-ci-wait.sh`.
+Wait for green CI with a Monitor before spawning Rex. Rex checks CI once and never waits.
+Before each spawn or resume, follow `docs/skills/code-review-depth.md`. Run the tier script from the trusted base at the reviewed SHA. Check the full range. Take the stricter result with Rex. Missing evidence means Full. Apply the 300-token hand-back cap and TTL-specific resume window. A fresh Rex reads earlier findings from the posted review ID and commit range. Never use an orchestrator summary as evidence.
 
 ### After a base-branch refresh: run the carry-over check first (me2resh/apexyard#1638)
 

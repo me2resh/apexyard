@@ -1,6 +1,15 @@
 #!/bin/bash
 # shellcheck source=/dev/null
 . "${BASH_SOURCE[0]%/*}/_lib-awk-fallback.sh"
+# Per-call forge time limit for resolve_* helpers (#1796).
+if [ -z "${APEXYARD_GH_TIMEOUT_LOADED:-}" ] && [ -r "${BASH_SOURCE[0]%/*}/_lib-gh-timeout.sh" ]; then
+  # shellcheck source=/dev/null
+  . "${BASH_SOURCE[0]%/*}/_lib-gh-timeout.sh"
+  APEXYARD_GH_TIMEOUT_LOADED=1
+fi
+if ! command -v apexyard_gh >/dev/null 2>&1; then
+  apexyard_gh() { gh "$@"; }
+fi
 # Shared PR and repo extraction for merge-gate hooks. The hooks are:
 # block-unreviewed-merge.sh, require-design-review-for-ui.sh,
 # require-architecture-review.sh, and block-merge-on-red-ci.sh.
@@ -405,6 +414,13 @@ _merge_scrub_once() {
              word == "head" || word == "tail" || word == "wc" || \
              word == "true" || word == "false"
     }
+    # Echo arguments are data only after every segment passes the scrub.
+    function remember_echo() {
+      if (echo_start) {
+        np++; ps[np] = echo_start; pl[np] = length(out) - echo_start + 1
+        echo_start = 0
+      }
+    }
     function is_grep_family(word) {
       return word == "grep" || word == "egrep" || word == "fgrep"
     }
@@ -492,6 +508,7 @@ _merge_scrub_once() {
         c = substr(s, pos, 1); nx = substr(s, pos + 1, 1)
         if (c == " " || c == "\t") { out = out c; pos++; continue }
         if (c == "\n") {
+          remember_echo()
           out = out c; pos++; first = 1; cmdword = ""
           # Bodies start after the opener line, in delimiter order. Inspect
           # every command on the opener line before discarding any body.
@@ -514,7 +531,9 @@ _merge_scrub_once() {
           pending = 0
           continue
         }
-        if (c ~ /[;|&]/) { out = out c; pos++; first = 1; cmdword = ""; continue }
+        # Combined-output operators do not start a new command.
+        if (c == "&" && nx == ">") { out = out c; pos++; c = ">"; nx = substr(s, pos + 1, 1) }
+        if (c ~ /[;|&]/) { remember_echo(); out = out c; pos++; first = 1; cmdword = ""; continue }
         # No normalization of command words: quoted, escaped, assigned,
         # expanded, reserved and path-qualified words all retain raw text.
         if (first) {
@@ -525,7 +544,9 @@ _merge_scrub_once() {
           if (!allowed(word) || (after != "" && after !~ /[ \t\n;|&<>]/)) {
             bad = 1; break
           }
-          out = out word; first = 0; cmdword = word; seen_pat = 0; take_next = 0; continue
+          out = out word; first = 0; cmdword = word; seen_pat = 0; take_next = 0
+          if (word == "echo") echo_start = length(out) + 1
+          continue
         }
         # Unquoted zsh dynamic named directory (~[...]) can run code.
         # newbad keeps the dev scrub and adds the raw text (see the end).
@@ -599,7 +620,8 @@ _merge_scrub_once() {
         }
         # Do not mistake the ampersand in a descriptor redirect for a new
         # command. Process substitutions hit the raw fallback above.
-        if ((c == ">" || c == "<") && nx == "&") {
+        if ((c == "<" && nx == "&") || \
+            (c == ">" && nx == "&" && substr(s, pos + 2, 1) ~ /[0-9-]/)) {
           out = out c nx; pos += 2; continue
         }
         # Output redirects to shell startup files or .git/hooks add the raw
@@ -611,7 +633,7 @@ _merge_scrub_once() {
         if (c == ">") {
           start = pos
           pos++
-          if (substr(s, pos, 1) == ">" || substr(s, pos, 1) == "|") pos++
+          while (pos <= n && substr(s, pos, 1) ~ /[>|!&]/) pos++
           while (pos <= n && substr(s, pos, 1) ~ /[ \t]/) pos++
           lead = (pos <= n) ? substr(s, pos, 1) : ""
           if (read_merge_word()) {
@@ -620,6 +642,12 @@ _merge_scrub_once() {
             newbad = 1
           }
           pos = start
+          if (nx == "&") {
+            pos++
+            while (pos <= n && substr(s, pos, 1) ~ /[>|!&]/) pos++
+            out = out substr(s, start, pos - start)
+            continue
+          }
         }
         # Grep-family options that can run a program on some hosts add the
         # raw text. A word that starts with a quote is handled in the quote branch.
@@ -677,6 +705,7 @@ _merge_scrub_once() {
         }
         out = out c; pos++
       }
+      remember_echo()
       if (pending) bad = 1
       # A newbad shape can execute the data, so the gates must see the raw
       # text. They must also still see the dev scrubbed text, where a merge
@@ -1016,9 +1045,241 @@ _has_opaque_merge_wrapper() {
 
 # Raw scan for the unparseable JSON fallback. Do not scrub the encoded payload:
 # JSON quotes are transport syntax, not shell argument boundaries.
-# Scan both the original text and backslash-newline-joined text (#1564).
-# A backslash at the end of a comment line does not continue that comment,
-# so the original scan must remain available for every detector.
+# Scan the bounded data view without evaluating shell input. A changed
+# phrase is opaque: its target must never borrow another call or checkout.
+# Return 0 for a split, 1 for clear text, and 2 for scan failure.
+_has_split_merge_phrase() {
+  local result
+  if [ "${#1}" -gt 120000 ]; then return 2; fi
+  result=$(MERGE_SPLIT_INPUT="$1" awk '
+    function reset() { stage = 0; active = 1; redirected = 0; option_value = 0; api = 0; phrase_lit = cmd_lit = prefixed = 0 }
+    # Start a phrase window at a host word. Return 1 when the word can be a host.
+    function open_window(value,    host) {
+      host = value; sub(/^.*\//, "", host)
+      # Unquoted expansion can word-split into the host. Keep it opaque.
+      # A quoted expansion before a literal last segment keeps that segment.
+      if (opaque_unquoted) host = ".*"
+      if ("gh" ~ ("^" host "$") || "glab" ~ ("^" host "$")) {
+        stage = 1; cli = host; altered = changed || host != value
+        if (!opaque_word) phrase_lit = cmd_lit = 1
+        return 1
+      }
+      return 0
+    }
+    # A broken phrase: the current word starts a new window behind a prefix.
+    function restart_window(value) {
+      stage = 0; phrase_lit = cmd_lit = 0; altered = 0; option_value = 0; prefixed = 1
+      open_window(value)
+    }
+    function clear_word() { w = raw = ""; changed = opaque_word = opaque_unquoted = 0 }
+    function queue_body(body) {
+      if (body == "") return
+      if (depth >= 3 || np >= 100) scan_error = 1
+      else { pending[++np] = body; levels[np] = depth + 1 }
+    }
+    function consume_group(endchar,    level,t,start) {
+      start = i + 1; level = 1
+      while (i < n && level) {
+        t = substr(s, ++i, 1)
+        if (endchar == "`") {
+          if (t == "`") level = 0
+          continue
+        }
+        if ((endchar == ")" && t == "(") || (endchar == "}" && t == "{")) level++
+        if (t == endchar) level--
+      }
+      return substr(s, start, i - start)
+    }
+    function finish(    value) {
+      if (w == "") {
+        if (changed && stage > 0) altered = 1
+        clear_word(); return
+      }
+      # Shell arguments can contain another command. Never evaluate them.
+      if (nested && raw ~ /[ \t]/) {
+        if (depth >= 3 || np >= 100) scan_error = 1
+        else { pending[++np] = raw; levels[np] = depth + 1 }
+      }
+      value = w
+      if (api && value ~ /(pulls|merge_requests)\/[0-9]+\/merge/ && changed) hit = 1
+      if (active && stage == 0) {
+        # These words keep the next word at command position.
+        if (value ~ /^[A-Za-z_][A-Za-z0-9_]*=/ || value == "env" || value == "command" || value == "exec" || value == "builtin" || value == "time" || value == "nohup" || value == "!" || value == "do" || value == "then" || value == "if" || value == "elif" || value == "else" || value == "while" || value == "until") {
+          clear_word(); return
+        }
+        if (!open_window(value)) {
+          # Non-host prefix: keep looking for a later phrase window.
+          prefixed = 1
+          clear_word(); return
+        }
+      } else if (active) {
+        if (opaque_word) value = ".*"
+        if (stage == 1 && value == "api") api = 1
+        if (option_value) option_value = 0
+        else if (value ~ /^-/) {
+          if (value == "-R" || value == "--repo" || value == "--hostname" || value == "--host") option_value = 1
+          altered = 1
+        } else if (stage == 1 && \
+            ((("gh" ~ ("^" cli "$")) && ("pr" ~ ("^" value "$"))) || \
+             (("glab" ~ ("^" cli "$")) && ("mr" ~ ("^" value "$"))))) {
+          stage = 2; altered = altered || changed
+          if (!opaque_word) phrase_lit = cmd_lit = 1
+        } else if (stage == 2 && "merge" ~ ("^" value "$")) {
+          if (!opaque_word) phrase_lit = 1
+          # At command position, any literal phrase word confirms a changed
+          # phrase. Behind a non-host prefix, an ordinary argument list can
+          # fill the window, so the host word or the subcommand word must be
+          # literal. At command position, a window with no literal phrase
+          # word stays clear unless a later bare PR number confirms it.
+          if (!(altered || changed || redirected || depth > 0)) active = 0
+          else if (prefixed ? cmd_lit : phrase_lit) { hit = 1; active = 0 }
+          else if (!prefixed && !phrase_lit) stage = 3
+          else restart_window(value)
+        } else if (stage == 3) {
+          if (value ~ /^[0-9]+$/ && !opaque_word) { hit = 1; active = 0 }
+          else restart_window(value)
+        } else if (api) {
+          # Keep api set so a later path word can still match.
+          active = 0
+        } else {
+          # Broken phrase: treat the current word as a fresh prefix window.
+          restart_window(value)
+        }
+      }
+      clear_word()
+    }
+    function mark_opaque() {
+      if (length(w) < 128) w = w ".*"
+      changed = opaque_word = 1
+      if (q == "") opaque_unquoted = 1
+    }
+    function unknown(endchar,    level,t) {
+      mark_opaque()
+      if (endchar == "") return
+      level = 1
+      while (i < n && level) {
+        t = substr(s, ++i, 1)
+        if ((endchar == ")" && t == "(") || (endchar == "}" && t == "{")) level++
+        if (t == endchar) level--
+      }
+    }
+    function scan(text,    c,t,nx,rq,rest,body) {
+      s = text; n = length(s); q = w = raw = ""; changed = opaque_word = opaque_unquoted = 0; reset()
+      for (i = 1; i <= n; i++) {
+        c = substr(s, i, 1); nx = substr(s, i + 1, 1)
+        if (c == sq || c == dq) {
+          if (q == c) { q = ""; changed = 1; continue }
+          if (q == "") { q = c; changed = 1; continue }
+        }
+        if (q == "" && c == "#" && (i == 1 || substr(s, i - 1, 1) ~ /[ \t\n;|&()]/)) {
+          finish()
+          while (i < n && substr(s, i + 1, 1) != "\n") i++
+          continue
+        }
+        if (q != sq && c == bs) {
+          unknown(""); i++
+          if (length(raw) < 4094) raw = raw bs substr(s,i,1)
+          else if (nested) scan_error = 1
+          continue
+        }
+        if (q != sq && c == "$") {
+          rest = substr(s, i + 1, 70)
+          if (nx == "{") { i++; unknown("}") }
+          else if (nx == "(") {
+            mark_opaque(); i++
+            body = consume_group(")")
+            queue_body(body)
+          } else if (nx == sq || nx == dq) {
+            i++; unknown(nx)
+          } else {
+            unknown("")
+            if (match(rest, /^[A-Za-z_][A-Za-z0-9_]*/)) {
+              i += RLENGTH
+              while (i < n && substr(s, i + 1, 1) ~ /[A-Za-z0-9_]/) i++
+            }
+            else if (nx ~ /[0-9@*#?$!_-]/) i++
+          }
+          continue
+        }
+        if (q != sq && c == "`") {
+          mark_opaque()
+          body = consume_group("`")
+          queue_body(body)
+          continue
+        }
+        if (q == "" && c == "{" && nx ~ /[ \t\n]/ && w == "") { finish(); reset(); continue }
+        if (q == "" && c == "{") { unknown("}"); continue }
+        # A lone "[" word is the test command, not a glob character class.
+        if (q == "" && c ~ /[*?[]/ && !(c == "[" && w == "" && nx ~ /[ \t\n;|&()<>]/)) {
+          unknown(c == "[" ? "]" : ""); continue
+        }
+        # Process substitution bodies are nested command sources.
+        if (q == "" && (c == "<" || c == ">") && nx == "(") {
+          finish()
+          i++
+          body = consume_group(")")
+          queue_body(body)
+          continue
+        }
+        if (q == "" && (c ~ /[<>]/ || (c == "&" && nx == ">"))) {
+          if (w ~ /^[0-9]+$/) w = ""
+          finish(); redirected = 1
+          while (i < n && substr(s, i + 1, 1) ~ /[<>|!&]/) i++
+          while (i < n && substr(s, i + 1, 1) ~ /[ \t]/) i++
+          rq = ""; target = ""
+          while (i < n) {
+            t = substr(s, i + 1, 1)
+            if (rq == "" && t ~ /[ \t\n;|&<>]/) break
+            i++
+            if (length(target) < 4096) target = target t
+            else if (nested) scan_error = 1
+            if (t == sq || t == dq) {
+              if (rq == t) rq = ""
+              else if (rq == "") rq = t
+            }
+          }
+          # A shell here-string is another command source.
+          if (nested && target != "") {
+            sub(/^[\047\042]/, "", target); sub(/[\047\042]$/, "", target)
+            queue_body(target)
+          }
+          continue
+        }
+        if (q == "" && c ~ /[ \t\n;|&()]/) {
+          finish()
+          if (c ~ /[\n;|&()]/) reset()
+          continue
+        }
+        if (length(raw) < 4096) raw = raw c
+        else if (nested) scan_error = 1
+        if (length(w) < 128) {
+          if (c ~ /[A-Za-z0-9_\/=-]/) w = w c
+          else if (c == ".") w = w "\\."
+          else w = w "!"
+        }
+      }
+      finish()
+    }
+    BEGIN {
+      sq = sprintf("%c",39); dq = sprintf("%c",34); bs = sprintf("%c",92)
+      original = ENVIRON["MERGE_SPLIT_INPUT"]
+      nested = original ~ /(^|[ \t;|&\/])(bash|sh|zsh|eval|source)([ \t]|$)/
+      scan(original)
+      for (j = 1; j <= np && j <= 100 && !hit; j++) {
+        depth = levels[j]; scan(pending[j])
+      }
+      print scan_error ? "unavailable" : (hit ? "split" : "clear")
+    }
+  ' 2>/dev/null) || return 2
+  case "$result" in
+    split) return 0 ;;
+    clear) return 1 ;;
+    *) return 2 ;;
+  esac
+}
+
+# Scan both original and continuation-joined text. A comment must not hide
+# a command by joining its final backslash to the next line (#1564).
 is_merge_command_raw() {
   local cmd joined
   joined=$(_join_shell_continuations "$1")
@@ -1056,6 +1317,9 @@ is_merge_command_raw() {
     if echo "$cmd" | grep -qE '\btracker_pr_merge\b'; then
       return 0
     fi
+    local scan_status
+    _has_split_merge_phrase "$cmd"; scan_status=$?
+    if [ "$scan_status" -ne 1 ]; then return 0; fi
   done
   return 1
 }
@@ -1210,6 +1474,13 @@ extract_pr_number() {
 
   # 3. Last resort: ask the forge which PR/MR the current branch points at.
   #    Forge-aware (#764): a glab command falls back to `glab mr view`.
+  #    The text-only mode (second argument `text-only`) skips this step.
+  #    The dispatcher prefetch uses it, so it never calls the forge to
+  #    find the key (AgDR-0256 D1). The gates keep the default mode.
+  if [ -z "$pr" ] && [ "${2:-}" = text-only ]; then
+    echo ""
+    return 0
+  fi
   if [ -z "$pr" ]; then
     if _is_argv_only_merge_command "$cmd"; then
       echo ""
@@ -1252,6 +1523,17 @@ merge_command_uses_variable() {
   # Use the same bounded data view as is_merge_command. Uncertain or
   # executable commands keep the raw text, so variable targets still block.
   cmd=$(_scrub_merge_command "$joined") || cmd="$joined"
+  # Gates can reuse their raw scan only when the data view is identical.
+  # Standalone callers still scan the command here.
+  # Any status other than clear (1) is unresolved: fail closed (A1 / #1803).
+  if [ "$cmd" = "$1" ] && [ -n "${2:-}" ]; then
+    [ "$2" -eq 1 ] || return 0
+  else
+    local split_st=0
+    _has_split_merge_phrase "$cmd"
+    split_st=$?
+    [ "$split_st" -eq 1 ] || return 0
+  fi
 
   # All four hooks call this check before PR extraction. Three intentionally
   # skip when extraction returns empty, leaving the approval hook to report
@@ -1342,6 +1624,217 @@ merge_command_uses_variable() {
 # On failure the caller should fall back to `git rev-parse HEAD` with a
 # visible warning — better to block a valid merge that the user can retry
 # than silently allow a merge on the wrong SHA.
+# --- PR metadata snapshot readers (AgDR-0256, me2resh/apexyard#1759) ---
+#
+# The dispatcher fetches the PR metadata one time for a merge and exports
+# the trusted values as APEXYARD_PRMETA_* variables. Only the file list is
+# on disk, and its SHA-256 digest is in the environment. These readers give
+# a gate a snapshot value only when every check passes. Any failed check is
+# a miss. A miss makes the caller fetch from the forge, as before. A miss
+# never allows a merge.
+#
+# A reader accepts the snapshot only when APEXYARD_PRMETA_OWNER_PID equals
+# the gate's $PPID. This stops a stale, inherited or forged value from a
+# process that is not the dispatcher. It is a guard against accidental
+# inheritance, not authentication (AgDR-0256 D2 rules 7 to 13).
+#
+# APEXYARD_DEBUG_PRMETA=1 prints one stderr line for each read: hit, or
+# miss and the reason. The line never holds the file list.
+
+# Prints a debug line when APEXYARD_DEBUG_PRMETA=1.
+_prmeta_debug() {
+  if [ "${APEXYARD_DEBUG_PRMETA:-}" = 1 ]; then
+    printf 'prmeta: %s\n' "$*" >&2
+  fi
+  return 0
+}
+
+# Returns 0 when $1 is a valid [HOST/]OWNER/REPO value for a gh call.
+# The CI gate and the dispatcher prefetch use this one check.
+merge_repo_is_valid() {
+  local repo="${1:-}" host="" api_repo=""
+  api_repo="$repo"
+  if [[ "$repo" == */*/* ]]; then
+    host="${repo%%/*}"
+    api_repo="${repo#*/}"
+  fi
+  if [[ ! "$api_repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] ||
+     [[ "$api_repo" == ./* || "$api_repo" == ../* ||
+        "$api_repo" == */. || "$api_repo" == */.. ]] ||
+     { [ -n "$host" ] && [[ ! "$host" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]]; }; then
+    return 1
+  fi
+  return 0
+}
+
+# Reads stdin and prints its SHA-256 digest as 64 lowercase hex characters.
+# Returns 1 when no digest tool is present or the output has a bad shape.
+# The tools are called with `command -p`, so the default PATH is used and
+# a shell function cannot replace them. cksum is not allowed: CRC is not
+# collision-resistant.
+prmeta_sha256() {
+  local out=""
+  if command -p -v shasum >/dev/null 2>&1; then
+    out=$(command -p shasum -a 256 2>/dev/null) || return 1
+    out="${out%% *}"
+  elif command -p -v sha256sum >/dev/null 2>&1; then
+    out=$(command -p sha256sum 2>/dev/null) || return 1
+    out="${out%% *}"
+  elif command -p -v openssl >/dev/null 2>&1; then
+    out=$(command -p openssl dgst -sha256 2>/dev/null) || return 1
+    out="${out##*= }"
+  else
+    return 1
+  fi
+  out=$(printf '%s' "$out" | command -p tr 'A-F' 'a-f') || return 1
+  if [[ ! "$out" =~ ^[0-9a-f]{64}$ ]]; then
+    return 1
+  fi
+  printf '%s\n' "$out"
+}
+
+# Returns 0 when the exported scalars are bound to this gate and to the
+# key <pr> <repo>, and every scalar has a valid shape. Prints the reason
+# for a miss to the debug line.
+_prmeta_scalars_ok() {
+  local pr="${1:-}" repo="${2:-}" what="${3:-}"
+  local owner="${APEXYARD_PRMETA_OWNER_PID:-}" count="${APEXYARD_PRMETA_COUNT:-}"
+  local branch="${APEXYARD_PRMETA_BRANCH:-}" base="${APEXYARD_PRMETA_BASE:-}"
+  if [ -z "$owner" ]; then
+    _prmeta_debug "miss $what (no snapshot)"
+    return 1
+  fi
+  if [ "$owner" != "$PPID" ]; then
+    _prmeta_debug "miss $what (owner pid is not the parent)"
+    return 1
+  fi
+  if [ -z "$pr" ] || [ -z "$repo" ] ||
+     [ "${APEXYARD_PRMETA_PR:-}" != "$pr" ] ||
+     [ "${APEXYARD_PRMETA_REPO:-}" != "$repo" ]; then
+    _prmeta_debug "miss $what (key differs)"
+    return 1
+  fi
+  if [[ ! "${APEXYARD_PRMETA_HEAD:-}" =~ ^[0-9a-f]{40}$ ]]; then
+    _prmeta_debug "miss $what (bad head shape)"
+    return 1
+  fi
+  if [ -z "$branch" ] || [ -z "$base" ] ||
+     [[ "$branch" == *[[:cntrl:]]* ]] || [[ "$base" == *[[:cntrl:]]* ]]; then
+    _prmeta_debug "miss $what (bad branch or base shape)"
+    return 1
+  fi
+  if [[ ! "$count" =~ ^(0|[1-9][0-9]*)$ ]] || [ "${#count}" -gt 4 ] || [ "$count" -gt 3000 ]; then
+    _prmeta_debug "miss $what (bad count shape)"
+    return 1
+  fi
+  return 0
+}
+
+# prmeta_get <field> <pr> <repo>: prints one snapshot scalar and returns 0
+# on a hit. <field> is head, branch, base or count. Returns 1 on a miss.
+prmeta_get() {
+  local field="${1:-}" value=""
+  if ! _prmeta_scalars_ok "${2:-}" "${3:-}" "$field"; then
+    return 1
+  fi
+  case "$field" in
+    head) value="${APEXYARD_PRMETA_HEAD:-}" ;;
+    branch) value="${APEXYARD_PRMETA_BRANCH:-}" ;;
+    base) value="${APEXYARD_PRMETA_BASE:-}" ;;
+    count) value="${APEXYARD_PRMETA_COUNT:-}" ;;
+    *)
+      _prmeta_debug "miss $field (unknown field)"
+      return 1
+      ;;
+  esac
+  _prmeta_debug "hit $field"
+  printf '%s\n' "$value"
+}
+
+# prmeta_file_list <pr> <repo>: prints the snapshot file list and returns 0
+# on a hit. Returns 1 on a miss.
+#
+# The reader reads the file one time, into memory, and uses only the value
+# that it hashed (AgDR-0256 D2 rules 15 to 20). The canonical bytes are
+# `printf '%s\n' "$L"`. The digest and the line count must match the
+# exported values. An empty list is a miss.
+prmeta_file_list() {
+  local pr="${1:-}" repo="${2:-}" dir="${APEXYARD_PRMETA_DIR:-}"
+  local want="${APEXYARD_PRMETA_FILES_SHA256:-}" count="${APEXYARD_PRMETA_COUNT:-}"
+  local list="" sum="" lines="" mode="" LC_ALL=C
+  if ! _prmeta_scalars_ok "$pr" "$repo" files; then
+    return 1
+  fi
+  if [ "$count" = 0 ]; then
+    _prmeta_debug "miss files (count is 0)"
+    return 1
+  fi
+  if [ -z "$dir" ] || [[ ! "$want" =~ ^[0-9a-f]{64}$ ]]; then
+    _prmeta_debug "miss files (no file list)"
+    return 1
+  fi
+  if [ ! -d "$dir" ] || [ -L "$dir" ] || [ ! -O "$dir" ]; then
+    _prmeta_debug "miss files (directory is not safe)"
+    return 1
+  fi
+  mode=$(command -p ls -ld "$dir" 2>/dev/null) || mode=""
+  mode="${mode%% *}"
+  case "$mode" in
+    drwx------|drwx------.|drwx------@) ;;
+    *)
+      _prmeta_debug "miss files (directory mode is not 0700)"
+      return 1
+      ;;
+  esac
+  if [ ! -f "$dir/files" ] || [ -L "$dir/files" ]; then
+    _prmeta_debug "miss files (not a regular file)"
+    return 1
+  fi
+  # Read at most 4 MiB + 1 byte. A longer result is a miss. The braces keep
+  # a bash warning about a NUL byte off the gate's stderr.
+  { list=$(command -p head -c 4194305 "$dir/files" 2>/dev/null); } 2>/dev/null || list=""
+  if [ "${#list}" -gt 4194304 ]; then
+    _prmeta_debug "miss files (file is larger than 4 MiB)"
+    return 1
+  fi
+  if [ -z "$list" ]; then
+    _prmeta_debug "miss files (empty list)"
+    return 1
+  fi
+  if ! sum=$(printf '%s\n' "$list" | prmeta_sha256); then
+    _prmeta_debug "miss files (no digest tool)"
+    return 1
+  fi
+  if [ "$sum" != "$want" ]; then
+    _prmeta_debug "miss files (digest differs)"
+    return 1
+  fi
+  lines=$(printf '%s\n' "$list" | command -p wc -l | command -p tr -d ' ')
+  if [ "$lines" != "$count" ]; then
+    _prmeta_debug "miss files (line count differs)"
+    return 1
+  fi
+  _prmeta_debug "hit files"
+  printf '%s\n' "$list"
+}
+
+# Echoes the PR's base branch name, or empty on failure. Reads the snapshot
+# first. On a miss it calls `gh pr view --json baseRefName`, as the review
+# gate did inline before AgDR-0256. Empty <repo> gives empty, as before.
+resolve_pr_base_ref() {
+  local pr_number="${1:-}" cmd_repo="${2:-}" base=""
+  if [ -z "$pr_number" ] || [ -z "$cmd_repo" ]; then
+    echo ""
+    return
+  fi
+  if base=$(prmeta_get base "$pr_number" "$cmd_repo"); then
+    echo "$base"
+    return
+  fi
+  base=$(apexyard_gh pr view "$pr_number" --repo "$cmd_repo" --json baseRefName -q '.baseRefName' 2>/dev/null)
+  echo "$base"
+}
+
 resolve_pr_head() {
   local pr_number="$1"
   local cmd_repo="$2"
@@ -1349,6 +1842,12 @@ resolve_pr_head() {
 
   if [ -z "$pr_number" ]; then
     echo ""
+    return
+  fi
+
+  # Snapshot first (AgDR-0256). A miss falls through to the forge call.
+  if sha=$(prmeta_get head "$pr_number" "$cmd_repo"); then
+    echo "$sha"
     return
   fi
 
@@ -1362,9 +1861,9 @@ resolve_pr_head() {
       sha=$(glab mr view "$pr_number" --output json 2>/dev/null | jq -r '.sha // .diff_refs.head_sha // empty' 2>/dev/null)
     fi
   elif [ -n "$cmd_repo" ]; then
-    sha=$(gh pr view "$pr_number" --repo "$cmd_repo" --json headRefOid --jq '.headRefOid' 2>/dev/null)
+    sha=$(apexyard_gh pr view "$pr_number" --repo "$cmd_repo" --json headRefOid --jq '.headRefOid' 2>/dev/null)
   else
-    sha=$(gh pr view "$pr_number" --json headRefOid --jq '.headRefOid' 2>/dev/null)
+    sha=$(apexyard_gh pr view "$pr_number" --json headRefOid --jq '.headRefOid' 2>/dev/null)
   fi
 
   echo "$sha"
@@ -1386,6 +1885,12 @@ resolve_pr_head_branch() {
     return
   fi
 
+  # Snapshot first (AgDR-0256). A miss falls through to the forge call.
+  if branch=$(prmeta_get branch "$pr_number" "$cmd_repo"); then
+    echo "$branch"
+    return
+  fi
+
   if [ "$(_forge_kind_for "$cmd_repo")" = glab ]; then
     if [ -n "$cmd_repo" ]; then
       branch=$(glab mr view "$pr_number" -R "$cmd_repo" --output json 2>/dev/null | jq -r '.source_branch // empty' 2>/dev/null)
@@ -1393,9 +1898,9 @@ resolve_pr_head_branch() {
       branch=$(glab mr view "$pr_number" --output json 2>/dev/null | jq -r '.source_branch // empty' 2>/dev/null)
     fi
   elif [ -n "$cmd_repo" ]; then
-    branch=$(gh pr view "$pr_number" --repo "$cmd_repo" --json headRefName -q '.headRefName' 2>/dev/null)
+    branch=$(apexyard_gh pr view "$pr_number" --repo "$cmd_repo" --json headRefName -q '.headRefName' 2>/dev/null)
   else
-    branch=$(gh pr view "$pr_number" --json headRefName -q '.headRefName' 2>/dev/null)
+    branch=$(apexyard_gh pr view "$pr_number" --json headRefName -q '.headRefName' 2>/dev/null)
   fi
 
   echo "$branch"

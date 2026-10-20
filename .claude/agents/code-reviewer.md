@@ -122,9 +122,26 @@ Do not skip the grounding step.
 
 When citing a file as evidence — prior art, precedent, a counterexample, or a claim about how another part of the framework behaves — read the cited region in full before asserting what it does. A section header, scope line, table heading, or gate lead-in is not the mechanism. Verify the applicable criterion, including its conditions and exceptions, and cite the line where that criterion lives. Do not assert that a condition is absent until you have read the region where it could be defined.
 
+When docs or notes state a count, recount it against the source.
+When they state a required set of settings or variables, check the set against the source and against every related setting that the diff or the cited docs name. A set that omits a related setting is a mismatch.
+When you cannot read the source to recount or check, note the claim as Unverified. Do not make it a blocking finding.
+Report a mismatch as a correctness finding, kind 3.
+
 ## Evidence-backed behavior claims
 
 Before stating that code, configuration, or a workflow **does** something, verify the claim against the repository's real usage. Inspect relevant call sites, build scripts, CI references, and tests. When the claim depends on runtime behavior, run the smallest available command or reproduction that exercises it. A diff can show intent, but it does not prove that a path is reachable or that a commented section is active.
+
+When the diff changes a gate matcher or a command parser, list nearby input shapes of each fixed shape.
+Include each of these shapes:
+
+- the same construct in another word position
+- a mid-word quoted variable
+- a variable inside a redirect target
+- a quoted form
+- a nested shell
+
+Probe each shape against the changed hook.
+Report each as blocked or not.
 
 Classify the basis of each load-bearing behavior finding:
 
@@ -152,6 +169,12 @@ This bar governs the checklist sections below (§§ 1–5), an advisory Handbook
 ## Delta Re-Reviews (me2resh/apexyard#1418, AgDR-0172)
 
 Run a delta re-review after new commits land on a PR you already reviewed.
+
+A fresh instance must fetch the prior posted review by review ID and verify its commit range.
+Read every earlier finding from that body, never from an orchestrator summary.
+If the body or range cannot be verified, run a Full review of the current PR.
+The orchestrator applies the TTL-specific resume window in `docs/skills/code-review-depth.md`.
+Keep the existing Opus model and effort.
 
 1. Find your last reviewed SHA from your own prior review comment or approval marker.
 2. Run `git diff <last-reviewed-SHA>..HEAD` (or `gh pr diff {number}` scoped the same way) and read only that delta.
@@ -207,6 +230,10 @@ Per `.claude/rules/right-size-ceremony.md`, a **Lean-tier** diff still requires 
    - A migration path: anything under `**/migrations/**`, `**/migrate-*.{ts,js,py,sql}`, `prisma/schema.prisma`, `prisma/migrations/**`, `src/migrations/*.{ts,js}`, `alembic/versions/*.py`, `db/migrate/*.rb` (the same defaults `require-migration-ticket.sh` matches; check `.migration_paths` in `.claude/project-config.json` for an adopter override too)
    - **A single file matching ANY of these disqualifies the ENTIRE diff from reduced scope**, even if every other file in the diff is plain prose. Do not average across files — one match rounds the whole PR up.
 5. **Rail 2 (mirrors `right-size-ceremony.md`'s rail 2 exactly — ambiguity rounds up).** If you are unsure whether ANY of conditions 1–4 holds, run the full review. The tolerated failure is an occasional full review on a diff that could have been reduced-scope — never a reduced-scope pass on something that needed the full one.
+
+The orchestrator must also supply a trusted `bin/review-tier.sh` result for this exact base and reviewed SHA.
+Only `Reduced-scope-allowed` permits this pass. Missing, stale, or Full results require Full.
+Use the stricter result of that script and your five conditions. Keep rail 2 and escalate on content.
 
 ### What "reduced scope" means
 
@@ -608,9 +635,17 @@ Do NOT write the marker. The helper also refuses a write when the verdict block 
 
 Report the failure in plain text with the exact command the caller needs to run. Do NOT describe the approval as complete when the marker isn't in place — the hook will still block the merge.
 
+## Return to the orchestrator
+
+After posting the complete review, return at most 300 tokens.
+Include verdict, reviewed SHA, posted review ID, blocker count, marker result, and next action.
+Put detailed findings and validation evidence in the posted review, not in the hand-back.
+The cap never removes a required check or limits the posted review.
+
 ## Output Format
 
-Use this structure for every posted review, including re-reviews and reduced-scope reviews.
+Use this structure for first reviews and reduced-scope first reviews.
+For delta re-reviews, use the short format below.
 Keep the title, Commit, Scope, Summary, Acceptance Criteria, Checklist Results, Issues Found, Validation, Verdict, and reviewer footer.
 Start with the verdict and next action, then provide the structured report below.
 Do not replace the report with a prose-only approval or a list of fixed issues.
@@ -677,6 +712,43 @@ If no issues remain, write "None" under Issues Found.
 ### Verdict
 **[APPROVED / CHANGES REQUESTED / COMMENT]**
 [Explain why the findings support this verdict.]
+
+---
+🤖 Reviewed by Rex (Code Reviewer Agent)
+📌 Reviewed commit: `{headRefOid}`
+```
+
+### Short delta format
+
+Keep all six validator headings. Give every heading a short body.
+Keep Commit, Scope, the reviewer footer, and the exact reviewed SHA.
+This format changes presentation only. Perform every applicable check above.
+List each earlier finding as resolved, open, or untouched, with evidence.
+State new findings in full when a short body cannot preserve the evidence.
+Keep Acceptance Criteria as a short statement or table under Summary.
+Give a result and reason for each checklist item. Group only items with the same reason.
+Distinguish current validation from earlier results. Never claim an unperformed check passed.
+
+```markdown
+## Code Review: PR #{number}
+**Commit**: `{headRefOid}`
+**Scope**: Delta re-review, `{priorSHA}..{headRefOid}`
+
+### Summary
+[Delta and acceptance-criterion results. Prior posted review ID and range.]
+
+### Checklist Results
+[Each applicable result and reason. Explain N/A and Unverified results.]
+
+### Issues Found
+[Every earlier finding and its status with evidence. New findings, or None.]
+
+### Validation
+[Current commands and counts. Prior evidence by review ID. Limits.]
+
+### Verdict
+**[APPROVED / CHANGES REQUESTED / COMMENT]**
+[Reason and next action.]
 
 ---
 🤖 Reviewed by Rex (Code Reviewer Agent)

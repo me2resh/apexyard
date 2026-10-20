@@ -211,23 +211,19 @@ g() {
   GIT_DIR="$repo/gitdir" GIT_WORK_TREE="$repo" git "$@"
 }
 
-# carry_over_in <repo> <old> <new> <base> — invoke rex_approval_carries_over
-# with GIT_DIR/GIT_WORK_TREE set so the function sees a real work tree.
+# carry_over_in <git_repo> <old> <new> <base> <sb_bin> [<forge_slug>]
+# Invoke rex_approval_carries_over with GIT_DIR/GIT_WORK_TREE set so the
+# function sees a real work tree. Default forge slug is acme-org/example.
 carry_over_in() {
   local repo="$1" old="$2" new="$3" base="$4" sb_bin="$5"
+  local forge_slug="${6:-acme-org/example}"
   GIT_DIR="$repo/gitdir" GIT_WORK_TREE="$repo" PATH="$sb_bin:$PATH" \
-    bash -c ". '$LIB'; rex_approval_carries_over acme-org/example '$old' '$new' '$base'"
+    bash -c ". '$LIB'; rex_approval_carries_over '$forge_slug' '$old' '$new' '$base'"
 }
 
-# make_rex_carry_gh_mock <sandbox_dir> <repo_git_dir> [<base_branch_override>]
-# Writes a `gh` shim at <sandbox_dir>/bin/gh that answers BOTH forge calls
-# rex_approval_carries_over makes, by reading real objects out of
-# <repo_git_dir>:
-#   - `... branches/<name> -q .commit.sha` -> that branch's real tip SHA
-#     (via refs/heads/<name> so a tag cannot shadow)
-#   - `... commits/<sha>` (no -q)          -> real parents + tree, as JSON
-# <base_branch_override>, if given, is a branch name or commit SHA that
-# makes the corresponding API lookup fail.
+# make_rex_carry_gh_mock <sandbox_dir> <repo_git_dir> [<unresolvable>]
+# Answers the #1796 GraphQL carry-over fetch (plus legacy REST) from real
+# objects in <repo_git_dir>. refs/heads tip only — a tag cannot shadow.
 make_rex_carry_gh_mock() {
   local sb="$1" repo_dir="$2" unresolvable="${3:-}"
   mkdir -p "$sb/bin"
@@ -235,22 +231,88 @@ make_rex_carry_gh_mock() {
   printf '%s\n' "$unresolvable" > "$sb/mock-unresolvable"
   cat > "$sb/bin/gh" <<'EOF'
 #!/bin/bash
-sb=${0%/bin/gh}
+# Resolve the sandbox from bin/, not from $0's basename — call counters may
+# rename this file to gh-inner while keeping it under bin/.
+sb=$(cd "$(dirname "$0")/.." && pwd)
 IFS= read -r repo_dir < "$sb/mock-repo_dir"
 IFS= read -r unresolvable < "$sb/mock-unresolvable"
 REPO_DIR="$repo_dir"
 UNRESOLVABLE="$unresolvable"
+GD="$REPO_DIR/gitdir"
+WT="$REPO_DIR"
 args="$*"
+
 case "$args" in
+  *"api graphql"*|*"graphql"*)
+    oid=""; qname=""; prev=""
+    for a in "$@"; do
+      case "$prev" in
+        -F|-f)
+          case "$a" in
+            oid=*) oid="${a#oid=}" ;;
+            qname=*) qname="${a#qname=}" ;;
+          esac
+          ;;
+      esac
+      prev="$a"
+    done
+    [ -n "$oid" ] && [ -n "$qname" ] || exit 1
+    ref="${qname#refs/heads/}"
+    if [ -n "$UNRESOLVABLE" ] && { [ "$ref" = "$UNRESOLVABLE" ] || [ "$oid" = "$UNRESOLVABLE" ]; }; then
+      exit 1
+    fi
+    base_tip=$(GIT_DIR="$GD" GIT_WORK_TREE="$WT" git rev-parse "refs/heads/$ref" 2>/dev/null) || exit 1
+    [ -n "$base_tip" ] || exit 1
+    spine=$(mktemp) || exit 1
+    cur="$oid"
+    depth=0
+    while [ "$depth" -lt 10 ]; do
+      if [ -n "$UNRESOLVABLE" ] && [ "$cur" = "$UNRESOLVABLE" ]; then
+        rm -f "$spine"; exit 1
+      fi
+      if ! GIT_DIR="$GD" GIT_WORK_TREE="$WT" git cat-file -e "${cur}^{commit}" 2>/dev/null; then
+        break
+      fi
+      parents=$(GIT_DIR="$GD" GIT_WORK_TREE="$WT" git show -s --format='%P' "$cur")
+      tree=$(GIT_DIR="$GD" GIT_WORK_TREE="$WT" git rev-parse "${cur}^{tree}")
+      p0=$(printf '%s' "$parents" | awk '{print $1}')
+      p1=$(printf '%s' "$parents" | awk '{print $2}')
+      p2=$(printf '%s' "$parents" | awk '{print $3}')
+      ap=""
+      [ -n "$p0" ] && ap="{\"oid\":\"$p0\"}"
+      [ -n "$p1" ] && ap="${ap}${ap:+,}{\"oid\":\"$p1\"}"
+      [ -n "$p2" ] && ap="${ap}${ap:+,}{\"oid\":\"$p2\"}"
+      # Record head-first; reverse later to nest from the tip.
+      printf '%s\t%s\t%s\n' "$cur" "$tree" "$ap" >> "$spine"
+      [ -z "$p0" ] && break
+      cur="$p0"
+      depth=$((depth + 1))
+    done
+    nested="null"
+    # Portable reverse: sed one-liner works on macOS and Linux.
+    while IFS=$'\t' read -r csha ctree cap; do
+      [ -z "$csha" ] && continue
+      if [ "$nested" = "null" ]; then
+        nested=$(printf '{"oid":"%s","tree":{"oid":"%s"},"allParents":{"nodes":[%s]}}' \
+          "$csha" "$ctree" "$cap")
+      else
+        nested=$(printf '{"oid":"%s","tree":{"oid":"%s"},"allParents":{"nodes":[%s]},"firstParent":{"nodes":[%s]}}' \
+          "$csha" "$ctree" "$cap" "$nested")
+      fi
+    done <<SPINE
+$(sed '1!G;h;$!d' "$spine")
+SPINE
+    rm -f "$spine"
+    printf '{"data":{"repository":{"ref":{"target":{"oid":"%s"}},"c0":%s}}}\n' "$base_tip" "$nested"
+    exit 0
+    ;;
   *"/branches/"*)
     ref=$(printf '%s' "$args" | sed -E 's#.*branches/([^ ]+).*#\1#')
-    # Minimal URL-decode for test branch names that contain '/'.
     ref=$(printf '%s' "$ref" | sed 's/%2[Ff]/\//g')
     if [ -n "$UNRESOLVABLE" ] && [ "$ref" = "$UNRESOLVABLE" ]; then
       exit 1
     fi
-    # Fully-qualified heads/ — a tag with the same name must not win.
-    sha=$(GIT_DIR="$REPO_DIR/gitdir" GIT_WORK_TREE="$REPO_DIR" git rev-parse "refs/heads/$ref" 2>/dev/null)
+    sha=$(GIT_DIR="$GD" GIT_WORK_TREE="$WT" git rev-parse "refs/heads/$ref" 2>/dev/null)
     [ -z "$sha" ] && exit 1
     echo "$sha"
     exit 0
@@ -260,11 +322,11 @@ case "$args" in
     if [ -n "$UNRESOLVABLE" ] && [ "$target" = "$UNRESOLVABLE" ]; then
       exit 1
     fi
-    if ! GIT_DIR="$REPO_DIR/gitdir" GIT_WORK_TREE="$REPO_DIR" git cat-file -e "${target}^{commit}" 2>/dev/null; then
+    if ! GIT_DIR="$GD" GIT_WORK_TREE="$WT" git cat-file -e "${target}^{commit}" 2>/dev/null; then
       exit 1
     fi
-    parents=$(GIT_DIR="$REPO_DIR/gitdir" GIT_WORK_TREE="$REPO_DIR" git show -s --format='%P' "$target")
-    tree=$(GIT_DIR="$REPO_DIR/gitdir" GIT_WORK_TREE="$REPO_DIR" git rev-parse "${target}^{tree}")
+    parents=$(GIT_DIR="$GD" GIT_WORK_TREE="$WT" git show -s --format='%P' "$target")
+    tree=$(GIT_DIR="$GD" GIT_WORK_TREE="$WT" git rev-parse "${target}^{tree}")
     p0=$(printf '%s' "$parents" | awk '{print $1}')
     p1=$(printf '%s' "$parents" | awk '{print $2}')
     p2=$(printf '%s' "$parents" | awk '{print $3}')
@@ -742,57 +804,312 @@ POISON
   g "$repo" merge -q --no-ff side-branch -m "merge side into pr"
   NEW_SHA=$(g "$repo" rev-parse HEAD)
   sb=$(mktemp -d)
-  # Custom mock: branches/main -> real branch tip; commits/main -> tag tip
-  # (models the commits/{ref} shadowing the hardened code must not use).
-  mkdir -p "$sb/bin"
-  printf '%s\n' "$repo" > "$sb/mock-repo"
-  printf '%s\n' "$TAG_TIP" > "$sb/mock-TAG_TIP"
-  cat > "$sb/bin/gh" <<'EOF'
-#!/bin/bash
-sb=${0%/bin/gh}
-IFS= read -r repo < "$sb/mock-repo"
-IFS= read -r TAG_TIP < "$sb/mock-TAG_TIP"
-REPO_DIR="$repo"
-args="$*"
-case "$args" in
-  *"/branches/"*)
-    ref=$(printf '%s' "$args" | sed -E 's#.*branches/([^ ]+).*#\1#')
-    ref=$(printf '%s' "$ref" | sed 's/%2[Ff]/\//g')
-    sha=$(GIT_DIR="$REPO_DIR/gitdir" GIT_WORK_TREE="$REPO_DIR" git rev-parse "refs/heads/$ref" 2>/dev/null)
-    [ -z "$sha" ] && exit 1
-    echo "$sha"
-    exit 0
-    ;;
-  *"-q .sha"*|*"commits/main"*)
-    # Deliberate wrong tip — what commits/{ref} would return if the tag won.
-    echo "$TAG_TIP"
-    exit 0
-    ;;
-  *"commits/"*)
-    target=$(printf '%s' "$args" | sed -E 's#.*commits/([^ ]+).*#\1#')
-    if ! GIT_DIR="$REPO_DIR/gitdir" GIT_WORK_TREE="$REPO_DIR" git cat-file -e "${target}^{commit}" 2>/dev/null; then
-      exit 1
-    fi
-    parents=$(GIT_DIR="$REPO_DIR/gitdir" GIT_WORK_TREE="$REPO_DIR" git show -s --format='%P' "$target")
-    tree=$(GIT_DIR="$REPO_DIR/gitdir" GIT_WORK_TREE="$REPO_DIR" git rev-parse "${target}^{tree}")
-    p0=$(printf '%s' "$parents" | awk '{print $1}')
-    p1=$(printf '%s' "$parents" | awk '{print $2}')
-    if [ -n "$p1" ]; then
-      pj="[{\"sha\":\"$p0\"},{\"sha\":\"$p1\"}]"
-    else
-      pj="[{\"sha\":\"$p0\"}]"
-    fi
-    printf '{"sha":"%s","parents":%s,"commit":{"tree":{"sha":"%s"}}}\n' "$target" "$pj" "$tree"
-    exit 0
-    ;;
-  *) exit 1 ;;
-esac
-EOF
-  chmod +x "$sb/bin/gh"
+  # GraphQL uses refs/heads/<base> only (#1796). A tag named "main" must not
+  # change the tip. Fail-before: commits/{ref} that preferred the tag would
+  # resolve TAG_TIP and wrongly allow carry-over.
+  : "${TAG_TIP:?}"
+  make_rex_carry_gh_mock "$sb" "$repo"
   got=$(carry_over_in "$repo" "$OLD_SHA" "$NEW_SHA" "main" "$sb/bin")
   rm -rf "$repo" "$sb"
   [ "$got" = "false" ] && mark_pass "#1456 tag cannot shadow base branch tip -> false" \
-                        || mark_fail "#1456 tag shadowing" "got '$got' (want false — branches endpoint must win over tag)"
+                        || mark_fail "#1456 tag shadowing" "got '$got' (want false — refs/heads tip must win over tag)"
+
+  # -------------------------------------------------------------------------
+  # #1796: one GraphQL call for a multi-step chain; a real mismatch still
+  # blocks. Fail-before: one REST commits/ call per step.
+  # -------------------------------------------------------------------------
+  repo=$(make_git_repo)
+  echo base > "$repo/base.txt"; g "$repo" add base.txt; g "$repo" commit -q -m base
+  g "$repo" checkout -q -b pr-branch
+  echo pr > "$repo/pr.txt"; g "$repo" add pr.txt; g "$repo" commit -q -m "reviewed work"
+  OLD_SHA=$(g "$repo" rev-parse HEAD)
+  for step in 1 2 3 4; do
+    g "$repo" checkout -q main
+    echo "$step" > "$repo/base-$step.txt"
+    g "$repo" add "base-$step.txt"
+    g "$repo" commit -q -m "base step $step"
+    g "$repo" checkout -q pr-branch
+    g "$repo" merge -q --no-ff main -m "base merge $step"
+  done
+  NEW_SHA=$(g "$repo" rev-parse HEAD)
+  sb=$(mktemp -d)
+  make_rex_carry_gh_mock "$sb" "$repo"
+  # Count forge calls: wrap the mock (inner keeps bin/ path for sandbox resolve).
+  mv "$sb/bin/gh" "$sb/bin/gh-inner"
+  cat > "$sb/bin/gh" <<EOF
+#!/bin/bash
+printf '1\n' >> "$sb/gh-calls"
+exec "$sb/bin/gh-inner" "\$@"
+EOF
+  chmod +x "$sb/bin/gh"
+  got=$(carry_over_in "$repo" "$OLD_SHA" "$NEW_SHA" main "$sb/bin")
+  calls=$(wc -l < "$sb/gh-calls" | tr -d ' ')
+  if [ "$got" = "true" ] && [ "$calls" = "1" ]; then
+    mark_pass "#1796 four-step chain uses one forge call -> true"
+  else
+    mark_fail "#1796 one forge call" "got='$got' calls=$calls (want true / 1)"
+  fi
+
+  # Paired mismatch: wrong old SHA still blocks; still one forge call.
+  BAD_OLD=$(g "$repo" rev-parse main)
+  : > "$sb/gh-calls"
+  got=$(carry_over_in "$repo" "$BAD_OLD" "$NEW_SHA" main "$sb/bin")
+  calls=$(wc -l < "$sb/gh-calls" | tr -d ' ')
+  if [ "$got" = "false" ] && [ "$calls" = "1" ]; then
+    mark_pass "#1796 chain shortcut still blocks wrong old SHA -> false (1 call)"
+  else
+    mark_fail "#1796 mismatch pair" "got='$got' calls=$calls (want false / 1)"
+  fi
+  rm -rf "$repo" "$sb"
+
+  # -------------------------------------------------------------------------
+  # #1796: Rex + CEO share one memoised GraphQL result in the same process.
+  # -------------------------------------------------------------------------
+  repo=$(make_git_repo)
+  echo base > "$repo/base.txt"; g "$repo" add base.txt; g "$repo" commit -q -m base
+  g "$repo" checkout -q -b pr-branch
+  echo pr > "$repo/pr.txt"; g "$repo" add pr.txt; g "$repo" commit -q -m "reviewed"
+  OLD_SHA=$(g "$repo" rev-parse HEAD)
+  g "$repo" checkout -q main
+  echo more > "$repo/base2.txt"; g "$repo" add base2.txt; g "$repo" commit -q -m "base moves"
+  g "$repo" checkout -q pr-branch
+  g "$repo" merge -q --no-ff main -m "merge base"
+  NEW_SHA=$(g "$repo" rev-parse HEAD)
+  sb=$(mktemp -d)
+  make_rex_carry_gh_mock "$sb" "$repo"
+  mv "$sb/bin/gh" "$sb/bin/gh-inner"
+  cat > "$sb/bin/gh" <<EOF
+#!/bin/bash
+printf '1\n' >> "$sb/gh-calls"
+exec "$sb/bin/gh-inner" "\$@"
+EOF
+  chmod +x "$sb/bin/gh"
+  # Same shell process (no `$()`): two checks share one memoised GraphQL result.
+  got=$(
+    GIT_DIR="$repo/gitdir" GIT_WORK_TREE="$repo" PATH="$sb/bin:$PATH" \
+      bash -c "
+        . '$LIB'
+        rex_approval_carries_over acme-org/example '$OLD_SHA' '$NEW_SHA' main >/dev/null
+        r1=\$_REX_CARRY_LAST
+        rex_approval_carries_over acme-org/example '$OLD_SHA' '$NEW_SHA' main >/dev/null
+        r2=\$_REX_CARRY_LAST
+        printf '%s %s\n' \"\$r1\" \"\$r2\"
+      "
+  )
+  calls=$(wc -l < "$sb/gh-calls" | tr -d ' ')
+  if [ "$got" = "true true" ] && [ "$calls" = "1" ]; then
+    mark_pass "#1796 Rex+CEO share one walk result (1 forge call)"
+  else
+    mark_fail "#1796 shared walk" "got='$got' calls=$calls (want 'true true' / 1)"
+  fi
+
+  # Paired mismatch: Rex marker SHA carries over, CEO marker SHA (a different
+  # SHA whose chain does not line up) does not. One dispatch, one forge call.
+  BAD_OLD=$(g "$repo" rev-parse main)
+  : > "$sb/gh-calls"
+  got=$(
+    GIT_DIR="$repo/gitdir" GIT_WORK_TREE="$repo" PATH="$sb/bin:$PATH" \
+      bash -c "
+        . '$LIB'
+        rex_approval_carries_over acme-org/example '$OLD_SHA' '$NEW_SHA' main >/dev/null
+        r1=\$_REX_CARRY_LAST
+        rex_approval_carries_over acme-org/example '$BAD_OLD' '$NEW_SHA' main >/dev/null
+        r2=\$_REX_CARRY_LAST
+        printf '%s %s\n' \"\$r1\" \"\$r2\"
+      "
+  )
+  calls=$(wc -l < "$sb/gh-calls" | tr -d ' ')
+  if [ "$got" = "true false" ] && [ "$calls" = "1" ]; then
+    mark_pass "#1796 shared walk result: Rex carries, mismatched CEO SHA does not (1 forge call)"
+  else
+    mark_fail "#1796 shared walk mismatch" "got='$got' calls=$calls (want 'true false' / 1)"
+  fi
+  rm -rf "$repo" "$sb"
+
+  # -------------------------------------------------------------------------
+  # #1796: forge timeout -> "timeout" (gate exits 2). Fail-before: hung forever.
+  # -------------------------------------------------------------------------
+  repo=$(make_git_repo)
+  echo base > "$repo/base.txt"; g "$repo" add base.txt; g "$repo" commit -q -m base
+  g "$repo" checkout -q -b pr-branch
+  echo pr > "$repo/pr.txt"; g "$repo" add pr.txt; g "$repo" commit -q -m pr
+  OLD_SHA=$(g "$repo" rev-parse HEAD)
+  g "$repo" checkout -q main
+  echo m > "$repo/m.txt"; g "$repo" add m.txt; g "$repo" commit -q -m m
+  g "$repo" checkout -q pr-branch
+  g "$repo" merge -q --no-ff main -m merge
+  NEW_SHA=$(g "$repo" rev-parse HEAD)
+  sb=$(mktemp -d)
+  mkdir -p "$sb/bin"
+  cat > "$sb/bin/gh" <<'EOF'
+#!/bin/bash
+# Stall forever — the per-call limit must end this.
+# exec so the waited PID is the sleeper (see #1796 watchdog / `$()` note).
+exec sleep 120
+EOF
+  chmod +x "$sb/bin/gh"
+  got=$(
+    GIT_DIR="$repo/gitdir" GIT_WORK_TREE="$repo" PATH="$sb/bin:$PATH" \
+      APEXYARD_GH_CALL_TIMEOUT=1 APEXYARD_GH_FORCE_WATCHDOG=1 \
+      bash -c ". '$LIB'; rex_approval_carries_over acme-org/example '$OLD_SHA' '$NEW_SHA' main" 2>"$sb/err"
+  )
+  if [ "$got" = "timeout" ] && grep -q 'forge call timed out' "$sb/err"; then
+    mark_pass "#1796 stalled gh ends at limit -> timeout + BLOCKED message"
+  else
+    mark_fail "#1796 stalled gh" "got='$got' err=$(head -1 "$sb/err")"
+  fi
+  rm -rf "$repo" "$sb"
+
+  # -------------------------------------------------------------------------
+  # #1809 Hakim H1: non-github.com HOST/OWNER/REPO must not query github.com.
+  # Return unknown with zero forge calls. Paired: plain OWNER/REPO still works.
+  # -------------------------------------------------------------------------
+  repo=$(make_git_repo)
+  echo base > "$repo/base.txt"; g "$repo" add base.txt; g "$repo" commit -q -m base
+  g "$repo" checkout -q -b pr-branch
+  echo pr > "$repo/pr.txt"; g "$repo" add pr.txt; g "$repo" commit -q -m "reviewed"
+  OLD_SHA=$(g "$repo" rev-parse HEAD)
+  g "$repo" checkout -q main
+  echo more > "$repo/base2.txt"; g "$repo" add base2.txt; g "$repo" commit -q -m "base moves"
+  g "$repo" checkout -q pr-branch
+  g "$repo" merge -q --no-ff main -m "merge base"
+  NEW_SHA=$(g "$repo" rev-parse HEAD)
+  sb=$(mktemp -d)
+  make_rex_carry_gh_mock "$sb" "$repo"
+  mv "$sb/bin/gh" "$sb/bin/gh-inner"
+  cat > "$sb/bin/gh" <<EOF
+#!/bin/bash
+printf '1\n' >> "$sb/gh-calls"
+exec "$sb/bin/gh-inner" "\$@"
+EOF
+  chmod +x "$sb/bin/gh"
+  : > "$sb/gh-calls"
+  got=$(carry_over_in "$repo" "$OLD_SHA" "$NEW_SHA" main "$sb/bin" "ghe.corp/acme/app")
+  calls=$(wc -l < "$sb/gh-calls" | tr -d ' ')
+  if [ "$got" = "unknown" ] && [ "$calls" = "0" ]; then
+    mark_pass "#1809 H1 host-qualified non-github.com repo -> unknown (0 forge calls)"
+  else
+    mark_fail "#1809 H1 host-qualified" "got='$got' calls=$calls (want unknown / 0)"
+  fi
+  : > "$sb/gh-calls"
+  got=$(carry_over_in "$repo" "$OLD_SHA" "$NEW_SHA" main "$sb/bin" "acme-org/example")
+  calls=$(wc -l < "$sb/gh-calls" | tr -d ' ')
+  if [ "$got" = "true" ] && [ "$calls" = "1" ]; then
+    mark_pass "#1809 H1 pair: plain OWNER/REPO still carries over (1 forge call)"
+  else
+    mark_fail "#1809 H1 plain OWNER/REPO pair" "got='$got' calls=$calls (want true / 1)"
+  fi
+  rm -rf "$repo" "$sb"
+
+  # -------------------------------------------------------------------------
+  # #1809 Hakim A3: GraphQL string vars use -f so an all-digit owner stays a
+  # string ( -F would coerce it to an integer and fail the String! type ).
+  # -------------------------------------------------------------------------
+  repo=$(make_git_repo)
+  echo base > "$repo/base.txt"; g "$repo" add base.txt; g "$repo" commit -q -m base
+  g "$repo" checkout -q -b pr-branch
+  echo pr > "$repo/pr.txt"; g "$repo" add pr.txt; g "$repo" commit -q -m "reviewed"
+  OLD_SHA=$(g "$repo" rev-parse HEAD)
+  g "$repo" checkout -q main
+  echo more > "$repo/base2.txt"; g "$repo" add base2.txt; g "$repo" commit -q -m "base moves"
+  g "$repo" checkout -q pr-branch
+  g "$repo" merge -q --no-ff main -m "merge base"
+  NEW_SHA=$(g "$repo" rev-parse HEAD)
+  sb=$(mktemp -d)
+  make_rex_carry_gh_mock "$sb" "$repo"
+  mv "$sb/bin/gh" "$sb/bin/gh-inner"
+  cat > "$sb/bin/gh" <<EOF
+#!/bin/bash
+printf '%s\n' "\$*" >> "$sb/gh-calls"
+exec "$sb/bin/gh-inner" "\$@"
+EOF
+  chmod +x "$sb/bin/gh"
+  got=$(carry_over_in "$repo" "$OLD_SHA" "$NEW_SHA" main "$sb/bin" "12345/example")
+  if [ "$got" = "true" ] \
+     && grep -q -- '-f owner=12345' "$sb/gh-calls" \
+     && ! grep -qE -- '(^| )-F owner=12345( |$)' "$sb/gh-calls"; then
+    mark_pass "#1809 A3 all-digit owner uses -f and still carries over"
+  else
+    mark_fail "#1809 A3 all-digit owner" "got='$got' calls=$(cat "$sb/gh-calls")"
+  fi
+  rm -rf "$repo" "$sb"
+
+  # -------------------------------------------------------------------------
+  # #1809 Hakim A6/A8/A7: pin GraphQL to github.com, exactly three segments,
+  # and build the fallback fetch URL from OWNER/REPO.
+  # -------------------------------------------------------------------------
+  repo=$(make_git_repo)
+  echo base > "$repo/base.txt"; g "$repo" add base.txt; g "$repo" commit -q -m base
+  g "$repo" checkout -q -b pr-branch
+  echo pr > "$repo/pr.txt"; g "$repo" add pr.txt; g "$repo" commit -q -m "reviewed"
+  OLD_SHA=$(g "$repo" rev-parse HEAD)
+  g "$repo" checkout -q main
+  echo more > "$repo/base2.txt"; g "$repo" add base2.txt; g "$repo" commit -q -m "base moves"
+  g "$repo" checkout -q pr-branch
+  g "$repo" merge -q --no-ff main -m "merge base"
+  NEW_SHA=$(g "$repo" rev-parse HEAD)
+  sb=$(mktemp -d)
+  make_rex_carry_gh_mock "$sb" "$repo"
+  mv "$sb/bin/gh" "$sb/bin/gh-inner"
+  cat > "$sb/bin/gh" <<EOF
+#!/bin/bash
+printf '%s\n' "\$*" >> "$sb/gh-calls"
+exec "$sb/bin/gh-inner" "\$@"
+EOF
+  chmod +x "$sb/bin/gh"
+  : > "$sb/gh-calls"
+  got=$(GH_HOST=ghe.corp carry_over_in "$repo" "$OLD_SHA" "$NEW_SHA" main "$sb/bin" "github.com/acme-org/example")
+  if [ "$got" = "true" ] && grep -q -- 'api graphql --hostname github.com' "$sb/gh-calls"; then
+    mark_pass "#1809 B6 explicit github.com form, GH_HOST=other -> --hostname github.com sent"
+  else
+    mark_fail "#1809 B6 explicit form pin" "got='$got' calls=$(cat "$sb/gh-calls")"
+  fi
+  : > "$sb/gh-calls"
+  got=$(GH_HOST=ghe.corp carry_over_in "$repo" "$OLD_SHA" "$NEW_SHA" main "$sb/bin" "acme-org/example")
+  if [ "$got" = "true" ] && grep -q -- 'api graphql' "$sb/gh-calls" \
+     && ! grep -q -- '--hostname' "$sb/gh-calls"; then
+    mark_pass "#1809 B6 plain OWNER/REPO, GH_HOST=other -> no --hostname (follows GH_HOST)"
+  else
+    mark_fail "#1809 B6 plain form" "got='$got' calls=$(cat "$sb/gh-calls")"
+  fi
+  : > "$sb/gh-calls"
+  got=$(carry_over_in "$repo" "$OLD_SHA" "$NEW_SHA" main "$sb/bin" "github.com/acme/app/extra")
+  calls=$(wc -l < "$sb/gh-calls" | tr -d ' ')
+  if [ "$got" = "unknown" ] && [ "$calls" = "0" ]; then
+    mark_pass "#1809 A8 four-segment github.com repo -> unknown (0 forge calls)"
+  else
+    mark_fail "#1809 A8 four segments" "got='$got' calls=$calls (want unknown / 0)"
+  fi
+  got=$(carry_over_in "$repo" "$OLD_SHA" "$NEW_SHA" main "$sb/bin" "github.com/acme-org/example")
+  if [ "$got" = "true" ]; then
+    mark_pass "#1809 A8 pair: three-segment github.com/OWNER/REPO still carries over"
+  else
+    mark_fail "#1809 A8 pair" "got='$got' (want true)"
+  fi
+  # A7: the fetch URL for the explicit github.com form. Remove the parent
+  # objects from the local clone so the fetch runs, and record the URL with
+  # a git shim that fails the fetch.
+  gsb=$(mktemp -d)
+  REAL_GIT=$(command -v git)
+  cat > "$gsb/git" <<EOF
+#!/bin/bash
+for a in "\$@"; do
+  case "\$a" in https://*) printf '%s\n' "\$a" >> "$gsb/fetch-urls"; exit 1 ;; esac
+done
+exec "$REAL_GIT" "\$@"
+EOF
+  chmod +x "$gsb/git"
+  : > "$gsb/fetch-urls"
+  nrepo=$(make_git_repo)
+  GIT_DIR="$nrepo/gitdir" GIT_WORK_TREE="$nrepo" PATH="$gsb:$sb/bin:$PATH" \
+    bash -c ". '$LIB'; rex_approval_carries_over 'github.com/acme-org/example' '$OLD_SHA' '$NEW_SHA' main" >/dev/null 2>&1
+  if grep -qx 'https://github.com/acme-org/example.git' "$gsb/fetch-urls" \
+     && ! grep -q 'github.com/github.com' "$gsb/fetch-urls"; then
+    mark_pass "#1809 A7 explicit github.com form -> fetch URL https://github.com/OWNER/REPO.git"
+  else
+    mark_fail "#1809 A7 fetch URL" "urls=$(cat "$gsb/fetch-urls")"
+  fi
+  rm -rf "$repo" "$nrepo" "$sb" "$gsb"
 
 else
   echo "  SKIP: git not on PATH — rex_approval_carries_over cases skipped" >&2

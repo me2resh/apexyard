@@ -78,6 +78,21 @@
 #
 # Results use per-process shell caches, like the config and portfolio helpers.
 
+# Per-call gh timeout for tracker_review_at_sha (#1796 / Hakim A2 on #1809).
+# Optional when a minimal test copies only this file — then fall back to bare gh.
+if [ -z "${APEXYARD_GH_TIMEOUT_LOADED:-}" ]; then
+  _tracker_timeout_lib="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)/_lib-gh-timeout.sh"
+  if [ -n "$_tracker_timeout_lib" ] && [ -r "$_tracker_timeout_lib" ]; then
+    # shellcheck source=/dev/null
+    . "$_tracker_timeout_lib"
+    APEXYARD_GH_TIMEOUT_LOADED=1
+  fi
+  unset _tracker_timeout_lib
+fi
+if ! command -v apexyard_gh >/dev/null 2>&1; then
+  apexyard_gh() { gh "$@"; }
+fi
+
 # ------------------------------------------------------------------------------
 # Internal: load _lib-read-config.sh for one tracker config read.
 #
@@ -1910,9 +1925,15 @@ tracker_review_at_sha() {
   # state counts (COMMENTED / APPROVED / CHANGES_REQUESTED) — the verdict lives
   # in the body per AgDR-0075, and requiring APPROVED specifically is the exact
   # single-account trap AgDR-0062 hit.
-  out=$(gh api "repos/${repo}/pulls/${pr}/reviews" --paginate \
-          --jq ".[] | select(.commit_id == \"${sha}\") | .id" 2>/dev/null)
+  # apexyard_gh applies the same per-call limit as the other gate forge calls
+  # (#1796). stderr stays open so a timeout BLOCKED line reaches the operator.
+  # Exit 124 (limit fired) is fail-closed as rc 2 — same class as network/auth.
+  out=$(apexyard_gh api "repos/${repo}/pulls/${pr}/reviews" --paginate \
+          --jq ".[] | select(.commit_id == \"${sha}\") | .id")
   rc=$?
+  if [ "$rc" -eq 124 ]; then
+    return 2
+  fi
   [ "$rc" -ne 0 ] && return 2
   [ -n "$out" ] && return 0
   return 1

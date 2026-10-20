@@ -116,8 +116,9 @@ _require_lib() {
 _require_lib "$(dirname "$0")/_lib-extract-pr.sh" \
   is_merge_command is_merge_command_raw \
   _run_awk_or_fallback join_shell_continuations _join_shell_continuations_fallback \
-  _scrub_merge_command _normalize_json_escapes \
-  has_conflicting_repo_flags merge_command_uses_variable extract_pr_number resolve_merge_repo resolve_pr_head
+  _scrub_merge_command _has_split_merge_phrase _normalize_json_escapes \
+  has_conflicting_repo_flags merge_command_uses_variable extract_pr_number resolve_merge_repo resolve_pr_head \
+  prmeta_get prmeta_file_list
 # Repo-qualified marker path helper (#485).
 _require_lib "$(dirname "$0")/_lib-review-markers.sh" \
   review_marker_path unqualified_marker_hint
@@ -183,6 +184,13 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
+_has_split_merge_phrase "$COMMAND"
+scan_status=$?
+if [ "$scan_status" -eq 2 ]; then
+  echo "BLOCKED: merge gate could not scan the command. Check awk and the command size." >&2
+  exit 2
+fi
+
 if ! is_merge_command "$COMMAND"; then
   exit 0
 fi
@@ -192,7 +200,7 @@ if has_conflicting_repo_flags "$COMMAND"; then
   exit 2
 fi
 
-if merge_command_uses_variable "$COMMAND"; then
+if merge_command_uses_variable "$COMMAND" "$scan_status"; then
   echo "BLOCKED: design-review gate cannot resolve a merge command containing an unexpanded PR or repo variable. Re-run with literal values." >&2
   exit 2
 fi
@@ -251,16 +259,24 @@ fi
 # Get the PR's changed files. The diff endpoint rejects responses over 300
 # files; the files API is paginated and supports larger PRs. It caps at 3,000
 # files, so refuse to evaluate a truncated result rather than fail open.
-CHANGED_FILE_LIST=$(mktemp "${TMPDIR:-/tmp}/apexyard-pr-files.XXXXXX") || exit 2
+#
+# The dispatcher snapshot gives the count and the list first (AgDR-0256).
+# On a miss, the gate makes its own two calls. It reads the output straight
+# into memory. A temporary file let a same-uid process rewrite the list
+# between the write and the read (AgDR-0256 D2 rules 24 and 25).
 CHANGED_RC=0
 TOTAL_FILES=""
-if [ -z "$CMD_REPO" ] || ! TOTAL_FILES=$(gh api "repos/${CMD_REPO}/pulls/${PR_NUMBER}" --jq '.changed_files' 2>/dev/null) || ! printf '%s' "$TOTAL_FILES" | grep -qE '^[0-9]+$' || [ "$TOTAL_FILES" -gt 3000 ] || ! gh api --paginate "repos/${CMD_REPO}/pulls/${PR_NUMBER}/files?per_page=100" --jq '.[].filename' >"$CHANGED_FILE_LIST" 2>/dev/null; then
-  CHANGED_RC=1
+CHANGED=""
+if [ -n "$CMD_REPO" ] && CHANGED=$(prmeta_file_list "$PR_NUMBER" "$CMD_REPO") \
+  && TOTAL_FILES=$(prmeta_get count "$PR_NUMBER" "$CMD_REPO"); then
+  CHANGED_RC=0
+else
+  CHANGED=""
+  TOTAL_FILES=""
+  if [ -z "$CMD_REPO" ] || ! TOTAL_FILES=$(apexyard_gh api "repos/${CMD_REPO}/pulls/${PR_NUMBER}" --jq '.changed_files' 2>/dev/null) || ! printf '%s' "$TOTAL_FILES" | grep -qE '^[0-9]+$' || [ "$TOTAL_FILES" -gt 3000 ] || ! CHANGED=$(apexyard_gh api --paginate "repos/${CMD_REPO}/pulls/${PR_NUMBER}/files?per_page=100" --jq '.[].filename' 2>/dev/null); then
+    CHANGED_RC=1
+  fi
 fi
-CHANGED_COUNT=$(wc -l <"$CHANGED_FILE_LIST" 2>/dev/null | tr -d ' ')
-CHANGED_COUNT=${CHANGED_COUNT:-0}
-CHANGED=$(cat "$CHANGED_FILE_LIST" 2>/dev/null)
-rm -f "$CHANGED_FILE_LIST"
 if [ "$CHANGED_RC" -ne 0 ] || [ -z "$CHANGED" ] || [ "$TOTAL_FILES" -gt 3000 ]; then
   echo "BLOCKED: design-review gate could not determine the PR's changed files. Refusing to merge until the diff can be verified." >&2
   exit 2

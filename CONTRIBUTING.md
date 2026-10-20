@@ -14,8 +14,8 @@ git remote add upstream https://github.com/me2resh/apexyard.git
 # 2. Branch off dev (NOT main) using the naming convention
 git checkout -b feature/GH-<issue>-short-slug upstream/dev
 
-# 3. Make the change. Run the checks the CI gate runs:
-bash bin/run-hook-tests.sh          # the hook test suite
+# 3. Make the change. Run the checks (Bash 3.2 locally; CI is Linux only):
+/bin/bash bin/run-hook-tests.sh     # the hook test suite
 # (+ markdownlint / shellcheck if you touched .md / .sh)
 
 # 4. Open a PR targeting dev, with a Summary / Testing / Glossary body
@@ -54,15 +54,26 @@ Full detail lives in `.claude/rules/` (`git-conventions.md`, `pr-quality.md`, `p
 Run what CI runs, locally:
 
 ```bash
-bash bin/run-hook-tests.sh        # hook test suite — must be green
+/bin/bash bin/run-hook-tests.sh   # hook test suite under Bash 3.2 — must be green
 npx markdownlint-cli2@0.23.2 '**/*.md'  # if you touched markdown (same pin as the gate)
 shellcheck .claude/hooks/*.sh     # if you touched hooks
 ```
 
-CI runs the full hook test suite on each Linux leg and splits macOS bash 3.2
-across four round-robin shards. To select a shard locally, run
-`/bin/bash bin/run-hook-tests.sh --shard 1/4` (add `--list` to list its tests).
-The required `hook test suite` check waits for every leg.
+CI runs the full hook test suite on Linux only (jq 1.7 on every PR; jq 1.7 and
+jq 1.8 on merge, nightly, and manual runs). CI does not run `/bin/bash` 3.2 or
+macOS system awk. Run those checks on your machine before you push:
+
+```bash
+/bin/bash bin/run-hook-tests.sh
+# Optional: the same suite with mawk 1.3.4 as awk. The command prints the awk version first; it must say mawk.
+# CI runs test_awk_ere_interval_lock.sh on Linux as the ERE interval guard. Homebrew mawk 1.3.4 accepts ERE intervals, so this run does not test them.
+# mawk must be installed (`brew install mawk`); check with `command -v mawk`.
+d=$(mktemp -d) && ln -s "$(command -v mawk)" "$d/awk" && PATH="$d:$PATH" awk -W version | head -1 && PATH="$d:$PATH" /bin/bash bin/run-hook-tests.sh; s=$?; rm -rf "$d"; (exit "$s")
+```
+
+To run one shard locally, use `/bin/bash bin/run-hook-tests.sh --shard 1/4`
+(add `--list` to list its tests). The required `hook test suite` check waits
+for every Linux leg.
 
 If you add or remove a skill / hook / role, verify that `bash bin/run-pre-push-checks.sh` still passes locally — it runs markdownlint, shellcheck, and the subpack extraction smoke test.
 

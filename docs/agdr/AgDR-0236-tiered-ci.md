@@ -77,3 +77,9 @@ The schedule becomes active when this workflow reaches the default branch.
 | Tier | The set of CI jobs selected for an event |
 | Affected test | A test selected from references to changed files |
 | Conformance | Credentialed checks that prove harnesses enforce governance hooks |
+
+## Architecture evolution
+
+### 2026-10-19 — No macOS CI runners (#1814, AgDR-0259)
+
+The CEO decision in #1814 removes every macOS matrix leg from `tests.yml`. Light, heavy, and release tiers stay. They now use Linux only (jq-1.7 on light PRs; jq-1.7 and jq-1.8 on heavy, release, merge, nightly, and manual runs). `refresh-ready-prs.yml` no longer runs on push or PR synchronize; it runs on `workflow_dispatch` only. Bash 3.2 and macOS system awk run locally before push, not in CI. See [AgDR-0259](AgDR-0259-no-macos-ci-runners.md).
