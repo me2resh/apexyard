@@ -42,6 +42,23 @@ cases_push=(
   'git >`echo a b` push origin feature/GH-1805-x'
   'git >a\ b push origin feature/GH-1805-x'
   "git >\$'a b' push origin feature/GH-1805-x"
+  # #1772 N2: the zsh clobber forms and a named descriptor (the Bash tool
+  # can run zsh).
+  "git >! f push origin feature/GH-1805-x"
+  "git >!f push origin feature/GH-1805-x"
+  "git >>| f push origin feature/GH-1805-x"
+  "git >>|f push origin feature/GH-1805-x"
+  "git >>! f push origin feature/GH-1805-x"
+  "git &>! f push origin feature/GH-1805-x"
+  "git &>| f push origin feature/GH-1805-x"
+  "git &>>| f push origin feature/GH-1805-x"
+  "git >&| f push origin feature/GH-1805-x"
+  "git >>& f push origin feature/GH-1805-x"
+  "git 2>! f push origin feature/GH-1805-x"
+  "git -C /tmp >! f push origin feature/GH-1805-x"
+  "git {fd}>/dev/null push origin feature/GH-1805-x"
+  "git {fd}</dev/null push origin feature/GH-1805-x"
+  "git {log_fd}>>f push origin feature/GH-1805-x"
 )
 cases_commit=(
   "git >/dev/null commit -m x"
@@ -49,6 +66,10 @@ cases_commit=(
   'git >"a b" commit -m x'
   'git 2>$(mktemp) commit -m x'
   'git >"a\" b" commit -m x'
+  # #1772 N2.
+  "git >! f commit -m x"
+  "git >>| f commit -m x"
+  "git {fd}>/dev/null commit -m x"
 )
 # #1805 B2: a target that the shared grammar cannot match (nested
 # substitution, escaped quote) must still reach the gates, which block it.
@@ -60,6 +81,28 @@ cases_uncertain=(
   'git >${X:-a b} push origin feature/GH-1805-x'
   'git >"a b push origin feature/GH-1805-x'
   'git 2>`a b commit -m x'
+  # #1772 N1: a quoted target or a substitution target that goes on to the
+  # next line. The verb is on the later line.
+  $'git >"a\nb" push origin feature/GH-1805-x'
+  $'git >\'a\nb\' push origin feature/GH-1805-x'
+  $'git >$(echo\nx) push origin feature/GH-1805-x'
+  $'git 2>"a\nb" commit -m x'
+  $'git >"a\nb\nc" push origin feature/GH-1805-x'
+  $'git -C /tmp >"a\nb"\tcommit -m x'
+  # #1772 N2: a zsh form with a target that the grammar cannot match.
+  'git >! $(a $(b)) push origin feature/GH-1805-x'
+  'git {fd}>"a b push origin feature/GH-1805-x'
+)
+# #1772 N1 allow twins: a target that goes on to the next line, with no push
+# or commit word after it, is not uncertain.
+cases_not_uncertain=(
+  $'git log > "a\nb"'
+  $'git log > "a\nb"\necho done'
+  $'echo push\ngit log > "a\nb"'
+  # #1772 N2 allow twins: a zsh form with a target that the grammar reads.
+  'git log >! "a b.txt" && grep push "a b.txt"'
+  'git log {fd}>"a b" && grep commit "a b"'
+  'git log >>| out.txt; echo commit'
 )
 
 # Fail-before: archive the hooks tree at a pinned dev commit. The pin is the
@@ -154,6 +197,36 @@ if /bin/bash -c '. "$1" || exit 1; git_uncertain_protected_shape "$2"' _ "$HOOKS
 else
   pass "consumable target is not uncertain: $twin"
 fi
+
+for cmd in "${cases_not_uncertain[@]}"; do
+  if /bin/bash -c '. "$1" || exit 1; git_uncertain_protected_shape "$2"' _ "$HOOKS/_lib-git-global.sh" "$cmd"; then
+    fail "readable or later-free target is not uncertain: $cmd"
+  else
+    pass "readable or later-free target is not uncertain: $cmd"
+  fi
+done
+
+# #1772 N2 allow twins: a zsh form before a verb that is not push or commit
+# does not route.
+for cmd in 'git >! out.txt log' 'git {fd}>/dev/null log' 'git log >>| push.txt' 'git &>! push.txt status'; do
+  if has_in "$HOOKS/_lib-git-global.sh" "$cmd" push || has_in "$HOOKS/_lib-git-global.sh" "$cmd" commit; then
+    fail "zsh form with another verb does not route: $cmd"
+  else
+    pass "zsh form with another verb does not route: $cmd"
+  fi
+done
+
+# #1772 N2: the gate scanner skips a zsh form and a named descriptor.
+for cmd in 'git >! f log' 'git >>|f log' 'git &>! f log' 'git {fd}>/dev/null log' 'git 2>! f -C . log'; do
+  if /bin/bash -c '
+    . "$1" || exit 1
+    git_prepare_invocation "$2" log "$PWD"
+  ' _ "$HOOKS/_lib-git-global.sh" "$cmd"; then
+    pass "prepare skips zsh redirect: $cmd"
+  else
+    fail "prepare skips zsh redirect: $cmd"
+  fi
+done
 
 # `git > push` writes to a file named push; it is not a push verb.
 if has_in "$HOOKS/_lib-git-global.sh" "git > push" push; then
@@ -256,7 +329,9 @@ fi
 
 # #1805 B2 through the dispatcher: a quoted target with a space and an
 # unparsed nested target both reach the push gates.
-for cmd in 'git >"a b" push origin feature/GH-1805-x' 'git >$(a $(b c)) push origin feature/GH-1805-x'; do
+for cmd in 'git >"a b" push origin feature/GH-1805-x' 'git >$(a $(b c)) push origin feature/GH-1805-x' \
+  $'git >"a\nb" push origin feature/GH-1805-x' 'git >! f push origin feature/GH-1805-x' \
+  'git {fd}>/dev/null push origin feature/GH-1805-x'; do
   payload=$(python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$cmd")
   : > "$TMP/log"
   printf '%s' "$payload" | DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh" >/dev/null
@@ -271,7 +346,8 @@ done
 # The visitor blocks the unparsed target (real block-main-push gate).
 cp "$HOOKS/block-main-push.sh" "$TMP/real-bmp.sh"
 for lib in "$HOOKS"/_lib-*.sh; do cp "$lib" "$TMP/"; done
-for cmd in 'git >$(a $(b c)) push origin feature/GH-1805-x' 'git >${X:-a b} push origin feature/GH-1805-x'; do
+for cmd in 'git >$(a $(b c)) push origin feature/GH-1805-x' 'git >${X:-a b} push origin feature/GH-1805-x' \
+  $'git >"a\nb" push origin feature/GH-1805-x' $'git >\'a\nb\' push origin feature/GH-1805-x'; do
   payload=$(python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]},"cwd":sys.argv[2]}))' \
     "$cmd" "$TMP")
   rc=0
@@ -280,6 +356,33 @@ for cmd in 'git >$(a $(b c)) push origin feature/GH-1805-x' 'git >${X:-a b} push
     pass "push gate blocks an unparsed redirection target: $cmd"
   else
     fail "push gate blocks an unparsed redirection target (rc=$rc): $cmd: $(printf '%s' "$out" | head -2)"
+  fi
+done
+# #1772 N2: `git >! push ...` has two readings. Bash runs `git push` and
+# zsh writes to a file named push. The gate scanner uses the zsh reading,
+# which does not reach the verb that the dispatcher found, so it blocks.
+for cmd in 'git >! push origin feature/GH-1805-x' 'git 2>! push origin feature/GH-1805-x'; do
+  payload=$(python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]},"cwd":sys.argv[2]}))' \
+    "$cmd" "$TMP")
+  rc=0
+  out=$(printf '%s' "$payload" | /bin/bash "$TMP/real-bmp.sh" 2>&1) || rc=$?
+  if [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'cannot resolve'; then
+    pass "push gate blocks a zsh form with two readings: $cmd"
+  else
+    fail "push gate blocks a zsh form with two readings (rc=$rc): $cmd: $(printf '%s' "$out" | head -2)"
+  fi
+done
+# Allow twins: the same gate allows a plain push and a zsh form with one
+# reading to a feature branch.
+for cmd in 'git push origin feature/GH-1805-x' 'git >! f push origin feature/GH-1805-x'; do
+  payload=$(python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]},"cwd":sys.argv[2]}))' \
+    "$cmd" "$TMP")
+  rc=0
+  out=$(printf '%s' "$payload" | /bin/bash "$TMP/real-bmp.sh" 2>&1) || rc=$?
+  if [ "$rc" -eq 0 ]; then
+    pass "push gate allows: $cmd"
+  else
+    fail "push gate allows (rc=$rc): $cmd: $(printf '%s' "$out" | head -2)"
   fi
 done
 
@@ -307,7 +410,10 @@ nojq_run() {
   printf '%s' "$rc"
 }
 for cmd in 'git >"a b" push origin feature/GH-1805-x' 'git >$(a $(b c)) push origin feature/GH-1805-x' \
-  "git 2>'e r' commit -m x" 'git >${X:-a b} push origin feature/GH-1805-x'; do
+  "git 2>'e r' commit -m x" 'git >${X:-a b} push origin feature/GH-1805-x' \
+  'git >! f push origin feature/GH-1805-x' 'git >>| "a b" commit -m x' \
+  'git {fd}>/dev/null push origin feature/GH-1805-x' 'git &>! $(a (b)) push origin feature/GH-1805-x' \
+  $'git >"a\nb" push origin feature/GH-1805-x'; do
   rc=$(nojq_run "$cmd")
   if [ "$rc" = 2 ]; then
     pass "no jq blocks redirect shape: $cmd"
@@ -316,12 +422,107 @@ for cmd in 'git >"a b" push origin feature/GH-1805-x' 'git >$(a $(b c)) push ori
   fi
 done
 # Allow twin: a redirect with no push or commit word is not blocked.
-rc=$(nojq_run 'git log > "a b.txt"')
-if [ "$rc" = 0 ]; then
-  pass "no jq allows a redirect with no push or commit"
+for cmd in 'git log > "a b.txt"' 'git log >! "a b.txt"' 'git log {fd}>/dev/null'; do
+  rc=$(nojq_run "$cmd")
+  if [ "$rc" = 0 ]; then
+    pass "no jq allows a redirect with no push or commit: $cmd"
+  else
+    fail "no jq allows a redirect with no push or commit (rc=$rc): $cmd"
+  fi
+done
+
+# #1772 N3: the redirect scan stays linear when one line holds many git
+# words. Time the dispatcher (stub gates) on the head tree and on the base
+# tree. The head run must finish within the base time plus 0.5 seconds.
+# A host that runs a short command slower than 0.15 seconds gets a larger
+# margin in the same ratio. Without a base tree, the limit uses the head
+# time for the same text with no redirection. On a very slow host the
+# limits are reported in NOTE lines and do not fail the test. Run this
+# with the default awk.
+stub_tree() {
+  local src="$1" dest="$2" script
+  mkdir -p "$dest"
+  cp "$src"/*.sh "$dest/"
+  for script in $scripts; do
+    cat > "$dest/$script" <<'EOF'
+#!/usr/bin/env bash
+cat >/dev/null
+printf '%s\n' "$(basename "$0")" >> "${DISPATCH_LOG:?}"
+EOF
+    chmod +x "$dest/$script"
+  done
+  chmod +x "$dest/dispatch-bash.sh"
+}
+dispatch_secs() {
+  local tree="$1" cmd="$2" payload
+  payload=$(python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$cmd")
+  : > "$TMP/tlog"
+  { time (printf '%s' "$payload" | DISPATCH_LOG="$TMP/tlog" /bin/bash "$tree/dispatch-bash.sh" >/dev/null 2>&1 || true); } 2> "$TMP/time"
+  tail -n 1 "$TMP/time"
+}
+# The first run can be slow (cold caches). Use the faster of two runs.
+dispatch_min() {
+  local a b
+  a=$(dispatch_secs "$1" "$2")
+  b=$(dispatch_secs "$1" "$2")
+  awk -v a="$a" -v b="$b" 'BEGIN { print (b < a) ? b : a }'
+}
+TIMEFORMAT=%R
+stub_tree "$HOOKS" "$TMP/th-head"
+have_base=0
+if [ -n "${BASE_HOOKS:-}" ] && [ -f "${BASE_HOOKS}/dispatch-bash.sh" ]; then
+  stub_tree "$BASE_HOOKS" "$TMP/th-base"
+  have_base=1
 else
-  fail "no jq allows a redirect with no push or commit (rc=$rc)"
+  echo "NOTE: no base tree for the timing check; the limit uses the head time with no redirection"
 fi
+cal=$(dispatch_min "$TMP/th-head" "echo short")
+margin=$(awk -v c="$cal" 'BEGIN { m = 0.5; if (c > 0.15) m = 0.5 * c / 0.15; printf "%.2f", m }')
+echo "timing margin ${margin}s (short command ${cal}s)"
+GT=git
+many=""
+for i in $(seq 1 200); do many="$many $GT"; done
+c60=""
+for i in $(seq 1 60); do c60="$c60 fix $GT"; done
+r60=""
+for i in $(seq 1 60); do r60="$r60 $GT > a"; done
+e200x=""
+for i in $(seq 1 200); do e200x="$e200x $GT >x"; done
+timing_cases=(
+  "echo$many > /dev/null"
+  "echo$many > /dev/null && $GT push origin feature/GH-1772-x"
+  "echo$e200x push"
+  "$GT commit -m \"$c60\" > /dev/null"
+  "$GT commit -m \"$r60\""
+)
+timing_labels=(
+  "echo with 200 git words and a redirection"
+  "echo with 200 git words, a redirection and a later push"
+  "echo with 200 git words, each with a redirection"
+  "commit -m with 60 git words and a redirection"
+  "commit -m with 60 git words, each with a redirection"
+)
+for i in 0 1 2 3 4; do
+  cmd="${timing_cases[i]}"
+  label="${timing_labels[i]}"
+  head_s=$(dispatch_min "$TMP/th-head" "$cmd")
+  if [ "$have_base" = 1 ]; then
+    ref_s=$(dispatch_min "$TMP/th-base" "$cmd")
+    ref_kind="base"
+  else
+    ref_s=$(dispatch_min "$TMP/th-head" "${cmd//>/}")
+    ref_kind="head with no redirection"
+  fi
+  limit=$(awk -v r="$ref_s" -v m="$margin" 'BEGIN { printf "%.2f", r + m }')
+  slow=$(awk -v r="$ref_s" 'BEGIN { print (r > 5) ? 1 : 0 }')
+  if awk -v t="$head_s" -v l="$limit" 'BEGIN { exit !(t <= l) }'; then
+    pass "N3 time: $label: ${head_s}s, $ref_kind ${ref_s}s, limit ${limit}s"
+  elif [ "$slow" = 1 ]; then
+    echo "NOTE: slow host: $label took ${head_s}s; $ref_kind ${ref_s}s; limit ${limit}s"
+  else
+    fail "N3 time: $label: ${head_s}s is over the limit ${limit}s ($ref_kind ${ref_s}s)"
+  fi
+done
 
 echo "TOTAL $PASS passed; $FAIL failed"
 [ "$FAIL" -eq 0 ]
