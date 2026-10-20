@@ -142,5 +142,14 @@ pair 'arithmetic shift' "echo \$((1<<2)); $phrase" 'echo $((1<<2))'
 tick_quote=$(printf 'echo `echo it%ss`' "'")
 pair 'backtick apostrophe' "$tick_quote; $phrase" "$tick_quote"
 pair 'backtick escaped tick' "echo \`echo \\\` x\`; $phrase" "echo \`echo \\\` x\`"
+# An ANSI-C quote can hold an escaped single quote. The scan reads it as
+# the shell does, in command text and in the substitution walk.
+ansi=$': $(echo $\'\\\'\')'
+pair 'ANSI-C quote' "echo \$'\\''; $phrase" "echo \$'\\''; echo clear"
+ansi_hd() { printf "bash <<'EOF'\n%s\nx=\$(printf \")\"; %s)\nEOF" "$ansi" "$1"; }
+pair 'heredoc ANSI-C quote' "$(ansi_hd "$phrase")" "$(ansi_hd 'echo "$U" "$V" "$W"')"
+# When a shell word is present, a shell can read a here-document body.
+# A substitution that does not close in that body fails closed.
+pair 'shell heredoc unclosed substitution' "$(printf "bash <<'EOF'\necho \$( data\nEOF")" "$(printf "cat <<'EOF'\necho \$( data\nEOF")"
 printf 'RESULT: %s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

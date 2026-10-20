@@ -1074,12 +1074,34 @@ _has_split_merge_phrase() {
     function clear_word() { w = raw = ""; changed = opaque_word = opaque_unquoted = 0 }
     # A body from a here-document is data. Its descendants are data too.
     # A here-document body keeps the current layer, as the scan before
-    # #1824 read it in place. It is shorter than its text, so this ends.
-    function queue_body(body, data) {
+    # #1824 read it in place. A tail body runs to the end of its text.
+    # The scan reads each queued body once. The total length of all queued
+    # bodies has a limit of three times the command length, so the total
+    # work stays linear. Above that limit the scan fails closed.
+    function queue_body(body, data, tail) {
       # A blank body holds no command, for example a blanked inert body.
       if (body !~ /[^ \t\n]/) return
-      if (depth >= 3 || np >= 100) scan_error = 1
-      else { pending[++np] = body; levels[np] = depth + (data ? 0 : 1); datas[np] = in_data || data }
+      qlen += length(body)
+      if (depth >= 3 || (!data && nq >= 100) || qlen > budget) scan_error = 1
+      else {
+        pending[++np] = body; levels[np] = depth + (data ? 0 : 1)
+        datas[np] = in_data || data; tails[np] = tail
+        if (!data) nq++
+      }
+    }
+    # Index the lines of the current text once, so that each delimiter
+    # search costs a lookup and not a walk to the end of the text.
+    function index_lines(    k,m,p,key,L) {
+      split("", lpos); split("", lcnt); split("", dpos); split("", dcnt); split("", llen)
+      m = split(s, L, "\n"); p = 1
+      for (k = 1; k <= m; k++) {
+        key = L[k]; llen[p] = length(key)
+        lpos[++lcnt[key], key] = p
+        sub(/^\t+/, "", key)
+        dpos[++dcnt[key], key] = p
+        p += llen[p] + 1
+      }
+      lines_ready = 1
     }
     # Read the here-document delimiter after "<<" or "<<-". Quotes and
     # escapes are removed from the word, as the shell removes them.
@@ -1102,16 +1124,22 @@ _has_split_merge_phrase() {
     # Move i from a newline to the newline after the delimiter line of one
     # here-document. Set hd_line to the start of that line. Return 0 when
     # the delimiter line is missing.
-    function heredoc_end(word, dash,    j,line) {
-      while (i < n) {
-        j = i + 1
-        while (i < n && substr(s, i + 1, 1) != "\n") i++
-        line = substr(s, j, i - j + 1)
-        if (dash) sub(/^\t+/, "", line)
-        if (i < n) i++
-        if (line == word) { hd_line = j; return 1 }
+    function heredoc_end(word, dash,    cnt,lo,hi,mid,p) {
+      if (!lines_ready) index_lines()
+      cnt = dash ? dcnt[word] + 0 : lcnt[word] + 0
+      # Find the first delimiter line that starts after position i.
+      lo = 1; hi = cnt
+      while (lo <= hi) {
+        mid = int((lo + hi) / 2)
+        p = dash ? dpos[mid, word] : lpos[mid, word]
+        if (p > i) hi = mid - 1
+        else lo = mid + 1
       }
-      return 0
+      if (lo > cnt) { i = n; return 0 }
+      p = dash ? dpos[lo, word] : lpos[lo, word]
+      hd_line = p; i = p + llen[p]
+      if (i > n) i = n
+      return 1
     }
     # The substitution walk skips each pending here-document body. The body
     # is data for the walk. Return 0 when a delimiter line is missing.
@@ -1124,21 +1152,30 @@ _has_split_merge_phrase() {
     # nested body, then continues after the delimiter line. A shell can read
     # the body as commands, and the body quotes must not change the scan of
     # the next command. Without a delimiter line, the shell reads the body
-    # to the end of the input, so the scan does the same.
+    # to the end of the input, so the scan does the same. The scan queues
+    # that tail body once. A tail body reads its own tail in place, as a
+    # fresh nested body would read it. Thus no text is queued again.
     function take_heredocs(    k,start) {
       for (k = 1; k <= snh; k++) {
         start = i + 1
-        if (!heredoc_end(sc_word[k], sc_dash[k])) { queue_body(substr(s, start), 1); i = n; break }
-        queue_body(substr(s, start, hd_line - start), 1)
+        if (!heredoc_end(sc_word[k], sc_dash[k])) {
+          if (in_tail) { i = start - 1; walk_failed = 0 }
+          else { queue_body(substr(s, start), 1, 1); i = n }
+          break
+        }
+        queue_body(substr(s, start, hd_line - start), 1, 0)
       }
       snh = 0
     }
     # Find the end of a substitution body. A backtick body ends at the next
     # unescaped backtick, as in the shell. A "$(" body walk tracks quotes,
-    # comments, case words, and here-document bodies. In command text, a
-    # body that does not close fails closed. In a here-document body, which
-    # is data, this scan uses the plain parenthesis count for that body and
-    # all later bodies. That count is the boundary from before #1824.
+    # comments, ANSI-C quotes, case words, and here-document bodies. In
+    # command text, a body that does not close fails closed. In a
+    # here-document body, which is data, this scan uses the plain
+    # parenthesis count for that body and all later bodies. That count is
+    # the boundary from before #1824. When the command also has a shell,
+    # eval, or source word, a shell can read the body, so the walk fails
+    # closed there too.
     function consume_group(endchar,    level,t,start,cq,word,cases,commandpos,comment) {
       start = i + 1
       if (endchar == "`") {
@@ -1148,7 +1185,7 @@ _has_split_merge_phrase() {
           if (t == bs) { i++; continue }
           if (t == "`") { level = 0; break }
         }
-        if (level && !in_data) { scan_error = 1; i = n; return "" }
+        if (level && (!in_data || nested)) { scan_error = 1; i = n; return "" }
         return substr(s, start, i - start)
       }
       level = 1; nh = 0
@@ -1161,6 +1198,10 @@ _has_split_merge_phrase() {
             comment = 0
           }
           if (t == bs && cq != sq) { word = word "!"; i++; continue }
+          # An ANSI-C quote ends at the next single quote without a
+          # backslash before it.
+          if (cq == "" && t == "$" && substr(s, i + 1, 1) == sq) { word = word "!"; i++; cq = "$"; continue }
+          if (cq == "$") { if (t == sq) cq = ""; continue }
           if (t == sq || t == dq) {
             word = word "!"
             if (cq == t) cq = ""
@@ -1192,7 +1233,7 @@ _has_split_merge_phrase() {
           if (t == ")" && !(cases && level == 1)) level--
         }
         if (!level) return substr(s, start, i - start)
-        if (!in_data) { scan_error = 1; i = n; return "" }
+        if (!in_data || nested) { scan_error = 1; i = n; return "" }
         walk_failed = 1; i = start - 1; level = 1
       }
       while (i < n && level) {
@@ -1209,10 +1250,7 @@ _has_split_merge_phrase() {
         clear_word(); return
       }
       # Shell arguments can contain another command. Never evaluate them.
-      if (nested && raw ~ /[ \t]/) {
-        if (depth >= 3 || np >= 100) scan_error = 1
-        else { pending[++np] = raw; levels[np] = depth + 1; datas[np] = in_data }
-      }
+      if (nested && raw ~ /[ \t]/) queue_body(raw, 0, 0)
       if (skip_target) { skip_target = 0; clear_word(); return }
       value = w
       if (api && value ~ /(pulls|merge_requests)\/[0-9]+\/merge/ && changed) hit = 1
@@ -1298,8 +1336,8 @@ _has_split_merge_phrase() {
         if (t == endchar) level--
       }
     }
-    function scan(text,    c,nx,rest,body) {
-      s = text; n = length(s); q = w = raw = ""; changed = opaque_word = opaque_unquoted = walk_failed = snh = 0; reset()
+    function scan(text,    c,nx,t,rest,body) {
+      s = text; n = length(s); q = w = raw = ""; changed = opaque_word = opaque_unquoted = walk_failed = snh = lines_ready = 0; reset()
       for (i = 1; i <= n; i++) {
         c = substr(s, i, 1); nx = substr(s, i + 1, 1)
         if (c == sq || c == dq) {
@@ -1324,8 +1362,19 @@ _has_split_merge_phrase() {
             mark_opaque(); i++
             body = consume_group(")")
             queue_body(body)
+          } else if (nx == sq && q == "") {
+            # An ANSI-C quote ends at the next single quote without a
+            # backslash before it.
+            mark_opaque(); i++
+            while (i < n) {
+              t = substr(s, ++i, 1)
+              if (t == bs) i++
+              else if (t == sq) break
+            }
           } else if (nx == sq || nx == dq) {
-            i++; unknown(nx)
+            # In double quotes, "$" before a single quote is text. A "$"
+            # before a double quote starts a normal double-quoted string.
+            unknown("")
           } else {
             unknown("")
             if (match(rest, /^[A-Za-z_][A-Za-z0-9_]*/)) {
@@ -1396,9 +1445,10 @@ _has_split_merge_phrase() {
       sq = sprintf("%c",39); dq = sprintf("%c",34); bs = sprintf("%c",92)
       original = ENVIRON["MERGE_SPLIT_INPUT"]
       nested = original ~ /(^|[ \t;|&\/])(bash|sh|zsh|eval|source)([ \t]|$)/
+      budget = 3 * length(original)
       scan(original)
-      for (j = 1; j <= np && j <= 100 && !hit; j++) {
-        depth = levels[j]; in_data = datas[j]; scan(pending[j])
+      for (j = 1; j <= np && !hit && !scan_error; j++) {
+        depth = levels[j]; in_data = datas[j]; in_tail = tails[j]; scan(pending[j])
       }
       print scan_error ? "unavailable" : (hit ? "split" : "clear")
     }
