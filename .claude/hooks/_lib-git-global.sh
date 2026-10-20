@@ -23,9 +23,9 @@ _git_opt_val='(\\.|"[^"]*"|'"'"'[^'"'"']*'"'"'|\$\([^)]*\)|`[^`]*`|[^[:space:];&
 # The regex vars intentionally hold literal " characters and must stay
 # unquoted at use sites (concatenated into larger ERE strings).
 # shellcheck disable=SC2089
-_git_q='("|'\'')?'
+_git_q='("|'\'')*'
 # shellcheck disable=SC2089
-_git_cmd_word=${_git_q}'[Gg]'${_git_q}'[Ii]'${_git_q}'[Tt]'${_git_q}
+_git_cmd_word=${_git_q}'\\?[Gg]'${_git_q}'\\?[Ii]'${_git_q}'\\?[Tt]'${_git_q}
 _git_sub_opts='([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env|attr-source))[[:space:]]+'"${_git_opt_val}"'|--(git-dir|work-tree|namespace|super-prefix|config-env|attr-source)='"${_git_opt_val}"'|--?[A-Za-z][A-Za-z-]*(='"${_git_opt_val}"')?))*[[:space:]]+'
 _git_sub_re='(^|[^[:alnum:]_.-])'${_git_cmd_word}${_git_sub_opts}
 
@@ -40,7 +40,7 @@ _git_quoted_literal() {
         c="\\$c"
         ;;
     esac
-    out+="${_git_q}${c}"
+    out+="${_git_q}\\\\?${c}"
   done
   printf '%s' "${out}${_git_q}"
 }
@@ -65,7 +65,7 @@ command_has_git_subcommand() {
 # 0 when a shell token is the git command word (#1816 G1/G4).
 git_token_is_cmd_word() {
   local flat
-  flat=$(printf '%s' "$1" | tr -d "'\"")
+  flat=$(printf '%s' "$1" | tr -d "'\"\\\\")
   case "$flat" in
     [Gg][Ii][Tt]) return 0 ;;
   esac
@@ -79,7 +79,7 @@ git_token_is_verb() {
   if _git_take_value; then
     word="$_GIT_TAKEN"
   else
-    word=$(printf '%s' "$1" | tr -d "'\"")
+    word=$(printf '%s' "$1" | tr -d "'\"\\\\")
   fi
   _GIT_SCAN="$saved"
   [ "$word" = "$want" ]
@@ -92,22 +92,23 @@ git_uncertain_protected_shape() {
   local push_re commit_re exp_tok
   push_re="$(_git_quoted_literal push)"
   commit_re="$(_git_quoted_literal commit)"
-  # ERE: use [{] / [}] so mawk/BSD grep do not read an interval.
-  exp_tok='(\$[{]?[A-Za-z_][A-Za-z0-9_]*[}]?|\$\([^)]*\)|`[^`]*`)'
-  # Expansion as the command word only: start or a shell separator, then
-  # optional assignments, then the expansion. Do not match a -C/-c value.
-  local exp_cmd='(^|[;|&][[:space:]]*|\&\&[[:space:]]*|\|\|[[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:];|&]*[[:space:]]+)*'"${exp_tok}"
-  if printf '%s\n' "$text" | LC_ALL=C grep -qE "${exp_cmd}[[:space:]]+((-[Cc]|--[A-Za-z][A-Za-z0-9_-]*)([[:space:]]+[^[:space:];|&]+)?[[:space:]]+)*${push_re}([^[:alnum:]_.-]|$)"; then
+  local literal_match direct_re
+  direct_re='(^|[^[:alnum:]_.-])'${_git_cmd_word}'[[:space:]]+'
+  literal_match=$(printf '%s\n' "$text" | LC_ALL=C grep -oE "${direct_re}(${push_re}|${commit_re})([^[:alnum:]_.-]|$)" || :)
+  # Obscured protected words need no further argument interpretation.
+  case "$literal_match" in *'"'*|*"'"*|*'\'*) return 0 ;; esac
+  # Unknown shell words can occupy the command or verb position.
+  local word_part='[[:alnum:]_./"'"'"'-]*'
+  exp_tok='('"${word_part}"'(\$[A-Za-z_][A-Za-z0-9_]*|\$[{][^}]*[}]|\$\([^)]*\)|`[^`]*`|\$'"'"'[^'"'"']*'"'"'|[{][^}]*[}])'"${word_part}"')'
+  local uncertain_opts='([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env|attr-source))[[:space:]]+'"${_git_opt_val}"'|--[A-Za-z-]+='"${_git_opt_val}"'|--(no-pager|paginate|bare|no-replace-objects|literal-pathspecs|glob-pathspecs|noglob-pathspecs|icase-pathspecs|no-optional-locks|no-lazy-fetch)|-[pP]))*[[:space:]]+'
+  local exp_cmd="(^|[;|&(){}!][[:space:]]*|[[:space:]]*(exec|command|env|time|if|while)[[:space:]]+([^;|&]*[[:space:]]+)?)([A-Za-z_][A-Za-z0-9_]*=[^[:space:];|&]*[[:space:]]+)*${exp_tok}"
+  if printf '%s\n' "$text" | LC_ALL=C grep -qE "${exp_cmd}${uncertain_opts}(${push_re}|${commit_re})([^[:alnum:]_.-]|$)"; then
     return 0
   fi
-  if printf '%s\n' "$text" | LC_ALL=C grep -qE "${exp_cmd}[[:space:]]+((-[Cc]|--[A-Za-z][A-Za-z0-9_-]*)([[:space:]]+[^[:space:];|&]+)?[[:space:]]+)*${commit_re}([^[:alnum:]_.-]|$)"; then
-    return 0
-  fi
-  # Literal git (any case / quotes), then an expansion as the next word (the
-  # verb), then at least one more argument.
-  local git_then_exp
-  git_then_exp='(^|[^[:alnum:]_.-])'${_git_cmd_word}'[[:space:]]+'${exp_tok}
-  if printf '%s\n' "$text" | LC_ALL=C grep -qE "${git_then_exp}[[:space:]]+[^[:space:];|&]"; then
+  local git_then_exp="(^|[^[:alnum:]_.-])${_git_cmd_word}${uncertain_opts}${exp_tok}"
+  if printf '%s\n' "$text" | LC_ALL=C grep -qE "${git_then_exp}([[:space:]]+[^[:space:];|&]|[[:space:]]*$)"; then
+    # A bare variable verb with no arguments has no protected evidence.
+    [[ "$text" =~ \$[A-Za-z_][A-Za-z0-9_]*[[:space:]]*$ ]] && ! [[ "$text" = *'"'* || "$text" = *"'"* || "$text" = *--* || "$text" = *' -C '* || "$text" = *' -c '* ]] && return 1
     return 0
   fi
   return 1
@@ -160,7 +161,7 @@ _git_take_value() {
       continue
     fi
     case "$char" in
-      \\) return 1 ;; # #1748: unresolved shell escapes fail closed.
+      \\|'$'|'`') return 1 ;; # Unresolved shell words fail closed.
       \"|\') quote="$char" ;;
       [[:space:]]|';'|'&'|'|') break ;;
       *) taken+="$char" ;;
@@ -620,9 +621,39 @@ _git_alias_word() {
   fi
   return 1
 }
+# Decode a literal verb without changing the strict repository-path reader.
+_git_alias_literal_verb() {
+  local raw="$1" out="" quote="" char next i
+  for ((i=0; i<${#raw}; i++)); do
+    char="${raw:i:1}"
+    if [ "$quote" = "'" ]; then
+      if [ "$char" = "'" ]; then quote=""; else out+="$char"; fi
+    elif [ "$char" = '\' ]; then
+      i=$((i+1)); [ "$i" -lt "${#raw}" ] || return 1
+      next="${raw:i:1}"
+      if [ "$quote" = '"' ]; then
+        case "$next" in
+          '$'|'`'|'"'|'\') out+="$next" ;;
+          $'\n') ;;
+          *) out+="\\$next" ;;
+        esac
+      elif [ "$next" != $'\n' ]; then out+="$next"; fi
+    elif [ -n "$quote" ]; then
+      if [ "$char" = "$quote" ]; then quote=""; else out+="$char"; fi
+    else
+      case "$char" in
+        \"|\') quote="$char" ;;
+        '$'|'`'|'{'|'}') return 1 ;;
+        *) out+="$char" ;;
+      esac
+    fi
+  done
+  [ -z "$quote" ] || return 1
+  _GA_DECODED="$out"
+}
 # Parse options once. Retain literal inline config and target options.
 _git_alias_parse() {
-  local word raw name quote="" c i region="" before
+  local word raw name quote="" c i region="" before _GA_DECODED=""
   _GA_INLINE=() _GA_TARGET=() _GA_OPAQUE=0 _GA_UNREADABLE=0 _GA_VERB=""
   # #1816: accept a quoted or case-variant command word.
   if ! _git_strip_cmd_word "$1"; then
@@ -656,7 +687,13 @@ _git_alias_parse() {
       --config-env=*) _GA_UNREADABLE=1 ;;
       --git-dir=*|--work-tree=*) _GA_TARGET+=("$word") ;;
       --*|-*) ;;
-      *) _GA_VERB="$word"; break ;;
+      *)
+        _GA_VERB="$word"
+        raw="${before:0:${#before}-${#_GIT_SCAN}}"
+        if [[ "$raw" = *'\'* ]] && _git_alias_literal_verb "$raw"; then
+          _GA_VERB="$_GA_DECODED"
+        fi
+        break ;;
     esac
   done
   for raw in ${_GA_INLINE[@]+"${_GA_INLINE[@]}"}; do
@@ -826,7 +863,8 @@ git_alias_check() {
     for f in ${_GA_VIEWFILES[@]+"${_GA_VIEWFILES[@]}"}; do rm -f "$f"; done
   }
   trap '_git_alias_cleanup_views' RETURN
-  case "${cmd:-}" in *git*) ;; *) return 0 ;; esac
+  local entry_re="$_git_cmd_word"
+  [[ "${cmd:-}" =~ $entry_re ]] || return 0
   if ! command -v join_shell_continuations >/dev/null 2>&1; then
     # shellcheck source=/dev/null
     . "$(dirname "${BASH_SOURCE[0]}")/_lib-awk-fallback.sh" || return 2
@@ -909,15 +947,19 @@ EOF_POSITIONS
   fi
   # #1816 G7: repository path the resolver cannot follow statically.
   local _GA_HARD_UNRESOLVED=0
-  if [[ "$text" =~ (^|[^[:alnum:]_])env[[:space:]]+(-C|--chdir)([[:space:]]|=) ]] \
-    || [[ "$text" =~ \(cd[[:space:]] ]] \
-    || [[ "$text" =~ (^|[^[:alnum:]_])cd[[:space:]]+-P([[:space:]]|$) ]]; then
+  if [[ "$text" =~ (^|[^[:alnum:]_.-])env[[:space:]]+(-C|--chdir)([[:space:]]|=) ]] \
+    || [[ "$text" =~ \([[:space:]]*cd[[:space:]] ]] \
+    || [[ "$text" =~ (^|[^[:alnum:]_.-])cd[[:space:]]+-P([[:space:]]|$) ]]; then
     _GA_HARD_UNRESOLVED=1
   fi
-  # Walk the directory chain only once. Failed or non-leading directory changes
-  # use the payload view, as required by residual R2 (soft unresolved).
+  if [[ "$text" =~ (^|[^[:alnum:]_.-])(pushd|popd|sh|bash)[[:space:]] ]] \
+    || [[ "$text" =~ (^|[^[:alnum:]_.-])env[[:space:]].*(-C|--chdir)([[:space:]]|=) ]]; then
+    _GA_HARD_UNRESOLVED=1
+  fi
+  # Walk the directory chain once. Unresolved changes block non-builtin verbs.
+  local _GIT_TAKEN=""
   local segments segment chain_cwd="${cwd:-$PWD}" segment_start=0 segment_end prefix consumed=0 ci=0 chain_bad=0
-  if [[ "$text" =~ (^|[^[:alnum:]_])(cd|pushd|popd)([[:space:]]|$) ]]; then
+  if [[ "$text" =~ (^|[^[:alnum:]_.-])(cd|pushd|popd)([[:space:]]|$) ]]; then
     segments=$(_git_chain_segments "$text") || return 2
     rest="$text"
     while IFS= read -r segment; do
@@ -928,19 +970,20 @@ EOF_POSITIONS
       local trimmed="${segment#"${segment%%[![:space:]]*}"}"
       case "$trimmed" in
         cd|cd[[:space:]]*)
+          _GIT_TAKEN=""
           _GIT_SCAN="${trimmed#cd}"
           if [ -z "${_GIT_SCAN//[[:space:]]/}" ]; then _GIT_TAKEN="$HOME";
           elif ! _git_take_value; then chain_bad=1; fi
-          if [ "$_GIT_TAKEN" = -- ]; then _git_take_value || chain_bad=1; fi
-          if [ "$_GIT_TAKEN" = -P ]; then
+          if [ "${_GIT_TAKEN:-}" = -- ]; then _git_take_value || chain_bad=1; fi
+          if [ "${_GIT_TAKEN:-}" = -P ]; then
             _GA_HARD_UNRESOLVED=1
             _git_take_value || chain_bad=1
           fi
-          dir=$(_git_resolve_dir "$_GIT_TAKEN" "$chain_cwd") && [ -d "$dir" ] && chain_cwd="$dir" || chain_bad=1
+          dir=$(_git_resolve_dir "${_GIT_TAKEN:-}" "$chain_cwd") && [ -d "$dir" ] && chain_cwd="$dir" || chain_bad=1
           local tail="${_GIT_SCAN#"${_GIT_SCAN%%[![:space:]]*}"}"
           if [ -n "$tail" ] && ! [[ "$tail" =~ ^\|\|[[:space:]]*(exit|return)([[:space:]]+[0-9]+)?[[:space:]]*$ ]]; then chain_bad=1; fi
           ;;
-        *) [[ "$trimmed" =~ (^|[^[:alnum:]_])(cd|pushd|popd)([[:space:]]|$) ]] && chain_bad=1 ;;
+        *) [[ "$trimmed" =~ ^(pushd|popd|\([[:space:]]*cd)([[:space:]]|$) ]] && chain_bad=1 ;;
       esac
       for ((i=0; i<${#candidates[@]}; i++)); do
         pos="${candidate_positions[i]}"
@@ -953,6 +996,7 @@ EOF_POSITIONS
 $segments
 EOF_SEGMENTS
   fi
+  [ "$chain_bad" = 0 ] || _GA_HARD_UNRESOLVED=1
   local creation_re="${_git_sub_re}(init|clone|worktree)([^[:alnum:]_.-]|$)"
   if [[ "$text" =~ $creation_re ]]; then _GA_CREATES_REPO=1; fi
   local alias_free_payload=0 simple_re='^'${_git_cmd_word}'[[:space:]]+[^[:space:]-][^[:space:]]*$'
@@ -1022,12 +1066,13 @@ EOF_SEGMENTS
             target="${cwd:-$PWD}"
           fi
           ;;
-        --git-dir=*) gitdir="${token#*=}" ;;
+        --git-dir=*)
+          gitdir="${token#*=}"
+          case "$gitdir" in *'$'*|*'`'*|*'\\'*) candidate_unresolved=1 ;; esac ;;
       esac
     done
-    # Opaque -C expansions stay on the ordinary gate path (unresolvable -C).
-    # A clear non-builtin with a bad -C path is G7.
-    if [ "$candidate_unresolved" = 1 ] && [ "$_GA_OPAQUE" = 0 ] && ! _git_alias_builtin "$_GA_VERB"; then
+    # Unresolved target options cannot clear an alias in the payload repository.
+    if [ "$candidate_unresolved" = 1 ] && ! _git_alias_builtin "$_GA_VERB"; then
       _git_alias_block "cannot resolve the repository for this git alias. Use a literal directory change or -C path, then run the real verb."; return 2
     fi
     cachekey="${#target}:$target${#gitdir}:$gitdir"; index=-1

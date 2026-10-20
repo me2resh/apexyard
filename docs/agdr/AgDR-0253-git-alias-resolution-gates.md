@@ -207,7 +207,7 @@ Chosen: **Option A**, because it closes the alias gap for every gate class and r
 10. Choose the target for each remaining verb, and for each external that needs a view:
     - With no `-C`, `--git-dir` or `--work-tree`, and no `cd`, `pushd` or `popd` in the text, use the payload cwd.
     - Otherwise resolve the target with the `_git_chain_cwd` rules. Walk the segments one time per process, not one time per invocation. Do not require a repository.
-    - When the target does not resolve, use the payload-cwd view. This is residual R2.
+    - When the target does not resolve and the verb is not a builtin, block (G7).
 11. Read each view with one call: `git -C <target> [--git-dir=<dir>] config --includes --get-regexp '^(alias\..*|help\.autocorrect|include\..*|includeif\..*)$'`. Do not use `--global` or `--file`, because they turn includes off. A non-repository target reads the global and system config.
     - Add the basename of each `include.path` and `includeif.*.path` value in the view to the definition-evidence list in rule 17. A command that writes that file can then define an alias.
 12. Treat exit 0 and exit 1 as a valid view. Treat any other exit as a read failure. A read failure blocks only a verb that needs the view.
@@ -325,7 +325,7 @@ These classes were open on `dev` before #1816. Exact payloads stay private. Publ
 | G4 | A git command word in another letter case | Compare the command word case-insensitively before routing. |
 | G5 | A quoted or partly quoted real verb | Decode the verb with the shared word reader (same quote rules as the alias parser). |
 | G6 | A single-quoted repository path that holds a space, when jq is not installed | Covered by the #1748 row-5 / B3 payload pattern for single-quoted `-C` and `--git-dir` values. |
-| G7 | A repository alias reached through a path the resolver does not follow | When an alias (non-builtin verb) runs and the target cannot be resolved statically (`env -C`, a subshell `cd`, `cd -P`, or a `-C` path built from an expansion), block. Builtin verbs other than push and commit stay allowed. |
+| G7 | A repository alias reached through a path the resolver does not follow | When an alias (non-builtin verb) runs and the target cannot be resolved statically (`env -C`, a subshell `cd`, `cd -P`, or a target option built from an expansion, a directory-stack change, a redirected directory change, or a nested shell), block. This also applies to soft directory-chain failures. Builtin verbs other than push and commit stay allowed. |
 | G8 | A repository alias from a config file written other than via `git config` | When the command text names a `.git/config` path (including `.git//config` and `.git/./config`) and then runs a non-builtin verb, block. Do not trust a stale view. |
 
 Builtin safe verbs (status, log, diff, show, fetch, branch --list) stay allowed under every class, including a quoted or uppercase command word.
@@ -335,7 +335,7 @@ Builtin safe verbs (status, log, diff, show, fetch, branch --list) stay allowed 
 Residuals name a class and why it is accepted. They give no runnable command, payload, file-path trick or variable example.
 
 - R1. **Class: agent-written external `git-<verb>`.** An executable named `git-<verb>` on `PATH` or the exec-path runs as a normal program. Accepted because this matches any agent-written script. The native `pre-push` still applies unless the script disables hooks (AgDR-0114). Follow-up item 2.
-- R2. **Class: soft-unresolved target without alias use.** A soft directory-chain failure (for example a `cd` whose path holds an expansion) still uses the payload-cwd view when the verb is unknown and there is no alias evidence. Hard-unresolved shapes that run an alias are G7 and now block. Soft unresolved without an alias stays allowed so round-1 false blocks do not return. CEO decision 1, narrowed by #1816.
+- R2. **Superseded by G7.** A soft or hard unresolved repository target blocks a non-builtin verb. This includes directory paths that contain expansions. Read-only builtin verbs stay allowed. The resolver must not use the payload repository to clear an alias in an unknown repository.
 - R3. **Class: split channel or definition evidence.** A channel token or definition evidence that quotes, expansions or format strings split so the literal text no longer contains the whole-word token. Config path writes that the literal text still names (including slash and dot normalisation) are G8 and now block. Accepted for the remaining split forms because a full shell parser is out of scope. CEO decision 7; narrowed by #1816.
 - R4. **Class: external-existence disagreement.** The hook and git can disagree on whether an external `git-<verb>` exists when the hook-process `PATH` differs from the Bash-tool `PATH`, or when a `PATH` entry is relative. Rule 7 applies rules 8 and 9 first, checks the view for a dangerous alias, and counts only absolute `PATH` entries. A disagreement then matters only when the view also misses the alias. Accepted 2026-10-19.
 - R5. **Class: Bash-tool sourced environment.** Files that the Bash tool sources can change `HOME`, `PATH` or a `GIT_CONFIG*` variable with no command text. The class covers a `CLAUDE_ENV_FILE` script, owner-writable shell-snapshot files under `~/.claude/shell-snapshots/`, and owner-writable session-env directories under `~/.claude/session-env/`. The hook cannot see those changes. Accepted with follow-up item 5 (CEO decision 12).
@@ -343,7 +343,13 @@ Residuals name a class and why it is accepted. They give no runnable command, pa
 - **Class: scripted or file-fed git.** A script file, `eval`, `source`, or a verb or options read from a file or command output, is outside every command-text gate. Rule 4 marks that form opaque; rule 18 blocks only on view evidence. Older than this decision.
 - **Class: ungated write verbs.** Verbs that create commits or send refs other than `push` and `commit` are not gated today. This decision gates exactly the verbs the gates cover.
 
+Literal verbs use quote-aware escape removal before builtin and alias lookup. The repository-path reader still rejects escapes and unresolved expansions.
+
 ### Accepted false blocks
+
+- Prose that names a non-builtin git word with an unresolved repository target. The strict G7 rule cannot verify that word against the target config.
+
+- An expansion in the verb position can name a read-only verb at runtime. The gate blocks when arguments or explicit shell quoting make the protected verb uncertain. Use a literal read-only verb.
 
 These follow the AgDR-0113 rule that quoted text can over-match. Each needs a rare combination with a remaining verb.
 
@@ -409,7 +415,7 @@ R3 forms are not test cases. A test for an accepted residual must not assert an 
 
 The CEO accepted each v2 recommendation. These are decided:
 
-1. **Allow, with residual R2.** A candidate with no alias evidence and an unresolvable target is allowed. Blocking would bring back round-1 false blocks 1 and 3.
+1. **Superseded by the round 3 G7 correction.** Block a non-builtin verb when its repository target cannot be resolved statically.
 2. **Block.** Every alias that resolves to `push` or `commit` blocks with "run the real verb". Splicing into the 11 gate parsers is rejected.
 3. **Shell aliases block on every Bash command.** The block message says to run the body directly.
 4. **A running `help.autocorrect` blocks an unknown verb.** Follow-up item 4 narrows this.

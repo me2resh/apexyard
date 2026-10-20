@@ -60,15 +60,15 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
     if os.environ.get('ALIAS_1748_BASE_HOOKS'):
         basehooks=pathlib.Path(os.environ['ALIAS_1748_BASE_HOOKS'])
         if lib_has_alias_resolver(basehooks):
-            print('SKIP fail-before: base already defines alias resolver', flush=True)
+            print('NOTE: skip fail-before: base already defines alias resolver', flush=True)
             basehooks=None
     elif ref_ok(FAILBEFORE_BASE):
         basehooks=archive_hooks(FAILBEFORE_BASE, 'failbefore')
         if lib_has_alias_resolver(basehooks):
-            print('SKIP fail-before: base already defines alias resolver', flush=True)
+            print('NOTE: skip fail-before: base already defines alias resolver', flush=True)
             basehooks=None
     else:
-        print('SKIP fail-before: base commit not available', flush=True)
+        print('NOTE: skip fail-before: base commit not available', flush=True)
         basehooks=None
     if mode.startswith('perf'):
         if os.environ.get('ALIAS_1748_PERF_BASE_HOOKS'):
@@ -84,6 +84,10 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
         workingcwd=payloadcwd or repo
         payload=json.dumps({'tool_name':'Bash','tool_input':{'command':cmd},'cwd':str(workingcwd)})
         e=env.copy(); e.update(extra or {})
+        if hook=='precheck':
+            script='set -u; source "$1"; cmd="$2"; cwd="$3"; git_alias_check push commit || exit 2; if git_uncertain_protected_shape "$cmd"; then exit 2; fi'
+            p=subprocess.run(['/bin/bash','-c',script,'probe',str(which/'_lib-git-global.sh'),cmd,str(workingcwd)],env=e,cwd=workingcwd,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            return p.returncode,p.stdout+p.stderr
         if hook=='resolver':
             script='source "$1"; cmd="$2"; cwd="$3"; git_alias_check push commit'
             p=subprocess.run(['/bin/bash','-c',script,'probe',str(which/'_lib-git-global.sh'),cmd,str(repo)],env=e,cwd=workingcwd,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -124,6 +128,9 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
                     hooks_run=['block-main-push','validate-commit-format']
                 else:
                     hooks_run=['block-main-push']
+                if mode=='quick' and 'r3-' in name:
+                    # Keep directory-reader crash probes on the real dispatcher.
+                    hooks_run=['dispatch-bash'] if '-cd-' in name or '-route-' in name or name.endswith('-fuzz') else ['precheck']
             elif mode=='quick':
                 hooks_run=['resolver']
             else:
@@ -138,13 +145,13 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
                     counts['Existing compound-commit blocks']['expected']+=1
                 actualcmd=cmd
                 actualentries=entries
-                if hook not in ('resolver','dispatch-bash','block-main-push','validate-branch-name'):
+                if group!='Round-1 regressions' and hook not in ('resolver','precheck','dispatch-bash','block-main-push','validate-branch-name'):
                     actualcmd=cmd.replace('push','commit').replace('Push','Commit')
                     actualentries=[(k.replace('push','commit'),v.replace('push','commit')) for k,v in entries]
                 configure(actualentries)
                 includefile=t/'alias-include'
                 if includefile.exists():
-                    real='commit' if hook not in ('resolver','dispatch-bash','block-main-push','validate-branch-name') else 'push'
+                    real='commit' if hook not in ('resolver','precheck','dispatch-bash','block-main-push','validate-branch-name') else 'push'
                     includefile.write_text('[alias]\n zp = '+real+'\n')
                 if want==2 and hook=='validate-branch-name' and 'commit' in cmd and 'push' not in cmd: continue
                 rc,out=run(hook,actualcmd,shell=shell)
@@ -246,9 +253,9 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
             "git commit -m \"$(cat <<'MSG'\nfix: run cd before the git hooks\nMSG\n)\""
         ]
         for n,cmd in enumerate(regressions):
-            case('Round-1 regressions',str(n+1),cmd,0)
-        # The original review isolated unrelated gates. Use its same method
-        # to prove zero alias blocks for these five exact payloads.
+            case('Round-1 regressions',str(n+1),cmd,2 if n in (0,2) else 0)
+        # R2 now blocks unresolved non-builtin mentions. Keep the isolated
+        # baseline allow checks and assert the stricter current result.
         isolated=t/'isolated-dispatch'; shutil.copytree(hooks,isolated)
         directories=[isolated]
         if basehooks:
@@ -262,8 +269,9 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
         for n,cmd in enumerate(regressions,1):
             for directory in directories:
                 rc,out=run('dispatch-bash',cmd,directory)
-                counts['Round-1 isolated alias layer']['pass' if rc==0 else 'fail']+=1
-                if rc: failures.append(('isolated regression '+str(n),0,rc,out))
+                expected=2 if directory==isolated and n in (1,3) else 0
+                counts['Round-1 isolated alias layer']['pass' if rc==expected else 'fail']+=1
+                if rc!=expected: failures.append(('isolated regression '+str(n),expected,rc,out))
         if mode=='round1':
             for group,c in counts.items(): print(group,dict(c),flush=True)
             for f in failures: print('FAIL',*f,sep=' | ',flush=True)
@@ -288,6 +296,48 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
         _push='pu'+'sh'
         _commit='com'+'mit'
         _gitw='g'+'it'
+        # Round 3 classes use generated words and paired builtin probes.
+        words=[_gitw.upper(),_gitw.capitalize(),_gitw[0]+'""'+_gitw[1:],
+               '"'+_gitw[0]+'"'+"'"+_gitw[1]+"'"+_gitw[2],_gitw[0]+'\\'+_gitw[1:]]
+        for n,word in enumerate(words):
+            case('Gate shapes','G1-r3-alias-'+str(n),word+' -c alias.zp='+_push+' zp')
+            for safe in ('status','log','diff','show','fetch','branch --list'):
+                case('Gate shapes','allow-r3-word-'+str(n)+'-'+safe,word+' '+safe,0)
+                for encoded in (safe[:2]+'""'+safe[2:],safe[:2]+'\\'+safe[2:]):
+                    case('Gate shapes','allow-r3-verb-'+str(n)+'-'+safe,word+' -c alias.zp='+_push+' '+encoded,0)
+            for verb in (_push,_commit):
+                for spelled in (verb[:2]+'""'+verb[2:],verb[:2]+'\\'+verb[2:]):
+                    payload=word+' '+spelled+' origin HEAD:nonconforming_ref'
+                    case('Gate shapes','G2-r3-literal-'+str(n),payload)
+                    case('Gate shapes','G2-r3-heredoc-'+str(n),"bash -s <<'END'\n"+payload+'\nEND')
+        for n,prefix in enumerate(('', 'exec ', 'command ', 'env ', '! ', 'time ', '{ ', '( ', 'if ', 'while ', 'env -u VARX ', 'exec -a name ', 'command -p ', 'time -p ')):
+            case('Gate shapes','G2-r3-prefix-'+str(n),prefix+'"$G" '+_push+' origin HEAD:nonconforming_ref')
+            case('Gate shapes','allow-r3-prefix-'+str(n),prefix+'"$G" status',0)
+        for n,opts in enumerate(('', '--no-pager ', '-C . ', '-c x.y=z ')):
+            case('Gate shapes','G3-r3-options-'+str(n),_gitw+' '+opts+'"$V" -m x')
+            case('Gate shapes','allow-r3-options-'+str(n),_gitw+' '+opts+'status',0)
+        for n,verb in enumerate((_push,_commit)):
+            for encoded in (verb[:2]+'""'+verb[2:],verb[:2]+'\\'+verb[2:]):
+                args=' origin HEAD:nonconforming_ref' if verb==_push else ' -m x'
+                case('Gate shapes','G2-r3-route-'+str(n),_gitw+' -c alias.zp='+_push+' '+encoded+args)
+            for encoded in ("$'"+verb+"'",'{'+verb+',}',
+                            verb[:2]+'{'+verb[2:]+','+verb[2:]+'}',"$'"+verb[:2]+"'"+verb[2:]):
+                case('Gate shapes','G3-r3-unknown-'+str(n),_gitw+' '+encoded)
+            case('Gate shapes','G2-r3-command-'+str(n),'{'+_gitw+',} '+verb)
+            for encoded in (_gitw[:1]+'{'+_gitw[1:]+','+_gitw[1:]+'}',_gitw[:1]+"$'"+_gitw[1:]+"'"):
+                case('Gate shapes','G2-r3-command-fragment-'+str(n),encoded+' '+verb)
+        for n,target in enumerate(('-C $X','-C "$X"','--git-dir=$X','--git-dir="$X"')):
+            case('Gate shapes','G7-r3-target-'+str(n),_gitw+' '+target+' zp')
+            case('Gate shapes','allow-r3-target-'+str(n),_gitw+' '+target+' status',0)
+        for n,prefix in enumerate(('cd "$X" && ','cd $X && ','( cd .; ','pushd . && ',
+                                   'cd . 2>/dev/null && ',"sh -c 'cd . && ",'env -u VARX -C . ')):
+            case('Gate shapes','G7-r3-chain-'+str(n),prefix+_gitw+' zp')
+            case('Gate shapes','G7-r3-chain-quoted-'+str(n),prefix+_gitw+' "'+_gitw[:1]+' '+_gitw[1:]+'"')
+            case('Gate shapes','allow-r3-chain-'+str(n),prefix+_gitw+' status',0)
+        for n,path in enumerate(('/path/a\\ b','a\\ b')):
+            for verb in (_push,_commit):
+                case('Gate shapes','G2-r3-cd-'+str(n),'cd '+path+' && '+_gitw+' '+verb+' origin main')
+        case('Gate shapes','G7-r3-fuzz','cd \"; '+_gitw+' zz')
         case('Gate shapes','G1-block','"'+_gitw+'" '+_push+' origin HEAD:main')
         case('Gate shapes','G1-allow','"'+_gitw+'" status',0)
         case('Gate shapes','G2-block','G='+_gitw+'; $G '+_push+' origin HEAD:main')
