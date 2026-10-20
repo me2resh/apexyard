@@ -44,6 +44,8 @@ fi
 [ -f "$DENY" ] && [ -r "$DENY" ] || die "cannot read deny list: $DENY"
 git -C "$REPO" cat-file -e "$COMMIT^{commit}" 2>/dev/null \
   || die "unknown commit: $COMMIT"
+# A symbolic out-dir could send the tree outside the place the operator chose.
+[ ! -L "$OUT" ] || die "out-dir is a symbolic link: $OUT"
 if [ -e "$OUT" ]; then
   [ -d "$OUT" ] || die "out-dir is not a directory: $OUT"
   [ -z "$(ls -A "$OUT")" ] || die "out-dir is not empty: $OUT"
@@ -125,7 +127,7 @@ if [ -s "$NAMES_FILE" ]; then
   # A binary file is never redacted by the text pass. Fail closed on any.
   bins=""
   while IFS= read -r f; do
-    grep -Iq . "$f" 2>/dev/null || bins="$bins $f"
+    grep -Iq '' "$f" 2>/dev/null || bins="$bins $f"
   done < <(find "$OUT" -type f -size +0)
   [ -z "$bins" ] || die "a binary file was not redacted:$(printf '%s' "$bins" | cut -c1-300)"
 
@@ -136,9 +138,11 @@ if [ -s "$NAMES_FILE" ]; then
   left=$(grep -rliF -f "$NAMES_FILE" "$OUT") || rc=$?
   [ "$rc" -le 1 ] || die "the proof scan failed (grep exit $rc)"
   [ -z "$left" ] || die "a deny-list name remains in: $(printf '%s' "$left" | head -5 | tr '\n' ' ')"
-  paths=$(find "$OUT" -print) || die "cannot list the snapshot paths"
+  # List the paths relative to the out-dir. No pattern is built from the
+  # out-dir name, so any out-dir name is safe.
+  paths=$(cd "$OUT" && find . -print) || die "cannot list the snapshot paths"
   rc=0
-  left=$(printf '%s\n' "$paths" | sed "s|^$OUT||" | grep -iF -f "$NAMES_FILE") || rc=$?
+  left=$(printf '%s\n' "$paths" | grep -iF -f "$NAMES_FILE") || rc=$?
   [ "$rc" -le 1 ] || die "the path proof scan failed (grep exit $rc)"
   [ -z "$left" ] || die "a deny-list name remains in a path: $(printf '%s' "$left" | head -5 | tr '\n' ' ')"
 else

@@ -108,6 +108,47 @@ if [ -e "$WORKDIR/snap-bin" ]; then bad "a failed build removes the out-dir"; el
 touch "$WORKDIR/afile"
 check "an out-dir under a file fails with exit 2" 2 bash "$SNAPSHOT" "$CLEAN" "$WORKDIR/afile/sub" "$DENY" "$REPO"
 
+# 3f. The out-dir name must not break the path proof (B1). A deny-list name
+# with "/" is caught only by the path proof. Fake names only.
+REPO2="$WORKDIR/repo2"
+mkdir -p "$REPO2/docs/zzz-note"
+git -C "$REPO2" init -q
+printf 'plain\n' > "$REPO2/docs/zzz-note/a.txt"
+printf '\n\n' > "$REPO2/newlines.txt"
+git -C "$REPO2" add docs/zzz-note/a.txt newlines.txt
+git -C "$REPO2" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q -m slash
+SLASH=$(git -C "$REPO2" rev-parse HEAD)
+DENYSLASH="$WORKDIR/denyslash.txt"
+printf 'docs/zzz-note\n' > "$DENYSLASH"
+check "a path proof catches a name with a slash" 2 bash "$SNAPSHOT" "$SLASH" "$WORKDIR/plain-out" "$DENYSLASH" "$REPO2"
+if grep -qF 'remains in a path' "$OUTFILE"; then ok "the failure names the path leak"; else bad "the failure names the path leak"; fi
+check "an out-dir name with a pipe still runs the path proof" 2 bash "$SNAPSHOT" "$SLASH" "$WORKDIR/pi|pe/out" "$DENYSLASH" "$REPO2"
+if grep -qF 'remains in a path' "$OUTFILE"; then ok "the pipe out-dir failure names the path leak"; else bad "the pipe out-dir failure names the path leak"; fi
+check "an out-dir name with a bracket still runs the path proof" 2 bash "$SNAPSHOT" "$SLASH" "$WORKDIR/br[ack/out" "$DENYSLASH" "$REPO2"
+if grep -qF 'remains in a path' "$OUTFILE"; then ok "the bracket out-dir failure names the path leak"; else bad "the bracket out-dir failure names the path leak"; fi
+
+# 3g. A scan error (grep exit 2) fails closed, in the text scan and in the
+# path proof. The fake grep fails only for the chosen scan.
+REALGREP=$(command -v grep)
+FAKE1="$WORKDIR/fake1"; FAKE2="$WORKDIR/fake2"
+mkdir -p "$FAKE1" "$FAKE2"
+printf '#!/bin/sh\nexit 2\n' > "$FAKE1/grep"
+printf '#!/bin/sh\ncase "$1" in -iF) exit 2 ;; esac\nexec %s "$@"\n' "$REALGREP" > "$FAKE2/grep"
+chmod +x "$FAKE1/grep" "$FAKE2/grep"
+check "a text scan error fails with exit 2" 2 env PATH="$FAKE1:$PATH" bash "$SNAPSHOT" "$CLEAN" "$WORKDIR/snap-g1" "$DENY" "$REPO"
+if grep -qF 'scan failed' "$OUTFILE"; then ok "the text scan failure is named"; else bad "the text scan failure is named"; fi
+check "a path proof scan error fails with exit 2" 2 env PATH="$FAKE2:$PATH" bash "$SNAPSHOT" "$CLEAN" "$WORKDIR/snap-g2" "$DENY" "$REPO"
+if grep -qF 'path proof scan failed' "$OUTFILE"; then ok "the path proof failure is named"; else bad "the path proof failure is named"; fi
+
+# 3h. A symbolic out-dir is refused.
+mkdir -p "$WORKDIR/realdir"
+ln -s "$WORKDIR/realdir" "$WORKDIR/linkout"
+check "a symbolic out-dir fails with exit 2" 2 bash "$SNAPSHOT" "$CLEAN" "$WORKDIR/linkout" "$DENY" "$REPO"
+if [ -z "$(ls -A "$WORKDIR/realdir")" ]; then ok "a symbolic out-dir target stays empty"; else bad "a symbolic out-dir target stays empty"; fi
+
+# 3i. A file that holds only newlines is text, not binary.
+check "a newline-only file is not binary" 0 bash "$SNAPSHOT" "$SLASH" "$WORKDIR/snap-nl" "$DENY" "$REPO2"
+
 # 4. An empty deny list builds an unredacted snapshot and says so.
 : > "$WORKDIR/empty.txt"
 check "an empty deny list builds a snapshot" 0 bash "$SNAPSHOT" "$CLEAN" "$WORKDIR/snap-empty" "$WORKDIR/empty.txt" "$REPO"
