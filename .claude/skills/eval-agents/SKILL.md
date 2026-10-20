@@ -199,6 +199,8 @@ This wording is deliberate (#833, Hakim's security review of #828): telling the 
 
 Capture the sub-agent's full returned text as `AGENT_OUTPUT`.
 
+**Option: read-only source access (#1815).** Some defects need the source, for example a count to recount or a set of settings to check. For such an entry, run the reviewer with the Opus CLI in place of the `Agent` tool. Give it only Read, Grep and Glob over a sanitized source snapshot of the reviewed commit, built by `lib/source-snapshot.sh`. The reviewer gets no shell and no path outside its run folder. The full protocol and the list of entries that used it are in [`docs/eval-agents/README.md`](../../../docs/eval-agents/README.md) § "Read-only source access (option)". Record in the report which entries used the option.
+
 #### 3e. Contamination check (safety backstop) — snapshot-diff is authoritative, text-scan is secondary
 
 Two independent checks, both run before scoring. Either one flagging is sufficient to discard the run.
@@ -400,6 +402,8 @@ Override per-project in `.claude/project-config.json` (shallow-merge — overrid
 | `.claude/skills/eval-agents/lib/snapshot-diff.sh` | Filesystem snapshot/check pair — the Step 3c/3e contamination backstop (#833) |
 | `.claude/skills/eval-agents/tests/smoke.sh` | Validator smoke tests |
 | `.claude/skills/eval-agents/tests/test-snapshot-diff.sh` | Snapshot-diff smoke tests (#833) |
+| `.claude/skills/eval-agents/lib/source-snapshot.sh` | Builds the read-only, sanitized source snapshot for the source-access option (#1815) |
+| `.claude/skills/eval-agents/tests/test_source_snapshot.sh` | Source-snapshot tests: redaction, fail-closed leak check, read-only tree (#1815) |
 | `.claude/skills/eval-agents/lib/mine_disagreements.py` | Read-only candidate miner (#1440): Rex APPROVED vs. Hakim or Tariq CHANGES on one commit |
 | `.claude/skills/eval-agents/tests/test_mine_disagreements.sh` | Miner tests: Python unit tests, a fake `gh` read-only check, and a draft-rejection check (#1440) |
 | `docs/eval-agents/README.md` | Corpus directory overview, what's seeded, how to grow it |
