@@ -1043,7 +1043,25 @@ _has_split_merge_phrase() {
   local result
   if [ "${#1}" -gt 120000 ]; then return 2; fi
   result=$(MERGE_SPLIT_INPUT="$1" awk '
-    function reset() { stage = 0; active = 1; redirected = 0; option_value = 0; api = 0; phrase_lit = 0 }
+    function reset() { stage = 0; active = 1; redirected = 0; option_value = 0; api = 0; phrase_lit = cmd_lit = prefixed = 0 }
+    # Start a phrase window at a host word. Return 1 when the word can be a host.
+    function open_window(value,    host) {
+      host = value; sub(/^.*\//, "", host)
+      # Unquoted expansion can word-split into the host. Keep it opaque.
+      # A quoted expansion before a literal last segment keeps that segment.
+      if (opaque_unquoted) host = ".*"
+      if ("gh" ~ ("^" host "$") || "glab" ~ ("^" host "$")) {
+        stage = 1; cli = host; altered = changed || host != value
+        if (!opaque_word) phrase_lit = cmd_lit = 1
+        return 1
+      }
+      return 0
+    }
+    # A broken phrase: the current word starts a new window behind a prefix.
+    function restart_window(value) {
+      stage = 0; phrase_lit = cmd_lit = 0; altered = 0; option_value = 0; prefixed = 1
+      open_window(value)
+    }
     function clear_word() { w = raw = ""; changed = opaque_word = opaque_unquoted = 0 }
     function queue_body(body) {
       if (body == "") return
@@ -1063,7 +1081,7 @@ _has_split_merge_phrase() {
       }
       return substr(s, start, i - start)
     }
-    function finish(    host, value) {
+    function finish(    value) {
       if (w == "") {
         if (changed && stage > 0) altered = 1
         clear_word(); return
@@ -1076,18 +1094,13 @@ _has_split_merge_phrase() {
       value = w
       if (api && value ~ /(pulls|merge_requests)\/[0-9]+\/merge/ && changed) hit = 1
       if (active && stage == 0) {
-        if (value ~ /^[A-Za-z_][A-Za-z0-9_]*=/ || value == "env" || value == "command" || value == "exec" || value == "do" || value == "then" || value == "if" || value == "elif" || value == "else" || value == "while" || value == "until") {
+        # These words keep the next word at command position.
+        if (value ~ /^[A-Za-z_][A-Za-z0-9_]*=/ || value == "env" || value == "command" || value == "exec" || value == "builtin" || value == "time" || value == "nohup" || value == "!" || value == "do" || value == "then" || value == "if" || value == "elif" || value == "else" || value == "while" || value == "until") {
           clear_word(); return
         }
-        host = value; sub(/^.*\//, "", host)
-        # Unquoted expansion can word-split into the host. Keep it opaque.
-        # A quoted expansion or glob before a literal last segment keeps that segment.
-        if (opaque_unquoted) host = ".*"
-        if ("gh" ~ ("^" host "$") || "glab" ~ ("^" host "$")) {
-          stage = 1; cli = host; altered = changed || host != value
-          if (!opaque_word) phrase_lit = 1
-        } else {
+        if (!open_window(value)) {
           # Non-host prefix: keep looking for a later phrase window.
+          prefixed = 1
           clear_word(); return
         }
       } else if (active) {
@@ -1101,39 +1114,27 @@ _has_split_merge_phrase() {
             ((("gh" ~ ("^" cli "$")) && ("pr" ~ ("^" value "$"))) || \
              (("glab" ~ ("^" cli "$")) && ("mr" ~ ("^" value "$"))))) {
           stage = 2; altered = altered || changed
-          if (!opaque_word) phrase_lit = 1
+          if (!opaque_word) phrase_lit = cmd_lit = 1
         } else if (stage == 2 && "merge" ~ ("^" value "$")) {
           if (!opaque_word) phrase_lit = 1
-          # A window with no literal phrase word stays clear unless a
-          # later bare PR number confirms an opaque three-word phrase.
-          if (phrase_lit && (altered || changed || redirected || depth > 0)) {
-            hit = 1; active = 0
-          } else if (!phrase_lit && (altered || changed || redirected || depth > 0)) {
-            stage = 3
-          } else active = 0
+          # At command position, any literal phrase word confirms a changed
+          # phrase. Behind a non-host prefix, an ordinary argument list can
+          # fill the window, so the host word or the subcommand word must be
+          # literal. At command position, a window with no literal phrase
+          # word stays clear unless a later bare PR number confirms it.
+          if (!(altered || changed || redirected || depth > 0)) active = 0
+          else if (prefixed ? cmd_lit : phrase_lit) { hit = 1; active = 0 }
+          else if (!prefixed && !phrase_lit) stage = 3
+          else restart_window(value)
         } else if (stage == 3) {
           if (value ~ /^[0-9]+$/ && !opaque_word) { hit = 1; active = 0 }
-          else {
-            stage = 0; phrase_lit = 0; altered = 0; option_value = 0
-            host = value; sub(/^.*\//, "", host)
-            if (opaque_unquoted) host = ".*"
-            if ("gh" ~ ("^" host "$") || "glab" ~ ("^" host "$")) {
-              stage = 1; cli = host; altered = changed || host != value
-              if (!opaque_word) phrase_lit = 1
-            }
-          }
+          else restart_window(value)
         } else if (api) {
           # Keep api set so a later path word can still match.
           active = 0
         } else {
           # Broken phrase: treat the current word as a fresh prefix window.
-          stage = 0; phrase_lit = 0; altered = 0; option_value = 0
-          host = value; sub(/^.*\//, "", host)
-          if (opaque_unquoted) host = ".*"
-          if ("gh" ~ ("^" host "$") || "glab" ~ ("^" host "$")) {
-            stage = 1; cli = host; altered = changed || host != value
-            if (!opaque_word) phrase_lit = 1
-          }
+          restart_window(value)
         }
       }
       clear_word()

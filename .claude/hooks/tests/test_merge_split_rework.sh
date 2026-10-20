@@ -140,5 +140,58 @@ for gate in block-unreviewed-merge.sh block-merge-on-red-ci.sh require-architect
   done
 done
 
+# Finding 4: behind a non-host prefix, an ordinary argument list can fill the
+# phrase window. It stays clear unless the host or subcommand word is literal.
+# A bare number confirms an all-opaque window only at command position.
+f4_allow=(
+  'python3 "$SCRIPT" "$IN" "$OUT" 5'
+  './run.sh "$A" "$B" "$C" 1'
+  "printf '%s %s %s %d\n' \"\$a\" \"\$b\" \"\$c\" 1"
+  'for x in "$A" "$B" "$C" 1; do echo "$x"; done'
+  'mv "$f" "$d" merge'
+  'node "$S" "$A" "$B" "$C" 42'
+  'cp -v "$A" "$B" merge'
+  'sort "$f" "$d" "$e" 9 | head -n 3'
+  'while read -r x; do mv "$x" "$Y" "$Z" 2; done'
+  'echo "$A" "$B" merge 7'
+)
+f4_block=(
+  "$(printf 'nohup "$%s" "$%s" "$%s" 7' G P M)"
+  "$(printf 'mv "$f" "$d" && "$%s" "$%s" %s 7' G P "$M")"
+  "$(printf 'for x in 1; do "$%s" "$%s" "$%s" 1; done' G P M)"
+  "$(printf 'nice "$%s" %s "$%s" 7' G "$P" M)"
+  "$(printf 'sudo %s "$%s" "$%s" 7' "$G" P M)"
+  "$(printf './run.sh "$A"; time "$%s" "$%s" "$%s" 5' G P M)"
+)
+for cmd in "${f4_allow[@]}"; do
+  check 'ordinary argument list stays clear' 1 "$cmd"
+done
+for cmd in "${f4_block[@]}"; do
+  check 'prefixed or command-position phrase still blocks' 0 "$cmd"
+  check 'prefixed or command-position phrase data pair' 1 "$(printf "cat <<'DATA'\n%s\nDATA" "$cmd")"
+done
+for gate in block-unreviewed-merge.sh block-merge-on-red-ci.sh require-architecture-review.sh require-design-review-for-ui.sh; do
+  for cmd in "${f4_allow[@]}"; do
+    payload=$(jq -nc --arg c "$cmd" '{tool_name:"Bash",tool_input:{command:$c}}')
+    (cd "$TMP" && printf '%s' "$payload" | PATH="$TMP/bin:$PATH" APEXYARD_OPS_DISABLE_PIN=1 /bin/bash ".claude/hooks/$gate" >/dev/null 2>"$TMP/err")
+    rc=$?
+    if [ "$rc" -eq 0 ]; then
+      PASS=$((PASS+1)); printf 'PASS [%s allow argument list]\n' "$gate"
+    else
+      FAIL=$((FAIL+1)); printf 'FAIL [%s allow argument list]: rc=%s: %s\n' "$gate" "$rc" "$cmd" >&2
+    fi
+  done
+  for cmd in "${f4_block[@]}"; do
+    payload=$(jq -nc --arg c "$cmd" '{tool_name:"Bash",tool_input:{command:$c}}')
+    (cd "$TMP" && printf '%s' "$payload" | PATH="$TMP/bin:$PATH" APEXYARD_OPS_DISABLE_PIN=1 /bin/bash ".claude/hooks/$gate" >/dev/null 2>"$TMP/err")
+    rc=$?
+    if [ "$rc" -eq 2 ]; then
+      PASS=$((PASS+1)); printf 'PASS [%s block window phrase]\n' "$gate"
+    else
+      FAIL=$((FAIL+1)); printf 'FAIL [%s block window phrase]: rc=%s\n' "$gate" "$rc" >&2
+    fi
+  done
+done
+
 printf 'RESULT: %s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
