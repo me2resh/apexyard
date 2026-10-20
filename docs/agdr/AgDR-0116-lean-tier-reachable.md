@@ -61,3 +61,43 @@ For a **pure `.md` diff**, Lean and Standard were already mechanically identical
 - AgDR-0104 (control vs. backstop framing — why the gate can't also be the tier classifier)
 - AgDR-0107 (the original Lean-tier rule this decision corrects)
 - AgDR-0111 / AgDR-0112 (prior rounds establishing that gate trust must rest on forge-reported state, never a local self-report)
+
+## Evolution — scripted depth permission (#1773, 2026-10-19)
+
+Option 4 now requires a trusted tier script before each Rex spawn or resume.
+`bin/review-tier.sh` permits the existing Reduced-Scope pass only.
+The orchestrator exports it from the base commit, never from the PR working tree.
+It reads the complete base..reviewed range and both rename and copy paths.
+It checks an independent file list and fails to Full on any error or truncation.
+Only regular Markdown and raster images under docs qualify.
+Prompt-referenced paths, AgDRs, ORBIT records, JSON, YAML, scripts, and lock files always require Full.
+Rex retains the five eligibility conditions and both rails. The stricter result governs.
+A new head invalidates the result, so the orchestrator repeats the check after a push.
+The merge gates and marker library remain unchanged.
+
+The spawn procedure is in `docs/skills/code-review-depth.md`.
+Forge-case tests are in `.claude/hooks/tests/test_review_tier.sh`.
+CEO decision 2026-10-19: this slice ships the three prompt edits with a partial C4 result (k=1 on the five delta entries, 30 runs, 0 observed flips). That is not a zero-flip result. Open work remains: k=3 on all 15 entries, and k=8 where an entry falls outside baseline variance. Until that work lands, ac7-1, ac7-4 and ac7-6 stay partially-verified. The per-PR human merge nod is the place that accepts this C4 deviation.
+
+## Architecture evolution — isolate the tier interpreter (#1773, 2026-10-19)
+
+Hakim's review of PR #1797 showed that `python3 -` put the caller's cwd first on
+`sys.path` and honoured `PYTHONPATH`. A PR that planted `json.py` (or another
+pure-Python stdlib name) at the repository root could forge `Reduced-scope-allowed`
+and run code on the host when the orchestrator used that checkout as cwd.
+
+The script now starts Python with `-I`, changes to a fresh temporary directory
+before the interpreter runs, and resolves the repository argument to an absolute
+path first. Callers may invoke it from any directory. Regression tests plant
+`json.py` and `re.py` under the fixture repo, run with cwd inside that repo, and
+assert Full with no marker file from the planted modules. A `PYTHONPATH` variant
+is covered the same way.
+
+## Architecture evolution — plant coverage and signal exit (#1813, 2026-10-19)
+
+Hakim's advisory on PR #1797 asked for three more plant cases that still run when
+`-I` is removed but the neutral working directory stays: `subprocess.py`,
+`sitecustomize.py`, and a `.pth` file under a `PYTHONUSERBASE` user-site layout.
+Each case returns Full and leaves no run marker. The INT and TERM traps now call
+cleanup and then `exit 1`, so a signalled run is an explicit non-zero failure
+instead of cleanup-and-continue.

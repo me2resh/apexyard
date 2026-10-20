@@ -1149,20 +1149,53 @@ _at_session_differs() {
   [ "$old" != "$cur" ]
 }
 
+# REPLY is <value> with bytes below 0x20 and 0x7f removed (audit-line fields).
+# Pure bash only: no fork (process-budget case 3b / #1808).
+_at_strip_controls() {
+  local s="$1" out="" ch
+  while [ -n "$s" ]; do
+    ch="${s:0:1}"
+    s="${s:1}"
+    case "$ch" in
+      [[:cntrl:]]) ;;
+      *) out="${out}${ch}" ;;
+    esac
+  done
+  REPLY="$out"
+}
+
+# REPLY is a decimal hash of $1 (digits only; safe as a claim file name).
+# Pure bash: no cksum/awk/tr on the per-edit warn path (#1808).
+_at_claim_hash() {
+  local s="$1" i=0 o h=0 n
+  n=${#s}
+  while [ "$i" -lt "$n" ]; do
+    printf -v o '%d' "'${s:$i:1}"
+    h=$(( (h * 31 + o) % 2147483647 ))
+    i=$((i + 1))
+  done
+  REPLY=$h
+}
+
 # Return 0 when writing <repo>/<num> into <dir> would replace a marker that
 # holds a different ticket and a different session_id. Used by /start-ticket
 # before overwrite (AgDR-0257). Checks the per-tree apexyard-ticket when
-# present; otherwise the old-layout path this write would replace
-# (current-ticket / tickets/<project>[/<branch>]).
+# present. Checks the old-layout path only when the tree fails validation
+# (that write replaces only the old-layout file). A valid tree with no
+# per-tree marker yet writes its own marker; the shared current-ticket is
+# not the marker it replaces (Hakim A4 / #1533).
 active_ticket_foreign_overwrite() {
   local dir="$1" new_repo="$2" new_num="$3"
   local marker="" old_repo="" old_num="" old_sid="" cur_sid=""
   new_num="${new_num#\#}"
   REPLY=""
   active_ticket_init "$dir" 2>/dev/null || true
-  if active_ticket_gitdir "$dir" 2>/dev/null && [ -f "$AT_GITDIR/apexyard-ticket" ] \
-    && [ ! -L "$AT_GITDIR/apexyard-ticket" ]; then
-    marker="$AT_GITDIR/apexyard-ticket"
+  if active_ticket_gitdir "$dir" 2>/dev/null; then
+    if [ -f "$AT_GITDIR/apexyard-ticket" ] && [ ! -L "$AT_GITDIR/apexyard-ticket" ]; then
+      marker="$AT_GITDIR/apexyard-ticket"
+    else
+      return 1
+    fi
   elif active_ticket_legacy_path "$dir" "$new_repo" 2>/dev/null \
     && [ -n "$REPLY" ] && [ -f "$REPLY" ] && [ ! -L "$REPLY" ]; then
     marker="$REPLY"
@@ -1245,10 +1278,13 @@ active_ticket_warn_if_mismatch() {
 
   if active_ticket_mismatch_warn_dir "$home"; then
     warn_dir="$REPLY"
-    # Claim: path plus the marker identity fields so a later foreign marker
-    # at the same path still warns once (Rex finding 1 / #1533).
-    claim=$(printf '%s|%s|%s|%s|%s' "$marker" "$m_sid" "$m_repo" "$m_num" "$m_started" \
-      | tr -c 'A-Za-z0-9._-' '_')
+    # Claim: pure-bash hash of path plus the marker identity fields.
+    # A later foreign marker at the same path still warns once
+    # (Rex finding 1 / #1533). A short hash keeps the name under NAME_MAX
+    # when the marker path is long, with no extra exec on the edit path
+    # (#1808).
+    _at_claim_hash "${marker}|${m_sid}|${m_repo}|${m_num}|${m_started}"
+    claim="$REPLY"
     if [ -n "$claim" ] && [ -e "$warn_dir/$claim" ]; then
       return 0
     fi
@@ -1266,7 +1302,7 @@ active_ticket_warn_if_mismatch() {
   age="${m_started:-unknown}"
   case "$why" in
     session*)
-      fix="Run /start-ticket for your ticket, or use a separate worktree (see #1534)."
+      fix="Run /start-ticket for your ticket, or stay in a worktree that already holds it (see #1534)."
       ;;
     *)
       fix="Re-run /start-ticket on this branch, or switch back to the marker branch."
@@ -1601,7 +1637,8 @@ active_ticket_pending_path() {
 # symlink.
 active_ticket_write_from_file() {
   local dir="$1" f="$2" l repo="" num="" title="" url="" branch="" wrote=1 id=""
-  local takeover_marker="" old_repo="" old_num="" old_sid="" new_sid=""
+  local takeover=0 takeover_marker="" old_repo="" old_num="" old_sid="" new_sid=""
+  local s_old_repo="" s_old_num="" s_old_sid="" s_repo="" s_num="" s_new_sid=""
   case "$f" in
     */.claude/session/start-ticket-*.pending)
       id="${f##*/start-ticket-}"
@@ -1641,9 +1678,10 @@ active_ticket_write_from_file() {
   # export; headless and /fan-out must not set it (AgDR-0257 / #1533).
   if active_ticket_foreign_overwrite "$dir" "$repo" "$num"; then
     if [ "${APEXYARD_START_TICKET_TAKEOVER:-}" != 1 ]; then
-      echo "apexyard: ticket marker not overwritten: another session holds a different ticket at $REPLY. Use a separate worktree (see #1534), or re-run /start-ticket and choose take over." >&2
+      echo "apexyard: ticket marker not overwritten: another session holds a different ticket at $REPLY. Stay in a worktree that already holds your ticket (see #1534), or re-run /start-ticket and choose take over." >&2
       return 1
     fi
+    takeover=1
     takeover_marker="$REPLY"
     active_ticket_read_field "$takeover_marker" repo || true
     old_repo="$REPLY"
@@ -1653,7 +1691,6 @@ active_ticket_write_from_file() {
     old_sid="$REPLY"
     active_ticket_session_id || true
     new_sid="$REPLY"
-    echo "apexyard: ticket marker taken over: ${old_repo}#${old_num} (session ${old_sid}) -> ${repo}#${num} (session ${new_sid})" >&2
   fi
   rm -f "$f"
   active_ticket_init "$dir" || true
@@ -1663,6 +1700,17 @@ active_ticket_write_from_file() {
     echo "note: $dir failed validation (${AT_REASON:-unknown}). Only the old-layout marker is written." >&2
   fi
   active_ticket_write_legacy "$dir" "$repo" "$num" "$title" "$url" "$branch" && wrote=0
+  # Audit only after a successful write. Strip control characters from every
+  # printed field (Hakim A2 / #1533).
+  if [ "$takeover" = 1 ] && [ "$wrote" = 0 ]; then
+    _at_strip_controls "$old_repo"; s_old_repo="$REPLY"
+    _at_strip_controls "$old_num"; s_old_num="$REPLY"
+    _at_strip_controls "$old_sid"; s_old_sid="$REPLY"
+    _at_strip_controls "$repo"; s_repo="$REPLY"
+    _at_strip_controls "$num"; s_num="$REPLY"
+    _at_strip_controls "$new_sid"; s_new_sid="$REPLY"
+    echo "apexyard: ticket marker taken over: ${s_old_repo}#${s_old_num} (session ${s_old_sid}) -> ${s_repo}#${s_num} (session ${s_new_sid})" >&2
+  fi
   return "$wrote"
 }
 

@@ -75,14 +75,13 @@ A timeout that is too short would block valid merges.
 
 | Entry | Slowest p95 | 5 x p95 | Floor | Chosen timeout |
 |-------|-------------|---------|-------|----------------|
-| `dispatch-bash.sh` (Bash matcher) | 9661 (`gh pr merge`, slow-network route, see below) | 48305 | 10000 | 60 seconds |
+| `dispatch-bash.sh` (Bash matcher) | 14885 (`gh pr merge`, #1770 chain after #1796, see below) | 74425 | 10000 | 75 seconds |
 | `require-active-ticket.sh` (Edit, Write, MultiEdit matcher) | 207 | 1035 | 10000 | 10 seconds |
 
-The `dispatch-bash.sh` value is 60 seconds, above the 48.3 second minimum.
-The extra margin covers the merge routes with more calls (no checks: 6 calls;
-the AgDR-0244 fallback: 8 calls) on a slow network.
-A merge that waits longer than 60 seconds for the tracker fails closed.
-The operator can retry it.
+The `dispatch-bash.sh` value is 75 seconds, above the 74.4 second minimum
+from the #1770 chain after #1796. That is inside the CEO 60–75 band
+(AgDR-0256 decision 4). A merge that waits longer than 75 seconds for the
+tracker fails closed. The operator can retry it.
 
 ### Merge route after AgDR-0256 (me2resh/apexyard#1759)
 
@@ -111,14 +110,14 @@ A branch with a chain of "merge dev into branch" commits is slower.
 When the Rex marker is on an older commit, the review gate walks the
 chain with one forge call for each step. PR #1770 has 4 steps:
 
-| Host | Calls before / after | p95 before | p95 after |
-|------|----------------------|------------|-----------|
-| macOS, real GitHub API, squash merge of #1770 | 15 / 10 | 16613 | 11469 |
-| Simulated #1759 host (recorded responses, 0.9 to 1.9 s per call) | 15 / 10 | 26572 | 18986 |
+| Host | Calls after #1759 / after #1796 | p95 after #1759 | p95 after #1796 |
+|------|----------------------------------|-----------------|-----------------|
+| macOS, real GitHub API, squash merge of #1770 | 10 / 6 | 11469 | 16542 |
+| Simulated #1759 host (recorded responses, 0.9 to 1.9 s per call) | 10 / 6 | 18986 | 14885 |
 
-For that shape, 5 x p95 is 94.9 seconds, above the 60-second timeout.
-The timeout stays at 60 seconds until the walk calls are cut.
-AgDR-0256 names that follow-up and the per-call time limit.
+Issue #1796 batches the walk into one GraphQL call and adds a per-call `gh`
+limit (`apexyard_gh`, default 20 s). Simulated p95 is 14885 ms (NFR-1 met).
+5 x that p95 is 74.4 seconds, so the dispatcher timeout is 75 seconds.
 
 No document gives a timeout override in `.claude/settings.local.json`.
 Nothing yet shows which `timeout` wins when two entries merge.
@@ -127,7 +126,7 @@ Nothing yet shows which `timeout` wins when two entries merge.
 checks the two timeouts in `.claude/settings.json` against them.
 
 ```text
-profile: dispatch-bash.sh p95_ms=9661
+profile: dispatch-bash.sh p95_ms=14885
 profile: require-active-ticket.sh p95_ms=207
 ```
 

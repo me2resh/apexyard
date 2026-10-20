@@ -12,16 +12,17 @@ bad() { echo "FAIL [AC6/$1]: $2" >&2; FAIL=$((FAIL + 1)); }
 
 BEFORE_LIB=$(tm_upstream_lib) || BEFORE_LIB=""
 if [ -n "$BEFORE_LIB" ]; then
-  # Upstream already used printf '%s\n' for title — fail-before pins that a
-  # leading -- title was already safe on the write path; the new fields must
-  # keep the same printf form.
+  # Pinned pre-#1794 lib already used printf '%s\n' for title — fail-before
+  # pins that a leading -- title was already safe on the write path.
   if grep -q "printf 'title=%s\\\\n'" "$BEFORE_LIB"; then
-    echo "FAIL-BEFORE OK [AC6/upstream-printf-title]"
+    echo "FAIL-BEFORE OK [AC6/d970c194-printf-title]"
     FB_PASS=$((FB_PASS + 1))
   else
-    echo "FAIL-BEFORE MISS [AC6/upstream-printf-title]" >&2
+    echo "FAIL-BEFORE MISS [AC6/d970c194-printf-title]" >&2
     FB_FAIL=$((FB_FAIL + 1))
   fi
+else
+  echo "NOTE: skip fail-before: no base ref d970c194b0ff5e14aac71d486c32dd3aa976d78a"
 fi
 
 OPS=$(tm_make_ops)

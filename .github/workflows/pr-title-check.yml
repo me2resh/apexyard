@@ -18,10 +18,15 @@ on:
 # regardless of job-level scoping.
 permissions: {}
 
+concurrency:
+  group: pr-title-check-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   check-title:
     name: Verify Ticket ID
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read         # read plan records on the PR head
       pull-requests: write   # add ticket label + post comment on failure

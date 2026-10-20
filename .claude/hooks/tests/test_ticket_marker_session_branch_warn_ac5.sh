@@ -18,12 +18,14 @@ BEFORE_LIB=$(tm_upstream_lib) || BEFORE_LIB=""
 # key is ignored by the fixed reader (pass-after) and note upstream behaviour.
 if [ -n "$BEFORE_LIB" ]; then
   if grep -q 'active_ticket_read_field' "$BEFORE_LIB"; then
-    echo "FAIL-BEFORE OK [AC5/upstream-already-first-match-reader]"
+    echo "FAIL-BEFORE OK [AC5/d970c194-already-first-match-reader]"
     FB_PASS=$((FB_PASS + 1))
   else
-    echo "FAIL-BEFORE MISS [AC5/upstream-already-first-match-reader]" >&2
+    echo "FAIL-BEFORE MISS [AC5/d970c194-already-first-match-reader]" >&2
     FB_FAIL=$((FB_FAIL + 1))
   fi
+else
+  echo "NOTE: skip fail-before: no base ref d970c194b0ff5e14aac71d486c32dd3aa976d78a"
 fi
 
 OPS=$(tm_make_ops)

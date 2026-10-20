@@ -10,14 +10,20 @@ with `AskUserQuestion`:
 
 | Option | Action |
 |--------|--------|
-| Separate worktree | Stop. Point at the concurrent-sessions runbook in #1534. |
+| Stay in a worktree that already holds your ticket | Stop. Point at the concurrent-sessions runbook in #1534. |
 | Take over | Write with `APEXYARD_START_TICKET_TAKEOVER=1`. |
 | Cancel | Leave the marker byte-for-byte unchanged. |
 
 Headless and `/fan-out` runs cancel. `active_ticket_write_from_file` also
-refuses a foreign overwrite unless that flag is set. The ticket gate warns
-once per session when `session_id` or `branch` on the marker does not match
-the current session or tree branch. The warning never blocks.
+refuses a foreign overwrite unless that flag is set. The guard checks the
+per-tree marker when present. It checks the old-layout path only when the
+tree fails validation. A valid linked worktree with no per-tree marker yet
+writes its own marker and does not treat the shared old-layout session
+marker as a foreign overwrite (Hakim A4). After a successful take-over write, the writer
+prints one stderr audit line with control characters stripped from every
+field (Hakim A2). The ticket gate warns once per session when `session_id`
+or `branch` on the marker does not match the current session or tree
+branch. The warning never blocks.
 
 The hook trusts a marker in a git dir only for the ops fork or a registered clone. A registered clone is `workspace/<project>/`, or the `workspace:` path of its registry entry. The marker is a process gate. Anyone with write access to the git dir can forge it. It is not an authorization boundary.
 

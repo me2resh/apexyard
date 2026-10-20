@@ -29,10 +29,15 @@ permissions:
   actions: read
   contents: read
 
+concurrency:
+  group: codeql-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # Run only on the upstream repository (#1370). Code scanning is free for
     # public repositories, but a private fork without GitHub Advanced Security
     # cannot accept the SARIF upload: the analysis runs and the upload step

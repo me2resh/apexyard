@@ -32,6 +32,21 @@
 # does not itself resolve them, so it stays testable with a stubbed `gh`
 # and has no opinion on where those values came from.
 
+# Per-call gh timeout (#1796). Optional when a minimal test copies only this
+# file — then fall back to bare `gh`.
+if [ -z "${APEXYARD_GH_TIMEOUT_LOADED:-}" ]; then
+  _rex_carry_timeout_lib="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_lib-gh-timeout.sh"
+  if [ -r "$_rex_carry_timeout_lib" ]; then
+    # shellcheck source=/dev/null
+    . "$_rex_carry_timeout_lib"
+    APEXYARD_GH_TIMEOUT_LOADED=1
+  fi
+  unset _rex_carry_timeout_lib
+fi
+if ! command -v apexyard_gh >/dev/null 2>&1; then
+  apexyard_gh() { gh "$@"; }
+fi
+
 is_pr_behind_base() {
   local repo="$1" base="$2" head_sha="$3"
   if [ -z "$repo" ] || [ -z "$base" ] || [ -z "$head_sha" ]; then
@@ -40,8 +55,12 @@ is_pr_behind_base() {
   fi
 
   local behind_by rc
-  behind_by=$(gh api "repos/${repo}/compare/${base}...${head_sha}" -q '.behind_by' 2>/dev/null)
+  behind_by=$(apexyard_gh api "repos/${repo}/compare/${base}...${head_sha}" -q '.behind_by' 2>/dev/null)
   rc=$?
+  if [ "$rc" -eq 124 ]; then
+    echo "unknown"
+    return 0
+  fi
   if [ "$rc" -ne 0 ]; then
     echo "unknown"
     return 0
@@ -67,19 +86,23 @@ is_pr_behind_base() {
 # skew protection #1386 added — both fail closed on any uncertainty.
 #
 #   rex_approval_carries_over <owner/repo> <old_sha> <new_sha> <base_branch>
-#       Echoes one of: true | false | unknown
+#       Echoes one of: true | false | unknown | timeout
 #       "true" only when ALL of the following hold, each verified against
 #       the forge (never against local git state alone — me2resh/apexyard#1437
-#       round-2 review, Rex B1 + Hakim A1; hardened further in #1456):
-#         - Each step is a two-parent commit, per the forge's own commit API
-#           (GET /repos/<repo>/commits/<sha>), not local `git log`.
+#       round-2 review, Rex B1 + Hakim A1; hardened further in #1456; batched
+#       in one GraphQL call per walk in #1796):
+#         - Each step is a two-parent commit, per the forge GraphQL Commit
+#           fields (oid, tree, parents), not local `git log`.
 #         - The first-parent chain reaches <old_sha> within 10 merge steps.
 #         - parent[1] is an ancestor of (or equal to) <base_branch>'s CURRENT
-#           tip, resolved from the forge branches endpoint
-#           (GET /repos/<repo>/branches/<url-encoded-name> → .commit.sha).
-#           The commits/{ref} endpoint is NOT used for the tip: a tag with
-#           the same name can shadow a branch there. Never a local ref —
-#           a local branch/remote-tracking ref can be stale or attacker-set.
+#           tip, resolved from repository.ref(qualifiedName: refs/heads/...)
+#           in the same GraphQL query. The commits/{ref} endpoint is NOT used
+#           for the tip: a tag with the same name can shadow a branch there.
+#           Never a local ref — a local branch/remote-tracking ref can be
+#           stale or attacker-set.
+#         - Rex and CEO checks in the same process share one memoised chain
+#           for the same (repo, new_sha, base). A forge timeout echoes
+#           "timeout" (gate exits 2).
 #           This is the fix for the critical bypass an earlier version had:
 #           checking only parent[0] lets an attacker merge in ANY second
 #           parent (e.g. a throwaway descendant of the approved commit) and
@@ -187,77 +210,255 @@ _rex_carry_is_sha40() {
   printf '%s' "${1:-}" | grep -qE '^[0-9a-f]{40}$'
 }
 
+# Process-local memo for the forge chain (#1796). Rex and CEO checks in the
+# same gate process share one GraphQL result when they walk the same
+# (repo, new_sha, base_branch). Keyed facts only — never an allow verdict.
+_REX_CARRY_MEMO_KEY=
+_REX_CARRY_MEMO_BASE_TIP=
+_REX_CARRY_MEMO_CHAIN_JSON=
+
+# _rex_carry_graphql_commit_sel <remaining> — nested Commit selection that
+# follows firstParent up to <remaining> more levels (10 commits total when
+# called with 9). Each level exposes oid, tree, and allParents (up to 3).
+_rex_carry_graphql_commit_sel() {
+  local remaining="$1"
+  printf 'oid tree { oid } allParents: parents(first: 3) { nodes { oid } }'
+  if [ "$remaining" -gt 0 ]; then
+    printf ' firstParent: parents(first: 1) { nodes { ... on Commit { '
+    _rex_carry_graphql_commit_sel $((remaining - 1))
+    printf ' } } }'
+  fi
+}
+
+# _rex_carry_parse_owner_name <repo> — sets _rex_carry_owner and _rex_carry_name
+# from OWNER/REPO or github.com/OWNER/REPO. Returns 1 when the shape is wrong
+# or the host is not github.com (Hakim H1 on #1809: a non-github host must not
+# reach GraphQL on the default host, which is a different repository).
+_rex_carry_parse_owner_name() {
+  local repo="$1" host
+  _rex_carry_owner=
+  _rex_carry_name=
+  _rex_carry_explicit_host=0
+  case "$repo" in
+    */*/*)
+      # Exactly three segments: github.com/OWNER/REPO. Four or more fail
+      # closed, as merge_repo_is_valid does (Hakim A8).
+      case "$repo" in
+        */*/*/*) return 1 ;;
+      esac
+      host=$(printf '%s' "$repo" | awk -F/ '{print $1}')
+      # Enterprise / other forges: fail closed with no forge call. Do not strip
+      # the host and query github.com/OWNER/REPO (cross-forge twin attack).
+      if [ "$host" != "github.com" ]; then
+        return 1
+      fi
+      _rex_carry_owner=$(printf '%s' "$repo" | awk -F/ '{print $(NF-1)}')
+      _rex_carry_name=$(printf '%s' "$repo" | awk -F/ '{print $NF}')
+      _rex_carry_explicit_host=1
+      ;;
+    */*)
+      _rex_carry_owner=$(printf '%s' "$repo" | awk -F/ '{print $1}')
+      _rex_carry_name=$(printf '%s' "$repo" | awk -F/ '{print $2}')
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+  [ -n "$_rex_carry_owner" ] && [ -n "$_rex_carry_name" ]
+}
+
+# _rex_carry_fetch_chain <repo> <new_sha> <base_branch>
+# One GraphQL call: base tip (refs/heads/...) + up to 10 first-parent commits
+# with parents and trees. Fills the process memo. Returns 0 on success,
+# 124 on forge timeout, 1 on any other fetch/parse failure.
+_rex_carry_fetch_chain() {
+  local repo="$1" new_sha="$2" base_branch="$3"
+  local key owner name qname query gql_json gql_rc chain_json base_tip
+
+  key="${repo}|${new_sha}|${base_branch}"
+  if [ "$key" = "${_REX_CARRY_MEMO_KEY:-}" ] && [ -n "${_REX_CARRY_MEMO_CHAIN_JSON:-}" ] \
+     && _rex_carry_is_sha40 "${_REX_CARRY_MEMO_BASE_TIP:-}"; then
+    return 0
+  fi
+  _REX_CARRY_MEMO_KEY=
+  _REX_CARRY_MEMO_BASE_TIP=
+  _REX_CARRY_MEMO_CHAIN_JSON=
+
+  if ! _rex_carry_parse_owner_name "$repo"; then
+    return 1
+  fi
+  owner="$_rex_carry_owner"
+  name="$_rex_carry_name"
+  qname="refs/heads/${base_branch}"
+
+  query=$(printf 'query($owner:String!,$name:String!,$oid:GitObjectID!,$qname:String!){repository(owner:$owner,name:$name){ref(qualifiedName:$qname){target{oid}}c0:object(oid:$oid){... on Commit{%s}}}}' \
+    "$(_rex_carry_graphql_commit_sel 9)")
+
+  # stderr stays open so a per-call timeout BLOCKED line reaches the operator.
+  # String variables use -f (not -F): -F coerces an all-digit value to an
+  # integer and GraphQL then rejects String! / GitObjectID! (Hakim A3).
+  # Pin --hostname github.com only for the explicit github.com/OWNER/REPO
+  # form. A plain OWNER/REPO passes no --hostname and follows GH_HOST, as the
+  # rest of the gate does (Hakim B6).
+  if [ "${_rex_carry_explicit_host:-0}" = "1" ]; then
+    gql_json=$(apexyard_gh api graphql --hostname github.com \
+      -f "query=$query" \
+      -f "owner=$owner" \
+      -f "name=$name" \
+      -f "oid=$new_sha" \
+      -f "qname=$qname")
+  else
+    gql_json=$(apexyard_gh api graphql \
+      -f "query=$query" \
+      -f "owner=$owner" \
+      -f "name=$name" \
+      -f "oid=$new_sha" \
+      -f "qname=$qname")
+  fi
+  gql_rc=$?
+  if [ "$gql_rc" -eq 124 ]; then
+    return 124
+  fi
+  if [ "$gql_rc" -ne 0 ] || [ -z "$gql_json" ]; then
+    return 1
+  fi
+
+  base_tip=$(printf '%s' "$gql_json" | jq -r '.data.repository.ref.target.oid // empty' 2>/dev/null)
+  if ! _rex_carry_is_sha40 "$base_tip"; then
+    return 1
+  fi
+
+  # Flatten the nested firstParent spine into a JSON array of
+  # {sha, tree, parents:[...]}. Stop when a node is missing.
+  chain_json=$(printf '%s' "$gql_json" | jq -c '
+    def flatten:
+      if . == null or .oid == null then
+        []
+      else
+        [{
+          sha: .oid,
+          tree: .tree.oid,
+          parents: [(.allParents.nodes // [])[].oid]
+        }]
+        + (if .firstParent.nodes[0] then (.firstParent.nodes[0] | flatten) else [] end)
+      end;
+    .data.repository.c0 | flatten
+  ' 2>/dev/null)
+  if [ -z "$chain_json" ] || [ "$chain_json" = "null" ]; then
+    return 1
+  fi
+
+  _REX_CARRY_MEMO_KEY="$key"
+  _REX_CARRY_MEMO_BASE_TIP="$base_tip"
+  _REX_CARRY_MEMO_CHAIN_JSON="$chain_json"
+  return 0
+}
+
+# _rex_carry_step_from_chain <index> — reads memo chain entry into
+# forge_parent_count / forge_parent0 / forge_parent1 / forge_tree / step_sha.
+# Returns 1 when the index is missing or malformed.
+_rex_carry_step_from_chain() {
+  local idx="$1" entry
+  entry=$(printf '%s' "$_REX_CARRY_MEMO_CHAIN_JSON" | jq -c --argjson i "$idx" '.[$i] // empty' 2>/dev/null)
+  if [ -z "$entry" ] || [ "$entry" = "null" ]; then
+    return 1
+  fi
+  step_sha=$(printf '%s' "$entry" | jq -r '.sha // empty' 2>/dev/null)
+  forge_tree=$(printf '%s' "$entry" | jq -r '.tree // empty' 2>/dev/null)
+  forge_parent_count=$(printf '%s' "$entry" | jq -r '.parents | length' 2>/dev/null)
+  forge_parent0=$(printf '%s' "$entry" | jq -r '.parents[0] // empty' 2>/dev/null)
+  forge_parent1=$(printf '%s' "$entry" | jq -r '.parents[1] // empty' 2>/dev/null)
+  [ -n "$step_sha" ]
+}
+
+# _rex_carry_emit <verdict> — set _REX_CARRY_LAST (current-shell capture for
+# the gate) and echo the verdict (for `$()` callers / tests).
+_rex_carry_emit() {
+  _REX_CARRY_LAST="$1"
+  printf '%s\n' "$1"
+}
+
 # rex_approval_carries_over <owner/repo> <old_sha> <new_sha> <base_branch>
+# Echoes one of: true | false | unknown | timeout
+# Also sets _REX_CARRY_LAST to the same value. The merge gate must call this
+# in the current shell (not only via `$()`) so Rex and CEO share the
+# process-local GraphQL memo (#1796). `$()` alone runs each call in a
+# subshell and cannot share the memo.
+# "timeout" means a forge call hit the per-call limit — the gate must exit 2
+# with the BLOCKED timeout line already on stderr.
 rex_approval_carries_over() {
   local repo="$1" old_sha="$2" new_sha="$3" base_branch="$4"
+  _REX_CARRY_LAST="unknown"
 
   if [ -z "$repo" ] || [ -z "$base_branch" ]; then
-    echo "unknown"
+    _rex_carry_emit "unknown"
     return 0
   fi
   # Validate BEFORE any git or forge call — an unvalidated value could
   # otherwise reach a shell-interpolated API path or git ref argument.
   if ! _rex_carry_is_sha40 "$old_sha" || ! _rex_carry_is_sha40 "$new_sha"; then
-    echo "unknown"
+    _rex_carry_emit "unknown"
     return 0
   fi
 
   if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    echo "unknown"
+    _rex_carry_emit "unknown"
     return 0
   fi
 
-  # 1. Resolve the base branch's CURRENT tip from the forge branches
-  # endpoint. Never commits/{ref} — a tag with the same name can shadow
-  # the branch there (#1456). Never a local ref either.
-  local base_encoded base_tip base_tip_rc
-  base_encoded=$(jq -nr --arg b "$base_branch" '$b|@uri' 2>/dev/null)
-  if [ -z "$base_encoded" ]; then
-    echo "unknown"
+  # 1. One GraphQL call for the base tip and up to 10 first-parent steps
+  # (#1796). The forge stays the source of parents and trees. A second call
+  # in the same process for the same (repo, new, base) reuses the memo so
+  # Rex and CEO share one walk result.
+  local fetch_rc base_tip
+  _rex_carry_fetch_chain "$repo" "$new_sha" "$base_branch"
+  fetch_rc=$?
+  if [ "$fetch_rc" -eq 124 ]; then
+    _rex_carry_emit "timeout"
     return 0
   fi
-  base_tip=$(gh api "repos/${repo}/branches/${base_encoded}" -q '.commit.sha' 2>/dev/null)
-  base_tip_rc=$?
-  if [ "$base_tip_rc" -ne 0 ] || ! _rex_carry_is_sha40 "$base_tip"; then
-    echo "unknown"
+  if [ "$fetch_rc" -ne 0 ]; then
+    _rex_carry_emit "unknown"
+    return 0
+  fi
+  base_tip="$_REX_CARRY_MEMO_BASE_TIP"
+  if ! _rex_carry_is_sha40 "$base_tip"; then
+    _rex_carry_emit "unknown"
     return 0
   fi
 
   # Verify each merge before following its first parent (#1682).
   # At least one merge is required. No unverified step can retain approval.
   local current_sha="$new_sha" steps=0
+  local step_sha forge_parent_count forge_parent0 forge_parent1 forge_tree
   while [ "$steps" -lt 10 ]; do
-    # 2. Resolve each commit's parents and tree from the forge commit API.
-    # Local `git log`/`git show` cannot supply these facts.
-    local commit_json commit_json_rc
-    commit_json=$(gh api "repos/${repo}/commits/${current_sha}" 2>/dev/null)
-    commit_json_rc=$?
-    if [ "$commit_json_rc" -ne 0 ] || [ -z "$commit_json" ]; then
-      echo "unknown"
+    # 2. Resolve this step from the memoised forge chain — never from local
+    # `git log` / `git show`.
+    if ! _rex_carry_step_from_chain "$steps"; then
+      _rex_carry_emit "unknown"
       return 0
     fi
-    local forge_parent_count
-    forge_parent_count=$(printf '%s' "$commit_json" | jq -r '.parents | length' 2>/dev/null)
+    if [ "$step_sha" != "$current_sha" ]; then
+      # Chain spine drifted from the first-parent walk — fail closed.
+      _rex_carry_emit "unknown"
+      return 0
+    fi
     case "$forge_parent_count" in
       ''|*[!0-9]*)
-        echo "unknown"
+        _rex_carry_emit "unknown"
         return 0
         ;;
     esac
     if [ "$forge_parent_count" -ne 2 ]; then
       # A non-merge commit (1 parent) or an octopus merge (3+ parents) is
       # never a "clean base merge" — no carry-over.
-      echo "false"
+      _rex_carry_emit "false"
       return 0
     fi
 
-    local forge_parent0 forge_parent1 forge_tree
-    forge_parent0=$(printf '%s' "$commit_json" | jq -r '.parents[0].sha' 2>/dev/null)
-    forge_parent1=$(printf '%s' "$commit_json" | jq -r '.parents[1].sha' 2>/dev/null)
-    forge_tree=$(printf '%s' "$commit_json" | jq -r '.commit.tree.sha' 2>/dev/null)
     if ! _rex_carry_is_sha40 "$forge_parent0" || ! _rex_carry_is_sha40 "$forge_parent1" \
        || ! _rex_carry_is_sha40 "$forge_tree"; then
-      echo "unknown"
+      _rex_carry_emit "unknown"
       return 0
     fi
 
@@ -267,12 +468,16 @@ rex_approval_carries_over() {
     # "unknown". Fetch only computation inputs. Each step's parents and
     # recorded tree come from the forge, even when its object exists locally.
     local sha
+    if ! _rex_carry_parse_owner_name "$repo"; then
+      _rex_carry_emit "unknown"
+      return 0
+    fi
     for sha in "$forge_parent0" "$forge_parent1" "$base_tip"; do
       if ! git cat-file -e "${sha}^{commit}" 2>/dev/null; then
-        _rex_carry_git fetch -q "https://github.com/${repo}.git" "$sha" >/dev/null 2>&1
+        _rex_carry_git fetch -q "https://github.com/${_rex_carry_owner}/${_rex_carry_name}.git" "$sha" >/dev/null 2>&1
       fi
       if ! git cat-file -e "${sha}^{commit}" 2>/dev/null; then
-        echo "unknown"
+        _rex_carry_emit "unknown"
         return 0
       fi
     done
@@ -291,9 +496,9 @@ rex_approval_carries_over() {
     local anc_rc=$?
     if [ "$anc_rc" -ne 0 ]; then
       if [ "$anc_rc" -eq 1 ]; then
-        echo "false"
+        _rex_carry_emit "false"
       else
-        echo "unknown"
+        _rex_carry_emit "unknown"
       fi
       return 0
     fi
@@ -304,7 +509,7 @@ rex_approval_carries_over() {
     # never lets a local merge driver alter the recomputation.
     local mt_tree mt_rc mt_err
     mt_err=$(mktemp 2>/dev/null) || {
-      echo "unknown"
+      _rex_carry_emit "unknown"
       return 0
     }
     mt_tree=$(_rex_carry_git_isolated merge-tree --write-tree "$forge_parent0" "$forge_parent1" 2>"$mt_err")
@@ -314,12 +519,12 @@ rex_approval_carries_over() {
         # This git build doesn't support `merge-tree --write-tree` — cannot
         # verify, not "verified and conflicting".
         rm -f "$mt_err"
-        echo "unknown"
+        _rex_carry_emit "unknown"
       else
         # A real conflict: the recorded merge required a decision git's own
         # merge could not make on its own — not a mechanical replay.
         rm -f "$mt_err"
-        echo "false"
+        _rex_carry_emit "false"
       fi
       return 0
     fi
@@ -327,16 +532,16 @@ rex_approval_carries_over() {
 
     mt_tree=$(printf '%s' "$mt_tree" | head -1 | tr -d '[:space:]')
     if ! _rex_carry_is_sha40 "$mt_tree"; then
-      echo "unknown"
+      _rex_carry_emit "unknown"
       return 0
     fi
     if [ "$mt_tree" != "$forge_tree" ]; then
-      echo "false"
+      _rex_carry_emit "false"
       return 0
     fi
 
     if [ "$forge_parent0" = "$old_sha" ]; then
-      echo "true"
+      _rex_carry_emit "true"
       return 0
     fi
     current_sha="$forge_parent0"
@@ -344,7 +549,7 @@ rex_approval_carries_over() {
   done
 
   # The reviewed commit was not reached within the fixed verification limit.
-  echo "false"
+  _rex_carry_emit "false"
 }
 
 # _merge_behind_path_matches_any <path> <newline-separated patterns>
@@ -391,10 +596,10 @@ merge_refresh_required() {
   # up as ONE entry with both fields set, not two separate entries, so this
   # does not double the 300-file truncation threshold's meaning.
   local pr_files pr_rc
-  pr_files=$(gh api "repos/${repo}/pulls/${pr}/files" --paginate \
+  pr_files=$(apexyard_gh api "repos/${repo}/pulls/${pr}/files" --paginate \
     -q '.[] | .filename, (.previous_filename // empty)' 2>/dev/null)
   pr_rc=$?
-  if [ "$pr_rc" -ne 0 ]; then
+  if [ "$pr_rc" -eq 124 ] || [ "$pr_rc" -ne 0 ]; then
     echo "required"
     return 0
   fi
@@ -417,9 +622,9 @@ merge_refresh_required() {
   # Files the base branch touched since the merge base — i.e. exactly the
   # commits a refresh would pull in.
   local compare_json compare_rc
-  compare_json=$(gh api "repos/${repo}/compare/${merge_base}...${base}" 2>/dev/null)
+  compare_json=$(apexyard_gh api "repos/${repo}/compare/${merge_base}...${base}" 2>/dev/null)
   compare_rc=$?
-  if [ "$compare_rc" -ne 0 ] || [ -z "$compare_json" ]; then
+  if [ "$compare_rc" -eq 124 ] || [ "$compare_rc" -ne 0 ] || [ -z "$compare_json" ]; then
     echo "required"
     return 0
   fi

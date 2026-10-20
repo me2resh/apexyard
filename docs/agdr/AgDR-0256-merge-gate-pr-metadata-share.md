@@ -235,10 +235,11 @@ Measurement: the real dispatcher and the real four gates in a sandbox ops root w
 - NFR-1 (p95 15 seconds or less on the #1759 host): met on the simulated host, 9661 ms. The real #1759 host was not available.
 - NFR-2 (macOS p95 not above 2748 ms): not comparable. 2748 ms was a route that the review gate blocked early, on a faster network. On today's network the full route went from 13015 ms to 9567 ms.
 - NFR-3: the 8-call exception path is about 8 x 1.9 + 1.2 = 16.4 seconds on the #1759 host, under the new timeout.
-- The profile line is `profile: dispatch-bash.sh p95_ms=9661`, the larger p95 of the two hosts.
-- The timeout is 60 seconds. 5 x 9661 ms is 48.3 seconds. The value is rounded up to 60 seconds to cover the 6-call and 8-call routes, which this build did not measure separately.
+- The profile line after #1759 was `profile: dispatch-bash.sh p95_ms=9661` (plain merge, simulated host).
+- The timeout after #1759 was 60 seconds. 5 x 9661 ms is 48.3 seconds. Rounded up to 60 seconds for the 6-call and 8-call routes.
+- **#1796** re-profiles on the #1770 chain (simulated p95 14885 ms) and sets the timeout to 75 seconds. See § Architecture evolution and the updated #1770 table.
 - No document gives `.claude/settings.local.json` timeout advice.
-- A per-call time limit is a follow-up spike.
+- A per-call time limit shipped in #1796 (`apexyard_gh`).
 
 #### Carry-over chain shape (PR #1770)
 
@@ -246,16 +247,18 @@ The CEO asked for a measurement on a branch with a chain of "merge dev into bran
 
 Measurement: the real dispatcher and the real four gates in a sandbox ops root, a squash merge of #1770, the Rex marker on `f107fb9`, the other markers on the head `9ae6007`, n=30, `/bin/bash` 3.2 on macOS. "Simulated" replays recorded real responses with 0.9 to 1.9 s per call.
 
-| Host | Calls before / after | p50 before / after (ms) | p95 before / after (ms) |
-|------|----------------------|-------------------------|-------------------------|
-| macOS, real GitHub API | 15 / 10 | 12988 / 9918 | 16613 / 11469 |
-| Simulated #1759 host | 15 / 10 | 25225 / 17861 | 26572 / 18986 |
+| Host | Calls after #1759 / after #1796 | p50 after #1759 / after #1796 (ms) | p95 after #1759 / after #1796 (ms) |
+|------|----------------------------------|-------------------------------------|-------------------------------------|
+| macOS, real GitHub API | 10 / 6 | 9918 / 11322 | 11469 / 16542 |
+| Simulated #1759 host | 10 / 6 | 17861 / 13656 | 18986 / 14885 |
+
+(#1759 columns: AgDR table above for the #1770 shape. #1796 columns: n=30 on this build, fair before = post-#1759 hooks at `46ffd5ff`.)
 
 - The snapshot removes 5 calls: 3 `gh pr view` calls in the review gate, the CI gate head read, and one of the two duplicate file-list pairs. The recheck adds 1.
-- The walk's 5 calls (1 branch call and 4 commit calls) are not shared. They stay serial in the review gate. A walk for a stale CEO marker would repeat them.
-- For this shape on the simulated host, NFR-1 (p95 of 15 seconds or less) is not met: 18986 ms.
-- The 60-second timeout does not hold 5 x p95 for this shape: 5 x 18986 ms is 94.9 seconds. It holds 3.2 x p95. CEO decision 4 says to tell the CEO before a timeout above 75 seconds, so this build keeps 60 seconds.
-- The walk is outside the approved v6 scope. It is a named follow-up (below), together with the per-call time limit. One `gh` call in the #1770 investigation hung for 120 seconds and then passed in 2 seconds on repeat. Only a per-call limit stops that case.
+- **#1796:** the walk is one GraphQL call (base tip + up to 10 first-parent steps). Rex and CEO share the memo in one process. Route calls: 6.
+- For this shape on the simulated host after #1796, NFR-1 is met: p95 14885 ms.
+- 5 x 14885 ms is 74.4 seconds. The dispatcher timeout is **75 seconds** (inside CEO decision 4's 60–75 band; tell the CEO before going above 75).
+- Per-call limit: `apexyard_gh` default 20 s (`_lib-gh-timeout.sh`).
 
 ### D8. Rollback
 
@@ -312,16 +315,87 @@ Not filed by this build. The CEO accepted the first and third rows. The other ro
 | [Task] Decide head pinning for raw merges | Choose a gate rule for a raw merge without `--match-head-commit` or `-f sha=`: require, warn, or record as residual. |
 | [Task] Add a glab prefetch or a glab call budget | Prefetch through `glab mr view --output json`, or measure the glab route and record its budget. |
 | [Task] Test which dispatcher timeout wins on override | Test a repeated dispatcher entry in `.claude/settings.local.json`, then document the result. |
-| [Spike] Per-call time limit for merge-gate `gh` calls | Find a bash 3.2 method with no GNU `timeout` that ends one hung call early. The limit wraps each `gh` call, not the gate process. Evidence: one call in the #1770 investigation hung for 120 seconds, then passed in 2 seconds. |
-| [Task] Cut the forge calls of the carry-over chain walk | `rex_approval_carries_over` makes 1 branch call plus 1 commit call for each step, up to 10 steps, in series, and repeats the walk for a stale CEO marker. Measured on #1770 (4 steps): the route is 10 calls, p95 18986 ms on the simulated #1759 host, so 5 x p95 is 94.9 seconds, above the 60-second timeout. Options: share one walk result between the Rex and CEO checks; fetch the parents of all steps in one GraphQL query; or read the steps from the PR commits list. Each option must keep the forge as the source of the parents and the tree. Then measure again and set the timeout. |
+| [Spike] Per-call time limit for merge-gate `gh` calls | **Done in #1796** (evolution entry above). `_lib-gh-timeout.sh` / `apexyard_gh`; default 20 s; `timeout` / `gtimeout` / watchdog. |
+| [Task] Cut the forge calls of the carry-over chain walk | **Done in #1796** (evolution entry above). One GraphQL query per walk; Rex/CEO share the memo in-process. |
 | [Discovery, parked under #1762] Function and environment injection into hooks | `BASH_FUNC_<name>%%`, `BASH_ENV` and `PATH` can replace `gh`, `jq` or `shasum` in every gate. |
 | [Task] Refuse unscoped merges in the review and CI gates (optional) | Make the review and CI gates block an empty `CMD_REPO` (#887 class). |
 
+## Architecture evolution
+
+### Carry-over walk batching and per-call gh limit (#1796)
+
+The #1759 snapshot cut the plain merge route. It left the Rex carry-over walk
+on one forge call per merge-dev step. On the #1770 shape (4 steps) the route
+was 10 calls and the simulated-host p95 was 18986 ms, so NFR-1 failed and
+60 s was only 3.2 × p95.
+
+This evolution (same AgDR number — not a new decision number) changes the
+walk and the gate forge path:
+
+1. **One GraphQL call per walk.** `rex_approval_carries_over` loads the base
+   tip (`repository.ref(qualifiedName: refs/heads/...)`) and up to 10
+   first-parent commits (oid, tree, parents) in a single `gh api graphql`
+   query. The forge stays the source of parents and trees. Local git only
+   recomputes merge-tree and ancestry.
+2. **Shared memo in one gate process.** Rex and CEO call the walk in the
+   current shell (via `_REX_CARRY_LAST`), not only via `$()`. The second
+   check reuses the same chain when `(repo, new_sha, base)` match.
+3. **Per-call time limit.** `_lib-gh-timeout.sh` / `apexyard_gh` wraps each
+   merge-route `gh` call. Default 20 s (`APEXYARD_GH_CALL_TIMEOUT`). Prefers
+   `timeout`, then `gtimeout`, then a bash-native watchdog. A stall returns
+   124 and prints a BLOCKED line; the review gate treats carry-over
+   `timeout` as exit 2. The wrapper wraps the `gh` child only, so the
+   AgDR-0256 PPID binding for PR metadata still holds.
+
+4. **Watchdog + command substitution (CI suite cap).** The watchdog must
+   write its timeout flag before signalling, and must TERM/KILL direct
+   children of the `gh` PID. A test stub that ran `sleep 120` under a
+   shell (not `exec sleep`) left that sleep as a child; bash `$()` in
+   `_rex_carry_fetch_chain` waited for it for the full 120 s, so
+   `test_block_unreviewed_merge.sh` hit the Linux CI per-suite cap
+   (rc=124) even though the case asserted "forge call timed out". Tests
+   use `exec sleep` and `APEXYARD_GH_CALL_TIMEOUT=1`. The suite stays well
+   under 120 s. Cap unchanged.
+
+5. **Host-qualified repos stay on github.com only (#1809 H1, A6, A7, A8, B6).**
+   The walk parses `OWNER/REPO` and `github.com/OWNER/REPO`. Any other
+   `HOST/OWNER/REPO` returns `unknown` with no forge call. Reasoning: if
+   the walk stripped a non-github host, it would read a different
+   repository on a different forge (cross-forge twin). On `dev`, that shape
+   already failed closed via a 404 on the REST path. This PR does not add
+   enterprise-host support.
+   - Hostname rule (B6): the GraphQL call passes `--hostname github.com`
+     only for the explicit `github.com/OWNER/REPO` form. This is the rule
+     `block-merge-on-red-ci.sh` uses. A plain `OWNER/REPO` passes no
+     `--hostname` and follows `GH_HOST`, like the rest of the gate.
+   - Fetch URL (A7): for the explicit `github.com/OWNER/REPO` form, the
+     fallback fetch URL is `https://github.com/OWNER/REPO.git`. The host
+     segment is not repeated in the URL.
+   - Segments (A8): the explicit form has exactly three segments. A value
+     with four or more segments returns `unknown` with no forge call, as
+     `merge_repo_is_valid` does.
+
+6. **GraphQL string variables use `-f` (#1809 A3).** `owner`, `name`,
+   `oid`, and `qname` stay strings. `-F` would coerce an all-digit value to
+   an integer and fail the GraphQL type check.
+
+7. **`tracker_review_at_sha` uses `apexyard_gh` (#1809 A2).** The posted-
+   review check shares the same per-call limit. A stall returns rc 2 (fail
+   closed).
+
+Fail-closed rules are unchanged: an unreadable step, a tree mismatch, or a
+chain over 10 steps still means "does not carry over".
+
+Measurement (n=30, #1770 shape): see the updated table under § "Carry-over
+chain shape (PR #1770)". Simulated p95 after #1796 is 14885 ms. The
+dispatcher timeout is 75 seconds (5 x that p95, rounded up inside the
+CEO 60–75 band). Profile line: `profile: dispatch-bash.sh p95_ms=14885`.
+
 ## Artifacts
 
-- me2resh/apexyard#1759, #1623, #1760, #1761
+- me2resh/apexyard#1759, #1623, #1760, #1761, #1796
 - AgDR-0104, AgDR-0109, AgDR-0120, AgDR-0162, AgDR-0169, AgDR-0244, AgDR-0247
-- `.claude/hooks/dispatch-bash.sh`, `.claude/hooks/_lib-extract-pr.sh`, the four merge gates
-- `.claude/hooks/tests/test_prmeta_1759.sh`
+- `.claude/hooks/dispatch-bash.sh`, `.claude/hooks/_lib-extract-pr.sh`, `.claude/hooks/_lib-merge-behind.sh`, `.claude/hooks/_lib-gh-timeout.sh`, the four merge gates
+- `.claude/hooks/tests/test_prmeta_1759.sh`, `.claude/hooks/tests/test_lib_merge_behind.sh`
 - `docs/perf/hook-fail-closed-profile-2026-10.md`, `docs/hooks-fail-closed.md`
 - Design reviews: Tariq (2026-10-19), Hakim security review of v4 and delta checks of v5 and v6 (2026-10-19). Hakim's v6 advisories are in this build: the crash-class tests, the control-variable unset, the whole-file digest test and the rule 27 wording.
