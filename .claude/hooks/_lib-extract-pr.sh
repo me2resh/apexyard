@@ -1052,7 +1052,7 @@ _has_split_merge_phrase() {
   local result
   if [ "${#1}" -gt 120000 ]; then return 2; fi
   result=$(MERGE_SPLIT_INPUT="$1" awk '
-    function reset() { stage = 0; active = 1; redirected = 0; option_value = 0; api = 0; phrase_lit = cmd_lit = prefixed = 0 }
+    function reset() { stage = 0; active = 1; redirected = 0; option_value = 0; api = 0; wrapper = wrapper_value = gap = skip_target = 0; phrase_lit = cmd_lit = prefixed = 0 }
     # Start a phrase window at a host word. Return 1 when the word can be a host.
     function open_window(value,    host) {
       host = value; sub(/^.*\//, "", host)
@@ -1074,25 +1074,53 @@ _has_split_merge_phrase() {
     function clear_word() { w = raw = ""; changed = opaque_word = opaque_unquoted = 0 }
     function queue_body(body) {
       if (body == "") return
-      if (depth >= 3 || np >= 100) scan_error = 1
+      if (depth >= 3 || np >= 100 || length(body) > 4096) scan_error = 1
       else { pending[++np] = body; levels[np] = depth + 1 }
     }
-    function consume_group(endchar,    level,t,start) {
-      start = i + 1; level = 1
+    function consume_group(endchar,    level,t,start,cq,word,cases,steps,commandpos,comment) {
+      start = i + 1; level = 1; cq = word = ""; cases = steps = comment = 0; commandpos = 1
       while (i < n && level) {
+        if (++steps > 4096) { scan_error = 1; i = n; return "" }
         t = substr(s, ++i, 1)
+        if (comment) {
+          if (endchar == "`" && t == "`") { level = 0; break }
+          if (endchar == "`" && t == bs) { i++; continue }
+          if (t == "\n") { comment = 0; commandpos = 1 }
+          continue
+        }
+        if (cq == "" && t == "#" && (i == start || substr(s, i - 1, 1) ~ /[ \t\n;|&()]/)) {
+          comment = 1; continue
+        }
+        if (t == bs && cq != sq) { word = word "!"; i++; continue }
+        if (t == sq || t == dq) {
+          word = word "!"
+          if (cq == t) cq = ""
+          else if (cq == "") cq = t
+          continue
+        }
+        if (cq != "") continue
         if (endchar == "`") {
           if (t == "`") level = 0
           continue
         }
+        if (t !~ /[ \t\n;|&()<>]/) { word = word t; continue }
+        if (word != "") {
+          if (word == "case" && commandpos) cases++
+          else if (word == "esac" && commandpos && cases) cases--
+          commandpos = 0
+        }
+        word = ""
+        if (t ~ /[;|&\n()]/) commandpos = 1
         if ((endchar == ")" && t == "(") || (endchar == "}" && t == "{")) level++
-        if (t == endchar) level--
+        if (t == endchar && !(endchar == ")" && cases && level == 1)) level--
       }
+      if (level) scan_error = 1
       return substr(s, start, i - start)
     }
     function finish(    value) {
       if (w == "") {
         if (changed && stage > 0) altered = 1
+        if (changed && skip_target) skip_target = 0
         clear_word(); return
       }
       # Shell arguments can contain another command. Never evaluate them.
@@ -1100,13 +1128,26 @@ _has_split_merge_phrase() {
         if (depth >= 3 || np >= 100) scan_error = 1
         else { pending[++np] = raw; levels[np] = depth + 1 }
       }
+      if (skip_target) { skip_target = 0; clear_word(); return }
       value = w
       if (api && value ~ /(pulls|merge_requests)\/[0-9]+\/merge/ && changed) hit = 1
       if (active && stage == 0) {
-        # These words keep the next word at command position.
-        if (value ~ /^[A-Za-z_][A-Za-z0-9_]*=/ || value == "env" || value == "command" || value == "exec" || value == "builtin" || value == "time" || value == "nohup" || value == "!" || value == "do" || value == "then" || value == "if" || value == "elif" || value == "else" || value == "while" || value == "until") {
+        # Wrapper options belong to the launcher, not the command window.
+        if (wrapper_value) { wrapper_value = 0; clear_word(); return }
+        if (wrapper && value ~ /^-/) {
+          if ((wrapper == "exec" && value == "-a") ||
+              (wrapper == "env" && value ~ /^(-u|-C|-S|--unset|--chdir|--split-string)$/) ||
+              (wrapper == "sudo" && value ~ /^(-u|-g|-C|-p|-h|-r|-t|-T|-D|-R|-U|--user|--group|--prompt|--host|--role|--type|--command-timeout|--chdir|--chroot|--other-user|--close-from)$/) ||
+              (wrapper == "time" && value ~ /^(-o|-f|--output|--format)$/) ||
+              (wrapper == "nice" && value ~ /^(-n|--adjustment)$/)) wrapper_value = 1
           clear_word(); return
         }
+        # These words keep the next word at command position.
+        if (value ~ /^[A-Za-z_][A-Za-z0-9_]*=/ || value == "env" || value == "command" || value == "exec" || value == "builtin" || value == "time" || value == "nohup" || value == "sudo" || value == "nice" || value == "!" || value == "do" || value == "then" || value == "if" || value == "elif" || value == "else" || value == "while" || value == "until") {
+          if (value !~ /^[A-Za-z_][A-Za-z0-9_]*=/) wrapper = value
+          clear_word(); return
+        }
+        wrapper = 0
         if (!open_window(value)) {
           # Non-host prefix: keep looking for a later phrase window.
           prefixed = 1
@@ -1122,8 +1163,11 @@ _has_split_merge_phrase() {
         } else if (stage == 1 && \
             ((("gh" ~ ("^" cli "$")) && ("pr" ~ ("^" value "$"))) || \
              (("glab" ~ ("^" cli "$")) && ("mr" ~ ("^" value "$"))))) {
+          gap = opaque_word
           stage = 2; altered = altered || changed
           if (!opaque_word) phrase_lit = cmd_lit = 1
+        } else if (stage == 2 && gap && ((cli == "gh" && value == "pr") || (cli == "glab" && value == "mr"))) {
+          gap = 0; cmd_lit = phrase_lit = 1; altered = 1
         } else if (stage == 2 && "merge" ~ ("^" value "$")) {
           if (!opaque_word) phrase_lit = 1
           # At command position, any literal phrase word confirms a changed
@@ -1163,7 +1207,7 @@ _has_split_merge_phrase() {
         if (t == endchar) level--
       }
     }
-    function scan(text,    c,t,nx,rq,rest,body) {
+    function scan(text,    c,nx,rest,body) {
       s = text; n = length(s); q = w = raw = ""; changed = opaque_word = opaque_unquoted = 0; reset()
       for (i = 1; i <= n; i++) {
         c = substr(s, i, 1); nx = substr(s, i + 1, 1)
@@ -1219,6 +1263,7 @@ _has_split_merge_phrase() {
           i++
           body = consume_group(")")
           queue_body(body)
+          skip_target = 0
           continue
         }
         if (q == "" && (c ~ /[<>]/ || (c == "&" && nx == ">"))) {
@@ -1226,23 +1271,9 @@ _has_split_merge_phrase() {
           finish(); redirected = 1
           while (i < n && substr(s, i + 1, 1) ~ /[<>|!&]/) i++
           while (i < n && substr(s, i + 1, 1) ~ /[ \t]/) i++
-          rq = ""; target = ""
-          while (i < n) {
-            t = substr(s, i + 1, 1)
-            if (rq == "" && t ~ /[ \t\n;|&<>]/) break
-            i++
-            if (length(target) < 4096) target = target t
-            else if (nested) scan_error = 1
-            if (t == sq || t == dq) {
-              if (rq == t) rq = ""
-              else if (rq == "") rq = t
-            }
-          }
-          # A shell here-string is another command source.
-          if (nested && target != "") {
-            sub(/^[\047\042]/, "", target); sub(/[\047\042]$/, "", target)
-            queue_body(target)
-          }
+          # Parse the target with the normal word reader. Its substitutions
+          # execute even when the redirect belongs to an ordinary command.
+          skip_target = 1
           continue
         }
         if (q == "" && c ~ /[ \t\n;|&()]/) {
@@ -1252,6 +1283,8 @@ _has_split_merge_phrase() {
         }
         if (length(raw) < 4096) raw = raw c
         else if (nested) scan_error = 1
+        # A long literal path still needs its final host segment.
+        if (c == "/" && length(w) >= 128) w = ""
         if (length(w) < 128) {
           if (c ~ /[A-Za-z0-9_\/=-]/) w = w c
           else if (c == ".") w = w "\\."
