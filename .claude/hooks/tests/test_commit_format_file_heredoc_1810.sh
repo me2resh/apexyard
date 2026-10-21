@@ -97,6 +97,14 @@ run_case "file write, then a command that does not read the file: allow" "$H" \
 $MENTION
 EOF
 echo done" 0 ""
+run_case "two file writes in one command: allow" "$H" \
+  "cat > $OUT <<'EOF'
+$MENTION
+EOF
+cat > $TMP/out/second.md <<'EOF'
+$MENTION
+EOF
+echo done" 0 ""
 
 # --- AC2: a real commit with a command substitution in -m still blocks ----
 run_case "commit -m with \$(...): block" "$H" \

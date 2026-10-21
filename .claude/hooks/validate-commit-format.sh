@@ -30,9 +30,10 @@
 #   - That command starts the line, or follows `&&`, `||` or `;`.
 #   - The line before the start line does not end in a backslash.
 #   - A later line is the delimiter (`<<-` removes leading tabs first).
-# Return 1 with no output when no heredoc qualifies, when any other line
-# outside a stripped body holds `<<`, or when a line after a stripped body
-# names the file of that heredoc (a later command can run the file).
+# Return 1 with no output when no heredoc qualifies, when another line
+# outside a stripped body holds `<<` and is not a qualifying start line, or
+# when a line after a stripped body names the file of that heredoc (a later
+# command can run the file).
 _fmt_strip_file_heredocs() {
   local cmd="$1" line term dash target base n i j k tab check
   local word='[A-Za-z0-9._/~+%@,=:-]+'

@@ -63,6 +63,7 @@
 # heredoc operator and one quoted delimiter word (see _shq_single_sink).
 # Anything else, and any parse doubt, returns the raw command, so the gates
 # see the body. A body that a shell runs is a command, not data.
+# A second exception (AgDR-0263, #1810) is local to validate-commit-format.sh.
 #
 # Strips heredoc BODY text (and the heredoc's own start/terminator lines)
 # from a command string, but ONLY for heredocs that are CONFIRMED — both:
