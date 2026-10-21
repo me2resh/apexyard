@@ -109,16 +109,17 @@ git_token_is_verb() {
 # feeds its script. A shell word in prose, in a heredoc body line that does
 # not start a command, or a script-file run does not count.
 _git_text_has_nested_shell() {
-  local text="$1" word_re='(^|[^[:alnum:]_.-])(pushd|popd|sh|bash|zsh|dash|ksh)([[:space:];&|<>)]|$)'
+  local text="$1" word_re="(^|[^[:alnum:]_.-])(pushd|popd|eval|sh|bash|zsh|dash|ksh)([[:space:];&|<>'\")]|$)"
   # No fork when no candidate word is present.
   [[ "$text" =~ $word_re ]] || return 1
   local at='(^|[;&|(){}!`]|\$\(|[[:space:]]-(exec|execdir|ok|okdir)[[:space:]])[[:space:]]*'
   local wrap='((exec|command|builtin|time|nohup|nice|sudo|xargs|env|timeout|then|do|else|if|while|until)([[:space:]]+[^[:space:];&|()]+)*[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*'
-  local shell='([^[:space:];&|()<>`]*/)?(sh|bash|zsh|dash|ksh)'
-  local opts='([[:space:]]+[-+][^[:space:];&|<>()]*)*'
-  local stack="${at}${wrap}(pushd|popd)([[:space:];&|)]|$)"
+  local shell="${_git_q}([^[:space:];&|()<>\`]*/)?(sh|bash|zsh|dash|ksh)${_git_q}"
+  # A separate option value can precede -c (for example a shell option name).
+  local opts="([[:space:]]+((-[oO]|--rcfile|--init-file)[[:space:]]+${_git_opt_val}|[-+][^[:space:];&|<>()]*))*"
+  local stack="${at}${wrap}(pushd|popd|${_git_q}eval${_git_q})([[:space:];&|)]|$)"
   local cmdstr="(^|[^[:alnum:]_.-])${shell}${opts}[[:space:]]+-[A-Za-z]*[cs][A-Za-z]*([[:space:];&|<>)'\"]|$)"
-  local fed="${at}${wrap}${shell}${opts}[[:space:]]*([;&|<>)]|$)"
+  local fed="${at}${wrap}${shell}([[:space:]]+[-+][^[:space:];&|<>()]*)*[[:space:]]*([;&|<>)]|$)"
   printf '%s\n' "$text" | LC_ALL=C grep -qE "${stack}|${cmdstr}|${fed}"
 }
 
@@ -345,6 +346,26 @@ _git_redir_take_word() {
   return 0
 }
 
+# Git's own dashed programs have no literal git verb to parse. Route them
+# to the protected gates. An expansion makes the executable target unknown.
+# Do not execute any command text to resolve that target.
+_git_text_has_dashed_protected() {
+  local text="$1" exec_path escaped re
+  case "$text" in *git-push*|*git-commit*) ;; *) return 1 ;; esac
+  # Any leading path counts, so a copy outside the exec path also blocks.
+  re='(^|[^[:alnum:]_.-])(git-(push|commit))([[:space:];&|<>"'"'"')]|$)'
+  [[ "$text" =~ $re ]] && return 0
+  # A variable or substitution can supply the exec path. Fail closed because
+  # its value can differ from the hook process environment.
+  re='(\$[A-Za-z_][A-Za-z0-9_]*|\$[{][^}]*[}]|\$\([^)]*\)|`[^`]*`)["'"'"']*/git-(push|commit)([[:space:];&|<>"'"'"')]|$)'
+  [[ "$text" =~ $re ]] && return 0
+  exec_path=$(git --exec-path 2>/dev/null) || return 0
+  [ -n "$exec_path" ] || return 0
+  escaped=$(printf '%s' "$exec_path" | sed 's/[][\\.^$*+?(){}|]/\\&/g') || return 0
+  re="(^|[^[:alnum:]_./-])${_git_q}${escaped}/git-(push|commit)${_git_q}([[:space:];&|<>)]|$)"
+  [[ "$text" =~ $re ]]
+}
+
 # #1816 G2/G3: an expansion hides the command word or the verb, and the rest
 # of the simple command can still be a push or a commit.
 # #1805 B2: so can a redirection target that the matcher cannot consume.
@@ -353,6 +374,7 @@ git_uncertain_protected_shape() {
   if _git_redir_hides_verb "$text"; then
     return 0
   fi
+  _git_text_has_dashed_protected "$text" && return 0
   local push_re commit_re exp_tok
   push_re="$(_git_quoted_literal push)"
   commit_re="$(_git_quoted_literal commit)"
