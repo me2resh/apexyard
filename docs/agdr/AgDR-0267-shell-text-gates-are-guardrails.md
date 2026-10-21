@@ -80,35 +80,47 @@ The gates still fail closed. A gate that crashes, times out or cannot read its i
 
 ### Real controls for the hostile case
 
-These controls hold against a hostile actor because they do not read shell text:
+These controls do not read shell text. Each one holds against a hostile actor only when the operator sets it up as stated here:
 
-1. **GitHub rulesets on `main` and `dev`.** On me2resh/apexyard the `Branch-Protection` ruleset targets `main` and `dev`. It requires a pull request and status checks, and it blocks deletion and force-push (`non_fast_forward`). A managed project uses its own forge rules (AgDR-0115).
-2. **Read-only hook files.** The Edit, Write, MultiEdit and NotebookEdit channel blocks a write to the live hook and settings files of the ops root. It decides on structured tool fields, not on shell text (`block-protected-target-writes.sh`, labelled `Edit CLASS: CONTROL`). A ConfigChange hook blocks a settings change that turns hooks off (AgDR-0261 § B, #1806). An operator can also make the hook files read-only at the file-system level.
-3. **Claude Code permission rules.** The operator sets allow and deny rules in user or managed settings. The harness applies them outside the hook scripts, so an in-session edit to a hook does not change them. The framework does not ship a `permissions` block in `.claude/settings.json`.
-4. **The per-PR human merge approval.** Every merge needs Rex and an explicit human approval for that PR (`/approve-merge`). On me2resh/apexyard the ruleset also requires a pull request.
+1. **GitHub rulesets on `main` and `dev`.** On me2resh/apexyard the `Branch-Protection` ruleset targets `main` and `dev`. It requires a pull request with one approving review and status checks. It blocks deletion and force-push (`non_fast_forward`). A ruleset holds only for a credential that is not on its bypass list. A managed project uses its own forge rules (AgDR-0115).
+2. **Read-only hook files.** The Edit, Write, MultiEdit and NotebookEdit channel blocks a write to the live hook and settings files of the ops root. It decides on structured tool fields, not on shell text (`block-protected-target-writes.sh`, labelled `Edit CLASS: CONTROL`). The Bash channel of the same hook reads shell text, so it is a backstop. A ConfigChange hook blocks a settings change that turns hooks off (AgDR-0261 § B, #1806). For the hostile case, the operator must also make the hook files read-only at the file-system level.
+3. **Claude Code permission rules.** The operator sets allow and deny rules. The harness applies them outside the hook scripts. User settings are a file that an agent can edit, so only managed settings hold against a hostile actor. The framework does not ship a `permissions` block in `.claude/settings.json`.
+4. **The per-PR human merge approval.** Every merge needs Rex and an explicit human approval for that PR (`/approve-merge`). The forge holds this approval only when a ruleset requires an approving review, and only for a credential that is not a bypass actor. In all other cases, the merge gate hook holds it, and that hook reads shell text.
 
-This record names the controls. It does not claim that each install has all four set up. An operator who needs the hostile case closed must set up items 1 to 3.
+**Accepted residual.** An agent session can sometimes use a bypass-actor token. On that install, the merge gate hook is the only barrier to a merge without human approval. A crafted command can get past that hook. This record accepts that residual. The operator closes it with one of these actions:
+
+- Keep each credential that an agent session can use off the bypass list.
+- Keep bypass-actor tokens out of agent sessions.
+
+This record names the controls. It does not claim that each install has all four set up. An operator who needs the hostile case closed must set up items 1 to 3 as stated, and must close the residual.
 
 ### Review bar for gate PRs
 
-A finding on a gate PR blocks only when it is one of these:
+The CEO bar names four blockers for a gate PR:
 
-1. A regression against `dev` on an ordinary command. A false block counts. A latency above the target in § "Cost budget" counts when `dev` is below it.
-2. A correctness bug in normal use of the changed code.
-3. A failed acceptance criterion.
-4. A false statement in a durable doc, such as an AgDR, a rule, a hook header or a test comment.
+- a regression against `dev` on an ordinary command
+- a correctness bug in normal use
+- a failed acceptance criterion
+- a false durable doc
 
-Exotic bypass shapes are advisory. The reviewer lists each one at class level and adds it to epic me2resh/apexyard#1846. The reviewer names the class only, never the exact command. A public tracker must not hold a ready-made bypass.
+Reviewers apply that bar through the text below, so that no other blocker drops. The same text is in both reviewer briefs and in the `/security-review` skill.
 
-The bar does not hide these faults. Each one still blocks:
+The bar narrows one case only. On a PR that changes `.claude/hooks/**`, a crafted command that the shell-text scan does not catch is advisory. This case includes an exotic shape that `dev` blocks and the head does not.
 
-- A gate that fails open on its own error, timeout or bad input. This is a regression or a correctness bug.
-- A hook change that makes a hook run code from command text, a cloned repository or other untrusted input. AgDR-0172 kind 2 still applies to this fault, because the hook itself adds the hole.
-- A removed or weakened block on an ordinary command, or a removed matcher entry in `.claude/settings.json`.
+Every other blocker stays:
 
-The bar narrows AgDR-0172 kind 2 for one case only: a crafted command that the scan does not catch. On a gate PR, that case is advisory.
+- kinds 1, 3 and 4 of the Blocking-Severity Bar (AgDR-0172)
+- a gate that fails open on its own error, timeout or bad input
+- a hook change that runs code from command text, a cloned repository or other untrusted input
+- the checks that `.claude/agents/code-reviewer.md` § "Blocking-Severity Bar" keeps blocking. These are the Acceptance Criteria check, the AgDR check, the Glossary requirement, a handbook marked `ENFORCEMENT: blocking`, and rail 1 of `.claude/rules/right-size-ceremony.md`.
 
-Reviewers check three things on a gate PR: the delta, the earlier findings, and ordinary commands against `dev`. Reviewers do not hunt for new exotic shape classes. A probe of nearby shapes may check that the fix works. A probe result on an exotic shape is advisory.
+A regression on an ordinary command is kind 1. An ordinary command is one that an agent or a human really types. A false block counts. A slowdown above the 2 s target in AgDR-0267 § "Cost budget" counts when `dev` is below it.
+
+A deleted or weakened paired test for a shape that `dev` already blocks is a correctness finding (kind 3).
+
+An exotic bypass shape is advisory. Name its class only, never the exact command. List the class for epic me2resh/apexyard#1846. Do not hunt for new shape classes. Check the delta, the earlier findings, and ordinary commands against `dev`.
+
+A probe of nearby shapes may check that the fix works. A probe result on an exotic shape is advisory. A public tracker must not hold a ready-made bypass.
 
 ### Freeze
 
@@ -130,7 +142,9 @@ A guardrail must never cost more than the mistake it prevents. The target for th
 
 The evidence for 2 s:
 
-- AgDR-0264 measured 0.19 s to 0.35 s for the dispatcher on its test shapes, and near base speed for 37 KB of review prose. So 2 s is about six times the measured cost. That room covers load and a slower host.
+- AgDR-0264 measured 0.19 s to 0.35 s for the dispatcher on its test shapes, with stub gates. So 2 s is about six times the routing cost. That room covers the real gates, load and a slower host.
+- AgDR-0264 also found 37 KB of review prose near base speed. It gave no time for that case.
+- The time of the real gates on an ordinary command is not measured yet. The first gate PR that measures it records the value.
 - The issue measured 25 s to 75 s on large commands. That is 12 to 37 times the target, and a timeout blocked the call.
 - The mistakes that the gates prevent cost about one minute to fix. The ruleset refuses a bad push, or the agent amends one commit. An agent runs tens of Bash calls for one ticket. At 25 s for each large call, the gate costs more than the mistake.
 
@@ -140,11 +154,14 @@ The 75 s `timeout` on the dispatcher entry stays. It is a fail-closed limit, not
 
 Earlier records sometimes call a shell-text hook a "security gate" or a "security boundary", for example AgDR-0168 and AgDR-0192. Read that term as "guardrail" for the shell-text scan. Notes point to this record from AgDR-0109, AgDR-0168, AgDR-0172 and AgDR-0192.
 
+AgDR-0171 calls its guard list a living list. The freeze applies to that list and to similar lists for exotic shape classes.
+
 ## Consequences
 
 - Some exotic shape classes stay open on purpose. Epic me2resh/apexyard#1846 lists them at class level. Each accepted residual is named in the AgDR of its gate.
 - Reviewer briefs stop asking for adversarial shape hunts on gate PRs. `.claude/agents/code-reviewer.md`, `.claude/agents/security-reviewer.md` and `.claude/skills/security-review/SKILL.md` each have a "Review bar for gate PRs" section that points to this record.
-- Gate PRs block only on the four kinds in § "Review bar for gate PRs". This removes the main cause of three-to-five-round gate PRs.
+- On a gate PR, a crafted command that the scan misses no longer blocks. Every other blocker stays. This removes the main cause of three-to-five-round gate PRs.
+- On an install where the agent session can use a bypass-actor token, a merge without human approval stays possible through a crafted command. This residual is accepted, and the operator can close it (§ "Real controls for the hostile case").
 - A gate PR that slows an ordinary command above 2 s, when `dev` is below 2 s, is a regression. The reviewer measures with the host and tools in § "Cost budget".
 - The fail-closed rule of AgDR-0104 stays. A gate that cannot decide still blocks.
 - The paired-test rule of AgDR-0109 stays for the shapes that a hook already handles. A missing test for a new exotic class does not block.

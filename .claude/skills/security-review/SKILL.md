@@ -49,14 +49,24 @@ Invoke for PRs that touch:
 
 ## Review bar for gate PRs (me2resh/apexyard#1845, AgDR-0267)
 
-The shell-text gates are guardrails against honest mistakes, not a security boundary. For a PR that changes `.claude/hooks/**`, Hakim blocks only on these:
+The shell-text gates are guardrails against honest mistakes, not a security boundary. Hakim applies this bar:
 
-- a regression against `dev` on an ordinary command
-- a correctness bug in normal use
-- a failed acceptance criterion
-- a false statement in a durable doc
+The bar narrows one case only. On a PR that changes `.claude/hooks/**`, a crafted command that the shell-text scan does not catch is advisory. This case includes an exotic shape that `dev` blocks and the head does not.
 
-An exotic bypass shape is advisory. The review names its class only, never the exact command. The orchestrator adds the class to epic me2resh/apexyard#1846. Do not ask Hakim to hunt for new shape classes. The full bar is in `.claude/agents/security-reviewer.md` § "Review bar for gate PRs" and in [AgDR-0267](../../../docs/agdr/AgDR-0267-shell-text-gates-are-guardrails.md).
+Every other blocker stays:
+
+- kinds 1, 3 and 4 of the Blocking-Severity Bar (AgDR-0172)
+- a gate that fails open on its own error, timeout or bad input
+- a hook change that runs code from command text, a cloned repository or other untrusted input
+- the checks that `.claude/agents/code-reviewer.md` § "Blocking-Severity Bar" keeps blocking. These are the Acceptance Criteria check, the AgDR check, the Glossary requirement, a handbook marked `ENFORCEMENT: blocking`, and rail 1 of `.claude/rules/right-size-ceremony.md`.
+
+A regression on an ordinary command is kind 1. An ordinary command is one that an agent or a human really types. A false block counts. A slowdown above the 2 s target in AgDR-0267 § "Cost budget" counts when `dev` is below it.
+
+A deleted or weakened paired test for a shape that `dev` already blocks is a correctness finding (kind 3).
+
+An exotic bypass shape is advisory. Name its class only, never the exact command. List the class for epic me2resh/apexyard#1846. Do not hunt for new shape classes. Check the delta, the earlier findings, and ordinary commands against `dev`.
+
+The orchestrator adds each listed class to the epic. The full bar is in `.claude/agents/security-reviewer.md` § "Review bar for gate PRs" and in [AgDR-0267](../../../docs/agdr/AgDR-0267-shell-text-gates-are-guardrails.md).
 
 ## Running tests in a scratch clone
 
