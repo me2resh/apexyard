@@ -257,6 +257,8 @@ With that config, `wip: scratch work` is accepted and `refactor: cleanup` is rej
 
 **Interactive commits (no `-m` / `-F`)** are skipped — accepted gap, matches sibling hooks' policy.
 
+**Quoted heredoc that writes a file (#1810, AgDR-0263):** the hook removes the body of a quoted heredoc that only feeds `cat` or `tee` to a file before it reads the command. Prose in that body that names a commit, with Markdown backticks, does not start the commit checks. A real commit in the same command is still checked.
+
 **Enforces:** `.claude/rules/git-conventions.md § "Commit Message Format"` — was prose-only.
 
 ## PWD-vs-command-context distinction
