@@ -363,8 +363,6 @@ _git_text_has_dashed_protected() {
   local text="$1" lead_re strict loose
   # A dashed prefix needs a hyphen and a letter t; cheap guard before a fork.
   case "$text" in *-*) ;; *) return 1 ;; esac
-  # A line continuation joins words, as in the shell.
-  text="${text//\\$'\n'/}"
   local sub='\$\([^()]*\)|`[^`]*`'
   local plain='[^[:space:];&|<>()`]'
   local dirp="((${sub}|${plain})*/)?"

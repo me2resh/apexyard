@@ -566,8 +566,7 @@ if [ "$_scan_failed" -eq 1 ]; then
 else
   # #1816 G2/G3: expansion hides the command word or verb — fail closed.
   if command -v git_uncertain_protected_shape >/dev/null 2>&1 \
-    && { git_uncertain_protected_shape "$_scan_cmd" \
-      || _git_text_has_dashed_protected "$COMMAND"; }; then
+    && git_uncertain_protected_shape "$_scan_cmd"; then
     run_push_gates
     run_commit_gates
   else

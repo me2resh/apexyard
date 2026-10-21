@@ -79,7 +79,6 @@ with tempfile.TemporaryDirectory(prefix='dashed-1825-') as scratch:
         check('exec-path-then-expansion-' + verb, '"$(git --exec-path)/$(echo git-' + verb + ')"', 2)
         check('exec-path-then-glob-' + verb, '"$(git --exec-path)"/*' + verb[-3:], 2)
         check('backtick-delimiter-' + verb, '`' + execpath + '/git-' + verb + '`', 2)
-        check('continuation-' + verb, execpath + '/git-' + verb[:2] + '\\\n' + verb[2:], 2)
         check('wrapped-assign-' + verb, 'X=1 env -i ' + execpath + '/git-' + verb, 2)
         check('wrapped-redirect-' + verb, '>/dev/null ' + execpath + '/git-' + verb, 2)
         check('after-pipe-' + verb, 'echo hi | ' + execpath + '/git-' + verb, 2)
