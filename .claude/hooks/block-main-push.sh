@@ -302,6 +302,8 @@ if [ "$_HAS_GIT_PUSH" -eq 1 ]; then
     # bug. See _lib-extract-push-ref.sh's _extract_all_push_refs_core doc
     # comment and docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md.
     if declare -F _extract_all_push_refs_core > /dev/null 2>&1; then
+      ALL_PUSH_RC=0
+      ALL_PUSH_DSTS=$(_extract_all_push_refs_core "$COMMAND") || ALL_PUSH_RC=$?
       while IFS= read -r ANY_PUSH_DST; do
         [ -z "$ANY_PUSH_DST" ] && continue
         if is_protected_branch "$ANY_PUSH_DST"; then
@@ -327,7 +329,14 @@ ${NO_VERIFY_NOTE}
 MSG
           exit 2
         fi
-      done < <(_extract_all_push_refs_core "$COMMAND")
+      done <<EOF_ALL_PUSH_DSTS
+$ALL_PUSH_DSTS
+EOF_ALL_PUSH_DSTS
+      # #1831: fail closed when the words of one push cannot be read.
+      if [ "$ALL_PUSH_RC" -eq 3 ]; then
+        push_ref_unresolved_message >&2
+        exit 2
+      fi
     fi
 
     # Tag pushes are never subject to a branch-protection check. Pass the
@@ -398,10 +407,16 @@ MSG
     fi
 
     if [ "$SKIP_PUSH_BRANCH_CHECK" != "1" ]; then
+      PUSH_DST_RC=0
       if [ "$UNTRUSTED_TAG_SIGNAL" = "1" ]; then
         PUSH_DST=""
       else
-        PUSH_DST=$(extract_push_ref "$COMMAND")
+        PUSH_DST=$(extract_push_ref "$COMMAND") || PUSH_DST_RC=$?
+      fi
+      # #1831: fail closed when the push words cannot be read.
+      if [ "$PUSH_DST_RC" -eq 3 ]; then
+        push_ref_unresolved_message >&2
+        exit 2
       fi
 
       # Fail closed rather than silently falling back to the current branch
@@ -414,7 +429,12 @@ MSG
       # fallback below would have been, since the decoy proves the
       # command's structure is genuinely ambiguous.
       if [ -z "$PUSH_DST" ]; then
-        RAW_PUSH_DST=$(_extract_push_ref_core "$COMMAND")
+        RAW_PUSH_RC=0
+        RAW_PUSH_DST=$(_extract_push_ref_core "$COMMAND") || RAW_PUSH_RC=$?
+        if [ "$RAW_PUSH_RC" -eq 3 ]; then
+          push_ref_unresolved_message >&2
+          exit 2
+        fi
         if [ -n "$RAW_PUSH_DST" ]; then
           cat >&2 <<MSG
 BLOCKED: Cannot safely determine the push destination for this command.

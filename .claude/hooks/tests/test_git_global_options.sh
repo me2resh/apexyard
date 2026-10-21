@@ -380,7 +380,7 @@ check h6-no-execution no "$(if [ -e "$test_tmp/executed" ]; then printf yes; els
 
 # A loaded marker must not disable dispatcher routing.
 mkdir -p "$test_tmp/dispatch"
-cp "$HOOKS/dispatch-bash.sh" "$HOOKS/_lib-git-global.sh" "$HOOKS/_lib-extract-pr.sh" "$HOOKS/_lib-command-scrub.sh" "$HOOKS/_lib-awk-fallback.sh" "$test_tmp/dispatch/"
+cp "$HOOKS/dispatch-bash.sh" "$HOOKS/_lib-git-global.sh" "$HOOKS/_lib-extract-pr.sh" "$HOOKS/_lib-command-scrub.sh" "$HOOKS/_lib-awk-fallback.sh" "$HOOKS/_lib-strip-heredoc.sh" "$test_tmp/dispatch/"
 for gate in $(sed -nE 's/^# APEXYARD_DISPATCH_GATE: Bash[^|]*\|[^|]*\|([^ ]+)\.sh$/\1/p' "$HOOKS/dispatch-bash.sh" | sort -u); do
   printf '#!/bin/bash\ncat >/dev/null\necho %s >> "$DISPATCH_LOG"\n' "$gate" > "$test_tmp/dispatch/$gate.sh"
   chmod +x "$test_tmp/dispatch/$gate.sh"
