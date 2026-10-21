@@ -14,7 +14,7 @@ projects: [apexyard]
 
 # Shell-text gates are guardrails, not a security boundary
 
-> In the context of the Bash gate hooks, facing gate PRs that took three to five review rounds each and a dispatcher that took 25 to 75 s on large commands, I decided that the shell-text gates are guardrails against honest mistakes, to achieve fast and correct gate PRs, accepting that some exotic bypass shape classes stay open on purpose.
+> In the context of the Bash gate hooks, gate PRs took three to five review rounds each. The dispatcher took 25 to 75 s on large commands. I decided that the shell-text gates are guardrails against honest mistakes. This keeps gate PRs fast and correct. I accept that some exotic bypass shape classes stay open on purpose.
 
 ## Outcome and next action
 
