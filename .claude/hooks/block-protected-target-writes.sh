@@ -27,7 +27,9 @@ if [ "$tool" != Bash ]; then
 fi
 cmd=$(jq -er '.tool_input.command' <<<"$INPUT") || pt_block 'missing Bash command.'
 cwd="$PT_CWD"
-pt_token() {
+# Each protected-form test ignores letter case (pt_nocase).
+pt_token() { pt_nocase pt_token_nocase "$@"; }
+pt_token_nocase() {
   local text="$1" token
   text=$(printf '%s' "$text" | sed -e 's://*:/:g' -e 's:/\./:/:g')
   for token in '.claude/settings.local.json' '.claude/settings.json' '.claude/hooks' "$PT_PIN_DIR" '.claude/apexyard' APEXYARD_OPS_PIN_DIR ops-root- gate-session- CLAUDE_CONFIG_DIR CLAUDE_ENV_FILE session-env/ shell-snapshots/; do
@@ -42,9 +44,13 @@ pt_token() {
 # Remove only the named source operand occurrence from the token view.
 PT_TOKEN_VIEW=$(printf '%s' "$cmd" | awk -v source_view=1 "$PT_TOKENS_AWK") || pt_block 'cannot parse sourced-library operands.'
 
-pt_dir_is_sensitive() {
+pt_dir_is_sensitive() { pt_nocase pt_dir_is_sensitive_nocase "$@"; }
+pt_dir_is_sensitive_nocase() {
   local root
-  for root in ${PT_ROOTS[@]+"${PT_ROOTS[@]}"}; do case "$1" in "$root/.claude"|"$root/.claude/"*) return 0 ;; esac; done
+  # Isolated worktrees live under .claude/worktrees. Hook work happens there
+  # (AgDR-0261 D13), so they are not protected state. A live path that a
+  # command names from a worktree is still judged as an operand.
+  for root in ${PT_ROOTS[@]+"${PT_ROOTS[@]}"}; do case "$1" in "$root/.claude/worktrees"|"$root/.claude/worktrees/"*) ;; "$root/.claude"|"$root/.claude/"*) return 0 ;; esac; done
   for root in "$PT_PIN_DIR" "$PT_USER" "$PT_HOME_CONFIG"; do case "$1" in "$root"|"$root/"*) return 0 ;; esac; done
   return 1
 }
@@ -89,6 +95,12 @@ pt_expand() {
   done
   printf '%s' "$value"
 }
+# An unresolved operand that names protected state blocks.
+pt_unresolved_nocase() {
+  case "$1" in *settings.json*|*settings.local.json*|*.claude/hooks*|*.claude/apexyard*|*ops-root-*|*gate-session-*|*session-env/*|*shell-snapshots/*) pt_block 'unresolved protected operand.' ;; esac
+  if [ "$2" = 1 ]; then case "$1" in */.claude) pt_block 'unresolved protected ancestor.' ;; esac; fi
+  return 0
+}
 pt_judge() {
   local value role="${2:-0}" index name
   if [[ "$1" =~ ^\$\{?([a-zA-Z_][a-zA-Z_0-9]*)\}?$ ]]; then
@@ -102,8 +114,7 @@ pt_judge() {
   value=$(pt_expand "$1") || pt_block 'cannot expand a write operand.'
   [ -n "$value" ] || return 0
   case "$value" in *'$'*|*'`'*|*'{}'*)
-    case "$value" in *settings.json*|*settings.local.json*|*.claude/hooks*|*.claude/apexyard*|*ops-root-*|*gate-session-*|*session-env/*|*shell-snapshots/*) pt_block 'unresolved protected operand.' ;; esac
-    if [ "$role" = 1 ]; then case "$value" in */.claude) pt_block 'unresolved protected ancestor.' ;; esac; fi
+    pt_nocase pt_unresolved_nocase "$value" "$role"
     case "$value" in *'{}'*) pt_token_context && pt_block 'unextractable protected operand.' ;; esac
     return 0 ;;
   esac
@@ -240,7 +251,8 @@ pt_operands() {
       -o|--output|-out) output=${words[$i]:-}; i=$((i+1)); continue ;;
       --output=*) output=${arg#*=}; continue ;;
       --file=*) [ "$verb" != tar ] || tar_file=${arg#*=}; continue ;;
-      -f) if [ "$verb" = tar ]; then tar_file=${words[$i]:-}; fi; i=$((i+1)); continue ;;
+      # Only tar takes a value after -f. For rm, cp and mv it is a plain flag.
+      -f) if [ "$verb" = tar ]; then tar_file=${words[$i]:-}; i=$((i+1)); fi; continue ;;
       -e|--expression|-s|--size|-m|--mode|-in|-from|-to|-encoding|-name|-type)
         i=$((i+1)); continue ;;
       of=*) pt_judge "${arg#of=}"; continue ;;
@@ -300,6 +312,15 @@ pt_operands() {
   esac
   return 0
 }
+pt_state_writer_nocase() {
+  local val="$2"
+  case "$1" in pin-ops-root.sh|write-session-snapshot.sh|record-subagent-start.sh|dispatch-session-start.sh)
+    case "$val" in ''|*'$'*|*'`'*) pt_block 'state writers are harness-only.' ;; esac
+    pt_protected "$val" 1 && pt_block 'state writer sandbox is protected.'
+    [[ "$(pt_physical "$val")" != "$PT_PIN_DIR" ]] || pt_block 'state writer sandbox is the live pin tree.' ;;
+  esac
+  return 0
+}
 pt_simple() {
   local segment="$1" word verb i start=0 savecwd="$PT_CWD" arg name val expanded sandbox_pin=""
   local -a words=() filtered=() redirect_slots=()
@@ -318,7 +339,7 @@ pt_simple() {
       operator="$word"
       while [[ "$operator" =~ ^[0-9] ]]; do operator=${operator:1}; done
       case "$operator" in
-        '>'|'>>'|'>|'|'>&'|'&>'|'<>')
+        '>'|'>>'|'>|'|'>&'|'&>'|'<>'|'>!'|'>>!'|'>>|'|'>>&'|'&>>'|'&>!'|'&>|'|'&>>!'|'&>>|'|'>&!'|'>&|'|'>>&!'|'>>&|')
           redirect_slots[${#words[@]}]=1
           words[${#words[@]}]=""
           continue ;;
@@ -388,14 +409,7 @@ pt_simple() {
   [ "$start" -lt "${#words[@]}" ] || return 0
   words=("${words[@]:$start}"); verb=${words[0]##*/}
   # State writers may run only with a literal sandbox assignment.
-  for word in "${words[@]}"; do
-    case "${word##*/}" in pin-ops-root.sh|write-session-snapshot.sh|record-subagent-start.sh|dispatch-session-start.sh)
-      val="$sandbox_pin"
-      case "$val" in ''|*'$'*|*'`'*) pt_block 'state writers are harness-only.' ;; esac
-      pt_protected "$val" 1 && pt_block 'state writer sandbox is protected.'
-      [ "$(pt_physical "$val")" != "$PT_PIN_DIR" ] || pt_block 'state writer sandbox is the live pin tree.' ;;
-    esac
-  done
+  for word in "${words[@]}"; do pt_nocase pt_state_writer_nocase "${word##*/}" "$sandbox_pin"; done
   case "$verb" in
     cd|pushd)
       # Skip cd options such as -P and -L. The first operand is the directory.
@@ -479,7 +493,11 @@ pt_simple() {
         esac
       done
       for i in "${!words[@]}"; do
-        case "${words[$i]}" in -exec|-execdir|-ok|-okdir) for arg in "${words[@]:1:$((i-1))}"; do case "$arg" in -*) ;; *) pt_judge "$arg" 1 ;; esac; done; words=("${words[@]:$((i+1))}"); pt_token_context && pt_block 'find has an unextractable mutation operand.'; return 0 ;; esac
+        case "${words[$i]}" in -exec|-execdir|-ok|-okdir)
+          # A read-only verb cannot write a find root. Judge the roots and the
+          # operands only for a mutating or an unknown verb.
+          case "${words[$((i+1))]:-}" in cat|grep|rg|jq|ls|diff|cmp|head|tail|wc|stat|file|readlink|realpath|shasum|sha256sum|md5|md5sum|du|shellcheck|test|'['|printf|echo|true|false|pwd) continue ;; esac
+          for arg in "${words[@]:1:$((i-1))}"; do case "$arg" in -*) ;; *) pt_judge "$arg" 1 ;; esac; done; words=("${words[@]:$((i+1))}"); pt_token_context && pt_block 'find has an unextractable mutation operand.'; return 0 ;; esac
       done; return 0 ;;
     patch) pt_patch; return 0 ;;
     cp|mv|install|dd|ln|link|rsync|ditto|rm|rmdir|unlink|shred|chmod|chown|chgrp|chflags|chattr|xattr|setfacl|touch|mkdir|truncate|tar|unzip|cpio|pax|perl|ruby|gsed|sed|ed|ex|vi|vim|sponge|tee|base64|openssl|iconv|plutil|uudecode|gzip|gunzip|bzip2|bunzip2|xz|unxz)

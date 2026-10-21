@@ -46,7 +46,7 @@ if [ -z "$path" ]; then
 fi
 path=$(pt_physical "$path") || block_change 'cannot resolve settings file.'
 is_live=0
-for root in "${PT_ROOTS[@]}"; do
+for root in ${PT_ROOTS[@]+"${PT_ROOTS[@]}"}; do
   case "$path" in "$root/.claude/settings.json"|"$root/.claude/settings.local.json") is_live=1 ;; esac
 done
 case "$path" in "$PT_USER/settings.json"|"$PT_HOME_CONFIG/settings.json") is_live=1 ;; esac

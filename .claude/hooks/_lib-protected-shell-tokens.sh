@@ -122,6 +122,13 @@ END {
       emit(); was_shell=shell_header
       newline=(c=="\n"); if(newline)c=";"
       if((c==">" && nextc ~ /[>&|]/) || (c=="<" && nextc ~ /[<>]/) || (c=="&"&&nextc ~ /[&>]/) || (c=="|"&&nextc=="|")) {c=c nextc;i++}
+      # Longer output forms: the combined append "&>>", the zsh combined
+      # append ">>&", and a zsh clobber suffix "!" or "|" after an output
+      # operator (">!", ">>!", ">>|", "&>!", "&>>|", ">&!", ">>&|"). Each form
+      # is one redirect operator.
+      if(c=="&>" && substr(text,i+1,1)==">") {c="&>>";i++}
+      if(c==">>" && substr(text,i+1,1)=="&") {c=">>&";i++}
+      if((c==">" || c==">>" || c=="&>" || c=="&>>" || c==">&" || c==">>&") && substr(text,i+1,1) ~ /[!|]/) {c=c substr(text,i+1,1);i++}
       if(c=="<<" && substr(text,i+1,1)=="<") {c="<<<";i++}
       if(c=="<<" && substr(text,i+1,1)=="-") {c="<<-";i++}
       # A case terminator is one operator. A newline before ";;" is not part of it.

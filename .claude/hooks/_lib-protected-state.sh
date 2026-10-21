@@ -4,6 +4,18 @@
 . "$(dirname "${BASH_SOURCE[0]}")/_lib-path-resolve.sh" || return 2
 
 pt_block() { printf 'BLOCKED: %s\n' "$*" >&2; exit 2; }
+# The default macOS volume ignores letter case. So a protected-form test must
+# also ignore case, or a case variant of a path passes. Run the named function
+# with nocasematch set, then restore the option. Option and verb tests stay
+# case-sensitive. On a case-sensitive volume this only adds blocks.
+pt_nocase() {
+  local rc=0 was=0
+  shopt -q nocasematch && was=1
+  shopt -s nocasematch
+  "$@" || rc=$?
+  [ "$was" = 1 ] || shopt -u nocasematch
+  return "$rc"
+}
 pt_lexical() {
   printf '%s\n' "$1" | awk -F/ '{n=0; for(i=1;i<=NF;i++){if($i==""||$i==".")continue;if($i==".."){if(n)n--;continue} a[++n]=$i} p="";for(i=1;i<=n;i++)p=p "/" a[i];print (p==""?"/":p)}'
 }
@@ -63,9 +75,10 @@ pt_init() {
   PT_HOME_CONFIG=$(pt_physical "$HOME/.claude") || return 2
 }
 # $2 enables ancestor checks for removal and recursive writes.
-pt_protected_form() {
+pt_protected_form() { pt_nocase pt_protected_form_nocase "$@"; }
+pt_protected_form_nocase() {
   local p="$1" ancestors="${2:-0}" root base env_path
-  for root in "${PT_ROOTS[@]}"; do
+  for root in ${PT_ROOTS[@]+"${PT_ROOTS[@]}"}; do
     case "$p" in "$root/.claude/settings.json"|"$root/.claude/settings.local.json"|"$root/.claude/hooks"|"$root/.claude/hooks/"*) return 0 ;; esac
     if [ "$ancestors" = 1 ]; then case "$root/.claude/hooks/" in "$p/"*) return 0 ;; esac; fi
   done
@@ -80,7 +93,7 @@ pt_protected_form() {
   if [ "$ancestors" = 1 ]; then case "$PT_PIN_DIR/" in "$p/"*) return 0 ;; esac; fi
   if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
     env_path=$(pt_physical "$CLAUDE_ENV_FILE") || pt_block 'cannot resolve the harness environment file.'
-    [ "$p" != "$env_path" ] || return 0
+    [[ "$p" != "$env_path" ]] || return 0
     if [ "$ancestors" = 1 ]; then case "$env_path" in "$p/"*) return 0 ;; esac; fi
   fi
   return 1
@@ -106,9 +119,10 @@ pt_protected() {
   physical=$(pt_physical "$p") || pt_block 'cannot resolve the target path.'
   pt_protected_form "$lexical" "$role" || pt_protected_form "$physical" "$role"
 }
-pt_live() {
+pt_live() { pt_nocase pt_live_nocase "$@"; }
+pt_live_nocase() {
   local root p
   p=$(pt_physical "$1") || return 0
-  for root in "${PT_ROOTS[@]}"; do [ "$root" != "$p" ] || return 0; done
+  for root in ${PT_ROOTS[@]+"${PT_ROOTS[@]}"}; do [[ "$root" != "$p" ]] || return 0; done
   return 1
 }
