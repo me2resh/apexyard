@@ -47,6 +47,17 @@ Invoke for PRs that touch:
 - Third-party integrations
 - Cryptography or secrets
 
+## Review bar for gate PRs (me2resh/apexyard#1845, AgDR-0267)
+
+The shell-text gates are guardrails against honest mistakes, not a security boundary. For a PR that changes `.claude/hooks/**`, Hakim blocks only on these:
+
+- a regression against `dev` on an ordinary command
+- a correctness bug in normal use
+- a failed acceptance criterion
+- a false statement in a durable doc
+
+An exotic bypass shape is advisory. The review names its class only, never the exact command. The orchestrator adds the class to epic me2resh/apexyard#1846. Do not ask Hakim to hunt for new shape classes. The full bar is in `.claude/agents/security-reviewer.md` § "Review bar for gate PRs" and in [AgDR-0267](../../../docs/agdr/AgDR-0267-shell-text-gates-are-guardrails.md).
+
 ## Running tests in a scratch clone
 
 Hakim may need to run tests or attack probes against the PR head, outside this repository's working tree. Use a plain `git clone` into a literal scratch path. Or export with `git archive <ref> | tar -x -C <scratchpad>` into this session's scratchpad. A sanctioned review needs no ticket for that write. The agent file states the path rule. If a hook blocks a command, stop that step. Report the exact command, the hook, and its message to the orchestrator. Never rephrase, split, encode, or disguise a command to get past a hook. Full pattern: `.claude/agents/security-reviewer.md` § "Running tests in a scratch clone".

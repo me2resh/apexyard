@@ -166,6 +166,21 @@ Advisory findings include a self-bypass edge case, a pre-existing gap the diff d
 
 This bar governs the checklist sections below (§§ 1–5), an advisory Handbook Finding, and the Fallow Findings. It does not narrow the Acceptance Criteria check, the Technical Decisions (AgDR) check, the mandatory Glossary requirement in § 6, a handbook marked `ENFORCEMENT: blocking` (§ 8), or rail 1 of `.claude/rules/right-size-ceremony.md` — each of those already states its own BLOCKING rule and stays blocking under it.
 
+## Review bar for gate PRs (me2resh/apexyard#1845, AgDR-0267)
+
+The shell-text gates are guardrails against honest mistakes. They are not a security boundary against a hostile or prompt-injected actor. See [AgDR-0267](../../docs/agdr/AgDR-0267-shell-text-gates-are-guardrails.md) and AgDR-0115.
+
+For a PR that changes `.claude/hooks/**`, a finding blocks only when it is one of these:
+
+1. A regression against `dev` on an ordinary command. An ordinary command is one that an agent or a human really types.
+2. A correctness bug in normal use of the changed code.
+3. A failed acceptance criterion.
+4. A false statement in a durable doc.
+
+An exotic bypass shape is advisory. Name its class only, never the exact command. List the class for epic me2resh/apexyard#1846. Do not hunt for new shape classes. The probe list in § "Evidence-backed behavior claims" checks that the fix works. A probe result on an exotic shape is advisory. A gate PR that slows an ordinary command above the AgDR-0267 latency target, when `dev` is below it, is a regression.
+
+This bar narrows kind 2 of § "Blocking-Severity Bar" only for a crafted command that the scan does not catch. A gate that fails open on its own error or timeout still blocks.
+
 ## Delta Re-Reviews (me2resh/apexyard#1418, AgDR-0172)
 
 Run a delta re-review after new commits land on a PR you already reviewed.

@@ -95,6 +95,21 @@ Every other finding is advisory. Post it as a recommendation and do not change a
 
 CRITICAL and HIGH findings under § "Severity Levels" below map to kinds 1–3 of this bar. A MEDIUM or LOW finding is advisory under this bar unless it independently meets one of the four kinds.
 
+## Review bar for gate PRs (me2resh/apexyard#1845, AgDR-0267)
+
+The shell-text gates are guardrails against honest mistakes. They are not a security boundary against a hostile or prompt-injected actor. GitHub rulesets, read-only hook files, Claude Code permission rules and the per-PR human merge approval hold that case. See [AgDR-0267](../../docs/agdr/AgDR-0267-shell-text-gates-are-guardrails.md) and AgDR-0115.
+
+For a PR that changes `.claude/hooks/**`, a finding blocks only when it is one of these:
+
+1. A regression against `dev` on an ordinary command. An ordinary command is one that an agent or a human really types.
+2. A correctness bug in normal use of the changed code.
+3. A failed acceptance criterion.
+4. A false statement in a durable doc.
+
+An exotic bypass shape is advisory. Name its class only, never the exact command. List the class for epic me2resh/apexyard#1846. Do not hunt for new shape classes. Check the delta, the earlier findings, and ordinary commands against `dev`.
+
+This bar narrows kind 2 of § "Blocking-Severity Bar" only for a crafted command that the scan does not catch. These faults still block: a gate that fails open on its own error or timeout, and a hook change that runs code from untrusted input. AgDR-0267 § "Cost budget" states the dispatcher latency target.
+
 ## Delta Re-Reviews (me2resh/apexyard#1418, AgDR-0172)
 
 Run a delta re-review after new commits land on a PR you already reviewed.
