@@ -44,11 +44,12 @@ Chosen: **A**, because it fixes the false block for the real command shapes and 
    - The line before the start line does not end in a backslash.
    - A later line is the delimiter. For `<<-`, leading tabs are removed first.
 2. The helper keeps the raw command (no strip) when any of these is true:
-   - Another line outside a stripped body holds `<<`. This covers a heredoc that a shell reads, an unquoted heredoc and a here-string.
+   - Another line outside a stripped body holds `<<` and is not a qualifying start line. This covers a heredoc that a shell reads, an unquoted heredoc and a here-string.
    - A line after a stripped body names the file of that heredoc, because a later command can run the file.
    - The heredoc is not terminated.
 3. When the helper strips a body, the hook puts the stripped text into its copy of the hook input. The visitor and all checks then read that text. If jq fails, the hook keeps the raw input.
-4. A real commit in the same command stays visible. The existing compound and newline checks then block it, as on `dev`.
+4. The helper does not use the AgDR-0262 target allow-list. That allow-list protects routing for all push and commit gates. This strip changes only the view of the commit-format check, and a file write is not a commit for any target.
+5. A real commit in the same command stays visible. The existing compound and newline checks then block it, as on `dev`.
 
 ## Consequences
 
