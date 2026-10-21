@@ -146,6 +146,7 @@ def make_dispatch_tree(src_hooks, label, stub_gates=False):
         shutil.rmtree(dest)
     shutil.copytree(src_hooks, dest)
     always = [
+        "block-protected-target-writes.sh",
         "block-ambient-tracker-repo.sh", "block-privileged-escalation.sh",
         "require-skill-for-issue-create.sh", "require-orbit-slice-for-ticket.sh",
         "require-migration-ticket.sh", "require-active-ticket.sh",
