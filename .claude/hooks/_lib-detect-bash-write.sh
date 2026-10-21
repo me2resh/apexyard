@@ -77,6 +77,19 @@ _bdw_operators() {
 #       an unparseable segment contributes nothing, never a fabricated
 #       target.
 
+# Shared triggers for segment extraction and its candidate filter (#1832).
+# Keep the full extractor checks below. These expressions only avoid work on
+# segments that cannot contribute a target or an unextractable inline edit.
+_BDW_TEE_RE='\btee\b'
+_BDW_CURL_OUTPUT_RE='\bcurl\b[^|;&]*(--output\b|-o\b)'
+_BDW_WGET_OUTPUT_RE='\bwget\b[^|;&]*(--output-document\b|-O\b)'
+_BDW_CP_MV_RE='(^|[;&|(]|&&|\|\|)[[:space:]]*(cp|mv)([[:space:]]|$)'
+_BDW_CP_MV_REDIRECT_RE='(^|[;&|()[:space:]])(cp|mv)[[:space:]]'
+_BDW_GIT_WORD_RE='\bgit[[:space:]]'
+_BDW_SORT_WORD_RE='\bsort\b'
+_BDW_YQ_WORD_RE='\byq\b'
+_BDW_UNNAMED_TOOLS_RE='(^|[;&|()[:space:]])(dd|install)[[:space:]]'
+
 # ------------------------------------------------------------------------------
 # Public: bash_command_appears_to_write COMMAND
 #
@@ -415,7 +428,7 @@ BDW_SEGMENTS
 
 # 2. tee.
 _bdw_match_tee() {
-  echo "$1" | grep -qE '\btee\b'
+  echo "$1" | grep -qE "$_BDW_TEE_RE"
 }
 
 # 3. sed -i, in the GNU spellings tested here (me2resh/apexyard#1414).
@@ -579,7 +592,7 @@ _bdw_match_curl_output() {
   echo "$cmd" | grep -qE '\bcurl\b' || return 1
   # `--output FILE` or `-o FILE`. Exclude `--output-dir` (separate flag) by
   # requiring `--output` to be followed by whitespace and a non-flag token.
-  if echo "$cmd" | grep -qE '\bcurl\b[^|;&]*(--output\b|-o\b)'; then
+  if echo "$cmd" | grep -qE "$_BDW_CURL_OUTPUT_RE"; then
     # Avoid matching `--output-dir` alone (rare flag — still a write surface
     # but conservative match keeps this branch tight).
     if echo "$cmd" | grep -qE '\bcurl\b[^|;&]*--output-dir\b' \
@@ -595,7 +608,7 @@ _bdw_match_curl_output() {
 _bdw_match_wget_output() {
   local cmd="$1"
   echo "$cmd" | grep -qE '\bwget\b' || return 1
-  if echo "$cmd" | grep -qE '\bwget\b[^|;&]*(--output-document\b|-O\b)'; then
+  if echo "$cmd" | grep -qE "$_BDW_WGET_OUTPUT_RE"; then
     return 0
   fi
   return 1
@@ -607,7 +620,7 @@ _bdw_match_wget_output() {
 #     `--output` to end the flag token before `=` or whitespace.
 _bdw_match_git_log_diff_output() {
   local cmd="$1"
-  echo "$cmd" | grep -qE '\bgit[[:space:]]' || return 1
+  echo "$cmd" | grep -qE "$_BDW_GIT_WORD_RE" || return 1
   echo "$cmd" | grep -qE '\bgit[[:space:]]+([^|;&]*[[:space:]])?(log|diff)[[:space:]][^|;&]*--output(=|[[:space:]]|$)'
 }
 
@@ -620,7 +633,7 @@ _bdw_match_git_log_diff_output() {
 #     another tool (`ps --sort -rss -o pid`) stays a read.
 _bdw_match_sort_output() {
   local cmd="$1"
-  echo "$cmd" | grep -qE '\bsort\b' || return 1
+  echo "$cmd" | grep -qE "$_BDW_SORT_WORD_RE" || return 1
   echo "$cmd" | grep -qE '(^|[^-[:alnum:]_.])sort[[:space:]][^|;&]*(-[A-Za-z0-9]*o[A-Za-z0-9]*[[:space:]]+|-o[^[:space:]=][^[:space:]]*|--output(=|[[:space:]]+))'
 }
 
@@ -631,7 +644,7 @@ _bdw_match_sort_output() {
 #     stay reads.
 _bdw_match_yq_inplace() {
   local cmd="$1"
-  echo "$cmd" | grep -qE '\byq\b' || return 1
+  echo "$cmd" | grep -qE "$_BDW_YQ_WORD_RE" || return 1
   echo "$cmd" | grep -qE '\byq[[:space:]]+([^|;&]*[[:space:]])?(-[A-Za-z0-9]*i[A-Za-z0-9]*\b|--inplace\b)'
 }
 
@@ -1070,7 +1083,7 @@ bash_extract_write_target() {
   fi
 
   # tee: capture the first non-flag argument after `tee`.
-  if echo "$syntax" | grep -qE '\btee\b'; then
+  if echo "$syntax" | grep -qE "$_BDW_TEE_RE"; then
     target=$(echo "$cmd" | grep -oE '\btee\b[[:space:]]+(-[^[:space:]]+[[:space:]]+)*[^[:space:]&|;]+' \
                   | head -n 1 \
                   | sed -E 's/^tee[[:space:]]+(-[^[:space:]]+[[:space:]]+)*//')
@@ -1094,7 +1107,7 @@ bash_extract_write_target() {
   fi
 
   # curl -o / --output: capture the path argument (#153).
-  if echo "$cmd" | grep -qE '\bcurl\b[^|;&]*(--output\b|-o\b)'; then
+  if echo "$cmd" | grep -qE "$_BDW_CURL_OUTPUT_RE"; then
     target=$(echo "$cmd" | grep -oE '(--output|-o)[[:space:]]+[^[:space:]&|;]+' \
                   | head -n 1 \
                   | sed -E 's/^(--output|-o)[[:space:]]+//')
@@ -1107,7 +1120,7 @@ bash_extract_write_target() {
   fi
 
   # wget -O / --output-document: same idea (#153).
-  if echo "$cmd" | grep -qE '\bwget\b[^|;&]*(--output-document\b|-O\b)'; then
+  if echo "$cmd" | grep -qE "$_BDW_WGET_OUTPUT_RE"; then
     target=$(echo "$cmd" | grep -oE '(--output-document|-O)[[:space:]]+[^[:space:]&|;]+' \
                   | head -n 1 \
                   | sed -E 's/^(--output-document|-O)[[:space:]]+//')
@@ -1165,7 +1178,7 @@ bash_extract_write_target() {
   # cp / mv: target is the LAST positional argument (#153).
   # Approximate: tokenise on whitespace, strip pipeline tail, take the last
   # non-flag token. Skip this for `git rm`/`git mv` (subcommands).
-  if echo "$cmd" | grep -qE '(^|[;&|(]|&&|\|\|)[[:space:]]*(cp|mv)([[:space:]]|$)' \
+  if echo "$cmd" | grep -qE "$_BDW_CP_MV_RE" \
      && ! echo "$cmd" | grep -qE '^[[:space:]]*git[[:space:]]+(rm|mv)\b'; then
     # Strip everything after a pipeline / list separator to focus on this segment.
     local seg
@@ -1200,7 +1213,7 @@ _bdw_strip_quotes() {
 # exempt target (#1416). Return empty when the destination is uncertain.
 _bdw_cp_mv_target_before_redirect() {
   local seg="$1" syntax="$2" prefix target
-  printf '%s' "$syntax" | grep -qE '(^|[;&|()[:space:]])(cp|mv)[[:space:]]' || return 0
+  printf '%s' "$syntax" | grep -qE "$_BDW_CP_MV_REDIRECT_RE" || return 0
   case "$seg" in *'>'*) ;; *) return 0 ;; esac
   prefix="${seg%%>*}"
   prefix="${prefix%&}"
@@ -1291,7 +1304,7 @@ BDW_REDIRECTS
   # GNU-compatible on this point); the strip-the-"tee"-token step below
   # uses plain anchored parameter expansion instead of sed, sidestepping
   # the incompatibility entirely.
-  if printf '%s\n' "$syntax" | grep -qE '\btee\b'; then
+  if printf '%s\n' "$syntax" | grep -qE "$_BDW_TEE_RE"; then
     tee_tail=$(printf '%s\n' "$seg" | grep -oE '\btee\b[[:space:]].*' | head -n 1)
     tee_tail="${tee_tail#tee}"
     local skip_flags=1
@@ -1322,6 +1335,34 @@ BDW_REDIRECTS
   # above; bash_extract_write_targets dedupes the combined output.)
   target=$(bash_extract_write_target "$seg" "$syntax")
   [ -n "$target" ] && printf '%s\n' "$target"
+}
+
+# Select candidate indices with one grep over BOTH aligned segment views.
+# The caller declares _bdw_candidates. Bash 3.2 uses dynamic local scope.
+# Grep status 1 means no candidates. Any error restores the complete loop.
+# Heredoc bodies stay visible, including bodies consumed by a shell (AgDR-0113).
+_bdw_candidate_segments() {
+  local count="$1" hits rc=0 hit index
+  shift
+  local pattern="${_BDW_REDIRECT_RE}|${_BDW_TEE_RE}|${_BDW_SED_INPLACE_RE}|${_BDW_CURL_OUTPUT_RE}|${_BDW_WGET_OUTPUT_RE}|${_BDW_CP_MV_RE}|${_BDW_CP_MV_REDIRECT_RE}|${_BDW_GIT_WORD_RE}|${_BDW_SORT_WORD_RE}|${_BDW_YQ_WORD_RE}|${_BDW_UNNAMED_TOOLS_RE}"
+  # -a: GNU grep 3.5+ drops a line with an encoding error and exits 0, so
+  # without -a the filter would skip a segment that the extractors still match.
+  hits=$(printf '%s\n' "$@" | grep -anE "$pattern" 2>/dev/null) || rc=$?
+  [ "$rc" -le 1 ] || return 1
+  [ -n "$hits" ] || return 0
+  local read_ok=0
+  while IFS= read -r hit; do
+    read_ok=1
+    index="${hit%%:*}"
+    # Binary-input notices have no numbered record. Preserve the full walk.
+    case "$index" in ''|*[!0-9]*) return 1 ;; esac
+    [ "$index" -gt 0 ] && [ "$index" -le "$((count * 2))" ] || return 1
+    index=$(( (index - 1) % count ))
+    _bdw_candidates[index]=1
+  done 2>/dev/null <<BDW_CANDIDATE_SEGMENTS
+$hits
+BDW_CANDIDATE_SEGMENTS
+  [ "$read_ok" -eq 1 ]
 }
 
 # ------------------------------------------------------------------------------
@@ -1369,15 +1410,26 @@ BDW_SYNTAX_SEGMENTS
   # that already saw a write fails closed on the list it gets (#1502).
   local seg_targets=""
   [ "$_bdw_syn_read" -eq 1 ] && seg_targets=$(
-    local index=0
+    local index=0 filter_ok=0
+    local -a operator_segments=() _bdw_candidates=()
     while IFS= read -r seg; do
-      local syntax_seg="${syntax_segments[index]:-}"
-      index=$((index + 1))
-      [ -z "$seg" ] && continue
-      _bdw_targets_from_segment "$seg" "$syntax_seg"
+      operator_segments+=("$seg")
     done 2>/dev/null <<BDW_COMMAND_SEGMENTS
 $(_bdw_split_top_level "$cmd")
 BDW_COMMAND_SEGMENTS
+    # Unequal views retain the original extraction walk.
+    if [ "${#operator_segments[@]}" -eq "${#syntax_segments[@]}" ] &&
+        [ "${#operator_segments[@]}" -gt 0 ] &&
+        _bdw_candidate_segments "${#operator_segments[@]}" "${operator_segments[@]}" "${syntax_segments[@]}"; then
+      filter_ok=1
+    fi
+    for ((index=0; index<${#operator_segments[@]}; index++)); do
+      [ "$filter_ok" -eq 0 ] || [ "${_bdw_candidates[index]:-0}" -eq 1 ] || continue
+      seg="${operator_segments[index]}"
+      local syntax_seg="${syntax_segments[index]:-}"
+      [ -z "$seg" ] && continue
+      _bdw_targets_from_segment "$seg" "$syntax_seg"
+    done
   )
   {
     [ -n "$seg_targets" ] && printf '%s\n' "$seg_targets"
@@ -1428,7 +1480,7 @@ bash_command_has_unextractable_write() {
   if printf '%s' "$syntax" | grep -qE '\b(curl[[:space:]][^|;&]*--output=|wget[[:space:]][^|;&]*--output-document=)'; then
     return 0
   fi
-  if printf '%s' "$syntax" | grep -qE '(^|[;&|()[:space:]])(dd|install)[[:space:]]'; then
+  if printf '%s' "$syntax" | grep -qE "$_BDW_UNNAMED_TOOLS_RE"; then
     return 0
   fi
   # yq -i with no extractable file path is unextractable (#1480).
@@ -1453,8 +1505,14 @@ $(_bdw_split_top_level "$operators")
 BDW_OPERATOR_SEGMENTS
   [ "$_bdw_op_read" -eq 0 ] && return 0
   [ "${#syntax_segments[@]}" -eq "${#operator_segments[@]}" ] || return 0
+  local filter_ok=0
+  local -a _bdw_candidates=()
+  if _bdw_candidate_segments "${#operator_segments[@]}" "${operator_segments[@]}" "${syntax_segments[@]}"; then
+    filter_ok=1
+  fi
   for ((index=0; index<${#syntax_segments[@]}; index++)); do
-    if printf '%s' "${syntax_segments[index]}" | grep -qE '(^|[;&|()[:space:]])(cp|mv)[[:space:]]' \
+    [ "$filter_ok" -eq 0 ] || [ "${_bdw_candidates[index]:-0}" -eq 1 ] || continue
+    if printf '%s' "${syntax_segments[index]}" | grep -qE "$_BDW_CP_MV_REDIRECT_RE" \
         && printf '%s' "${operator_segments[index]}" | grep -q '>'; then
       [ -n "$(_bdw_cp_mv_target_before_redirect "${operator_segments[index]}" "${syntax_segments[index]}")" ] || return 0
     fi
