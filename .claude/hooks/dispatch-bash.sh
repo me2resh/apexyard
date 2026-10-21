@@ -160,6 +160,7 @@ if printf '%s' "$COMMAND" | grep -qE 'record-menu-approval|_lib-menu-approval|me
   exit 2
 fi
 
+# APEXYARD_DISPATCH_GATE: Bash|*|block-protected-target-writes.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|block-ambient-tracker-repo.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|block-privileged-escalation.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|require-skill-for-issue-create.sh
@@ -219,6 +220,7 @@ fi
 
 # Hooks without a command predicate are safety checks for every Bash call.
 for script in \
+  block-protected-target-writes.sh \
   block-ambient-tracker-repo.sh \
   block-privileged-escalation.sh \
   require-skill-for-issue-create.sh \
@@ -232,7 +234,7 @@ for script in \
   block-forged-menu-approval.sh; do
   case "$script" in
     # Ticket-first fails closed (me2resh/apexyard#1623).
-    require-active-ticket.sh) run_fail_closed_hook "$script" ;;
+    block-protected-target-writes.sh|require-active-ticket.sh) run_fail_closed_hook "$script" ;;
     # Menu-record forgery guard fails closed too (AgDR-0234). A crash must
     # not let a Bash write of approval_channel=menu through unchecked.
     block-forged-menu-approval.sh) run_fail_closed_hook "$script" ;;

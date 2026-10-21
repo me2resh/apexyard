@@ -5,6 +5,7 @@ set -euo pipefail
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 INPUT=$(cat)
 # APEXYARD_SESSION_START_HOOK: pin-ops-root.sh
+# APEXYARD_SESSION_START_HOOK: write-session-snapshot.sh
 # APEXYARD_SESSION_START_HOOK: write-rule-excludes.sh
 # APEXYARD_SESSION_START_HOOK: onboarding-check.sh
 # APEXYARD_SESSION_START_HOOK: check-upstream-drift.sh
@@ -55,6 +56,7 @@ scripts=(
 
 # Pinning is the one ordering dependency. Run it before the remaining hooks.
 run_direct pin-ops-root.sh
+run_direct write-session-snapshot.sh
 
 if ! TMP_DIR=$(mktemp -d 2>/dev/null); then
   printf '%s\n' 'WARN: could not create SessionStart output directory; running remaining hooks directly.' >&2

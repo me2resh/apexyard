@@ -3,7 +3,7 @@
 # temp directory standing in for the real pin dir, running a write-capable
 # hook path through the isolation helper must leave that pin directory
 # byte-identical. Without the helper, the same session id lets pin-ops-root.sh
-# overwrite the pin (the bug this ticket closes).
+# create a new pin in the victim directory. Existing pins are write-once.
 #
 # Cases 3–4 intentionally use a mini suite that *writes* (pin-ops-root), not
 # a read-only lib smoke test — test_ops_root.sh never mutates the pin dir, so
@@ -54,20 +54,20 @@ printf '%s\n' "/path/to/real/ops-fork" >"$VICTIM/ops-root-${SID}"
 printf 'cache-sentinel\n' >"$VICTIM/resolve-cache-${SID}-config-json"
 VICTIM_BEFORE=$(dir_fingerprint "$VICTIM")
 
-# --- Case 1: without helper, pin-ops-root overwrites the victim pin ----------
+# --- Case 1: without helper, pin-ops-root creates a new victim pin ----------
 (
-  export CLAUDE_CODE_SESSION_ID="$SID"
+  export CLAUDE_CODE_SESSION_ID="$SID-raw"
   export APEXYARD_OPS_PIN_DIR="$VICTIM"
   unset APEXYARD_OPS_DISABLE_PIN APEXYARD_DISABLE_RESOLUTION_CACHE
   cd "$SRC_ROOT" || exit 1
-  bash "$PIN_HOOK"
+  bash "$PIN_HOOK" <<<'{"source":"startup"}'
 )
-pin_after_raw=$(cat "$VICTIM/ops-root-${SID}")
-if [ "$pin_after_raw" != "/path/to/real/ops-fork" ]; then
-  mark_pass "without helper, pin-ops-root overwrites victim pin (bug reproduced)"
+pin_after_raw=$(cat "$VICTIM/ops-root-${SID}-raw")
+if [ -n "$pin_after_raw" ] && [ "$pin_after_raw" != "/path/to/real/ops-fork" ]; then
+  mark_pass "without helper, pin-ops-root creates a new victim pin without isolation"
 else
   mark_fail "without helper overwrite" \
-    "expected pin-ops-root to replace sentinel; still='$pin_after_raw'"
+    "expected pin-ops-root to create a new pin; still='$pin_after_raw'"
 fi
 
 # Restore victim to the sentinel state for the isolation cases.
@@ -83,7 +83,7 @@ VICTIM_BEFORE=$(dir_fingerprint "$VICTIM")
   # shellcheck disable=SC1090,SC1091
   . "$HELPER"
   cd "$SRC_ROOT" || exit 1
-  bash "$PIN_HOOK"
+  bash "$PIN_HOOK" <<<'{"source":"startup"}'
 )
 VICTIM_AFTER_HELPER=$(dir_fingerprint "$VICTIM")
 if [ "$VICTIM_AFTER_HELPER" = "$VICTIM_BEFORE" ]; then
@@ -116,7 +116,7 @@ set -u
 export CLAUDE_CODE_SESSION_ID="$SID"
 unset APEXYARD_OPS_DISABLE_PIN
 cd "$SRC_ROOT" || exit 1
-bash "$PIN_HOOK"
+bash "$PIN_HOOK" <<<'{"source":"startup"}'
 EOF
 
 if CLAUDE_CODE_SESSION_ID="$SID" \
@@ -145,22 +145,22 @@ MINI_WITHOUT=$(mktemp "${TMPDIR:-/tmp}/apexyard-1549-mini-without.XXXXXX") || ex
 cat >"$MINI_WITHOUT" <<EOF
 #!/bin/bash
 set -u
-export CLAUDE_CODE_SESSION_ID="$SID"
+export CLAUDE_CODE_SESSION_ID="$SID-mini"
 unset APEXYARD_OPS_DISABLE_PIN APEXYARD_DISABLE_RESOLUTION_CACHE
 cd "$SRC_ROOT" || exit 1
-bash "$PIN_HOOK"
+bash "$PIN_HOOK" <<<'{"source":"startup"}'
 EOF
 
 CLAUDE_CODE_SESSION_ID="$SID" \
   APEXYARD_OPS_PIN_DIR="$VICTIM" \
   env -u APEXYARD_OPS_DISABLE_PIN -u APEXYARD_DISABLE_RESOLUTION_CACHE \
   bash "$MINI_WITHOUT" >/tmp/_1549_mini_without.out 2>&1 || true
-pin_after_mini=$(cat "$VICTIM/ops-root-${SID}")
-if [ "$pin_after_mini" != "/path/to/real/ops-fork" ]; then
-  mark_pass "write-capable mini suite without helper overwrites victim pin"
+pin_after_mini=$(cat "$VICTIM/ops-root-${SID}-mini")
+if [ -n "$pin_after_mini" ] && [ "$pin_after_mini" != "/path/to/real/ops-fork" ]; then
+  mark_pass "write-capable mini suite without helper creates a new victim pin"
 else
   mark_fail "mini suite without helper" \
-    "expected overwrite; pin still='$pin_after_mini'; tail:"$'\n'"$(tail -n 20 /tmp/_1549_mini_without.out)"
+    "expected a new pin; pin='$pin_after_mini'; tail:"$'\n'"$(tail -n 20 /tmp/_1549_mini_without.out)"
 fi
 rm -f "$MINI_WITHOUT"
 
@@ -177,7 +177,7 @@ set -u
 export CLAUDE_CODE_SESSION_ID="$SID"
 unset APEXYARD_OPS_DISABLE_PIN APEXYARD_DISABLE_RESOLUTION_CACHE
 cd "$SRC_ROOT" || exit 1
-bash "$PIN_HOOK"
+bash "$PIN_HOOK" <<<'{"source":"startup"}'
 EOF
 
 if CLAUDE_CODE_SESSION_ID="$SID" APEXYARD_OPS_PIN_DIR="$VICTIM" \

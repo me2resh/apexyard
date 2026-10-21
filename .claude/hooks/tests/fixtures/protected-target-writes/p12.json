@@ -1,0 +1,78 @@
+{
+  "capture": "P12",
+  "run": 2,
+  "date": "2026-10-19",
+  "design": "AgDR-0261 section B.10",
+  "session": "<session-a>",
+  "subagent": "agent-<p12>",
+  "isolation": "worktree",
+  "worktree": "<sandbox>/.claude/worktrees/agent-<p12>",
+  "logger": "The logger command is an absolute path in the uncommitted settings of <sandbox>. The worktree checks out the committed settings, which have no logger.",
+  "subagent_pretooluse_events": [
+    {
+      "ts": "2026-10-19T20:09:36Z",
+      "event": "PreToolUse",
+      "hook_pwd": "<sandbox>/.claude/worktrees/agent-<p12>",
+      "hook_claude_project_dir": "<sandbox>",
+      "pin_at_call": "<sandbox>",
+      "payload": {
+        "session_id": "<session-a>",
+        "hook_event_name": "PreToolUse",
+        "source": null,
+        "file_path": null,
+        "tool_name": "Bash",
+        "agent_id": "<p12>",
+        "agent_type": "general-purpose",
+        "cwd": "<sandbox>/.claude/worktrees/agent-<p12>",
+        "target": "pwd && git rev-parse --show-toplevel && git branch --show-current && tail -c 200 README.md | od -c | tail -5"
+      }
+    },
+    {
+      "ts": "2026-10-19T20:09:41Z",
+      "event": "PreToolUse",
+      "hook_pwd": "<sandbox>/.claude/worktrees/agent-<p12>",
+      "hook_claude_project_dir": "<sandbox>",
+      "pin_at_call": "<sandbox>",
+      "payload": {
+        "session_id": "<session-a>",
+        "hook_event_name": "PreToolUse",
+        "source": null,
+        "file_path": null,
+        "tool_name": "Edit",
+        "agent_id": "<p12>",
+        "agent_type": "general-purpose",
+        "cwd": "<sandbox>/.claude/worktrees/agent-<p12>",
+        "target": "<sandbox>/.claude/worktrees/agent-<p12>/README.md"
+      }
+    },
+    {
+      "ts": "2026-10-19T20:09:43Z",
+      "event": "PreToolUse",
+      "hook_pwd": "<sandbox>/.claude/worktrees/agent-<p12>",
+      "hook_claude_project_dir": "<sandbox>",
+      "pin_at_call": "<sandbox>",
+      "payload": {
+        "session_id": "<session-a>",
+        "hook_event_name": "PreToolUse",
+        "source": null,
+        "file_path": null,
+        "tool_name": "Bash",
+        "agent_id": "<p12>",
+        "agent_type": "general-purpose",
+        "cwd": "<sandbox>/.claude/worktrees/agent-<p12>",
+        "target": "git diff --stat && git diff | tail -6"
+      }
+    }
+  ],
+  "worktree_diff": "diff --git a/README.md b/README.md\nindex b425fdc9..5360e2b4 100644\n--- a/README.md\n+++ b/README.md\n@@ -342,3 +342,4 @@ MIT License. See [LICENSE](LICENSE) for details.\n ---\n \n Built with real-world experience shipping software with Claude Code.\n+<!-- worktree isolation test line -->",
+  "snapshot": {
+    "project_dir": "<sandbox>",
+    "ops_root": "<sandbox>"
+  },
+  "findings": [
+    "The subagent runs the hooks of the main session: the logger recorded its Bash and Edit calls.",
+    "Hook-process CLAUDE_PROJECT_DIR is <sandbox>, not the worktree. Hook-process PWD and payload cwd are the worktree.",
+    "The snapshot project directory is the session start directory. The worktree is not a live root. The Edit in the worktree passed."
+  ],
+  "verdict": "Met"
+}

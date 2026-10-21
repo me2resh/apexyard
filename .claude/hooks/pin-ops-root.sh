@@ -34,15 +34,27 @@
 #   - walk-up from $PWD fails to find an ops root     → exit 0 (no pin)
 #   - pin already exists with the same path           → exit 0 (no-op)
 #
-# Idempotent: re-invoking the hook on the same session overwrites the
-# pin with the same value (or refreshes it if the operator
-# legitimately switched ops forks mid-session — rare).
+# The pin is written once per session id: at startup, resume or fork, and at
+# clear (a new session id) from CLAUDE_PROJECT_DIR. compact never writes.
 #
 # Spaced-path safety: the path is written with `printf '%s\n' "$path"`
 # so the corresponding `IFS= read -r` in `_lib-ops-root.sh` reads it
 # back intact. No `tr -d '[:space:]'` shenanigans here or there.
 
 set -u
+INPUT=$(cat)
+[ -n "$INPUT" ] || INPUT='{}'
+source_kind=$(printf '%s' "$INPUT" | jq -r '.source // empty' 2>/dev/null) || exit 2
+# startup, resume and fork resolve from the launch directory ($PWD).
+# clear issues a new session id with no pin (AgDR-0261 capture P12b). At
+# clear, $PWD can follow a Bash cd inside the project, so clear resolves
+# only from CLAUDE_PROJECT_DIR, which stays at the launch directory.
+# compact keeps its session id and pin, so it never writes.
+case "$source_kind" in
+  startup|resume|fork) resolve_from="$PWD" ;;
+  clear) resolve_from="${CLAUDE_PROJECT_DIR:-}"; [ -n "$resolve_from" ] || exit 0 ;;
+  *) exit 0 ;;
+esac
 
 # Locate the lib relative to this script. The settings.json wrapper
 # walks up to the ops fork before exec'ing us, so $0 is always at
@@ -69,8 +81,14 @@ if [ -z "${CLAUDE_CODE_SESSION_ID:-}" ]; then
   exit 0
 fi
 
-# Resolve ops root from the launch cwd via the pure walk-up.
-ops_root="$(resolve_ops_root_walk "$PWD")"
+pin_dir="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}"
+pin_file="$pin_dir/ops-root-${CLAUDE_CODE_SESSION_ID}"
+mkdir -p "$pin_dir" || exit 2
+find -P "$pin_dir" -maxdepth 1 -type f \( -name 'ops-root-*' -o -name 'resolve-cache-*' \) -mtime +30 -delete 2>/dev/null || exit 2
+[ ! -e "$pin_file" ] || exit 0
+
+# Resolve ops root via the pure walk-up from the directory chosen above.
+ops_root="$(resolve_ops_root_walk "$resolve_from")"
 if [ -z "$ops_root" ]; then
   # No anchor found upward from $PWD. The current session isn't in an
   # ops-fork-shaped tree at launch time, so there's nothing to pin.
@@ -92,6 +110,6 @@ mkdir -p "$pin_dir" 2>/dev/null || exit 0
 
 # Write the pin. printf '%s\n' preserves spaces in the path; the
 # matching `IFS= read -r` in _lib-ops-root.sh reads it back intact.
-printf '%s\n' "$ops_root" > "$pin_file" 2>/dev/null || exit 0
+( set -C; printf '%s\n' "$ops_root" > "$pin_file" ) 2>/dev/null || { [ -f "$pin_file" ] || exit 2; }
 
 exit 0

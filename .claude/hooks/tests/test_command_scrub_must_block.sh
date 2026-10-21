@@ -86,7 +86,7 @@ setup_dispatch_sandbox() {
   [ -f "$hooks_src/_lib-tracker.sh" ] && cp "$hooks_src/_lib-tracker.sh" "$dest/hooks/_lib-tracker.sh"
   chmod +x "$dest/hooks/dispatch-bash.sh"
   local script
-  for script in block-ambient-tracker-repo.sh block-privileged-escalation.sh \
+  for script in block-protected-target-writes.sh block-ambient-tracker-repo.sh block-privileged-escalation.sh \
     require-skill-for-issue-create.sh require-orbit-slice-for-ticket.sh require-migration-ticket.sh \
     require-active-ticket.sh warn-review-marker-write.sh \
     warn-isolated-build-risk.sh block-reviewer-repo-mutation.sh \

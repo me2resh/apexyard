@@ -1,0 +1,190 @@
+{
+  "capture": "P12b",
+  "run": 2,
+  "date": "2026-10-19",
+  "design": "AgDR-0261 section B.10",
+  "main_thread_events": [
+    {
+      "ts": "2026-10-19T20:09:19Z",
+      "event": "SessionStart",
+      "hook_pwd": "<sandbox>",
+      "hook_claude_project_dir": "<sandbox>",
+      "pin_at_call": "",
+      "payload": {
+        "session_id": "<session-a>",
+        "hook_event_name": "SessionStart",
+        "source": "startup",
+        "file_path": null,
+        "tool_name": null,
+        "agent_id": null,
+        "agent_type": null,
+        "cwd": "<sandbox>",
+        "target": null
+      }
+    },
+    {
+      "ts": "2026-10-19T20:09:52Z",
+      "event": "PreToolUse",
+      "hook_pwd": "<sandbox>",
+      "hook_claude_project_dir": "<sandbox>",
+      "pin_at_call": "<sandbox>",
+      "payload": {
+        "session_id": "<session-a>",
+        "hook_event_name": "PreToolUse",
+        "source": null,
+        "file_path": null,
+        "tool_name": "Bash",
+        "agent_id": null,
+        "agent_type": null,
+        "cwd": "<sandbox>",
+        "target": "cd <sandbox>/.claude/worktrees/agent-<p12> && git branch --show-current && git diff"
+      }
+    },
+    {
+      "ts": "2026-10-19T20:11:50Z",
+      "event": "PreToolUse",
+      "hook_pwd": "<sandbox>/.claude/worktrees/agent-<p12>",
+      "hook_claude_project_dir": "<sandbox>",
+      "pin_at_call": "<sandbox>",
+      "payload": {
+        "session_id": "<session-a>",
+        "hook_event_name": "PreToolUse",
+        "source": null,
+        "file_path": null,
+        "tool_name": "Bash",
+        "agent_id": null,
+        "agent_type": null,
+        "cwd": "<sandbox>/.claude/worktrees/agent-<p12>",
+        "target": "mkdir -p workspace/probe && cd workspace/probe && pwd"
+      }
+    },
+    {
+      "ts": "2026-10-19T20:12:37Z",
+      "event": "PreToolUse",
+      "hook_pwd": "<sandbox>/.claude/worktrees/agent-<p12>/workspace/probe",
+      "hook_claude_project_dir": "<sandbox>",
+      "pin_at_call": "<sandbox>",
+      "payload": {
+        "session_id": "<session-a>",
+        "hook_event_name": "PreToolUse",
+        "source": null,
+        "file_path": null,
+        "tool_name": "Bash",
+        "agent_id": null,
+        "agent_type": null,
+        "cwd": "<sandbox>/.claude/worktrees/agent-<p12>/workspace/probe",
+        "target": "pwd"
+      }
+    },
+    {
+      "ts": "2026-10-19T20:13:48Z",
+      "event": "SessionStart",
+      "hook_pwd": "<sandbox>/.claude/worktrees/agent-<p12>/workspace/probe",
+      "hook_claude_project_dir": "<sandbox>",
+      "pin_at_call": "<sandbox>",
+      "payload": {
+        "session_id": "<session-a>",
+        "hook_event_name": "SessionStart",
+        "source": "compact",
+        "file_path": null,
+        "tool_name": null,
+        "agent_id": null,
+        "agent_type": null,
+        "cwd": "<sandbox>/.claude/worktrees/agent-<p12>/workspace/probe",
+        "target": null
+      }
+    },
+    {
+      "ts": "2026-10-19T20:17:10Z",
+      "event": "PreToolUse",
+      "hook_pwd": "<sandbox>/.claude/worktrees/agent-<p12>/workspace/probe",
+      "hook_claude_project_dir": "<sandbox>",
+      "pin_at_call": "<sandbox>",
+      "payload": {
+        "session_id": "<session-a>",
+        "hook_event_name": "PreToolUse",
+        "source": null,
+        "file_path": null,
+        "tool_name": "Bash",
+        "agent_id": null,
+        "agent_type": null,
+        "cwd": "<sandbox>/.claude/worktrees/agent-<p12>/workspace/probe",
+        "target": "pwd"
+      }
+    },
+    {
+      "ts": "2026-10-19T20:19:33Z",
+      "event": "SessionStart",
+      "hook_pwd": "<sandbox>",
+      "hook_claude_project_dir": "<sandbox>",
+      "pin_at_call": "",
+      "payload": {
+        "session_id": "<session-b>",
+        "hook_event_name": "SessionStart",
+        "source": "clear",
+        "file_path": null,
+        "tool_name": null,
+        "agent_id": null,
+        "agent_type": null,
+        "cwd": "<sandbox>",
+        "target": null
+      }
+    },
+    {
+      "ts": "2026-10-19T20:19:49Z",
+      "event": "PreToolUse",
+      "hook_pwd": "<sandbox>",
+      "hook_claude_project_dir": "<sandbox>",
+      "pin_at_call": "",
+      "payload": {
+        "session_id": "<session-b>",
+        "hook_event_name": "PreToolUse",
+        "source": null,
+        "file_path": null,
+        "tool_name": "Bash",
+        "agent_id": null,
+        "agent_type": null,
+        "cwd": "<sandbox>",
+        "target": "pwd"
+      }
+    },
+    {
+      "ts": "2026-10-19T20:23:48Z",
+      "event": "PreToolUse",
+      "hook_pwd": "<sandbox>",
+      "hook_claude_project_dir": "<sandbox>",
+      "pin_at_call": "",
+      "payload": {
+        "session_id": "<session-b>",
+        "hook_event_name": "PreToolUse",
+        "source": null,
+        "file_path": null,
+        "tool_name": "Bash",
+        "agent_id": null,
+        "agent_type": null,
+        "cwd": "<sandbox>",
+        "target": "grep -n '\"disableAllHooks\"\\|\"env\"\\|D17_PROBE' <sandbox>/.claude/settings.json <sandbox>/.claude/worktrees/agent-<p12c>/.claude/settings.json"
+      }
+    }
+  ],
+  "pin_and_snapshot": {
+    "<session-a>": {
+      "pin": "<sandbox>",
+      "written": "20:09:19Z (startup)",
+      "unchanged_after": "20:13:48Z (compact)",
+      "snapshot_project_dir": "<sandbox>"
+    },
+    "<session-b>": {
+      "pin": null,
+      "snapshot": null,
+      "note": "clear issued a new session id. No pin and no snapshot were written."
+    }
+  },
+  "findings": [
+    "A Bash cd inside the project persists. Later hook calls have PWD and payload cwd in the new directory.",
+    "compact ran with the moved PWD. It kept the session id, the pin and the snapshot.",
+    "clear issued a new session id. Its SessionStart ran with PWD at the project root. No pin and no snapshot exist for it, so the hooks of that session walk up from PWD on each call.",
+    "CLAUDE_PROJECT_DIR stayed <sandbox> in every hook call, before and after compact and clear."
+  ],
+  "verdict": "Met for compact. clear leaves the new session unpinned (fixed by the pin-on-clear change)."
+}

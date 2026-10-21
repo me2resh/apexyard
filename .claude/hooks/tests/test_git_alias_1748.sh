@@ -551,6 +551,11 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
         # value that holds a space (push and commit). Paired allow cases.
         spacedir=t/'a b'; spacedir.mkdir()
         subprocess.run(['git','init','-q','-b','feature/GH-1748-space',str(spacedir)],env=env,check=True)
+        # With no jq, block-protected-target-writes.sh (#1806) fails closed on any
+        # command text that matches its raw pattern, read-only commands included.
+        # Stub that gate here, so these cases test the alias gate alone (#1748).
+        nojqhooks=t/'nojq-stub-hooks'; shutil.copytree(hooks,nojqhooks)
+        (nojqhooks/'block-protected-target-writes.sh').write_text('#!/bin/bash\nexit 0\n')
         for cmd,want in [
             ('git -c alias.p=push p',2),
             ('echo alias.x',0),
@@ -563,7 +568,7 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
             (f'git -C "{spacedir}" push origin HEAD:main',2),
             (f'git -C "{spacedir}" status',0),
         ]:
-            rc,out=run('dispatch-bash',cmd,extra={'PATH':str(nojq)})
+            rc,out=run('dispatch-bash',cmd,nojqhooks,extra={'PATH':str(nojq)})
             counts['No jq']['pass' if rc==want else 'fail']+=1
             if rc!=want: failures.append(('No jq '+cmd,want,rc,out))
     elif mode.startswith('perf'):

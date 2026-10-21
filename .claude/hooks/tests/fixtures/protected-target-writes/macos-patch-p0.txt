@@ -1,0 +1,11 @@
+Observed 2026-10-19 on Darwin, patch 2.0-12u11-Apple.
+Command: /usr/bin/patch -f -p0 < input.patch
+The fixture contains one old-to-new line replacement.
+
+absolute: exit=0 target=new
+patching file '<fixture>/capture/target/x'
+dotdot: exit=0 target=new
+patching file '../target/x'
+
+Both forms modified the named target outside the working directory.
+Keep the protected-header rule.

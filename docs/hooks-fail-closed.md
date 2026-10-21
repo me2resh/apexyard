@@ -25,6 +25,13 @@ It covers me2resh/apexyard#1623.
 | The four merge gates | Inside the dispatcher, for merge commands | The dispatcher prints `BLOCKED` and exits 2 |
 | `block-forged-menu-approval.sh` | Edit, Write, MultiEdit matcher in `.claude/settings.json` | Claude Code blocks the call (`onFailure` is `block`) |
 | `block-forged-menu-approval.sh` | Inside the dispatcher, for each Bash call | The dispatcher prints `BLOCKED` and exits 2 |
+| `block-protected-target-writes.sh` | Edit, Write, MultiEdit, NotebookEdit matcher in `.claude/settings.json` | Claude Code blocks the call (`onFailure` is `block`) |
+| `block-protected-target-writes.sh` | Inside the dispatcher, for each Bash call | The dispatcher prints `BLOCKED` and exits 2 |
+| `block-hook-disabling-config-change.sh` | ConfigChange matcher in `.claude/settings.json` | Claude Code blocks the settings change (`onFailure` is `block`) |
+
+The last three rows are the tamper controls of AgDR-0261 § B (me2resh/apexyard#1806).
+They apply to every caller and have no hatch.
+The operator recovery path is the launch flag in the escape-hatch section below.
 
 The dispatcher has one path for fail-closed gates, `run_fail_closed_hook`.
 The merge gates (`run_merge_gate_hook`), ticket-first, and the menu-record guard use it.
@@ -40,8 +47,15 @@ See `docs/perf/hook-fail-closed-profile-2026-10.md`.
 
 | Entry | Timeout | Basis |
 |-------|---------|-------|
-| `dispatch-bash.sh` | 60 seconds | 5 x the slowest route p95 (9661 ms, full merge route on a slow network) is 48.3 seconds |
+| `dispatch-bash.sh` | 75 seconds | 5 x the slowest route p95 (9661 ms, full merge route on a slow network) is 48.3 seconds. `.claude/settings.json` sets 75 seconds, which leaves headroom above that |
 | `require-active-ticket.sh` | 10 seconds | 5 x p95 (207 ms) is under the 10 second floor |
+| `block-protected-target-writes.sh` (edit channel) | 10 seconds | 5 x p95 (73 ms) is under the 10 second floor |
+| `block-hook-disabling-config-change.sh` | 10 seconds | 5 x p95 (141 ms) is under the 10 second floor |
+
+The two new rows were measured on 2026-10-19 on macOS, /bin/bash 3.2, 40 runs each.
+The Bash channel of `block-protected-target-writes.sh` runs inside the
+dispatcher entry and its 75 second timeout. A short command such as
+`git status && ls` measured p95 125 ms.
 
 ### The fail-open exception
 
@@ -59,7 +73,7 @@ Do not move this hook to `run_fail_closed_hook`.
 
 ### What is not changed
 
-- No other hook entry sets `onFailure`.
+- No other hook entry sets `onFailure`. Five entries set it in all.
 - The `exit 0` in the settings wrapper stays.
   It runs when no `.claude/hooks` directory exists.
   That is deliberate for directories that are not ApexYard forks.
@@ -155,7 +169,7 @@ Rules for the escape hatch:
 - There is no environment variable for it. A new variable would be a new way
   for an agent to turn off the gates. The launch flag needs the operator
   to start the session.
-- Do not set `disableAllHooks` in a tracked settings file.
+- Do not set `disableAllHooks` to `true` in a tracked settings file.
 
 `bin/check-escape-hatch.sh` tests the hatch against the real CLI.
 It starts Claude Code twice in the repository with a fake API key.
