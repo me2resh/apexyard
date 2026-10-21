@@ -514,6 +514,7 @@ esac
 # The option list accepts `-C`, `-c` and the long options that take a
 # separate-word value, plus any `-x`, `--opt` or `--opt=value`.
 _scan_failed=0
+_scan_bash_cmd=""
 # Preserve broad routing for git\<newline>push and quoted/commented pairs.
 # Bash removal could hide verbs that the existing dispatcher routes.
 _dispatch_join_failure() { return 1; }
@@ -567,8 +568,23 @@ if [ "$_scan_failed" -eq 0 ]; then
     # text hides that operator.
     elif ! _scan_cmd=$(strip_heredoc_bodies "$COMMAND" quoted); then
       _scan_failed=1
-    elif ! _scan_cmd=$(join_shell_continuations "$_scan_cmd" broad-space _dispatch_join_failure); then
-      _scan_failed=1
+    else
+      # #1837: the broad join puts a space where bash puts nothing, so a
+      # continuation inside a word (the verb, a -C value, a redirection
+      # target, a dashed program name) splits that word. Also route on the
+      # text that bash runs. Only a pair that comes directly after a
+      # character that is not a blank needs it. After a blank, both joins
+      # give the same words. The one exception is a comment line, which
+      # AgDR-0269 records as a residual. This keeps the cost off the usual
+      # ` \` line end.
+      case "$_scan_cmd" in
+        *[![:space:]]\\$'\n'*)
+          _scan_bash_cmd=$(join_shell_continuations "$_scan_cmd" bash _dispatch_join_failure) || _scan_failed=1
+          ;;
+      esac
+      if ! _scan_cmd=$(join_shell_continuations "$_scan_cmd" broad-space _dispatch_join_failure); then
+        _scan_failed=1
+      fi
     fi
   else
     _scan_failed=1
@@ -599,15 +615,20 @@ if [ "$_scan_failed" -eq 1 ]; then
   run_commit_gates
 else
   # #1816 G2/G3: expansion hides the command word or verb — fail closed.
+  # #1837: each check reads the broad-join text and, when the command holds
+  # a continuation, the bash-join text too. A route from either one counts.
   if command -v git_uncertain_protected_shape >/dev/null 2>&1 \
-    && git_uncertain_protected_shape "$_scan_cmd"; then
+    && { git_uncertain_protected_shape "$_scan_cmd" \
+      || { [ -n "${_scan_bash_cmd:-}" ] && git_uncertain_protected_shape "$_scan_bash_cmd"; }; }; then
     run_push_gates
     run_commit_gates
   else
-    if command_has_git_subcommand "$_scan_cmd" push; then
+    if command_has_git_subcommand "$_scan_cmd" push \
+      || { [ -n "${_scan_bash_cmd:-}" ] && command_has_git_subcommand "$_scan_bash_cmd" push; }; then
       run_push_gates
     fi
-    if command_has_git_subcommand "$_scan_cmd" commit; then
+    if command_has_git_subcommand "$_scan_cmd" commit \
+      || { [ -n "${_scan_bash_cmd:-}" ] && command_has_git_subcommand "$_scan_bash_cmd" commit; }; then
       run_commit_gates
     fi
   fi
