@@ -123,36 +123,36 @@ if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
   # nothing for a branch-name validator to check.
   SCAN_LAST_REF=""
   if is_tag_push "$COMMAND"; then
-    STRIPPED_FOR_SCAN=$(echo "$COMMAND" | sed 's/[[:space:]][0-9]*[>|].*$//')
-    if command -v git_push_segment_re >/dev/null 2>&1; then
-      _branch_seg_re="$(git_push_segment_re)"
-    else
-      _branch_seg_re='\bgit[[:space:]]+push\b[^|;&]*'
-    fi
+    # #1831: walk each push invocation past its redirections. The old
+    # segment scan cut the command at the first redirection.
     while IFS= read -r SEGMENT; do
       [ -z "$SEGMENT" ] && continue
       HAS_EVIDENCE=0
-      if echo "$SEGMENT" | grep -qE '\s--tags(\s|$)' \
-         || echo "$SEGMENT" | grep -qE '\stag\s+\S' \
-         || echo "$SEGMENT" | grep -qE 'refs/tags/'; then
+      if _push_invocation_has_tag_evidence "$SEGMENT"; then
         HAS_EVIDENCE=1
       fi
       SEG_REF=""
+      SEG_RC=0
       if declare -F _extract_push_ref_core > /dev/null 2>&1; then
-        SEG_REF=$(_extract_push_ref_core "$SEGMENT")
+        SEG_REF=$(_extract_push_ref_core "$SEGMENT") || SEG_RC=$?
+      fi
+      if [ "$SEG_RC" -eq 3 ]; then
+        push_ref_unresolved_message >&2
+        exit 2
       fi
       # Explicit ORBIT refs must reach the records command check (#1673).
       if [ "$HAS_EVIDENCE" = "1" ]; then
         case "$SEG_REF" in orbit/*) ;; *) continue ;; esac
       fi
       [ -n "$SEG_REF" ] && SCAN_LAST_REF="$SEG_REF"
-    done < <(echo "$STRIPPED_FOR_SCAN" | grep -oE "$_branch_seg_re")
+    done < <(_each_push_invocation "$COMMAND")
 
     if [ -z "$SCAN_LAST_REF" ]; then
       exit 0
     fi
   fi
 
+  PUSH_REF_RC=0
   if [ -n "$SCAN_LAST_REF" ]; then
     # An evidence-less, ref-bearing occurrence was found by the
     # untrusted-tag-signal scan above -- validate it directly rather than
@@ -160,7 +160,12 @@ if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
     # would repeat the same hijack).
     PUSH_REF="$SCAN_LAST_REF"
   else
-    PUSH_REF=$(extract_push_ref "$COMMAND")
+    PUSH_REF=$(extract_push_ref "$COMMAND") || PUSH_REF_RC=$?
+  fi
+  # #1831: fail closed when the push words cannot be read.
+  if [ "$PUSH_REF_RC" -eq 3 ]; then
+    push_ref_unresolved_message >&2
+    exit 2
   fi
 
   # Fail closed rather than silently falling back to local HEAD when the
@@ -172,7 +177,12 @@ if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
   # thing; blocking and asking the operator to split the call (the ticket's
   # own mitigation) is the safe direction. See me2resh/apexyard#1075.
   if [ -z "$PUSH_REF" ]; then
-    RAW_REF=$(_extract_push_ref_core "$COMMAND")
+    RAW_REF_RC=0
+    RAW_REF=$(_extract_push_ref_core "$COMMAND") || RAW_REF_RC=$?
+    if [ "$RAW_REF_RC" -eq 3 ]; then
+      push_ref_unresolved_message >&2
+      exit 2
+    fi
     if [ -n "$RAW_REF" ]; then
       cat >&2 <<MSG
 BLOCKED: Cannot safely determine the push destination for this command.

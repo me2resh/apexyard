@@ -791,6 +791,109 @@ git_push_args() {
   fi
 }
 
+# Print the words after `git [global options] push`, one on each line
+# (#1831). $1 starts at the git command word and goes to the end of its line.
+# Skip each redirection as the shell does. Stop at the `;`, `&`, `|` or `)`
+# that ends the command. A word keeps its quotes.
+# Return 1 when $1 holds no push verb. Return 2 when the push arguments
+# cannot be read: a redirection target is not one closed word, an operator
+# has two readings, or a word is not closed on its line and the invocation
+# holds a redirection. Also return 2 when the arguments hold a unit
+# separator byte (0x1F), because the walk uses that byte to split the line
+# into pieces. The caller then fails closed.
+# A word that is not closed on its line in an invocation with no redirection
+# ends the walk. Then print the rest split at blanks, as before #1831.
+# Linear for words separated by blanks: each word step reads one piece, as
+# in _git_redir_hides_verb.
+git_push_ref_words() {
+  local inv="$1" norm saw=0 us tsep np wpi pos rest op op_re
+  local -a pieces endp
+  _git_strip_cmd_word "$inv" || return 1
+  _git_scan_globals push || return 2
+  norm="$_GIT_SCAN"
+  # The text before the arguments. A suffix pattern is slow on a long line.
+  case "${inv:0:$((${#inv} - ${#norm}))}" in *'<'*|*'>'*) saw=1 ;; esac
+  op_re='^'"${_git_redir_fd}${_git_redir_op}"
+  us=$'\037'
+  # #1831 B1: the walk cannot split text that already holds the separator
+  # byte. A real push does not hold it. Fail closed.
+  case "$norm" in *"$us"*) return 2 ;; esac
+  tsep=$(printf '%s\n' "$norm" | tr ' \t' '\037\037')
+  IFS="$us" read -r -a pieces <<EOF_PUSH_PIECES
+${tsep}${us}x
+EOF_PUSH_PIECES
+  unset "pieces[$((${#pieces[@]} - 1))]"
+  np=${#pieces[@]}
+  endp=()
+  pos=-1
+  for rest in ${pieces[@]+"${pieces[@]}"}; do
+    pos=$((pos + 1 + ${#rest}))
+    endp[${#endp[@]}]=$pos
+  done
+  [ "$np" -gt 0 ] || return 0
+  wpi=0
+  _GIT_SCAN="${pieces[0]}"
+  while :; do
+    if [ -z "$_GIT_SCAN" ]; then
+      wpi=$((wpi + 1))
+      [ "$wpi" -lt "$np" ] || break
+      _GIT_SCAN="${pieces[wpi]}"
+      continue
+    fi
+    case "$_GIT_SCAN" in '&>'*) ;; [\;\&\|\)]*) break ;; esac
+    case "$_GIT_SCAN" in
+      *[\\\'\"\`\$\(\)\<\>\;\&\|]*) ;;
+      *)
+        # A plain word fills the rest of the piece.
+        printf '%s\n' "$_GIT_SCAN"
+        _GIT_SCAN=""
+        continue
+        ;;
+    esac
+    op=""
+    case "$_GIT_SCAN" in
+      [0-9\{\<\>\&]*) [[ "$_GIT_SCAN" =~ $op_re ]] && op="${BASH_REMATCH[0]}" ;;
+    esac
+    if [ -n "$op" ]; then
+      _GIT_SCAN="${_GIT_SCAN:${#op}}"
+      saw=1
+      # #1772 R2-2: a `!` operator and then a blank has two readings.
+      case "$op" in *'!') [ -n "$_GIT_SCAN" ] || return 2 ;; esac
+      while [ -z "$_GIT_SCAN" ] && [ $((wpi + 1)) -lt "$np" ]; do
+        wpi=$((wpi + 1))
+        _GIT_SCAN="${pieces[wpi]}"
+      done
+      case "$_GIT_SCAN" in ''|[\;\&\|]*) break ;; esac
+      if [[ "$_GIT_SCAN" =~ ^([0-9]+|-)([;&|]|$) ]]; then
+        _GIT_SCAN="${_GIT_SCAN:${#BASH_REMATCH[1]}}"
+        continue
+      fi
+      _git_redir_take_word || return 2
+      continue
+    fi
+    rest="$_GIT_SCAN"
+    if _git_redir_take_word; then
+      printf '%s\n' "$_GIT_TAKEN"
+      continue
+    fi
+    [ "$saw" -eq 0 ] || return 2
+    # No redirection: split the rest at blanks, up to a separator. A failed
+    # read can leave the rest of the line in $_GIT_SCAN. Start again from
+    # the current piece.
+    _GIT_SCAN="$rest"
+    while :; do
+      rest="${_GIT_SCAN%%[;&|]*}"
+      [ -z "$rest" ] || printf '%s\n' "$rest"
+      [ "$rest" = "$_GIT_SCAN" ] || break
+      wpi=$((wpi + 1))
+      [ "$wpi" -lt "$np" ] || break
+      _GIT_SCAN="${pieces[wpi]}"
+    done
+    break
+  done
+  return 0
+}
+
 # Resolve a literal path. Do not evaluate shell substitutions.
 _git_resolve_dir() {
   local dir="$1" cwd="${2:-$PWD}"
