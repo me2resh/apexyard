@@ -808,6 +808,23 @@ if b4_allow_bad:
 else:
     ok(f"B4 allow twins do not route push gates ({len(b4_allows)} shapes)")
 
+# #1844 S1: many anchored quoted markers with no terminator. In quoted mode
+# the stripper returns the raw command at the second visible line that
+# holds text, so the scan is linear. The block twin adds a real push at the
+# end; it must still route the push gates.
+many_markers = "\n".join([f"cat <<{q}EOF{q}"] * 2000)
+t0 = time.perf_counter()
+rc, out = dispatch_route(new_route, many_markers, "s1-markers")
+s1_dt = time.perf_counter() - t0
+if rc == 0 and s1_dt <= 15.0:
+    ok(f"2000 unterminated quoted markers dt={s1_dt:.3f}s rc={rc}")
+else:
+    bad(f"2000 unterminated quoted markers dt={s1_dt:.3f}s rc={rc} (want <=15s, rc=0) out={out[:240]!r}")
+if "block-main-push.sh" in route_log(many_markers + "\n" + real_push, "s1-markers-push"):
+    ok("2000 unterminated quoted markers then a real push routes push gates")
+else:
+    bad("2000 unterminated quoted markers then a real push must route push gates")
+
 # Timing on the full hook tree: the always-on hooks are real too. A long
 # quoted heredoc of prose that names push and commit verbs must finish well
 # inside the dispatcher time limit (75 s in settings.json).

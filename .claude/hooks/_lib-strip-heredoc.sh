@@ -212,11 +212,15 @@ _shq_end_word() {
 }
 
 # Check one file target word. This is an allow-list (#1829 A1, N2): the
-# target must be a plain relative or absolute path. No part of it may name
-# a git dir or a hooks dir. The file must not be a symbolic link. Its
-# resolved directory must exist and must not be inside a git dir, a
-# configured hooks path, $XDG_CONFIG_HOME, or a home-directory dot file or
-# dot directory (this includes $HOME/.config). Any doubt returns 1.
+# target must be a plain relative or absolute path of the characters
+# A-Z a-z 0-9 . _ + % @ , = / -. It must not start with `-` or end with `/`.
+# It must not be in /dev, /proc or /sys. No part of it may be `..`, `.git`
+# (or start with `.git`), `.husky`, `hooks`, `.hooks` or `githooks` (any
+# case). The file must not be a symbolic link. Its directory must resolve.
+# The resolved path must not be a home-directory dot file or inside a dot
+# directory (this includes $HOME/.config), inside $XDG_CONFIG_HOME, inside
+# the git dir of its repo, or inside a configured hooks path of its repo or
+# of the current repo. $HOME must be set. Any doubt returns 1.
 _shq_target() {
   local t="$1" b d lc part rd gd hr xr
   case "$t" in /dev/null|/dev/stdout|/dev/stderr) return 1 ;; esac
@@ -318,15 +322,21 @@ _shq_cli_ok() {
 # 0 when start line $1 holds exactly one heredoc operator outside quotes,
 # the next word is one quoted word with matching quotes whose value is
 # terminator $2, and the line without those two words is one allow-listed
-# data sink. $3 is 1 for `<<-`, else 0 (#1829 B4). The sinks:
-#   cat > file | cat >> file   (the operator can come before or after)
-#   cat <<'X' | tee [-a] file
-#   tee [-a] file
-#   git commit ... -F - | --file=-
-#   git notes add|append ... -F - | --file=-
-#   gh pr|issue|release create|comment|edit ... --body-file - | -F -
-# git must not have -c, -C, -e, --edit, --editor, -t or --template. gh must
-# not have -e, --editor, -w or --web.
+# data sink. $3 is 1 for `<<-`, else 0 (#1829 B4). The sinks (this is the
+# full list; the code below is the authority):
+#   cat > file | cat >> file   (the heredoc can come before or after)
+#   cat <<'X' | tee [-a|--append] file   (the heredoc right after `cat`)
+#   tee [-a|--append] file     (exactly one file)
+#   git commit ...             stdin form: -F - | -F=- | --file - | --file=-
+#   git notes add|append ...   stdin form: as for git commit
+#   gh pr|issue|release create|comment|edit ...
+#                              stdin form: --body-file - | --body-file=- |
+#                              -F - | -F=-
+# git and gh: no operator word after the subcommand. For git, no
+# single-dash word may hold the letter c, e, C or t (-c, -e, -C, -t), and no
+# word may be --edit, --editor or --template (alone or with =value). For
+# gh, no single-dash word may hold e or w (-e, -w), and no word may be
+# --editor or --web. Each `file` must pass _shq_target.
 _shq_single_sink() {
   local line="$1" term="$2" op='<<' n k h=-1 idx
   local -a ws=() qs=()
@@ -456,11 +466,26 @@ strip_heredoc_bodies() {
   local tab
   tab="$(printf '\t')"
 
-  local i=0
+  local i=0 q_seen=0
   while [ "$i" -lt "$n" ]; do
     if [ "${skip[i]}" -eq 1 ]; then
       i=$((i + 1))
       continue
+    fi
+
+    # #1844 S1: in quoted mode, a second visible line that holds text makes
+    # the result the raw command (_shq_sinks_ok permits one start line and
+    # blank lines only). Return it at that line, so the scan stays linear.
+    if [ "$mode" = quoted ]; then
+      case "${lines[i]}" in
+        *[![:space:]]*)
+          if [ "$q_seen" -eq 1 ]; then
+            printf '%s' "$cmd"
+            return 0
+          fi
+          q_seen=1
+          ;;
+      esac
     fi
 
     local cur="${lines[i]}"

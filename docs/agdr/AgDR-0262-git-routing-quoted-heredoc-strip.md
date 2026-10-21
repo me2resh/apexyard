@@ -50,8 +50,26 @@ Chosen: **A**, because it removes the measured cause and fails closed on any dou
    - No word holds a `<` character inside quotes.
    - The line without the operator and the delimiter word is one allow-listed data sink.
    For any other shape the stripper returns the raw command.
-4. The data sinks are `cat > file`, `cat >> file`, `cat <<'X' | tee [-a] file`, `tee [-a] file`, `git commit` or `git notes add|append` with `-F -` or `--file=-`, and `gh pr|issue|release create|comment|edit` with `--body-file -` or `-F -`. The file target rules from the draft stay: a plain path, no git dir, hooks dir or home-directory dot path, no symbolic link, a directory that exists, and a check of `core.hooksPath` in the target repository and in the current repository.
-5. The command must hold nothing else: no other visible line, no separator, no continuation, no subshell, group, substitution or expansion, and no second heredoc or here-string. The start line must not have an earlier heredoc operator on its logical line.
+4. The data sinks and the target rules are the sets below. `_shq_single_sink`, `_shq_cli_ok` and `_shq_target` in `_lib-strip-heredoc.sh` are the authority, and their comments repeat these sets.
+   - Sinks:
+     - `cat > file` and `cat >> file`. The heredoc can come before or after the redirection.
+     - `cat <<'X' | tee [-a|--append] file`, with the heredoc right after `cat`.
+     - `tee [-a|--append] file`, with exactly one file.
+     - `git commit` and `git notes add|append`, with standard input as the message: `-F -`, `-F=-`, `--file -` or `--file=-`.
+     - `gh pr|issue|release create|comment|edit`, with standard input as the body: `--body-file -`, `--body-file=-`, `-F -` or `-F=-`.
+   - Option refusals for git and gh. No operator word can come after the subcommand.
+     - git: no single-dash word that holds the letter `c`, `e`, `C` or `t` (`-c`, `-e`, `-C`, `-t`), and no `--edit`, `--editor` or `--template`, alone or with `=value`.
+     - gh: no single-dash word that holds the letter `e` or `w` (`-e`, `-w`), and no `--editor` or `--web`, alone or with `=value`.
+   - File target rules:
+     - The target is a plain relative or absolute path of the characters `A-Z a-z 0-9 . _ + % @ , = / -`. It does not start with `-` and does not end with `/`.
+     - The target is not in `/dev`, `/proc` or `/sys`.
+     - No path part is `..`, `.git` (or starts with `.git`), `.husky`, `hooks`, `.hooks` or `githooks`, in any case.
+     - The file is not a symbolic link, and its directory resolves.
+     - `$HOME` is set. The resolved path is not a home-directory dot file and not inside a home-directory dot directory. This includes `$HOME/.config`.
+     - The resolved path is not inside `$XDG_CONFIG_HOME`, when that variable is set.
+     - The resolved path is not inside the git dir of its repository.
+     - The resolved path is not inside the `core.hooksPath` of its repository or of the current repository. A hooks path that is set but does not resolve is a refusal.
+5. The command must hold nothing else: no other visible line, no separator, no continuation, no subshell, group, substitution or expansion, and no second heredoc or here-string. The start line must not have an earlier heredoc operator on its logical line. In `quoted` mode the stripper returns the raw command at the second visible line that holds text, so its scan is linear in the number of lines (#1844 review, S1).
 6. AgDR-0113 still holds. The stripper is additive-only for every other caller. A body that a shell runs is a command, not data.
 7. This change does not edit `_lib-git-global.sh`. The gates read the raw command from their input, as before.
 
