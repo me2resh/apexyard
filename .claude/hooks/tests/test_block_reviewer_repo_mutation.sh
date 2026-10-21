@@ -84,6 +84,19 @@ run_case 'git fast-export remains available' 'git fast-export HEAD' allowed
 run_case 'git rerere status remains available' 'git rerere status' allowed
 run_case 'git maintenance list remains available' 'git maintenance list' allowed
 run_case 'git C config get remains available' 'git -C repo config --get user.name' allowed
+# #1840: a scope or display option before the read action, and the get and
+# list subcommands, are reads. Each config segment is judged alone.
+run_case '#1840 config local get-regexp remains available' "git -C repo config --local --get-regexp '^user\\.'" allowed
+run_case '#1840 config global get remains available' 'git config --global --get user.name' allowed
+run_case '#1840 config local list remains available' 'git config --local --list' allowed
+run_case '#1840 config get subcommand remains available' 'git config get core.worktree' allowed
+run_case '#1840 config list subcommand remains available' 'git config list --local' allowed
+run_case '#1840 config local write is blocked' 'git config --local user.name Reviewer' blocked
+run_case '#1840 config set subcommand is blocked' 'git config set user.name Reviewer' blocked
+run_case '#1840 config unset is blocked' 'git config --unset user.name' blocked
+run_case '#1840 config local unset is blocked' 'git config --local --unset user.name' blocked
+run_case '#1840 config read then write is blocked' 'git config --get user.name && git config user.name Reviewer' blocked
+run_case '#1840 config write then read is blocked' 'git config user.name Reviewer; git config --get user.name' blocked
 run_case 'git format-patch file write is blocked' 'git format-patch HEAD~1..HEAD' blocked
 run_case 'git submodule update remains blocked' 'git submodule update --init' blocked
 run_case 'git fast-export marks write is blocked' 'git fast-export --export-marks=marks.txt HEAD' blocked

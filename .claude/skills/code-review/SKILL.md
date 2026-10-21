@@ -126,6 +126,8 @@ refusal message — but the cheap fix is upstream of both: don't pass a path.
 6. On JS/TS diffs, run the Fallow static-analysis pass (§ 9 of the agent) — changed-scope, fail-soft, advisory; render a `### Fallow Findings` table + dry-run fix preview
 7. Submit the review through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host — #758), not a hardcoded `gh pr review`, then clear the active-reviewer marker from step 0
 
+**Review body path (#1840, AgDR-0266).** Rex writes the review body with the Write tool to the sanctioned body path, then posts that file with `tracker_review_submit <owner/repo> <pr> comment <body_file>`. The path is `<ops-root>/.claude/session/reviews/bodies/<owner>__<repo>__<pr>-rex.md`. `review_body_path <owner/repo> <pr> rex <ops-root>` in `_lib-review-markers.sh` prints it. Git ignores the folder. `limit-reviewer-writes.sh` lets a review agent write only in this folder. It blocks a reviewer Write to a repository file, a hook, a settings file or a review marker. Rex does not write the body with a Bash heredoc, because the Bash gates read quoted command text in the body as commands. Rex still writes the approval marker in Bash through `review_write_rex_approved`.
+
 On GitHub, add `ready-to-merge` after APPROVED: `gh pr edit {number} --repo "$PR_HOST_REPO" --add-label ready-to-merge`.
 Remove it after CHANGES REQUESTED: `gh pr edit {number} --repo "$PR_HOST_REPO" --remove-label ready-to-merge`.
 A label failure changes no verdict or marker.

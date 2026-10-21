@@ -389,10 +389,26 @@ if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]
   echo "BLOCKED: review-class agent cannot create or alter branches during an active review." >&2
   exit 2
 fi
-if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?config([[:space:]]|$)" && \
-   ! printf '%s' "$COMMAND" | grep -qE "git([^;&|]*[[:space:]])config[[:space:]]+(-{1,2}(get|get-all|get-regexp|list|show-origin|show-scope|name-only|includes|null)([[:space:]]|$)|-l([[:space:]]|$))"; then
-  echo "BLOCKED: review-class agent cannot change Git configuration during an active review." >&2
-  exit 2
+# Judge each `git ... config` segment alone, so that a read in one segment
+# cannot cover a write in the next. A read may name a scope or display option
+# before the read action, for example `git config --local --get-regexp x`, and
+# may use the `get` and `list` subcommands of newer Git (#1840).
+if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?config([[:space:]]|$)"; then
+  _brrm_cfg_seg_re='^[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?config([[:space:]]|$)'
+  _brrm_cfg_read_re='config([[:space:]]+(--(local|global|system|worktree|show-origin|show-scope|name-only|includes|no-includes|null)|-z))*[[:space:]]+(-{1,2}(get|get-all|get-regexp|get-urlmatch|list|show-origin|show-scope|name-only|includes|null)|-l|get|list)([[:space:]]|$)'
+  _brrm_cfg_found=0
+  while IFS= read -r _brrm_seg; do
+    [[ $_brrm_seg =~ $_brrm_cfg_seg_re ]] || continue
+    _brrm_cfg_found=1
+    if ! [[ $_brrm_seg =~ $_brrm_cfg_read_re ]]; then
+      echo "BLOCKED: review-class agent cannot change Git configuration during an active review." >&2
+      exit 2
+    fi
+  done < <(printf '%s\n' "$COMMAND" | tr ';&|' '\n\n\n')
+  if [ "$_brrm_cfg_found" -eq 0 ]; then
+    echo "BLOCKED: review-class agent cannot change Git configuration during an active review." >&2
+    exit 2
+  fi
 fi
 if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?reflog([[:space:]]|$)([^;&|]*[[:space:]])?(expire|delete|drop)([[:space:];|&]|$)"; then
   echo "BLOCKED: review-class agent cannot alter reflogs during an active review." >&2

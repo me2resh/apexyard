@@ -97,6 +97,12 @@ The hook reads the harness payload. It writes `approval_channel=menu` and `skill
 
 The typed commands stay. A typed merge marker has no menu channel.
 
+### 3b. Reviewer write scope — `limit-reviewer-writes.sh`
+
+**Event:** `PreToolUse` on `Edit|Write|MultiEdit`.
+
+Rex and Hakim have the Write tool for one job: to save the review body that `tracker_review_submit` posts. This hook lets a review agent write only under `<ops-root>/.claude/session/reviews/bodies/`. `review_body_path` in `_lib-review-markers.sh` prints a file name in that folder. The hook blocks every other target of a review agent: repository files, hooks, settings files and review markers. It reads the structured `file_path` field, not shell text. The orchestrator and build agents are not affected. See AgDR-0266 and #1840.
+
 ### 4. Onboarding — `onboarding-check.sh`
 
 **Event:** `SessionStart`.
