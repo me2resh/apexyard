@@ -339,7 +339,15 @@ pt_simple() {
       operator="$word"
       while [[ "$operator" =~ ^[0-9] ]]; do operator=${operator:1}; done
       case "$operator" in
-        '>'|'>>'|'>|'|'>&'|'&>'|'<>'|'>!'|'>>!'|'>>|'|'>>&'|'&>>'|'&>!'|'&>|'|'&>>!'|'&>>|'|'>&!'|'>&|'|'>>&!'|'>>&|')
+        # Zsh reads a trailing "!" as the clobber suffix. Bash and sh read it
+        # as the first character of the target word, or as a file named "!"
+        # when a space follows. The gate cannot know the shell, so it judges
+        # each reading.
+        '>!'|'>>!'|'&>!'|'&>>!'|'>&!'|'>>&!')
+          redirect_slots[${#words[@]}]=2
+          words[${#words[@]}]=""
+          continue ;;
+        '>'|'>>'|'>|'|'>&'|'&>'|'<>'|'>>|'|'>>&'|'&>>'|'&>|'|'&>>|'|'>&|'|'>>&|')
           redirect_slots[${#words[@]}]=1
           words[${#words[@]}]=""
           continue ;;
@@ -353,13 +361,17 @@ pt_simple() {
   done < <(printf '%s\n' "$segment" | awk "$PT_TOKENS_AWK")
   for i in "${!words[@]}"; do
     word=${words[$i]}
-    if [ "$skip" = 2 ]; then
+    if [ "$skip" = 2 ] || [ "$skip" = 3 ]; then
       case "$word" in [0-9]|-) ;; *) pt_judge "$word" ;; esac
+      if [ "$skip" = 3 ]; then pt_judge "!$word"; pt_judge '!'; fi
       skip=0; continue
     fi
     if [ "${redirect_slots[$i]:-0}" = 1 ]; then skip=2; continue; fi
+    if [ "${redirect_slots[$i]:-0}" = 2 ]; then skip=3; continue; fi
     filtered[${#filtered[@]}]="$word"
   done
+  # A "!" operator at the end of the segment writes a file named "!" in bash.
+  [ "$skip" != 3 ] || pt_judge '!'
   words=("${filtered[@]}")
   [ "${#words[@]}" -gt 0 ] || return 0
   local prefix="" need_duration=0

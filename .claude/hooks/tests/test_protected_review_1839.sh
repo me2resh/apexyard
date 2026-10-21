@@ -33,6 +33,31 @@ for op in '>!' '>>!' '>>|' '&>>' '&>!' '&>|' '&>>!' '&>>|' '>>&' '>&!' '>&|' '>>
   check 0 "redirect $op nested scratch file" run_bash "bash -c 'echo x $op $TMP/temp/out.txt'"
   check 0 "redirect $op scratch file in the live root" run_bash "echo x $op out.txt"
 done
+# 1b. The bash reading of a "!" operator. Bash takes the "!" as the first
+# character of the target word, or as a file named "!" when a space follows.
+# Zsh takes it as the clobber suffix (section 1). The gate judges both.
+mkdir -p "$TMP/live/!"
+for op in '>!' '>>!' '&>!' '&>>!' '>&!' '>>&!' '1>!' '2>>!'; do
+  check 2 "bash reading $op hook script" run_bash "echo x $op/../.claude/hooks/x.sh"
+  check 2 "bash reading $op settings" run_bash "echo x $op/../.claude/settings.json"
+  check 2 "bash reading $op nested bash" run_bash "bash -c 'echo x $op/../.claude/hooks/x.sh'"
+  check 2 "bash reading $op nested sh" run_bash "sh -c 'echo x $op/../.claude/hooks/x.sh'"
+  check 2 "zsh reading $op nested zsh" run_bash "zsh -c 'echo x $op .claude/hooks/x.sh'"
+  check 0 "bash reading $op scratch file" run_bash "echo x $op/../out.txt"
+  check 0 "bash reading $op nested bash scratch file" run_bash "bash -c 'echo x $op/../out.txt'"
+  check 0 "bash reading $op nested sh scratch file" run_bash "sh -c 'echo x $op/../out.txt'"
+done
+check 2 'bash reading, upper case' run_bash 'echo x >!/../.CLAUDE/HOOKS/x.sh'
+check 0 'quoted bang is part of the word' run_bash 'echo x >"!"/../out.txt'
+CASE_CWD="$TMP/live/.claude/hooks"
+check 2 'spaced form writes a file named ! in the hooks folder' run_bash "echo x >! $TMP/temp/out.txt"
+check 2 'bang operator at the end writes a file named ! in the hooks folder' run_bash 'echo x >!'
+check 2 'nested bash spaced form in the hooks folder' run_bash "bash -c 'echo x >! $TMP/temp/out.txt'"
+CASE_CWD="$TMP/temp"
+check 0 'spaced form from a scratch folder' run_bash "echo x >! $TMP/temp/out.txt"
+check 0 'bang operator at the end from a scratch folder' run_bash 'echo x >!'
+check 0 'plain redirect from a scratch folder' run_bash "echo x > $TMP/temp/out.txt"
+CASE_CWD="$TMP/live"
 check 0 'two-char append still allowed for scratch' run_bash "echo x >> $TMP/temp/out.txt"
 check 2 'two-char append still blocks a hook' run_bash 'echo x >> .claude/hooks/x.sh'
 check 0 'fd duplication is not a file target' run_bash 'echo x 2>&1'
