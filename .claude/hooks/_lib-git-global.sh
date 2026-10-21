@@ -747,7 +747,9 @@ git_push_args() {
 # Return 1 when $1 holds no push verb. Return 2 when the push arguments
 # cannot be read: a redirection target is not one closed word, an operator
 # has two readings, or a word is not closed on its line and the invocation
-# holds a redirection. The caller then fails closed.
+# holds a redirection. Also return 2 when the arguments hold a unit
+# separator byte (0x1F), because the walk uses that byte to split the line
+# into pieces. The caller then fails closed.
 # A word that is not closed on its line in an invocation with no redirection
 # ends the walk. Then print the rest split at blanks, as before #1831.
 # Linear for words separated by blanks: each word step reads one piece, as
@@ -762,16 +764,14 @@ git_push_ref_words() {
   case "${inv:0:$((${#inv} - ${#norm}))}" in *'<'*|*'>'*) saw=1 ;; esac
   op_re='^'"${_git_redir_fd}${_git_redir_op}"
   us=$'\037'
-  case "$norm" in
-    *"$us"*) pieces=("$norm") ;;
-    *)
-      tsep=$(printf '%s\n' "$norm" | tr ' \t' '\037\037')
-      IFS="$us" read -r -a pieces <<EOF_PUSH_PIECES
+  # #1831 B1: the walk cannot split text that already holds the separator
+  # byte. A real push does not hold it. Fail closed.
+  case "$norm" in *"$us"*) return 2 ;; esac
+  tsep=$(printf '%s\n' "$norm" | tr ' \t' '\037\037')
+  IFS="$us" read -r -a pieces <<EOF_PUSH_PIECES
 ${tsep}${us}x
 EOF_PUSH_PIECES
-      unset "pieces[$((${#pieces[@]} - 1))]"
-      ;;
-  esac
+  unset "pieces[$((${#pieces[@]} - 1))]"
   np=${#pieces[@]}
   endp=()
   pos=-1
@@ -820,12 +820,16 @@ EOF_PUSH_PIECES
       _git_redir_take_word || return 2
       continue
     fi
+    rest="$_GIT_SCAN"
     if _git_redir_take_word; then
       printf '%s\n' "$_GIT_TAKEN"
       continue
     fi
     [ "$saw" -eq 0 ] || return 2
-    # No redirection: split the rest at blanks, up to a separator.
+    # No redirection: split the rest at blanks, up to a separator. A failed
+    # read can leave the rest of the line in $_GIT_SCAN. Start again from
+    # the current piece.
+    _GIT_SCAN="$rest"
     while :; do
       rest="${_GIT_SCAN%%[;&|]*}"
       [ -z "$rest" ] || printf '%s\n' "$rest"

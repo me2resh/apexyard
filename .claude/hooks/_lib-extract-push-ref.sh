@@ -329,7 +329,8 @@ the push writes to.
 
 To unblock: write the push as one literal command on one line. Give each
 redirection a plain file name as its target. Put prose that mentions a
-push in a separate Bash call.
+push in a separate Bash call, or write the message to a file and pass the
+file (for example, git commit -F <file>).
 MSG
 }
 

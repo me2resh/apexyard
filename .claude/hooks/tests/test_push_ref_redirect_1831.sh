@@ -153,7 +153,36 @@ expect 0 "$VBN" "echo hi; $G >o push origin $GOOD" "chain twin"
 expect 2 "$BMP" "$G push origin $GOOD && $G push 2>&1 origin main" "chain: second push to main"
 expect 0 "$BMP" "$G push origin $GOOD && $G push 2>&1 origin $GOOD" "chain twin: second push to a feature ref"
 expect 2 "$BMP" "$G push origin $BAD 2>&1 | tail -5; $G >o push origin main" "chain with a pipe"
-expect 0 "$BMP" "$G push origin $GOOD 2>&1 | tail -5" "pipe twin"
+expect 0 "$BMP" "$G push origin $BAD 2>&1 | tail -5; $G >o push origin $GOOD" "chain with a pipe twin"
+
+# #1831 B1: a unit separator byte (0x1F) in the push arguments. The walk
+# uses that byte to split the line, so it fails closed. Each block case has
+# a twin with no byte, at top level and with a redirection before the verb.
+US=$'\037'
+for pre in "$G" "$G >o"; do
+  expect 2 "$VBN" "$pre push origin $BAD #$US" "branch-name fails closed on a 0x1F byte"
+  expect 0 "$VBN" "$pre push origin $GOOD #x" "branch-name twin without the byte"
+  expect 2 "$BMP" "$pre push origin main #$US" "main-push fails closed on a 0x1F byte"
+  expect 0 "$BMP" "$pre push origin $GOOD #x" "main-push twin without the byte"
+done
+# A good ref with the byte also fails closed: the gate cannot read the words.
+expect 2 "$BMP" "$G push origin $GOOD; echo \"$US\"" "main-push fails closed on a 0x1F byte after the push"
+rc=0
+/bin/bash -c '. "$1/_lib-git-global.sh" || exit 9; git_push_ref_words "$2" >/dev/null' _ "$HOOKS" "$G push origin main$US" || rc=$?
+if [ "$rc" = 2 ]; then
+  pass "word walk returns 2 for a 0x1F byte"
+else
+  fail "word walk returns 2 for a 0x1F byte (rc=$rc)"
+fi
+
+# Rex A3: the open-word fallback splits at blanks. The open word stays one
+# piece; the words after it do not join it.
+got=$(/bin/bash -c '. "$1/_lib-git-global.sh" || exit 9; git_push_ref_words "$2"' _ "$HOOKS" "$G push origin \"$GOOD next words" | tr '\n' '|')
+if [ "$got" = "origin|\"$GOOD|next|words|" ]; then
+  pass "open-word fallback splits at blanks"
+else
+  fail "open-word fallback splits at blanks (got '$got')"
+fi
 
 # Tag pushes stay exempt past a redirection.
 expect 0 "$VBN" "$G >o push origin tag v1.2.3" "tag push with tag keyword"
