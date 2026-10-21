@@ -75,7 +75,7 @@ Do not move this hook to `run_fail_closed_hook`.
 
 ### What is not changed
 
-- No other hook entry sets `onFailure`. Five entries set it in all.
+- No other hook entry sets `onFailure`. Six entries set it in all, including `limit-reviewer-writes.sh` (AgDR-0266).
 - The `exit 0` in the settings wrapper stays.
   It runs when no `.claude/hooks` directory exists.
   That is deliberate for directories that are not ApexYard forks.
