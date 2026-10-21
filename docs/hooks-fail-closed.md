@@ -47,14 +47,14 @@ See `docs/perf/hook-fail-closed-profile-2026-10.md`.
 
 | Entry | Timeout | Basis |
 |-------|---------|-------|
-| `dispatch-bash.sh` | 60 seconds | 5 x the slowest route p95 (9661 ms, full merge route on a slow network) is 48.3 seconds |
+| `dispatch-bash.sh` | 75 seconds | 5 x the slowest route p95 (9661 ms, full merge route on a slow network) is 48.3 seconds. `.claude/settings.json` sets 75 seconds, which leaves headroom above that |
 | `require-active-ticket.sh` | 10 seconds | 5 x p95 (207 ms) is under the 10 second floor |
 | `block-protected-target-writes.sh` (edit channel) | 10 seconds | 5 x p95 (73 ms) is under the 10 second floor |
 | `block-hook-disabling-config-change.sh` | 10 seconds | 5 x p95 (141 ms) is under the 10 second floor |
 
 The two new rows were measured on 2026-10-19 on macOS, /bin/bash 3.2, 40 runs each.
 The Bash channel of `block-protected-target-writes.sh` runs inside the
-dispatcher entry and its 20 second timeout. A short command such as
+dispatcher entry and its 75 second timeout. A short command such as
 `git status && ls` measured p95 125 ms.
 
 ### The fail-open exception

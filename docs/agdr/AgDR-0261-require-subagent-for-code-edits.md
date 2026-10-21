@@ -330,6 +330,13 @@ Build amendment (#1806, captures P12b of 2026-10-19):
 - So `pin-ops-root.sh` also writes the pin on `clear` when no pin exists for the new `session_id`. It resolves from `CLAUDE_PROJECT_DIR`, never from `$PWD`. It writes no pin when `CLAUDE_PROJECT_DIR` is not set.
 - `clear` still writes no snapshot (D16). The `clear` session stays in no-snapshot mode.
 
+Build amendment (#1806, review of the first code PR):
+
+- The gate compares every protected form without regard to case, because the default macOS volume ignores letter case. This covers paths, live roots, tokens, the unresolved-operand list, harness-only writer names and the sandbox pin tree. The `pt_nocase` helper sets `nocasematch` only for these tests. Option and verb tests stay case-sensitive, so `-c` is not `-C`. On a case-sensitive volume the change only adds blocks.
+- Redirect operators of three or more characters are single redirect slots: the zsh clobber suffix forms (`>!`, `>>!`, `>>|`, `&>!`, `&>|`, `>&!`, `>&|` and their append forms) and the combined append forms (`&>>`, `>>&`).
+- `.claude/worktrees/` is not a sensitive directory. A command that runs in an isolated worktree is not in token context for that reason alone. A live path that the command names is still judged. A `find -exec` with a read-only verb does not judge the find roots. A mutating or unknown verb still does.
+- The `-f` flag takes a value only for `tar`. For `rm`, `cp` and `mv` the operand after it is judged.
+
 Order inside `dispatch-session-start.sh`:
 
 1. `run_direct pin-ops-root.sh` (line 57, unchanged).
@@ -561,7 +568,7 @@ Aliases (D21):
 
 #### B.9 Fail-closed rules
 
-- No `jq`, or an unparsable payload: block an edit-channel call. Block a Bash call when the raw text looks like a write or names a protected token. Use `raw_payload_tool_matches` and `raw_payload_command_matches` (`_lib-fail-closed-json.sh:6, 11`).
+- No `jq`, or an unparsable payload: block an edit-channel call. Block a Bash call when the raw text looks like a write or names a protected token. Use `raw_payload_tool_matches` and `raw_payload_command_matches` (`_lib-fail-closed-json.sh:6, 11`). The raw pattern matches inside words, such as `sed` in `used`. So with no `jq` it also blocks some read-only commands. This is the safe direction, because `jq` is a hard dependency (AgDR-0038).
 - A missing `_lib-detect-bash-write.sh` blocks a Bash call that names a protected token.
 - A missing `_lib-git-global.sh` blocks a git command whose work tree is a live root.
 - A crash or timeout blocks through `onFailure: block` and `run_fail_closed_hook`.
