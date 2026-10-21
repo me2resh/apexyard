@@ -1020,9 +1020,30 @@ EOF
   _GIT_CHAIN_CHANGED="$changed"
 }
 
+# #1833 (AgDR-0270): the text for the structure parse (alias check, cd
+# chain, -C). It strips a quoted heredoc body only when the whole command is
+# one allow-listed data sink (`quoted` mode, AgDR-0262). Any other shape, or
+# a stripper that cannot load or fails, gives the raw command. The gate
+# bodies still read the raw command for their own checks.
+_git_structure_text() {
+  local text="$1" out
+  case "$text" in *'<<'*) ;; *) printf '%s' "$text"; return 0 ;; esac
+  if ! declare -F strip_heredoc_bodies >/dev/null 2>&1; then
+    # shellcheck source=/dev/null
+    . "$(dirname "${BASH_SOURCE[0]}")/_lib-strip-heredoc.sh" 2>/dev/null || true
+  fi
+  if declare -F strip_heredoc_bodies >/dev/null 2>&1 \
+    && out=$(strip_heredoc_bodies "$text" quoted 2>/dev/null); then
+    printf '%s' "$out"
+  else
+    printf '%s' "$text"
+  fi
+}
+
 # Resolve cd, then each -C, then repository paths for the selected invocation.
 git_prepare_invocation() {
   local cmd="$1" sub="$2" cwd="${3:-$PWD}" dir raw base
+  cmd=$(_git_structure_text "$cmd")
   GIT_REPLAY_ARGS=()
   GIT_DASH_C=""
   _git_load_invocation "$cmd" "$sub" || return 1
@@ -1088,6 +1109,7 @@ git_visit_invocations() {
   shift 3
   local cmd cwd sub prefix rc count=0 arg index
   cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null)
+  cmd=$(_git_structure_text "$cmd")
   cwd=$(printf '%s' "$input" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null)
   if [ "$mode" = block ]; then
     git_alias_check "$@" || return 2
