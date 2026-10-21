@@ -610,7 +610,8 @@ if [ -z "$COMMAND" ]; then
   if raw_payload_command_matches "$INPUT" "$(git_subcommand_payload_pattern '(-c[[:space:]]+[^[:space:]]*[Aa][Ll][Ii][Aa][Ss]\.[^[:space:]]+|--config-env)')" \
     || raw_payload_command_matches "$INPUT" "$(git_subcommand_payload_pattern push)" \
     || raw_payload_command_matches "$INPUT" "$(git_subcommand_payload_pattern commit)" \
-    || raw_payload_command_matches "$INPUT" "$(git_redir_uncertain_payload_pattern)"; then
+    || raw_payload_command_matches "$INPUT" "$(git_redir_uncertain_payload_pattern)" \
+    || raw_payload_command_matches "$INPUT" "$(git_dashed_payload_pattern)"; then
     echo "BLOCKED: dispatcher cannot parse this git command. Restore jq and retry." >&2
     exit 2
   fi
