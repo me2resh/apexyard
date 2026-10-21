@@ -1345,7 +1345,9 @@ _bdw_candidate_segments() {
   local count="$1" hits rc=0 hit index
   shift
   local pattern="${_BDW_REDIRECT_RE}|${_BDW_TEE_RE}|${_BDW_SED_INPLACE_RE}|${_BDW_CURL_OUTPUT_RE}|${_BDW_WGET_OUTPUT_RE}|${_BDW_CP_MV_RE}|${_BDW_CP_MV_REDIRECT_RE}|${_BDW_GIT_WORD_RE}|${_BDW_SORT_WORD_RE}|${_BDW_YQ_WORD_RE}|${_BDW_UNNAMED_TOOLS_RE}"
-  hits=$(printf '%s\n' "$@" | grep -nE "$pattern") 2>/dev/null || rc=$?
+  # -a: GNU grep 3.5+ drops a line with an encoding error and exits 0, so
+  # without -a the filter would skip a segment that the extractors still match.
+  hits=$(printf '%s\n' "$@" | grep -anE "$pattern" 2>/dev/null) || rc=$?
   [ "$rc" -le 1 ] || return 1
   [ -n "$hits" ] || return 0
   local read_ok=0

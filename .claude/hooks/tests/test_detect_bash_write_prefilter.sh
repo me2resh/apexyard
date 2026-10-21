@@ -80,6 +80,8 @@ check_command() {
   [ "${2:-}" = full ] && check bash_extract_write_targets "$1" all
   return 0
 }
+# The binary-notice doubles match -nE as well as -anE. The encoding-error double
+# loses a line only when -a is missing, so it fails on code that lacks -a.
 # Prose, shell-fed bodies, all extraction families, and separator edge cases.
 samples=(
   '' 'read data' $'echo >file;bad\377byte' $'cat > out <<\047EOF\047\nalpha beta gamma\nEOF'
@@ -100,7 +102,7 @@ while IFS= read -r -d '' cmd; do corpus+=("$cmd"); done < "$TMP/unique"
 tasks=()
 for ((i=0; i<${#corpus[@]}; i++)); do tasks+=("c $i"); done
 for ((i=0; i<${#samples[@]}; i++)); do tasks+=("s $i"); done
-for i in 3 4 6 7 8 14 16 17 19 20 22 25 26 28; do tasks+=("g $i" "b $i"); done
+for i in 3 4 6 7 8 14 16 17 19 20 22 25 26 28; do tasks+=("g $i" "b $i" "e $i"); done
 worker() {
   local id="$1" n="$2" t=0 task kind idx comparisons=0 failed=0
   for task in "${tasks[@]}"; do
@@ -111,10 +113,30 @@ worker() {
       c) check_command "${corpus[idx]}" ;;
       s) check_command "${samples[idx]}" full ;;
       # A grep failure must select the original complete walk, even with partial output.
-      g) grep() { if [ "${1:-}" = -nE ]; then cat >/dev/null; printf '1:partial\n'; return 2; fi; command grep "$@"; }
+      g) grep() { if [ "${1:-}" = -anE ] || [ "${1:-}" = -nE ]; then cat >/dev/null; printf '1:partial\n'; return 2; fi; command grep "$@"; }
          check_command "${samples[idx]}" full; unset -f grep ;;
       # Some grep implementations report binary input without numbered records.
-      b) grep() { if [ "${1:-}" = -nE ]; then cat >/dev/null; printf 'Binary file (standard input) matches\n'; return 0; fi; command grep "$@"; }
+      b) grep() { if [ "${1:-}" = -anE ] || [ "${1:-}" = -nE ]; then cat >/dev/null; printf 'Binary file (standard input) matches\n'; return 0; fi; command grep "$@"; }
+         check_command "${samples[idx]}" full; unset -f grep ;;
+      # GNU grep 3.5+ in a legacy multibyte locale drops a line that has an
+      # encoding error, writes the notice to stderr and exits 0.
+      e) grep() {
+           # Only a call without -a loses the line; -a prints every selected line.
+           if [ "${1:-}" = -nE ]; then
+             local hits first l
+             hits=$(command grep "$@") || :
+             first="${hits%%$'\n'*}"; first="${first#*:}"
+             if [ -n "$hits" ]; then
+               # Drop every line with the text of the first hit, as grep drops a text with an encoding error in both views.
+               while IFS= read -r l; do [ "${l#*:}" = "$first" ] || printf '%s\n' "$l"; done <<DROP_FIRST
+$hits
+DROP_FIRST
+             fi
+             echo 'grep: (standard input): binary file matches' >&2
+             return 0
+           fi
+           command grep "$@"
+         }
          check_command "${samples[idx]}" full; unset -f grep ;;
     esac
   done
