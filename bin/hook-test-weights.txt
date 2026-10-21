@@ -136,6 +136,7 @@
 11 .claude/hooks/tests/test_private_refs_slug_and_runtime.sh
 1 .claude/hooks/tests/test_project_config_untracked.sh
 1 .claude/hooks/tests/test_proportionate_work.sh
+387 .claude/hooks/tests/test_push_ref_redirect_1831.sh
 3 .claude/hooks/tests/test_quality_regression.sh
 27 .claude/hooks/tests/test_record_origin_verified_public.sh
 18 .claude/hooks/tests/test_registry_parser_differential.sh

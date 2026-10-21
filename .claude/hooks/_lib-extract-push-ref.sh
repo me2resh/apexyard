@@ -134,6 +134,206 @@ _push_args_from_segment() {
   printf '%s' "$segment"
 }
 
+# #1831: print each push invocation in $1, one on each line. An invocation
+# is the text from the push verb match to the end of its line. A redirection
+# can hold `&` or `|` (`2>&1`, `>|`, `&>`), so git_push_ref_words finds the
+# end of the command, not the segment pattern. With $2 = 1, print only the
+# first invocation.
+_each_push_invocation() {
+  local cmd="$1" first="${2:-0}" line rest match re
+  re=$(_push_verb_pattern)
+  # One grep selects the lines that hold a match. Then read each line.
+  while IFS= read -r line; do
+    rest="$line"
+    while [ -n "$rest" ]; do
+      match=$(printf '%s\n' "$rest" | LC_ALL=C grep -oE "$re" | head -1) || true
+      [ -n "$match" ] || break
+      rest="${rest#*"$match"}"
+      printf '%s\n' "${match}${rest}"
+      [ "$first" != 1 ] || return 0
+      # Keep the trailing boundary for the next match.
+      case "$match" in *[[:alnum:]_.-]) ;; *) rest="${match: -1}$rest" ;; esac
+    done
+  done <<EOF_PUSH_LINES
+$(printf '%s\n' "$cmd" | LC_ALL=C grep -E "$re" || true)
+EOF_PUSH_LINES
+}
+
+# #1831: print the push argument words of one invocation, one on each line.
+# Return 2 when they cannot be read (see git_push_ref_words in
+# _lib-git-global.sh). The caller then fails closed.
+_push_words() {
+  local inv="$1" seg rc=0
+  if command -v git_push_ref_words >/dev/null 2>&1; then
+    git_push_ref_words "$inv" || rc=$?
+    [ "$rc" -ne 1 ] || rc=0
+    return "$rc"
+  fi
+  # A copied hook tree without the shared reader: split at blanks, as before.
+  seg=$(printf '%s\n' "$inv" | sed 's/[[:space:]][0-9]*[>|].*$//')
+  seg=$(_each_push_segment "$seg" | head -1)
+  [ -n "$seg" ] || return 0
+  seg=$(_push_args_from_segment "$seg")
+  # shellcheck disable=SC2086
+  printf '%s\n' $seg
+}
+
+# Remove one pair of quote characters from the ends of a word (#1079).
+# Set $_PUSH_UNQUOTED. No subshell, so a long push stays fast.
+_push_unquote() {
+  _PUSH_UNQUOTED="$1"
+  _PUSH_UNQUOTED="${_PUSH_UNQUOTED#\"}"; _PUSH_UNQUOTED="${_PUSH_UNQUOTED#\'}"
+  _PUSH_UNQUOTED="${_PUSH_UNQUOTED%\"}"; _PUSH_UNQUOTED="${_PUSH_UNQUOTED%\'}"
+}
+
+# 0 when the push words (one on each line) delete a ref: `--delete`, `-d`.
+_push_words_delete() {
+  local token
+  while IFS= read -r token; do
+    _push_unquote "$token"
+    case "$_PUSH_UNQUOTED" in
+      --delete|--delete[!A-Za-z0-9_]*|-d|-d[!A-Za-z0-9_]*) return 0 ;;
+    esac
+  done <<EOF_PUSH_WORDS
+$1
+EOF_PUSH_WORDS
+  return 1
+}
+
+# 0 when the push words carry their own tag evidence: `--tags`, a `tag`
+# keyword before a name, or a `refs/tags/` ref.
+_push_words_tag_evidence() {
+  local token word prev=""
+  while IFS= read -r token; do
+    [ -n "$token" ] || continue
+    _push_unquote "$token"
+    word="$_PUSH_UNQUOTED"
+    case "$word" in
+      --tags|*refs/tags/*) return 0 ;;
+    esac
+    [ "$prev" != tag ] || return 0
+    prev="$word"
+  done <<EOF_PUSH_WORDS
+$1
+EOF_PUSH_WORDS
+  return 1
+}
+
+# Print the second positional push word (the refspec), as written. Skip
+# flags and their values. The first positional word is the remote.
+#
+# Recognised flags that consume a following value:
+#   -o / --push-option, --recurse-submodules, --signed, --receive-pack /
+#   --exec, --repo. The common short flags (-u, -f, -n, -v, -q, --force,
+#   --force-with-lease, --tags, --follow-tags, --atomic, --dry-run,
+#   --no-verify, --set-upstream, --prune, --mirror, --all) take no value.
+# `git push <ref>` (one positional, no remote) is rare in scripts; it gives
+# no refspec, and the caller falls back to local HEAD.
+_push_positional_ref() {
+  local token positional_count=0 skip_next=0
+  while IFS= read -r token; do
+    [ -n "$token" ] || continue
+    if [ "$skip_next" -eq 1 ]; then
+      skip_next=0
+      continue
+    fi
+    case "$token" in
+      # Flags that consume the next token as a value
+      -o|--push-option|--recurse-submodules|--signed|--receive-pack|--exec|--repo)
+        skip_next=1
+        continue
+        ;;
+      # `--<flag>=value` form — value is part of the same token, no skip needed.
+      --push-option=*|--recurse-submodules=*|--signed=*|--receive-pack=*|--exec=*|--repo=*)
+        continue
+        ;;
+      # Boolean flags — no value.
+      -[unfvq]|-[unfvq][unfvq]*|--force|--force-with-lease*|--tags|--follow-tags|--atomic|--dry-run|--no-verify|--set-upstream|--prune|--mirror|--all|--no-tags|--quiet|--verbose|--ipv4|--ipv6|--progress|--no-progress|--thin|--no-thin|--porcelain|--no-recurse-submodules)
+        continue
+        ;;
+      # Anything else starting with - is some other flag we don't know — skip
+      # to be safe (don't consume a following value, since most git push flags
+      # are boolean).
+      -*)
+        continue
+        ;;
+    esac
+    positional_count=$((positional_count + 1))
+    if [ "$positional_count" -eq 2 ]; then
+      printf '%s' "$token"
+      return 0
+    fi
+  done <<EOF_PUSH_WORDS
+$1
+EOF_PUSH_WORDS
+  return 0
+}
+
+# Print the destination branch from the push words, or nothing.
+_push_ref_from_words() {
+  local words="$1" ref
+  # A delete push has no source ref.
+  if _push_words_delete "$words"; then
+    return 0
+  fi
+  ref=$(_push_positional_ref "$words")
+  [ -n "$ref" ] || return 0
+
+  # Strip a single pair of surrounding quote characters, if present, e.g.
+  # `git push origin "main"` or `git push origin 'main'`. Without this,
+  # the extracted ref carries its quotes into the protected-branch /
+  # naming-convention regex match, which never matches `"main"` against
+  # `^(main|master|dev|develop)$` — the push then executes unvalidated.
+  # Mirrors block-main-push.sh's `cd`-target quote-stripping, which the
+  # #580 review of #549 called "the security-critical part" for the same
+  # reason (me2resh/apexyard#1079).
+  _push_unquote "$ref"
+  ref="$_PUSH_UNQUOTED"
+
+  # Strip any leading `+` (force-update marker on a refspec).
+  ref="${ref#+}"
+
+  # Refspec form `<src>:<dst>` — validate the DESTINATION (right side) because:
+  #   - The dst is what lands on the remote and whose name matters for the
+  #     branch-naming convention.
+  #   - The src may be `HEAD`, a SHA, or a differently-named local tracking
+  #     branch — none of which should be validated as a remote branch name.
+  # If there is no `:` the whole token is the branch name.
+  case "$ref" in *:*) ref="${ref#*:}" ;; esac
+  [ -n "$ref" ] || return 0
+
+  # `HEAD` without a refspec dst — not a branch name we can validate.
+  [ "$ref" != "HEAD" ] || return 0
+
+  # Strip leading `refs/heads/` if present — leave just the branch shorthand.
+  printf '%s\n' "${ref#refs/heads/}"
+}
+
+# 0 when one push invocation carries its own tag evidence (#1831). An
+# invocation whose words cannot be read has no evidence.
+_push_invocation_has_tag_evidence() {
+  local words
+  words=$(_push_words "$1") || return 1
+  _push_words_tag_evidence "$words"
+}
+
+# The block message for a push whose arguments cannot be read (#1831).
+push_ref_unresolved_message() {
+  cat <<'MSG'
+BLOCKED: Cannot read the push destination for this command.
+
+A redirection in this push hides its arguments. A redirection target is
+not one closed word, an operator has two readings, or a quote or a
+substitution is not closed on its line. The gate cannot see which branch
+the push writes to.
+
+To unblock: write the push as one literal command on one line. Give each
+redirection a plain file name as its target. Put prose that mentions a
+push in a separate Bash call, or write the message to a file and pass the
+file (for example, git commit -F <file>).
+MSG
+}
+
 # Returns true (0) when the command is a tag push that has no branch ref at all.
 # Tag pushes must be a no-op for a *branch*-name validator.
 #
@@ -185,6 +385,18 @@ is_tag_push() {
     return 0
   fi
 
+  # #1831: the strip above cuts the command at the first redirection, also
+  # one before the verb. Read each invocation past its redirections too.
+  local inv
+  while IFS= read -r inv; do
+    [ -n "$inv" ] || continue
+    if _push_invocation_has_tag_evidence "$inv"; then
+      return 0
+    fi
+  done <<EOF_PUSH_INVOCATIONS
+$(_each_push_invocation "$cmd")
+EOF_PUSH_INVOCATIONS
+
   return 1
 }
 
@@ -197,8 +409,10 @@ is_tag_push() {
 #
 # KEY BEHAVIOUR CHANGES vs the original (me2resh/apexyard#547):
 #
-#   1. Shell redirections and pipes are stripped BEFORE token parsing so that
+#   1. Shell redirections are skipped and a pipe ends the command, so that
 #      `2>&1`, `2>`, `>`, `|` tokens are not mistaken for branch names.
+#      #1831: the word reader skips a redirection before the verb or among
+#      the arguments, as the shell does (git_push_ref_words).
 #
 #   2. For a `src:dst` refspec (e.g. `HEAD:feature/GH-1-foo`), the DESTINATION
 #      (right of the colon) is returned for validation, not the source. The
@@ -224,149 +438,22 @@ is_tag_push() {
 #   git push                                           → empty (relies on upstream tracking)
 #   git push origin                                    → empty (no ref given)
 #   git push origin --delete <branch>                  → empty (deletion, no source-ref)
-#   git push upstream HEAD:feature/GH-1-foo 2>&1 | tl → feature/GH-1-foo (redirections stripped)
+#   git push upstream HEAD:feature/GH-1-foo 2>&1 | tl → feature/GH-1-foo (redirections skipped)
 #
-# Returns: prints the ref to stdout (or empty), always exits 0.
+# Returns: prints the ref to stdout (or empty). Exits 0, or 3 when the push
+# words cannot be read (#1831). The caller then fails closed.
 _extract_push_ref_core() {
-  local cmd="$1"
-  local push_segment ref
+  local cmd="$1" inv words rc=0
 
-  # Bail on `--delete` / `-d` shapes — they don't have a source ref.
-  if printf '%s\n' "$cmd" | LC_ALL=C grep -qE "$(_push_verb_pattern)"'[^|;&]*(--delete\b|[[:space:]]-d\b)'; then
-    echo ""
-    return 0
-  fi
-
-  # Strip shell redirections and pipeline suffixes from the raw command before
-  # we extract the push segment.  A command like:
-  #   git push upstream --tags 2>&1 | tail -5
-  # should be seen as:
-  #   git push upstream --tags
-  # We remove everything from the first redirection operator onward:
-  #   - `NNN>` (e.g. `2>`, `1>`, plain `>`)
-  #   - `|` pipe
-  # This is conservative: we drop from the FIRST such operator to end-of-line.
-  # The sed expression requires a WHITESPACE token boundary before the operator,
-  # then optional fd digits, then `>` or `|`, then anything: `[[:space:]][0-9]*[>|].*`.
-  # The leading whitespace is the #584 fix: the old `[[:space:]]*` (zero-width) let a
-  # bare `>` inside an ASCII arrow `->` in a commit message match, truncating the
-  # command before the trailing `&& git push <branch>` and falsely blocking the push.
-  local stripped_cmd
-  stripped_cmd=$(echo "$cmd" | sed 's/[[:space:]][0-9]*[>|].*$//')
-
-  # Isolate the `git push ...` segment up to the first command separator
-  # (|, ;, &&, &) so `git push origin foo && echo bar` doesn't pick up `echo`
-  # tokens.  (After stripping redirections above, the push segment is usually
-  # the whole remaining string, but the separator guard is a useful safety net.)
-  push_segment=$(_each_push_segment "$stripped_cmd" | head -1)
-  if [ -z "$push_segment" ]; then
-    echo ""
-    return 0
-  fi
-
-  # Drop `git`, its global options, and the `push` verb. A `-C <dir>` value
-  # must not become the remote name (#1730).
-  push_segment=$(_push_args_from_segment "$push_segment")
-
-  # Walk the remaining tokens, skipping flags + their values + the remote.
-  # The first non-flag, non-remote positional is the refspec (or branch).
-  #
-  # Recognised flags that consume a following value:
-  #   -o / --push-option, --recurse-submodules, --signed, --receive-pack /
-  #   --exec. The common short flags (-u, -f, -n, -v, -q, --force,
-  #   --force-with-lease, --tags, --follow-tags, --atomic, --dry-run,
-  #   --no-verify, --set-upstream, --prune, --mirror, --all) take no value.
-  #
-  # Recognised "remote" candidates: `origin`, `upstream`, or any single
-  # non-flag token that appears before the ref. We heuristically treat the
-  # FIRST non-flag positional as the remote and the SECOND as the ref.
-  # `git push <ref>` (one positional, no remote) is rare in scripts; if it
-  # happens, this returns empty and the caller falls back to local HEAD.
-  local positional_count=0
-  local skip_next=0
-  ref=""
-
-  # shellcheck disable=SC2086
-  for token in $push_segment; do
-    if [ "$skip_next" -eq 1 ]; then
-      skip_next=0
-      continue
-    fi
-
-    case "$token" in
-      # Flags that consume the next token as a value
-      -o|--push-option|--recurse-submodules|--signed|--receive-pack|--exec|--repo)
-        skip_next=1
-        continue
-        ;;
-      # `--<flag>=value` form — value is part of the same token, no skip needed.
-      --push-option=*|--recurse-submodules=*|--signed=*|--receive-pack=*|--exec=*|--repo=*)
-        continue
-        ;;
-      # Boolean flags — no value.
-      -[unfvq]|-[unfvq][unfvq]*|--force|--force-with-lease*|--tags|--follow-tags|--atomic|--dry-run|--no-verify|--set-upstream|--prune|--mirror|--all|--no-tags|--quiet|--verbose|--ipv4|--ipv6|--progress|--no-progress|--thin|--no-thin|--porcelain|--no-recurse-submodules)
-        continue
-        ;;
-      # Anything else starting with - is some other flag we don't know — skip
-      # to be safe (don't consume a following value, since most git push flags
-      # are boolean).
-      -*)
-        continue
-        ;;
-    esac
-
-    positional_count=$((positional_count + 1))
-    if [ "$positional_count" -eq 2 ]; then
-      ref="$token"
-      break
-    fi
-  done
-
-  if [ -z "$ref" ]; then
-    echo ""
-    return 0
-  fi
-
-  # Strip a single pair of surrounding quote characters, if present, e.g.
-  # `git push origin "main"` or `git push origin 'main'`. Without this,
-  # the extracted ref carries its quotes into the protected-branch /
-  # naming-convention regex match, which never matches `"main"` against
-  # `^(main|master|dev|develop)$` — the push then executes unvalidated.
-  # Mirrors block-main-push.sh's `cd`-target quote-stripping, which the
-  # #580 review of #549 called "the security-critical part" for the same
-  # reason (me2resh/apexyard#1079).
-  ref="${ref#\"}"; ref="${ref#\'}"
-  ref="${ref%\"}"; ref="${ref%\'}"
-
-  # Strip any leading `+` (force-update marker on a refspec).
-  ref="${ref#+}"
-
-  # Refspec form `<src>:<dst>` — validate the DESTINATION (right side) because:
-  #   - The dst is what lands on the remote and whose name matters for the
-  #     branch-naming convention.
-  #   - The src may be `HEAD`, a SHA, or a differently-named local tracking
-  #     branch — none of which should be validated as a remote branch name.
-  # If there is no `:` the whole token is the branch name.
-  if echo "$ref" | grep -q ':'; then
-    # Take the DST side (right of colon).
-    ref="${ref#*:}"
-  fi
-
-  if [ -z "$ref" ]; then
-    echo ""
-    return 0
-  fi
-
-  # `HEAD` without a refspec dst — not a branch name we can validate.
-  if [ "$ref" = "HEAD" ]; then
-    echo ""
-    return 0
-  fi
-
-  # Strip leading `refs/heads/` if present — leave just the branch shorthand.
-  ref="${ref#refs/heads/}"
-
-  echo "$ref"
+  # #1831: take the first push invocation in the raw text, then read its
+  # words past each redirection. The old code cut the command at the first
+  # redirection, so a redirection before the verb or among the arguments
+  # hid the ref, and the gates fell back to local HEAD.
+  inv=$(_each_push_invocation "$cmd" 1)
+  [ -n "$inv" ] || return 0
+  words=$(_push_words "$inv") || rc=$?
+  [ "$rc" -ne 2 ] || return 3
+  _push_ref_from_words "$words"
 }
 
 # Heredoc-aware wrapper around _extract_push_ref_core (me2resh/apexyard#1066).
@@ -445,73 +532,29 @@ extract_push_ref() {
 # docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md.
 #
 # Returns: zero or more refs, one per line, in the order they appear.
-# Always exits 0.
+# Exits 0, or 3 when the words of one occurrence cannot be read (#1831).
 _extract_all_push_refs_core() {
-  local cmd="$1"
-  local stripped_cmd
+  local cmd="$1" inv words rc ref unresolved=0
 
-  # Same redirect/pipe stripping as _extract_push_ref_core, applied to the
-  # WHOLE command before segmenting.
-  stripped_cmd=$(echo "$cmd" | sed 's/[[:space:]][0-9]*[>|].*$//')
-
-  _each_push_segment "$stripped_cmd" | while IFS= read -r segment; do
-    [ -z "$segment" ] && continue
-
-    # --delete / -d shapes have no source ref — skip this occurrence, keep
-    # scanning the rest.
-    if echo "$segment" | grep -qE '(--delete\b|[[:space:]]-d\b)'; then
+  # #1831: read each invocation past its redirections. Return 3 when the
+  # words of one invocation cannot be read, after the other refs print.
+  while IFS= read -r inv; do
+    [ -n "$inv" ] || continue
+    rc=0
+    words=$(_push_words "$inv") || rc=$?
+    if [ "$rc" -eq 2 ]; then
+      unresolved=1
       continue
     fi
-
-    # Drop git, its global options, and the push verb (#1730).
-    segment=$(_push_args_from_segment "$segment")
-
-    local positional_count=0
-    local skip_next=0
-    local ref=""
-
-    # shellcheck disable=SC2086
-    for token in $segment; do
-      if [ "$skip_next" -eq 1 ]; then
-        skip_next=0
-        continue
-      fi
-
-      case "$token" in
-        -o|--push-option|--recurse-submodules|--signed|--receive-pack|--exec|--repo)
-          skip_next=1
-          continue
-          ;;
-        --push-option=*|--recurse-submodules=*|--signed=*|--receive-pack=*|--exec=*|--repo=*)
-          continue
-          ;;
-        -[unfvq]|-[unfvq][unfvq]*|--force|--force-with-lease*|--tags|--follow-tags|--atomic|--dry-run|--no-verify|--set-upstream|--prune|--mirror|--all|--no-tags|--quiet|--verbose|--ipv4|--ipv6|--progress|--no-progress|--thin|--no-thin|--porcelain|--no-recurse-submodules)
-          continue
-          ;;
-        -*)
-          continue
-          ;;
-      esac
-
-      positional_count=$((positional_count + 1))
-      if [ "$positional_count" -eq 2 ]; then
-        ref="$token"
-        break
-      fi
-    done
-
-    [ -z "$ref" ] && continue
-    # Strip a single pair of surrounding quote characters, if present --
-    # see _extract_push_ref_core's identical comment (me2resh/apexyard#1079).
-    ref="${ref#\"}"; ref="${ref#\'}"
-    ref="${ref%\"}"; ref="${ref%\'}"
-    ref="${ref#+}"
-    case "$ref" in *:*) ref="${ref#*:}" ;; esac
-    [ -z "$ref" ] && continue
-    [ "$ref" = "HEAD" ] && continue
-    ref="${ref#refs/heads/}"
-    echo "$ref"
-  done
+    # --delete / -d shapes have no source ref; _push_ref_from_words prints
+    # nothing for them, and the scan goes on to the next occurrence.
+    ref=$(_push_ref_from_words "$words")
+    [ -z "$ref" ] || printf '%s\n' "$ref"
+  done <<EOF_PUSH_INVOCATIONS
+$(_each_push_invocation "$cmd")
+EOF_PUSH_INVOCATIONS
+  [ "$unresolved" -eq 0 ] || return 3
+  return 0
 }
 
 # Returns true (0) when the raw command contains AT LEAST ONE "git
@@ -596,71 +639,33 @@ _extract_all_push_refs_core() {
 # or already covered by decision point 4's scan-all). Always exits
 # cleanly either way.
 _command_has_untagged_refless_push() {
-  local cmd="$1" stripped_cmd segment has_evidence seg
-  local positional_count skip_next token ref found
+  local cmd="$1" inv words rc found=1
 
-  stripped_cmd=$(echo "$cmd" | sed 's/[[:space:]][0-9]*[>|].*$//')
-  found=1
-
-  while IFS= read -r segment; do
-    [ -z "$segment" ] && continue
+  while IFS= read -r inv; do
+    [ -z "$inv" ] && continue
+    # #1831: words that cannot be read count as a ref-less push. The caller
+    # then reads the raw destination, and that read fails closed.
+    rc=0
+    words=$(_push_words "$inv") || rc=$?
+    if [ "$rc" -eq 2 ]; then
+      found=0
+      continue
+    fi
 
     # --delete / -d shapes have no source ref and no branch to protect —
     # not the shape this function looks for, skip like
     # _extract_all_push_refs_core does.
-    if echo "$segment" | grep -qE '(--delete\b|[[:space:]]-d\b)'; then
+    if _push_words_delete "$words"; then
       continue
     fi
 
-    has_evidence=0
-    if echo "$segment" | grep -qE '\s--tags(\s|$)' \
-       || echo "$segment" | grep -qE '\stag\s+\S' \
-       || echo "$segment" | grep -qE 'refs/tags/'; then
-      has_evidence=1
-    fi
-
-    # Determine whether THIS segment has an explicit positional ref —
-    # same token walk as _extract_all_push_refs_core, applied per segment
-    # so evidence and ref-presence are checked on the SAME occurrence.
-    seg=$(_push_args_from_segment "$segment")
-    positional_count=0
-    skip_next=0
-    ref=""
-
-    # shellcheck disable=SC2086
-    for token in $seg; do
-      if [ "$skip_next" -eq 1 ]; then
-        skip_next=0
-        continue
-      fi
-      case "$token" in
-        -o|--push-option|--recurse-submodules|--signed|--receive-pack|--exec|--repo)
-          skip_next=1
-          continue
-          ;;
-        --push-option=*|--recurse-submodules=*|--signed=*|--receive-pack=*|--exec=*|--repo=*)
-          continue
-          ;;
-        -[unfvq]|-[unfvq][unfvq]*|--force|--force-with-lease*|--tags|--follow-tags|--atomic|--dry-run|--no-verify|--set-upstream|--prune|--mirror|--all|--no-tags|--quiet|--verbose|--ipv4|--ipv6|--progress|--no-progress|--thin|--no-thin|--porcelain|--no-recurse-submodules)
-          continue
-          ;;
-        -*)
-          continue
-          ;;
-      esac
-      positional_count=$((positional_count + 1))
-      if [ "$positional_count" -eq 2 ]; then
-        ref="$token"
-        break
-      fi
-    done
-
-    if [ "$has_evidence" -eq 0 ] && [ -z "$ref" ]; then
+    # Tag evidence and ref presence are checked on the SAME occurrence.
+    if ! _push_words_tag_evidence "$words" && [ -z "$(_push_positional_ref "$words")" ]; then
       found=0
     fi
-  done <<PUSH_SEGMENTS
-$(_each_push_segment "$stripped_cmd")
-PUSH_SEGMENTS
+  done <<EOF_PUSH_INVOCATIONS
+$(_each_push_invocation "$cmd")
+EOF_PUSH_INVOCATIONS
 
   return "$found"
 }

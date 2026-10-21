@@ -109,16 +109,17 @@ git_token_is_verb() {
 # feeds its script. A shell word in prose, in a heredoc body line that does
 # not start a command, or a script-file run does not count.
 _git_text_has_nested_shell() {
-  local text="$1" word_re='(^|[^[:alnum:]_.-])(pushd|popd|sh|bash|zsh|dash|ksh)([[:space:];&|<>)]|$)'
+  local text="$1" word_re="(^|[^[:alnum:]_.-])(pushd|popd|eval|sh|bash|zsh|dash|ksh)([[:space:];&|<>'\")]|$)"
   # No fork when no candidate word is present.
   [[ "$text" =~ $word_re ]] || return 1
   local at='(^|[;&|(){}!`]|\$\(|[[:space:]]-(exec|execdir|ok|okdir)[[:space:]])[[:space:]]*'
   local wrap='((exec|command|builtin|time|nohup|nice|sudo|xargs|env|timeout|then|do|else|if|while|until)([[:space:]]+[^[:space:];&|()]+)*[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*[[:space:]]+)*'
-  local shell='([^[:space:];&|()<>`]*/)?(sh|bash|zsh|dash|ksh)'
-  local opts='([[:space:]]+[-+][^[:space:];&|<>()]*)*'
-  local stack="${at}${wrap}(pushd|popd)([[:space:];&|)]|$)"
+  local shell="${_git_q}([^[:space:];&|()<>\`]*/)?(sh|bash|zsh|dash|ksh)${_git_q}"
+  # A separate option value can precede -c (for example a shell option name).
+  local opts="([[:space:]]+((-[oO]|--rcfile|--init-file)[[:space:]]+${_git_opt_val}|[-+][^[:space:];&|<>()]*))*"
+  local stack="${at}${wrap}(pushd|popd|${_git_q}eval${_git_q})([[:space:];&|)]|$)"
   local cmdstr="(^|[^[:alnum:]_.-])${shell}${opts}[[:space:]]+-[A-Za-z]*[cs][A-Za-z]*([[:space:];&|<>)'\"]|$)"
-  local fed="${at}${wrap}${shell}${opts}[[:space:]]*([;&|<>)]|$)"
+  local fed="${at}${wrap}${shell}([[:space:]]+[-+][^[:space:];&|<>()]*)*[[:space:]]*([;&|<>)]|$)"
   printf '%s\n' "$text" | LC_ALL=C grep -qE "${stack}|${cmdstr}|${fed}"
 }
 
@@ -345,6 +346,47 @@ _git_redir_take_word() {
   return 0
 }
 
+# Git's own dashed programs have no literal git verb to parse. Route them
+# to the protected gates (#1825). Three forms count, and only at a command
+# position (after any assignment, wrapper or redirection):
+#   F1 a command word whose last path part is the dashed push or commit name,
+#      with quotes or escapes allowed inside the name and any letter case;
+#   F2 a last path part that starts with the dashed prefix and then holds a
+#      quote, a backslash, a glob character, a brace or an expansion;
+#   F3 a path from an exec-path expansion whose last part starts with an
+#      expansion, a glob character or a brace.
+# Inside a nested shell the body is command text, so a word boundary is
+# enough there. The same name in an argument or in data text does not count.
+# A name built only from variables, with no literal dashed prefix, stays open
+# (AgDR-0253 R3). No command text is ever executed.
+_git_text_has_dashed_protected() {
+  local text="$1" lead_re strict loose
+  # A dashed prefix needs a hyphen and a letter t; cheap guard before a fork.
+  case "$text" in *-*) ;; *) return 1 ;; esac
+  local sub='\$\([^()]*\)|`[^`]*`'
+  local plain='[^[:space:];&|<>()`]'
+  local dirp="((${sub}|${plain})*/)?"
+  local gq
+  gq="$(_git_quoted_literal 'git-')"
+  local names
+  names="$(_git_quoted_literal push)|$(_git_quoted_literal commit)"
+  local delim='([[:space:];&|<>)`]|$)'
+  # A quote counts only when more word text follows it. A closing quote does not.
+  local special='(\\|\$|`|[*?[{]|["'"'"'][[:alnum:]_"'"'"'\\$])'
+  local f1="${dirp}${gq}(${names})${delim}"
+  local f2="${dirp}${gq}[[:alnum:]_.-]*${special}"
+  local xp='(exec-path|EXEC_PATH)'
+  local f3="(${sub}|${plain})*(\\\$\\([^()]*${xp}[^()]*\\)|\`[^\`]*${xp}[^\`]*\`|${xp})(${sub}|${plain})*/[\"']*${special}"
+  local asg='[A-Za-z_][A-Za-z0-9_]*=([^[:space:];&|()`"'"'"']|\$\([^()]*\)|"([^"\\]|\\.)*"|'"'"'[^'"'"']*'"'"'|`[^`]*`)*[[:space:]]+'
+  local kw='(exec|command|builtin|time|nohup|nice|sudo|xargs|env|timeout|then|do|else|if|while|until)[[:space:]]+((-[^[:space:];&|()]+([[:space:]]+[^-[:space:];&|()][^[:space:];&|()]*)?|[0-9]+|[A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|()]*)[[:space:]]+)*'
+  local wrap="(${asg}|${kw}|${_git_redir}[[:space:]]+)*"
+  strict='(^|[;&|(){}!`]|\$\(|[[:space:]]-(exec|execdir|ok|okdir)[[:space:]])[[:space:]]*'"${wrap}"
+  loose='(^|[^[:alnum:]_.-])'
+  lead_re="$strict"
+  _git_text_has_nested_shell "$text" && lead_re="$loose"
+  printf '%s\n' "$text" | LC_ALL=C grep -qiE "${lead_re}(${f1}|${f2})|${lead_re}${f3}"
+}
+
 # #1816 G2/G3: an expansion hides the command word or the verb, and the rest
 # of the simple command can still be a push or a commit.
 # #1805 B2: so can a redirection target that the matcher cannot consume.
@@ -353,6 +395,7 @@ git_uncertain_protected_shape() {
   if _git_redir_hides_verb "$text"; then
     return 0
   fi
+  _git_text_has_dashed_protected "$text" && return 0
   local push_re commit_re exp_tok
   push_re="$(_git_quoted_literal push)"
   commit_re="$(_git_quoted_literal commit)"
@@ -408,6 +451,14 @@ git_subcommand_payload_pattern() {
   fi
   # shellcheck disable=SC2090
   printf '%s' ${_git_cmd_word}'(([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env|attr-source))[[:space:]]+'"${_git_payload_val}"'|--?[A-Za-z][A-Za-z-]*(='"${_git_payload_val}"')?|'"${jredir}"')|'"${jredir}"'))*[[:space:]]+'${lit}'([^[:alnum:]_.-]|$)'
+}
+
+# JSON-string pattern for the no-jq path (#1825): a dashed push or commit
+# name, or a dashed prefix followed by a quote, a backslash, a glob
+# character, a brace or an expansion. The no-jq path cannot see the command
+# position or a word start, so it blocks on the name alone (fail closed).
+git_dashed_payload_pattern() {
+  printf '%s' '([Gg][Ii][Tt]-([Pp][Uu][Ss][Hh]|[Cc][Oo][Mm][Mm][Ii][Tt])([^[:alnum:]_.-]|$)|[Gg][Ii][Tt]-[[:alnum:]_.-]*(\\\\|\\"|\$|`|[*?[{]))'
 }
 
 # JSON-string pattern for the no-jq path (#1805 B2): a git command word,
@@ -740,6 +791,109 @@ git_push_args() {
   fi
 }
 
+# Print the words after `git [global options] push`, one on each line
+# (#1831). $1 starts at the git command word and goes to the end of its line.
+# Skip each redirection as the shell does. Stop at the `;`, `&`, `|` or `)`
+# that ends the command. A word keeps its quotes.
+# Return 1 when $1 holds no push verb. Return 2 when the push arguments
+# cannot be read: a redirection target is not one closed word, an operator
+# has two readings, or a word is not closed on its line and the invocation
+# holds a redirection. Also return 2 when the arguments hold a unit
+# separator byte (0x1F), because the walk uses that byte to split the line
+# into pieces. The caller then fails closed.
+# A word that is not closed on its line in an invocation with no redirection
+# ends the walk. Then print the rest split at blanks, as before #1831.
+# Linear for words separated by blanks: each word step reads one piece, as
+# in _git_redir_hides_verb.
+git_push_ref_words() {
+  local inv="$1" norm saw=0 us tsep np wpi pos rest op op_re
+  local -a pieces endp
+  _git_strip_cmd_word "$inv" || return 1
+  _git_scan_globals push || return 2
+  norm="$_GIT_SCAN"
+  # The text before the arguments. A suffix pattern is slow on a long line.
+  case "${inv:0:$((${#inv} - ${#norm}))}" in *'<'*|*'>'*) saw=1 ;; esac
+  op_re='^'"${_git_redir_fd}${_git_redir_op}"
+  us=$'\037'
+  # #1831 B1: the walk cannot split text that already holds the separator
+  # byte. A real push does not hold it. Fail closed.
+  case "$norm" in *"$us"*) return 2 ;; esac
+  tsep=$(printf '%s\n' "$norm" | tr ' \t' '\037\037')
+  IFS="$us" read -r -a pieces <<EOF_PUSH_PIECES
+${tsep}${us}x
+EOF_PUSH_PIECES
+  unset "pieces[$((${#pieces[@]} - 1))]"
+  np=${#pieces[@]}
+  endp=()
+  pos=-1
+  for rest in ${pieces[@]+"${pieces[@]}"}; do
+    pos=$((pos + 1 + ${#rest}))
+    endp[${#endp[@]}]=$pos
+  done
+  [ "$np" -gt 0 ] || return 0
+  wpi=0
+  _GIT_SCAN="${pieces[0]}"
+  while :; do
+    if [ -z "$_GIT_SCAN" ]; then
+      wpi=$((wpi + 1))
+      [ "$wpi" -lt "$np" ] || break
+      _GIT_SCAN="${pieces[wpi]}"
+      continue
+    fi
+    case "$_GIT_SCAN" in '&>'*) ;; [\;\&\|\)]*) break ;; esac
+    case "$_GIT_SCAN" in
+      *[\\\'\"\`\$\(\)\<\>\;\&\|]*) ;;
+      *)
+        # A plain word fills the rest of the piece.
+        printf '%s\n' "$_GIT_SCAN"
+        _GIT_SCAN=""
+        continue
+        ;;
+    esac
+    op=""
+    case "$_GIT_SCAN" in
+      [0-9\{\<\>\&]*) [[ "$_GIT_SCAN" =~ $op_re ]] && op="${BASH_REMATCH[0]}" ;;
+    esac
+    if [ -n "$op" ]; then
+      _GIT_SCAN="${_GIT_SCAN:${#op}}"
+      saw=1
+      # #1772 R2-2: a `!` operator and then a blank has two readings.
+      case "$op" in *'!') [ -n "$_GIT_SCAN" ] || return 2 ;; esac
+      while [ -z "$_GIT_SCAN" ] && [ $((wpi + 1)) -lt "$np" ]; do
+        wpi=$((wpi + 1))
+        _GIT_SCAN="${pieces[wpi]}"
+      done
+      case "$_GIT_SCAN" in ''|[\;\&\|]*) break ;; esac
+      if [[ "$_GIT_SCAN" =~ ^([0-9]+|-)([;&|]|$) ]]; then
+        _GIT_SCAN="${_GIT_SCAN:${#BASH_REMATCH[1]}}"
+        continue
+      fi
+      _git_redir_take_word || return 2
+      continue
+    fi
+    rest="$_GIT_SCAN"
+    if _git_redir_take_word; then
+      printf '%s\n' "$_GIT_TAKEN"
+      continue
+    fi
+    [ "$saw" -eq 0 ] || return 2
+    # No redirection: split the rest at blanks, up to a separator. A failed
+    # read can leave the rest of the line in $_GIT_SCAN. Start again from
+    # the current piece.
+    _GIT_SCAN="$rest"
+    while :; do
+      rest="${_GIT_SCAN%%[;&|]*}"
+      [ -z "$rest" ] || printf '%s\n' "$rest"
+      [ "$rest" = "$_GIT_SCAN" ] || break
+      wpi=$((wpi + 1))
+      [ "$wpi" -lt "$np" ] || break
+      _GIT_SCAN="${pieces[wpi]}"
+    done
+    break
+  done
+  return 0
+}
+
 # Resolve a literal path. Do not evaluate shell substitutions.
 _git_resolve_dir() {
   local dir="$1" cwd="${2:-$PWD}"
@@ -939,7 +1093,12 @@ git_visit_invocations() {
     git_alias_check "$@" || return 2
     # #1816 G2/G3: an expansion hides the command word or verb.
     if git_uncertain_protected_shape "$cmd"; then
-      echo "BLOCKED: a shell expansion or redirection hides the git command word or verb. Use a literal git push or git commit." >&2
+      if _git_text_has_dashed_protected "$cmd"; then
+        # #1825: name the program class, not an expansion or a redirection.
+        echo "BLOCKED: this command runs git's own dashed push or commit program, or a program name that can become one. Use the normal git command word with a literal push or commit. If this is prose, write it to a file and pass -F or --body-file." >&2
+      else
+        echo "BLOCKED: a shell expansion or redirection hides the git command word or verb. Use a literal git push or git commit." >&2
+      fi
       return 2
     fi
   fi

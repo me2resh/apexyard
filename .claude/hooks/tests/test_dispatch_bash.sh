@@ -35,6 +35,7 @@ cp "$(dirname "$ROOT/dispatch-bash.sh")/_lib-awk-fallback.sh" "$TMP/hooks/_lib-a
 cp "$ROOT/_lib-extract-pr.sh" "$TMP/hooks/_lib-extract-pr.sh"
 cp "$ROOT/_lib-command-scrub.sh" "$TMP/hooks/_lib-command-scrub.sh"
 cp "$ROOT/_lib-git-global.sh" "$TMP/hooks/_lib-git-global.sh"
+cp "$ROOT/_lib-strip-heredoc.sh" "$TMP/hooks/_lib-strip-heredoc.sh"
 chmod +x "$TMP/hooks/dispatch-bash.sh"
 
 scripts='block-ambient-tracker-repo.sh block-privileged-escalation.sh require-skill-for-issue-create.sh require-orbit-slice-for-ticket.sh require-migration-ticket.sh require-active-ticket.sh warn-review-marker-write.sh warn-isolated-build-risk.sh block-reviewer-repo-mutation.sh block-reviewer-ci-wait.sh block-forged-menu-approval.sh block-git-add-all.sh block-main-push.sh validate-branch-name.sh pre-push-gate.sh block-agent-routing-drift.sh check-secrets.sh block-onboarding-in-git.sh verify-commit-refs.sh validate-commit-format.sh require-agdr-for-arch-changes.sh warn-bootstrap-scope.sh suggest-ticket-template.sh validate-issue-structure.sh block-private-refs-in-public-repos.sh validate-pr-create.sh require-agdr-for-arch-pr.sh nudge-control-adversarial-test.sh block-unreviewed-merge.sh require-design-review-for-ui.sh block-merge-on-red-ci.sh require-architecture-review.sh detect-role-trigger.sh'
