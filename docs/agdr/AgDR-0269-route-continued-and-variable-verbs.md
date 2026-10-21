@@ -34,7 +34,7 @@ The G2/G3 uncertain-verb check in `git_uncertain_protected_shape` skips global o
 
 | Option | Pros | Cons |
 |--------|------|------|
-| A. Keep the broad-space text. Also join the command in bash mode (`join_shell_continuations ... bash`) when it holds a backslash-newline pair, and route when either text routes. Add the shared redirection unit to the uncertain-verb options. | Only adds routes. Uses existing linear code. A command with no continuation pays nothing. | One more awk pass and one more scan for a command with a continuation. |
+| A. Keep the broad-space text. Also join the command in bash mode (`join_shell_continuations ... bash`) when it holds a backslash-newline pair after a character that is not a blank, and route when either text routes. Add the shared redirection unit to the uncertain-verb options. | Only adds routes. Uses existing linear code. A command with no continuation pays nothing. | One more awk pass and one more scan for a command with a continuation. |
 | B. Change the dispatcher join to bash mode only. | One scan. | Loses routes that the broad join gives today, for example `git` and `push` on two lines with a continuation directly after `git`. |
 | C. Make the gates fail closed on any continuation near a git word. | Gates block the class. | Blocks ordinary multi-line git commands that pass on `dev`. |
 
@@ -42,7 +42,7 @@ The G2/G3 uncertain-verb check in `git_uncertain_protected_shape` skips global o
 
 Chosen: **A**, because it only adds routes and it reuses code that is already in the dispatcher and the library.
 
-1. The dispatcher keeps the broad-space join. It also joins the command in bash mode when the stripped command holds a backslash-newline pair directly after a character that is not a blank. The bash mode removes each continuation outside single quotes and comments, with escape parity, as bash does. After a blank, both joins give the same words, so the usual ` \` line end pays nothing.
+1. The dispatcher keeps the broad-space join. It also joins the command in bash mode when the stripped command holds a backslash-newline pair directly after a character that is not a blank. The bash mode removes each continuation outside single quotes and comments, with escape parity, as bash does. After a blank, both joins give the same words, so the usual line end (a blank and then a backslash) pays nothing.
 2. The uncertain-verb check and the push and commit scans read both texts. A route from either text counts.
 3. If the bash-mode join fails, the dispatcher runs both gate groups (fail closed).
 4. The uncertain-verb options now accept the shared redirection unit (`_git_redir`), spaced or glued to the command word. This is the same unit that `_git_sub_opts` uses.
@@ -51,7 +51,7 @@ Chosen: **A**, because it only adds routes and it reuses code that is already in
 
 - A push or commit whose verb, `-C` value, redirection target or dashed program name is split by a continuation now routes to the gates.
 - A variable verb after a redirection now routes to both gate groups. The gates block it, because they run the same uncertain-verb check on the raw command.
-- The allow twins still route nothing: the same shapes with another verb, a continuation inside single quotes or a comment, and a bare variable verb with no arguments.
+- The allow twins still route nothing. They are the same shapes with another verb, a continuation inside single quotes or a comment, and a bare variable verb with no arguments.
 - Gap that stays open: the gate bodies read the raw command and do not join continuations. A routed push whose verb is split by a continuation reaches the gates, and the gates do not see the verb. `dev` has the same gap for a continuation between `git` and the verb. The gates block most forms of the dashed program name class, because a backslash after the dashed prefix fails closed there. A continuation inside the `git` part of that name is not blocked by the gates. The git-native pre-push and pre-commit hooks still apply (AgDR-0114).
 - Gap that stays open: the `-C` value class can block in the git alias check before routing. The alias check reads the broad-space text, as on `dev`.
 - Residual: a comment line that ends in a blank and a backslash. Bash ends the comment at the newline, but the broad join keeps the next line on the comment line. The position-aware checks (the dashed program name and the uncertain verb) can then miss a command on the next line. `dev` has the same miss.
