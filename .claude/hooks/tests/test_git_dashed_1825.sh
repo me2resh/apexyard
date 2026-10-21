@@ -64,6 +64,72 @@ with tempfile.TemporaryDirectory(prefix='dashed-1825-') as scratch:
     check('unrelated-path', str(base / 'git-push-helper'), 0)
     check('any-leading-path-push', str(base / 'git-push'), 2)
     check('any-leading-path-commit', '"' + str(base) + '/git-commit"', 2)
+    # Round 1 classes: a name that quote removal, a glob, a brace or an
+    # expansion forms. Each class has a block case and a data-text allow twin.
+    splits = {'push': ('pu""sh', 'pu\\sh', "pu''sh", 'pu[s]h', 'pus?', 'pus*', 'pu{sh,}'),
+              'commit': ('com""mit', 'com\\mit', 'com[m]it', 'comm?t', 'com{mit,}')}
+    for verb, forms in splits.items():
+        for i, form in enumerate(forms):
+            check('split-%s-%d' % (verb, i), '{}/git-{}'.format(execpath, form), 2)
+            check('split-quoted-%s-%d' % (verb, i), '"$(git --exec-path)"/git-' + form, 2)
+        check('case-' + verb, '{}/GIT-{}'.format(execpath, verb.upper()), 2)
+        check('prefix-expansion-' + verb, 'v=' + verb + '; "$(git --exec-path)/git-$v"', 2)
+        check('braced-expansion-' + verb, 'v=' + verb + '; "${GIT_EXEC_PATH}/git-${v}"', 2)
+        check('quoted-prefix-' + verb, '"{}/git-"{}'.format(execpath, verb), 2)
+        check('exec-path-then-expansion-' + verb, '"$(git --exec-path)/$(echo git-' + verb + ')"', 2)
+        check('exec-path-then-glob-' + verb, '"$(git --exec-path)"/*' + verb[-3:], 2)
+        check('backtick-delimiter-' + verb, '`' + execpath + '/git-' + verb + '`', 2)
+        check('continuation-' + verb, execpath + '/git-' + verb[:2] + '\\\n' + verb[2:], 2)
+        check('wrapped-assign-' + verb, 'X=1 env -i ' + execpath + '/git-' + verb, 2)
+        check('wrapped-redirect-' + verb, '>/dev/null ' + execpath + '/git-' + verb, 2)
+        check('after-pipe-' + verb, 'echo hi | ' + execpath + '/git-' + verb, 2)
+    # Allow twins: plain names that only share the prefix stay allowed.
+    for name in ('git-status', 'git-log', 'git-lfs', 'git-push-helper', 'git-commit-tree'):
+        check('twin-prefix-' + name, '"' + execpath + '/' + name + '"', 0)
+    # B1: text that only names the program is data, not a command.
+    for label, command in (
+        ('man', 'man git-push'),
+        ('search', "grep -rn 'git-commit' ."),
+        ('echo', 'echo git-push'),
+        ('echo-quoted', 'echo "run git-commit later"'),
+        ('log-grep', 'git log --grep=git-push'),
+        ('heredoc', "cat <<'EOT'\nRun git-push to publish.\nEOT"),
+        ('commit-message', 'git commit -m "docs(#1825): explain the git-push program"'),
+        ('path-arg', 'cat docs/git-push.md'),
+        ('printf', "printf '%s\\n' git-commit"),
+    ):
+        check('data-' + label, command, 0)
+    # No-jq path: the dispatcher cannot parse the payload. It blocks the
+    # dashed name and the dashed prefix with a special character, and it
+    # allows plain text with no dashed name.
+    nojq = base / 'nojq'
+    nojq.mkdir()
+    for d in os.environ['PATH'].split(':'):
+        if not os.path.isdir(d):
+            continue
+        for n in os.listdir(d):
+            f = os.path.join(d, n)
+            link = nojq / n
+            if n != 'jq' and os.access(f, os.X_OK) and not os.path.lexists(link):
+                os.symlink(f, link)
+    def check_nojq(label, command, want):
+        payload = json.dumps({'tool_name': 'Bash', 'cwd': str(repo),
+                              'tool_input': {'command': command}})
+        nenv = dict(env, PATH=str(nojq))
+        result = subprocess.run(['/bin/bash', str(hooks / 'dispatch-bash.sh')],
+                                input=payload, env=nenv, cwd=repo, text=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        ok = result.returncode == want
+        counts[not ok] += 1
+        print(('PASS' if ok else 'FAIL'), 'nojq-' + label, flush=True)
+        if not ok:
+            print('expected', want, 'got', result.returncode, result.stdout, result.stderr)
+    check_nojq('plain-push', execpath + '/git-push', 2)
+    check_nojq('plain-commit', 'git-commit -m x', 2)
+    check_nojq('split', execpath + '/git-pu""sh', 2)
+    check_nojq('glob', execpath + '/git-pus*', 2)
+    check_nojq('expansion', '"$(git --exec-path)/git-$v"', 2)
+    check_nojq('allow-status', 'ls -l', 0)
     shapes = (
         ('separate-option', 'bash -o posix -c "{body}"'),
         ('quoted-shell', "'bash' -c \"{body}\""),

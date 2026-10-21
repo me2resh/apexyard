@@ -566,7 +566,8 @@ if [ "$_scan_failed" -eq 1 ]; then
 else
   # #1816 G2/G3: expansion hides the command word or verb — fail closed.
   if command -v git_uncertain_protected_shape >/dev/null 2>&1 \
-    && git_uncertain_protected_shape "$_scan_cmd"; then
+    && { git_uncertain_protected_shape "$_scan_cmd" \
+      || _git_text_has_dashed_protected "$COMMAND"; }; then
     run_push_gates
     run_commit_gates
   else
@@ -610,7 +611,8 @@ if [ -z "$COMMAND" ]; then
   if raw_payload_command_matches "$INPUT" "$(git_subcommand_payload_pattern '(-c[[:space:]]+[^[:space:]]*[Aa][Ll][Ii][Aa][Ss]\.[^[:space:]]+|--config-env)')" \
     || raw_payload_command_matches "$INPUT" "$(git_subcommand_payload_pattern push)" \
     || raw_payload_command_matches "$INPUT" "$(git_subcommand_payload_pattern commit)" \
-    || raw_payload_command_matches "$INPUT" "$(git_redir_uncertain_payload_pattern)"; then
+    || raw_payload_command_matches "$INPUT" "$(git_redir_uncertain_payload_pattern)" \
+    || raw_payload_command_matches "$INPUT" "$(git_dashed_payload_pattern)"; then
     echo "BLOCKED: dispatcher cannot parse this git command. Restore jq and retry." >&2
     exit 2
   fi

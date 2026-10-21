@@ -347,23 +347,46 @@ _git_redir_take_word() {
 }
 
 # Git's own dashed programs have no literal git verb to parse. Route them
-# to the protected gates. An expansion makes the executable target unknown.
-# Do not execute any command text to resolve that target.
+# to the protected gates (#1825). Three forms count, and only at a command
+# position (after any assignment, wrapper or redirection):
+#   F1 a command word whose last path part is the dashed push or commit name,
+#      with quotes or escapes allowed inside the name and any letter case;
+#   F2 a last path part that starts with the dashed prefix and then holds a
+#      quote, a backslash, a glob character, a brace or an expansion;
+#   F3 a path from an exec-path expansion whose last part starts with an
+#      expansion, a glob character or a brace.
+# Inside a nested shell the body is command text, so a word boundary is
+# enough there. The same name in an argument or in data text does not count.
+# A name built only from variables, with no literal dashed prefix, stays open
+# (AgDR-0253 R3). No command text is ever executed.
 _git_text_has_dashed_protected() {
-  local text="$1" exec_path escaped re
-  case "$text" in *git-push*|*git-commit*) ;; *) return 1 ;; esac
-  # Any leading path counts, so a copy outside the exec path also blocks.
-  re='(^|[^[:alnum:]_.-])(git-(push|commit))([[:space:];&|<>"'"'"')]|$)'
-  [[ "$text" =~ $re ]] && return 0
-  # A variable or substitution can supply the exec path. Fail closed because
-  # its value can differ from the hook process environment.
-  re='(\$[A-Za-z_][A-Za-z0-9_]*|\$[{][^}]*[}]|\$\([^)]*\)|`[^`]*`)["'"'"']*/git-(push|commit)([[:space:];&|<>"'"'"')]|$)'
-  [[ "$text" =~ $re ]] && return 0
-  exec_path=$(git --exec-path 2>/dev/null) || return 0
-  [ -n "$exec_path" ] || return 0
-  escaped=$(printf '%s' "$exec_path" | sed 's/[][\\.^$*+?(){}|]/\\&/g') || return 0
-  re="(^|[^[:alnum:]_./-])${_git_q}${escaped}/git-(push|commit)${_git_q}([[:space:];&|<>)]|$)"
-  [[ "$text" =~ $re ]]
+  local text="$1" lead_re strict loose
+  # A dashed prefix needs a hyphen and a letter t; cheap guard before a fork.
+  case "$text" in *-*) ;; *) return 1 ;; esac
+  # A line continuation joins words, as in the shell.
+  text="${text//\\$'\n'/}"
+  local sub='\$\([^()]*\)|`[^`]*`'
+  local plain='[^[:space:];&|<>()`]'
+  local dirp="((${sub}|${plain})*/)?"
+  local gq
+  gq="$(_git_quoted_literal 'git-')"
+  local names
+  names="$(_git_quoted_literal push)|$(_git_quoted_literal commit)"
+  local delim='([[:space:];&|<>)`]|$)'
+  # A quote counts only when more word text follows it. A closing quote does not.
+  local special='(\\|\$|`|[*?[{]|["'"'"'][[:alnum:]_"'"'"'\\$])'
+  local f1="${dirp}${gq}(${names})${delim}"
+  local f2="${dirp}${gq}[[:alnum:]_.-]*${special}"
+  local xp='(exec-path|EXEC_PATH)'
+  local f3="(${sub}|${plain})*(\\\$\\([^()]*${xp}[^()]*\\)|\`[^\`]*${xp}[^\`]*\`|${xp})(${sub}|${plain})*/[\"']*${special}"
+  local asg='[A-Za-z_][A-Za-z0-9_]*=([^[:space:];&|()`"'"'"']|\$\([^()]*\)|"([^"\\]|\\.)*"|'"'"'[^'"'"']*'"'"'|`[^`]*`)*[[:space:]]+'
+  local kw='(exec|command|builtin|time|nohup|nice|sudo|xargs|env|timeout|then|do|else|if|while|until)[[:space:]]+((-[^[:space:];&|()]+([[:space:]]+[^-[:space:];&|()][^[:space:];&|()]*)?|[0-9]+|[A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|()]*)[[:space:]]+)*'
+  local wrap="(${asg}|${kw}|${_git_redir}[[:space:]]+)*"
+  strict='(^|[;&|(){}!`]|\$\(|[[:space:]]-(exec|execdir|ok|okdir)[[:space:]])[[:space:]]*'"${wrap}"
+  loose='(^|[^[:alnum:]_.-])'
+  lead_re="$strict"
+  _git_text_has_nested_shell "$text" && lead_re="$loose"
+  printf '%s\n' "$text" | LC_ALL=C grep -qiE "${lead_re}(${f1}|${f2})|${lead_re}${f3}"
 }
 
 # #1816 G2/G3: an expansion hides the command word or the verb, and the rest
@@ -430,6 +453,14 @@ git_subcommand_payload_pattern() {
   fi
   # shellcheck disable=SC2090
   printf '%s' ${_git_cmd_word}'(([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env|attr-source))[[:space:]]+'"${_git_payload_val}"'|--?[A-Za-z][A-Za-z-]*(='"${_git_payload_val}"')?|'"${jredir}"')|'"${jredir}"'))*[[:space:]]+'${lit}'([^[:alnum:]_.-]|$)'
+}
+
+# JSON-string pattern for the no-jq path (#1825): a dashed push or commit
+# name, or a dashed prefix followed by a quote, a backslash, a glob
+# character, a brace or an expansion. The no-jq path cannot see the command
+# position or a word start, so it blocks on the name alone (fail closed).
+git_dashed_payload_pattern() {
+  printf '%s' '([Gg][Ii][Tt]-([Pp][Uu][Ss][Hh]|[Cc][Oo][Mm][Mm][Ii][Tt])([^[:alnum:]_.-]|$)|[Gg][Ii][Tt]-[[:alnum:]_.-]*(\\\\|\\"|\$|`|[*?[{]))'
 }
 
 # JSON-string pattern for the no-jq path (#1805 B2): a git command word,
@@ -961,7 +992,12 @@ git_visit_invocations() {
     git_alias_check "$@" || return 2
     # #1816 G2/G3: an expansion hides the command word or verb.
     if git_uncertain_protected_shape "$cmd"; then
-      echo "BLOCKED: a shell expansion or redirection hides the git command word or verb. Use a literal git push or git commit." >&2
+      if _git_text_has_dashed_protected "$cmd"; then
+        # #1825: name the program class, not an expansion or a redirection.
+        echo "BLOCKED: this command runs git's own dashed push or commit program, or a program name that can become one. Use the normal git command word with a literal push or commit. If this is prose, write it to a file and pass -F or --body-file." >&2
+      else
+        echo "BLOCKED: a shell expansion or redirection hides the git command word or verb. Use a literal git push or git commit." >&2
+      fi
       return 2
     fi
   fi
