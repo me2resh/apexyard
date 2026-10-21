@@ -259,6 +259,8 @@ With that config, `wip: scratch work` is accepted and `refactor: cleanup` is rej
 
 **Quoted heredoc that writes a file (#1810, AgDR-0263):** the hook removes the body of a quoted heredoc that only feeds `cat` or `tee` to a file before it reads the command. Prose in that body that names a commit, with Markdown backticks, does not start the commit checks. A real commit in the same command is still checked.
 
+**Redirections (#1842, AgDR-0271):** the hook reads the commit words past each redirection, as the shell does, with the redirection reader of `_lib-git-global.sh`. A redirection before the git word, before the verb or among the commit arguments does not hide the message. A redirection alone no longer counts as a compound command, so `git commit -m "fix: x" 2>&1` is checked and passes. A short option group such as `-am <msg>` or `-m<msg>` is read as git reads it. The hook blocks when it cannot read a redirection target, and when `-F -` reads the message from an input redirection.
+
 **Enforces:** `.claude/rules/git-conventions.md § "Commit Message Format"` — was prose-only.
 
 ## PWD-vs-command-context distinction
