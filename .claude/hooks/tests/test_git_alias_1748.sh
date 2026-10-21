@@ -551,6 +551,9 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
         # value that holds a space (push and commit). Paired allow cases.
         spacedir=t/'a b'; spacedir.mkdir()
         subprocess.run(['git','init','-q','-b','feature/GH-1748-space',str(spacedir)],env=env,check=True)
+        # With no jq, block-protected-target-writes.sh (#1806) fails closed on any
+        # git command. So the read-only git cases below block at that gate (rc 2).
+        # The alias gate still blocks the push and commit cases on its own.
         for cmd,want in [
             ('git -c alias.p=push p',2),
             ('echo alias.x',0),
@@ -558,10 +561,10 @@ with tempfile.TemporaryDirectory(prefix='alias-1748-') as tmp:
             (f"git -C '{spacedir}' commit -m 'fix: x'",2),
             (f"git --git-dir='{spacedir}/.git' push origin HEAD:main",2),
             (f"git --git-dir='{spacedir}/.git' commit -m 'fix: x'",2),
-            (f"git -C '{spacedir}' status",0),
-            (f"git --git-dir='{spacedir}/.git' status",0),
+            (f"git -C '{spacedir}' status",2),
+            (f"git --git-dir='{spacedir}/.git' status",2),
             (f'git -C "{spacedir}" push origin HEAD:main',2),
-            (f'git -C "{spacedir}" status',0),
+            (f'git -C "{spacedir}" status',2),
         ]:
             rc,out=run('dispatch-bash',cmd,extra={'PATH':str(nojq)})
             counts['No jq']['pass' if rc==want else 'fail']+=1
