@@ -494,14 +494,16 @@ esac
 # the subcommand, so `git push;`, `git push&&` and `(git push)` also route.
 #
 # The scan adds routing when its join succeeds. If awk fails, run the push
-# and commit gates unconditionally. The scan does not scrub
-# quoted data, so text that only mentions a push or commit (a heredoc body,
-# an echo, a commit message) also routes. That over-match can cause a false
-# block from a gate that refuses compound commands. A real compound commit
-# such as `git add a && git commit ...` reaches validate-commit-format.sh,
-# which refuses it, as it did before the dispatcher existed.
+# and commit gates unconditionally. #1780 / AgDR-0262: strip a confirmed
+# quoted heredoc body before push/commit routing only when the whole
+# command is one allow-listed data sink, so prose mentions do not start
+# those gates. Any other command keeps the raw command, so text that only
+# mentions a push or commit (an echo, a commit message) still routes. The
+# alias check and push/commit routing read the stripped text. The
+# merge-shape scan reads the raw command. If the strip fails, run both gate
+# groups (fail closed). Unquoted heredocs and here-strings are not stripped.
 #
-# Line continuations are joined first, because grep reads one line at a
+# Line continuations are joined, because grep reads one line at a
 # time and `git \<newline> push` would otherwise put git and push on
 # different lines. Bash 3.2's whole-string substitution is superlinear on
 # thousands of continuations, so use one awk pass. The sentinel preserves
@@ -513,6 +515,9 @@ _scan_failed=0
 # Preserve broad routing for git\<newline>push and quoted/commented pairs.
 # Bash removal could hide verbs that the existing dispatcher routes.
 _dispatch_join_failure() { return 1; }
+# A join failure here fails closed before the alias library loads. The
+# route text is joined again after the quoted-heredoc strip below
+# (#1829 B1b).
 if [ -r "$HOOK_DIR/_lib-awk-fallback.sh" ]; then
   . "$HOOK_DIR/_lib-awk-fallback.sh"
   if _scan_cmd=$(join_shell_continuations "$COMMAND" broad-space _dispatch_join_failure); then
@@ -546,10 +551,37 @@ fi
 if ! command -v command_has_git_subcommand >/dev/null 2>&1; then
   _scan_failed=1
 fi
+# #1780: strip quoted heredoc bodies before the alias check and push/commit
+# routing. The raw COMMAND stays for merge-shape matching below.
+if [ "$_scan_failed" -eq 0 ]; then
+  if [ -r "$HOOK_DIR/_lib-strip-heredoc.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$HOOK_DIR/_lib-strip-heredoc.sh"
+    if ! declare -F strip_heredoc_bodies >/dev/null 2>&1; then
+      _scan_failed=1
+    # #1829 B1b: strip the raw command, then join continuations. The
+    # stripper must see each backslash-newline, because bash removes it
+    # before it reads operators: `<\<newline><` is one `<<`. The joined
+    # text hides that operator.
+    elif ! _scan_cmd=$(strip_heredoc_bodies "$COMMAND" quoted); then
+      _scan_failed=1
+    elif ! _scan_cmd=$(join_shell_continuations "$_scan_cmd" broad-space _dispatch_join_failure); then
+      _scan_failed=1
+    fi
+  else
+    _scan_failed=1
+  fi
+fi
 if [ "$_alias_library_loaded" = 1 ] && command -v git_alias_check >/dev/null 2>&1; then
   # cmd and cwd are read by git_alias_check in this shell.
+  # Use the stripped route text, so quoted heredoc prose is not scanned
+  # (#1780). Use the raw command when the strip failed closed.
   # shellcheck disable=SC2034
-  cmd="$COMMAND"
+  if [ "$_scan_failed" -eq 0 ]; then
+    cmd="$_scan_cmd"
+  else
+    cmd="$COMMAND"
+  fi
   # shellcheck disable=SC2034
   cwd=$(jq -r '.cwd // .tool_input.cwd // empty' <<<"$INPUT" 2>/dev/null) || cwd=""
   git_alias_check push commit || exit 2
