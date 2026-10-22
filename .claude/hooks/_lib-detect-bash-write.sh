@@ -81,7 +81,7 @@ _bdw_operators() {
 # Keep the full extractor checks below. These expressions only avoid work on
 # segments that cannot contribute a target or an unextractable inline edit.
 _BDW_TEE_RE='\btee\b'
-_BDW_CURL_OUTPUT_RE='\bcurl\b[^|;&]*(--output\b|-o\b)'
+_BDW_CURL_OUTPUT_RE='\bcurl\b[^|;&]*(--output\b|-o\b|[[:space:]]-[A-Za-z]+o[[:space:]])'
 _BDW_WGET_OUTPUT_RE='\bwget\b[^|;&]*(--output-document\b|-O\b)'
 _BDW_CP_MV_RE='(^|[;&|(]|&&|\|\|)[[:space:]]*(cp|mv)([[:space:]]|$)'
 _BDW_CP_MV_REDIRECT_RE='(^|[;&|()[:space:]])(cp|mv)[[:space:]]'
@@ -596,7 +596,7 @@ _bdw_match_curl_output() {
     # Avoid matching `--output-dir` alone (rare flag — still a write surface
     # but conservative match keeps this branch tight).
     if echo "$cmd" | grep -qE '\bcurl\b[^|;&]*--output-dir\b' \
-       && ! echo "$cmd" | grep -qE '\bcurl\b[^|;&]*(--output[[:space:]]|-o[[:space:]])'; then
+       && ! echo "$cmd" | grep -qE '\bcurl\b[^|;&]*(--output[[:space:]]|-o[[:space:]]|[[:space:]]-[A-Za-z]+o[[:space:]])'; then
       return 1
     fi
     return 0
@@ -1108,9 +1108,9 @@ bash_extract_write_target() {
 
   # curl -o / --output: capture the path argument (#153).
   if echo "$cmd" | grep -qE "$_BDW_CURL_OUTPUT_RE"; then
-    target=$(echo "$cmd" | grep -oE '(--output|-o)[[:space:]]+[^[:space:]&|;]+' \
+    target=$(echo "$cmd" | grep -oE '(--output|-o|[[:space:]]-[A-Za-z]+o)[[:space:]]+[^[:space:]&|;]+' \
                   | head -n 1 \
-                  | sed -E 's/^(--output|-o)[[:space:]]+//')
+                  | sed -E 's/^(--output|-o|[[:space:]]-[A-Za-z]+o)[[:space:]]+//')
     if [ -n "$target" ]; then
       target="${target%\"}"; target="${target#\"}"
       target="${target%\'}"; target="${target#\'}"
