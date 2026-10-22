@@ -38,6 +38,10 @@ Chosen: **per-action group (PR number and event action)**, because it keeps the 
 - Two quick title edits on one head can still give a cancelled PR Title Check run. A rerun clears it.
 - Cost: a few extra Linux runner minutes. No macOS runner is added.
 
+## Timeout
+
+The `hook-tests` job in `.github/workflows/tests.yml` now has `timeout-minutes: 45` (was 30). Recent runs took 21 to 29 minutes. The run for PR #1850 (run 39732592843) reached 30 minutes and was cancelled. No runner or matrix entry changes.
+
 ## Artifacts
 
 - Ticket: #1856
