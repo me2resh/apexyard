@@ -29,6 +29,8 @@ The syntax view also blanks a quoted command word. The tracker gate must still s
 | Scrub every command | Removes the false blocks. | Hides commands run by shells and other programs. |
 | Scrub only allowlisted commands and keep quoted tracker words raw | Removes the reported false blocks. Keeps executable tracker words visible. | Unsupported syntax still uses raw text. |
 
+> **Note 2026-10-21 ([AgDR-0267](AgDR-0267-shell-text-gates-are-guardrails.md)).** "Security boundary" in the first row means a guardrail. The tracker gate reads shell text, so it catches honest mistakes and is not a security boundary.
+
 ## Decision
 
 Chosen: **Scrub only allowlisted commands and keep quoted tracker words raw**, because the shared scanner already enforces this boundary.

@@ -41,6 +41,8 @@ restores that earlier behavior. It does not widen the gate.
 | Skip only the per-worktree/per-project tiers, and still check `current-ticket` | Matches the header comment's stated intent. Adds no new exemption. An unextractable target still needs an active session ticket. | The target cannot bind to a project marker. A session with only a per-project marker still blocks an unextractable target. |
 | Block unextractable targets with no fallback at all (status quo) | No behavior change | Contradicts the hook's documented intent. Blocks a session that already declared a ticket. Forces the Edit or Write tool for a valid Bash write. |
 
+> **Note 2026-10-21 ([AgDR-0267](AgDR-0267-shell-text-gates-are-guardrails.md)).** "Security gate" in the first row means a guardrail. The ticket gate reads shell text, so it catches honest mistakes and is not a security boundary.
+
 ## Decision
 
 Chosen: **skip only the per-worktree and per-project tiers, and still

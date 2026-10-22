@@ -67,6 +67,12 @@ trust-chain never go Lean) and rail 2 (ambiguity rounds up) stay unchanged,
 word for word. `block-unreviewed-merge.sh` still requires a fresh Rex marker
 at the PR's real HEAD on every merge, including after a delta re-review.
 
+> **Note 2026-10-21 ([AgDR-0267](AgDR-0267-shell-text-gates-are-guardrails.md)).**
+> For a PR that changes `.claude/hooks/**`, AgDR-0267 narrows kind 2. A
+> crafted command that the shell-text scan does not catch is advisory, even
+> when a prompt-injected actor could use it. A gate that fails open on its own
+> error, and a hook that runs code from untrusted input, still block.
+
 ## Consequences
 
 - A self-bypass edge case, a pre-existing gap, and a writing-profile nit that
