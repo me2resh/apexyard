@@ -1139,7 +1139,7 @@ Do not file these yet. Each is one ticket. § Decision "Ticket order" sets the s
 
 ### Amendment (#1858)
 
-Four small changes to the tamper gates. Each has a paired block case and allow case in the suites.
+Four small changes to the tamper gates. Three of them have a paired block case and allow case in the suites. The case-blind live-file change has one case only. It runs only on a case-insensitive file system, so Linux CI skips it.
 
 | Change | Effect |
 |--------|--------|
