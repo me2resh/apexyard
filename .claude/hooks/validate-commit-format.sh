@@ -21,6 +21,80 @@
 # superset — if a project wants to use scopes in commits, that's fine, but
 # the scope is not required.
 
+# #1810 / AgDR-0263: print $1 without the body of each quoted heredoc that
+# only feeds a file write, and return 0. The shell does not expand such a
+# body, and cat or tee only copies it to the file. Thus it is data, not a
+# command. A heredoc qualifies only when all of these are true:
+#   - Its start line ends in `cat > F <<'X'`, `cat <<'X' > F` (also `>>`)
+#     or `tee [-a] F <<'X'`. The delimiter has single or double quotes.
+#   - That command starts the line, or follows `&&`, `||` or `;`.
+#   - The line before the start line does not end in a backslash.
+#   - A later line is the delimiter (`<<-` removes leading tabs first).
+# Return 1 with no output when no heredoc qualifies, when another line
+# outside a stripped body holds `<<` and is not a qualifying start line, or
+# when a line after a stripped body names the file of that heredoc (a later
+# command can run the file).
+_fmt_strip_file_heredocs() {
+  local cmd="$1" line term dash target base n i j k tab check
+  local word='[A-Za-z0-9._/~+%@,=:-]+'
+  local delim="('[A-Za-z_][A-Za-z0-9_]*'|\"[A-Za-z_][A-Za-z0-9_]*\")"
+  local lead='^(.*(&&|\|\||;))?[[:space:]]*'
+  local re_before="${lead}(cat[[:space:]]*>>?[[:space:]]*|tee[[:space:]]+(-a[[:space:]]+)?)(${word})[[:space:]]+<<(-?)[[:space:]]*${delim}[[:space:]]*\$"
+  local re_after="${lead}cat[[:space:]]+<<(-?)[[:space:]]*${delim}[[:space:]]*>>?[[:space:]]*(${word})[[:space:]]*\$"
+  local -a lines=() keep=() names=() ends=()
+  tab="$(printf '\t')"
+  while IFS= read -r line || [ -n "$line" ]; do
+    lines+=("$line")
+    keep+=(1)
+  done <<< "$cmd"
+  n=${#lines[@]}
+  i=0
+  while [ "$i" -lt "$n" ]; do
+    line="${lines[i]}"
+    case "$line" in
+      *'<<'*) ;;
+      *) i=$((i + 1)); continue ;;
+    esac
+    if [[ "$line" =~ $re_before ]]; then
+      target="${BASH_REMATCH[5]}"; dash="${BASH_REMATCH[6]}"; term="${BASH_REMATCH[7]}"
+    elif [[ "$line" =~ $re_after ]]; then
+      dash="${BASH_REMATCH[3]}"; term="${BASH_REMATCH[4]}"; target="${BASH_REMATCH[5]}"
+    else
+      return 1
+    fi
+    case "${BASH_REMATCH[1]}" in *'<<'*) return 1 ;; esac
+    if [ "$i" -gt 0 ]; then
+      case "${lines[i - 1]}" in *\\) return 1 ;; esac
+    fi
+    term="${term:1:${#term}-2}"
+    j=-1
+    for ((k = i + 1; k < n; k++)); do
+      check="${lines[k]}"
+      if [ "$dash" = - ]; then
+        while [ "${check:0:1}" = "$tab" ]; do check="${check:1}"; done
+      fi
+      if [ "$check" = "$term" ]; then j=$k; break; fi
+    done
+    [ "$j" -ge 0 ] || return 1
+    for ((k = i + 1; k <= j; k++)); do keep[k]=0; done
+    names+=("${target##*/}")
+    ends+=("$j")
+    i=$((j + 1))
+  done
+  for ((k = 0; k < ${#names[@]}; k++)); do
+    base="${names[k]}"
+    for ((i = ends[k] + 1; i < n; i++)); do
+      [ "${keep[i]}" -eq 1 ] || continue
+      case "${lines[i]}" in *"$base"*) return 1 ;; esac
+    done
+  done
+  [ "${#names[@]}" -gt 0 ] || return 1
+  for ((i = 0; i < n; i++)); do
+    [ "${keep[i]}" -eq 1 ] && printf '%s\n' "${lines[i]}"
+  done
+  return 0
+}
+
 # Run one target check. The visitor isolates each call in a subshell.
 _git_gate_body() {
 INPUT="$_GIT_GATE_INPUT"
@@ -446,6 +520,17 @@ exit 0
 }
 
 _GIT_GATE_INPUT=$(cat)
+# #1810 / AgDR-0263: a quoted heredoc body that only feeds a file write is
+# data. Remove it from the command before the visitor and the checks read
+# it, so prose that names a commit does not start the commit checks. If jq
+# fails, keep the raw input.
+_fmt_cmd=$(printf '%s' "$_GIT_GATE_INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null) || _fmt_cmd=""
+if [ -n "$_fmt_cmd" ] && _fmt_scan=$(_fmt_strip_file_heredocs "$_fmt_cmd"); then
+  if _fmt_input=$(printf '%s' "$_GIT_GATE_INPUT" | jq -c --arg c "$_fmt_scan" '.tool_input.command = $c' 2>/dev/null) \
+    && [ -n "$_fmt_input" ]; then
+    _GIT_GATE_INPUT="$_fmt_input"
+  fi
+fi
 _GIT_GATE_LIB="$(cd "$(dirname "$0")" && pwd)/_lib-git-global.sh"
 if [ -r "$_GIT_GATE_LIB" ]; then
   # shellcheck disable=SC1090

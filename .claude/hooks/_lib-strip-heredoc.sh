@@ -67,6 +67,7 @@
 # (see _shq_subst_sink). The gate visitor in _lib-git-global.sh also reads
 # the `quoted` mode text for its structure parse only (alias check, cd
 # chain, -C). The gate bodies still read the raw command.
+# A second exception (AgDR-0263, #1810) is local to validate-commit-format.sh.
 #
 # Strips heredoc BODY text (and the heredoc's own start/terminator lines)
 # from a command string, but ONLY for heredocs that are CONFIRMED — both:

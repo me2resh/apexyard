@@ -95,6 +95,25 @@ Every other finding is advisory. Post it as a recommendation and do not change a
 
 CRITICAL and HIGH findings under § "Severity Levels" below map to kinds 1–3 of this bar. A MEDIUM or LOW finding is advisory under this bar unless it independently meets one of the four kinds.
 
+## Review bar for gate PRs (me2resh/apexyard#1845, AgDR-0267)
+
+The shell-text gates are guardrails against honest mistakes. They are not a security boundary against a hostile or prompt-injected actor. GitHub rulesets, read-only hook files, Claude Code permission rules and the per-PR human merge approval hold that case when the operator sets them up. A ruleset does not hold a bypass-actor credential. See the caveat and the accepted residual in [AgDR-0267](../../docs/agdr/AgDR-0267-shell-text-gates-are-guardrails.md) § "Real controls for the hostile case", and AgDR-0115.
+
+The bar narrows one case only. On a PR that changes `.claude/hooks/**`, a crafted command that the shell-text scan does not catch is advisory. This case includes an exotic shape that `dev` blocks and the head does not.
+
+Every other blocker stays:
+
+- kinds 1, 3 and 4 of the Blocking-Severity Bar (AgDR-0172)
+- a gate that fails open on its own error, timeout or bad input
+- a hook change that runs code from command text, a cloned repository or other untrusted input
+- the checks that `.claude/agents/code-reviewer.md` § "Blocking-Severity Bar" keeps blocking. These are the Acceptance Criteria check, the AgDR check, the Glossary requirement, a handbook marked `ENFORCEMENT: blocking`, and rail 1 of `.claude/rules/right-size-ceremony.md`.
+
+A regression on an ordinary command is kind 1. An ordinary command is one that an agent or a human really types. A false block counts. A slowdown above the 2 s target in AgDR-0267 § "Cost budget" counts when `dev` is below it.
+
+A deleted or weakened paired test for a shape that `dev` already blocks is a correctness finding (kind 3).
+
+An exotic bypass shape is advisory. Name its class only, never the exact command. List the class for epic me2resh/apexyard#1846. Do not hunt for new shape classes. Check the delta, the earlier findings, and ordinary commands against `dev`.
+
 ## Delta Re-Reviews (me2resh/apexyard#1418, AgDR-0172)
 
 Run a delta re-review after new commits land on a PR you already reviewed.
