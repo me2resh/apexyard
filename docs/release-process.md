@@ -173,6 +173,15 @@ git push upstream --tags
 # /release-sync $VERSION
 ```
 
+## After the release
+
+Do these steps after `/release-sync` merges. They are advisory. No hook enforces them.
+
+1. Update the README contributor credits for new PR authors and new issue authors since the previous release.
+2. Comment on each closed issue that an outside reporter opened. Name the version, link the release, and thank the reporter.
+3. Add a "Thanks" section to the GitHub release notes. Name the same reporters.
+4. Update the website through the site's own sync process (`me2resh/apexyard-site`, plan `plan-release-sync`).
+
 ## Release PR caveats
 
 The release PR's body legitimately contains many `Closes #N` references — every ticket that landed on `dev` since the last release. The single-Closes-per-PR check from #114 will block the open. Add the skip marker to the body:

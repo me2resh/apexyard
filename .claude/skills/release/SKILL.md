@@ -418,6 +418,19 @@ This files a `sync/main-to-dev-after-vA.B.C → dev` PR that merges `upstream/ma
 
 **Do not skip this step.** The v2.0.0 release suffered 99 merge conflicts because accumulated sync-back skips were not addressed for multiple release cycles (#403).
 
+### 10. After the release (advisory checklist)
+
+Do these steps after `/release-sync` merges. No hook enforces them. Skip none.
+
+An outside reporter is a person who is not a maintainer account (`me2resh`, `atlas-apex`) and who opened an issue.
+
+1. Update the README contributor credits. Add each new PR author and each new issue author since the previous release.
+2. Comment on each closed issue in the release that an outside reporter opened. Name the version, link the release, and thank the reporter.
+3. Add a "Thanks" section to the GitHub release notes. Name the same reporters.
+4. Update the website to the new version. Use the site's own sync process (`me2resh/apexyard-site`, plan `plan-release-sync`).
+
+Step 4 matters. The v5.10.0 release left the site on v5.6.3.
+
 ## Rules
 
 1. **Framework-only.** Refuse to run on a managed project. The dev/main split is apexyard-the-framework's pattern, not the portfolio's.
