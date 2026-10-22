@@ -33,12 +33,12 @@ Thus a stripper change alone does not help. AgDR-0262 already records this as a 
 | Option | Pros | Cons |
 |--------|------|------|
 | A. Add the substitution shape to the `quoted` mode sinks. Let `git_visit_invocations` and `git_prepare_invocation` parse the structure (alias check, cd chain, `-C`) on the `quoted` mode text. | Small change. Fixes the measured cause in each gate. Uses the allow-list and the single-sink rule that AgDR-0262 already reviewed. | The gate structure parse no longer reads the raw command for a confirmed sink. |
-| B. Make `_git_chain_segments` and `git_alias_check` linear. | Faster for every shape. | Large change in a file that other open work changes. The alias check still reads every git word in the body, so 7 commit gates stay above 3 s. |
+| B. Make `_git_chain_segments` and `git_alias_check` linear. | Faster for every shape. | Large change in a file that other open work changes. The alias check still reads every git word in the body (about 0.5 s for each gate on 16 KB), so the 7 commit gates are estimated to stay above 3 s. |
 | C. Only add the shape to the sinks. | Smallest change. | Measured: the commit gates alone still take about 54 s. The acceptance criterion is not met. |
 
 ## Decision
 
-Chosen: **A**, because it is the smallest change that meets the 3 s criterion and it keeps every AgDR-0262 rule.
+Chosen: **A**, because it is the smallest change that brings the shape to 3 s or less above the always-on-hook floor, and it keeps every AgDR-0262 rule. The CEO accepted this reading of the 3 s criterion in the AC note on #1833. With every hook active, the 3 s criterion as written is not met, because an ordinary 60-byte commit already takes about 3 s.
 
 1. A new sink in `_lib-strip-heredoc.sh` (`_shq_subst_sink`): `git commit ... -m "$(cat <<'X'` or `--message`, then the body, the terminator line, and exactly one `)"` line. All of these must be true:
    - The text after `"$(` splits into exactly three words: `cat`, the heredoc operator, and one quoted delimiter word whose value is the terminator (AgDR-0262 Decision 3).
@@ -50,7 +50,8 @@ Chosen: **A**, because it is the smallest change that meets the 3 s criterion an
 
 ## Consequences
 
-- The 16 KB substitution message finishes in about 1.1 to 1.6 s through the dispatcher with real push and commit gates, under UTF-8 and `LC_ALL=C`, with the macOS awk and with mawk 1.3.4. It routes only the commit gates.
+- With the always-on hooks stubbed and real push and commit gates, the 16 KB substitution message finishes in about 1.1 to 1.6 s through the dispatcher. This is true under UTF-8 and `LC_ALL=C`, with the macOS awk and with mawk 1.3.4. The message routes only the commit gates.
+- With every hook active (system awk), the 16 KB message takes about 3.4 to 4.1 s. The floor for a 60-byte message on the same tree is about 2.8 to 3.2 s. The always-on hooks set that floor, not the message body.
 - A `git commit -F -` sink with a large body is fast in the gates too. This removes the AgDR-0262 known limit on gate cost for that shape. The commit-format hook still decides on that shape by itself.
 - A substitution that runs anything other than a plain `cat` keeps the raw command: a shell, `cat ... | sh`, an unquoted delimiter, an unquoted substitution, `eval`, a command before `git commit`, and text after `)"`. The test pins 15 such twins.
 - Residual (advisory): a shell that reads a `)` in the body as the end of the substitution reads the body differently. Bash 3.2 can do this. This is a two-shell reading. The CEO decision of 2026-10-21 (#1845) lists that class as advisory, because the shell-text gates are guardrails against honest mistakes.
