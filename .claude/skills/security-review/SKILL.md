@@ -188,6 +188,8 @@ Posts a GitHub review with:
 
 Invokes: Security Reviewer Agent (Hakim)
 
+**Review body path (#1840, AgDR-0266).** Hakim writes the review body with the Write tool to the sanctioned body path, then posts that file with `tracker_review_submit <owner/repo> <pr> comment <body_file>`. The path is `<ops-root>/.claude/session/reviews/bodies/<owner>__<repo>__<pr>-security.md`. `review_body_path <owner/repo> <pr> security <ops-root>` in `_lib-review-markers.sh` prints it. Git ignores the folder. `limit-reviewer-writes.sh` lets a review agent write only in this folder. It blocks a reviewer Write to a repository file, a hook, a settings file or a review marker. Hakim does not write the body with a Bash heredoc, because the Bash gates read quoted command text in the body as commands.
+
 ## Persist the run + render trend
 
 After the Security Reviewer agent posts the review — through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host — #763), not a hardcoded `gh pr review` — persist a structured artefact via the shared audit-history lib so the security-review trend across PRs becomes legible. See `docs/agdr/AgDR-0019-audit-artefact-persistence.md` for the schema rationale.
