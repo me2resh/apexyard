@@ -1,0 +1,24 @@
+#!/bin/bash
+# v5.9.0 -> v5.10.0 migration: PLACEHOLDER (no-op)
+#
+# v5.10.0 ships no per-adopter migration. No gitignored region moved, no
+# default config key was added, no marker file was introduced, and no
+# directory was renamed.
+#
+# This script keeps the migration chain (`.claude/migrations/`, walked by
+# `.claude/hooks/_lib-migration-chain.sh` in `/update` step 8b) unbroken at
+# this hop. See `.claude/migrations/README.md`: a release with no
+# per-adopter migration still ships a no-op script.
+#
+# Exit codes:
+#   0 - no-op (placeholder)
+#   1 - conflict (reserved)
+#   2 - hard error (reserved)
+
+set -u
+
+QUIET="${APEXYARD_MIGRATION_QUIET:-0}"
+info() { [ "$QUIET" = "1" ] || echo "$@"; }
+
+info "migration v5.9.0->v5.10.0: placeholder (no adopter-facing migration for this release)."
+exit 0

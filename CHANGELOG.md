@@ -1,3 +1,117 @@
+## [v5.10.0] — 2026-10-22
+
+Minor release — 4 features, 34 fixes, 27 improvements.
+
+### Added (feat)
+
+- (#1797) gate review depth with a trusted tier script and add the Rex delta corpus — 7ba8c564
+- (#1794) warn when the ticket marker belongs to another session or branch — b4080e3b
+- (#1770) key the bootstrap, issue-skill and role-fired markers on the session id — 64e6e103
+- (#1767) add the /preflight skill and apexyard doctor — 1ac23c1f
+
+### Fixed (fix)
+
+- (#1861) detect the curl combined short-option output form as a file write — 8d17671b
+- (#1862) narrow the pin-tree token and close three tamper-gate gaps — 6c5dfff4
+- (#1850) route a continued verb and a variable verb after a redirection — 8b491660
+- (#1847) let review agents write their review body through a scoped Write tool — ab6034db
+- (#1851) accept a heredoc substitution commit message as a data sink — 8df77d5b
+- (#1852) read the commit message past a redirection — 615ac764
+- (#1849) treat a quoted heredoc that writes a file as data in commit-format — 569578bd
+- (#1844) strip a quoted heredoc body before push and commit routing — 2cbc0eaa
+- (#1841) read the push destination past a redirection — fa4d7464
+- (#1838) route git's dashed push and commit programs to the gates — 0f08be87
+- (#1835) route a git verb after a redirection to the push and commit gates — defd0597
+- (#1827) close the merge-gate scan classes found by the shape search — 0344451f
+- (#1804) block git aliases that run push or commit — 5eb65c0f
+- (#1807) block split merge phrases and the >& and >! redirect targets — 7f82bd5e
+- (#1811) let a valid worktree start its ticket and hash the warn claim — 61de7f75
+- (#1802) accept an ancestor merge-base when the plan records are unchanged — a9ecd9af
+- (#1795) share PR metadata across the merge gates in one dispatch — d970c194
+- (#1788) tell a forge auth or network error apart from a missing branch — a791285d
+- (#1793) stop an inherited Claude Code session id overriding the adapter id — 9f3ff671
+- (#1765) fix three merge-gate matcher bugs (#1757, #1758, #1760) — 4ef5feea
+- (#1778) handle a missing forge branch and cover printed commands — 1ba0c1fd
+- (#1769) restore the framework model when a routing override is removed — d63bb611
+- (#1771) let the operator make the portfolio first push — dd2065bf
+- (#1764) lay out laned BPMN on a grid and make lint fail on errors — afdcb067
+- (#1756) check or block five git option forms in the gates — 23d8387f
+- (#1755) skip apexyard body rules for external contributions — 27df313f
+- (#1754) make the shipped ORBIT example pass records-lint — 11114117
+- (#1753) resolve Git Bash mount paths with cygpath — 8cdb26fc
+- (#1750) resolve the push branch in the cd target repo — 2529becc
+- (#1752) report unsupported manifests as not scanned — 4a7283ee
+- (#1751) read commit checks when gh pr checks returns no result — 5713599c
+- (#1747) make push and commit gates read git global options — 7381e0f9
+- (#1746) make fork CI pass on upstream sync PRs — 46638333
+- (#1740) accept Windows path forms in POSIX gates — 9ba947d2
+
+### Changed (refactor / chore / docs)
+
+- (#1860) stop duplicate PR check runs cancelling each other — c206a7a8
+- (#1848) record that shell-text gates are guardrails — 98417717
+- (#1839) harden settings, hooks and pin against in-session tampering — 1200b6df
+- (#1843) pre-filter segments before write-target extraction — 7c6964a3
+- (#1826) test the Rex recount check with read-only source access — 088f48c4
+- (#1809) batch the carry-over walk and limit each gh call — cd52f975
+- (#1823) add shape-probe and recount checks to the Rex prompt — 7fbc265c
+- (#1820) make the local mawk command use mawk as awk — 4300e902
+- (#1821) fix the advisory review items from PR 1797 and PR 1799 — 98d9a39d
+- (#1817) remove macOS runners and cap CI run volume — b3236f8f
+- (#1799) add a runbook for more than one session on one project — 41cc7c28
+- (#1791) make a fresh spawn the default and draft the harness requests — 663161f7
+- (#1800) clear three small review findings — 9e4f75af
+- (#1787) run the harness adapter unit tests on pull requests — 1a634f19
+- (#1784) bump @opencode-ai/plugin — 144d552b
+- (#1786) bump the codeql-action group with 3 updates — 226c8f71
+- (#1785) bump @earendil-works/pi-coding-agent — af65762c
+- (#1779) record the per-agent effort spike as discarded — cd71acd4
+- (#1766) cycle 2026-10-19 reconciliation and o7 slice — e48bbc49
+- (#1768) revision 5, a working DevOps base for every project — f501ad2b
+- (#1734) bump the pi-minor-and-patch group — cee2d239
+- (#1733) bump the opencode-minor-and-patch group — f5c447f9
+- (#1732) bump ossf/scorecard-action from 2.4.4 to 2.5.0 — 91e99189
+- (#1702) bump actions/upload-artifact from 7.0.1 to 7.0.2 — 1c57364b
+- (#1701) bump actions/setup-node from 7.0.0 to 7.1.0 — 21e24a41
+- (#1700) bump the codeql-action group across 1 directory with 3 updates — 0713cc18
+- (#1728) renumber the Windows path AgDR to AgDR-0246 — 3630f7cf
+
+### Closes
+
+- Closes #1533
+- Closes #1534
+- Closes #1723
+- Closes #1730
+- Closes #1736
+- Closes #1739
+- Closes #1741
+- Closes #1742
+- Closes #1743
+- Closes #1744
+- Closes #1748
+- Closes #1759
+- Closes #1763
+- Closes #1772
+- Closes #1776
+- Closes #1780
+- Closes #1781
+- Closes #1782
+- Closes #1783
+- Closes #1792
+- Closes #1796
+- Closes #1798
+- Closes #1801
+- Closes #1803
+- Closes #1806
+- Closes #1808
+- Closes #1813
+- Closes #1814
+- Closes #1819
+- Closes #1824
+- Closes #1825
+- Closes #1831
+- Closes #1832
+
 ## [v5.9.0] — 2026-10-15
 
 Minor release — 25 features, 6 fixes, 41 improvements.
