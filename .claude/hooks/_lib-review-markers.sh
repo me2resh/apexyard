@@ -30,6 +30,11 @@
 #       Returns the absolute path to the reviews directory:
 #       <marker_home>/.claude/session/reviews
 #
+#   review_body_dir <marker_home>
+#   review_body_path <owner/repo> <pr> <role> [marker_home]
+#       The sanctioned review-body folder and one body file in it. A review
+#       agent writes its body there with the Write tool (#1840, AgDR-0266).
+#
 #   review_validate_rex_body <body_file>
 #       Exit 0 when the Rex review body has the required Output Format
 #       headings. Exit 1 otherwise. Does not write a marker.
@@ -100,6 +105,31 @@ review_marker_path() {
   reviews_dir=$(review_markers_dir "$marker_home")
 
   printf '%s/%s__%s-%s.approved' "$reviews_dir" "$safe_repo" "$pr" "$role"
+}
+
+# review_body_dir <marker_home>
+# The one folder where a review agent may write with the Write tool
+# (me2resh/apexyard#1840, AgDR-0266): <marker_home>/.claude/session/reviews/bodies
+review_body_dir() {
+  printf '%s/bodies' "$(review_markers_dir "${1:-.}")"
+}
+
+# review_body_path <owner/repo> <pr> <role> [marker_home]
+# The review-body file for one review, in review_body_dir. The name uses the
+# marker qualifier with a .md suffix, for example
+# <home>/.claude/session/reviews/bodies/me2resh__apexyard__42-rex.md.
+# limit-reviewer-writes.sh lets a review agent write only in that folder.
+review_body_path() {
+  local repo="${1:-}" pr="${2:-}" role="${3:-}"
+  local marker_home="${4:-${MARKER_HOME:-.}}" safe_repo safe_pr safe_role
+  if [ -z "$repo" ] || [ -z "$pr" ] || [ -z "$role" ]; then
+    echo "_lib-review-markers.sh: review_body_path requires <owner/repo> <pr> <role>" >&2
+    return 1
+  fi
+  safe_repo=$(printf '%s' "$repo" | sed 's#/#__#' | tr -c 'A-Za-z0-9._-' '_')
+  safe_pr=$(printf '%s' "$pr" | tr -c '0-9' '_')
+  safe_role=$(printf '%s' "$role" | tr -c 'A-Za-z0-9._-' '_')
+  printf '%s/%s__%s-%s.md' "$(review_body_dir "$marker_home")" "$safe_repo" "$safe_pr" "$safe_role"
 }
 
 # ---------------------------------------------------------------------------

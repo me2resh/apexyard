@@ -63,6 +63,10 @@
 # heredoc operator and one quoted delimiter word (see _shq_single_sink).
 # Anything else, and any parse doubt, returns the raw command, so the gates
 # see the body. A body that a shell runs is a command, not data.
+# #1833 (AgDR-0270): `git commit -m "$(cat <<'X'` ... `)"` is a sink too
+# (see _shq_subst_sink). The gate visitor in _lib-git-global.sh also reads
+# the `quoted` mode text for its structure parse only (alias check, cd
+# chain, -C). The gate bodies still read the raw command.
 # A second exception (AgDR-0263, #1810) is local to validate-commit-format.sh.
 #
 # Strips heredoc BODY text (and the heredoc's own start/terminator lines)
@@ -415,13 +419,52 @@ _shq_single_sink() {
   _shq_target "${_SHQ_W[k]}"
 }
 
+# #1833 (AgDR-0270): 0 when start line $1 is `git commit ... -m "$(cat <<'X'`
+# (or `--message`) with nothing after the delimiter word. The caller checked
+# that the only other visible line is `)"`. The substitution runs only a
+# plain `cat` of the quoted heredoc, so its output is data: the message.
+# The text after `"$(` must split into exactly `cat`, the heredoc operator
+# and one quoted delimiter word whose value is terminator $2 ($3 is 1 for
+# `<<-`). The words before `"$(` must pass the git commit rules of
+# _shq_single_sink, and the last of them must be `-m` or `--message`.
+_shq_subst_sink() {
+  local line="$1" term="$2" op='<<' head tail n idx
+  [ "$3" != 1 ] || op='<<-'
+  case "$line" in *'"$('*) ;; *) return 1 ;; esac
+  head="${line%%'"$('*}"
+  tail="${line#*'"$('}"
+  # A `#` at the start of a word makes the rest of the line a comment.
+  case "$head" in '#'*|*[[:space:]]'#'*) return 1 ;; esac
+  _shq_words "$tail" || return 1
+  [ "${#_SHQ_W[@]}" -eq 3 ] || return 1
+  [ "${_SHQ_W[0]}:${_SHQ_Q[0]}" = cat:0 ] || return 1
+  [ "${_SHQ_W[1]}:${_SHQ_Q[1]}" = "$op:2" ] || return 1
+  [ "${_SHQ_Q[2]}" = 1 ] && [ "${_SHQ_ONE[2]}" = 1 ] || return 1
+  [ "${_SHQ_W[2]}" = "$term" ] || return 1
+  _shq_words "$head" || return 1
+  n=${#_SHQ_W[@]}
+  [ "$n" -ge 3 ] || return 1
+  for ((idx = 0; idx < n; idx++)); do
+    case "${_SHQ_W[idx]}" in *'<'*) return 1 ;; esac
+  done
+  [ "${_SHQ_W[0]}:${_SHQ_Q[0]}" = git:0 ] || return 1
+  [ "${_SHQ_W[1]}:${_SHQ_Q[1]}" = commit:0 ] || return 1
+  case "${_SHQ_W[n - 1]}:${_SHQ_Q[n - 1]}" in -m:0|--message:0) ;; *) return 1 ;; esac
+  # The substitution is the message value. A `-` word stands in for it, so
+  # the stdin rule of _shq_cli_ok holds for this value.
+  _SHQ_W+=(-); _SHQ_Q+=(0)
+  _shq_cli_ok 2 'ceCt' '--edit --editor --template' '-m --message'
+}
+
 # 0 when the command is one stripped quoted heredoc that feeds a single
 # allow-listed data sink, and every other visible line is blank. Reads the
 # arrays of strip_heredoc_bodies through dynamic scope. Fails closed
 # (returns 1) on any doubt.
+# #1833: one `)"` line after the terminator closes `"$(cat <<'X'`. Then
+# the start line must pass _shq_subst_sink.
 _shq_sinks_ok() {
   local LC_ALL=C
-  local _shq_tab start=-1 idx
+  local _shq_tab start=-1 close=-1 idx
   _shq_tab="$(printf '\t')"
   for ((idx = 0; idx < n; idx++)); do
     [ "${skip[idx]}" -eq 0 ] || continue
@@ -430,11 +473,19 @@ _shq_sinks_ok() {
       start=$idx
       continue
     fi
+    if [ "${lines[idx]}" = ')"' ] && [ "$start" -ge 0 ] && [ "$close" -lt 0 ]; then
+      close=$idx
+      continue
+    fi
     # Any other visible text (a second command, a continuation, a second
     # heredoc) keeps the raw command.
     case "${lines[idx]}" in *[![:space:]]*) return 1 ;; esac
   done
   [ "$start" -ge 0 ] || return 1
+  if [ "$close" -ge 0 ]; then
+    _shq_subst_sink "${lines[start]}" "${hterm[start]}" "${htabs[start]}"
+    return
+  fi
   # #1829 B4: split the whole start line, the marker included.
   _shq_single_sink "${lines[start]}" "${hterm[start]}" "${htabs[start]}"
 }
@@ -477,8 +528,10 @@ strip_heredoc_bodies() {
     # #1844 S1: in quoted mode, a second visible line that holds text makes
     # the result the raw command (_shq_sinks_ok permits one start line and
     # blank lines only). Return it at that line, so the scan stays linear.
+    # #1833: a `)"` line can close `"$(cat <<'X'`. _shq_sinks_ok checks it.
     if [ "$mode" = quoted ]; then
       case "${lines[i]}" in
+        ')"') ;;
         *[![:space:]]*)
           if [ "$q_seen" -eq 1 ]; then
             printf '%s' "$cmd"
