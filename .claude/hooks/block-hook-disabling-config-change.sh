@@ -46,10 +46,16 @@ if [ -z "$path" ]; then
 fi
 path=$(pt_physical "$path") || block_change 'cannot resolve settings file.'
 is_live=0
-for root in ${PT_ROOTS[@]+"${PT_ROOTS[@]}"}; do
-  case "$path" in "$root/.claude/settings.json"|"$root/.claude/settings.local.json") is_live=1 ;; esac
-done
-case "$path" in "$PT_USER/settings.json"|"$PT_HOME_CONFIG/settings.json") is_live=1 ;; esac
+# The live-file test ignores letter case, like every protected-form test.
+live_form() {
+  local p="$1" r
+  for r in ${PT_ROOTS[@]+"${PT_ROOTS[@]}"}; do
+    case "$p" in "$r/.claude/settings.json"|"$r/.claude/settings.local.json") return 0 ;; esac
+  done
+  case "$p" in "$PT_USER/settings.json"|"$PT_HOME_CONFIG/settings.json") return 0 ;; esac
+  return 1
+}
+pt_nocase live_form "$path" && is_live=1
 if [ "$is_live" = 0 ]; then
   # Defence in depth. Capture P12c showed no ConfigChange for a worktree
   # settings file. If a future harness reports one, it can load the change,

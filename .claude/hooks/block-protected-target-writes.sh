@@ -32,7 +32,7 @@ pt_token() { pt_nocase pt_token_nocase "$@"; }
 pt_token_nocase() {
   local text="$1" token
   text=$(printf '%s' "$text" | sed -e 's://*:/:g' -e 's:/\./:/:g')
-  for token in '.claude/settings.local.json' '.claude/settings.json' '.claude/hooks' "$PT_PIN_DIR" '.claude/apexyard' APEXYARD_OPS_PIN_DIR ops-root- gate-session- CLAUDE_CONFIG_DIR CLAUDE_ENV_FILE session-env/ shell-snapshots/; do
+  for token in '.claude/settings.local.json' '.claude/settings.json' '.claude/hooks' "$PT_PIN_DIR/resolve-cache-" "$PT_PIN_DIR/projctx" '.claude/apexyard/resolve-cache-' '.claude/apexyard/projctx' APEXYARD_OPS_PIN_DIR ops-root- gate-session- CLAUDE_CONFIG_DIR CLAUDE_ENV_FILE session-env/ shell-snapshots/; do
     case "$text" in *"$token"*) return 0 ;; esac
   done
   if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then case "$text" in *"$CLAUDE_CONFIG_DIR"*) return 0 ;; esac; fi
@@ -51,7 +51,10 @@ pt_dir_is_sensitive_nocase() {
   # (AgDR-0261 D13), so they are not protected state. A live path that a
   # command names from a worktree is still judged as an operand.
   for root in ${PT_ROOTS[@]+"${PT_ROOTS[@]}"}; do case "$1" in "$root/.claude/worktrees"|"$root/.claude/worktrees/"*) ;; "$root/.claude"|"$root/.claude/"*) return 0 ;; esac; done
-  for root in "$PT_PIN_DIR" "$PT_USER" "$PT_HOME_CONFIG"; do case "$1" in "$root"|"$root/"*) return 0 ;; esac; done
+  # The pin tree is state only for the pin and gate state files (AgDR-0261,
+  # #1858). Other files under it, such as private briefs, are not state.
+  case "$1" in "$PT_PIN_DIR"|"$PT_PIN_DIR"/ops-root-*|"$PT_PIN_DIR"/gate-session-*|"$PT_PIN_DIR"/resolve-cache-*|"$PT_PIN_DIR"/projctx|"$PT_PIN_DIR"/projctx/*) return 0 ;; "$PT_PIN_DIR/"*) return 1 ;; esac
+  for root in "$PT_USER" "$PT_HOME_CONFIG"; do case "$1" in "$root"|"$root/"*) return 0 ;; esac; done
   return 1
 }
 pt_in_sensitive_dir() {
@@ -501,7 +504,7 @@ pt_simple() {
       for i in "${!words[@]}"; do
         case "${words[$i]}" in
           -delete) for arg in "${words[@]:1}"; do case "$arg" in -*) break ;; *) pt_judge "$arg" 1 ;; esac; done ;;
-          -fprint|-fprint0|-fprintf) pt_judge "${words[$((i+1))]:-}" ;;
+          -fprint|-fprint0|-fprintf|-fls) pt_judge "${words[$((i+1))]:-}" ;;
         esac
       done
       for i in "${!words[@]}"; do

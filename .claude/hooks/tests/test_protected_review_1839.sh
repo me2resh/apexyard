@@ -147,4 +147,28 @@ check 0 'ConfigChange with no roots: permission change' cc_no_roots
 printf '{"disableAllHooks":true}\n' > "$HOME/.claude/settings.json"
 check 2 'ConfigChange with no roots: disableAllHooks' cc_no_roots
 printf '{}\n' > "$HOME/.claude/settings.json"
+
+# 5. Pin tree narrowing and find -fls (#1858).
+mkdir -p "$APEXYARD_OPS_PIN_DIR/private/briefs" "$APEXYARD_OPS_PIN_DIR/private/probes"
+check 0 'private briefs write passes' run_bash "echo x > $APEXYARD_OPS_PIN_DIR/private/briefs/b.md"
+check 0 'private probes write passes' run_bash "echo x > $APEXYARD_OPS_PIN_DIR/private/probes/p.txt"
+check 0 'private briefs write by home path passes' run_bash 'echo x > $HOME/.claude/apexyard/private/briefs/b.md'
+check 2 'pin file write blocks' run_bash "echo x > $APEXYARD_OPS_PIN_DIR/ops-root-zz"
+check 2 'gate state write blocks' run_bash "echo x > $APEXYARD_OPS_PIN_DIR/gate-session-zz/snapshot.json"
+check 2 'gate state write by home path blocks' run_bash 'echo x > $HOME/.claude/apexyard/gate-session-zz/snapshot.json'
+check 2 'resolve cache write blocks' run_bash "echo x > $APEXYARD_OPS_PIN_DIR/resolve-cache-zz"
+check 2 'projctx write blocks' run_bash "echo x > $APEXYARD_OPS_PIN_DIR/projctx/a"
+check 2 'find -fls into a protected file blocks' run_bash "find . -fls .claude/hooks/x.sh"
+check 0 'find -fls into a scratch file passes' run_bash "find . -fls $TMP/temp/ls.txt"
+
+# 6. The ConfigChange live-file test ignores letter case (#1858).
+if [ -e "$TMP/live/.CLAUDE/settings.json" ]; then
+  printf '{"hooks":{"PreToolUse":[]}}\n' > "$TMP/live/.claude/settings.json"
+  mkdir -p "$TMP/live/.claude/session"
+  : > "$TMP/live/.claude/session/config-change-blocks.jsonl"
+  jq -cn --arg f "$TMP/live/.CLAUDE/SETTINGS.JSON" '{session_id:"d17",source:"project_settings",file_path:$f}' | /bin/bash "$ROOT/block-hook-disabling-config-change.sh" >/dev/null 2>&1 || :
+  # Only the live branch reads the tracked baseline. The not-live branch logs allow or "committed copy".
+  check 0 'case variant of a live settings file is judged live' grep -q 'tracked settings baseline' "$TMP/live/.claude/session/config-change-blocks.jsonl"
+  printf '{}\n' > "$TMP/live/.claude/settings.json"
+fi
 finish
