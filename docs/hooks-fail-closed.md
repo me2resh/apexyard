@@ -25,6 +25,7 @@ It covers me2resh/apexyard#1623.
 | The four merge gates | Inside the dispatcher, for merge commands | The dispatcher prints `BLOCKED` and exits 2 |
 | `block-forged-menu-approval.sh` | Edit, Write, MultiEdit matcher in `.claude/settings.json` | Claude Code blocks the call (`onFailure` is `block`) |
 | `block-forged-menu-approval.sh` | Inside the dispatcher, for each Bash call | The dispatcher prints `BLOCKED` and exits 2 |
+| `limit-reviewer-writes.sh` | Edit, Write, MultiEdit matcher in `.claude/settings.json` | Claude Code blocks the call (`onFailure` is `block`), for every caller (AgDR-0266) |
 | `block-protected-target-writes.sh` | Edit, Write, MultiEdit, NotebookEdit matcher in `.claude/settings.json` | Claude Code blocks the call (`onFailure` is `block`) |
 | `block-protected-target-writes.sh` | Inside the dispatcher, for each Bash call | The dispatcher prints `BLOCKED` and exits 2 |
 | `block-hook-disabling-config-change.sh` | ConfigChange matcher in `.claude/settings.json` | Claude Code blocks the settings change (`onFailure` is `block`) |
@@ -51,6 +52,7 @@ See `docs/perf/hook-fail-closed-profile-2026-10.md`.
 | `require-active-ticket.sh` | 10 seconds | 5 x p95 (207 ms) is under the 10 second floor |
 | `block-protected-target-writes.sh` (edit channel) | 10 seconds | 5 x p95 (73 ms) is under the 10 second floor |
 | `block-hook-disabling-config-change.sh` | 10 seconds | 5 x p95 (141 ms) is under the 10 second floor |
+| `limit-reviewer-writes.sh` | 10 seconds | 5 x p95 (80 ms, measured 2026-10-21 on macOS, /bin/bash 3.2, 40 runs) is under the 10 second floor |
 
 The two new rows were measured on 2026-10-19 on macOS, /bin/bash 3.2, 40 runs each.
 The Bash channel of `block-protected-target-writes.sh` runs inside the
@@ -73,7 +75,7 @@ Do not move this hook to `run_fail_closed_hook`.
 
 ### What is not changed
 
-- No other hook entry sets `onFailure`. Five entries set it in all.
+- No other hook entry sets `onFailure`. Six entries set it in all, including `limit-reviewer-writes.sh` (AgDR-0266).
 - The `exit 0` in the settings wrapper stays.
   It runs when no `.claude/hooks` directory exists.
   That is deliberate for directories that are not ApexYard forks.
@@ -145,6 +147,7 @@ The fallback knows only built-in types when the library is missing.
 ```
 
 **Warning:** A name shared with a build agent locks that build agent during an active review.
+`limit-reviewer-writes.sh` also limits the Edit, Write and MultiEdit tools of a listed type at all times, with no active review: that type may write only under `.claude/session/reviews/bodies/` (AgDR-0266).
 
 ## Operator escape hatch
 

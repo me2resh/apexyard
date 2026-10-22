@@ -72,15 +72,18 @@ done
 [ "$(entry_field block-forged-menu-approval.sh onFailure)" = block ] \
   || fail "menu-record guard must set onFailure to block"
 
-# Only the three entries may set onFailure.
+[ "$(entry_field limit-reviewer-writes.sh onFailure)" = block ] \
+  || fail "reviewer write-scope guard must set onFailure to block (#1840)"
+
+# Only the six named entries may set onFailure.
 others=$(jq -r '[.. | objects | select(has("onFailure")) | .command]
-  | map(select((contains("dispatch-bash.sh") or contains("require-active-ticket.sh") or contains("block-forged-menu-approval.sh") or contains("block-protected-target-writes.sh") or contains("block-hook-disabling-config-change.sh")) | not))
+  | map(select((contains("dispatch-bash.sh") or contains("require-active-ticket.sh") or contains("block-forged-menu-approval.sh") or contains("block-protected-target-writes.sh") or contains("block-hook-disabling-config-change.sh") or contains("limit-reviewer-writes.sh")) | not))
   | length' "$SETTINGS")
 [ "$others" -eq 0 ] || fail "$others hook entries outside the fail-closed gates set onFailure"
 
 # Each fail-closed entry occurs once.
 total=$(jq '[.. | objects | select(has("onFailure"))] | length' "$SETTINGS")
-[ "$total" -eq 5 ] || fail "expected exactly 5 entries with onFailure, found $total"
+[ "$total" -eq 6 ] || fail "expected exactly 6 entries with onFailure, found $total"
 
 # Hooks are on by default: no tracked settings file turns them off.
 for file in "$ROOT/.claude/settings.json" "$ROOT/.claude/settings.local.json"; do

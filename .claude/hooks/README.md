@@ -97,6 +97,12 @@ The hook reads the harness payload. It writes `approval_channel=menu` and `skill
 
 The typed commands stay. A typed merge marker has no menu channel.
 
+### 3b. Reviewer write scope — `limit-reviewer-writes.sh`
+
+**Event:** `PreToolUse` on `Edit|Write|MultiEdit`.
+
+Rex and Hakim have the Write tool for one job: to save the review body that `tracker_review_submit` posts. This hook lets a review agent write only under `<ops-root>/.claude/session/reviews/bodies/`. `review_body_path` in `_lib-review-markers.sh` prints a file name in that folder. The hook blocks every other target of a review agent: repository files, hooks, settings files and review markers. It reads the structured `file_path` field, not shell text. The orchestrator and build agents are not affected. See AgDR-0266 and #1840.
+
 ### 4. Onboarding — `onboarding-check.sh`
 
 **Event:** `SessionStart`.
@@ -258,6 +264,8 @@ With that config, `wip: scratch work` is accepted and `refactor: cleanup` is rej
 **Interactive commits (no `-m` / `-F`)** are skipped — accepted gap, matches sibling hooks' policy.
 
 **Quoted heredoc that writes a file (#1810, AgDR-0263):** the hook removes the body of a quoted heredoc that only feeds `cat` or `tee` to a file before it reads the command. Prose in that body that names a commit, with Markdown backticks, does not start the commit checks. A real commit in the same command is still checked.
+
+**Redirections (#1842, AgDR-0271):** the hook reads the commit words past each redirection, as the shell does, with the redirection reader of `_lib-git-global.sh`. A redirection before the git word, before the verb or among the commit arguments does not hide the message. A redirection alone no longer counts as a compound command, so `git commit -m "fix: x" 2>&1` is checked and passes. A short option group such as `-am <msg>` or `-m<msg>` is read as git reads it. The hook blocks when it cannot read a redirection target, and when `-F -` reads the message from an input redirection.
 
 **Enforces:** `.claude/rules/git-conventions.md § "Commit Message Format"` — was prose-only.
 
