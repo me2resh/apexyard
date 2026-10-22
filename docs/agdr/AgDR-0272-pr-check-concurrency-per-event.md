@@ -11,9 +11,9 @@ category: architecture
 
 <!-- When this template creates an artifact, use the controlled technical writing profile in .claude/rules/writing-standard.md. -->
 
-# PR check concurrency group per event and head SHA
+# PR check concurrency group per event action
 
-> In the context of PR Title Check and ORBIT records lint, facing duplicate runs that cancel each other on one PR head, I decided to add the head SHA and the event action to the concurrency group to achieve one uncancelled run per event, accepting a few extra Linux minutes.
+> In the context of PR Title Check and ORBIT records lint, facing duplicate runs that cancel each other on one PR head, I decided to add the event action to the concurrency group to achieve one uncancelled run per event, accepting a few extra Linux minutes.
 
 ## Context
 
@@ -24,17 +24,18 @@ Each new PR head starts two runs of each workflow (for example `opened` and `edi
 | Option | Pros | Cons |
 |--------|------|------|
 | Merge gate ignores cancelled runs | No workflow change | Weakens a gate. A real cancelled run could hide a failure. |
-| Per-event group with the head SHA | No run is cancelled by another event. A title edit still runs. | Runs of different events execute in parallel. |
+| Per-action group (PR number and event action) | Opened, edited and synchronize do not cancel each other. A title edit still runs. Two pushes in a row still cancel the older run. | Runs of different actions execute in parallel. |
 | Drop the `edited` trigger | One run per head | A title edit no longer re-runs PR Title Check. |
 
 ## Decision
 
-Chosen: **per-event group with the head SHA**, because it keeps the gate strict and keeps the title re-check.
+Chosen: **per-action group (PR number and event action)**, because it keeps the gate strict and keeps the title re-check.
 
 ## Consequences
 
 - An edit and a push on the same head run in parallel.
-- Two runs of the same event on the same head still cancel the older one.
+- Two pushes in a row still cancel the older run, because both use the `synchronize` action.
+- Two quick title edits on one head can still give a cancelled PR Title Check run. A rerun clears it.
 - Cost: a few extra Linux runner minutes. No macOS runner is added.
 
 ## Artifacts
