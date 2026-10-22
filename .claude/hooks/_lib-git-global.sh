@@ -417,7 +417,9 @@ EOF_LITERAL_MATCHES
   # Unknown shell words can occupy the command or verb position.
   local word_part='[[:alnum:]_./"'"'"'-]*'
   exp_tok='('"${word_part}"'(\$[A-Za-z_][A-Za-z0-9_]*|\$[{][^}]*[}]|\$\([^)]*\)|`[^`]*`|\$'"'"'[^'"'"']*'"'"'|[{][^}]*[}])'"${word_part}"')'
-  local uncertain_opts='([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env|attr-source))[[:space:]]+'"${_git_opt_val}"'|--[A-Za-z-]+='"${_git_opt_val}"'|--(no-pager|paginate|bare|no-replace-objects|literal-pathspecs|glob-pathspecs|noglob-pathspecs|icase-pathspecs|no-optional-locks|no-lazy-fetch)|-[pP]))*[[:space:]]+'
+  # #1837: a redirection before the verb uses the shared unit, as in
+  # _git_sub_opts, spaced or glued to the command word.
+  local uncertain_opts='(([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env|attr-source))[[:space:]]+'"${_git_opt_val}"'|--[A-Za-z-]+='"${_git_opt_val}"'|--(no-pager|paginate|bare|no-replace-objects|literal-pathspecs|glob-pathspecs|noglob-pathspecs|icase-pathspecs|no-optional-locks|no-lazy-fetch)|-[pP]|'"${_git_redir}"')|'"${_git_redir}"'))*[[:space:]]+'
   local exp_cmd="(^|[;|&(){}!][[:space:]]*|[[:space:]]*(exec|command|env|time|if|while)[[:space:]]+([^;|&]*[[:space:]]+)?)([A-Za-z_][A-Za-z0-9_]*=[^[:space:];|&]*[[:space:]]+)*${exp_tok}"
   if printf '%s\n' "$text" | LC_ALL=C grep -qE "${exp_cmd}${uncertain_opts}(${push_re}|${commit_re})([^[:alnum:]_.-]|$)"; then
     return 0

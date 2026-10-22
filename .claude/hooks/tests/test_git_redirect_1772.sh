@@ -621,5 +621,37 @@ for i in 0 1 2 3 4; do
   fi
 done
 
+# #1837 (code review F1 on #1835): the `&>` form with a quoted target that
+# holds a blank is in the accepted quadratic class (AgDR-0264 Decision 8).
+# Time it at 2000 copies with the same limit. The pinned base above does
+# not scan redirections, so the reference is the dev commit that accepted
+# the class (the #1835 squash). That reference takes about 10 seconds, so
+# each tree runs once, and the slow-host rule above does not apply.
+# REDIRECT_1772_AMP_BASE_HOOKS overrides the reference tree.
+AMP_PIN=defd0597094d80e72e366de76bf62127410fea98
+amp_hooks="${REDIRECT_1772_AMP_BASE_HOOKS:-}"
+if [ -z "$amp_hooks" ] && git -C "$ROOT" rev-parse --verify --quiet "${AMP_PIN}^{commit}" >/dev/null 2>&1; then
+  mkdir -p "$TMP/amp-src"
+  git -C "$ROOT" archive "$AMP_PIN" .claude/hooks | tar -x -C "$TMP/amp-src"
+  amp_hooks="$TMP/amp-src/.claude/hooks"
+fi
+if [ -n "$amp_hooks" ] && [ -f "$amp_hooks/dispatch-bash.sh" ]; then
+  stub_tree "$amp_hooks" "$TMP/th-amp"
+  amp=""
+  for i in $(seq 1 2000); do amp="$amp $GT&>\"a b\""; done
+  cmd="echo$amp push"
+  head_s=$(dispatch_secs "$TMP/th-head" "$cmd")
+  ref_s=$(dispatch_secs "$TMP/th-amp" "$cmd")
+  limit=$(awk -v r="$ref_s" -v m="$margin" 'BEGIN { a = r * 6; b = r + m; printf "%.2f", (a > b) ? a : b }')
+  label="echo with 2000 git words, each with an &> quoted-blank target"
+  if awk -v t="$head_s" -v l="$limit" 'BEGIN { exit !(t <= l) }'; then
+    pass "N3 time: $label: ${head_s}s, #1835 reference ${ref_s}s, limit ${limit}s"
+  else
+    fail "N3 time: $label: ${head_s}s is over the limit ${limit}s (#1835 reference ${ref_s}s)"
+  fi
+else
+  echo "NOTE: skip the &> timing case: reference ${AMP_PIN} is not in this clone"
+fi
+
 echo "TOTAL $PASS passed; $FAIL failed"
 [ "$FAIL" -eq 0 ]
