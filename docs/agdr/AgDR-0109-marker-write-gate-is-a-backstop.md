@@ -85,6 +85,8 @@ So AgDR-0104's rule is preserved exactly where it applies. A command that *does*
 
 The tests written in each of the three rounds all covered the shapes their author had thought of, which is definitionally the set not containing the next bypass. Only an adversarial pairing changes that.
 
+> **Note 2026-10-21 ([AgDR-0267](AgDR-0267-shell-text-gates-are-guardrails.md)).** The shell-text gates are guardrails, not a security boundary. The paired test stays for the shapes that a hook already handles. A missing test for a new exotic shape class does not block a gate PR. The class goes into epic me2resh/apexyard#1846.
+
 ## Consequences
 
 - The ~14 false positives per session collapse to warnings; the sanctioned reviewer stops being blocked by the gate it is reviewing, and reviewers stop needing base64 workarounds that read as evasion.
