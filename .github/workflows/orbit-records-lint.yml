@@ -6,7 +6,7 @@ permissions:
   contents: read
   issues: read
 concurrency:
-  group: orbit-records-lint-${{ github.event.pull_request.number || github.ref }}
+  group: orbit-records-lint-${{ github.event.pull_request.number || github.ref }}-${{ github.event.action }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   records-lint:

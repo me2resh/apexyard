@@ -47,6 +47,17 @@ config_change() { printf '{"session_id":"excludes","source":"local_settings"}' |
 check 0 'rule excludes change after the snapshot passes' config_change
 printf '{"claudeMdExcludes":[],"hooks":{"PreToolUse":[]}}\n' > "$TMP/live/.claude/settings.local.json"
 check 2 'hooks change after the snapshot blocks' config_change
+# Resume warning and log rotation (#1858): the warning shows once.
+export CLAUDE_CODE_SESSION_ID=d17-rotate
+cp "$APEXYARD_OPS_PIN_DIR/ops-root-d17" "$APEXYARD_OPS_PIN_DIR/ops-root-$CLAUDE_CODE_SESSION_ID"
+check 0 'rotate session snapshot' start startup
+mkdir -p "$TMP/live/.claude/session"
+printf '{"decision":"block"}\n' > "$TMP/live/.claude/session/config-change-blocks.jsonl"
+out1=$(start resume 2>&1)
+out2=$(start resume 2>&1)
+check 0 'resume warns for an old block' test "${out1#*WARN}" != "$out1"
+check 0 'second resume shows no warning' test "${out2#*WARN}" = "$out2"
+check 0 'old block log is kept as .old' test -s "$TMP/live/.claude/session/config-change-blocks.jsonl.old"
 rm -f "$TMP/live/.claude/settings.local.json"
 export CLAUDE_CODE_SESSION_ID=no-source
 check 0 'empty source is a no-op' start ''

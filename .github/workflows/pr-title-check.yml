@@ -19,7 +19,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: pr-title-check-${{ github.event.pull_request.number || github.ref }}
+  group: pr-title-check-${{ github.event.pull_request.number || github.ref }}-${{ github.event.action }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

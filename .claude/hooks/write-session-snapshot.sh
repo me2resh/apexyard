@@ -20,6 +20,10 @@ if [ "$PT_HAS_SNAPSHOT" = 1 ]; then
     done
     if [ "$changed" = 1 ] || [ -s "$PT_OPS/.claude/session/config-change-blocks.jsonl" ]; then
       echo 'WARN: settings differ from the session snapshot, or ConfigChange blocks were logged. Restart to load the settings on disk.'
+      # Rotate the log so a later resume does not repeat the warning.
+      if [ -s "$PT_OPS/.claude/session/config-change-blocks.jsonl" ]; then
+        mv -f "$PT_OPS/.claude/session/config-change-blocks.jsonl" "$PT_OPS/.claude/session/config-change-blocks.jsonl.old" 2>/dev/null || :
+      fi
     fi
   fi
   exit 0

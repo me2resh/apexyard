@@ -1137,3 +1137,14 @@ Do not file these yet. Each is one ticket. § Decision "Ticket order" sets the s
 | A5 | § B.3 examples and § B.12 item 8.1: `dd of=` and `install -t` on protected paths block. |
 | Merge requirements | § B.14 carries the corpus CI test with the closing rule, the resolver tests, the macOS `patch -p0` capture (with the header rule kept and non-literal input with a token blocked), captures P12 to P12c, and the pin-versus-snapshot comparison. |
 
+### Amendment (#1858)
+
+Four small changes to the tamper gates. Three of them have a paired block case and allow case in the suites. The case-blind live-file change has one case only. It runs only on a case-insensitive file system, so Linux CI skips it.
+
+| Change | Effect |
+|--------|--------|
+| Narrow the pin-tree token | The Bash write gate treats only the pin files, the gate session state, the resolve cache and the project context folder as state. A write to another file in the pin tree, such as a private brief or probe file, passes. This applies to the raw token test and to the working-directory test. |
+| Rotate the ConfigChange log | After a `resume` prints the warning, the session-start hook moves the block log to a `.old` file. A later resume shows the warning again only for a new block or a new settings difference. |
+| Case-blind live-file test | The ConfigChange hook judges "is this a live settings file" with the same case-blind helper as the other protected-form tests. |
+| `find` file-output primary | The `find` verb judges the target of the `-fls` primary, next to `-fprint`, `-fprint0` and `-fprintf`. |
+
