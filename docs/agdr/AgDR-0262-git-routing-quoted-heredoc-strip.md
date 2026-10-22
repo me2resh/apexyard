@@ -81,6 +81,7 @@ Chosen: **A**, because it removes the measured cause and fails closed on any dou
 - A marker with an unpaired quote, a mismatched quote pair, a partly quoted delimiter, or an operator inside a quoted argument keeps the raw command. The push or commit gates then see the lines after it.
 - Known limit: any shape other than one data sink keeps the raw command. For example, a sink after `cd`, a commit message passed in a substitution, and a body file that a later command reads all keep the old cost. With a large body that names the verbs, the gates can still be slow, and a dispatcher timeout blocks (fail closed).
 - Known limit: a `git commit -F -` sink still routes the commit gates, because the stripped text holds the commit. The gates read the raw command, so a large message body that names the verbs keeps the old gate cost, and a gate parser can still block on prose in the message. The visitor speed-up in issue #1780 scope items 2 and 3 is not part of this change.
+- Update (#1833): [AgDR-0270](AgDR-0270-heredoc-substitution-commit-message.md) adds `git commit -m "$(cat <<'X' ... X\n)"` as a sink. It also lets the gate visitor parse the structure on the `quoted` mode text. That record changes the two known limits above for the substitution message and for the gate cost of a `git commit -F -` sink.
 - Residual: a later Bash call can use a file or a message that a sink wrote. That is the same class as a file that the Write tool writes.
 
 ## Artifacts
