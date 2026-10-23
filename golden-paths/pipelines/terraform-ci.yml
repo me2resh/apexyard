@@ -103,9 +103,7 @@ jobs:
           sudo chmod +x /usr/local/bin/terramate
           terramate --version
       - name: Setup tflint
-        run: |
-          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
-          tflint --version
+        uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337  # v6
       - name: Run tflint (changed stacks)
         run: terramate run --changed tflint
 
@@ -221,6 +219,8 @@ jobs:
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd  # v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+      # Limit the IAM role trust policy to this repository (plan role), and
+      # require the apply role to trust only `main` or a protected environment.
       - name: Configure AWS OIDC
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4
         with:
@@ -247,8 +247,11 @@ jobs:
           # CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           # TF_VAR_some_input: ${{ secrets.SOME_INPUT }}
           TF_IN_AUTOMATION: "true"
+          STACK_PATH: ${{ matrix.path }}
+          DISPLAY_NAME: ${{ matrix.display_name }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          cd "${{ matrix.path }}"
+          cd "$STACK_PATH"
           # pipefail so `terraform plan | tee` reflects terraform's exit, not tee's
           set -o pipefail
           max_retries=3
@@ -265,11 +268,11 @@ jobs:
             fi
           done
 
-          if [ "${{ github.ref_name }}" != "main" ]; then
-            echo "🚀 PLAN-ONLY MODE (branch: ${{ github.ref_name }}) — changes apply only after merge to main."
+          if [ "$REF_NAME" != "main" ]; then
+            echo "🚀 PLAN-ONLY MODE (branch: $REF_NAME) — changes apply only after merge to main."
           fi
 
-          echo "📋 Planning ${{ matrix.display_name }}..."
+          echo "📋 Planning $DISPLAY_NAME..."
           retry_count=0
           while [ $retry_count -lt $max_retries ]; do
             if terraform plan -no-color -out=tfplan 2>&1 | tee plan_output.txt; then echo "✅ plan ok"; break; fi
@@ -281,23 +284,27 @@ jobs:
             fi
           done
 
-          {
-            echo "PLAN_OUTPUT<<EOF"
-            cat plan_output.txt
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          # Write the plan to a file; the comment step reads it from disk.
+          cp plan_output.txt "$RUNNER_TEMP/plan.txt"
 
       - name: Comment plan on PR
         if: github.event_name == 'pull_request'
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7
+        env:
+          DISPLAY_NAME: ${{ matrix.display_name }}
+          STACK_ENV: ${{ matrix.environment }}
+          STACK_ACCOUNT: ${{ matrix.account }}
+          STACK_NAME: ${{ matrix.name }}
+          REF_NAME: ${{ github.ref_name }}
         with:
           script: |
-            const planOutput = `${{ steps.plan.outputs.PLAN_OUTPUT }}`;
-            const displayName = '${{ matrix.display_name }}';
-            const environment = '${{ matrix.environment }}';
-            const account = '${{ matrix.account }}';
-            const stackName = '${{ matrix.name }}';
-            const onMain = '${{ github.ref_name }}' === 'main';
+            const planOutput = require('fs').readFileSync(`${process.env.RUNNER_TEMP}/plan.txt`, 'utf8');
+            const displayName = process.env.DISPLAY_NAME;
+            const environment = process.env.STACK_ENV;
+            const account = process.env.STACK_ACCOUNT;
+            const stackName = process.env.STACK_NAME;
+            const refName = process.env.REF_NAME;
+            const onMain = refName === 'main';
             const branchEmoji = onMain ? '🚀' : '🔍';
             const status = onMain ? 'Will be applied automatically' : 'Plan-only (no apply)';
             const note = onMain
@@ -305,7 +312,7 @@ jobs:
               : 'This is a feature branch. Changes apply only when this PR is merged to main.';
             const body = `## ${branchEmoji} Terraform Plan for \`${displayName}\`
 
-            **Branch**: \`${{ github.ref_name }}\`
+            **Branch**: \`${refName}\`
             **Status**: ${status}
             **Environment**: \`${environment}\`
             **Account**: \`${account}\`
@@ -349,6 +356,8 @@ jobs:
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd  # v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+      # Limit the IAM role trust policy to this repository (plan role), and
+      # require the apply role to trust only `main` or a protected environment.
       - name: Configure AWS OIDC
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4
         with:
@@ -365,10 +374,12 @@ jobs:
         env:
           # CUSTOMIZE: same provider/secret env as the plan step.
           TF_IN_AUTOMATION: "true"
+          STACK_PATH: ${{ matrix.path }}
+          DISPLAY_NAME: ${{ matrix.display_name }}
         run: |
-          cd "${{ matrix.path }}"
+          cd "$STACK_PATH"
           max_retries=3
-          echo "🚀 Applying ${{ matrix.display_name }}..."
+          echo "🚀 Applying $DISPLAY_NAME..."
 
           retry_count=0
           while [ $retry_count -lt $max_retries ]; do
