@@ -155,6 +155,10 @@ I need to decide between PostgreSQL and DynamoDB for this service.
 Create an AgDR.
 ```
 
+### Turn on branch protection
+
+Turn on required review and required status checks on your protected branches. The hooks are guardrails, not a security boundary. See the [Threat model](../SECURITY.md#threat-model).
+
 ---
 
 ## Terminal push hook (`core.hooksPath`)

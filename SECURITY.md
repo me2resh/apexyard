@@ -28,8 +28,8 @@ private advisory only the maintainers can see.
 
 Please include:
 
-- What the issue is and the security impact (e.g. a hook that can be bypassed,
-  a workflow that leaks a token, an example template that ships a real secret).
+- What the issue is and the security impact (e.g. a gate that misses a common
+  command shape, a workflow that leaks a token, an example template that ships a real secret).
 - Steps to reproduce, and the affected file(s) / version.
 - Any suggested remediation.
 
@@ -37,12 +37,21 @@ We aim to acknowledge within **5 business days** and to ship a fix or a
 mitigation plan within **30 days** for confirmed issues, coordinating disclosure
 with you.
 
+## Threat model
+
+- The hooks are guardrails for honest agents and contributors. They stop
+  common mistakes at tool-call time.
+- The hooks are not a security boundary. An agent or person with forge
+  credentials can act outside them.
+- The security boundary for a merge is the forge's branch protection. Turn on
+  required review and required status checks on every protected branch.
+
 ## Scope
 
 In scope:
 
-- Hook bypasses that defeat a documented gate (merge gate, ticket-first,
-  secrets/onboarding/leak guards).
+- A gate that misses a command shape that an honest agent produces in normal
+  work (merge gate, ticket-first, secrets/onboarding/leak guards).
 - CI workflow weaknesses (injection, excessive `GITHUB_TOKEN` scope, unpinned
   actions, artifact poisoning).
 - Secrets or filled-in private config shipped in the repo, an example template,
@@ -50,6 +59,8 @@ In scope:
 
 Out of scope:
 
+- A command shape chosen to evade a hook, when the forge's branch protection
+  still applies.
 - Vulnerabilities in a fork's *own* managed-project code (report those in that
   project's tracker).
 - Social-engineering of maintainers; issues requiring a malicious local actor
