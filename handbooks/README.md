@@ -21,9 +21,15 @@ Rex finds handbooks by **path convention** — there is no YAML frontmatter, no 
 
 If you need a fifth bucket beyond these four, add the directory and update Rex's discovery logic in `.claude/agents/code-reviewer.md`. The path convention is open — Rex falls back to "always-load" for any directory it doesn't have specific rules for.
 
+## Front matter and freshness
+
+Handbook entries use a YAML front matter schema for owner, verification dates, and status. Run `bin/kb-migrate` to add missing fields. The compile and freshness tools are documented in [`docs/knowledge-base.md`](../docs/knowledge-base.md).
+
+A handbook may start with that front matter block. When it does, `ENFORCEMENT: blocking` is the first line after the closing `---`.
+
 ## File format
 
-Flat markdown. No YAML frontmatter required. Rex reads the file as prose during review and applies the rules conversationally.
+Flat markdown plus the knowledge-base front matter schema. Rex reads the file as prose during review and applies the rules conversationally.
 
 The recommended shape (mirrored across the four samples shipped with the framework):
 
@@ -69,9 +75,18 @@ Other shapes are fine — Rex reads as prose. The shape above just keeps the fou
 
 **Default: advisory.** Rex surfaces the finding as a `nit:` / `suggestion:` comment in the review. The PR can still merge if other gates pass.
 
-**Opt in to blocking** by adding the literal phrase `ENFORCEMENT: blocking` at the **top of the file**, before any markdown content. Example:
+**Opt in to blocking** by adding the literal phrase `ENFORCEMENT: blocking` as the first line after the front matter block (or at the top of the file when there is no front matter). Example:
 
 ```markdown
+---
+owner: example
+verified_by: example
+verified_on: 2026-01-01
+stale_after: 2026-06-30
+sources: []
+version: 1
+status: active
+---
 ENFORCEMENT: blocking
 
 # Handbook: Migration Safety

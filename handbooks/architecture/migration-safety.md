@@ -1,3 +1,12 @@
+---
+owner: atlas-apex
+verified_by: atlas-apex
+verified_on: 2026-05-24
+stale_after: 2026-11-20
+sources: []
+version: 1
+status: active
+---
 ENFORCEMENT: blocking
 
 # Handbook: Migration Safety
