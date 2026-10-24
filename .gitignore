@@ -80,3 +80,8 @@ workspace/*
 # `git status` shows them as untracked symlinks — leave them alone.
 # If you absolutely want to suppress the untracked-symlink line, add the
 # specific name to .git/info/exclude on each clone.
+
+# Compiled knowledge-base output (bin/kb-compile). Regenerated on demand.
+# See docs/knowledge-base.md.
+/kb/
+

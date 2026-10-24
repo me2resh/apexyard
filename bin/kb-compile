@@ -1,0 +1,297 @@
+#!/usr/bin/env bash
+# Compile handbook, rule, AgDR, and ORBIT sources into kb/ JSON entries.
+# Usage: bin/kb-compile [--root DIR] [--out DIR] [--check] [--push]
+# Never edits source files. Network only with --push and both env vars set.
+
+set -u
+
+SCRIPT_DIR=$(CDPATH='' cd "$(dirname "$0")" && pwd)
+# shellcheck disable=SC1091
+. "$SCRIPT_DIR/_lib-kb.sh"
+
+ROOT=""
+OUT=""
+CHECK=0
+PUSH=0
+TMP_WORK=""
+
+cleanup() {
+  if [ -n "$TMP_WORK" ] && [ -d "$TMP_WORK" ]; then
+    rm -rf "$TMP_WORK"
+  fi
+}
+trap cleanup EXIT
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --root)
+      ROOT=$2
+      shift 2
+      ;;
+    --root=*)
+      ROOT=${1#--root=}
+      shift
+      ;;
+    --out)
+      OUT=$2
+      shift 2
+      ;;
+    --out=*)
+      OUT=${1#--out=}
+      shift
+      ;;
+    --check)
+      CHECK=1
+      shift
+      ;;
+    --push)
+      PUSH=1
+      shift
+      ;;
+    -h|--help)
+      cat <<'EOF'
+Usage: bin/kb-compile [--root DIR] [--out DIR] [--check] [--push]
+
+Compile knowledge-base sources into JSON under <out>/ (default <root>/kb).
+--check compiles to a temp dir and exits 1 when <out> differs.
+--push POSTs manifest.json when APEXYARD_TOKEN and APEXYARD_KB_ENDPOINT are set.
+EOF
+      exit 0
+      ;;
+    -*)
+      echo "kb-compile: unknown option: $1" >&2
+      exit 2
+      ;;
+    *)
+      echo "kb-compile: unexpected argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [ -z "$ROOT" ]; then
+  ROOT=$(git rev-parse --show-toplevel) || exit 1
+else
+  ROOT=$(cd "$ROOT" && pwd) || exit 1
+fi
+
+if [ -z "$OUT" ]; then
+  OUT="$ROOT/kb"
+fi
+
+# Validate one rule-tests file. Warn on broken files. Never fail the compile.
+validate_rule_test() {
+  local f=$1
+  local body ok=1
+  if ! kb_has_front_matter "$f"; then
+    echo "kb-compile: warning: rule-test missing front matter: ${f#"$ROOT"/}" >&2
+    return 0
+  fi
+  body=$(kb_front_matter_body "$f")
+  if ! kb_fm_has_key "$body" "rule"; then
+    echo "kb-compile: warning: rule-test missing rule: key: ${f#"$ROOT"/}" >&2
+    ok=0
+  fi
+  if ! awk '
+    BEGIN { want = 0; fence = 0 }
+    /^## Must flag[[:space:]]*$/ { want = 1; next }
+    want && /^```/ { fence = 1; exit }
+    want && /^## / { exit }
+    END { exit (fence ? 0 : 1) }
+  ' "$f"; then
+    echo "kb-compile: warning: rule-test missing ## Must flag fenced block: ${f#"$ROOT"/}" >&2
+    ok=0
+  fi
+  if [ "$ok" -eq 0 ]; then
+    return 0
+  fi
+  return 0
+}
+
+# Compile into destination directory $1.
+compile_into() {
+  local dest=$1
+  local entries_dir manifest_tmp list_tmp rel kind abs id file_name hash
+  local stale_json version_json entry_json
+
+  mkdir -p "$dest/entries"
+  entries_dir="$dest/entries"
+  list_tmp=$(mktemp)
+  manifest_tmp=$(mktemp)
+
+  # Collect sources: path<TAB>kind
+  if [ -d "$ROOT/handbooks" ]; then
+    find "$ROOT/handbooks" -type f -name '*.md' ! -name 'README.md' ! -name 'index.md' | LC_ALL=C sort | while IFS= read -r abs; do
+      rel=${abs#"$ROOT"/}
+      printf '%s\thandbook\n' "$rel"
+    done >> "$list_tmp"
+  fi
+  if [ -d "$ROOT/.claude/rules" ]; then
+    find "$ROOT/.claude/rules" -type f -name '*.md' | LC_ALL=C sort | while IFS= read -r abs; do
+      rel=${abs#"$ROOT"/}
+      printf '%s\trule\n' "$rel"
+    done >> "$list_tmp"
+  fi
+  if [ -d "$ROOT/docs/agdr" ]; then
+    find "$ROOT/docs/agdr" -type f -name 'AgDR-*.md' | LC_ALL=C sort | while IFS= read -r abs; do
+      rel=${abs#"$ROOT"/}
+      printf '%s\tagdr\n' "$rel"
+    done >> "$list_tmp"
+  fi
+  if [ -d "$ROOT/docs/orbit" ]; then
+    find "$ROOT/docs/orbit" -type f \( -name '*.json' -o -name '*.md' \) | LC_ALL=C sort | while IFS= read -r abs; do
+      rel=${abs#"$ROOT"/}
+      printf '%s\torbit\n' "$rel"
+    done >> "$list_tmp"
+  fi
+
+  # Validate rule-tests (warnings only). Skip README.md.
+  if [ -d "$ROOT/rule-tests" ]; then
+    find "$ROOT/rule-tests" -type f -name '*.md' ! -name 'README.md' | LC_ALL=C sort | while IFS= read -r abs; do
+      validate_rule_test "$abs"
+    done
+  fi
+
+  : > "$manifest_tmp.entries"
+
+  while IFS="$(printf '\t')" read -r rel kind; do
+    [ -n "$rel" ] || continue
+    abs="$ROOT/$rel"
+    [ -f "$abs" ] || continue
+
+    kb_apply_defaults "$ROOT" "$rel" "$kind" "$abs"
+    hash=$(kb_sha256 "$abs")
+    id=${rel%.*}
+    file_name=$(printf '%s' "$rel" | sed 's|/|__|g')
+    file_name="${file_name}.json"
+
+    if [ -z "$KB_STALE_AFTER" ]; then
+      stale_json=null
+    else
+      stale_json=$(printf '%s' "$KB_STALE_AFTER" | jq -Rs 'sub("\\n$";"")')
+    fi
+    version_json=$KB_VERSION
+    # version must be a number
+    case "$version_json" in
+      ''|*[!0-9]*) version_json=1 ;;
+    esac
+
+    entry_json=$(jq -Sn \
+      --arg id "$id" \
+      --arg kind "$kind" \
+      --arg path "$rel" \
+      --arg title "$KB_TITLE" \
+      --arg owner "$KB_OWNER" \
+      --arg verified_by "$KB_VERIFIED_BY" \
+      --arg verified_on "$KB_VERIFIED_ON" \
+      --argjson stale_after "$stale_json" \
+      --argjson sources "$KB_SOURCES_JSON" \
+      --argjson version "$version_json" \
+      --arg status "$KB_STATUS" \
+      --arg hash "$hash" \
+      '{
+        id: $id,
+        kind: $kind,
+        path: $path,
+        title: $title,
+        owner: $owner,
+        verified_by: $verified_by,
+        verified_on: $verified_on,
+        stale_after: $stale_after,
+        sources: $sources,
+        version: $version,
+        status: $status,
+        hash: $hash
+      }')
+
+    printf '%s\n' "$entry_json" | jq -S . > "$entries_dir/$file_name"
+
+    printf '%s\n' "$entry_json" | jq -c \
+      --arg file "entries/$file_name" \
+      '{id:.id, kind:.kind, path:.path, hash:.hash, file:$file}' >> "$manifest_tmp.entries"
+  done < "$list_tmp"
+
+  # Build sorted manifest.
+  if [ -s "$manifest_tmp.entries" ]; then
+    jq -s -S '{schema_version:1, entry_count:length, entries: sort_by(.id)}' \
+      "$manifest_tmp.entries" > "$dest/manifest.json"
+  else
+    jq -Sn '{schema_version:1, entry_count:0, entries:[]}' > "$dest/manifest.json"
+  fi
+
+  # Remove stale entry files that are not in this compile.
+  if [ -d "$entries_dir" ]; then
+    expected=$(mktemp)
+    : > "$expected"
+    if [ -s "$manifest_tmp.entries" ]; then
+      while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        printf '%s\n' "$line" | jq -r '.file' | sed 's|^entries/||'
+      done < "$manifest_tmp.entries" | LC_ALL=C sort > "$expected"
+    fi
+
+    for existing in "$entries_dir"/*.json; do
+      [ -e "$existing" ] || continue
+      bn=$(basename "$existing")
+      if ! grep -Fxq "$bn" "$expected"; then
+        rm -f "$existing"
+      fi
+    done
+    rm -f "$expected"
+  fi
+
+  rm -f "$list_tmp" "$manifest_tmp" "$manifest_tmp.entries"
+}
+
+# Compare two trees by sorted sha256 of all files. Return 0 if identical.
+trees_identical() {
+  local a=$1 b=$2 ha hb
+  ha=$(mktemp)
+  hb=$(mktemp)
+  (
+    cd "$a" && find . -type f | LC_ALL=C sort | while IFS= read -r f; do
+      printf '%s  %s\n' "$(kb_sha256 "$f")" "$f"
+    done
+  ) > "$ha"
+  (
+    cd "$b" && find . -type f | LC_ALL=C sort | while IFS= read -r f; do
+      printf '%s  %s\n' "$(kb_sha256 "$f")" "$f"
+    done
+  ) > "$hb"
+  if cmp -s "$ha" "$hb"; then
+    rm -f "$ha" "$hb"
+    return 0
+  fi
+  rm -f "$ha" "$hb"
+  return 1
+}
+
+if [ "$CHECK" -eq 1 ]; then
+  TMP_WORK=$(mktemp -d)
+  compile_into "$TMP_WORK"
+  if [ ! -d "$OUT" ]; then
+    echo "kb-compile: --check failed: $OUT does not exist" >&2
+    exit 1
+  fi
+  if trees_identical "$TMP_WORK" "$OUT"; then
+    exit 0
+  fi
+  echo "kb-compile: --check failed: $OUT differs from a fresh compile" >&2
+  exit 1
+fi
+
+compile_into "$OUT"
+
+if [ "$PUSH" -eq 1 ]; then
+  if [ -z "${APEXYARD_TOKEN:-}" ] || [ -z "${APEXYARD_KB_ENDPOINT:-}" ]; then
+    echo "kb-compile: push skipped (APEXYARD_TOKEN and APEXYARD_KB_ENDPOINT are required)" >&2
+    exit 0
+  fi
+  curl -fsS -X POST \
+    -H "Authorization: Bearer ${APEXYARD_TOKEN}" \
+    -H "Content-Type: application/json" \
+    --data-binary @"$OUT/manifest.json" \
+    "$APEXYARD_KB_ENDPOINT"
+fi
+
+exit 0
