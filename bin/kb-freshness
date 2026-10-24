@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# List knowledge-base entries whose stale_after date is before today.
+# Usage: bin/kb-freshness [--root DIR] [--today YYYY-MM-DD] [--out FILE]
+# Always exits 0. Prints nothing when no entry is stale.
+
+set -u
+
+SCRIPT_DIR=$(CDPATH='' cd "$(dirname "$0")" && pwd)
+# shellcheck disable=SC1091
+. "$SCRIPT_DIR/_lib-kb.sh"
+
+ROOT=""
+TODAY=""
+OUT_FILE=""
+TMP_WORK=""
+
+cleanup() {
+  if [ -n "$TMP_WORK" ] && [ -d "$TMP_WORK" ]; then
+    rm -rf "$TMP_WORK"
+  fi
+}
+trap cleanup EXIT
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --root)
+      ROOT=$2
+      shift 2
+      ;;
+    --root=*)
+      ROOT=${1#--root=}
+      shift
+      ;;
+    --today)
+      TODAY=$2
+      shift 2
+      ;;
+    --today=*)
+      TODAY=${1#--today=}
+      shift
+      ;;
+    --out)
+      OUT_FILE=$2
+      shift 2
+      ;;
+    --out=*)
+      OUT_FILE=${1#--out=}
+      shift
+      ;;
+    -h|--help)
+      cat <<'EOF'
+Usage: bin/kb-freshness [--root DIR] [--today YYYY-MM-DD] [--out FILE]
+
+List entries with stale_after before today. Exit 0 always.
+Prints nothing and writes no file when nothing is stale.
+EOF
+      exit 0
+      ;;
+    -*)
+      echo "kb-freshness: unknown option: $1" >&2
+      exit 2
+      ;;
+    *)
+      echo "kb-freshness: unexpected argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [ -z "$ROOT" ]; then
+  ROOT=$(git rev-parse --show-toplevel) || exit 1
+else
+  ROOT=$(cd "$ROOT" && pwd) || exit 1
+fi
+
+if [ -z "$TODAY" ]; then
+  TODAY=$(kb_today)
+fi
+
+TMP_WORK=$(mktemp -d)
+"$SCRIPT_DIR/kb-compile" --root "$ROOT" --out "$TMP_WORK" || exit 1
+
+rows=$(mktemp)
+# Scan entry JSON files.
+for f in "$TMP_WORK/entries"/*.json; do
+  [ -e "$f" ] || continue
+  jq -r --arg today "$TODAY" '
+    select(.status != "deprecated")
+    | select(.stale_after != null)
+    | select(.stale_after < $today)
+    | [.id, .owner, .verified_on, .stale_after]
+    | @tsv
+  ' "$f" 2>/dev/null || true
+done | LC_ALL=C sort > "$rows"
+
+if [ ! -s "$rows" ]; then
+  rm -f "$rows"
+  exit 0
+fi
+
+report=$(mktemp)
+{
+  printf '%s\n' '# Stale knowledge-base entries'
+  printf '\n'
+  printf '%s\n' '| id | owner | verified_on | stale_after | days overdue |'
+  printf '%s\n' '| --- | --- | --- | --- | --- |'
+  while IFS="$(printf '\t')" read -r id owner von stale; do
+    [ -n "$id" ] || continue
+    days=$(kb_days_between "$stale" "$TODAY" || echo "?")
+    printf '| %s | %s | %s | %s | %s |\n' "$id" "$owner" "$von" "$stale" "$days"
+  done < "$rows"
+} > "$report"
+
+cat "$report"
+if [ -n "$OUT_FILE" ]; then
+  tmp=$(mktemp)
+  cat "$report" > "$tmp"
+  mv "$tmp" "$OUT_FILE"
+fi
+
+rm -f "$rows" "$report"
+exit 0
