@@ -306,6 +306,218 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Optional milestone (#1830) — opt-in per project, never on by default.
+#
+# Contract: an explicit 5th argument or the project's `tracker.milestone`
+# registry key adds a `--milestone <title>` argument to the ONE create call.
+# With neither, the argv is identical to the pre-#1830 shape. The value is a
+# proper argument, never string-templated, so spaces, quotes, `$()` and
+# backticks stay inert.
+# ---------------------------------------------------------------------------
+
+# Case M1 — no milestone anywhere: the exact argv gh receives is unchanged.
+SBM=$(make_sandbox)
+install_gh_mock "$SBM"
+printf 'Body.\n' > "$SBM/body.md"
+(
+  cd "$SBM" || exit 1
+  # shellcheck source=/dev/null
+  . "$SBM/.claude/hooks/_lib-tracker.sh"
+  tracker_clear_cache
+  PATH="$SBM/bin:$PATH" GH_CAPTURE="$SBM/cap-none" tracker_create "o/r" "Plain" "$SBM/body.md" "chore" >/dev/null
+)
+assert_eq "tracker_create no milestone → argv identical to the pre-#1830 shape" \
+  "issue|create|--repo|o/r|--title|Plain|--body-file|$SBM/body.md|--label|chore" \
+  "$(paste -sd'|' "$SBM/cap-none")"
+
+# Case M2 — explicit milestone: one create call carries --milestone, value verbatim.
+(
+  cd "$SBM" || exit 1
+  # shellcheck source=/dev/null
+  . "$SBM/.claude/hooks/_lib-tracker.sh"
+  tracker_clear_cache
+  PATH="$SBM/bin:$PATH" GH_CAPTURE="$SBM/cap-ms" tracker_create "o/r" "With ms" "$SBM/body.md" "chore" "v1.2 Beta" >/dev/null
+)
+assert_eq "tracker_create milestone arg → --milestone passed in the same call" \
+  "issue|create|--repo|o/r|--title|With ms|--body-file|$SBM/body.md|--milestone|v1.2 Beta|--label|chore" \
+  "$(paste -sd'|' "$SBM/cap-ms")"
+
+# Case M3 — a hostile milestone title arrives as ONE argument and runs nothing.
+EVILMS='Q4 "ship" $(touch PWNED) `touch PWNED2` ; touch PWNED3'
+(
+  cd "$SBM" || exit 1
+  # shellcheck source=/dev/null
+  . "$SBM/.claude/hooks/_lib-tracker.sh"
+  tracker_clear_cache
+  PATH="$SBM/bin:$PATH" GH_CAPTURE="$SBM/cap-evil" tracker_create "o/r" "Evil ms" "$SBM/body.md" "" "$EVILMS" >/dev/null
+)
+assert_eq "tracker_create milestone with quotes/\$()/backticks → one argument, verbatim" \
+  "$EVILMS" "$(awk 'p{print;exit} /^--milestone$/{p=1}' "$SBM/cap-evil")"
+pwned=no
+for f in PWNED PWNED2 PWNED3; do [ -e "$SBM/$f" ] && pwned=yes; done
+assert_eq "tracker_create milestone → no shell injection (no PWNED files)" "no" "$pwned"
+
+# Case M4 — an unknown milestone makes the CLI refuse: non-zero, empty stdout,
+# the CLI's own error on stderr, and exactly ONE create attempt (no retry
+# without the milestone, no follow-up edit).
+cat > "$SBM/bin/gh" <<'EOF'
+#!/bin/bash
+echo "x" >> "$GH_CALLS"
+if [ "$1" = "issue" ] && [ "$2" = "create" ]; then
+  while [ $# -gt 0 ]; do
+    if [ "$1" = "--milestone" ]; then
+      echo "could not add to milestone '$2': '$2' not found" >&2
+      exit 1
+    fi
+    shift
+  done
+  echo "https://github.com/o/r/issues/9"
+fi
+EOF
+chmod +x "$SBM/bin/gh"
+: > "$SBM/calls"
+(
+  cd "$SBM" || exit 1
+  # shellcheck source=/dev/null
+  . "$SBM/.claude/hooks/_lib-tracker.sh"
+  tracker_clear_cache
+  out=$(PATH="$SBM/bin:$PATH" GH_CALLS="$SBM/calls" tracker_create "o/r" "Bad ms" "$SBM/body.md" "" "nope" 2>"$SBM/err-ms"); rc=$?
+  printf '%s|%s\n' "$rc" "$out"
+) > "$SBM/r-unknown"
+IFS="|" read -r m_rc m_out < "$SBM/r-unknown"
+assert_eq "tracker_create unknown milestone → non-zero exit"        "1" "$m_rc"
+assert_eq "tracker_create unknown milestone → empty stdout"         ""  "$m_out"
+assert_eq "tracker_create unknown milestone → CLI error on stderr"  "1" "$(grep -c "'nope' not found" "$SBM/err-ms")"
+assert_eq "tracker_create unknown milestone → one create call only" "1" "$(wc -l < "$SBM/calls" | tr -d ' ')"
+rm -rf "$SBM"
+
+# Case M5 — glab takes the milestone as --milestone; custom exposes
+# $TRACKER_MILESTONE and a template that ignores it still works. Both kinds
+# come from project-config defaults, so no YAML parser is needed.
+SBK=$(make_sandbox)
+printf 'body\n' > "$SBK/body.md"
+cat > "$SBK/bin/glab" <<'EOF'
+#!/bin/bash
+[ -n "${GLAB_CAPTURE:-}" ] && printf '%s\n' "$@" > "$GLAB_CAPTURE"
+echo "https://gitlab.com/g/p/-/issues/5"
+EOF
+cat > "$SBK/bin/mycli" <<'EOF'
+#!/bin/bash
+[ -n "${MYCLI_CAPTURE:-}" ] && printf '%s\n' "$@" > "$MYCLI_CAPTURE"
+echo "https://example.com/c/u/issues/6"
+EOF
+chmod +x "$SBK/bin/glab" "$SBK/bin/mycli"
+
+printf '{ "tracker": { "kind": "glab" } }\n' > "$SBK/.claude/project-config.defaults.json"
+(
+  cd "$SBK" || exit 1
+  # shellcheck source=/dev/null
+  . "$SBK/.claude/hooks/_lib-tracker.sh"
+  tracker_clear_cache
+  PATH="$SBK/bin:$PATH" GLAB_CAPTURE="$SBK/cap-glab" tracker_create "g/p" "GL" "$SBK/body.md" "" 'Sprint "7" $(id)' >/dev/null
+  PATH="$SBK/bin:$PATH" GLAB_CAPTURE="$SBK/cap-glab0" tracker_create "g/p" "GL" "$SBK/body.md" >/dev/null
+)
+assert_eq "tracker_create glab milestone → --milestone passed verbatim" \
+  'Sprint "7" $(id)' "$(awk 'p{print;exit} /^--milestone$/{p=1}' "$SBK/cap-glab")"
+assert_eq "tracker_create glab no milestone → no --milestone flag" "0" "$(grep -c -- '--milestone' "$SBK/cap-glab0")"
+
+printf '%s\n' '{ "tracker": { "kind": "custom", "create_command": "mycli new --title \"$TRACKER_TITLE\" --ms \"$TRACKER_MILESTONE\"" } }' > "$SBK/.claude/project-config.defaults.json"
+(
+  cd "$SBK" || exit 1
+  # shellcheck source=/dev/null
+  . "$SBK/.claude/hooks/_lib-tracker.sh"
+  tracker_clear_cache
+  PATH="$SBK/bin:$PATH" MYCLI_CAPTURE="$SBK/cap-cu" tracker_create "c/u" "CU" "$SBK/body.md" "" 'M "x" $(id)' >/dev/null
+  PATH="$SBK/bin:$PATH" MYCLI_CAPTURE="$SBK/cap-cu0" tracker_create "c/u" "CU" "$SBK/body.md" >/dev/null
+)
+assert_eq "tracker_create custom → \$TRACKER_MILESTONE exposed verbatim" \
+  'M "x" $(id)' "$(awk 'p{print;exit} /^--ms$/{p=1}' "$SBK/cap-cu")"
+assert_eq "tracker_create custom no milestone → \$TRACKER_MILESTONE empty" \
+  "" "$(awk 'p{print;exit} /^--ms$/{p=1}' "$SBK/cap-cu0")"
+
+printf '%s\n' '{ "tracker": { "kind": "custom", "create_command": "mycli new --title \"$TRACKER_TITLE\"" } }' > "$SBK/.claude/project-config.defaults.json"
+(
+  cd "$SBK" || exit 1
+  # shellcheck source=/dev/null
+  . "$SBK/.claude/hooks/_lib-tracker.sh"
+  tracker_clear_cache
+  out=$(PATH="$SBK/bin:$PATH" tracker_create "c/u" "CU" "$SBK/body.md" "" "ignored"); rc=$?
+  printf '%s|%s\n' "$rc" "$(printf '%s' "$out" | jq -r '.ref // empty' 2>/dev/null)"
+) > "$SBK/r-ignore"
+IFS="|" read -r i_rc i_ref < "$SBK/r-ignore"
+assert_eq "tracker_create custom template ignoring milestone → exit 0" "0" "$i_rc"
+assert_eq "tracker_create custom template ignoring milestone → ref parsed" "6" "$i_ref"
+rm -rf "$SBK"
+
+# Case M5b — a multi-line registry value reaches the CLI as its first line
+# only, whichever reader produced it.
+SBL1=$(make_sandbox)
+install_gh_mock "$SBL1"
+printf 'Body.\n' > "$SBL1/body.md"
+(
+  cd "$SBL1" || exit 1
+  # shellcheck source=/dev/null
+  . "$SBL1/.claude/hooks/_lib-tracker.sh"
+  tracker_clear_cache
+  _tracker_project_value() { printf 'first\nsecond\n'; }
+  PATH="$SBL1/bin:$PATH" GH_CAPTURE="$SBL1/cap" tracker_create "o/r" "ML" "$SBL1/body.md" >/dev/null
+)
+assert_eq "tracker_create multi-line registry milestone → first line only" \
+  "first" "$(awk 'p{print;exit} /^--milestone$/{p=1}' "$SBL1/cap")"
+assert_eq "tracker_create multi-line registry milestone → second line never reaches the CLI" \
+  "0" "$(grep -c '^second$' "$SBL1/cap")"
+rm -rf "$SBL1"
+
+# Case M6 — kind=none ignores a milestone: still shape-only exit 3.
+SBN2=$(make_sandbox)
+printf '{ "tracker": { "kind": "none" } }\n' > "$SBN2/.claude/project-config.defaults.json"
+(
+  cd "$SBN2" || exit 1
+  # shellcheck source=/dev/null
+  . "$SBN2/.claude/hooks/_lib-tracker.sh"
+  tracker_clear_cache
+  tracker_create "o/r" "t" "" "" "M1" >/dev/null; echo "rc=$?"
+) > "$SBN2/rc"
+assert_eq "tracker_create kind=none with milestone → exit 3 (ignored)" "3" "$(sed -n 's/^rc=//p' "$SBN2/rc")"
+rm -rf "$SBN2"
+
+# Case M7 — the per-project `tracker.milestone` default (needs a YAML parser).
+# It applies when no argument is given, an explicit argument beats it, and a
+# project without the key is unaffected even when a sibling project has one.
+if [ "$HAVE_YAML" = yes ]; then
+  SBY=$(make_sandbox "version: 1
+projects:
+  - name: with-ms
+    repo: o/r
+    tracker:
+      milestone: 'Release \"2\" \$(id)'
+  - name: without-ms
+    repo: o/plain
+    tracker:
+      kind: gh")
+  install_gh_mock "$SBY"
+  printf 'Body.\n' > "$SBY/body.md"
+  (
+    cd "$SBY" || exit 1
+    # shellcheck source=/dev/null
+    . "$SBY/.claude/hooks/_lib-tracker.sh"
+    tracker_clear_cache
+    PATH="$SBY/bin:$PATH" GH_CAPTURE="$SBY/cap-def" tracker_create "o/r" "Default" "$SBY/body.md" >/dev/null
+    PATH="$SBY/bin:$PATH" GH_CAPTURE="$SBY/cap-ovr" tracker_create "o/r" "Override" "$SBY/body.md" "" "Explicit" >/dev/null
+    PATH="$SBY/bin:$PATH" GH_CAPTURE="$SBY/cap-oth" tracker_create "o/plain" "Other" "$SBY/body.md" >/dev/null
+  )
+  assert_eq "tracker_create registry milestone default → applied when no argument" \
+    'Release "2" $(id)' "$(awk 'p{print;exit} /^--milestone$/{p=1}' "$SBY/cap-def")"
+  assert_eq "tracker_create explicit milestone → beats the registry default" \
+    "Explicit" "$(awk 'p{print;exit} /^--milestone$/{p=1}' "$SBY/cap-ovr")"
+  assert_eq "tracker_create project without the key → no --milestone flag" \
+    "0" "$(grep -c -- '--milestone' "$SBY/cap-oth")"
+  rm -rf "$SBY"
+else
+  echo "SKIP: tracker_create registry milestone default (no yq / python3+PyYAML)"
+fi
+
+# ---------------------------------------------------------------------------
 # tracker_label_ensure (#709) — the tracker-agnostic analog of the inline
 # `gh label create` steps used by /spike, /prototype, /investigation.
 #
