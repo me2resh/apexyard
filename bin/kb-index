@@ -67,6 +67,29 @@ folder_heading() {
   fi
 }
 
+# Read the index fields of one handbook. Missing fields use the kb-migrate defaults.
+# Sets KB_TITLE KB_OWNER KB_VERIFIED_ON KB_STALE_AFTER KB_STATUS.
+load_entry() {
+  local rel=$1 abspath=$2 body="" vdate
+  if kb_has_front_matter "$abspath"; then
+    body=$(kb_front_matter_body "$abspath")
+  fi
+  KB_OWNER=$(kb_fm_scalar "$body" "owner")
+  [ -n "$KB_OWNER" ] || KB_OWNER=$(kb_file_author "$ROOT" "$rel")
+  vdate=$(kb_file_commit_date "$ROOT" "$rel")
+  KB_VERIFIED_ON=$(kb_fm_scalar "$body" "verified_on")
+  [ -n "$KB_VERIFIED_ON" ] || KB_VERIFIED_ON=$vdate
+  KB_STALE_AFTER=$(kb_fm_scalar "$body" "stale_after")
+  [ -n "$KB_STALE_AFTER" ] || KB_STALE_AFTER=$(kb_add_days "$KB_VERIFIED_ON" 180)
+  KB_STATUS=$(kb_fm_scalar "$body" "status")
+  [ -n "$KB_STATUS" ] || KB_STATUS=active
+  KB_TITLE=$(awk '/^# / { sub(/^# /,""); print; exit }' "$abspath")
+  if [ -z "$KB_TITLE" ]; then
+    KB_TITLE=$(basename "$rel")
+    KB_TITLE=${KB_TITLE%.*}
+  fi
+}
+
 # Build index.md content for one absolute directory under handbooks/.
 build_index() {
   local dir=$1
@@ -90,7 +113,7 @@ build_index() {
         README.md|index.md) continue ;;
       esac
       base=${f#"$ROOT"/}
-      kb_apply_defaults "$ROOT" "$base" "handbook" "$f"
+      load_entry "$base" "$f"
       title=$KB_TITLE
       # Escape pipes in table cells.
       title=$(printf '%s' "$title" | sed 's/|/\\|/g')
