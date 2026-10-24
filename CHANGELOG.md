@@ -1,3 +1,18 @@
+## [v5.10.1] — 2026-10-24
+
+Patch release — 4 improvements.
+
+### Changed (refactor / chore / docs)
+
+- (#1873) harden the terraform-ci golden-path template — ce979c5c
+- (#1872) state the hook threat model in SECURITY.md — 953d4501
+- (#1868) add an after-the-release checklist to /release — f9fd80df
+- (#1869) credit five missing issue authors — 0024f0f6
+
+### Thanks
+
+- @SecFathy (Mohammed Fathy) reported the problems that #1872 and #1873 fix.
+
 ## [v5.10.0] — 2026-10-22
 
 Minor release — 4 features, 34 fixes, 27 improvements.
