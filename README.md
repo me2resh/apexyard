@@ -327,6 +327,7 @@ Thank you to everyone who opened issues, including bug reports, feature requests
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Arafik-wahid-cubeish" title="rafik-wahid-cubeish"><img src="https://github.com/rafik-wahid-cubeish.png?size=100" width="64" height="64" alt="rafik-wahid-cubeish"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3ARef34t" title="Ref34t"><img src="https://github.com/Ref34t.png?size=100" width="64" height="64" alt="Ref34t"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Asamahali" title="samahali"><img src="https://github.com/samahali.png?size=100" width="64" height="64" alt="samahali"></a>
+<a href="https://github.com/SecFathy" title="SecFathy"><img src="https://github.com/SecFathy.png?size=100" width="64" height="64" alt="SecFathy"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Asts1078" title="sts1078"><img src="https://github.com/sts1078.png?size=100" width="64" height="64" alt="sts1078"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Asudanese" title="sudanese"><img src="https://github.com/sudanese.png?size=100" width="64" height="64" alt="sudanese"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Atifa64" title="tifa64"><img src="https://github.com/tifa64.png?size=100" width="64" height="64" alt="tifa64"></a>
