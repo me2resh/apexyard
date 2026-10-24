@@ -134,6 +134,44 @@ else
   pass "README not default target"
 fi
 
+# --- B1: stale_after counts from an existing verified_on ---
+cat > "$FX/handbooks/general/partial.md" <<'MD'
+---
+verified_on: 2020-03-01
+---
+
+# Handbook: Partial
+MD
+out=$("$MIGRATE" --root "$FX" "$FX/handbooks/general/partial.md" 2>&1) || true
+fm=$(awk 'NR==1 && /^---$/ {f=1;next} f && /^---$/ {exit} f' "$FX/handbooks/general/partial.md")
+echo "$fm" | grep -q '^verified_on: 2020-03-01$' && pass "partial keeps verified_on" || fail "partial keeps verified_on" "$fm"
+echo "$fm" | grep -q '^stale_after: 2020-08-28$' && pass "stale_after from existing verified_on" || fail "stale_after from existing verified_on" "$fm"
+
+# --- B2: refuse targets outside <root>/handbooks ---
+echo '# Outside' > "$FX/CLAUDE.md"
+mkdir -p "$FX/other"
+echo '# Other' > "$FX/other/x.md"
+OUT=$(mktemp -d)
+echo '# Far outside' > "$OUT/far.md"
+ln -s "$OUT/far.md" "$FX/handbooks/general/escape.md"
+ln -s "$FX/CLAUDE.md" "$FX/handbooks/general/escape2.md"
+mkdir -p "$FX/handbooks/general/sub"
+
+out=$("$MIGRATE" --root "$FX" "$FX/CLAUDE.md" 2>&1); rc=$?
+{ [ "$rc" -ne 0 ] && echo "$out" | grep -q 'refused' && ! grep -q '^owner:' "$FX/CLAUDE.md"; } && pass "refuses path outside handbooks/" || fail "refuses path outside handbooks/" "$out"
+
+out=$("$MIGRATE" --root "$FX" "$OUT/far.md" 2>&1); rc=$?
+{ [ "$rc" -ne 0 ] && echo "$out" | grep -q 'refused' && ! grep -q '^owner:' "$OUT/far.md"; } && pass "refuses path outside the root" || fail "refuses path outside the root" "$out"
+
+out=$("$MIGRATE" --root "$FX" "$FX/handbooks/../other/x.md" 2>&1); rc=$?
+{ [ "$rc" -ne 0 ] && echo "$out" | grep -q 'refused' && ! grep -q '^owner:' "$FX/other/x.md"; } && pass "refuses .. escape" || fail "refuses .. escape" "$out"
+
+out=$("$MIGRATE" --root "$FX" "$FX/handbooks/general/escape.md" 2>&1); rc=$?
+{ [ "$rc" -ne 0 ] && echo "$out" | grep -q 'refused' && ! grep -q '^owner:' "$OUT/far.md"; } && pass "refuses symlink escape (outside root)" || fail "refuses symlink escape (outside root)" "$out"
+
+out=$("$MIGRATE" --root "$FX" "$FX/handbooks/general/escape2.md" 2>&1); rc=$?
+{ [ "$rc" -ne 0 ] && echo "$out" | grep -q 'refused' && ! grep -q '^owner:' "$FX/CLAUDE.md"; } && pass "refuses symlink escape (inside root)" || fail "refuses symlink escape (inside root)" "$out"
+rm -rf "$OUT"
 
 echo
 echo "Total: $((PASS + FAIL))  Passed: $PASS  Failed: $FAIL"

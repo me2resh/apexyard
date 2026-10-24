@@ -1,8 +1,16 @@
 # Knowledge base
 
-This page is the reference for the ApexYard knowledge base. It covers the front matter schema, the compile output, the freshness check, and the GitHub Action.
+This page is the reference for handbook front matter, the migration script, the generated folder indexes and rule tests.
 
-The knowledge base turns handbook, rule, AgDR, and ORBIT records into a stable JSON set under `kb/`. Adopters who skip the Action see no change. Nothing in this feature wires into existing hooks or `settings.json`.
+The work ships as three stacked PRs for #1877:
+
+| Step | Part | Status in this page |
+| --- | --- | --- |
+| 1 of 3 | Front matter schema and `bin/kb-migrate` | Shipped by step 1 |
+| 2 of 3 | `bin/kb-index` and the generated `index.md` files | Shipped by step 2 |
+| 3 of 3 | Rule tests and Rex rule ids | Shipped by step 3 |
+
+Nothing in this feature wires into an existing hook or into `settings.json`.
 
 ## Front matter schema
 
@@ -18,23 +26,27 @@ Handbook entries under `handbooks/` may start with a YAML front matter block. Li
 | `version` | integer | `1` |
 | `status` | `active` \| `draft` \| `deprecated` | `active` |
 
+When `verified_on` is set in the file and `stale_after` is missing, the default is that `verified_on` value plus 180 days.
+
 Other keys (for example domain handbook `paths:`) stay in place. The migrate step never rewrites an existing value.
 
 ### Enforcement line
 
 A handbook may start with `ENFORCEMENT: blocking`. After migrate, the front matter block comes first. The enforcement line is the first line after the closing `---`. Do not delete it.
 
-### Migrate
+### Migrate (step 1)
 
 ```bash
 bin/kb-migrate [--root DIR] [--dry-run] [PATH...]
 ```
 
-Default targets: every `.md` file under `handbooks/` except `README.md` and `index.md`. A second run prints `unchanged` and leaves bytes identical when all fields exist. Do not run migrate on `.claude/rules/`.
+Default targets: every `.md` file under `handbooks/` except `README.md` and `index.md`. A second run prints `unchanged` and leaves bytes identical when all fields exist.
+
+The script refuses any target that is not inside `handbooks/` under the root. It resolves `..` and symlinks before it checks. Use it only on handbooks.
 
 When a file has no commit yet, the owner comes from `git var GIT_AUTHOR_IDENT` (read-only) or `unknown`. The date is today.
 
-## Generated folder index
+## Generated folder index (step 2)
 
 ```bash
 bin/kb-index [--root DIR] [--check]
@@ -48,84 +60,6 @@ For `handbooks/` and each sub-folder, the script writes `index.md`. The first li
 
 The file has a heading, a table of entries in that folder, and a list of sub-folders. Sort order is fixed. `README.md` and `index.md` are never entries. `--check` writes nothing and exits 1 when an index would change.
 
-## Compile step
+## Rule tests (step 3)
 
-```bash
-bin/kb-compile [--root DIR] [--out DIR] [--check] [--push]
-```
-
-Default output directory is `<root>/kb`. The script never edits a source file. It uses a temp directory for work and cleans it with a trap.
-
-### Sources
-
-| Kind | Paths |
-| --- | --- |
-| `handbook` | `handbooks/**/*.md` (skip `README.md`, `index.md`) |
-| `rule` | `.claude/rules/*.md` |
-| `agdr` | `docs/agdr/AgDR-*.md` |
-| `orbit` | `docs/orbit/**/*.json` and `docs/orbit/**/*.md` when present |
-
-Missing directories are fine. An unmigrated file still compiles. Missing fields use the same defaults as `bin/kb-migrate`.
-
-For kind `agdr` and `orbit`, `stale_after` is JSON `null`. Records do not go stale. When present, `owner` comes from the `agent:` front matter key.
-
-### Output
-
-One JSON file per entry under `<out>/entries/`. The file name is the repo-relative path with `/` replaced by `__`, then `.json`.
-
-Entry fields: `id`, `kind`, `path`, `title`, `owner`, `verified_by`, `verified_on`, `stale_after`, `sources`, `version`, `status`, `hash`.
-
-`id` is the repo-relative path without the extension. `hash` is the SHA-256 of the source file bytes.
-
-`<out>/manifest.json` shape:
-
-```json
-{
-  "schema_version": 1,
-  "entry_count": 0,
-  "entries": [
-    { "id": "", "kind": "", "path": "", "hash": "", "file": "" }
-  ]
-}
-```
-
-Entries sort by `id`. There is no timestamp. A second run with no source change writes identical bytes. Stale files under `<out>/entries/` that no longer have a source are removed.
-
-`--check` compiles into a temp directory and exits 1 when `<out>` differs.
-
-### Push
-
-The compile step makes no network call unless `--push` is set and both `APEXYARD_TOKEN` and `APEXYARD_KB_ENDPOINT` are set. Then it POSTs `manifest.json` with `curl`. When `--push` is set and either variable is missing, it prints a skip message to stderr and exits 0. It never prints the token.
-
-The `kb/` directory is gitignored. Do not commit it.
-
-## Freshness check
-
-```bash
-bin/kb-freshness [--root DIR] [--today YYYY-MM-DD] [--out FILE]
-```
-
-The script compiles into a temp directory, then lists entries whose `stale_after` is not null and earlier than today. Deprecated entries are skipped. The report is a markdown table with id, owner, verified_on, stale_after, and days overdue.
-
-When nothing is stale, the script prints nothing, writes no file, and exits 0. When entries are stale, it prints the report, writes `--out` when given, and exits 0.
-
-## GitHub Action
-
-Workflow file: `.github/workflows/kb.yml`.
-
-Triggers:
-
-- `push` on branches `dev` and `main` for knowledge-base paths
-- `pull_request` on the same paths
-- `schedule` cron `23 4 * * *`
-- `workflow_dispatch`
-
-Job `compile` (push, pull request, dispatch): runs `bin/kb-compile` and `bin/kb-index --check`, then uploads the `kb/` artifact. Permission: `contents: read`.
-
-Job `freshness` (schedule and dispatch only): runs `bin/kb-freshness --out kb-stale-report.md`. When the report exists, it creates or updates one pull request from branch `kb/stale-entries` into the default branch. Permissions: `contents: write` and `pull-requests: write` on this job only.
-
-Concurrency groups keep a push from cancelling the nightly run.
-
-## Rule tests
-
-Rule test cases live under `rule-tests/`. The path mirrors the handbook path. See `rule-tests/README.md`. The `/codify-rule` skill asks for one must-flag snippet before it writes the handbook. `bin/kb-compile` warns on a broken rule-test file and does not fail the compile.
+Rule test cases live under `rule-tests/`. The path mirrors the handbook path. The `/codify-rule` skill asks for one must-flag snippet before it writes the handbook. Rex findings that cite a handbook or rule carry `rule-id:`.

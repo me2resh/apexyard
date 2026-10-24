@@ -68,6 +68,28 @@ EOF
   fi
 fi
 
+ROOT_REAL=$(cd "$ROOT" && pwd -P) || exit 1
+HB_REAL=$ROOT_REAL/handbooks
+if [ -d "$ROOT/handbooks" ]; then
+  HB_REAL=$(cd "$ROOT/handbooks" && pwd -P) || exit 1
+fi
+
+# Print the physical path of a file. Follows symlinks and removes ..
+real_file() {
+  local p=$1 d l n=0
+  while [ -L "$p" ]; do
+    n=$((n + 1))
+    if [ "$n" -gt 20 ]; then return 1; fi
+    l=$(readlink "$p") || return 1
+    case "$l" in
+      /*) p=$l ;;
+      *) p=$(dirname "$p")/$l ;;
+    esac
+  done
+  d=$(cd "$(dirname "$p")" 2>/dev/null && pwd -P) || return 1
+  printf '%s/%s\n' "$d" "$(basename "$p")"
+}
+
 migrate_one() {
   local abs=$1
   local rel body missing tmp missfile first rest
@@ -82,7 +104,20 @@ migrate_one() {
     return 1
   fi
 
-  rel=${abs#"$ROOT"/}
+  # Resolve symlinks and .. first. Refuse any target outside <root>/handbooks.
+  if ! abs=$(real_file "$abs"); then
+    echo "kb-migrate: cannot resolve: $1" >&2
+    return 1
+  fi
+  case "$abs" in
+    "$HB_REAL"/*) ;;
+    *)
+      echo "kb-migrate: refused, outside handbooks/: $1" >&2
+      return 1
+      ;;
+  esac
+
+  rel=${abs#"$ROOT_REAL"/}
 
   if kb_has_front_matter "$abs"; then
     body=$(kb_front_matter_body "$abs")
