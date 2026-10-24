@@ -10,7 +10,7 @@ Decision rationale: [`docs/agdr/AgDR-0020-adopter-handbooks-for-rex.md`](../docs
 
 ## Discovery
 
-Rex finds handbooks by **path convention** — there is no YAML frontmatter, no `applies_to:` glob to maintain. The directory IS the targeting metadata.
+Rex finds handbooks by **path convention** — there is no `applies_to:` glob to maintain. Optional front matter holds owner and review dates. The directory IS the targeting metadata.
 
 | Path | When Rex loads it |
 |---|---|
@@ -21,9 +21,9 @@ Rex finds handbooks by **path convention** — there is no YAML frontmatter, no 
 
 If you need a fifth bucket beyond these four, add the directory and update Rex's discovery logic in `.claude/agents/code-reviewer.md`. The path convention is open — Rex falls back to "always-load" for any directory it doesn't have specific rules for.
 
-## Front matter and freshness
+## Front matter
 
-Handbook entries use a YAML front matter schema for owner, verification dates, and status. Run `bin/kb-migrate` to add missing fields. The compile and freshness tools are documented in [`docs/knowledge-base.md`](../docs/knowledge-base.md).
+Handbook entries use a YAML front matter schema for owner, verification dates, and status. Run `bin/kb-migrate` to add missing fields. The schema and the scripts are documented in [`docs/knowledge-base.md`](../docs/knowledge-base.md).
 
 A handbook may start with that front matter block. When it does, `ENFORCEMENT: blocking` is the first line after the closing `---`.
 
