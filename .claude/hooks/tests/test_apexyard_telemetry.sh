@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Test install events with local repositories and a curl stub.
-# shellcheck disable=SC1091
+# shellcheck disable=SC1091,SC2154
 . "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
-# shellcheck disable=SC2154
 source "$(dirname "${BASH_SOURCE[0]}")/_lib-apexyard-cli.sh"
 export APEXYARD_TELEMETRY=1 APEXYARD_CURL="$sb/tools/curl" CURL_LOG="$sb/curl.log" CURL_BODY="$sb/body.json"
 unset APEXYARD_TELEMETRY_URL
