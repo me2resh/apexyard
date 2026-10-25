@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # apexyard — tiny CLI shim that exposes a subset of ApexYard skills as
-# shell-runnable commands. Commands: `apexyard status` and `apexyard doctor`.
+# shell-runnable commands: status, doctor, init, and update.
 #
 # Install: symlink this script into a directory on your PATH.
 #
@@ -73,6 +73,8 @@ usage() {
 Usage: apexyard <command> [args]
 
 Commands:
+  init [options]         Create an ops repository. Use init --help for options.
+  update [--check]        Show upstream changes and start /update.
   doctor                 Read-only environment checks (exit 0/1/2: pass/warn/fail).
   status [-b|--briefing]   Compact "where am I" briefing — workspace, ticket,
                            branch, role. Defaults to --briefing today (the
@@ -89,6 +91,17 @@ case "$cmd" in
   ""|-h|--help|help)
     usage
     exit 0
+    ;;
+  init|update)
+    cli_path=$(resolve_cli_path) || exit 2
+    if [ "$cmd" = update ]; then
+      APEXYARD_UPDATE_ROOT=$(find_ops_root) || {
+        echo "apexyard update: not inside an apexyard fork" >&2
+        exit 2
+      }
+      export APEXYARD_UPDATE_ROOT
+    fi
+    exec "$BASH" "$(dirname "$cli_path")/apexyard-$cmd.sh" "$@"
     ;;
   doctor)
     # Use the fork that contains the current directory.
