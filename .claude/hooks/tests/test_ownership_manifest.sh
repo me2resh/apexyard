@@ -148,10 +148,18 @@ for path in projects/README.md .claude/skills/update/SKILL.md .claude/rules/git-
 done
 check_class handbooks/general/x.md shared
 check_class .claude/settings.json shared
-for spec in '.claude/hooks/tests/test_x.sh:1' '.claude/hooks/block-unreviewed-merge.sh:0' '.githooks/pre-push:0' '.claude/settings.json:0'; do
+for spec in 'bin/run-pre-push-checks.sh:0' 'bin/run-configured-pre-push-checks.sh:0' 'bin/install-git-hooks.sh:0' '.cursor/hooks.json:0' 'harness-adapters/opencode/src/gate-dispatcher.ts:0' 'harness-adapters/pi/src/gate-dispatcher.ts:0' 'bin/other.sh:1' '.github/workflows/ci.yml:1' '.claude/hooks/tests/test_x.sh:1' '.claude/hooks/block-unreviewed-merge.sh:0' '.githooks/pre-push:0' '.claude/settings.json:0'; do
   status=0; ownership_is_security "${spec%:*}" || status=$?
   assert_eq "real security $spec" "${spec##*:}" "$status"
 done
+mkdir -p "$fixture/nogit/bin" "$fixture/nogit/.claude"
+cp "$SRC_ROOT/bin/check-ownership-manifest.sh" "$SRC_ROOT/bin/_lib-ownership.sh" "$fixture/nogit/bin/"
+cp "$SRC_ROOT/.claude/ownership-manifest.yaml" "$fixture/nogit/.claude/"
+status=0; GIT_CEILING_DIRECTORIES="$fixture" bash "$fixture/nogit/bin/check-ownership-manifest.sh" >"$fixture/out" 2>"$fixture/error" || status=$?
+assert_eq 'checker outside work tree' 2 "$status"
+: > "$fixture/empty"
+status=0; bash "$SRC_ROOT/bin/check-ownership-manifest.sh" --paths "$fixture/empty" >"$fixture/out" 2>"$fixture/error" || status=$?
+assert_eq 'checker empty input' 2 "$status"
 if git -C "$SRC_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   status=0; bash "$SRC_ROOT/bin/check-ownership-manifest.sh" || status=$?
   assert_eq 'real repo' 0 "$status"
