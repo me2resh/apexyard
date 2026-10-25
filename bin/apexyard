@@ -20,6 +20,9 @@
 
 set -u
 
+APEXYARD_CLI_VERSION="0.1.0"
+export APEXYARD_CLI_VERSION
+
 # ---------------------------------------------------------------------------
 # Resolve the ops-fork root from $PWD by walking up. Honours both the
 # v2 `.apexyard-fork` marker (split-portfolio v2, framework ≥ #242) and
@@ -83,6 +86,12 @@ Commands:
 Run from inside an apexyard fork or any of its workspace/<name>/ clones.
 EOF
 }
+
+cli_path=$(resolve_cli_path) || exit 2
+# Read the notice helper from the real CLI directory.
+# shellcheck source=bin/_lib-telemetry.sh
+source "$(dirname "$cli_path")/_lib-telemetry.sh"
+telemetry_notice_once || true
 
 cmd="${1:-}"
 shift || true

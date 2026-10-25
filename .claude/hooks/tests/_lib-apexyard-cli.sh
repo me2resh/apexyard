@@ -4,6 +4,9 @@ set -euo pipefail
 CLI=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/bin/apexyard
 sb=$(mktemp -d)
 trap 'rm -rf "$sb"' EXIT
+export HOME="$sb/home" XDG_CONFIG_HOME="$sb/config"
+export APEXYARD_TELEMETRY=0
+mkdir -p "$HOME" "$XDG_CONFIG_HOME"
 export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
 export GIT_AUTHOR_NAME=Test GIT_AUTHOR_EMAIL=test@example.invalid
 export GIT_COMMITTER_NAME=Test GIT_COMMITTER_EMAIL=test@example.invalid

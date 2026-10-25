@@ -2,19 +2,19 @@
 # Create an ops repository with the full framework history.
 set -euo pipefail
 usage() {
-  echo 'Usage: apexyard init [--org X] [--name ops] [--private|--public] [--dir PATH] [--ref REF] [--dry-run]'
+  echo 'Usage: apexyard init [--org X] [--name ops] [--private|--public] [--dir PATH] [--ref REF] [--agent NAME] [--dry-run]'
 }
 fail() { echo "apexyard init: $*" >&2; exit 2; }
-org='' name=ops visibility=--private target='' dry_run=0
+org='' name=ops visibility=--private target='' dry_run=0 agent=claude
 ref=${APEXYARD_FRAMEWORK_REF:-main}
 framework=${APEXYARD_FRAMEWORK_URL:-https://github.com/me2resh/apexyard.git}
 gh_cmd=${APEXYARD_GH:-gh}
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --org|--name|--dir|--ref)
+    --org|--name|--dir|--ref|--agent)
       [ "$#" -ge 2 ] && [ -n "$2" ] || fail "$1 requires a value"
       case "$1" in
-        --org) org=$2 ;; --name) name=$2 ;; --dir) target=$2 ;; --ref) ref=$2 ;;
+        --org) org=$2 ;; --name) name=$2 ;; --dir) target=$2 ;; --ref) ref=$2 ;; --agent) agent=$2 ;;
       esac
       shift 2 ;;
     --private|--public) visibility=$1; shift ;;
@@ -23,6 +23,10 @@ while [ "$#" -gt 0 ]; do
     *) fail "unknown option: $1" ;;
   esac
 done
+case "$agent" in
+  claude|codex|cursor|opencode|pi|other) ;;
+  *) fail "invalid agent: $agent" ;;
+esac
 for tool in git jq "$gh_cmd"; do
   command -v "$tool" >/dev/null 2>&1 || fail "required command not found: $tool"
 done
@@ -61,3 +65,9 @@ done
 sed "s/name: \"Your Company Name\"/name: \"$org\"/" "$target/onboarding.yaml" > "$target/onboarding.yaml.tmp"
 mv "$target/onboarding.yaml.tmp" "$target/onboarding.yaml"
 printf 'Open %s in your agent tool. Run /setup to complete setup.\n' "$target"
+
+# Telemetry must not prevent repository creation.
+# shellcheck source=bin/_lib-telemetry.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_lib-telemetry.sh"
+telemetry_notice_once || true
+telemetry_send "$agent" || true
