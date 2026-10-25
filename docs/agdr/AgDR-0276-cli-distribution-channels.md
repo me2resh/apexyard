@@ -27,11 +27,16 @@ Install was star, fork and clone. We want one command and real download counts. 
 
 ## Decision
 
-Chosen: **release assets plus install.sh, formula file and npm launcher**. The release workflow runs only on a `v*.*.*` tag push. It builds the archive and checksum, then creates the release. The installer refuses on a checksum mismatch.
+Chosen: **release assets plus install.sh, formula file and npm launcher**. The release workflow is reusable (`workflow_call`, with a `tag` input) and has a `workflow_dispatch` trigger for a manual re-run. It builds the archive and checksum, then attaches them to the release. The installer refuses on a checksum mismatch.
+
+Trigger: `auto-tag-on-release-pr-merge.yml` calls the workflow in a `cli-assets` job, after it creates the tag and the GitHub Release. A tag push made with `GITHUB_TOKEN` starts no other workflow (AgDR-0076), so a tag-push trigger never ran for framework releases. We reject a personal access token. A tag trigger would also share the `v*.*.*` name space with framework releases. The workflow has top-level `contents: read`. Only its job and the calling job have `contents: write`.
+
+Version form: the archive and release use the tag form (`v1.2.3`). The CLI version stamp drops the `v`, as `bin/apexyard` and the Homebrew file do.
 
 ## Consequences
 
-- The owner pushes a tag to release. No other trigger exists.
+- A framework release builds and attaches the CLI assets with no owner step. The owner can re-run the workflow with `workflow_dispatch`.
+- Follow-up (not filed): the checksum comes from the same host as the archive. It gives integrity, not authenticity. A later signature, for example a Sigstore attestation, can close the gap.
 - The formula and npm package stay as files in the repo until the owner publishes them.
 - A checksum mismatch stops the install.
 

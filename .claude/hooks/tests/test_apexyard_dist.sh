@@ -59,7 +59,7 @@ mkdir "$sb/unpacked"
 tar -xzf "$archive" -C "$sb/unpacked"
 bundle="$sb/unpacked/apexyard-$APEXYARD_VERSION"
 check version test "$(cat "$bundle/VERSION")" = "$APEXYARD_VERSION"
-check stamp grep -Fq "APEXYARD_CLI_VERSION=\"$APEXYARD_VERSION\"" "$bundle/bin/apexyard"
+check stamp grep -Fq "APEXYARD_CLI_VERSION=\"${APEXYARD_VERSION#v}\"" "$bundle/bin/apexyard"
 for file in apexyard apexyard-init.sh apexyard-update.sh _lib-telemetry.sh; do
   check "archive $file" test -f "$bundle/bin/$file"
 done
@@ -78,9 +78,10 @@ check exact-archive cmp "$sb/expected" "$sb/actual"
 check reproducible cmp "$archive" "$sb/rebuild/apexyard-$APEXYARD_VERSION.tar.gz"
 workflow="$root/.github/workflows/release-cli.yml"
 sed -n '/^on:/,/^permissions:/p' "$workflow" > "$sb/trigger"
-check tags grep -Fq "'v*.*.*'" "$sb/trigger"
-check push grep -q '^  push:' "$sb/trigger"
-check tag-only bash -c '! grep -Eq "pull_request|workflow_dispatch|branches:" "$1"' _ "$sb/trigger"
+check reusable grep -q '^  workflow_call:' "$sb/trigger"
+check no-tag-push bash -c '! grep -Eq "^  push:|pull_request" "$1"' _ "$sb/trigger"
+check top-read bash -c 'sed -n "/^permissions:/,/^jobs:/p" "$1" | grep -q "contents: read"' _ "$workflow"
+check called-by-autotag grep -Fq 'uses: ./.github/workflows/release-cli.yml' "$root/.github/workflows/auto-tag-on-release-pr-merge.yml"
 if command -v ruby >/dev/null 2>&1; then
   check formula ruby -c "$root/packaging/homebrew/apexyard.rb"
 else echo 'NOTE: ruby is not available.'; fi
