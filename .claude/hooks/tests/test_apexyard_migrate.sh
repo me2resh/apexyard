@@ -70,25 +70,6 @@ build_fixture() {
   cp "$SRC_ROOT/.claude/hooks/_lib-migration-chain.sh" "$root/.claude/hooks/"
   printf '%s\n' 'v5.4.0' > "$root/.claude/framework-version"
   : > "$root/onboarding.yaml"; : > "$root/apexyard.projects.yaml"; : > "$root/.apexyard-fork"
-  cp "$SRC_ROOT/bin/_lib-ownership.sh" "$root/bin/_lib-ownership.sh"
-  cp "$SRC_ROOT/.claude/ownership-manifest.yaml" "$root/.claude/ownership-manifest.yaml"
-  chmod +x "$1/gh"
-}
-
-reset_gh_state() {
-  FAKE_GH_STATE="$1"
-  mkdir -p "$FAKE_GH_STATE"
-  export FAKE_GH_STATE
-  : > "$FAKE_GH_STATE/calls.log"
-  install_fake_gh "$FAKE_GH_BIN"
-}
-
-build_fixture() {
-  local root="$1" upstream="$2" origin_bare pair
-  mkdir -p "$root/.claude/migrations" "$root/bin" "$root/.claude/hooks"
-  cp "$SRC_ROOT/.claude/hooks/_lib-migration-chain.sh" "$root/.claude/hooks/"
-  printf '%s\n' 'v5.4.0' > "$root/.claude/framework-version"
-  : > "$root/onboarding.yaml"; : > "$root/apexyard.projects.yaml"; : > "$root/.apexyard-fork"
   cat > "$root/bin/_lib-ownership.sh" <<'EOS'
 ownership_class() { printf '%s\n' 'framework'; }
 ownership_is_security() { return 1; }
@@ -268,6 +249,50 @@ if build_fixture "$F5" "$UPSTREAM_BARE"; then
     mark_pass "--dry-run mutates nothing (no create, no symlink, no remote change)"
   else mark_fail "case5 dry-run" "rc=$rc out=$out"; fi
 else mark_fail "case5 build" "build_fixture failed"; fi
+
+# Case 7: a failing migration pair exits non-zero and writes no anchor
+F7="$BASE/fork7"; mkdir -p "$F7"; reset_gh_state "$BASE/gh-state-7"
+if build_fixture "$F7" "$UPSTREAM_BARE"; then
+  printf '%s\n' '#!/bin/bash' 'exit 7' > "$F7/.claude/migrations/v5.5.0-to-v5.6.0.sh"
+  rc=0; out=$(run_migrate "$F7" --target v5.7.0 --run-migrations 2>&1) || rc=$?
+  anchor=$(cat "$F7/.claude/framework-version" 2>/dev/null || true)
+  if [ "$rc" -ne 0 ] && [ "$anchor" = "v5.4.0" ]; then
+    mark_pass "failing migration pair exits non-zero and leaves the anchor"
+  else mark_fail "case7 failing pair" "rc=$rc anchor='$anchor' out=$out"; fi
+else mark_fail "case7 build" "build_fixture failed"; fi
+
+# Case 8: path move copies branches that exist only on the old fork
+F8="$BASE/fork8"; mkdir -p "$F8"; reset_gh_state "$BASE/gh-state-8"
+APEXYARD_BIN_DIR="$BASE/local-bin-8"; mkdir -p "$APEXYARD_BIN_DIR"
+if build_fixture "$F8" "$UPSTREAM_BARE"; then
+  git -C "$F8" push -q origin main:refs/heads/remote-only >/dev/null 2>&1
+  git -C "$F8" fetch -q origin >/dev/null 2>&1
+  rc=0; out=$(run_migrate "$F8" --path move --new-repo owner/rem --yes 2>&1) || rc=$?
+  new_bare=$(cat "$FAKE_GH_STATE/created-owner_rem" 2>/dev/null || true)
+  if [ "$rc" -eq 0 ] && [ -n "$new_bare" ] \
+    && git --git-dir="$new_bare" show-ref --verify --quiet refs/heads/remote-only \
+    && ! git --git-dir="$new_bare" show-ref --verify --quiet refs/heads/HEAD; then
+    mark_pass "path move copies old-fork-only branches without force"
+  else mark_fail "case8 remote branches" "rc=$rc out=$out"; fi
+else mark_fail "case8 build" "build_fixture failed"; fi
+
+# Case 9: apexyard update works after each path (needs #1888)
+if grep -q '^  update)' "$CLI"; then
+  for p in keep move; do
+    F9="$BASE/fork9$p"; mkdir -p "$F9"; reset_gh_state "$BASE/gh-state-9$p"
+    APEXYARD_BIN_DIR="$BASE/local-bin-9$p"; mkdir -p "$APEXYARD_BIN_DIR"
+    build_fixture "$F9" "$UPSTREAM_BARE" || { mark_fail "case9 build" "$p"; continue; }
+    if [ "$p" = move ]; then run_migrate "$F9" --path move --new-repo "owner/upd" --yes >/dev/null 2>&1
+    else run_migrate "$F9" --path keep >/dev/null 2>&1; fi
+    # run_migrate appends "migrate"; call the CLI directly for update.
+    out=$(cd "$F9" && OPS_ROOT="$F9" PATH="$FAKE_GH_BIN:$PATH" bash "$F9/bin/apexyard" update --dry-run 2>&1 </dev/null) || true
+    if printf '%s\n' "$out" | grep -qi 'unknown command'; then
+      mark_fail "case9 update after $p" "$out"
+    else mark_pass "apexyard update is recognised after path $p"; fi
+  done
+else
+  echo "  SKIP apexyard update after paths: 'update' command absent (lands in #1888)"
+fi
 
 # Case 6: safety grep
 scan_file() {

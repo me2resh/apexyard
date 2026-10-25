@@ -236,7 +236,8 @@ apexyard migrate --dry-run        # print actions; change nothing
 
 Use this when the fork stays where it is and you only want the `apexyard` CLI
 on your PATH. The repo files do not change. Later updates run through
-`apexyard update`.
+`apexyard update`. The `update` command ships in PR #1888; this change lands
+after it.
 
 ```bash
 apexyard migrate --path keep
@@ -249,8 +250,8 @@ overwrite any other file.
 
 ### Path move — new repo, full history, keep upstream
 
-Use this when you want a new empty GitHub repo and a full push of every branch
-and tag. You archive the old fork yourself afterward. The script never archives
+Use this when you want a new empty GitHub repo and a push of every branch
+(local and old-fork) and tag. You archive the old fork yourself afterward. The script never archives
 or deletes the old remote.
 
 ```bash
@@ -264,8 +265,11 @@ What it does:
 2. Creates the repo with `gh repo create` (no `--source`, no `--push`).
 3. Renames `origin` → `old-fork`, adds the new URL as `origin`.
 4. Keeps an existing `upstream`, or adds it from the fork parent.
-5. Runs `git push origin --all` and `git push origin --tags` (never `--force`,
-   `--mirror`, or `--delete`).
+5. Runs `git push origin --all` (local branches), then pushes each branch that
+   exists only on the old fork (`refs/remotes/old-fork/<name>` to
+   `refs/heads/<name>`), then `git push origin --tags`. It never uses
+   `--force`, `--mirror`, or `--delete`. A remote branch is only as current as
+   your last `git fetch` of the old fork.
 6. Prints hand-archive steps for the old fork.
 
 ### Migration chain

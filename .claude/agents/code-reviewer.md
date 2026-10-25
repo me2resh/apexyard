@@ -455,7 +455,7 @@ When a custom handbook addresses the same topic as a public handbook, **apply BO
 
 #### Enforcement: advisory vs blocking
 
-Each handbook is **advisory** by default. A handbook is **blocking** if and only if its body contains the literal phrase `ENFORCEMENT: blocking` at the **top of the file** (typically as the first line, before the H1 title).
+Each handbook is **advisory** by default. A handbook is **blocking** if and only if its body contains the literal phrase `ENFORCEMENT: blocking` at the top of the body. A handbook may start with a YAML front matter block. When it does, `ENFORCEMENT: blocking` is the first line after the closing `---`.
 
 | Type | If you find a violation | Effect on verdict |
 |---|---|---|
@@ -469,7 +469,7 @@ For each loaded handbook (public or private custom):
 1. Read the "What Rex flags" section — that's the trigger pattern list.
 2. Read the "What's NOT a violation" section — that's the false-positive guard.
 3. Scan the diff for the trigger patterns; suppress matches that fall under the false-positive guard.
-4. For each genuine violation, surface a finding citing the handbook path (the absolute resolved path for the private layer), the file:line in the diff, the specific rule violated (one sentence), and the mitigation, if the handbook suggests one.
+4. For each genuine violation, surface a finding citing the handbook path (the absolute resolved path for the private layer), the file:line in the diff, the specific rule violated (one sentence), and the mitigation, if the handbook suggests one. Every finding that cites a handbook or a framework rule must include its rule id (the repo-relative path without `.md`, for example `handbooks/architecture/migration-safety`), written as `rule-id: <id>` in the finding.
 
 #### Handbook section in the review output
 
@@ -479,9 +479,11 @@ Add a `### Handbook Findings` section to the review (between `### Issues Found` 
 ### Handbook Findings
 
 ⛔ **Migration Safety (blocking)** — `handbooks/architecture/migration-safety.md`
+- rule-id: handbooks/architecture/migration-safety
 - `prisma/migrations/20260514_drop_role/migration.sql:3` drops `users.role_v1` which the previous release reads in `src/auth/role-resolver.ts:42`. Split into a deprecate-then-drop pair across two releases. (See handbook § "What Rex flags" #1.)
 
 ⚠ **TypeScript Strict Mode** — `handbooks/language/typescript/strict-mode.md`
+- rule-id: handbooks/language/typescript/strict-mode
 - `src/handlers/user.ts:42` declares `function fetchUser(id: any)` — replace with `string` or a domain value object.
 ```
 

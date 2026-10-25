@@ -125,8 +125,9 @@ migrate_print_or_run_chain() {
   for pair in "$@"; do
     [ -n "$pair" ] || continue
     migrate_say "Running $pair ..."
-    if ! migration_run "$pair"; then
-      rc=$?; migrate_die "migration $pair exited $rc; stopped"; return "$rc"
+    migration_run "$pair"; rc=$?
+    if [ "$rc" -ne 0 ]; then
+      migrate_die "migration $pair exited $rc; stopped"; return "$rc"
     fi
   done
   migration_write_anchor "$target" || return 1
@@ -167,7 +168,7 @@ migrate_print_archive_instructions() {
 }
 
 migrate_path_move() {
-  local new_repo="$1" public="$2" dry_run="$3" visibility new_url parent_url
+  local new_repo="$1" public="$2" dry_run="$3" visibility new_url parent_url ref
   [ -n "$new_repo" ] || { migrate_die "path move requires --new-repo OWNER/NAME"; return 1; }
   case "$new_repo" in */*) ;; *) migrate_die "--new-repo must be OWNER/NAME"; return 1 ;; esac
   if migrate_gh repo view "$new_repo" >/dev/null 2>&1; then
@@ -207,6 +208,12 @@ migrate_path_move() {
     fi
   fi
   git -C "$MIGRATE_ROOT" push origin --all || return 1
+  # Branches that exist only on the old fork: copy them, never overwrite.
+  for ref in $(git -C "$MIGRATE_ROOT" for-each-ref --format='%(refname:strip=3)' refs/remotes/old-fork/); do
+    [ "$ref" = "HEAD" ] && continue
+    git -C "$MIGRATE_ROOT" show-ref --verify --quiet "refs/heads/$ref" && continue
+    git -C "$MIGRATE_ROOT" push origin "refs/remotes/old-fork/$ref:refs/heads/$ref" || return 1
+  done
   git -C "$MIGRATE_ROOT" push origin --tags || return 1
   migrate_say "Pushed full history to $new_repo"
   migrate_print_archive_instructions
@@ -230,7 +237,6 @@ apexyard_migrate() {
   done
   migrate_resolve_root || return 1
   migrate_detect || return 1
-  migrate_ownership_sanity
   if [ -z "$path" ]; then
     migrate_print_paths
     migrate_print_or_run_chain "$target" "$run_migrations" "$dry_run" || return 1
