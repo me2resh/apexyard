@@ -238,6 +238,83 @@ run_engine --plan
 has 'dangling file overlay' $'kept\tframework\tdocs/clean\toverlay'
 run_engine --apply
 assert_eq 'dangling overlay remains' yes "$([ -L "$ops/docs/clean" ] && echo yes)"
+# Drift uses the base ref and leaves all local files intact.
+run_drift() {
+  code=0
+  /bin/bash "$engine" --drift --repo "$ops" "$@" > "$fixture/out" 2>&1 </dev/null || code=$?
+}
+reset_ops
+run_drift
+assert_eq 'clean drift exit' 0 "$code"
+has 'clean drift summary' 'drift: no local edits to framework-owned files'
+local_first .claude/skills/foo/SKILL.md
+local_first .claude/hooks/static.sh
+local_first handbooks/shared.md
+printf 'local adopter\n' > "$ops/apexyard.projects.yaml"
+before=$(snapshot)
+run_drift
+assert_eq 'local drift exit' 1 "$code"
+has 'skill drift' $'drift\t.claude/skills/foo/SKILL.md'
+has 'drift skill suggestion' '  Suggestion: copy the skill to ./custom-skills/foo/'
+has 'security drift' $'drift\t.claude/hooks/static.sh\tsecurity'
+has 'local drift summary' 'drift: 2 local edit(s) to framework-owned files'
+assert_eq 'shared path has no drift' no "$(grep -q 'handbooks/shared.md' "$fixture/out" && echo yes || echo no)"
+assert_eq 'adopter path has no drift' no "$(grep -q 'apexyard.projects.yaml' "$fixture/out" && echo yes || echo no)"
+assert_eq 'drift leaves work tree' "$before" "$(snapshot)"
+run_drift --target x
+assert_eq 'drift rejects target' 2 "$code"
+run_drift --confirm-security
+assert_eq 'drift rejects security confirmation' 2 "$code"
+reset_ops
+rm "$ops/docs/clean"
+ln -s "$fixture/missing" "$ops/docs/clean"
+run_drift
+assert_eq 'overlay has no drift' 0 "$code"
+assert_eq 'overlay path absent from drift' no "$(grep -q 'docs/clean' "$fixture/out" && echo yes || echo no)"
+reset_ops
+local_first .claude/skills/foo/SKILL.md
+: > "$ops/.apexyard-fork"
+mkdir -p "$ops/bin"
+cp "$SRC_ROOT/bin/update-files.sh" "$SRC_ROOT/bin/_lib-ownership.sh" "$ops/bin/"
+code=0
+(cd "$ops" && /bin/bash "$SRC_ROOT/bin/apexyard" doctor --drift) > "$fixture/out" 2>&1 || code=$?
+assert_eq 'doctor drift exit' 1 "$code"
+has 'doctor skill drift' $'drift\t.claude/skills/foo/SKILL.md'
+# Compare classes and bytes for a merge, a kept file, and an update.
+reset_ops
+local_first .claude/skills/foo/SKILL.md
+printf 'local adopter\n' > "$ops/apexyard.projects.yaml"
+cp "$ops/apexyard.projects.yaml" "$fixture/kept"
+printf 'v1.1.0\n' > "$ops/.claude/framework-version"
+run_engine --plan --base v1.0.0
+assert_eq 'class plan exit' 0 "$code"
+has 'class plan merge' $'merged\tframework\t.claude/skills/foo/SKILL.md'
+has 'class plan kept' $'kept\tadopter\tapexyard.projects.yaml'
+has 'class plan update' $'updated\tframework\tdocs/clean'
+awk -F '\t' 'NF >= 3 { print $1 "\t" $2 "\t" $3 }' "$fixture/out" | LC_ALL=C sort > "$fixture/plan"
+run_engine --apply --base v1.0.0
+assert_eq 'class apply exit' 0 "$code"
+awk -F '\t' 'NF >= 3 { print $1 "\t" $2 "\t" $3 }' "$fixture/out" | LC_ALL=C sort > "$fixture/apply"
+assert_eq 'plan and apply classes agree' "$(cat "$fixture/plan")" "$(cat "$fixture/apply")"
+while IFS=$'\t' read -r status _ path; do
+  case "$status" in
+    merged)
+      assert_eq "merged local bytes: $path" local "$(head -n 1 "$ops/$path")"
+      assert_eq "merged upstream bytes: $path" upstream "$(tail -n 1 "$ops/$path")" ;;
+    updated)
+      if git -C "$fw" cat-file -e "v1.1.0:$path" 2>/dev/null; then
+        git -C "$fw" show "v1.1.0:$path" > "$fixture/expected"
+        assert_eq "updated bytes: $path" yes "$(cmp -s "$fixture/expected" "$ops/$path" && echo yes || echo no)"
+      else
+        assert_eq "updated delete: $path" no "$([ -e "$ops/$path" ] && echo yes || echo no)"
+      fi ;;
+    kept)
+      git -C "$ops" show "HEAD:$path" > "$fixture/expected"
+      if [ "$path" = apexyard.projects.yaml ]; then cp "$fixture/kept" "$fixture/expected"; fi
+      if [ "$path" = .claude/framework-version ]; then printf 'v1.1.0\n' > "$fixture/expected"; fi
+      assert_eq "kept bytes: $path" yes "$(cmp -s "$fixture/expected" "$ops/$path" && echo yes || echo no)" ;;
+  esac
+done < "$fixture/plan"
 echo '===== test_update_files.sh ====='
 echo "Passed: $PASS"
 echo "Failed: $FAIL"
