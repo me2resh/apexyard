@@ -143,7 +143,7 @@ OWNERSHIP_MANIFEST="$SRC_ROOT/.claude/ownership-manifest.yaml"
 for path in apexyard.projects.yaml onboarding.yaml projects/acme/README.md custom-handbooks/general/x.md custom-skills/foo/SKILL.md .claude/project-config.json .claude/settings.local.json; do
   check_class "$path" adopter
 done
-for path in projects/README.md .claude/skills/update/SKILL.md .claude/rules/git-conventions.md .claude/agents/code-reviewer.md .claude/hooks/tests/test_x.sh .claude/hooks/block-unreviewed-merge.sh .githooks/pre-push; do
+for path in projects/README.md .claude/skills/update/SKILL.md .claude/rules/git-conventions.md .claude/agents/code-reviewer.md .claude/hooks/tests/test_x.sh .claude/hooks/block-unreviewed-merge.sh .githooks/pre-push rule-tests/README.md; do
   check_class "$path" framework
 done
 check_class handbooks/general/x.md shared
