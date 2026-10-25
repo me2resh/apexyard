@@ -40,14 +40,16 @@ Rules:
 - Adopter paths and unclassified paths are kept. A path behind a symlink is an overlay and is kept.
 - Framework and shared paths: no local edit means the target blob is written. A local edit is re-applied with `git merge-file`. A failed merge is a conflict.
 - Any conflict stops the update before the first write. The output shows the local edit, the upstream change and an overlay suggestion.
-- A local edit to a security path is shown first and needs `--confirm-security` or a typed `yes`.
+- A local edit to a security path is shown first and needs `--confirm-security` or a typed `yes`. A security path behind a symlink (the file or a parent directory) is also shown, as the link only, and needs the same confirmation.
+- Every git read fails closed with exit 2 and nothing written. The engine uses the base manifest only when the target tree has no manifest entry, never when a read fails.
+- A tree path with a `..` or `.git` segment is refused.
 - Each re-applied or confirmed local edit is saved as a patch under `.claude/session/update-backup/`.
-- `--plan` uses the same computation and writes nothing. Its header says that the per-file update is the default, and that `/update --git-merge` runs the history merge instead.
+- `--plan` uses the same computation and writes nothing. Its header says that the per-file update is the default, and that `/update --git-merge` runs the history merge instead. The `/update` wiring lands in step 3 of #1887 (#1895).
 - Routed agent model lines (owner decision): the SessionStart hook `apply-agent-routing.sh` rewrites the frontmatter `model:` line of each agent that the routing file names. For a framework-owned `.claude/agents/<name>.md` whose name is a key of `agents:` in the routing file, the engine ignores a `model:` line difference. It compares and merges a copy of the local file whose model line matches the base. The update thus takes upstream's file, and the hook applies the routing again at the next session start. A model line edit to an agent that the routing does not name is a normal local edit. The routing file is `.portfolio.agent_routing` in `.claude/project-config.json`, else `./agent-routing.yaml`.
 
 ## Consequences
 
-- The per-file update is the default in `/update`. `--git-merge` is the escape hatch to the history merge (owner decision).
+- From step 3 of #1887 (#1895), the per-file update is the default in `/update`. `--git-merge` is the escape hatch to the history merge (owner decision).
 - After an update, a routed agent file holds upstream's model line until the next session start. The routing hook then writes the routed model again.
 - `apexyard update` (#1885) and `/update` can call one engine for both forks and template-made repos.
 - A fork that uses the engine does not get upstream commits in its history. The hook drift notice still works, because it compares blobs against a local `upstream/*` ref.

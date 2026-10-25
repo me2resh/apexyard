@@ -74,10 +74,12 @@ repo=$(cd "$repo" && pwd -P) || exit 2
 # Return 0 when the path, or a parent directory of it in the repo, is a
 # symlink. Such a path is an adopter overlay. The engine never reads or
 # writes through the link.
+# On return 0, overlay_link holds the repo-relative path of the link.
+overlay_link=''
 overlay() {
   local part="$1"
   while :; do
-    [ ! -L "$repo/$part" ] || return 0
+    if [ -L "$repo/$part" ]; then overlay_link=$part; return 0; fi
     case "$part" in */*) part=${part%/*} ;; *) return 1 ;; esac
   done
 }
@@ -100,17 +102,33 @@ target=$(git -C "$repo" rev-parse --verify --quiet "$target^{commit}") || fail "
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/apexyard-update.XXXXXXXX") || exit 2
 trap 'rm -rf "$scratch"' EXIT
 
-export OWNERSHIP_MANIFEST="$scratch/manifest"
-git -C "$repo" show "$target:.claude/ownership-manifest.yaml" > "$OWNERSHIP_MANIFEST" 2>/dev/null ||
-  git -C "$repo" show "$base:.claude/ownership-manifest.yaml" > "$OWNERSHIP_MANIFEST" 2>/dev/null ||
-  fail 'No ownership manifest in base or target.'
-
-# One ls-tree call for each ref: "<mode> <type> <blob>\t<path>".
-git -C "$repo" ls-tree -r -z "$base" | tr '\000' '\n' > "$scratch/base.tree" || exit 2
-git -C "$repo" ls-tree -r -z "$target" | tr '\000' '\n' > "$scratch/target.tree" || exit 2
-bad=$(awk '$1 != "100644" && $1 != "100755" { sub(/^[^\t]*\t/, ""); print; exit }' "$scratch/base.tree" "$scratch/target.tree")
+# Fail closed on every git read. One ls-tree call for each ref, into a raw
+# file first: a pipe would hide the ls-tree exit status behind tr's status,
+# and a partial tree would then look like upstream deletes.
+# Tree line: "<mode> <type> <blob>\t<path>".
+for side in base target; do
+  if [ "$side" = base ]; then ref=$base; else ref=$target; fi
+  git -C "$repo" ls-tree -r -z "$ref" > "$scratch/$side.raw" || fail "Cannot read the $side tree. Nothing is written."
+  tr '\000' '\n' < "$scratch/$side.raw" > "$scratch/$side.tree" || exit 2
+done
+bad=$(awk '$1 != "100644" && $1 != "100755" { sub(/^[^\t]*\t/, ""); print; exit }' "$scratch/base.tree" "$scratch/target.tree") || exit 2
 [ -z "$bad" ] || fail "Unsupported tree entry (only regular files are supported): $bad"
-cut -f2- "$scratch/base.tree" "$scratch/target.tree" | LC_ALL=C sort -u > "$scratch/paths"
+cut -f2- "$scratch/base.tree" "$scratch/target.tree" | LC_ALL=C sort -u > "$scratch/paths" || exit 2
+# Refuse a hostile tree path: a ".." or ".git" segment, or an absolute path.
+bad=$(awk '/^\// || /(^|\/)\.\.(\/|$)/ || /(^|\/)\.git(\/|$)/ { print; exit }' "$scratch/paths") || exit 2
+[ -z "$bad" ] || fail "Refused tree path with a '..' or '.git' segment: $bad"
+
+# The manifest comes from the target tree. Use the base copy only when the
+# target tree has no manifest entry. A failed read is an error, never a
+# reason to fall back.
+manifest_blob() {
+  awk -F '\t' '$2 == ".claude/ownership-manifest.yaml" { split($1, m, " "); print m[3]; exit }' "$scratch/$1.tree"
+}
+export OWNERSHIP_MANIFEST="$scratch/manifest"
+mblob=$(manifest_blob target) || exit 2
+[ -n "$mblob" ] || { mblob=$(manifest_blob base) || exit 2; }
+[ -n "$mblob" ] || fail 'No ownership manifest in base or target.'
+git -C "$repo" cat-file blob "$mblob" > "$OWNERSHIP_MANIFEST" || fail 'Cannot read the ownership manifest. Nothing is written.'
 ownership_classify_stream < "$scratch/paths" > "$scratch/classes" || exit 2
 
 # Join: class, flag, base blob, target blob, target mode, path.
@@ -168,7 +186,8 @@ is_routed_agent() {
 # base blob <b> (or removed when the base has none) to <out>.
 normalize_model() {
   local file=$1 b=$2 out=$3 base_model
-  base_model=$(blob "$b" | awk 'NR == 1 && $0 == "---" { fm = 1; next } fm && $0 == "---" { exit } fm && /^model:/ { print; exit }')
+  blob "$b" > "$out.base" || return 2
+  base_model=$(awk 'NR == 1 && $0 == "---" { fm = 1; next } fm && $0 == "---" { exit } fm && /^model:/ { print; exit }' "$out.base") || return 2
   BASE_MODEL=$base_model awk '
     NR == 1 && $0 == "---" { fm = 1; print; next }
     fm && $0 == "---" { fm = 0; print; next }
@@ -203,6 +222,8 @@ done < "$scratch/joined"
 local_src() { if [ -f "$scratch/local.$1" ]; then printf '%s' "$scratch/local.$1"; else printf '%s' "$repo/$2"; fi; }
 if [ -s "$scratch/local-files" ]; then
   (cd "$repo" && git hash-object --stdin-paths) < "$scratch/local-files" > "$scratch/local-blobs" || exit 2
+  [ "$(awk 'END { print NR }' "$scratch/local-blobs")" = "$(awk 'END { print NR }' "$scratch/local-files")" ] ||
+    fail 'Cannot hash the local files. Nothing is written.'
 else
   : > "$scratch/local-blobs"
 fi
@@ -223,6 +244,9 @@ while IFS=$'\t' read -r class flag b t tmode path; do
   esac
   if [ "$kind" = link ]; then
     status=kept; note=overlay
+    # A gate file behind a link is never kept silently. The banner shows
+    # the link, and the apply needs confirmation.
+    if [ "$flag" = true ]; then sec=true; security_count=$((security_count + 1)); fi
   else
     [ "$l" = "$b" ] || edit=true
     if [ "$flag" = true ] && [ "$edit" = true ]; then sec=true; security_count=$((security_count + 1)); fi
@@ -345,8 +369,15 @@ if [ "$security_count" -gt 0 ]; then
   echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
   echo 'SECURITY: local edits to gate files'
   echo 'These files enforce gates. Read each local edit below.'
-  while IFS=$'\t' read -r _ status class sec _ b _ _ _ _ path; do
+  while IFS=$'\t' read -r _ status class sec _ b _ _ kind _ path; do
     [ "$sec" = true ] || continue
+    if [ "$kind" = link ] && overlay "$path"; then
+      # Show the link only. Never read through it.
+      echo "  $path ($status, behind a link)"
+      echo "    link: $overlay_link -> $(readlink "$repo/$overlay_link")"
+      echo '    The update keeps this link. The gate file it points to is not checked.'
+      continue
+    fi
     echo "  $path ($status)"
     show_diff base "$b" local LOCAL "$path" || exit 2
   done < "$scratch/records"

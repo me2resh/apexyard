@@ -386,6 +386,60 @@ run_drift
 assert_eq 'no routing file: model lines are drift' 1 "$code"
 has 'drift without routing lists routed' $'drift\t.claude/agents/routed.md'
 
+# Fail closed on unreadable git state (Rex B1 on #1894).
+reset_ops
+missing=0123456789abcdef0123456789abcdef01234567
+bad_commit=$(printf 'tree %s\nauthor t <t@t> 0 +0000\ncommitter t <t@t> 0 +0000\n\nmissing tree\n' "$missing" |
+  git -C "$ops" hash-object -t commit -w --literally --stdin)
+before=$(snapshot)
+code=0
+/bin/bash "$engine" --apply --confirm-security --repo "$ops" --target "$bad_commit" > "$fixture/out" 2>&1 </dev/null || code=$?
+assert_eq 'missing target tree exits 2' 2 "$code"
+assert_eq 'missing target tree writes nothing' "$before" "$(snapshot)"
+has 'missing target tree message' 'Cannot read the target tree. Nothing is written.'
+sub=$(printf '100644 blob %s\townership-manifest.yaml\n' "$missing" | git -C "$ops" mktree --missing)
+top=$(printf '040000 tree %s\t.claude\n' "$sub" | git -C "$ops" mktree)
+bad_commit=$(git -C "$ops" -c user.name=t -c user.email=t@t commit-tree "$top" -m 'missing manifest blob')
+code=0
+/bin/bash "$engine" --apply --confirm-security --repo "$ops" --target "$bad_commit" > "$fixture/out" 2>&1 </dev/null || code=$?
+assert_eq 'unreadable target manifest exits 2' 2 "$code"
+assert_eq 'unreadable target manifest writes nothing' "$before" "$(snapshot)"
+has 'no fallback to the base manifest' 'Cannot read the ownership manifest. Nothing is written.'
+# Refuse a hostile tree path (Rex A1 on #1894).
+good=$(printf 'x\n' | git -C "$ops" hash-object -w --stdin)
+sub=$(printf '100644 blob %s\tescape\n' "$good" | git -C "$ops" mktree)
+top=$(printf '040000 tree %s\t..\n' "$sub" | git -C "$ops" mktree)
+bad_commit=$(git -C "$ops" -c user.name=t -c user.email=t@t commit-tree "$top" -m 'dot-dot path')
+code=0
+/bin/bash "$engine" --plan --repo "$ops" --target "$bad_commit" > "$fixture/out" 2>&1 </dev/null || code=$?
+assert_eq 'dot-dot tree path exits 2' 2 "$code"
+has 'dot-dot tree path message' "Refused tree path with a '..' or '.git' segment: ../escape"
+# A gate file behind a link is never kept silently (Rex B2 on #1894).
+reset_ops
+printf 'other gate\n' > "$fixture/other-gate.sh"
+rm "$ops/.claude/hooks/static.sh"
+ln -s "$fixture/other-gate.sh" "$ops/.claude/hooks/static.sh"
+run_engine --plan
+has 'linked gate file is marked' $'kept\tframework\t.claude/hooks/static.sh\tsecurity\toverlay'
+before=$(snapshot)
+run_engine --apply
+assert_eq 'linked gate file needs confirmation' 3 "$code"
+assert_eq 'linked gate file writes nothing' "$before" "$(snapshot)"
+has 'banner shows the link' "link: .claude/hooks/static.sh -> $fixture/other-gate.sh"
+run_engine --apply --confirm-security
+assert_eq 'linked gate file confirmed' 0 "$code"
+assert_eq 'linked gate file link remains' yes "$([ -L "$ops/.claude/hooks/static.sh" ] && echo yes)"
+assert_eq 'link target is not written' 'other gate' "$(cat "$fixture/other-gate.sh")"
+reset_ops
+mv "$ops/.claude/hooks" "$ops/custom-hooks"
+ln -s ../custom-hooks "$ops/.claude/hooks"
+before=$(snapshot)
+run_engine --apply
+assert_eq 'linked hooks dir needs confirmation' 3 "$code"
+assert_eq 'linked hooks dir writes nothing' "$before" "$(snapshot)"
+has 'banner shows the hooks dir link' 'link: .claude/hooks -> ../custom-hooks'
+has 'linked hooks dir gate is listed' '.claude/hooks/gate.sh (kept, behind a link)'
+
 echo '===== test_update_files.sh ====='
 echo "Passed: $PASS"
 echo "Failed: $FAIL"
