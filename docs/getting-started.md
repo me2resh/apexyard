@@ -28,9 +28,37 @@ check in Git Bash or WSL.
 
 ---
 
-## Step 1: Fork apexyard on GitHub
+## Step 1: Create your ops repo
 
-Your ops repo is a fork of ApexYard. It is one repository with no nested install.
+### Default: `apexyard init`
+
+Install the CLI, then create your ops repo with one command:
+
+```bash
+curl -fsSL https://apexyard.ai/install | sh   # CLI only; no sudo; checks the release checksum
+apexyard init --org your-org --name ops --private
+```
+
+You can also install with `brew install me2resh/tap/apexyard` or `npx create-apexyard`.
+
+`apexyard init` creates a NEW repo from the framework, so it can be private.
+It clones the repo, adds the framework as the remote `upstream`, and writes
+`.claude/framework-version`. Use `--public` for a public repo and `--agent NAME`
+to record your agent tool. Add `--dry-run` to see the plan only.
+
+To update later, run `apexyard update`. It shows which files change and who
+owns them, then starts `/update`. Use `apexyard update --check` to preview only.
+
+`apexyard init` sends one anonymous install event: a random install id, the CLI
+version, your operating system, and the agent tool. Set `APEXYARD_TELEMETRY=0`
+to turn it off.
+
+Go to Step 2.
+
+### Alternative: fork apexyard on GitHub
+
+Your ops repo can also be a fork of ApexYard. GitHub does not allow a private
+fork of a public repo. It is one repository with no nested install.
 
 Visit [`github.com/me2resh/apexyard`](https://github.com/me2resh/apexyard).
 Star it, then fork it into your organisation. Keep `apexyard`, or rename the

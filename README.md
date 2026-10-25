@@ -70,15 +70,43 @@ root. No runtime or service is required.
 >
 > **For AI coding agents:** `AGENTS.md` is the universal entry document for tools that do not load `CLAUDE.md`. See [`docs/harnesses/pi.md`](docs/harnesses/pi.md).
 
-## Quick Start — fork and go
+## Quick Start — one command
 
-ApexYard governs a **portfolio of repos** as one organisation. Fork and clone
-the repository. Use that fork as your ops repo. Register each project you want
-to manage. The fork is the ops repo, so no nested installation is needed.
+ApexYard governs a **portfolio of repos** as one organisation. One command
+creates your ops repo. The repo can be private. Register each project you want
+to manage.
+
+```bash
+curl -fsSL https://apexyard.ai/install | sh   # installs the CLI only; no sudo
+apexyard init --org your-org --name ops --private
+```
+
+Other ways to install the CLI: `brew install me2resh/tap/apexyard`, or
+`npx create-apexyard`. Each release has a checksum. The installer stops when
+the checksum does not match.
+
+`apexyard init` creates a new repo from the framework. It is not a fork. It
+adds the framework as the remote `upstream` and writes
+`.claude/framework-version`. Then open the folder in your agent tool and run
+`/setup`. To update later, run `apexyard update`.
+
+**Install count.** `apexyard init` sends one anonymous event. It holds four
+fields: a random install id, the CLI version, your operating system, and the
+agent tool you chose. It never sends a repo, organisation, user name, path or
+code. To turn it off, set `APEXYARD_TELEMETRY=0`. The CLI prints this notice on
+first run.
+
+### Alternative — fork and go
+
+You can also fork the repository. GitHub does not allow a private fork of a
+public repo, so use `apexyard init` when you need a private ops repo. The fork
+is the ops repo, so no nested installation is needed.
 
 > **Using opencode, pi, or Codex?** Steps 1–3 use plain `git` and `gh`. Install
 > your tool's adapter before steps 4–6. Each step also gives a manual file
 > option. The enforced rules are the same in both paths.
+
+The fork steps follow. Skip them if you used `apexyard init`, and go to step 4.
 
 ### 1. Star + Fork on GitHub
 
