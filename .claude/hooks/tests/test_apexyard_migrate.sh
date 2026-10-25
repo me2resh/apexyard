@@ -276,7 +276,8 @@ if build_fixture "$F8" "$UPSTREAM_BARE"; then
   else mark_fail "case8 remote branches" "rc=$rc out=$out"; fi
 else mark_fail "case8 build" "build_fixture failed"; fi
 
-# Case 9: apexyard update works after each pathif grep -Eq '^  (init\|)?update\)' "$CLI"; then
+# Case 9: apexyard update works after each path
+if grep -Eq '^  (init\|)?update\)' "$CLI"; then
   for p in keep move; do
     F9="$BASE/fork9$p"; mkdir -p "$F9"; reset_gh_state "$BASE/gh-state-9$p"
     APEXYARD_BIN_DIR="$BASE/local-bin-9$p"; mkdir -p "$APEXYARD_BIN_DIR"
@@ -290,7 +291,7 @@ else mark_fail "case8 build" "build_fixture failed"; fi
     else mark_pass "apexyard update is recognised after path $p"; fi
   done
 else
-  echo "  SKIP apexyard update after paths: 'update' command absent (lands in #1888)"
+  echo "  SKIP apexyard update after paths: 'update' command absent from bin/apexyard"
 fi
 
 # Case 6: safety grep
