@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # Test repository creation without network access.
 # The shared fixture defines sb.
-# shellcheck disable=SC1091
+# shellcheck disable=SC1091,SC2154
 . "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
-# shellcheck disable=SC2154
 source "$(dirname "${BASH_SOURCE[0]}")/_lib-apexyard-cli.sh"
 check 'init succeeds' init_ops
 check upstream test "$(git -C "$sb/ops" remote get-url upstream)" = "$sb/fixture"
