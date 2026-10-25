@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # All downloads in this suite use local files.
 set -euo pipefail
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
 root=$(cd "$(dirname "$0")/../../.." && pwd)
 sb=$(mktemp -d)
 trap 'rm -rf "$sb"' EXIT
