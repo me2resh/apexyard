@@ -1,0 +1,27 @@
+name: Release CLI
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build release assets
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          bash bin/build-release-assets.sh "$VERSION" dist
+          sed "s/^VERSION=.*/VERSION=\"$VERSION\"/" install.sh > dist/install.sh
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ github.ref_name }}
+        run: gh release create "$VERSION" dist/*.tar.gz dist/*.sha256 dist/install.sh --verify-tag --title "$VERSION" --generate-notes
