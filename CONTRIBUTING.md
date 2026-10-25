@@ -49,6 +49,11 @@ These aren't style suggestions — `.claude/hooks/` blocks them mechanically, so
 
 Full detail lives in `.claude/rules/` (`git-conventions.md`, `pr-quality.md`, `pr-workflow.md`).
 
+## A new path needs an owner
+
+Each shipped path needs a glob in `.claude/ownership-manifest.yaml`.
+CI runs `bin/check-ownership-manifest.sh` and fails on an unmatched path.
+
 ## Before you open a PR
 
 Run what CI runs, locally:

@@ -31,7 +31,7 @@ git -C "$root" diff --name-only "$version" FETCH_HEAD >/dev/null
 # Use arrays so paths with spaces remain complete.
 security=() other=()
 while IFS= read -r -d '' path; do
-  owner=$(ownership_class "$path")
+  owner=$(ownership_class "$path") || owner=unmatched
   if ownership_is_security "$path"; then
     security+=("$path [$owner]")
   else
