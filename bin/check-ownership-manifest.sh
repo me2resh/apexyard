@@ -24,7 +24,10 @@ done
 ownership_validate_manifest || exit 2
 if [ -z "$paths" ]; then
   # Read NUL-separated names, so git does not quote a non-ASCII path.
-  input=$(git -C "$root" ls-files -z | tr '\000' '\n') || exit 2
+  listing=$(mktemp "${TMPDIR:-/tmp}/ownership-ls.XXXXXX") || exit 2
+  trap 'rm -f "$listing"' EXIT
+  git -C "$root" ls-files -z > "$listing" || { echo 'git ls-files failed' >&2; exit 2; }
+  input=$(tr '\000' '\n' < "$listing")
 elif [ "$paths" = '-' ]; then
   input=$(cat) || exit 2
 else
@@ -40,6 +43,10 @@ printf '%s\n' "$result" | awk -F '\t' '
     } else count[$1]++
   }
   END {
+    if (!total) {
+      print "No paths to classify." > "/dev/stderr"
+      exit 2
+    }
     if (missing) {
       print "Add a glob for it to .claude/ownership-manifest.yaml." > "/dev/stderr"
       exit 1

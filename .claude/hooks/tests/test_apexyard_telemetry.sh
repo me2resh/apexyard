@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Test install events with local repositories and a curl stub.
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
 # shellcheck disable=SC2154
 source "$(dirname "${BASH_SOURCE[0]}")/_lib-apexyard-cli.sh"
 export APEXYARD_TELEMETRY=1 APEXYARD_CURL="$sb/tools/curl" CURL_LOG="$sb/curl.log" CURL_BODY="$sb/body.json"
@@ -22,7 +24,7 @@ check 'default dry run message' grep -q 'Install ping (dry run, nothing sent):' 
 check 'default does not call curl' test ! -e "$CURL_LOG"
 id=$(cat "$XDG_CONFIG_HOME/apexyard/install-id")
 check 'id format' /bin/bash -c '[[ "$1" =~ ^[0-9a-f]{32}$ ]]' _ "$id"
-mode=$(stat -f '%Lp' "$XDG_CONFIG_HOME/apexyard/install-id" 2>/dev/null || stat -c '%a' "$XDG_CONFIG_HOME/apexyard/install-id")
+mode=$(stat -c '%a' "$XDG_CONFIG_HOME/apexyard/install-id" 2>/dev/null || stat -f '%Lp' "$XDG_CONFIG_HOME/apexyard/install-id")
 check 'id permissions' test "$mode" = 600
 check 'first notice' grep -q 'ApexYard sends one anonymous' "$sb/default.out"
 export APEXYARD_TELEMETRY_URL=http://test.invalid/x

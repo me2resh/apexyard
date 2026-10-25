@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Test change reports and the agent command without network access.
 # The shared fixture defines sb.
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
 # shellcheck disable=SC2154
 source "$(dirname "${BASH_SOURCE[0]}")/_lib-apexyard-cli.sh"
 check 'init succeeds' init_ops
