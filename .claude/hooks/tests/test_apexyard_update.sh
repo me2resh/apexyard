@@ -23,6 +23,18 @@ other_line=$(grep -n 'a-file.txt' "$sb/check.out" | cut -d: -f1)
 check 'security first' test "$security_line" -lt "$other_line"
 check 'loud header' grep -q '!!! SECURITY-OWNED CHANGES !!!' "$sb/check.out"
 check 'version unchanged' test "$(cat "$sb/ops/.claude/framework-version")" = v1.0.0
+# Use the real ownership library from the CLI bin directory.
+unset APEXYARD_LIB_DIR
+mkdir -p "$sb/fixture/bin" "$sb/fixture/.claude/hooks"
+echo tool > "$sb/fixture/bin/real-tool"
+echo gate > "$sb/fixture/.claude/hooks/real-gate.sh"
+git -C "$sb/fixture" add -- bin/real-tool .claude/hooks/real-gate.sh
+git -C "$sb/fixture" commit -m real >/dev/null
+check 'real library succeeds' /bin/bash "$CLI" update --check > "$sb/real.out" 2>&1
+check 'real framework owner' grep -q 'bin/real-tool \[framework\]' "$sb/real.out"
+check 'real security owner' grep -q '.claude/hooks/real-gate.sh \[framework\]' "$sb/real.out"
+check 'real security first' test "$(grep -n 'real-gate.sh' "$sb/real.out" | cut -d: -f1)" -lt "$(grep -n 'bin/real-tool' "$sb/real.out" | cut -d: -f1)"
+check 'real unmatched' grep -q 'a-file.txt \[unmatched\]' "$sb/real.out"
 export APEXYARD_LIB_DIR="$sb/absent"
 check 'missing library succeeds' /bin/bash "$CLI" update --check > "$sb/unknown.out" 2>&1
 check 'missing library message' grep -q 'ownership manifest library not found' "$sb/unknown.out"
