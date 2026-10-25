@@ -185,6 +185,8 @@ paths:
     owner: framework
   - glob: "roles/**"
     owner: framework
+  - glob: "rule-tests/**"
+    owner: framework
   - glob: "templates/**"
     owner: framework
   - glob: "topologies/**"

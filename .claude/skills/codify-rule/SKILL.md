@@ -382,14 +382,50 @@ For **overwrite**: simply replace the file.
 
 For **cancel**: exit without writing.
 
-### 11. Write the file
+### 11. Collect a rule test case
+
+After the handbook draft is approved and before any write, ask for one test case.
+
+```
+Give one short code or prose snippet that this rule MUST flag.
+Optionally give one snippet the rule must NOT flag.
+```
+
+Write the case to `rule-tests/<same path as the handbook>.md` (create the folder tree). Example: handbook `handbooks/architecture/migration-safety.md` maps to `rule-tests/handbooks/architecture/migration-safety.md`.
+
+Case file shape:
+
+````markdown
+---
+rule: handbooks/architecture/migration-safety
+---
+
+## Must flag
+
+```text
+DROP COLUMN users.role_v1;
+```
+
+## Must not flag
+
+```text
+ADD COLUMN users.role_v2 text;
+```
+````
+
+The `rule:` value is the handbook id (repo-relative path without `.md`). The `## Must not flag` section is optional. Include the case path in the step 13 summary under files written.
+
+### 12. Write the file
 
 ```bash
 mkdir -p "$(dirname "$resolved_handbook_path")"
 printf "%s" "$file_content" > "$resolved_handbook_path"
+# Also write the rule-tests case from step 11 when the operator provided one.
+mkdir -p "$(dirname "$resolved_rule_test_path")"
+printf "%s" "$rule_test_content" > "$resolved_rule_test_path"
 ```
 
-### 12. Return
+### 13. Return
 
 Print a single block summarising the capture:
 
@@ -397,14 +433,19 @@ Print a single block summarising the capture:
 Handbook entry codified:
 
   Path:        {resolved_handbook_path}
+  Rule test:   {resolved_rule_test_path}
   Bucket:      {bucket}
   Enforcement: {advisory|blocking}
   Source:      {pr_owner_repo}#{pr_number}, comment by @{comment_author} on {comment_date}
 
+Files written:
+  - {resolved_handbook_path}
+  - {resolved_rule_test_path}
+
 Rex will pick up this rule on the next PR review.
 
 Next steps:
-  1. Stage the file:   git add {resolved_handbook_path}
+  1. Stage the files:  git add {resolved_handbook_path} {resolved_rule_test_path}
   2. Commit:           git commit -m "docs(#{pr_number}): handbook on {short-title}"
   3. Push + PR — the handbook entry is durable from the next review onwards.
 ```
@@ -413,7 +454,7 @@ Next steps:
 
 1. **Operator-approval gate is mandatory.** No file is written until the operator says yes in step 8. The skill is operator-curated, not auto-promoted.
 2. **Source attribution is required.** Every entry ends with the `_Source: PR #N comment by @author on YYYY-MM-DD_` footer. Future readers should always be able to find the original miss this rule came from. This is the audit trail for "where did this rule come from?".
-3. **`paths:` frontmatter is domain-only.** Other buckets stay frontmatter-free per `handbooks/README.md` § "File format" and the project's no-frontmatter convention. Adding frontmatter to architecture / general / language handbooks would silently disable Rex's load condition for those buckets.
+3. **`paths:` frontmatter is domain-only.** Other buckets stay frontmatter-free of `paths:`. Adding `paths:` to architecture / general / language handbooks would silently disable Rex's load condition for those buckets. Any handbook may carry the knowledge-base schema front matter (see `docs/knowledge-base.md`), because `bin/kb-migrate` adds it.
 4. **Default advisory; opt in to blocking.** The `--blocking` flag prepends the literal `ENFORCEMENT: blocking` marker. Pick blocking sparingly — a handbook that day-1 blocks every PR generates revolts and gets removed.
 5. **One miss per invocation.** v1 captures one rule from one comment. Multi-handbook bulk capture from a single review is out of scope (file separate `/codify-rule` invocations).
 6. **No mining of historical PRs.** That's Stage 3 (`/enrich-domain`) — a separate future ticket.
