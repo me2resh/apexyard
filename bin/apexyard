@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # apexyard — tiny CLI shim that exposes a subset of ApexYard skills as
-# shell-runnable commands. Commands: `apexyard status` and `apexyard doctor`.
+# shell-runnable commands. Commands: `apexyard status`, `apexyard doctor`,
+# and `apexyard migrate`.
 #
 # Install: symlink this script into a directory on your PATH.
 #
@@ -9,6 +10,7 @@
 # Usage:
 #   apexyard status [-b|--briefing]   # 4-line "where am I" briefing
 #   apexyard doctor                 # read-only environment report
+#   apexyard migrate [opts]         # keep CLI or move fork to init layout
 #   apexyard --help
 #
 # The script delegates to .claude/skills/status/briefing.sh inside the
@@ -77,6 +79,8 @@ Commands:
   status [-b|--briefing]   Compact "where am I" briefing — workspace, ticket,
                            branch, role. Defaults to --briefing today (the
                            full /status report runs inside Claude Code).
+  migrate [opts]         Keep the CLI only, or move this fork to a new repo
+                           (init layout). See: apexyard migrate --help.
 
 Run from inside an apexyard fork or any of its workspace/<name>/ clones.
 EOF
@@ -130,6 +134,30 @@ case "$cmd" in
     esac
 
     exec bash "$helper"
+    ;;
+  migrate)
+    # Resolve ops root the same way as doctor/status, then source the
+    # migrate library next to this script (or under the fork's bin/).
+    ops_root=$(find_ops_root) || ops_root=""
+    if [ -z "$ops_root" ]; then
+      cli_path=$(resolve_cli_path) || cli_path="${BASH_SOURCE[0]}"
+      ops_root=$(cd "$(dirname "$cli_path")/.." && pwd -P) || ops_root=""
+    fi
+    if [ -z "$ops_root" ] || [ ! -d "$ops_root" ]; then
+      echo "apexyard: not inside an apexyard fork and could not resolve CLI root" >&2
+      exit 1
+    fi
+    migrate_lib="$ops_root/bin/_lib-migrate.sh"
+    if [ ! -f "$migrate_lib" ]; then
+      echo "apexyard: migrate helper not found at $migrate_lib" >&2
+      exit 1
+    fi
+    OPS_ROOT="$ops_root"
+    export OPS_ROOT
+    # shellcheck source=/dev/null
+    . "$migrate_lib"
+    apexyard_migrate "$@"
+    exit $?
     ;;
   *)
     echo "apexyard: unknown command '$cmd'" >&2

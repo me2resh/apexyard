@@ -218,6 +218,70 @@ public trackers.
 
 ---
 
+## Move an existing fork to the init layout
+
+`apexyard migrate` helps an existing fork adopt the current init layout. It
+detects whether the repo is a fork, whether `upstream` is set, and which
+version `.claude/framework-version` records. It never deletes, archives, or
+force-pushes.
+
+Run it from the fork root:
+
+```bash
+apexyard migrate                  # detect + print both paths (no prompt)
+apexyard migrate --dry-run        # print actions; change nothing
+```
+
+### Path keep — install the CLI only
+
+Use this when the fork stays where it is and you only want the `apexyard` CLI
+on your PATH. The repo files do not change. Later updates run through
+`apexyard update`.
+
+```bash
+apexyard migrate --path keep
+# optional: APEXYARD_BIN_DIR=~/.local/bin apexyard migrate --path keep
+```
+
+This creates a symlink `${APEXYARD_BIN_DIR:-$HOME/.local/bin}/apexyard` →
+`bin/apexyard` when that name is free or already points here. It refuses to
+overwrite any other file.
+
+### Path move — new repo, full history, keep upstream
+
+Use this when you want a new empty GitHub repo and a full push of every branch
+and tag. You archive the old fork yourself afterward. The script never archives
+or deletes the old remote.
+
+```bash
+apexyard migrate --path move --new-repo OWNER/NAME
+apexyard migrate --path move --new-repo OWNER/NAME --public   # default is private
+```
+
+What it does:
+
+1. Refuses if `OWNER/NAME` already exists.
+2. Creates the repo with `gh repo create` (no `--source`, no `--push`).
+3. Renames `origin` → `old-fork`, adds the new URL as `origin`.
+4. Keeps an existing `upstream`, or adds it from the fork parent.
+5. Runs `git push origin --all` and `git push origin --tags` (never `--force`,
+   `--mirror`, or `--delete`).
+6. Prints hand-archive steps for the old fork.
+
+### Migration chain
+
+After a path (or with no `--path`), the command prints the chain from the
+recorded version to `--target` (or the highest pair in `.claude/migrations`).
+Add `--run-migrations` to run each pair in order and write the version anchor.
+If the recorded version is `unknown`, set `.claude/framework-version` first.
+
+```bash
+apexyard migrate --target v5.7.0
+apexyard migrate --path keep --target v5.7.0 --run-migrations
+```
+
+---
+
 ## Authoring a new migration (framework maintainers)
 
 When cutting a release that introduces a per-adopter change:
