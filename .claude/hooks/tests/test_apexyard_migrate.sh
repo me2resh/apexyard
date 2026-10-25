@@ -276,8 +276,7 @@ if build_fixture "$F8" "$UPSTREAM_BARE"; then
   else mark_fail "case8 remote branches" "rc=$rc out=$out"; fi
 else mark_fail "case8 build" "build_fixture failed"; fi
 
-# Case 9: apexyard update works after each path (needs #1888)
-if grep -q '^  update)' "$CLI"; then
+# Case 9: apexyard update works after each pathif grep -Eq '^  (init\|)?update\)' "$CLI"; then
   for p in keep move; do
     F9="$BASE/fork9$p"; mkdir -p "$F9"; reset_gh_state "$BASE/gh-state-9$p"
     APEXYARD_BIN_DIR="$BASE/local-bin-9$p"; mkdir -p "$APEXYARD_BIN_DIR"
@@ -285,7 +284,7 @@ if grep -q '^  update)' "$CLI"; then
     if [ "$p" = move ]; then run_migrate "$F9" --path move --new-repo "owner/upd" --yes >/dev/null 2>&1
     else run_migrate "$F9" --path keep >/dev/null 2>&1; fi
     # run_migrate appends "migrate"; call the CLI directly for update.
-    out=$(cd "$F9" && OPS_ROOT="$F9" PATH="$FAKE_GH_BIN:$PATH" bash "$F9/bin/apexyard" update --dry-run 2>&1 </dev/null) || true
+    out=$(cd "$F9" && OPS_ROOT="$F9" PATH="$FAKE_GH_BIN:$PATH" bash "$F9/bin/apexyard" update --check 2>&1 </dev/null) || true
     if printf '%s\n' "$out" | grep -qi 'unknown command'; then
       mark_fail "case9 update after $p" "$out"
     else mark_pass "apexyard update is recognised after path $p"; fi

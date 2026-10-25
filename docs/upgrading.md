@@ -236,8 +236,7 @@ apexyard migrate --dry-run        # print actions; change nothing
 
 Use this when the fork stays where it is and you only want the `apexyard` CLI
 on your PATH. The repo files do not change. Later updates run through
-`apexyard update`. The `update` command ships in PR #1888; this change lands
-after it.
+`apexyard update`.
 
 ```bash
 apexyard migrate --path keep
