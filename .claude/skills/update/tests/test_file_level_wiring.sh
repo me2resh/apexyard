@@ -46,6 +46,27 @@ check 'per-file is the default' '**Default: the per-file update.**'
 check 'git-merge is the escape hatch' '`--git-merge` is the escape hatch'
 check 'plan header documented' 'The plan starts with two header lines that begin with `#`.'
 
+check 'description names the default' 'per-file update by owner class on a sync branch (the default; --git-merge runs the history merge)'
+check 'usage names the default' '/update                              # per-file update by owner class (the default)'
+check 'fallback asks the user' '`SYNC_MODE=ask`: the per-file update cannot run'
+check 'fallback shows the engine error' 'Show `$PLAN_ERROR` to the user.'
+check 'checkout before branch delete' 'Check out the default branch (`git checkout "$DEFAULT_BRANCH"`), then delete the empty sync branch'
+check 'nothing to commit' 'No framework file changed. Nothing to commit.'
+check 'commit subject without ticket' 'SUBJECT="chore: sync framework files from $UPSTREAM_REF"'
+
+# The old default text must not come back (Rex on #1895).
+refuse() {
+  local label="$1" pattern="$2"
+  if grep -Fq -- "$pattern" "$SKILL"; then
+    echo "FAIL [$label]: found '$pattern'" >&2; FAIL=$((FAIL + 1))
+  else
+    echo "PASS [$label]"; PASS=$((PASS + 1))
+  fi
+}
+refuse 'no merge-based default' 'merge-based sync (default'
+refuse 'no merge-or-rebase description' 'description: Sync the ApexYard fork with upstream — preview, merge-or-rebase on a sync branch'
+refuse 'no empty ticket subject' 'git commit -m "chore(#${TICKET}): sync framework files'
+
 # The file-level section must not stage with a wildcard.
 section=$(awk '/^\*\*File-level path/{on=1} /^\*\*Merge path:\*\*/{on=0} on' "$SKILL")
 if printf '%s\n' "$section" | grep -Eq 'git add (-A|\.)( |$)'; then

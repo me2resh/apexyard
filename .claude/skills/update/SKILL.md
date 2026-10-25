@@ -1,6 +1,6 @@
 ---
 name: update
-description: Sync the ApexYard fork with upstream — preview, merge-or-rebase on a sync branch, walk per-version migrations.
+description: Sync the ApexYard fork with upstream — per-file update by owner class on a sync branch (the default; --git-merge runs the history merge), walk per-version migrations.
 argument-hint: "[--plan] [--dry-run] [--rebase] [--git-merge] [--from-version vN.N.N] [--skip-migrations] [--skip-adapter-sync]"
 allowed-tools: Bash, Read, Write, Edit, AskUserQuestion
 ---
@@ -40,11 +40,11 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 ## Usage
 
 ```
-/update                              # merge-based sync (default, safer)
-/update --rebase                     # rebase local customisations on top of upstream
+/update                              # per-file update by owner class (the default)
+/update --git-merge --rebase         # history merge as a rebase of local commits on top of upstream
 /update --plan                       # per-file plan (unchanged/updated/kept/merged/conflict); writes nothing
 /update --dry-run                    # preview only, don't touch anything
-/update --git-merge                  # force the history merge instead of the file-level update
+/update --git-merge                  # history merge (git merge) instead of the per-file update
 /update --from-version v1.2.0        # override the version anchor (use when fork anchor is missing/wrong)
 /update --skip-migrations            # files-only sync; do NOT run the per-version migration chain
 /update --skip-adapter-sync          # do not refresh an already-installed Codex adapter
@@ -55,8 +55,8 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 
 | Flag | Effect |
 |------|--------|
-| `--rebase` | Rebase local commits onto upstream instead of merging. Cleaner linear history; rewrites local SHAs. |
-| `--plan` | Print the file-level plan from step 2a and exit. Each shipped file is `unchanged`, `updated`, `kept` (yours), `merged` or `conflict`. Writes nothing: no branch, no file, no anchor. The classes are the ones that the real update then applies. |
+| `--rebase` | History merge only (with `--git-merge` or the fallback). Rebase local commits onto upstream instead of merging. Cleaner linear history; rewrites local SHAs. |
+| `--plan` | Print the file-level plan from step 2a and exit. Each shipped file is `unchanged`, `updated`, `kept` (yours), `merged` or `conflict`. Writes no tracked file and makes no branch. The anchor does not change. (Step 0 writes the session bootstrap marker, and step 2 updates remote-tracking refs. Neither is a tracked file.) The classes are the ones that the real update then applies. |
 | `--git-merge` | Escape hatch. Use the history merge (steps 4, 6 merge/rebase path, 7) instead of the default per-file update. Use it only when the per-file update cannot do what you need. |
 | `--dry-run` | Run the preview step only. Print the commit delta and exit; no fetch-after-preview, no branch creation, no merge. **Does NOT execute migrations** — only previews the planned chain. |
 | `--from-version vN.N.N` | Explicit version-anchor override. Use when `.claude/framework-version` is missing (legacy fork pre-v1.4.0) OR you've manually rolled back and the anchor is stale. The chain is built against this value instead of the file. Refuses if the value doesn't match `vMAJOR.MINOR.PATCH`. |
@@ -247,16 +247,27 @@ Compute the plan. The plan writes nothing.
 ENGINE="$(git rev-parse --show-toplevel)/bin/update-files.sh"
 PLAN_FILE=$(mktemp "${TMPDIR:-/tmp}/apexyard-plan.XXXXXXXX")
 SYNC_MODE=git
+PLAN_ERROR=""
 if [ "$GIT_MERGE" = "0" ] && [ -f "$ENGINE" ]; then
   if bash "$ENGINE" --plan --target "$UPSTREAM_REF" \
-      ${FROM_VERSION_OVERRIDE:+--base "$FROM_VERSION_OVERRIDE"} > "$PLAN_FILE"; then
+      ${FROM_VERSION_OVERRIDE:+--base "$FROM_VERSION_OVERRIDE"} > "$PLAN_FILE" 2> "$PLAN_FILE.err"; then
     SYNC_MODE=files
+  else
+    SYNC_MODE=ask
+    PLAN_ERROR=$(cat "$PLAN_FILE.err")
   fi
+elif [ "$GIT_MERGE" = "0" ]; then
+  SYNC_MODE=ask
+  PLAN_ERROR="bin/update-files.sh is not in this fork."
 fi
 ```
 
 - `SYNC_MODE=files`: steps 4, 6 and 7 use the file-level path below. Show the plan lines to the user in step 3.
-- `SYNC_MODE=git`: the engine is missing, the anchor is missing or unknown, or `--git-merge` was passed. Use the history merge (steps 4, 6, 7). Say why in one line. A missing anchor needs `--from-version vN.N.N`.
+- `SYNC_MODE=git`: `--git-merge` was passed. Use the history merge (steps 4, 6, 7).
+- `SYNC_MODE=ask`: the per-file update cannot run (for example, the engine is missing, or the anchor is missing or unknown). Do not fall back silently. Show `$PLAN_ERROR` to the user. Then use `AskUserQuestion` with these choices, recommended first:
+  1. Stop, and run `/update --from-version vN.N.N` (or fix the error) to use the per-file update.
+  2. Use the history merge for this run. Say that the history merge does not keep the ownership rules: it can change an adopter-owned file, and it does not show gate edits first.
+  On choice 2, set `SYNC_MODE=git`. On choice 1, clean up (see Cleanup) and exit 0.
 
 If `--plan` is set, print the plan and stop. Do not create a branch. Do not write a file.
 
@@ -267,7 +278,7 @@ if [ "$PLAN" = "1" ]; then
   else
     echo "No file-level plan: run with --from-version vN.N.N, or check that bin/update-files.sh exists."
   fi
-  rm -f "$PLAN_FILE"
+  rm -f "$PLAN_FILE" "$PLAN_FILE.err"
   # Clear the bootstrap marker (see Cleanup) and exit 0.
 fi
 ```
@@ -443,7 +454,7 @@ ENGINE_EXIT=$?
 | Exit | Meaning | Next action |
 |------|---------|-------------|
 | 0 | Files are written. Adopter paths are not changed. Local edits are re-applied and saved under `.claude/session/update-backup/`. | Stage each `updated` and `merged` path by name, then commit on the sync branch. |
-| 1 | Conflict. Nothing is written. The output shows each local edit, the upstream change and an overlay suggestion. | Show the output. Do not merge by hand in this run. Ask the user to move the change to the suggested overlay, then run `/update` again. Delete the empty sync branch. |
+| 1 | Conflict. Nothing is written. The output shows each local edit, the upstream change and an overlay suggestion. | Show the output. Do not merge by hand in this run. Ask the user to move the change to the suggested overlay, then run `/update` again. Check out the default branch (`git checkout "$DEFAULT_BRANCH"`), then delete the empty sync branch (`git branch -D "$BRANCH"`). |
 | 2 | Usage or environment error. | Show the message and stop. |
 | 3 | A gate file has a local edit. Nothing is written. | Show the banner and each diff to the user. Use `AskUserQuestion`: keep the gate edits and continue, or stop. Recommend stop first. Only on an explicit choice to continue, run the command again with `--confirm-security`. Never pass `--confirm-security` without that choice. |
 
@@ -456,8 +467,19 @@ while IFS= read -r p; do
   if [ -e "$p" ]; then git add -- "$p"; else git rm -q --cached -- "$p" 2>/dev/null || true; fi
 done < "$PLAN_FILE.paths"
 git add -- .claude/framework-version 2>/dev/null || true
-git commit -m "chore(#${TICKET}): sync framework files from $UPSTREAM_REF"
-rm -f "$PLAN_FILE" "$PLAN_FILE.paths"
+# Same ticket rule as the branch name in step 5. Never write "chore(#)".
+if [ -n "$TICKET" ]; then
+  SUBJECT="chore(#${TICKET}): sync framework files from $UPSTREAM_REF"
+else
+  SUBJECT="chore: sync framework files from $UPSTREAM_REF"
+fi
+if git diff --cached --quiet; then
+  # Exit 0 with no updated or merged path: there is nothing to commit.
+  echo "No framework file changed. Nothing to commit."
+else
+  git commit -m "$SUBJECT"
+fi
+rm -f "$PLAN_FILE" "$PLAN_FILE.paths" "$PLAN_FILE.err"
 ```
 
 Then go to step 8. Skip step 7.
