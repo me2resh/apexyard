@@ -40,6 +40,8 @@ paths:
     owner: shared
   - glob: docs/**
     owner: framework
+  - glob: .claude/agents/**
+    owner: framework
 YAML
 printf 'base\n' > "$fw/apexyard.projects.yaml"
 printf 'v1.0.0\n' > "$fw/.claude/framework-version"
@@ -50,9 +52,13 @@ done
 printf 'old\n' > "$fw/docs/clean"
 printf 'delete\n' > "$fw/docs/delete"
 printf 'delete\n' > "$fw/docs/edited-delete"
+mkdir -p "$fw/.claude/agents"
+for agent in routed plain still; do
+  printf -- '---\nname: %s\nmodel: sonnet\n---\nfirst\n2\n3\n4\n5\n6\n7\nlast\n' "$agent" > "$fw/.claude/agents/$agent.md"
+done
 commit_fixture "$fw"
 git -C "$fw" tag v1.0.0
-for path in .claude/skills/foo/SKILL.md .claude/hooks/gate.sh handbooks/shared.md; do
+for path in .claude/skills/foo/SKILL.md .claude/hooks/gate.sh handbooks/shared.md .claude/agents/routed.md .claude/agents/plain.md; do
   sed 's/^last$/upstream/' "$fw/$path" > "$fixture/file"; cp "$fixture/file" "$fw/$path"
 done
 printf 'upstream\n' > "$fw/apexyard.projects.yaml"
@@ -315,6 +321,71 @@ while IFS=$'\t' read -r status _ path; do
       assert_eq "kept bytes: $path" yes "$(cmp -s "$fixture/expected" "$ops/$path" && echo yes || echo no)" ;;
   esac
 done < "$fixture/plan"
+# Routed agents: the routing hook rewrites the model line. The update takes
+# upstream's file and ignores that line for each agent the routing names.
+set_model() {
+  sed "s/^model: sonnet$/model: $2/" "$ops/.claude/agents/$1.md" > "$fixture/file"
+  cp "$fixture/file" "$ops/.claude/agents/$1.md"
+}
+write_routing() {
+  printf '# routing\nagents:\n  routed:\n    model: opus\n  "still":\n    model: opus\nother:\n  plain:\n    model: x\n' > "$1"
+}
+reset_ops
+write_routing "$ops/agent-routing.yaml"
+for agent in routed plain still; do set_model "$agent" opus; done
+run_engine --plan
+has 'routed model line is not an edit' $'updated\tframework\t.claude/agents/routed.md'
+has 'unrouted model line is an edit' $'merged\tframework\t.claude/agents/plain.md'
+assert_eq 'routed agent with no upstream change' no "$(grep -q 'agents/still.md' "$fixture/out" && echo yes || echo no)"
+has 'plan header names the default' '# Per-file update by owner class. This is the default. /update --git-merge runs the history merge instead.'
+run_engine --apply
+assert_eq 'routed apply exit' 0 "$code"
+assert_eq 'routed agent takes upstream file' "$(git -C "$fw" show v1.1.0:.claude/agents/routed.md)" "$(cat "$ops/.claude/agents/routed.md")"
+assert_eq 'unrouted agent keeps local model' 'model: opus' "$(grep '^model:' "$ops/.claude/agents/plain.md")"
+assert_eq 'routed still agent is untouched' 'model: opus' "$(grep '^model:' "$ops/.claude/agents/still.md")"
+reset_ops
+write_routing "$ops/agent-routing.yaml"
+set_model routed opus
+local_first .claude/agents/routed.md
+run_engine --plan
+has 'routed agent with a body edit merges' $'merged\tframework\t.claude/agents/routed.md'
+run_engine --apply
+assert_eq 'routed merge keeps the body edit' local "$(sed -n '5p' "$ops/.claude/agents/routed.md")"
+assert_eq 'routed merge takes upstream body' upstream "$(tail -n 1 "$ops/.claude/agents/routed.md")"
+assert_eq 'routed merge takes base model line' 'model: sonnet' "$(grep '^model:' "$ops/.claude/agents/routed.md")"
+reset_ops
+set_model routed opus
+run_engine --plan
+has 'no routing file: model line is an edit' $'merged\tframework\t.claude/agents/routed.md'
+if command -v jq >/dev/null 2>&1; then
+  reset_ops
+  mkdir -p "$ops/routing"
+  write_routing "$ops/routing/custom.yaml"
+  printf '{"portfolio":{"agent_routing":"routing/custom.yaml"}}\n' > "$ops/.claude/project-config.json"
+  set_model routed opus
+  run_engine --plan
+  has 'routing path from project config' $'updated\tframework\t.claude/agents/routed.md'
+else
+  echo 'NOTE: jq is not installed, so the project-config routing path is not checked'
+fi
+# doctor --drift: a routed model line is not drift. An unrouted one is.
+reset_ops
+write_routing "$ops/agent-routing.yaml"
+set_model routed opus
+set_model still opus
+run_drift
+assert_eq 'routed model line is not drift' 0 "$code"
+has 'routed drift summary' 'drift: no local edits to framework-owned files'
+set_model plain opus
+run_drift
+assert_eq 'unrouted model line is drift' 1 "$code"
+has 'unrouted drift line' $'drift\t.claude/agents/plain.md'
+assert_eq 'routed agent not listed' no "$(grep -Eq 'agents/(routed|still).md' "$fixture/out" && echo yes || echo no)"
+rm "$ops/agent-routing.yaml"
+run_drift
+assert_eq 'no routing file: model lines are drift' 1 "$code"
+has 'drift without routing lists routed' $'drift\t.claude/agents/routed.md'
+
 echo '===== test_update_files.sh ====='
 echo "Passed: $PASS"
 echo "Failed: $FAIL"

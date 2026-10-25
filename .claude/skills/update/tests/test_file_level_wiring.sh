@@ -42,6 +42,9 @@ check 'exit 3 row' '| 3 | A gate file has a local edit. Nothing is written.'
 check 'explicit security choice' 'Never pass `--confirm-security` without that choice.'
 check 'stage from plan' "awk -F '\\t' '\$1 == \"updated\" || \$1 == \"merged\" { print \$3 }' \"\$PLAN_FILE\""
 check 'merge or rebase skipped' 'Skip this step when `SYNC_MODE=files`.'
+check 'per-file is the default' '**Default: the per-file update.**'
+check 'git-merge is the escape hatch' '`--git-merge` is the escape hatch'
+check 'plan header documented' 'The plan starts with two header lines that begin with `#`.'
 
 # The file-level section must not stage with a wildcard.
 section=$(awk '/^\*\*File-level path/{on=1} /^\*\*Merge path:\*\*/{on=0} on' "$SKILL")

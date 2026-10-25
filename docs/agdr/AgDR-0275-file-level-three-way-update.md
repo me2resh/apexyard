@@ -42,10 +42,13 @@ Rules:
 - Any conflict stops the update before the first write. The output shows the local edit, the upstream change and an overlay suggestion.
 - A local edit to a security path is shown first and needs `--confirm-security` or a typed `yes`.
 - Each re-applied or confirmed local edit is saved as a patch under `.claude/session/update-backup/`.
-- `--plan` uses the same computation and writes nothing.
+- `--plan` uses the same computation and writes nothing. Its header says that the per-file update is the default, and that `/update --git-merge` runs the history merge instead.
+- Routed agent model lines (owner decision): the SessionStart hook `apply-agent-routing.sh` rewrites the frontmatter `model:` line of each agent that the routing file names. For a framework-owned `.claude/agents/<name>.md` whose name is a key of `agents:` in the routing file, the engine ignores a `model:` line difference. It compares and merges a copy of the local file whose model line matches the base. The update thus takes upstream's file, and the hook applies the routing again at the next session start. A model line edit to an agent that the routing does not name is a normal local edit. The routing file is `.portfolio.agent_routing` in `.claude/project-config.json`, else `./agent-routing.yaml`.
 
 ## Consequences
 
+- The per-file update is the default in `/update`. `--git-merge` is the escape hatch to the history merge (owner decision).
+- After an update, a routed agent file holds upstream's model line until the next session start. The routing hook then writes the routed model again.
 - `apexyard update` (#1885) and `/update` can call one engine for both forks and template-made repos.
 - A fork that uses the engine does not get upstream commits in its history. The hook drift notice still works, because it compares blobs against a local `upstream/*` ref.
 - An upstream rename shows as an `updated` delete and an `updated` add. A local edit to the old path then becomes a conflict, which stops the update. No edit is lost.

@@ -26,6 +26,10 @@
 #   merged     A local edit and an upstream change merge cleanly.
 #   conflict   A local edit and an upstream change do not merge.
 #
+# A routed agent's `model:` line (written by apply-agent-routing.sh) is not
+# a local edit. The engine takes upstream's line, and the hook routes the
+# agent again at the next session start. See AgDR-0275.
+#
 # --plan prints the status of each path that is not unchanged and writes
 # nothing. --apply computes the same plan, then:
 #   1. shows each local edit to a security path and asks for confirmation;
@@ -118,24 +122,90 @@ awk -F '\t' '
     printf "%s\t%s\t%s\t%s\t%s\t%s\n", $1, $2, b, t, md, $3
   }' "$scratch/base.tree" "$scratch/target.tree" "$scratch/classes" > "$scratch/joined" || exit 2
 
+# Routed agents. The SessionStart hook apply-agent-routing.sh rewrites the
+# frontmatter `model:` line of each agent that the routing file names. That
+# rewrite is not an adopter edit: the update takes upstream's file, and the
+# hook applies the routing again at the next session start. The routing file
+# is `.portfolio.agent_routing` in .claude/project-config.json (read with jq
+# when it is present), else ./agent-routing.yaml. A relative path resolves
+# against the repo root.
+routing_file() {
+  local value=''
+  if command -v jq >/dev/null 2>&1 && ! overlay .claude/project-config.json && [ -f "$repo/.claude/project-config.json" ]; then
+    value=$(jq -r '.portfolio.agent_routing // empty | select(type == "string")' \
+      "$repo/.claude/project-config.json" 2>/dev/null) || value=''
+  fi
+  value=${value:-./agent-routing.yaml}
+  case "$value" in /*) printf '%s' "$value" ;; *) printf '%s/%s' "$repo" "${value#./}" ;; esac
+}
+# Print each key of the top-level `agents:` map, one for each line.
+routed_agents() {
+  local file
+  file=$(routing_file)
+  [ -f "$file" ] || return 0
+  awk '
+    /^agents:[ \t]*(#.*)?$/ { on = 1; indent = ""; next }
+    on && /^[^ \t#]/ { on = 0 }
+    !on || /^[ \t]*(#.*)?$/ { next }
+    {
+      match($0, /^[ \t]*/); lead = substr($0, 1, RLENGTH)
+      if (indent == "") indent = lead
+      if (lead != indent) next
+      key = substr($0, RLENGTH + 1)
+      if (key !~ /:/) next
+      sub(/:.*/, "", key); gsub(/"/, "", key); gsub(sprintf("%c", 39), "", key)
+      if (key != "") print key
+    }' "$file"
+}
+routed_agents > "$scratch/routed" || exit 2
+is_routed_agent() {
+  local name
+  case "$1" in .claude/agents/*/*) return 1 ;; .claude/agents/*.md) ;; *) return 1 ;; esac
+  name=${1#.claude/agents/}; name=${name%.md}
+  grep -Fxq -- "$name" "$scratch/routed"
+}
+# Write <file> with its frontmatter `model:` line set to the line from the
+# base blob <b> (or removed when the base has none) to <out>.
+normalize_model() {
+  local file=$1 b=$2 out=$3 base_model
+  base_model=$(blob "$b" | awk 'NR == 1 && $0 == "---" { fm = 1; next } fm && $0 == "---" { exit } fm && /^model:/ { print; exit }')
+  BASE_MODEL=$base_model awk '
+    NR == 1 && $0 == "---" { fm = 1; print; next }
+    fm && $0 == "---" { fm = 0; print; next }
+    fm && /^model:/ { if (ENVIRON["BASE_MODEL"] != "") print ENVIRON["BASE_MODEL"]; next }
+    { print }' "$file" > "$out"
+}
+blob() { if [ "$1" = - ]; then : ; else git -C "$repo" cat-file blob "$1"; fi; }
+
 # Local state: "-" absent, "link" overlay, "dir" a directory, else a regular
-# file whose blob id comes from one bulk hash-object call.
+# file whose blob id comes from one bulk hash-object call. For a routed
+# agent, the engine hashes and merges a copy whose model line matches the
+# base (see normalize_model), so a routed model line is not a local edit.
 : > "$scratch/local-kind"; : > "$scratch/local-files"
-while IFS=$'\t' read -r _ _ _ _ _ path; do
+i=0
+while IFS=$'\t' read -r class _ b _ _ path; do
+  i=$((i + 1))
   if overlay "$path"; then kind="link"
   elif [ -d "$repo/$path" ]; then kind=dir
-  elif [ -f "$repo/$path" ]; then kind="file"; printf '%s\n' "$path" >> "$scratch/local-files"
+  elif [ -f "$repo/$path" ]; then
+    kind="file"
+    if [ "$class" = framework ] && [ "$b" != - ] && is_routed_agent "$path"; then
+      normalize_model "$repo/$path" "$b" "$scratch/local.$i" || exit 2
+      printf '%s\n' "$scratch/local.$i" >> "$scratch/local-files"
+    else
+      printf '%s\n' "$path" >> "$scratch/local-files"
+    fi
   else kind=-
   fi
   printf '%s\n' "$kind" >> "$scratch/local-kind"
 done < "$scratch/joined"
+# The local copy to compare and merge: the normalised copy, else the file.
+local_src() { if [ -f "$scratch/local.$1" ]; then printf '%s' "$scratch/local.$1"; else printf '%s' "$repo/$2"; fi; }
 if [ -s "$scratch/local-files" ]; then
   (cd "$repo" && git hash-object --stdin-paths) < "$scratch/local-files" > "$scratch/local-blobs" || exit 2
 else
   : > "$scratch/local-blobs"
 fi
-
-blob() { if [ "$1" = - ]; then : ; else git -C "$repo" cat-file blob "$1"; fi; }
 
 # Build one record for each path. All modes use these records.
 # Record: n, status, class, security, edit, target blob, target mode, note, path.
@@ -168,7 +238,7 @@ while IFS=$'\t' read -r class flag b t tmode path; do
       mkdir "$scratch/$n" || exit 2
       blob "$b" > "$scratch/$n/b" || exit 2
       blob "$t" > "$scratch/$n/t" || exit 2
-      cp "$repo/$path" "$scratch/$n/l" || exit 2
+      cp "$(local_src "$n" "$path")" "$scratch/$n/l" || exit 2
       if git merge-file -p --diff3 "$scratch/$n/l" "$scratch/$n/b" "$scratch/$n/t" > "$scratch/$n/result" 2>/dev/null; then
         status=merged
       else
@@ -261,7 +331,14 @@ if [ "$mode" = drift ]; then
   exit 1
 fi
 
-if [ "$mode" = plan ]; then report plan; exit 0; fi
+if [ "$mode" = plan ]; then
+  # A header line starts with "#", so a caller that reads the status
+  # columns can skip it.
+  echo '# Per-file update by owner class. This is the default. /update --git-merge runs the history merge instead.'
+  echo '# Nothing is written. Statuses: unchanged, updated, kept (yours), merged, conflict.'
+  report plan
+  exit 0
+fi
 
 # 1. Security paths: show each local edit loudly, before any write.
 if [ "$security_count" -gt 0 ]; then

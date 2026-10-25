@@ -23,6 +23,8 @@ PR body and migration notes. Lead with the outcome and next action.
 
 Single-command replacement for the manual "fetch → branch → merge → push → PR" dance that fork maintainers do to pull upstream apexyard changes into their ops fork.
 
+**Default: the per-file update.** `/update` updates each shipped file by its owner class (step 2a, step 6 file-level path). It never changes an adopter-owned file. It re-applies your local edits with a three-way merge, or stops with nothing written. `--git-merge` is the escape hatch: it runs the older history merge (`git merge` or `git rebase` of the upstream branch) instead. The history merge is also the fallback when the per-file update cannot run.
+
 ## Path resolution
 
 Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
@@ -55,7 +57,7 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 |------|--------|
 | `--rebase` | Rebase local commits onto upstream instead of merging. Cleaner linear history; rewrites local SHAs. |
 | `--plan` | Print the file-level plan from step 2a and exit. Each shipped file is `unchanged`, `updated`, `kept` (yours), `merged` or `conflict`. Writes nothing: no branch, no file, no anchor. The classes are the ones that the real update then applies. |
-| `--git-merge` | Use the history merge (steps 4, 6 merge/rebase path, 7) even when the file-level update is available. Use it only when the file-level update cannot run. |
+| `--git-merge` | Escape hatch. Use the history merge (steps 4, 6 merge/rebase path, 7) instead of the default per-file update. Use it only when the per-file update cannot do what you need. |
 | `--dry-run` | Run the preview step only. Print the commit delta and exit; no fetch-after-preview, no branch creation, no merge. **Does NOT execute migrations** — only previews the planned chain. |
 | `--from-version vN.N.N` | Explicit version-anchor override. Use when `.claude/framework-version` is missing (legacy fork pre-v1.4.0) OR you've manually rolled back and the anchor is stale. The chain is built against this value instead of the file. Refuses if the value doesn't match `vMAJOR.MINOR.PATCH`. |
 | `--skip-migrations` | Sync the framework files but DO NOT run the per-version migration chain. Prints an advisory warning naming each skipped pair and reminding the operator that the migrations can be replayed later with `bash .claude/migrations/<pair>.sh`. The anchor file IS still advanced to the new release tag, so subsequent runs won't re-offer the same migrations. Use sparingly — the chain is the point. |
@@ -235,6 +237,8 @@ Network failure: print a warning and exit. Don't try to "work from cache" — us
 
 ### 2a. File-level plan (ownership-aware)
 
+The per-file update is the default. `--git-merge` skips it and runs the history merge.
+
 The file-level update (`bin/update-files.sh`, AgDR-0275) updates each shipped file by its owner class in `.claude/ownership-manifest.yaml` (AgDR-0274). It does a three-way merge for each file. The base is the release in `.claude/framework-version`. It needs no shared history, so it also works for a repo made from a template.
 
 Compute the plan. The plan writes nothing.
@@ -268,7 +272,9 @@ if [ "$PLAN" = "1" ]; then
 fi
 ```
 
-Each plan line is `<status> TAB <class> TAB <path>`, with `security` or a note (`overlay`, `unclassified`, `directory`) at the end when it applies. The last line is the count of each status.
+The plan starts with two header lines that begin with `#`. They say that the per-file update is the default, that `/update --git-merge` runs the history merge instead, and that the plan writes nothing. Show them to the user. Each plan line after them is `<status> TAB <class> TAB <path>`, with `security` or a note (`overlay`, `unclassified`, `directory`) at the end when it applies. The last line is the count of each status.
+
+A routed agent's `model:` line is not a local edit. The update takes upstream's agent file, and the SessionStart routing hook applies the routing again (AgDR-0275).
 
 ### 3. Preview
 
