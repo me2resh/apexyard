@@ -40,14 +40,15 @@ Rules:
 - The first matching glob wins.
 - There is no catch-all rule. A new top-level path fails `bin/check-ownership-manifest.sh` until a rule covers it.
 - An update changes only paths that the framework ships. A local path that the framework does not ship is never touched, whatever its class.
-- Gate files (`.claude/hooks/**`, `.githooks/**`, `.claude/settings.json`) carry `security: true`.
+- Gate files carry `security: true`. They are `.claude/hooks/**`, `.githooks/**`, `.claude/settings.json`, `bin/run-pre-push-checks.sh`, `bin/run-configured-pre-push-checks.sh`, `bin/install-git-hooks.sh`, `.cursor/hooks.json`, and the `gate-dispatcher.ts` file in each of the opencode and pi harness adapters.
+- `.github/workflows/**` is shared with no security flag, because the adopter owns their CI.
 
 ## Consequences
 
 - A contributor who adds a new top-level path must add a manifest rule in the same PR. CONTRIBUTING.md says so.
 - The workflow `ownership manifest` runs on every PR, including docs-only PRs.
 - The library accepts only the YAML subset in the manifest header. A richer shape is an error, not a silent misread.
-- `.claude/agents/**` is framework-owned. The agent-routing sync edits model lines in these files. The update engine must treat that edit as a local edit and re-apply it.
+- `.claude/agents/**` is framework-owned. The agent-routing sync edits model lines in these files. The update engine accepts upstream for the `model:` line that agent-routing names. The SessionStart hook applies the override again, so the drift report does not count it.
 
 ## Artifacts
 

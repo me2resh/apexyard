@@ -95,6 +95,28 @@ paths:
     owner: framework
     security: true
 
+  # Delegated gate runners and harness gate wiring. They enforce or wire a
+  # gate, so they sit before the wide rules for bin/, .cursor/ and
+  # harness-adapters/.
+  - glob: "bin/run-pre-push-checks.sh"
+    owner: framework
+    security: true
+  - glob: "bin/run-configured-pre-push-checks.sh"
+    owner: framework
+    security: true
+  - glob: "bin/install-git-hooks.sh"
+    owner: framework
+    security: true
+  - glob: ".cursor/hooks.json"
+    owner: framework
+    security: true
+  - glob: "harness-adapters/opencode/src/gate-dispatcher.ts"
+    owner: framework
+    security: true
+  - glob: "harness-adapters/pi/src/gate-dispatcher.ts"
+    owner: framework
+    security: true
+
   # ---------------------------------------------------------------------
   # Shared. Adopters may edit these files. An update merges them.
   # ---------------------------------------------------------------------
