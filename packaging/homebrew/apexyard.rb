@@ -1,8 +1,8 @@
 class Apexyard < Formula
   desc "Create and manage ApexYard ops repositories"
   homepage "https://github.com/me2resh/apexyard"
-  url "https://github.com/me2resh/apexyard/releases/download/v0.1.0/apexyard-v0.1.0.tar.gz"
-  version "0.1.0"
+  url "https://github.com/me2resh/apexyard/releases/download/__TAG__/apexyard-__TAG__.tar.gz"
+  version "__VERSION__"
   sha256 "__SHA256__"
   license "MIT"
 

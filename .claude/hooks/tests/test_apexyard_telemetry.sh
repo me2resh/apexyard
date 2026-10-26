@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Stub scripts, bash -c commands, and jq filters expand their own variables.
+# shellcheck disable=SC2016
 # Test install events with local repositories and a curl stub.
 # shellcheck disable=SC1091,SC2154
 . "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
@@ -31,8 +33,9 @@ check 'stub init succeeds' run_init sent --agent codex
 check 'one request' test "$(wc -l < "$CURL_LOG" | tr -d ' ')" = 1
 check 'curl options' grep -q -- '-fsS --max-time 3 -H Content-Type: application/json --data-binary @- -- http://test.invalid/x' "$CURL_LOG"
 check 'exact fields' test "$(jq -c keys "$CURL_BODY")" = '["agent","cli_version","install_id","os"]'
-check 'field values' jq -e --arg id "$id" --arg os "$(uname -s | tr '[:upper:]' '[:lower:]')" \
-  '.install_id == $id and .cli_version == "0.1.0" and .os == $os and .agent == "codex"' "$CURL_BODY" > /dev/null
+cli_version=$(/bin/bash "$CLI" --version)
+check 'field values' jq -e --arg id "$id" --arg version "$cli_version" --arg os "$(uname -s | tr '[:upper:]' '[:lower:]')" \
+  '.install_id == $id and .cli_version == $version and .os == $os and .agent == "codex"' "$CURL_BODY" > /dev/null
 for secret in private-org private-repo "$sb" "$(id -un)"; do
   check 'no private value' /bin/bash -c '! grep -Fq -- "$1" "$2"' _ "$secret" "$CURL_BODY"
 done

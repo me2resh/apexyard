@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Stub scripts, bash -c commands, and jq filters expand their own variables.
+# shellcheck disable=SC2016
 # All downloads in this suite use local files.
 set -euo pipefail
 # shellcheck disable=SC1091
@@ -28,6 +30,30 @@ assets="$sb/releases/$APEXYARD_VERSION"
 /bin/bash "$root/bin/build-release-assets.sh" "$APEXYARD_VERSION" "$assets"
 archive="$assets/apexyard-$APEXYARD_VERSION.tar.gz"
 cp "$archive" "$sb/original.tar.gz"
+# Stamp every packaging channel from the same framework release.
+stamped="$sb/stamped"
+mkdir -p "$stamped"
+cp "$archive.sha256" "$stamped/"
+check stamp-packaging /bin/bash "$root/bin/stamp-packaging.sh" v9.8.7 "$stamped"
+hash=$(awk '{print $1}' "$archive.sha256")
+check formula-version grep -Fq 'version "9.8.7"' "$stamped/apexyard.rb"
+check formula-url grep -Fq 'url "https://github.com/me2resh/apexyard/releases/download/v9.8.7/apexyard-v9.8.7.tar.gz"' "$stamped/apexyard.rb"
+check formula-sha grep -Fq "sha256 \"$hash\"" "$stamped/apexyard.rb"
+check package-version grep -Fq '"version": "9.8.7"' "$stamped/create-apexyard/package.json"
+check installer-version grep -Fxq 'VERSION="9.8.7"' "$stamped/install.sh"
+check no-placeholder bash -c '! grep -Fq __VERSION__ "$1"' _ "$stamped/install.sh"
+check no-fixed-version bash -c '! grep -RFq 0.1.0 "$1/packaging" "$1/bin/apexyard"' _ "$root"
+for version in 9.8.7 v9.8.7; do
+  sh "$root/install.sh" --version "$version" --dry-run > "$sb/plan"
+  check "normalized $version" grep -Fq "$APEXYARD_RELEASE_BASE/v9.8.7/apexyard-v9.8.7.tar.gz" "$sb/plan"
+done
+check installer-help bash -c 'sh "$1" --help | grep -Fq v5.11.0' _ "$root/install.sh"
+fork=$(mktemp -d "$sb/fork.XXXXXX")
+mkdir -p "$fork/.claude"
+touch "$fork/onboarding.yaml" "$fork/apexyard.projects.yaml"
+printf 'v5.11.0\n' > "$fork/.claude/framework-version"
+check fork-version test "$(cd "$fork" && "$root/bin/apexyard" --version)" = 5.11.0
+
 check install sh "$root/install.sh" > "$sb/install.out" 2>&1
 check plan-first test "$(head -1 "$sb/install.out")" = Plan:
 check installed-message grep -q '^Installed apexyard' "$sb/install.out"
@@ -58,6 +84,8 @@ check placeholder refuses env -u APEXYARD_VERSION sh "$root/install.sh"
 mkdir "$sb/unpacked"
 tar -xzf "$archive" -C "$sb/unpacked"
 bundle="$sb/unpacked/apexyard-$APEXYARD_VERSION"
+check cli-version test "$("$bundle/bin/apexyard" --version)" = 9.8.7
+check version-alias test "$("$bundle/bin/apexyard" version)" = 9.8.7
 check version test "$(cat "$bundle/VERSION")" = "$APEXYARD_VERSION"
 check stamp grep -Fq "APEXYARD_CLI_VERSION=\"${APEXYARD_VERSION#v}\"" "$bundle/bin/apexyard"
 for file in apexyard apexyard-init.sh apexyard-update.sh _lib-telemetry.sh; do
@@ -87,9 +115,9 @@ if command -v ruby >/dev/null 2>&1; then
 else echo 'NOTE: ruby is not available.'; fi
 check installer-copy /bin/bash "$root/bin/check-bundled-installer.sh"
 if command -v npm >/dev/null 2>&1; then
-  (cd "$root/packaging/npm/create-apexyard" && npm_config_cache="$sb/cache" npm_config_offline=true npm pack --ignore-scripts --pack-destination "$sb") > "$sb/npm.out" 2>&1
-  check npm-pack test -f "$sb/create-apexyard-0.1.0.tgz"
-  tar -tzf "$sb/create-apexyard-0.1.0.tgz" | LC_ALL=C sort > "$sb/npm-files"
+  (cd "$stamped/create-apexyard" && npm_config_cache="$sb/cache" npm_config_offline=true npm pack --ignore-scripts --pack-destination "$sb") > "$sb/npm.out" 2>&1
+  check npm-pack test -f "$sb/create-apexyard-9.8.7.tgz"
+  tar -tzf "$sb/create-apexyard-9.8.7.tgz" | LC_ALL=C sort > "$sb/npm-files"
   printf '%s\n' package/README.md package/bin/create-apexyard.js package/install.sh package/package.json | LC_ALL=C sort > "$sb/npm-expected"
   check npm-files cmp "$sb/npm-files" "$sb/npm-expected"
 else echo 'NOTE: npm is not available.'; fi

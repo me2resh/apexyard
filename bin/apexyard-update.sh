@@ -15,6 +15,7 @@ git -C "$root" remote get-url upstream >/dev/null 2>&1 || {
 [ -s "$root/.claude/framework-version" ] || {
   echo 'apexyard update: framework-version not found' >&2; exit 2;
 }
+# This is the framework version that apexyard --version also prints.
 IFS= read -r version < "$root/.claude/framework-version"
 git -C "$root" fetch upstream "$ref"
 lib_dir=${APEXYARD_LIB_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}

@@ -31,7 +31,9 @@ Chosen: **release assets plus install.sh, formula file and npm launcher**. The r
 
 Trigger: `auto-tag-on-release-pr-merge.yml` calls the workflow in a `cli-assets` job, after it creates the tag and the GitHub Release. A tag push made with `GITHUB_TOKEN` starts no other workflow (AgDR-0076), so a tag-push trigger never ran for framework releases. We reject a personal access token. A tag trigger would also share the `v*.*.*` name space with framework releases. The workflow has top-level `contents: read`. Only its job and the calling job have `contents: write`.
 
-Version form: the archive and release use the tag form (`v1.2.3`). The CLI version stamp drops the `v`, as `bin/apexyard` and the Homebrew file do.
+Version: the CLI has no version of its own (#1899). It ships with each framework release and carries the framework version. The release workflow takes the framework tag and stamps it into the Homebrew formula (`version`, `url`, `sha256`), the npm `package.json`, `install.sh` and `bin/apexyard`. No packaging file holds a fixed version. We reject a separate CLI version because the old `v0.x` tags belong to framework releases, so a first CLI release would point at a tag with no CLI files.
+
+Version form: the archive, the release and the download url use the tag form (`v1.2.3`). Every version stamp drops the `v`. `install.sh --version` accepts both forms. `apexyard --version` prints the stamped version. In a fork, it reads `.claude/framework-version`. `apexyard update` reads the same file.
 
 ## Consequences
 

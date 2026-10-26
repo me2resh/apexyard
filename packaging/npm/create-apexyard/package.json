@@ -1,6 +1,6 @@
 {
   "name": "create-apexyard",
-  "version": "0.1.0",
+  "version": "__VERSION__",
   "description": "Create an ApexYard ops repository",
   "bin": {"create-apexyard": "bin/create-apexyard.js"},
   "files": ["bin/create-apexyard.js", "install.sh", "README.md"],

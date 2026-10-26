@@ -14,17 +14,19 @@ while [ "$#" -gt 0 ]; do
       case "$1" in --version) version=$2 ;; --prefix) prefix=$2 ;; esac
       shift 2 ;;
     --dry-run) dry_run=1; shift ;;
-    -h|--help) echo 'Usage: sh install.sh [--version X] [--prefix DIR] [--dry-run]'; exit 0 ;;
+    -h|--help) echo 'Usage: sh install.sh [--version X] [--prefix DIR] [--dry-run]'; echo '  --version accepts a framework version such as 5.11.0 or v5.11.0.'; exit 0 ;;
     *) fail "unknown option: $1" ;;
   esac
 done
-[ "$version" != __VERSION__ ] || fail 'Set APEXYARD_VERSION or use --version X.'
+[ "$version" != "__VERSION""__" ] || fail 'Set APEXYARD_VERSION or use --version X.'
+version=${version#v}
 case "$version" in ''|*[!a-zA-Z0-9._-]*|.|..) fail 'invalid version' ;; esac
 [ "$(id -u)" != 0 ] || fail 'Do not run this installer as root.'
 case "$prefix" in /*) ;; *) prefix="$PWD/$prefix" ;; esac
-name="apexyard-$version"
-url="${base%/}/$version/$name.tar.gz"
-dest="$prefix/share/apexyard/$version"
+tag="v$version"
+name="apexyard-$tag"
+url="${base%/}/$tag/$name.tar.gz"
+dest="$prefix/share/apexyard/$tag"
 printf 'Plan:\n  Version: %s\n  Download: %s\n  Checksum: %s.sha256\n' "$version" "$url" "$url"
 printf '  Install directory: %s\n  Symlink: %s/bin/apexyard\n  no sudo is used\n' "$dest" "$prefix"
 [ "$dry_run" -eq 0 ] || exit 0

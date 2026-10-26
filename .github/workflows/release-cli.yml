@@ -1,6 +1,7 @@
 name: Release CLI
-# Reusable. Called from auto-tag-on-release-pr-merge.yml after the tag and
-# the GitHub Release exist (AgDR-0276, AgDR-0076). A tag push made with
+# The CLI carries the framework version. Reusable; called from
+# auto-tag-on-release-pr-merge.yml after the tag and GitHub Release exist
+# (AgDR-0276, AgDR-0076). A tag push made with
 # GITHUB_TOKEN starts no workflow, so this workflow has no tag trigger.
 on:
   workflow_call:
@@ -33,7 +34,8 @@ jobs:
           VERSION: ${{ inputs.tag }}
         run: |
           bash bin/build-release-assets.sh "$VERSION" dist
-          sed "s/^VERSION=.*/VERSION=\"$VERSION\"/" install.sh > dist/install.sh
+          bash bin/stamp-packaging.sh "$VERSION" dist
+          (cd dist/create-apexyard && npm pack --ignore-scripts --pack-destination ..)
       - name: Attach assets to release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -43,4 +45,4 @@ jobs:
           if ! gh release view "$VERSION" > /dev/null 2>&1; then
             gh release create "$VERSION" --verify-tag --title "$VERSION" --generate-notes
           fi
-          gh release upload "$VERSION" dist/*.tar.gz dist/*.sha256 dist/install.sh --clobber
+          gh release upload "$VERSION" dist/*.tar.gz dist/*.sha256 dist/install.sh dist/apexyard.rb dist/*.tgz --clobber

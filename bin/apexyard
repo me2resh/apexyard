@@ -22,8 +22,7 @@
 
 set -u
 
-APEXYARD_CLI_VERSION="0.1.0"
-export APEXYARD_CLI_VERSION
+APEXYARD_CLI_VERSION="__VERSION__"
 
 # ---------------------------------------------------------------------------
 # Resolve the ops-fork root from $PWD by walking up. Honours both the
@@ -78,6 +77,7 @@ usage() {
 Usage: apexyard <command> [args]
 
 Commands:
+  --version, version     Print the framework version.
   init [options]         Create an ops repository. Use init --help for options.
   update [--check]        Show upstream changes and start /update.
   doctor                 Read-only environment checks (exit 0/1/2: pass/warn/fail).
@@ -93,6 +93,19 @@ EOF
 }
 
 cli_path=$(resolve_cli_path) || exit 2
+if [ "$APEXYARD_CLI_VERSION" = "__VERSION""__" ]; then
+  version_root=$(find_ops_root) || version_root=$(cd "$(dirname "$cli_path")/.." && pwd -P)
+  framework_version=""
+  if [ -f "$version_root/.claude/framework-version" ]; then
+    IFS= read -r framework_version < "$version_root/.claude/framework-version" || true
+  fi
+  APEXYARD_CLI_VERSION=${framework_version#v}
+  APEXYARD_CLI_VERSION=${APEXYARD_CLI_VERSION:-unknown}
+fi
+export APEXYARD_CLI_VERSION
+case "${1:-}" in
+  --version|version) printf '%s\n' "$APEXYARD_CLI_VERSION"; exit 0 ;;
+esac
 # Read the notice helper from the real CLI directory.
 # shellcheck source=bin/_lib-telemetry.sh
 source "$(dirname "$cli_path")/_lib-telemetry.sh"
