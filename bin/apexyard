@@ -9,6 +9,7 @@
 # Usage:
 #   apexyard status [-b|--briefing]   # 4-line "where am I" briefing
 #   apexyard doctor                 # read-only environment report
+#   apexyard doctor --drift         # list local edits to framework-owned files
 #   apexyard --help
 #
 # The script delegates to .claude/skills/status/briefing.sh inside the
@@ -79,6 +80,7 @@ Commands:
   init [options]         Create an ops repository. Use init --help for options.
   update [--check]        Show upstream changes and start /update.
   doctor                 Read-only environment checks (exit 0/1/2: pass/warn/fail).
+  doctor --drift         List local edits to framework-owned files (exit 0/1/2: none/drift/error).
   status [-b|--briefing]   Compact "where am I" briefing — workspace, ticket,
                            branch, role. Defaults to --briefing today (the
                            full /status report runs inside Claude Code).
@@ -119,6 +121,14 @@ case "$cmd" in
     if [ -z "$ops_root" ]; then
       cli_path=$(resolve_cli_path) || cli_path="${BASH_SOURCE[0]}"
       ops_root=$(cd "$(dirname "$cli_path")/.." && pwd -P) || ops_root=""
+    fi
+    if [ "${1:-}" = --drift ]; then
+      shift
+      if [ ! -f "$ops_root/bin/update-files.sh" ]; then
+        echo "apexyard: update helper not found at $ops_root/bin/update-files.sh." >&2
+        exit 2
+      fi
+      exec "$BASH" "$ops_root/bin/update-files.sh" --drift --repo "$ops_root" "$@"
     fi
     helper="$ops_root/.claude/skills/preflight/preflight.sh"
     if [ ! -f "$helper" ]; then

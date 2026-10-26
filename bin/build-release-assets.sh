@@ -15,7 +15,7 @@ for file in apexyard apexyard-init.sh apexyard-update.sh _lib-telemetry.sh _lib-
   if [ "$file" = _lib-ownership.sh ] && [ ! -f "$root/bin/$file" ]; then continue; fi
   cp "$root/bin/$file" "$work/$name/bin/$file"
 done
-sed "s/^APEXYARD_CLI_VERSION=.*/APEXYARD_CLI_VERSION=\"$version\"/" "$root/bin/apexyard" > "$work/$name/bin/apexyard"
+sed "s/^APEXYARD_CLI_VERSION=.*/APEXYARD_CLI_VERSION=\"${version#v}\"/" "$root/bin/apexyard" > "$work/$name/bin/apexyard"
 chmod 755 "$work/$name/bin/"*
 printf '%s\n' "$version" > "$work/$name/VERSION"
 # Stable input order and timestamps also work with BSD tar.
