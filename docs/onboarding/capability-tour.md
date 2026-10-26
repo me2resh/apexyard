@@ -10,7 +10,7 @@ You can skip the tour at any time by saying "skip".
 
 ---
 
-## What's a role?
+## What is a role?
 
 A role names a type of teammate, its responsibilities, and its CAN/CANNOT
 boundaries. When work matches a role's trigger, the role activates and guides
@@ -20,7 +20,7 @@ Auditor.
 **Example**: Hakim reviews that authentication PR automatically. You do not
 need to ask for the review.
 
-## What's a skill?
+## What is a skill?
 
 A skill is a slash command that packages a workflow: the questions to ask, the
 template to use, and where to save the result. It gives each run the same
@@ -29,7 +29,7 @@ starting point.
 **Example**: `/feature` asks for a user story and acceptance criteria, shows
 the formatted ticket, and files a GitHub issue after you confirm it.
 
-## What's a gate?
+## What is a gate?
 
 A gate is a checkpoint. Work cannot pass it until a required condition is
 met, such as passing tests, a reviewer sign-off, or your explicit approval.
@@ -46,4 +46,4 @@ repeatable steps, and gates stop work from skipping a required check.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*
