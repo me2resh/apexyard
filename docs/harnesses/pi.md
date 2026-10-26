@@ -52,6 +52,82 @@ That writes the adapter into `.pi/extensions/apexyard/` — a **subdirectory** s
 
 Orientation docs (`AGENTS.md` + `SYSTEM.md`) auto-load from the fork's cwd with no extra step; see `harness-adapters/pi/README.md` for the manual `--extension` form and the `APEXYARD_OPS_ROOT` override.
 
+## omp (oh my pi)
+
+Tests used omp 18.10.2, with the macOS arm64 release binary.
+The binary SHA-256 matched the release `SHA256SUMS.txt`:
+`9752e3d7f7bdab636e21495a6affc196e8ffc3a2dffaf529db2dd73d2bdea255`.
+Tests used print mode (`omp -p`), `--auto-approve`, and a local scripted model server.
+Tests did not use a hosted model.
+Tests did not cover interactive mode, MCP, the `task` subagent tool, or Linux and Windows binaries.
+A later release can change the extension or hook format.
+Name the tested version when you report support.
+
+Install the adapter:
+
+```bash
+bash bin/install-pi-adapter.sh --target-dir <project>/.omp/extensions
+```
+
+omp finds `<project>/.omp/extensions/apexyard/index.ts` automatically.
+omp does not scan `.pi/extensions`, so the default Pi install path does not load in omp.
+Alternatively, use `omp -e <path>/index.ts`.
+omp keeps user data in `~/.omp/agent`.
+The `PI_CODING_AGENT_DIR` variable changes this directory.
+
+omp loads the full text of `AGENTS.md` without extra setup.
+It lists skills from `.claude/skills/`.
+Use the `read` tool with `skill://<name>` to read a skill file.
+It loads `.cursor/rules/*.mdc` as generic rules.
+It loads one project context file at each directory depth.
+`AGENTS.md` takes priority, so `CLAUDE.md` does not load.
+The project root `SYSTEM.md` does not load.
+omp reads `SYSTEM.md` from config directories such as `.omp/`.
+Read `.claude/rules/*.md` on demand, as in Pi.
+
+omp does not run shell hooks from `.claude/settings.json` or `.cursor/hooks.json` without the adapter.
+Without the adapter, a control run allowed a push to `main`, a merge without review, and a code write without a ticket.
+Only the adapter enforces the gates.
+Tests with the adapter produced these hook messages:
+
+| Action | Result |
+|--------|--------|
+| Push to `main` | Blocked: "Cannot push directly to a protected branch ('main')." |
+| Merge with no review, forge reachable | Blocked: "PR #N has no recorded code-reviewer (Rex) approval." |
+| Merge, forge not reachable | Blocked (fail-closed): "could not resolve PR #N's HEAD from the forge." |
+| `write` or `edit` of a code file with no active ticket | Blocked: "No active ticket set for this session." |
+| `edit` that touches `.claude/hooks` or `.claude/settings.json`, including an `MV` line | Blocked: "the edit target is live hook state." |
+| `eval` tool | The adapter blocks the tool. Code run by `eval` can do what the bash gates block. Use `bash` for gate checks. |
+
+A local sequence passed these steps:
+
+1. Declare a ticket through the gated `bash` tool to write the marker.
+2. Create a branch.
+3. Write a file.
+4. Edit the file.
+5. Run `git add`.
+6. Run `git commit`.
+7. Push the feature branch to a local remote.
+
+The Rex review did not run.
+Like Pi, omp has no subagent spawn that the adapter can use for Rex.
+The merge gate required the review marker.
+
+| Topic | Pi | omp |
+|-------|----|-----|
+| Extension folder | `.pi/extensions/` | `.omp/extensions/`. omp does not scan `.pi/extensions/`. |
+| User config folder | `~/.pi/agent` | `~/.omp/agent` |
+| `edit` tool input | `path` plus edit pairs | One `input` text has `[PATH#TAG]` headers for one or more files, plus `REM` and `MV DEST` lines. omp also sets `path` (first file) and `paths`. |
+| File-hook field | Hooks need `file_path`. The adapter sends `file_path` and `path`. | Hooks need `file_path`. The adapter sends `file_path` and `path`. |
+| Search tools | `find`, `grep`, `ls` | `glob`, `grep`. The adapter has no gate input for these tools. No gate uses them today. |
+| Code-run tool | see the Pi docs | `eval` runs Python or JavaScript. The adapter blocks it. |
+| Native hooks from `.claude/settings.json` | Not run | Not run |
+| Event names used by the adapter | `session_start`, `tool_call` | `session_start`, `tool_call` |
+
+This change also fixes file gates for Pi and omp.
+Previously, `block-protected-target-writes.sh` blocked every `edit` and `write` call because the adapter sent only `path`.
+The adapter now sends both `file_path` and `path`.
+
 ## Roadmap
 
 me2resh/apexyard#804 (spike) proved the adapter-over-bash pattern viable; #815 shipped the dispatcher covering the merge gate, red-CI block, design/architecture review, secrets scanning, and ticket-first gates; the 2026-07-09 live run proved it enforces during a real model turn; #845 hardened the install shape. The next steps, not yet scoped as tickets: porting role-trigger advisory banners and/or a slash-command-equivalent skill runner if pi's extension API grows the right hooks for either.
