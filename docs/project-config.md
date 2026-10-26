@@ -11,24 +11,24 @@ Related: apexyard#109 introduced this scheme; apexyard#107, #111, #112, #113, #1
 
 | File | Who maintains | Purpose |
 | --- | --- | --- |
-| `.claude/project-config.defaults.json` | apexyard upstream | Shipped defaults. Do not edit in a fork — upstream syncs via `/update`. |
+| `.claude/project-config.defaults.json` | apexyard upstream | Shipped defaults. Do not edit in a fork: upstream syncs via `/update`. |
 | `.claude/project-config.example.json` | apexyard upstream | Tracked template. Copy it to `project-config.json` to activate. Carries the framework repo's own pre-push dog-fooding as a worked example. |
-| `.claude/project-config.json` | fork owner | Overrides. Optional. **Gitignored and untracked upstream** — keep it that way. |
+| `.claude/project-config.json` | fork owner | Overrides. Optional. **Gitignored and untracked upstream**: keep it that way. |
 
-### Why the real file is untracked (apexyard#1031)
+### Why git does not track the real file (apexyard#1031)
 
-This follows the `onboarding.example.yaml` and `onboarding.yaml` pattern. The
-example is tracked so upstream can improve it. The real file stays local.
+This follows the `onboarding.example.yaml` and `onboarding.yaml` pattern.
+Upstream tracks the example so it can improve it. The real file stays local.
 
 Before #1031, the framework tracked `project-config.json` and listed it in
-`.gitignore`. Git does not ignore a file that is already tracked. A checkout
+`.gitignore`. Git does not ignore a file that it already tracks. A checkout
 could therefore overwrite a fork's local configuration. For a split portfolio,
 that could remove the `portfolio` block and break path resolution. The private
-content was not in git, so the file could not be restored from history.
+content was not in git, so history could not restore the file.
 
 **If you have an existing fork that committed this file**, run `git rm --cached .claude/project-config.json` once. It leaves the file on disk and lets the ignore entry finally apply. Back the file up first if it holds a `portfolio` block: it is not recoverable from git.
 
-#### Resolving the `/update` conflict — use `--cached`, or you lose the file
+#### Resolving the `/update` conflict: use `--cached`, or you lose the file
 
 If you sync before doing the above, the merge hits a modify/delete conflict, because upstream deleted the file while your fork modified it:
 
@@ -37,18 +37,18 @@ CONFLICT (modify/delete): .claude/project-config.json deleted in upstream
 and modified in HEAD. Version HEAD of .claude/project-config.json left in tree.
 ```
 
-Git leaves your version on disk, so **nothing is lost yet**. The trap is the resolution. "Accept upstream's deletion" is the natural reading, and the obvious command for it destroys your config:
+Git leaves your version on disk, so **you have lost nothing yet**. The trap is the resolution. "Accept upstream's deletion" is the natural reading, and the obvious command for it destroys your config:
 
 | Resolution | Effect |
 |---|---|
-| `git rm .claude/project-config.json` | ❌ removes it from the index **and from disk** — your `portfolio` block is gone, and it was never in git to restore from |
+| `git rm .claude/project-config.json` | ❌ removes it from the index **and from disk**: your `portfolio` block is gone, and it was never in git to restore from |
 | `git rm --cached .claude/project-config.json` | ✅ removes it from the index only; the file stays on disk and the ignore entry now applies |
 
-Always use `--cached` here. Back the file up first regardless — this is the same unrecoverable loss described above, reached by a different route.
+Always use `--cached` here. Back the file up first regardless: this is the same unrecoverable loss described above, reached by a different route.
 
 ### Why the framework's own `pre_push` is in the example, not the defaults
 
-The defaults file would be the obvious home, and it is the wrong one. `_lib-read-config.sh` merges with `jq -s '.[0] * .[1]'`, so an adopter who defines no `pre_push` of their own **inherits whatever the defaults file ships** — which would mean every fork running apexyard's repo-specific commands on push, including its own `test_subpack_extraction.sh`. `pre_push.commands` in the defaults therefore stays `[]`, and `.claude/hooks/tests/test_project_config_untracked.sh` guards that it stays that way.
+The defaults file would be the obvious home, and it is the wrong one. `_lib-read-config.sh` merges with `jq -s '.[0] * .[1]'`. Thus, an adopter who defines no `pre_push` of their own **inherits whatever the defaults file ships**. This would mean every fork running apexyard's repo-specific commands on push, including its own `test_subpack_extraction.sh`. `pre_push.commands` in the defaults therefore stays `[]`, and `.claude/hooks/tests/test_project_config_untracked.sh` guards that it stays that way.
 
 ## Merge semantics
 
@@ -61,16 +61,16 @@ array. The shared config reader gets this behavior from `jq -s '.[0] * .[1]'`.
 **A warning names the entries that an array override drops (#1369).**
 An override array that omits entries the matching default array carries
 merges exactly as documented above. The override still wins, unchanged.
-`_lib-read-config.sh` also prints one advisory `WARN:` line to stderr. The
-line names the key and every dropped entry, the first time that override is
-read in a session. Without a session ID, the cross-process cache has no key
+`_lib-read-config.sh` also prints one advisory `WARN:` line to stderr. It
+prints the line on the first read of that override in a session. The line
+names the key and every dropped entry. Without a session ID, the cross-process cache has no key
 to read or write, so the warning prints again in every new process. This
 never blocks and never changes the merged value. It only makes an
 otherwise-silent drop visible. It applies only to a key that has a default
 array in `.claude/project-config.defaults.json`.
 `migration_paths`, `migration_label`, `ui_paths`, `ui_paths_exclude`,
 `design_paths`, `design_paths_exclude`, and `architecture_paths` have no
-entry in `.claude/project-config.defaults.json` at all — their hook holds
+entry in `.claude/project-config.defaults.json` at all: their hook holds
 the built-in default in code, not JSON. A drop against one of those produces
 no warning today. See AgDR-0167 for why, and #1401 for the follow-up that
 tracks closing this gap for those seven keys.
@@ -121,12 +121,12 @@ tracks closing this gap for those seven keys.
 | `leak_protection.public_framework_repos` | `check-private-refs-*.sh`, `block-private-refs-in-public-repos.sh` | Known-public `owner/repo` slugs. Origin identity is exempt when origin matches an entry. |
 | `leak_protection.origin_verified_public` | `check-private-refs-staged.sh`, `check-private-refs-runtime.sh` | Exact origin `owner/repo` slug recorded by `/setup` or `/update` after `gh` confirms visibility is PUBLIC. Hooks stay offline and fail closed when this key is missing or does not match origin. See AgDR-0190. |
 
-### `external_contributions` — repos you contribute to but don't govern
+### `external_contributions`: repos you contribute to but do not govern
 
 An upstream open-source project you send PRs to has its own `CONTRIBUTING.md`
 and its own tracker. Applying this framework's PR-title convention to a PR
-aimed at it refuses a PR that is correct for its destination, and before
-me2resh/apexyard#1448 there was no way to say so.
+aimed at it refuses a PR that is correct for its destination. Before
+me2resh/apexyard#1448, there was no way to say so.
 
 List those repositories as `owner/name` slugs:
 
@@ -148,9 +148,9 @@ Three properties worth knowing:
   behaves exactly as it did before.
 - **The registry wins.** If a listed repository is also a managed project, the
   exemption does not apply. Otherwise adding a governed repo to this list would
-  quietly disable title validation for work the framework is meant to govern.
+  quietly disable title validation for work that the framework intends to govern.
 - **Convention only.** This relaxes a *convention* check. Leak protection,
-  secret scanning, and every security control are unaffected — they arguably
+  secret scanning, and every security control stay unchanged. They arguably
   matter more here, since these repositories are usually public.
 
 ### Pre-merge QA offer
@@ -206,7 +206,7 @@ Always tell the user the branch name.
 
 `tracker_review_submit` posts GitHub reviews with the operator `gh` login by default.
 Set `review_identity.kind` to `github_app` to post those reviews as a GitHub App.
-The app token is applied to that one `gh pr review` command.
+The app token applies to that one `gh pr review` command.
 `tracker_pr_merge` and `/approve-merge` keep the operator login.
 
 The private key path must be outside every git work tree and outside `.claude/`.
@@ -230,7 +230,7 @@ The decision record is [AgDR-0235](agdr/AgDR-0235-reviewer-github-app.md).
 }
 ```
 
-Every consumer (skills + validator) picks this up on next invocation — no framework edits needed.
+Every consumer (skills + validator) picks this up on next invocation: no framework edits needed.
 
 ### Use a different priority label scheme
 
@@ -256,7 +256,7 @@ types=$(config_get '.branch.type_whitelist[]' | paste -sd'|' -)
 scheme=$(config_get_or '.ticket.label_priority_scheme' 'P0,P1,P2,P3')
 ```
 
-The reader uses `jq` for merging and path lookups. If `jq` is unavailable, the reader emits `{}` (quiet fallback) and prints a one-time warning on stderr — callers should apply their own safety nets.
+The reader uses `jq` for merging and path lookups. If `jq` is unavailable, the reader emits `{}` (quiet fallback) and prints a one-time warning on stderr. Callers should apply their own safety nets.
 
 ## GitHub Projects board auto-move (opt-in, `github_projects`)
 
@@ -268,7 +268,7 @@ ApexYard can auto-move board cards at three SDLC lifecycle moments:
 | `gh pr create` (auto-code-review hook) | `review` | "In review" |
 | `/approve-merge` | `measurement` | "Measurement" |
 
-This is **opt-in** — the default config has `enable_auto_moves: false`. To enable:
+This is **opt-in**: the default config has `enable_auto_moves: false`. To enable:
 
 ```json
 {
@@ -286,14 +286,14 @@ This is **opt-in** — the default config has `enable_auto_moves: false`. To ena
 }
 ```
 
-- `owner` — GitHub organisation or user that owns the board.
-- `board_number` — the numeric ID shown in the board URL (`/projects/<N>`).
-- `status_field_name` — the name of the single-select field on your board. Default: `"Status"`.
-- `status_map` — maps the three SDLC keys to the exact option label strings on your board. Adjust these to match your board's column names if they differ from the defaults.
+- `owner`: GitHub organisation or user that owns the board.
+- `board_number`: the numeric ID shown in the board URL (`/projects/<N>`).
+- `status_field_name`: the name of the single-select field on your board. Default: `"Status"`.
+- `status_map`: maps the three SDLC keys to the exact option label strings on your board. Adjust these to match your board's column names if they differ from the defaults.
 
 ### Graceful degrade
 
-Any failure (board not found, item not on the board, missing `project` scope in `gh` auth, misconfigured owner/number) emits a `WARN` to stderr and returns 0. The lifecycle action that triggered the move — starting a ticket, creating a PR, merging — is never blocked.
+Any failure emits a `WARN` to stderr and returns 0. Failures include board not found, item not on the board, missing `project` scope in `gh` auth, and misconfigured owner/number. Failures never block the lifecycle action that triggered the move: starting a ticket, creating a PR, merging.
 
 ### GitHub-native Workflows for the remaining transitions
 
@@ -301,9 +301,9 @@ For the "closed → Done" and "merged → Done" hops that happen outside the thr
 attach-points above, use GitHub Projects' built-in **Workflows** (open your board →
 Settings → Workflows):
 
-- **"Item added to project"** — auto-add issues/PRs when they are opened.
-- **"Item closed"** — move a card to Done when its linked issue is closed.
-- **"Pull request merged"** — move a card to Done when the linked PR is merged.
+- **"Item added to project"**: auto-add issues/PRs when they open.
+- **"Item closed"**: move a card to Done when its linked issue closes.
+- **"Pull request merged"**: move a card to Done when the linked PR merges.
 
 These are free, built-in, and require no configuration here. Enable them in the
 GitHub UI and your board will reflect the full lifecycle without additional hook wiring.
@@ -312,4 +312,4 @@ The lib that implements board moves lives at `.claude/hooks/_lib-project-board.s
 
 ## Backward compatibility
 
-`validate-commit-format.sh` previously read a flat `commit_types` top-level key from `.claude/project-config.json`. That reader is still honoured as a fallback, so forks that customised commit types before apexyard#109 keep working without edits. New customisations should use the nested `commit.type_whitelist` form.
+`validate-commit-format.sh` previously read a flat `commit_types` top-level key from `.claude/project-config.json`. The framework still honours that reader as a fallback, so forks that customised commit types before apexyard#109 keep working without edits. New customisations should use the nested `commit.type_whitelist` form.
