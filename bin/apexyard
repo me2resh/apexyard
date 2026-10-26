@@ -9,6 +9,7 @@
 # Usage:
 #   apexyard status [-b|--briefing]   # 4-line "where am I" briefing
 #   apexyard doctor                 # read-only environment report
+#   apexyard doctor --drift         # list local edits to framework-owned files
 #   apexyard migrate [opts]         # keep CLI or move fork to init layout
 #   apexyard --help
 #
@@ -20,6 +21,9 @@
 # and the portfolio-aware skills.
 
 set -u
+
+APEXYARD_CLI_VERSION="0.1.0"
+export APEXYARD_CLI_VERSION
 
 # ---------------------------------------------------------------------------
 # Resolve the ops-fork root from $PWD by walking up. Honours both the
@@ -77,6 +81,7 @@ Commands:
   init [options]         Create an ops repository. Use init --help for options.
   update [--check]        Show upstream changes and start /update.
   doctor                 Read-only environment checks (exit 0/1/2: pass/warn/fail).
+  doctor --drift         List local edits to framework-owned files (exit 0/1/2: none/drift/error).
   status [-b|--briefing]   Compact "where am I" briefing — workspace, ticket,
                            branch, role. Defaults to --briefing today (the
                            full /status report runs inside Claude Code).
@@ -86,6 +91,12 @@ Commands:
 Run from inside an apexyard fork or any of its workspace/<name>/ clones.
 EOF
 }
+
+cli_path=$(resolve_cli_path) || exit 2
+# Read the notice helper from the real CLI directory.
+# shellcheck source=bin/_lib-telemetry.sh
+source "$(dirname "$cli_path")/_lib-telemetry.sh"
+telemetry_notice_once || true
 
 cmd="${1:-}"
 shift || true
@@ -113,6 +124,14 @@ case "$cmd" in
     if [ -z "$ops_root" ]; then
       cli_path=$(resolve_cli_path) || cli_path="${BASH_SOURCE[0]}"
       ops_root=$(cd "$(dirname "$cli_path")/.." && pwd -P) || ops_root=""
+    fi
+    if [ "${1:-}" = --drift ]; then
+      shift
+      if [ ! -f "$ops_root/bin/update-files.sh" ]; then
+        echo "apexyard: update helper not found at $ops_root/bin/update-files.sh." >&2
+        exit 2
+      fi
+      exec "$BASH" "$ops_root/bin/update-files.sh" --drift --repo "$ops_root" "$@"
     fi
     helper="$ops_root/.claude/skills/preflight/preflight.sh"
     if [ ! -f "$helper" ]; then
