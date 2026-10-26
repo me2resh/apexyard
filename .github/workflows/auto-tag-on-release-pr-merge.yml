@@ -50,6 +50,8 @@ jobs:
     name: tag release + create GitHub Release
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
     permissions:
       contents: write   # create tag (git push --tags) + gh release create
     # Only run on merged release PRs (not just any closed PR, and not on forks)
@@ -206,3 +208,14 @@ jobs:
             echo ""
             echo "Next step: run \`/release-sync $VERSION\` to sync main→dev."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  cli-assets:
+    # Tag pushes made with GITHUB_TOKEN start no workflow (AgDR-0076), so the
+    # CLI assets are built by a direct call after the release exists (AgDR-0276).
+    name: build and attach CLI assets
+    needs: auto-tag
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release-cli.yml
+    with:
+      tag: ${{ needs.auto-tag.outputs.version }}

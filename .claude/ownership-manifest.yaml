@@ -173,6 +173,10 @@ paths:
     owner: framework
   - glob: "bin/**"
     owner: framework
+  - glob: "install.sh"
+    owner: framework
+  - glob: "packaging/**"
+    owner: framework
   - glob: "docs/**"
     owner: framework
   - glob: "golden-paths/**"
