@@ -1,7 +1,8 @@
 # Codex Adapter
 
 ApexYard's source of truth remains `.claude/`. It contains the skills, agents,
-hooks, rules, and hook wiring. The Codex adapter is generated from those files.
+hooks, rules, and hook wiring. The generator creates the Codex adapter from
+those files.
 This keeps the two agent surfaces aligned.
 
 Decision record: [`AgDR-0088`](agdr/AgDR-0088-codex-adapter-generation.md). For where Codex sits among all supported harnesses (and the shared-core architecture behind every adapter), see the [harness support index](harnesses/README.md).
@@ -31,11 +32,11 @@ test checks the generated command, input, and exit-code contract. Live coverage
 still depends on Codex hook loading and trust settings.
 
 Claude Code's handler-level `if` predicates are not part of Codex's documented
-hook handler shape. During generation, those predicates are compiled into the
-generated shell command as a preflight filter, and the unsupported `if` field is
-omitted from `.codex/hooks.json`.
+hook handler shape. During generation, the generator compiles those predicates
+into the generated shell command as a preflight filter. It omits the unsupported `if`
+field from `.codex/hooks.json`.
 
-Agent model labels are translated to Codex-native equivalents:
+The generator translates agent model labels to Codex-native equivalents:
 
 | Claude label | Codex label |
 |--------------|-------------|
@@ -60,23 +61,24 @@ bin/sync-codex-adapter.sh --reconcile-installed
 ```
 
 This mode refreshes and verifies an existing ApexYard Codex adapter, but is a
-silent no-op on forks where Codex support was never installed. New
-installations are identified by `.codex/apexyard-adapter.json`; adapters from
-before that manifest are recognised only when all three generated surfaces
+silent no-op on forks that never had a Codex support installation. This mode
+identifies new installations by `.codex/apexyard-adapter.json`. It recognises
+adapters from before that manifest only when all three generated surfaces
 exist: `.agents/skills/`, `.codex/agents/`, and `.codex/hooks.json`. Drift
 detection (here and in `--check` / `--check-installed`) only ever compares the
-adapter's owned paths — a hand-authored file living alongside the generated
-output under `.agents/` or `.codex/` is left alone.
+adapter's owned paths. A hand-authored file living alongside the generated
+output under `.agents/` or `.codex/` stays unchanged.
 
 `/update` runs this reconciliation automatically before every successful exit,
 including the already-current path. Use `--skip-adapter-sync` only as a
 troubleshooting escape hatch.
 
-For pre-manifest installs whose old generated `$update` skill cannot yet
-contain that instruction, the already-delegated `check-upstream-drift.sh`
-SessionStart hook runs a **read-only** `bin/sync-codex-adapter.sh
---check-installed` on every session and prints an advisory nudge if the
-installed adapter has drifted. This hook never writes to the tree — it only
+Some pre-manifest installs have an old generated `$update` skill that
+cannot yet contain that instruction. For these installs, the already-delegated
+`check-upstream-drift.sh` SessionStart hook runs a **read-only**
+`bin/sync-codex-adapter.sh
+--check-installed` on every session. It prints an advisory nudge if the
+installed adapter has drifted. This hook never writes to the tree. It only
 tells the operator to run the command above (or `/update`). It does not block
 session startup.
 
@@ -88,14 +90,14 @@ bin/sync-codex-adapter.sh --clean
 
 Use `--clean` when you want to remove any existing generated `.agents/` and
 `.codex/` trees before regenerating them. This is useful after generator changes
-or when a source file was renamed or deleted. It also removes stale generated
+or after a source file rename or deletion. It also removes stale generated
 `.codex/hooks/`, `.codex/rules/`, `.codex/migrations/`, and `.codex/registries/`
 directories from earlier adapter versions that copied too much of `.claude/`.
 
 ## Tracking Policy
 
-The first-pass Codex migration output produced by an editor or assistant should
-not be committed directly. It may contain absolute paths, stale casing, or other
+The first-pass Codex migration output from an editor or assistant should not
+go directly into commits. It may contain absolute paths, stale casing, or other
 machine-local details. For local exploration, add those generated directories to
 `.git/info/exclude` in your clone:
 
@@ -106,8 +108,8 @@ machine-local details. For local exploration, add those generated directories to
 
 The durable upstream contribution is the generator and its tests. If an adopter
 wants to treat Codex as an enforced governance surface, review and trust the
-generated `.codex/hooks.json` explicitly and consider tracking the generated
-adapter plus enforcing `--check` in CI.
+generated `.codex/hooks.json` explicitly. In that case, consider tracking the
+generated adapter plus enforcing `--check` in CI.
 
 ## Design Notes
 

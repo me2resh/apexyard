@@ -1,4 +1,4 @@
-# What's Inside ApexYard
+# What Is Inside ApexYard
 
 This page lists the ApexYard components. It covers the directory layout, roles,
 workflow documents, templates, and the runnable `.claude/` layer.
@@ -75,7 +75,7 @@ for the full trigger table.
 
 ### Architecture (1 role)
 
-- **Solution Architect** (Tariq) -- Independent design review before Build: NFRs, patterns, tech-debt, risk, traceability — the non-code analog of the Code Reviewer
+- **Solution Architect** (Tariq) -- Independent design review before Build: NFRs, patterns, tech-debt, risk, traceability: the non-code analog of the Code Reviewer
 
 ### Product (3 roles)
 
@@ -151,21 +151,21 @@ The `/migration` skill creates both artefacts in one guided flow; the `require-m
 | PRD | Product Requirements Document with user stories, acceptance criteria |
 | Technical Design | Architecture, domain model, API design, implementation plan |
 | ADR | Architecture Decision Record for significant technical decisions |
-| AgDR | Agent Decision Record — AI-specific decision tracking |
-| Migration AgDR | Migration-specific AgDR — rollback plan, downtime estimate, consumers, observability |
-| C4 Context (L1) | System context Mermaid diagram — external actors + system boundary |
-| C4 Container (L2) | Container Mermaid diagram — deployable units inside the system |
+| AgDR | Agent Decision Record: AI-specific decision tracking |
+| Migration AgDR | Migration-specific AgDR: rollback plan, downtime estimate, consumers, observability |
+| C4 Context (L1) | System context Mermaid diagram: external actors + system boundary |
+| C4 Container (L2) | Container Mermaid diagram: deployable units inside the system |
 
-## The `.claude/` layer — the runnable primitives
+## The `.claude/` layer: the runnable primitives
 
 The `.claude/` directory turns the documents into an enforced workflow. Claude
 Code loads it when it is at the repository root.
 
 | Layer | Path | What it is |
 |-------|------|------------|
-| **Hooks** | `.claude/hooks/` | 55 shell scripts that mechanically enforce SDLC rules — ticket-first edits (Edit/Write/Bash), ORBIT slice before Feature/Task issues, migration-ticket-first, auto code review, merge gates (Rex + CEO + design + architecture review), red-CI block, commit-format, AgDR-for-arch-changes, branch/PR-title validation, secrets scanning, private-ref leak protection, upstream-drift banner |
+| **Hooks** | `.claude/hooks/` | 55 shell scripts that mechanically enforce SDLC rules. These cover ticket-first edits (Edit/Write/Bash), ORBIT slice before Feature/Task issues, migration-ticket-first, auto code review, merge gates (Rex + CEO + design + architecture review). They also cover red-CI block, commit-format, AgDR-for-arch-changes, branch/PR-title validation, secrets scanning, private-ref leak protection, upstream-drift banner |
 | **Rules** | `.claude/rules/` | 22 modular rule files. CLAUDE.md indexes them by name. |
-| **Agents** | `.claude/agents/` | 23 sub-agents — the department personas plus utility agents |
+| **Agents** | `.claude/agents/` | 23 sub-agents: the department personas plus utility agents |
 | **Skills** | `.claude/skills/` | 68 slash commands |
 | **Settings** | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
@@ -175,18 +175,18 @@ Code loads it when it is at the repository root.
 
 ### The 23 sub-agents
 
-Utility agents: **Rex** (`code-reviewer`), **Hakim** (`security-reviewer`), **Tariq** (`solution-architect`), **Naqid** (`contrarian`), plus `dependency-auditor`. The remaining 18 are the department-role agents (engineering, product, design, security, data — one per role file).
+Utility agents: **Rex** (`code-reviewer`), **Hakim** (`security-reviewer`), **Tariq** (`solution-architect`), **Naqid** (`contrarian`), plus `dependency-auditor`. The remaining 18 are the department-role agents (engineering, product, design, security, data: one per role file).
 
 ### The 68 skills
 
 The full, one-line-per-skill list lives in [`CLAUDE.md`](../CLAUDE.md) under "Available skills". Highlights by category:
 
-- **Bootstrap & sync** — `/setup`, `/handover`, `/update`, `/split-portfolio`
-- **Planning & tickets** — `/scaffold`, `/write-spec`, `/plan-initiative`, `/feature`, `/bug`, `/task`, `/tickets-batch`, `/spike`, `/prototype`, `/walking-skeleton`, `/migration`, `/investigation`, `/idea`
-- **Review & decisions** — `/decide`, `/agdr`, `/code-review`, `/security-review`, `/design-review`, `/challenge`, `/approve-merge`, `/approve-design`, `/approve-architecture`
-- **Audits** — `/launch-check`, `/threat-model`, `/accessibility-audit`, `/compliance-check`, `/analytics-audit`, `/seo-audit`, `/geo-audit`, `/performance-audit`, `/monitoring-audit`, `/docs-audit`, `/mutation-test`, `/audit-deps`
-- **Architecture & diagrams** — `/c4`, `/dfd`, `/tech-vision`, `/journey`, `/feature-diagram`, `/extract-features`, `/process`
-- **Portfolio** — `/projects`, `/inbox`, `/status`, `/tasks`, `/roadmap`, `/stakeholder-update`, `/fan-out`
+- **Bootstrap & sync**: `/setup`, `/handover`, `/update`, `/split-portfolio`
+- **Planning & tickets**: `/scaffold`, `/write-spec`, `/plan-initiative`, `/feature`, `/bug`, `/task`, `/tickets-batch`, `/spike`, `/prototype`, `/walking-skeleton`, `/migration`, `/investigation`, `/idea`
+- **Review & decisions**: `/decide`, `/agdr`, `/code-review`, `/security-review`, `/design-review`, `/challenge`, `/approve-merge`, `/approve-design`, `/approve-architecture`
+- **Audits**: `/launch-check`, `/threat-model`, `/accessibility-audit`, `/compliance-check`, `/analytics-audit`, `/seo-audit`, `/geo-audit`, `/performance-audit`, `/monitoring-audit`, `/docs-audit`, `/mutation-test`, `/audit-deps`
+- **Architecture & diagrams**: `/c4`, `/dfd`, `/tech-vision`, `/journey`, `/feature-diagram`, `/extract-features`, `/process`
+- **Portfolio**: `/projects`, `/inbox`, `/status`, `/tasks`, `/roadmap`, `/stakeholder-update`, `/fan-out`
 
 ## CI/CD pipelines
 
@@ -200,11 +200,11 @@ Reusable GitHub Actions workflows live at `golden-paths/pipelines/`:
 | `security.yml` | Semgrep SAST + npm audit + secrets detection |
 | `dependency-audit.yml` | Weekly vulnerability + license scan |
 | `pr-title-check.yml` | Enforce ticket ID in PR titles |
-| `review-check.yml` | Block merge if Code Reviewer hasn't reviewed the latest commit |
+| `review-check.yml` | Block merge if Code Reviewer has not reviewed the latest commit |
 | `seo-check.yml` | SEO analysis for content files |
 
 Copy whichever you need into your project's `.github/workflows/`. Full details in `golden-paths/pipelines/README.md`.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*
