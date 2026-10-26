@@ -31,6 +31,14 @@ Report mode returns exit code 0 for findings.
 Strict mode returns exit code 1 for findings on added lines.
 Input errors return exit code 2.
 
+The CI job runs on every pull request.
+It fails when a finding touches an added line in a file in scope.
+A finding can span several lines.
+It counts if the pull request adds any line in that span.
+Files that the pull request does not change stay report only.
+A pull request with no changed file in scope passes at once.
+This behavior lets the check become a required check without staying pending.
+
 The passive check uses a heuristic, or approximate test.
 It checks a form of "be", an optional adverb, and a past participle.
 It can flag adjectives and miss passive forms without "be".
@@ -38,6 +46,6 @@ Review each finding before you change text.
 
 The rollout has three steps:
 
-1. Report findings without a merge gate.
-2. Require clean text on changed lines.
-3. Require clean text across the full scope.
+1. Report only (done).
+2. Apply strict mode to added lines (now).
+3. Apply strict mode to the full scope (later).

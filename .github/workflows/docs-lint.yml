@@ -2,14 +2,6 @@ name: docs lint
 
 on:
   pull_request:
-    paths:
-      - 'docs/**'
-      - 'README.md'
-      - 'handbooks/**'
-      - 'roles/**'
-      - '.claude/skills/**'
-      - 'bin/docs-lint.mjs'
-      - '.github/workflows/docs-lint.yml'
   workflow_dispatch:
 
 permissions:
@@ -27,15 +19,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v5.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
       - name: Report all findings
         run: node bin/docs-lint.mjs --summary
-      # Step 2 will remove continue-on-error and add --strict.
-      - name: Report findings on changed lines
+      # Strict mode fails the job when a finding touches an added line in a file in scope.
+      # Unchanged files stay report only. No changed file in scope means exit 0 at once.
+      # The check can become a required check without staying pending.
+      - name: Check added lines (strict)
         if: github.event_name == 'pull_request'
-        continue-on-error: true
         env:
           BASE_REF: ${{ github.base_ref }}
-        run: node bin/docs-lint.mjs --base "origin/$BASE_REF"
+        run: node bin/docs-lint.mjs --base "origin/$BASE_REF" --strict

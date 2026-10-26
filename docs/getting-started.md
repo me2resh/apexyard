@@ -7,14 +7,13 @@ for the directory layout, daily workflow, upgrade path, and FAQ.
 
 ## Prerequisites
 
-- A GitHub account and an org you can fork into
-- [Claude Code](https://claude.com/claude-code) installed
-- [GitHub CLI (`gh`)](https://cli.github.com) installed (required for `apexyard init`; the fork path can use the web UI)
-- [`jq`](https://jqlang.org/download/) installed — required. Framework hooks use jq to read `.claude/project-config.json` overrides; without it your overrides silently no-op. `brew install jq` / `apt-get install jq` / `dnf install jq` depending on platform. `/setup` refuses to run without it, and a SessionStart banner surfaces the gap if jq disappears later. See [AgDR-0038](agdr/AgDR-0038-jq-as-hard-dependency.md) for the rationale.
+- A GitHub account and an organisation where you can create a fork
+- An installation of [Claude Code](https://claude.com/claude-code)
+- An installation of [GitHub CLI (`gh`)](https://cli.github.com). `apexyard init` needs this tool. The fork method can use the web UI.
+- An installation of [`jq`](https://jqlang.org/download/). The framework needs jq. Framework hooks use jq to read `.claude/project-config.json` overrides. Without jq, the hooks silently ignore your overrides. Use `brew install jq` / `apt-get install jq` / `dnf install jq` for your platform. `/setup` refuses to run without jq. A SessionStart banner shows a warning if jq disappears later. See [AgDR-0038](agdr/AgDR-0038-jq-as-hard-dependency.md) for the reason.
 - **Windows**: Use [Git for Windows](https://gitforwindows.org) or WSL. The
   `.claude/hooks/*.sh` files use Bash. Native `cmd.exe` and PowerShell cannot
-  run them. The `C:`-drive path issue reported in [#691](https://github.com/me2resh/apexyard/issues/691)
-  is fixed.
+  run them. The project fixed the `C:`-drive path issue that [#691](https://github.com/me2resh/apexyard/issues/691) reports.
 - Basic familiarity with Claude Code's `CLAUDE.md` system
 
 After cloning, run `bash bin/apexyard doctor` before `/setup`, or use
@@ -22,8 +21,8 @@ After cloning, run `bash bin/apexyard doctor` before `/setup`, or use
 inside Claude Code. The report suggests fixes and makes no changes.
 Exit codes are 0 (pass), 1 (warning), and 2 (failure).
 
-On Windows, install the optional GitHub CLI with `winget install GitHub.cli`
-and the required jq 1.6 or later with `winget install jqlang.jq`. Run the
+On Windows, install the optional GitHub CLI with `winget install GitHub.cli`.
+Install jq 1.6 or later with `winget install jqlang.jq`. You need jq. Run the
 check in Git Bash or WSL.
 
 ---
@@ -32,7 +31,7 @@ check in Git Bash or WSL.
 
 ### Default: `apexyard init`
 
-Install the CLI, then create your ops repo with one command:
+Install the CLI. Then create your ops repo with one command:
 
 ```bash
 curl -fsSL https://apexyard.ai/install | sh   # CLI only; no sudo; checks the release checksum
@@ -46,11 +45,11 @@ the CLI when the CLI is absent, then runs `apexyard init` with these options.
 Do not run `apexyard init` again after it, because the target directory is no
 longer empty.
 
-Not live yet: the install URL, the Homebrew tap and the npm package are not
-published. Until they are, use the fork path below. `apexyard init` needs `git`,
+The project has not yet published the install URL, the Homebrew tap, or the npm package.
+Until the project publishes them, use the fork method below. `apexyard init` needs `git`,
 `jq` and `gh`.
 
-`apexyard init` creates a NEW repo from the framework, so it can be private.
+`apexyard init` creates a new repo from the framework, so it can be private.
 It clones the repo, adds the framework as the remote `upstream`, and writes
 `.claude/framework-version`. Use `--public` for a public repo and `--agent NAME`
 to record your agent tool. Add `--dry-run` to see the plan only.
@@ -58,10 +57,10 @@ to record your agent tool. Add `--dry-run` to see the plan only.
 To update later, run `apexyard update`. It shows which files change and who
 owns them, then starts `/update`. Use `apexyard update --check` to preview only.
 
-When an install endpoint is set, `apexyard init` sends one anonymous install
-event: a random install id, the CLI version, your operating system, and the
-agent tool. Today no endpoint is set. The CLI prints the event and sends
-nothing. Set `APEXYARD_TELEMETRY=0` to turn it off.
+When the configuration specifies an install endpoint, `apexyard init` sends one anonymous install event.
+The event contains a random install id, the CLI version, your operating system, and the agent tool.
+Today the configuration specifies no endpoint. The CLI prints the event and sends
+nothing. Set `APEXYARD_TELEMETRY=0` to stop these events.
 
 Go to Step 2.
 
@@ -71,7 +70,7 @@ Your ops repo can also be a fork of ApexYard. GitHub does not allow a private
 fork of a public repo. It is one repository with no nested install.
 
 Visit [`github.com/me2resh/apexyard`](https://github.com/me2resh/apexyard).
-Star it, then fork it into your organisation. Keep `apexyard`, or rename the
+Give it a star. Then fork it into your organisation. Keep `apexyard`, or rename the
 fork to a name such as `your-org/ops`.
 
 Then clone your fork locally:
@@ -152,9 +151,10 @@ projects:
     status: active
 ```
 
-Even if you have just one repo, register it — the skills work the same whether you have 1 or 20.
+Register your repo even if you have only one. The skills work the same whether you have 1 or 20.
 
-The `CLAUDE.md` at the root of your fork is the stack entry point. Claude Code reads it automatically when you start a session inside the fork — no additional wiring needed.
+The `CLAUDE.md` at the root of your fork is the stack entry point.
+Claude Code reads it automatically when you start a session inside the fork. You need no additional configuration.
 
 ---
 
@@ -195,23 +195,28 @@ Create an AgDR.
 
 ### Turn on branch protection
 
-Turn on required review and required status checks on your protected branches. The hooks are guardrails, not a security boundary. See the [Threat model](../SECURITY.md#threat-model).
+Turn on required review and required status checks on your protected branches. The hooks help enforce rules but do not provide a security boundary. See the [Threat model](../SECURITY.md#threat-model).
 
 ---
 
 ## Terminal push hook (`core.hooksPath`)
 
-The framework ships a `.githooks/pre-push` hook for `git push`. Once installed, it runs for a terminal push AND a Claude Code-driven push — git invokes it the same way either time. It runs two check sets in order. First, the framework's own hardcoded set (markdownlint, shellcheck, the subpack extraction smoke test), via `bin/run-pre-push-checks.sh`. Then this repo's own configured `.pre_push.commands`, via `bin/run-configured-pre-push-checks.sh`.
+The framework includes a `.githooks/pre-push` hook for `git push`. After installation, git runs it the same way for terminal pushes and Claude Code pushes. It runs two check sets in order. First, `bin/run-pre-push-checks.sh` runs the framework's hardcoded checks: markdownlint, shellcheck, and the subpack extraction smoke test. Then `bin/run-configured-pre-push-checks.sh` runs this repo's configured `.pre_push.commands`.
 
-**Plain rule (AgDR-0173, AgDR-0115): ApexYard runs `.pre_push.commands` only inside an ApexYard fork that has this hook installed. A managed-project clone gets no local pre-push check from ApexYard, ever.** ApexYard never sets `core.hooksPath` in a managed clone (AgDR-0115) — that clone's own CI is its backstop.
+Plain rule (AgDR-0173, AgDR-0115): ApexYard runs `.pre_push.commands` only inside an ApexYard fork with this hook. ApexYard never runs local pre-push checks in a managed-project clone. ApexYard never sets `core.hooksPath` in a managed clone (AgDR-0115). That clone's own CI is its fallback check.
 
-Before AgDR-0173, the Claude Code hook (`pre-push-gate.sh`) ran a repository's `.pre_push.commands` itself, sometimes against the wrong repository (me2resh/apexyard#1366). It picked a target repository out of the Bash command's text. That could not be made sound. A heredoc, a quoted string, or a commit message could all look like a push without being one.
+Before AgDR-0173, the Claude Code hook (`pre-push-gate.sh`) ran a repository's `.pre_push.commands` itself, sometimes against the wrong repository (me2resh/apexyard#1366). It selected a target repository from the Bash command's text. This method could not reliably identify a push. A heredoc, a quoted string, or a commit message could all look like a push without being one.
 
-After AgDR-0173, `pre-push-gate.sh` runs no repository's commands at all. It only reminds a session, on every matching push, to install the git hook above. It does this only when the session's own working-directory repo is itself an ApexYard fork. In a managed-project clone it prints at most a one-line note that ApexYard runs no checks there. It never suggests installing `core.hooksPath` in a repo that is not an ApexYard fork.
+After AgDR-0173, `pre-push-gate.sh` runs no repository's commands. On every matching push, it only reminds the session to install the git hook above. It gives this reminder only when the session's working-directory repo is an ApexYard fork. In a managed-project clone, it prints at most a one-line note that ApexYard runs no checks there. It never suggests installing `core.hooksPath` in a repo that is not an ApexYard fork.
 
-### Installed automatically by `/setup`
+### `/setup` installs the hook automatically
 
-As of me2resh/apexyard#1086, `/setup` runs `bin/install-git-hooks.sh` for you, so a fresh ops-fork clone that's been through `/setup` already has `core.hooksPath` pointing at `.githooks`. A `check-git-hooks-installed.sh` SessionStart advisory also warns — same non-blocking shape as `check-upstream-drift.sh` — if a clone's `core.hooksPath` is unset, stale (points at a deleted directory), or a leftover pointer into a different clone's `.git/hooks`.
+As of me2resh/apexyard#1086, `/setup` runs `bin/install-git-hooks.sh` for you. After `/setup`, a fresh ops-fork clone has `core.hooksPath` pointing at `.githooks`.
+The `check-git-hooks-installed.sh` SessionStart advisory gives warnings without blocking work, as `check-upstream-drift.sh` does. It warns if a clone's `core.hooksPath` has any of these conditions:
+
+- It has no value.
+- It points at a deleted directory.
+- It still points into a different clone's `.git/hooks`.
 
 If you skipped `/setup`, or want to run it by hand:
 
@@ -219,17 +224,23 @@ If you skipped `/setup`, or want to run it by hand:
 bash bin/install-git-hooks.sh
 ```
 
-Idempotent — safe to re-run. Repairs the stale-pointer cases above automatically; refuses to overwrite a `core.hooksPath` you set to something else on purpose unless you pass `--force`. See `bash bin/install-git-hooks.sh --help`.
+You can safely run the installer again. It repairs the stale pointers above automatically. It refuses to overwrite a `core.hooksPath` you deliberately set to something else unless you pass `--force`. See `bash bin/install-git-hooks.sh --help`.
 
-`core.hooksPath` is per-clone git config (never committed), so this needs to run once per clone — that's exactly why `/setup` calls it for the ops fork rather than leaving it as a one-time manual step to remember. **`/handover` deliberately does NOT call it** against a freshly-cloned managed-project workspace: the installer's only gate is "does a `.githooks/` directory exist," with no provenance check, so pointing it at an arbitrary just-cloned third-party repo hands *that repo's own* committed hook scripts execution on the very next ordinary git operation — no push required (confirmed HIGH finding, PR #1087 security review). See the "1.5-clone" step in `.claude/skills/handover/SKILL.md` for the full rationale, and me2resh/apexyard#1088 for the open follow-up on giving a managed-project clone's own terminal pushes protection without this risk. `--global` also works (`git config --global core.hooksPath .githooks`) if you want every clone on a machine covered at once, but note it affects every git repo on that machine, not just apexyard — if other repos ship their own hooks under `.git/hooks/`, those get shadowed. Per-clone (what the installer does by default) is the safer default.
+Git stores `core.hooksPath` in each clone's configuration and never commits it. The installer must run once for each clone. Thus, `/setup` calls it for the ops fork instead of leaving a manual step for you to remember.
+
+`/handover` deliberately does not call the installer for a newly cloned managed-project workspace. The installer only checks whether a `.githooks/` directory exists. It does not check the directory's source. If you run the installer against an arbitrary newly cloned third-party repo, the next ordinary git operation can execute that repo's committed hook scripts. This needs no push. The PR #1087 security review confirmed this HIGH finding.
+
+See the "1.5-clone" step in `.claude/skills/handover/SKILL.md` for the full reason. The open follow-up me2resh/apexyard#1088 addresses protection for a managed-project clone's own terminal pushes without this risk.
+
+`--global` also works (`git config --global core.hooksPath .githooks`) if you want to cover every clone on a machine at once. It affects every git repo on that machine, not only apexyard. If other repos include their own hooks under `.git/hooks/`, the global setting overrides those hooks. The installer's default configuration for each clone is safer.
 
 ### Missing tools degrade gracefully
 
-Each check guards for its tool: if `shellcheck` or `npx` is missing, the check prints an actionable install message and skips (exit 0). A contributor without a tool is never hard-blocked; the check still runs in CI.
+Each check first looks for its tool. If `shellcheck` or `npx` is missing, the check prints installation instructions and skips the check (exit 0). The check never blocks a contributor who lacks a tool. The check still runs in CI.
 
 ### Emergency bypass
 
-Include `<!-- pre-push: skip -->` in the HEAD commit message (subject or body) to bypass for a genuine one-off emergency. The bypass is printed to stderr so it's visible in the terminal output and grep-able in history. The skip is intentionally narrow — it covers one push per commit, not all future pushes.
+Use the bypass only for a real one-off emergency. Put `<!-- pre-push: skip -->` on its own line in the HEAD commit message (subject or body). A sentence that only mentions the marker does not bypass checks. The hook prints the bypass to stderr. You can see it in terminal output and find it with grep in history. The skip deliberately covers only one push per commit, not all future pushes.
 
 ```bash
 git commit --amend -m "$(git log -1 --format=%B)
@@ -240,12 +251,12 @@ git commit --amend -m "$(git log -1 --format=%B)
 
 | Check | What it catches | Tool required |
 |-------|----------------|---------------|
-| `markdownlint` | Malformed markdown (broken tables, duplicate headings, etc.) via markdownlint-cli2 | `npx` (Node.js) |
+| `markdownlint` | Malformed markdown, for example broken tables and duplicate headings, with markdownlint-cli2 | `npx` (Node.js) |
 | `shellcheck` | Shell-script bugs, quoting issues, portability problems in `.claude/hooks/*.sh` | `shellcheck` |
-| ~~`site-counts`~~ | Retired — the marketing site moved to me2resh/apexyard-site (#663) | — |
-| `subpacks` | Marketplace sub-pack extraction smoke test — confirms no framework-private files leaked | none (bash) |
+| ~~`site-counts`~~ | Retired. The marketing site moved to me2resh/apexyard-site (#663). | None |
+| `subpacks` | Marketplace sub-pack extraction smoke test. Confirms that extraction leaked no framework-private files. | none (bash) |
 
-Link-check (lychee) is intentionally excluded — it is slow and network-dependent, making it unsuitable for pre-push latency.
+The check set deliberately excludes link-check (lychee). It runs slowly and needs network access, so it would delay pre-push checks too much.
 
 ### Writing-profile check (advisory)
 
@@ -263,17 +274,21 @@ bash bin/check-writing-profile.sh
 
 ---
 
-## Managing model cost — why the main agent dominates spend
+## Managing model cost: why the main agent dominates spend
 
-The per-agent model matrix ([AgDR-0050](agdr/AgDR-0050-agent-runtime-overhaul.md)) only applies to *spawned* sub-agents (reviews, QA, analysts). *In-flow* work — implementation, PM, design — is adopted **in-thread** by design, so it runs on your primary tier (usually Opus) and the `sonnet` implementation default never takes effect. That's why operators see the main agent dominating token spend.
+The per-agent model matrix ([AgDR-0050](agdr/AgDR-0050-agent-runtime-overhaul.md)) applies only to sub-agents that you start for reviews, QA, and analysis. The main agent adopts implementation, PM, and design work in the same thread. This design uses your primary tier, usually Opus. Thus, the `sonnet` implementation default never takes effect. This explains why the main agent uses most tokens.
 
-Three levers manage it, ordered by effort-to-win ratio: (1) **`opusplan`** — Opus plans, Sonnet executes (biggest win, no framework change); (2) the **thin-orchestrator pattern** — keep the Opus loop as a planner / coordinator and delegate implementation to spawned `sonnet` build agents via `/fan-out` or `Workflow`; (3) populate **`agent-routing.yaml`** to pin or route per-agent tiers.
+Three methods control cost. The list starts with the method that gives the largest benefit for the least effort:
 
-Full explanation + the opt-in thin-orchestrator mode: [`docs/orchestrator-cost-model.md`](orchestrator-cost-model.md).
+- Use `opusplan`: Opus plans and Sonnet executes. This gives the largest benefit without framework changes.
+- Use the thin-orchestrator pattern. Keep the Opus loop as a planner and coordinator. Assign implementation to `sonnet` build agents that you start with `/fan-out` or `Workflow`.
+- Add entries to `agent-routing.yaml` to set or route per-agent tiers.
 
-**Idle CI waits and the prompt cache.** The orchestrator waits for green CI with a Monitor before it spawns a reviewer. The main conversation is idle in that time. A subscription inside its usage limits keeps the main prompt cache for 1 hour. An API key, Bedrock, Vertex, or Foundry keeps it for 5 minutes. A CI wait longer than 5 minutes then rebuilds the whole main context. If you run outside the limits of a subscription, set `promptCacheTtl` to `"1h"` in your Claude Code settings where your provider supports it. The `CLAUDE_CODE_PROMPT_CACHE_TTL` environment variable does the same. Check that your provider accepts a 1-hour cache first. The rule text is in [`.claude/rules/pr-workflow.md`](../.claude/rules/pr-workflow.md).
+See [`docs/orchestrator-cost-model.md`](orchestrator-cost-model.md) for the full explanation and the optional thin-orchestrator mode.
 
-**Bounding the main context.** On a 1M-context Opus model, Claude Code compacts at about 967K tokens by default. A long orchestrator session then carries a very large context on every turn. The `autoCompactWindow` setting lowers the compaction point. The spike [GH-1637](spike-memos/GH-1637-compaction-threshold.md) shows that the setting bounds the context per turn. The maximum context stayed 30K to 43K tokens below the window. The setting is optional. Use it only when long sessions carry more context than you want and you accept more compactions. If you use it, set it in your user settings, not in a shared project file:
+**Idle CI waits and the prompt cache.** The orchestrator uses a Monitor to wait for green CI before it starts a reviewer. The main conversation stays idle during this time. A subscription inside its usage limits keeps the main prompt cache for 1 hour. An API key, Bedrock, Vertex, or Foundry keeps it for 5 minutes. A CI wait longer than 5 minutes then rebuilds the whole main context. If you run outside subscription limits, set `promptCacheTtl` to `"1h"` in your Claude Code settings where your provider supports it. The `CLAUDE_CODE_PROMPT_CACHE_TTL` environment variable does the same. First, check that your provider accepts a 1-hour cache. See [`.claude/rules/pr-workflow.md`](../.claude/rules/pr-workflow.md) for the rule text.
+
+**Bounding the main context.** On a 1M-context Opus model, Claude Code compacts at about 967K tokens by default. A long orchestrator session then carries a large context on every turn. The `autoCompactWindow` setting lowers the compaction point. The spike [GH-1637](spike-memos/GH-1637-compaction-threshold.md) shows that the setting limits the context per turn. The maximum context stayed 30K to 43K tokens below the window. The setting is optional. Use it only when long sessions carry more context than you want and you accept more compactions. If you use it, set it in your user settings, not in a shared project file:
 
 ```json
 {
@@ -282,52 +297,66 @@ Full explanation + the opt-in thin-orchestrator mode: [`docs/orchestrator-cost-m
 ```
 
 - **Recommended value:** `500000`. This value is an extrapolation from windows of 100K to 400K. Criterion ac2-2 of the token-efficiency plan must confirm it with `bin/token-cost.py`.
-- **Allowed values:** a whole number from `100000` to `1000000`. Claude Code caps it at the model window.
-- **Other ways to set it:** the `--autocompact` flag (Claude Code 2.1.221 or later) for one launch, `/autocompact` for one model (2.1.288 or later), and `CLAUDE_CODE_AUTO_COMPACT_WINDOW` in scripts. The variable accepts a plain integer only.
-- **Quality:** a lower window means more compactions, and each compaction can drop detail from a long task. The spike's quality test was weak, so check long tasks after you set a low window.
-- **Cost:** the spike found no cost saving. In two runs each, a window of 100K cost about 9 percent more than the default, because each compaction rebuilds the prompt cache. Do not go below 300K without a measurement.
+- **Allowed values:** a whole number from `100000` to `1000000`. Claude Code limits it to the model window.
+- **Other ways to set it:** use the `--autocompact` flag for one launch with Claude Code 2.1.221 or later. Use `/autocompact` for one model with 2.1.288 or later. Use `CLAUDE_CODE_AUTO_COMPACT_WINDOW` in scripts. The variable accepts a plain integer only.
+- **Quality:** a lower window means more compactions. Each compaction can remove details from a long task. The spike used a weak quality test. Check long tasks after you set a low window.
+- **Cost:** the spike found no cost saving. In two runs each, a window of 100K cost about 9 percent more than the default. Each compaction rebuilds the prompt cache. Do not go below 300K without a measurement.
 
 ---
 
 ## Optional: LSP-aware code navigation
 
-Claude Code v2.0.74+ ships a built-in **LSP (Language Server Protocol) tool** that answers semantic queries — *"where is this defined?"*, *"where is this used?"*, *"what does this symbol resolve to?"* — by talking to a language server (`tsserver`, `pyright`, `gopls`, `rust-analyzer`, etc.) instead of grepping the file tree. It is **off by default** and **opt-in per session**.
+Claude Code v2.0.74+ includes an LSP (Language Server Protocol) tool that answers semantic queries. Examples include these queries:
+
+- Where does the code define this?
+- Where does the code use this?
+- What does this symbol resolve to?
+
+The tool communicates with a language server instead of searching the file tree with grep. Servers include `tsserver`, `pyright`, `gopls`, and `rust-analyzer`. The tool stays off by default. You must enable it for each session.
 
 ### Why turn it on?
 
-The LSP spike (PR #184, ticket #178) measured the input-token cost of three representative queries on a real TypeScript backend (~9,750 LOC). Shallow semantic queries — single-symbol lookups, find-references — came out **~3-15× cheaper** with LSP than with grep + Read. Multi-hop traces (chains of definitions across modules) saw a smaller ~1.4× win, because the irreducible cost is still reading prose to summarise behaviour.
+The LSP spike (PR #184, ticket #178) measured input-token cost for three representative queries on a real TypeScript backend (~9,750 LOC). Shallow semantic queries, such as single-symbol lookups and reference searches, cost ~3-15× less with LSP than with grep + Read. Multi-hop traces follow chains of definitions across modules. These traces cost ~1.4× less because the agent must still read prose to summarize behavior.
 
-Concretely: a Code Reviewer agent run on a typical PR that does a handful of "where is this defined" lookups can come in at a quarter to a tenth of its grep-driven token bill, with the saved budget freed up for the actual review reasoning.
+A Code Reviewer agent on a typical PR can use a quarter to a tenth of the tokens that grep-based lookups use. This applies when the review includes a few definition lookups. The agent can use the remaining token budget for review reasoning.
 
-### Easy path — `/setup` automates it
+### Easy path: `/setup` automates it
 
-Run `/setup` (first run) or `/setup --enable-lsp` (retrofit on an already-configured fork) and the skill walks you through three things in one offer:
+Run `/setup` for the first run, or `/setup --enable-lsp` to add LSP to a fork that you already configured. The skill guides you through four things in one offer:
 
-1. **Detects your language** from the `tech_stack` you described in `/setup` (or from the existing `onboarding.yaml` if you're retrofitting).
-2. **Installs the language server** (`typescript-language-server`, `pyright`, `gopls`, or `rust-analyzer`) using the right package manager for the detected language. Refuses gracefully if the prerequisite runtime (`node`, `python`, `go`, `rustup`) is missing — it never auto-installs runtimes.
-3. **Sets `ENABLE_LSP_TOOL=1` in your shell rc** (`~/.zshrc`, `~/.bashrc`, or `~/.profile` depending on `$SHELL`) — idempotently, so re-running is a no-op.
-4. **Prints the verified plugin-install copy-paste block** for your language. Three commands to run *inside Claude Code* (not the shell): `/plugin marketplace add anthropics/claude-plugins-official`, `/plugin install <plugin-name>@claude-plugins-official`, and `/reload-plugins`. The skill substitutes the right `<plugin-name>` for your detected language (e.g. `typescript-lsp`, `pyright-lsp`, `gopls-lsp`, `rust-analyzer-lsp`). The marketplace add is always emitted because the docs' auto-load claim for `claude-plugins-official` doesn't always fire on fresh installs.
+1. The skill detects your language from the `tech_stack` you described in `/setup`. The skill uses existing `onboarding.yaml` if you retrofit.
+2. The skill installs the language server (`typescript-language-server`, `pyright`, `gopls`, or `rust-analyzer`). The skill uses the right package manager for the detected language.
 
-The skill defaults to **on** for typical machines (≥ 4 cores AND ≥ 8 GB RAM) and **off** for constrained machines, with the operator free to override either way. Re-running `/setup --enable-lsp` is idempotent: if the env var and server binary are already in place, it reports "already enabled" and exits.
+   The skill refuses installation if the prerequisite runtime (`node`, `python`, `go`, or `rustup`) is missing. The skill never installs runtimes by itself.
 
-Windows is out of scope for v1 of the LSP automation — `/setup` prints a manual-install pointer back to this section and continues without LSP.
+3. The skill sets `ENABLE_LSP_TOOL=1` in your shell rc file (`~/.zshrc`, `~/.bashrc`, or `~/.profile`, depending on `$SHELL`).
 
-### Opt-in path — manual fallback (two pieces)
+   The skill does this once, so a repeat run makes no change.
 
-If you'd rather skip the skill and wire it up yourself — or you're on Windows and `/setup` declined to automate it — LSP is enabled by **two** things:
+4. The skill prints the verified plugin-install block for your language.
 
-1. The environment variable `ENABLE_LSP_TOOL=1` (singular `_TOOL`, not plural).
-2. A per-language plugin from the official Anthropic marketplace.
+   Run its three commands inside Claude Code, not the shell: `/plugin marketplace add anthropics/claude-plugins-official`, `/plugin install <plugin-name>@claude-plugins-official`, and `/reload-plugins`. The skill replaces `<plugin-name>` with the name for your language, for example `typescript-lsp`, `pyright-lsp`, `gopls-lsp`, or `rust-analyzer-lsp`. The skill always prints the marketplace add command. The documentation states that `claude-plugins-official` loads automatically, but fresh installations do not always do this.
 
-Both are required. Setting only the env var without an installed plugin gives Claude Code nothing to talk to; installing only the plugin without the env var keeps the tool dormant.
+The skill defaults to on for typical machines with ≥ 4 cores AND ≥ 8 GB RAM. It defaults to off for machines with fewer resources. The operator can change either default. Repeated runs of `/setup --enable-lsp` do not repeat configuration changes. If the environment variable and server binary already exist, the skill reports "already enabled" and exits.
 
-Add the env var to your shell rc so it loads on every shell start:
+The first version of the LSP automation does not support Windows. On Windows, `/setup` shows a manual-install reference to this section and continues without LSP.
+
+### Opt-in path: manual fallback (two pieces)
+
+You can configure LSP manually instead of using the skill. Use this method on Windows if `/setup` declines to automate configuration. LSP needs two things:
+
+- The environment variable `ENABLE_LSP_TOOL=1` (singular `_TOOL`, not plural).
+- A per-language plugin from the official Anthropic marketplace.
+
+LSP needs both. With only the environment variable, Claude Code has no plugin to communicate with. With only the plugin, the tool stays inactive.
+
+Add the environment variable to your shell configuration file so each shell start loads it:
 
 ```bash
 echo 'export ENABLE_LSP_TOOL=1' >> ~/.zshrc   # or ~/.bashrc
 ```
 
-Then install the plugin for your language. Inside Claude Code (not your shell), run:
+Then install the plugin for your language. Run these commands inside Claude Code, not your shell:
 
 ```
 /plugin marketplace add anthropics/claude-plugins-official
@@ -335,7 +364,7 @@ Then install the plugin for your language. Inside Claude Code (not your shell), 
 /reload-plugins
 ```
 
-Substituting `<plugin-name>` for one of:
+Replace `<plugin-name>` with one of these names:
 
 | Language | Plugin |
 |---|---|
@@ -344,17 +373,17 @@ Substituting `<plugin-name>` for one of:
 | Go | `gopls-lsp` |
 | Rust | `rust-analyzer-lsp` |
 
-Other languages (C/C++, C#, Java, Kotlin, Lua, PHP, Swift) are also covered — see the [discover-plugins reference](https://code.claude.com/docs/en/discover-plugins#code-intelligence) for the full table. The marketplace add is idempotent (no-op if already registered — the docs claim `claude-plugins-official` auto-loads on Claude Code startup, but in practice the auto-add can be missing on a fresh install, so always emit it).
+Plugins also support C/C++, C#, Java, Kotlin, Lua, PHP, and Swift. See the [discover-plugins reference](https://code.claude.com/docs/en/discover-plugins#code-intelligence) for the full table. The marketplace add command makes no change if the marketplace already exists. The documentation states that `claude-plugins-official` loads automatically when Claude Code starts. Fresh installations can omit this automatic addition, so always include the command.
 
-> **Gotcha — env var not visible to the current process.** `ENABLE_LSP_TOOL=1` written to your shell rc is **not** picked up by the Claude Code process you're currently in. `/reload-plugins` reloads plugin state but does **not** re-read shell env. After adding the env var (and after installing the plugin), fully **quit** and **relaunch** Claude Code. Verify with `echo $ENABLE_LSP_TOOL` in a fresh shell — it should print `1`.
+> **Warning: the current process does not see the environment variable.** The current Claude Code process does not read `ENABLE_LSP_TOOL=1` from your changed shell configuration file. `/reload-plugins` reloads plugin state but does not read shell environment variables again. After you add the environment variable and install the plugin, quit Claude Code fully. Then start Claude Code again. Check with `echo $ENABLE_LSP_TOOL` in a fresh shell. The command should print `1`.
 
 ### Per-language install notes
 
-The framework actively encourages LSP for these four. Pick the languages your project uses; multi-language repos can install several plugins side-by-side and the LSP tool will dispatch per-file based on extension.
+The framework encourages LSP for these four languages. Select the languages that your project uses. A repository with multiple languages can use several plugins together. The LSP tool selects the plugin for each file from its extension.
 
-#### TypeScript / JavaScript — `tsserver`
+#### TypeScript / JavaScript: `tsserver`
 
-`tsserver` ships bundled with the TypeScript compiler (`typescript` on npm), which most TS projects already have as a devDependency. No extra binary install if your repo has `node_modules`.
+The TypeScript compiler (`typescript` on npm) includes `tsserver`. Most TypeScript projects already have the compiler as a devDependency. If your repository has `node_modules`, you do not need to install another binary.
 
 ```bash
 # Verify your project ships tsserver
@@ -364,7 +393,7 @@ npx tsserver --version 2>/dev/null || npm ls typescript
 #   /plugin install typescript-lsp@claude-plugins-official
 ```
 
-#### Python — `pyright`
+#### Python: `pyright`
 
 ```bash
 # Install pyright globally
@@ -378,9 +407,9 @@ uv add --dev pyright
 #   /plugin install pyright-lsp@claude-plugins-official
 ```
 
-`pyright` understands `pyproject.toml` and `pyrightconfig.json` for path resolution; if your repo uses a virtualenv the plugin needs to know where it lives — set `python.pythonPath` in `pyrightconfig.json`.
+`pyright` uses `pyproject.toml` and `pyrightconfig.json` for path resolution. If your repository uses a virtualenv, the plugin needs the location of the virtualenv. Set `python.pythonPath` in `pyrightconfig.json`.
 
-#### Go — `gopls`
+#### Go: `gopls`
 
 ```bash
 # Install gopls (the official Go language server)
@@ -393,11 +422,11 @@ which gopls
 #   /plugin install gopls-lsp@claude-plugins-official
 ```
 
-`gopls` requires Go 1.21+ and a `go.mod` at the repo root. Cold start on a large monorepo can take 30–90 seconds while the module graph builds.
+`gopls` needs Go 1.21+ and a `go.mod` at the repository root. A cold start on a large monorepo can take 30 to 90 seconds while the module graph builds.
 
-#### Rust — `rust-analyzer`
+#### Rust: `rust-analyzer`
 
-`rust-analyzer` ships bundled with [rustup](https://rustup.rs/) — most Rust toolchains already have it.
+[rustup](https://rustup.rs/) includes `rust-analyzer`. Most Rust toolchains already have it.
 
 ```bash
 # Add the component if it's missing
@@ -410,35 +439,37 @@ rust-analyzer --version
 #   /plugin install rust-analyzer-lsp@claude-plugins-official
 ```
 
-Cargo workspaces with many crates have a slow first index — see the caveat below.
+Cargo workspaces with many crates take a long time to index initially. See the caveat below.
 
-### Caveats — what LSP does not solve
+### Caveats: what LSP does not solve
 
-- **Cold-start latency on large repos.** The first query against a fresh server pays the indexing cost: a few seconds for a small library, 30-90s for a Go monorepo or a large Rust workspace, sometimes longer for a TypeScript project with thousands of files. Subsequent queries in the same session are fast. Plan for the first call to be slow; budget for it in agent runs.
-- **Cross-project portfolio queries still need grep.** LSP indexes one project at a time. Skills that walk the whole portfolio (`/inbox`, `/tasks`, `/stakeholder-update`, anything that aggregates across `apexyard.projects.yaml`) read across many repos and stay on grep + Read regardless of LSP state.
-- **No new failure mode.** Skills that benefit from LSP (`/code-review`, `/threat-model`, `/security-review`) fall back to grep + Read transparently when LSP is absent. There is no "broken without LSP" path — only a faster one with it.
-- **Plugin marketplace links may move.** The plugin ecosystem is young. If a marketplace search turns up multiple options for one language, prefer the one maintained by the language's own community (e.g. official `tsserver` over a third-party wrapper).
+- **Cold-start latency on large repositories.** The first query to a fresh server needs time for indexing. A small library needs a few seconds. A Go monorepo or large Rust workspace needs 30-90s. A TypeScript project with thousands of files sometimes needs more time. Later queries in the same session are fast. Plan time for the first call in agent runs.
+- **Cross-project portfolio queries still need grep.** LSP indexes one project at a time. Portfolio-wide skills include `/inbox`, `/tasks`, `/stakeholder-update`, and anything that collects information across `apexyard.projects.yaml`. These skills read many repositories and use grep + Read regardless of LSP state.
+- **No new failure mode.** Skills that benefit from LSP include `/code-review`, `/threat-model`, and `/security-review`. They automatically use grep + Read when LSP is absent. These skills work without LSP and run faster with it.
+- **Plugin marketplace links may move.** The plugin ecosystem is new. If a marketplace search shows multiple options for one language, select the plugin that the language's own community maintains. For example, select official `tsserver` instead of a third-party wrapper.
 
 ## Optional: Fallow static analysis (JS/TS)
 
-For JavaScript / TypeScript projects, the Code Reviewer agent (Rex) can run a [Fallow](https://docs.fallow.tools) static-analysis pass as part of every code review — surfacing dead code, unused exports/dependencies, duplication, circular dependencies, and complexity hotspots in the **changed code**, plus a dry-run preview of the fixes it would apply. See `.claude/agents/code-reviewer.md` § 9 and [AgDR-0069](agdr/AgDR-0069-fallow-in-code-review.md).
+For JavaScript / TypeScript projects, the Code Reviewer agent (Rex) can run [Fallow](https://docs.fallow.tools) static analysis during every code review. The analysis finds dead code, unused exports and dependencies, duplication, circular dependencies, and high complexity in changed code. It also previews fixes with a dry run. See `.claude/agents/code-reviewer.md` § 9 and [AgDR-0069](agdr/AgDR-0069-fallow-in-code-review.md).
 
-**This is opt-in and fail-soft.** Rex only runs it when the diff touches `**/*.{js,jsx,mjs,cjs,ts,tsx}` AND the `fallow` CLI is on `PATH`. If the CLI is absent, the step is skipped silently — there is no "broken without fallow" path, only a richer review with it. Findings are **advisory** (`nit:` / `suggestion:`); they never flip a verdict on their own, and the review only previews fixes (`fallow fix --dry-run`) — it never mutates your tree.
+You must enable this optional analysis. Rex runs it only when the diff touches `**/*.{js,jsx,mjs,cjs,ts,tsx}` AND the `fallow` CLI exists on `PATH`. If the CLI is absent, Rex silently skips the step. Reviews work without Fallow and give more information with it. Findings are advisory (`nit:` / `suggestion:`). They never change a verdict on their own. The review only previews fixes (`fallow fix --dry-run`). It never changes your tree.
 
 To enable it on a JS/TS project:
 
-1. **Install the `fallow` CLI** — `cargo install fallow-cli`, or run it ad-hoc with `npx fallow`.
-2. **(Optional) toggle it in `onboarding.yaml`** — set `quality.fallow_review: false` to keep the CLI installed but disable the review pass. Absent or `true` → enabled when the CLI is present.
+1. Install the `fallow` CLI with `cargo install fallow-cli`, or run it when needed with `npx fallow`.
+2. Optionally, set `quality.fallow_review: false` in `onboarding.yaml` to disable the review analysis while keeping the CLI.
 
-Non-JS/TS stacks need do nothing — the language gate means the pass never fires on a non-JS/TS diff regardless of the flag, and an absent `fallow` CLI skips it anyway. (Leaving `quality.fallow_review` unset is equivalent to `true`; it only matters on JS/TS projects that have the CLI installed and want to turn the pass *off*.)
+   An absent value or `true` enables analysis when the CLI exists.
+
+Non-JS/TS stacks need no action. The language check prevents analysis of non-JS/TS diffs regardless of the flag. An absent `fallow` CLI also causes Rex to skip analysis. An unset `quality.fallow_review` equals `true`. This setting matters only for JS/TS projects that have the CLI and need to disable analysis.
 
 ## Optional: Local agent routing
 
-Agents can optionally route through a locally-running Ollama instance via a LiteLLM proxy — useful when you want to keep prompts off any cloud API for specific sub-tasks (ticket triage, data-analyst sketches, exploratory rephrasing). See [`local-model-setup.md`](local-model-setup.md) for the install + configuration walkthrough.
+Agents can optionally route through a local Ollama instance with a LiteLLM proxy. This keeps prompts away from cloud APIs for specific tasks, such as ticket triage, data-analyst sketches, and exploratory rephrasing. See [`local-model-setup.md`](local-model-setup.md) for installation and configuration instructions.
 
-**Opt-in only.** Absence of an `endpoint:` field in your `agent-routing.yaml` keeps every agent on its framework default. Nothing in the default `/setup` output enables this.
+You must enable local routing explicitly. If your `agent-routing.yaml` has no `endpoint:` field, every agent keeps its framework default. The default `/setup` output does not enable local routing.
 
-Before opting in, read the [local-model-routing spike memo](spikes/local-model-routing.md) — it measured cold-start latency and tool-call reliability against real workloads and recommends bounded use, not whole-portfolio routing.
+Before you enable local routing, read the [local-model-routing spike memo](spikes/local-model-routing.md). It measured cold-start latency and tool-call reliability with real workloads. It recommends limited use, rather than whole-portfolio routing.
 
 ---
 
@@ -477,11 +508,11 @@ You are a [Role Name]. You [primary responsibility].
 
 ### Modifying a Workflow
 
-Edit files in `workflows/` to match your team's process. For example, if you don't have a separate QA phase, remove it from `workflows/sdlc.md`.
+Edit files in `workflows/` to match your team's process. For example, if you do not have a separate QA phase, remove it from `workflows/sdlc.md`.
 
 ### Adding a Template
 
-Drop new markdown templates in `templates/` and reference them in `CLAUDE.md`.
+Add new markdown templates to `templates/`. Reference them in `CLAUDE.md`.
 
 ---
 
@@ -489,27 +520,27 @@ Drop new markdown templates in `templates/` and reference them in `CLAUDE.md`.
 
 After setup, Claude Code will:
 
-1. **Understand your team structure** -- It knows who does what
-2. **Follow your SDLC** -- It enforces workflow gates
-3. **Use your standards** -- Code reviews follow the defined checklist
-4. **Generate structured docs** -- PRDs, tech designs, ADRs from templates
-5. **Track decisions** -- Agent Decision Records for technical choices
+- Understand your team structure and who does each task.
+- Follow your SDLC and enforce workflow gates.
+- Use your standards, with code reviews that follow the defined checklist.
+- Generate structured PRDs, technical designs, and ADRs from templates.
+- Track technical choices in Agent Decision Records.
 
 ---
 
 ## Troubleshooting
 
-### Claude Code doesn't seem to know about the stack
+### Claude Code does not seem to know about the stack
 
-Make sure you're running Claude Code from inside your fork of apexyard (the ops repo). Claude Code reads `CLAUDE.md` automatically from the working directory's root — if you're one level deep (e.g. inside `workspace/<project>/`) it picks up the project's own `CLAUDE.md` instead.
+Run Claude Code from inside your fork of apexyard, the ops repository. Claude Code automatically reads `CLAUDE.md` from the working directory's root. If you work one level deeper, for example inside `workspace/<project>/`, Claude Code reads that project's own `CLAUDE.md` instead.
 
-### Roles aren't being applied correctly
+### Claude Code does not apply roles correctly
 
 Check that the role file exists in the expected path under `roles/`.
 
 ### Workflows feel too heavy for my team
 
-Customize! Edit `onboarding.yaml` to disable stages:
+Edit `onboarding.yaml` to disable stages:
 
 ```yaml
 workflows:
@@ -522,7 +553,7 @@ workflows:
 
 ## Next Steps
 
-- Browse the [roles](../roles/) to see all available role definitions
-- Read the [workflows](../workflows/) to understand the development process
-- Check the [templates](../templates/) for document formats
-- Star the [GitHub repo](https://github.com/me2resh/apexyard) for updates
+- Browse the [roles](../roles/) to see all available role definitions.
+- Read the [workflows](../workflows/) to understand the development process.
+- Check the [templates](../templates/) for document formats.
+- Star the [GitHub repo](https://github.com/me2resh/apexyard) for updates.

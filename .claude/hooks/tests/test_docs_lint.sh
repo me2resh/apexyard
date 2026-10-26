@@ -114,6 +114,96 @@ status=0
 output=$(lint --changed "$fixture/changed" --strict docs/sample.md) || status=$?
 assert_eq 'changed file exit' 1 "$status"
 assert_eq 'changed file total' 1 "$(printf '%s\n' "$output" | grep -c '^Total: 1 findings$')"
+# New fixtures follow the original repo-wide count checks.
+printf 'The file is\nready now.\n' > "$fixture/docs/span.md"
+cat > "$fixture/docs/header.md" <<'MD'
+Read this file.
+
+Keep this line.
+
+Keep this other line.
+
+Read that file.
+MD
+unicode_path=$(printf 'docs/caf\303\251 notes.md')
+printf 'Read this file.\n' > "$fixture/$unicode_path"
+printf 'Read this file.\n\nUse simply this file.\n' > "$fixture/docs/deletion.md"
+for file in docs/span.md docs/header.md "$unicode_path" docs/deletion.md; do
+  track "$fixture/$file"
+done
+commit_fixture
+base=$(git -C "$fixture" rev-parse HEAD)
+printf 'The file is\nwritten now.\n' > "$fixture/docs/span.md"
+cat > "$fixture/docs/header.md" <<'MD'
+Read this file.
+++ b/docs/other.md
+
+Keep this line.
+
+Keep this other line.
+
+Read that file.
+Use simply this file.
+MD
+printf 'Read this file.\n\nUse simply this file.\n' > "$fixture/$unicode_path"
+printf 'Read this file.\n' > "$fixture/docs/deletion.md"
+for file in docs/span.md docs/header.md "$unicode_path" docs/deletion.md; do
+  track "$fixture/$file"
+done
+commit_fixture
+status=0
+output=$(lint --base "$base" --strict docs/span.md) || status=$?
+assert_eq 'multiline passive strict exit' 1 "$status"
+assert_eq 'multiline passive first line' 1 "$(printf '%s\n' "$output" | grep -c '^docs/span.md:1: passive-voice:')"
+printf 'docs/span.md:2\n' > "$fixture/changed"
+status=0
+output=$(lint --changed "$fixture/changed" --strict docs/span.md) || status=$?
+assert_eq 'multiline changed exit' 1 "$status"
+status=0
+output=$(lint --base "$base" --strict docs/header.md) || status=$?
+assert_eq 'header-like addition exit' 1 "$status"
+assert_eq 'header-like addition later hunk' 1 "$(printf '%s\n' "$output" | grep -c '^docs/header.md:9: banned-word:')"
+status=0
+output=$(lint --base "$base" --strict "$unicode_path") || status=$?
+assert_eq 'space and unicode path exit' 1 "$status"
+assert_eq 'space and unicode path finding' 1 "$(printf '%s\n' "$output" | grep -Fc "$unicode_path:3: banned-word:")"
+status=0
+output=$(lint --base "$base" --strict docs/deletion.md) || status=$?
+assert_eq 'deletion-only exit' 0 "$status"
+assert_eq 'deletion-only total' 'Total: 0 findings' "$(printf '%s\n' "$output" | grep '^Total:')"
+status=0
+output=$(lint --base HEAD --strict) || status=$?
+assert_eq 'no changed files exit' 0 "$status"
+assert_eq 'no changed files total' 'Total: 0 findings' "$(printf '%s\n' "$output" | grep '^Total:')"
+assert_eq 'no changed files fast path' '0 findings on unchanged lines, not checked' "$(printf '%s\n' "$output" | grep 'not checked$')"
+cat > "$fixture/docs/words.md" <<'MD'
+Adjust the file.
+
+A just-in-time step.
+
+Use just this.
+MD
+cat > "$fixture/docs/passive.md" <<'MD'
+The file is also written by the tool.
+
+The file is set up by the tool.
+MD
+cat > "$fixture/docs/table.md" <<'MD'
+| Description |
+| --- |
+| Read one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twentyone twentytwo twentythree twentyfour twentyfive. |
+MD
+for file in docs/words.md docs/passive.md docs/table.md; do
+  track "$fixture/$file"
+done
+output=$(lint docs/words.md)
+assert_eq 'whole-word banned count' 1 "$(printf '%s\n' "$output" | grep -c ': banned-word:')"
+assert_eq 'whole-word banned line' 1 "$(printf '%s\n' "$output" | grep -c '^docs/words.md:5: banned-word:')"
+output=$(lint docs/passive.md)
+assert_eq 'adverb passive' 1 "$(printf '%s\n' "$output" | grep -c '^docs/passive.md:1: passive-voice:')"
+assert_eq 'approved passive phrase' 0 "$(printf '%s\n' "$output" | grep -c '^docs/passive.md:3: passive-voice:')"
+output=$(lint docs/table.md)
+assert_eq 'table sentence line' 1 "$(printf '%s\n' "$output" | grep -c '^docs/table.md:3: sentence-length:')"
 echo "Passed: $PASS"
 echo "Failed: $FAIL"
 [ "$FAIL" -eq 0 ]

@@ -220,7 +220,7 @@ export function lintText(text, rules) {
         const n = countWords(s.text);
         if (n > max) {
           const off = s.at + (s.text.length - s.text.trimStart().length);
-          findings.push({ line: lineAt(off), rule, detail: `${n} words (max ${max}): "${s.text.trim().slice(0, 60)}..."` });
+          findings.push({ line: lineAt(off), endLine: lineAt(s.at + s.text.trimEnd().length - 1), rule, detail: `${n} words (max ${max}): "${s.text.trim().slice(0, 60)}..."` });
         }
       }
     }
@@ -230,18 +230,18 @@ export function lintText(text, rules) {
       const part = m[1].toLowerCase();
       if (rules.passiveExclude.has(part) || part.endsWith('eed')) continue;
       if (overlapsApproved(rules, t, m.index, m.index + m[0].length)) continue;
-      findings.push({ line: lineAt(m.index), rule: 'passive-voice', detail: `"${m[0]}"` });
+      findings.push({ line: lineAt(m.index), endLine: lineAt(m.index + m[0].length - 1), rule: 'passive-voice', detail: `"${m[0]}"` });
     }
     for (const b of rules.banned) {
       b.re.lastIndex = 0;
       while ((m = b.re.exec(t))) {
         if (overlapsApproved(rules, t, m.index, m.index + m[0].length)) continue;
-        findings.push({ line: lineAt(m.index), rule: 'banned-word', detail: `${b.kind} "${m[0]}", use: ${b.use}` });
+        findings.push({ line: lineAt(m.index), endLine: lineAt(m.index + m[0].length - 1), rule: 'banned-word', detail: `${b.kind} "${m[0]}", use: ${b.use}` });
       }
     }
     for (const d of rules.emDash) {
       d.re.lastIndex = 0;
-      while ((m = d.re.exec(t))) findings.push({ line: lineAt(m.index), rule: 'em-dash', detail: `use ${rules.emDashUse}` });
+      while ((m = d.re.exec(t))) findings.push({ line: lineAt(m.index), endLine: lineAt(m.index + m[0].length - 1), rule: 'em-dash', detail: `use ${rules.emDashUse}` });
     }
   }
   return findings.sort((a, b) => a.line - b.line);
@@ -279,20 +279,15 @@ export function parseChanged(text) {
 }
 
 export function parseDiff(text) {
-  const map = new Map();
-  let file;
+  const ranges = [];
   for (const line of text.split('\n')) {
-    if (line.startsWith('+++ b/')) {
-      file = line.slice(6);
-      if (!map.has(file)) map.set(file, []);
-    } else if (line.startsWith('+++ ')) file = null;
     const h = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/);
-    if (h && file) {
+    if (h) {
       const count = h[2] === undefined ? 1 : +h[2];
-      if (count) map.get(file).push([+h[1], +h[1] + count - 1]);
+      if (count) ranges.push([+h[1], +h[1] + count - 1]);
     }
   }
-  return map;
+  return ranges;
 }
 
 export function frontmatterText(text) {
@@ -330,7 +325,7 @@ export function main(argv = process.argv.slice(2)) {
   }
   const includes = scope.include.map((entry) => ({ ...entry, re: globRegex(entry.glob) }));
   const excludes = scope.exclude.map(globRegex);
-  const git = (args) => execFileSync('git', ['-c', 'core.quotePath=false', '-C', opts.root, ...args], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const git = (args) => execFileSync('git', ['-c', 'core.quotePath=false', '--literal-pathspecs', '-C', opts.root, ...args], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   const tracked = git(['ls-files', '-z']).split('\0').filter(Boolean);
   const selected = new Map();
   for (const file of tracked) {
@@ -354,7 +349,14 @@ export function main(argv = process.argv.slice(2)) {
   if (opts.changed) changed = parseChanged(read(opts.changed));
   if (opts.base) {
     if (opts.base.startsWith('-')) throw new Error('Use a valid base reference.');
-    changed = files.length ? parseDiff(git(['diff', '-U0', '--no-color', '--no-ext-diff', '--no-renames', `${opts.base}...HEAD`, '--', ...files])) : new Map();
+    const changedFiles = files.length
+      ? git(['diff', '--name-only', '-z', '--no-renames', '--no-ext-diff', `${opts.base}...HEAD`, '--', ...files]).split('\0').filter(Boolean)
+      : [];
+    changed = new Map();
+    for (const file of changedFiles) {
+      changed.set(file, parseDiff(git(['diff', '-U0', '--no-color', '--no-ext-diff', '--no-renames', `${opts.base}...HEAD`, '--', file])));
+    }
+    if (!changed.size) files = [];
   }
   const byRule = {};
   const byFile = {};
@@ -364,7 +366,7 @@ export function main(argv = process.argv.slice(2)) {
     let text = read(path.join(opts.root, file));
     if (selected.get(file).frontmatterOnly) text = frontmatterText(text);
     for (const f of lintText(text, rules)) {
-      if (changed && !(changed.get(file) || []).some(([a, b]) => f.line >= a && f.line <= b)) {
+      if (changed && !(changed.get(file) || []).some(([a, b]) => f.line <= b && f.endLine >= a)) {
         unchanged++;
         continue;
       }
