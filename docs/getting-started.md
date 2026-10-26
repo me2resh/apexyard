@@ -57,9 +57,9 @@ to record your agent tool. Add `--dry-run` to see the plan only.
 To update later, run `apexyard update`. It shows which files change and who
 owns them, then starts `/update`. Use `apexyard update --check` to preview only.
 
-When the configuration specifies an install endpoint, `apexyard init` sends one anonymous install event.
+When you set an install endpoint, `apexyard init` sends one anonymous install event.
 The event contains a random install id, the CLI version, your operating system, and the agent tool.
-Today the configuration specifies no endpoint. The CLI prints the event and sends
+Today the CLI has no endpoint. The CLI prints the event and sends
 nothing. Set `APEXYARD_TELEMETRY=0` to stop these events.
 
 Go to Step 2.
@@ -203,9 +203,9 @@ Turn on required review and required status checks on your protected branches. T
 
 The framework includes a `.githooks/pre-push` hook for `git push`. After installation, git runs it the same way for terminal pushes and Claude Code pushes. It runs two check sets in order. First, `bin/run-pre-push-checks.sh` runs the framework's hardcoded checks: markdownlint, shellcheck, and the subpack extraction smoke test. Then `bin/run-configured-pre-push-checks.sh` runs this repo's configured `.pre_push.commands`.
 
-Plain rule (AgDR-0173, AgDR-0115): ApexYard runs `.pre_push.commands` only inside an ApexYard fork with this hook. ApexYard never runs local pre-push checks in a managed-project clone. ApexYard never sets `core.hooksPath` in a managed clone (AgDR-0115). That clone's own CI is its fallback check.
+Plain rule (AgDR-0173, AgDR-0115): ApexYard runs `.pre_push.commands` only inside an ApexYard fork that has this hook installed. ApexYard never runs local pre-push checks in a managed-project clone. ApexYard never sets `core.hooksPath` in a managed clone (AgDR-0115). That clone's own CI is its fallback check.
 
-Before AgDR-0173, the Claude Code hook (`pre-push-gate.sh`) ran a repository's `.pre_push.commands` itself, sometimes against the wrong repository (me2resh/apexyard#1366). It selected a target repository from the Bash command's text. This method could not reliably identify a push. A heredoc, a quoted string, or a commit message could all look like a push without being one.
+Before AgDR-0173, the Claude Code hook (`pre-push-gate.sh`) ran a repository's `.pre_push.commands` itself, sometimes against the wrong repository (me2resh/apexyard#1366). It selected a target repository from the Bash command's text. No design of this method could make it sound. It could also pick the wrong repository. A heredoc, a quoted string, or a commit message could all look like a push without being one.
 
 After AgDR-0173, `pre-push-gate.sh` runs no repository's commands. On every matching push, it only reminds the session to install the git hook above. It gives this reminder only when the session's working-directory repo is an ApexYard fork. In a managed-project clone, it prints at most a one-line note that ApexYard runs no checks there. It never suggests installing `core.hooksPath` in a repo that is not an ApexYard fork.
 
@@ -276,13 +276,13 @@ bash bin/check-writing-profile.sh
 
 ## Managing model cost: why the main agent dominates spend
 
-The per-agent model matrix ([AgDR-0050](agdr/AgDR-0050-agent-runtime-overhaul.md)) applies only to sub-agents that you start for reviews, QA, and analysis. The main agent adopts implementation, PM, and design work in the same thread. This design uses your primary tier, usually Opus. Thus, the `sonnet` implementation default never takes effect. This explains why the main agent uses most tokens.
+The per-agent model matrix ([AgDR-0050](agdr/AgDR-0050-agent-runtime-overhaul.md)) applies only to sub-agents. The main agent starts these sub-agents for reviews, QA, and analysis. The main agent adopts implementation, PM, and design work in the same thread. This design uses your primary tier, usually Opus. Thus, the `sonnet` implementation default never takes effect. This explains why the main agent uses most tokens.
 
-Three methods control cost. The list starts with the method that gives the largest benefit for the least effort:
+Three methods control cost. They are in order of benefit for effort, best first:
 
-- Use `opusplan`: Opus plans and Sonnet executes. This gives the largest benefit without framework changes.
-- Use the thin-orchestrator pattern. Keep the Opus loop as a planner and coordinator. Assign implementation to `sonnet` build agents that you start with `/fan-out` or `Workflow`.
-- Add entries to `agent-routing.yaml` to set or route per-agent tiers.
+1. Use `opusplan`: Opus plans and Sonnet executes. This gives the largest benefit without framework changes.
+2. Use the thin-orchestrator pattern. Keep the Opus loop as a planner and coordinator. Assign implementation to `sonnet` build agents that the main agent starts with `/fan-out` or `Workflow`.
+3. Add entries to `agent-routing.yaml` to set or route per-agent tiers.
 
 See [`docs/orchestrator-cost-model.md`](orchestrator-cost-model.md) for the full explanation and the optional thin-orchestrator mode.
 
@@ -316,9 +316,9 @@ The tool communicates with a language server instead of searching the file tree 
 
 ### Why turn it on?
 
-The LSP spike (PR #184, ticket #178) measured input-token cost for three representative queries on a real TypeScript backend (~9,750 LOC). Shallow semantic queries, such as single-symbol lookups and reference searches, cost ~3-15× less with LSP than with grep + Read. Multi-hop traces follow chains of definitions across modules. These traces cost ~1.4× less because the agent must still read prose to summarize behavior.
+The LSP spike (PR #184, ticket #178) measured input-token cost for three representative queries on a real TypeScript backend (~9,750 LOC). Shallow semantic queries, such as single-symbol lookups and reference searches, cost ~3-15× less with LSP than with grep + Read. Multi-hop traces follow chains of definitions across modules. These traces cost only ~1.4× less, because the agent must still read prose to summarize behavior.
 
-A Code Reviewer agent on a typical PR can use a quarter to a tenth of the tokens that grep-based lookups use. This applies when the review includes a few definition lookups. The agent can use the remaining token budget for review reasoning.
+A Code Reviewer agent run on a typical PR can use fewer tokens. It can use a quarter to a tenth of the tokens of a review that uses grep. This applies when the review includes a few definition lookups. The agent can use the remaining token budget for review reasoning.
 
 ### Easy path: `/setup` automates it
 
@@ -331,7 +331,7 @@ Run `/setup` for the first run, or `/setup --enable-lsp` to add LSP to a fork th
 
 3. The skill sets `ENABLE_LSP_TOOL=1` in your shell rc file (`~/.zshrc`, `~/.bashrc`, or `~/.profile`, depending on `$SHELL`).
 
-   The skill does this once, so a repeat run makes no change.
+   The skill makes this change only if it is not there yet.
 
 4. The skill prints the verified plugin-install block for your language.
 

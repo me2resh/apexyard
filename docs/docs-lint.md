@@ -46,6 +46,6 @@ Review each finding before you change text.
 
 The rollout has three steps:
 
-1. Report only (done).
-2. Apply strict mode to added lines (now).
-3. Apply strict mode to the full scope (later).
+1. Report only.
+2. Apply strict mode to added lines.
+3. Apply strict mode to the full scope.
