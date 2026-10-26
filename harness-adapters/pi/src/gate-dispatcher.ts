@@ -136,6 +136,10 @@ export function buildPiToolInputs(event: ToolCallEvent): Record<string, unknown>
     if (header) targets.add(header[1]);
     const move = /^MV\s+(?:"([^"\r\n]+)"|'([^'\r\n]+)'|([^\s"']+))\s*$/.exec(line);
     if (move) targets.add(move[1] ?? move[2] ?? move[3]);
+    if ((!header && line.trimStart().startsWith("[")) ||
+        (!move && /^\s*MV(?:\s|$)/i.test(line))) {
+      throw new Error("apexyard Pi gate adapter: The edit target could not be read.");
+    }
   }
   if (targets.size === 0 && input.length > 0) {
     throw new Error("apexyard Pi gate adapter: The edit target could not be read.");
@@ -150,7 +154,7 @@ export interface DispatcherOptions {
   resolveOpsRoot?: (startCwd: string) => string | undefined;
   /** Path to settings.json relative to the ops root. Defaults to ".claude/settings.json". */
   settingsRelativePath?: string;
-  /** Override tool_input reconstruction (mainly for tests). Defaults to buildPiToolInputs. */
+  /** Replace buildPiToolInputs (mainly for tests). The default builds a list; this option returns one input. */
   buildToolInput?: (event: ToolCallEvent) => Record<string, unknown> | undefined;
 }
 

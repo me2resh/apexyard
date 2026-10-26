@@ -524,6 +524,16 @@ for (const destination of ['"blocked file.md"', "'blocked file.md'", "blocked.md
   });
 }
 
+for (const line of ["[src/a.js#ZZ]", "  [src/a.js#ZZ]", 'MV "dest.js" extra', "mv dest.js", "  mV dest.js", "MV"]) {
+  test(`omp edit blocks an unread target line: ${line}`, async () => {
+    const fixture = makeFileGateFixture();
+    const result = await fixture.call("edit", { input: `[greet.py#A1B2]\n${line}` });
+    assert.equal(result?.block, true);
+    assert.match(result?.reason ?? "", /apexyard Pi gate adapter.*edit target could not be read/);
+    assert.throws(() => fixture.inputs(), { code: "ENOENT" });
+  });
+}
+
 test("omp edit blocks input with no readable target", async () => {
   const fixture = makeFileGateFixture();
   const result = await fixture.call("edit", { i: "change", input: "PUT 1*:\n+text" });
