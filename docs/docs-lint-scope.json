@@ -9,7 +9,28 @@
       "glob": "docs/how-to/**/*.md"
     },
     {
+      "glob": "docs/harnesses/**/*.md"
+    },
+    {
+      "glob": "docs/onboarding/**/*.md"
+    },
+    {
       "glob": "README.md"
+    },
+    {
+      "glob": "SECURITY.md"
+    },
+    {
+      "glob": ".claude/hooks/README.md"
+    },
+    {
+      "glob": ".claude/rules/git-conventions.md"
+    },
+    {
+      "glob": ".claude/rules/pr-workflow.md"
+    },
+    {
+      "glob": ".claude/rules/workflow-gates.md"
     },
     {
       "glob": "handbooks/*.md"
