@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "about": "Select user documents and skill titles and descriptions. Exclude internal records.",
+  "include": [
+    {
+      "glob": "docs/*.md"
+    },
+    {
+      "glob": "docs/how-to/**/*.md"
+    },
+    {
+      "glob": "README.md"
+    },
+    {
+      "glob": "handbooks/*.md"
+    },
+    {
+      "glob": "roles/**/*.md"
+    },
+    {
+      "glob": ".claude/skills/*/SKILL.md",
+      "frontmatterOnly": true
+    }
+  ],
+  "exclude": [
+    "docs/agdr/**",
+    "docs/designs/**",
+    "docs/prds/**",
+    "docs/technical-designs/**",
+    "docs/spikes/**",
+    "docs/spike-825/**",
+    "docs/spike-848/**",
+    "docs/spike-memos/**",
+    "docs/spike-reports/**",
+    "docs/skills/shared/**",
+    "docs/eval-agents/**",
+    "docs/perf/**",
+    "docs/quality-regression/**"
+  ]
+}
