@@ -309,7 +309,6 @@ export function parseArgs(argv) {
   }
   opts.root = path.resolve(opts.root);
   if (opts.base && opts.changed) throw new Error('Use --base or --changed, not both.');
-  if (opts.strict && !opts.base && !opts.changed) throw new Error('--strict needs --base or --changed.');
   return opts;
 }
 

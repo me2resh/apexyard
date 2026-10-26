@@ -58,3 +58,7 @@ Use three rollout steps:
 - Tests: `.claude/hooks/tests/test_docs_lint.sh`
 - Workflow: `.github/workflows/docs-lint.yml`
 - User guide: `docs/docs-lint.md`
+
+## Status log
+
+- 2026-10-26: Step 3 is in effect. Every published doc passes the lint with 0 findings. CI runs `node bin/docs-lint.mjs --strict` on every pull request and fails on any finding (#1898, step 3).

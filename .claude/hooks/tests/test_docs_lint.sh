@@ -75,6 +75,19 @@ assert_eq 'exclude path' 0 "$(printf '%s\n' "$output" | grep -c '^docs/private/h
 assert_eq 'skill description' 1 "$(printf '%s\n' "$output" | grep -c '^skills/demo/SKILL.md:3: passive-voice:')"
 assert_eq 'ignore skill body' 0 "$(printf '%s\n' "$output" | grep -c '^skills/demo/SKILL.md:5:')"
 assert_eq 'fixed sample parity count' 'Total: 4 findings' "$(lint docs/sample.md | grep '^Total:')"
+status=0
+output=$(lint --strict docs/sample.md) || status=$?
+assert_eq 'strict full bad exit' 1 "$status"
+assert_eq 'strict full finding detail' 1 "$(printf '%s\n' "$output" | grep -Ec '^docs/sample.md:1: passive-voice: .+$')"
+printf 'Read this file.\n' > "$fixture/docs/clean.md"
+status=0
+output=$(lint --strict docs/clean.md) || status=$?
+assert_eq 'strict full clean exit' 0 "$status"
+assert_eq 'strict full clean total' 1 "$(printf '%s\n' "$output" | grep -c '^Total: 0 findings$')"
+assert_eq 'strict full clean mode' 1 "$(printf '%s\n' "$output" | grep -c '^Mode: strict, all selected lines$')"
+status=0
+lint --strict --summary docs/sample.md >/dev/null || status=$?
+assert_eq 'strict full summary bad exit' 1 "$status"
 printf 'The file is written by the tool.\n' > "$fixture/docs/base.md"
 track "$fixture/docs/base.md"
 # Create commits without commit hooks or workspace changes.

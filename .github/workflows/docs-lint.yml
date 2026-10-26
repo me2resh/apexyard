@@ -22,13 +22,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
-      - name: Report all findings
-        run: node bin/docs-lint.mjs --summary
-      # Strict mode fails the job when a finding touches an added line in a file in scope.
-      # Unchanged files stay report only. No changed file in scope means exit 0 at once.
-      # The check can become a required check without staying pending.
-      - name: Check added lines (strict)
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: node bin/docs-lint.mjs --base "origin/$BASE_REF" --strict
+      # Strict mode fails the job on any finding in any file in scope.
+      # The job runs on every pull request, so it can be a required check.
+      - name: Check all published docs (strict)
+        run: node bin/docs-lint.mjs --strict

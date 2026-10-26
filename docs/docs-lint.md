@@ -18,7 +18,13 @@ node bin/docs-lint.mjs --summary
 node bin/docs-lint.mjs docs/docs-lint.md
 ```
 
-Check lines that a branch adds:
+Run a full strict check from the repo root:
+
+```sh
+node bin/docs-lint.mjs --strict
+```
+
+Optionally, check only lines that a branch changes:
 
 ```sh
 node bin/docs-lint.mjs --base origin/dev --strict
@@ -28,16 +34,16 @@ Each finding shows `file:line: rule: detail`.
 Use the file and line to find the text.
 Use the rule and detail to select a change.
 Report mode returns exit code 0 for findings.
-Strict mode returns exit code 1 for findings on added lines.
+Strict mode returns exit code 1 for any finding in the selected lines.
 Input errors return exit code 2.
 
-The CI job runs on every pull request.
-It fails when a finding touches an added line in a file in scope.
+The continuous integration (CI) job runs `node bin/docs-lint.mjs --strict` on every pull request.
+It checks every published document in scope and fails on any finding.
+The job can serve as a required check.
+
+The optional `--base` check selects changed lines.
 A finding can span several lines.
-It counts if the pull request adds any line in that span.
-Files that the pull request does not change stay report only.
-A pull request with no changed file in scope passes at once.
-This behavior lets the check become a required check without staying pending.
+The check counts a finding if a changed line occurs in that span.
 
 The passive check uses a heuristic, or approximate test.
 It checks a form of "be", an optional adverb, and a past participle.
@@ -48,4 +54,4 @@ The rollout has three steps:
 
 1. Report only.
 2. Apply strict mode to added lines.
-3. Apply strict mode to the full scope.
+3. Apply strict mode to the full scope. This step is the current state.
