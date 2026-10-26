@@ -1254,7 +1254,7 @@ Always remove the bootstrap marker on a clean exit (after the sync branch is rea
 
 ## Related
 
-- `docs/multi-project.md` § "Upgrades — pulling from upstream" — the manual flow this skill automates.
+- `docs/multi-project.md` § "Upgrades: pulling from upstream" — the manual flow this skill automates.
 - `docs/upgrading.md` — adopter-facing reference for the multi-hop migration chain.
 - `docs/agdr/AgDR-0032-update-chain-migrations.md` — design rationale for the version anchor + per-pair migrations.
 - `.claude/hooks/_lib-migration-chain.sh` — the chain detection + run library.

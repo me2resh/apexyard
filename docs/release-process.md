@@ -265,4 +265,4 @@ Branch protection on `dev` matches the prior `main` setup: required reviews + re
 - `golden-paths/pipelines/auto-tag-on-release-pr-merge.yml`: the reusable golden-path copy
 - `.claude/skills/update/SKILL.md`: the inverse skill, for adopters pulling new releases
 - `.claude/skills/release-sync/SKILL.md`: the mandatory main→dev sync after every release
-- `docs/multi-project.md § "Upgrades — pulling from upstream"`: adopter side of the relationship
+- `docs/multi-project.md § "Upgrades: pulling from upstream"`: adopter side of the relationship
