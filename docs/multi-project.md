@@ -38,7 +38,7 @@ ApexYard supports two patterns. **Read this section before you fork.** If you ch
 | **How upgrades flow** | Fetch `me2resh/apexyard` as `upstream`, then merge its `main` branch. |
 | **Best for** | CTOs, engineering leads, Chief-of-Staff roles managing 2+ repos (or 1 repo with intent to grow): **all projects public, OR you have GitHub Pro / Team / Enterprise** |
 
-If you need privacy, jump to the [split-portfolio setup](#split-portfolio-mode--public-framework--private-portfolio) further down.
+If you need privacy, jump to the [split-portfolio setup](#split-portfolio-mode-public-framework--private-portfolio) further down.
 
 ---
 
