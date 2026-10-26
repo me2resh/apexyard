@@ -16,7 +16,7 @@ executes the unmodified `.claude/hooks/*.sh` scripts.
 
 A live probe on Cursor.app 3.10.20 (2026-09-16) observed that path. A Write
 call hit `require-active-ticket.sh` and returned the real ticket-first
-message. Native exec is observed, not inferred.
+message. Native exec comes from observation, not inference.
 
 Do not keep a leftover full generated adapter in `~/.cursor/hooks.json`.
 That copy can fail-closed-block every Shell and Write call.
@@ -28,9 +28,9 @@ bin/install-cursor-adapter.sh
 ```
 
 This merges one `sessionStart` overlay into `~/.cursor/hooks.json`. It also
-refreshes `.cursor/rules/apexyard.mdc`. Foreign hooks stay. Leftover
-apexyard-owned copies (any command that execs `.claude/hooks/*.sh`) are
-replaced. A timestamped backup is written first.
+refreshes `.cursor/rules/apexyard.mdc`. Foreign hooks stay. It replaces
+leftover apexyard-owned copies (any command that execs `.claude/hooks/*.sh`).
+It writes a timestamped backup first.
 
 ```bash
 bin/install-cursor-adapter.sh --uninstall
@@ -40,10 +40,10 @@ Removes only apexyard's own entries. Foreign hooks stay.
 
 **Scope.** This is a per-machine install. The overlay self-scopes. It walks
 for `.apexyard-fork`, or the legacy `onboarding.yaml` plus
-`apexyard.projects.yaml` pair, and prints `{}` when the current project is
-not governed.
+`apexyard.projects.yaml` pair, and prints `{}` when the current project has
+no governance.
 
-**`cursor-agent` (the CLI) is not covered.** It ignores `hooks.json`. It
+**`cursor-agent` (the CLI) has no coverage.** It ignores `hooks.json`. It
 uses `~/.cursor/cli-config.json` permissions instead.
 
 ## Generate the project overlay
@@ -98,7 +98,7 @@ the work needs it. It does not inline the SDLC.
 
 ## Tracking policy
 
-The thin overlay may be committed. It has no secrets and no absolute
+You may commit the thin overlay. It has no secrets and no absolute
 paths. Clones then get project sessionStart without a generate step.
 
 `--check` still detects overlay drift.
@@ -128,7 +128,7 @@ bin/list-cursor-skills.sh --root . --duplicates
 
 - **Third-party configs must be on.** Without that toggle, `.claude/settings.json` does not load.
 - **A leftover full adapter still locks the IDE.** Re-install or uninstall it.
-- **`cursor-agent` CLI is not covered.** Confirmed. It ignores `hooks.json`.
+- **`cursor-agent` CLI has no coverage.** Confirmed. It ignores `hooks.json`.
 - **Session env injection is not independently proven.** The overlay prints Cursor sessionStart `env` JSON. If Cursor does not apply it, later hooks walk from cwd as they already do.
 - **Conformance CI has no headless Cursor path.** Cursor stays documented-manual on that badge.
 - **Project vs user load can both fire the overlay.** That is one session-pin script, not 86 gates. Double pin writes are idempotent.

@@ -16,8 +16,8 @@ main ─────●────────────────●──
           v1.1.0           v1.2.0    v1.2.1
 ```
 
-- **`dev`** — every feature/fix/chore PR targets here. All hooks + review gates apply unchanged.
-- **`main`** — only receives merges from `dev`, via release PRs. Every merge to `main` is tagged with a semver. Direct pushes blocked by `block-main-push.sh`.
+- **`dev`**: every feature/fix/chore PR targets here. All hooks + review gates apply unchanged.
+- **`main`**: only receives merges from `dev`, via release PRs. Every merge to `main` gets a semver tag. Direct pushes blocked by `block-main-push.sh`.
 - Releases are `dev → main` squash-merges, tagged `vX.Y.Z` automatically by CI after merge.
 - No `release/*` branches (no stabilisation window needed for docs+hooks).
 - No `hotfix/*` branches (no multi-version support; forks always run latest).
@@ -26,15 +26,15 @@ main ─────●────────────────●──
 
 Use judgment. Cut a release when `dev` contains a meaningful batch that adopters should receive. These are guidelines:
 
-- **Patch (`vX.Y.Z+1`)** — bug fixes only. Cut whenever there are ≥ 1 fix and adopters would benefit.
-- **Minor (`vX.Y+1.0`)** — new features (additive). Cut every 1–2 weeks if there's been net-new feature work.
-- **Major (`vX+1.0.0`)** — breaking changes. Coordinate with adopters first; release notes call out migrations.
+- **Patch (`vX.Y.Z+1`)**: bug fixes only. Cut whenever there are ≥ 1 fix and adopters would benefit.
+- **Minor (`vX.Y+1.0`)**: new features (additive). Cut every 1–2 weeks if there has been net-new feature work.
+- **Major (`vX+1.0.0`)**: breaking changes. Coordinate with adopters first; release notes call out migrations.
 
-Before cutting a release, run and review the cross-harness regression: `bin/quality-regression.sh --harness all` (see `docs/quality-regression/README.md`). A high-severity failure on any supported harness that ran stops the release until it is fixed. Record the result in `docs/quality-regression/runs/<date>/README.md`.
+Before cutting a release, run and review the cross-harness regression: `bin/quality-regression.sh --harness all` (see `docs/quality-regression/README.md`). A high-severity failure on any supported harness that ran stops the release until a fix corrects the failure. Record the result in `docs/quality-regression/runs/<date>/README.md`.
 
-If `dev` is ahead and nothing is broken, you can wait. Adopters stay on the previous tag, and the drift banner tells them about the new tag after release.
+If `dev` is ahead and nothing has broken, you can wait. Adopters stay on the previous tag, and the drift banner tells them about the new tag after release.
 
-## Cutting a release — happy path (automated)
+## Cutting a release: happy path (automated)
 
 Run `/release` for the full guided, automated flow:
 
@@ -48,23 +48,23 @@ The skill:
 
 1. Pre-flights the repo (clean tree, dev branch, non-empty delta)
 2. Auto-detects the semver bump from conventional commits (or accepts explicit version)
-3. Calls `bin/release-changelog.sh` to generate the CHANGELOG section (independently testable helper). A `Closes #N` line appears only when the real PR body (fetched via `gh pr view`) closes `#N`; on a fetch failure the script falls back to a scoped-title close and warns (AgDR-0197 / #1490)
-4. Lists every line the release tip removes from `main` via `bin/release-list-removed-lines.sh`, and asks before continuing when the list is non-empty (#1490)
+3. Calls `bin/release-changelog.sh` to generate the CHANGELOG section (independently testable helper). A `Closes #N` line appears only when the real PR body (fetched via `gh pr view`) closes `#N`. On a fetch failure, the script falls back to a scoped-title close and warns (AgDR-0197 / #1490)
+4. Lists every line the release tip removes from `main` via `bin/release-list-removed-lines.sh`. Asks before continuing when the list is non-empty (#1490)
 5. Shows the draft for review / editing
 6. Writes `CHANGELOG.md` (prepends the new section)
 7. Creates the release branch `release/vX.Y.Z` from dev, commits, and pushes
 8. Opens the release PR (dev→main) with the CHANGELOG section as body
-9. Stops at PR creation — CEO approval gate remains the sole human gate
+9. Stops at PR creation: CEO approval gate remains the sole human gate
 
 After the PR merges, the `auto-tag-on-release-pr-merge.yml` CI workflow fires and:
 
-- Tags the squash commit on `main` (using `github.sha` — always the correct commit, never the branch HEAD)
+- Tags the squash commit on `main` (using `github.sha`: always the correct commit, never the branch HEAD)
 - Runs the ancestry guard (`git merge-base --is-ancestor <sha> main`)
-- Creates a GitHub Release entry from the CHANGELOG section in the PR body (in the same job — a tag pushed via GITHUB_TOKEN does not trigger a secondary release workflow)
+- Creates a GitHub Release entry from the CHANGELOG section in the PR body. Uses the same job: a tag pushed via GITHUB_TOKEN does not trigger a secondary release workflow
 
-Then run `/release-sync vX.Y.Z` to sync main→dev and prevent squash-divergence accumulation. The skill merges main into dev with a plain merge, not a blind `-X ours`. It stops and asks on every conflict, including one caused only by the release squash commit — see `.claude/skills/release-sync/SKILL.md` § "Merge main with a plain merge" and AgDR-0170.
+Then run `/release-sync vX.Y.Z` to sync main→dev and prevent squash-divergence accumulation. The skill merges main into dev with a plain merge, not a blind `-X ours`. It stops and asks on every conflict, including one caused only by the release squash commit. See `.claude/skills/release-sync/SKILL.md` § "Merge main with a plain merge" and AgDR-0170.
 
-## Cutting a release — manual steps (fallback)
+## Cutting a release: manual steps (fallback)
 
 If `/release` is unavailable or if you need to debug a release, run the steps manually:
 
@@ -184,25 +184,25 @@ Do these steps after `/release-sync` merges. They are advisory. No hook enforces
 
 ## Release PR caveats
 
-The release PR's body legitimately contains many `Closes #N` references — every ticket that landed on `dev` since the last release. The single-Closes-per-PR check from #114 will block the open. Add the skip marker to the body:
+The release PR's body legitimately contains many `Closes #N` references: every ticket that landed on `dev` since the last release. The single-Closes-per-PR check from #114 will block the open. Add the skip marker to the body:
 
 ```
 <!-- multi-close: approved -->
 ```
 
-The marker is grep-able on purpose; release PRs are exactly the umbrella case it's designed for.
+The marker is grep-able on purpose; release PRs are exactly the umbrella case it serves.
 
 ## Auto-tag workflow
 
-The `.github/workflows/auto-tag-on-release-pr-merge.yml` workflow fires when any PR with a `release/v*` head branch is merged to `main`. It:
+The `.github/workflows/auto-tag-on-release-pr-merge.yml` workflow fires when any PR with a `release/v*` head branch merges to `main`. It:
 
 - Extracts the version from the head branch name
-- Uses `github.sha` (the squash commit SHA) — always the correct commit, never the release-branch HEAD (which was discarded by the squash)
+- Uses `github.sha` (the squash commit SHA): always the correct commit, never the release-branch HEAD (which the squash discarded)
 - Runs `git merge-base --is-ancestor <sha> main` before tagging
-- Tags and pushes with `git push origin --tags` (not the bare tag name — avoids the branch-name validator hook misfiring)
-- Creates a GitHub Release entry in the same job (a tag pushed via GITHUB_TOKEN does not trigger a secondary release workflow — confirmed in a private downstream project)
+- Tags and pushes with `git push origin --tags` (not the bare tag name: avoids the branch-name validator hook misfiring)
+- Creates a GitHub Release entry in the same job. A tag pushed via GITHUB_TOKEN does not trigger a secondary release workflow (confirmed in a private downstream project)
 
-This closes the v2.3.0 incident where the tag was placed on the release-branch HEAD rather than the squash commit.
+This closes the v2.3.0 incident where the tag pointed to the release-branch HEAD rather than the squash commit.
 
 A golden-path copy lives at `golden-paths/pipelines/auto-tag-on-release-pr-merge.yml` for adopters who want the same pattern on managed projects.
 
@@ -223,22 +223,22 @@ Tests: `.claude/hooks/tests/test_release_changelog.sh`.
 
 ## Drift banner behaviour
 
-After a release tag is pushed, every fork's `check-upstream-drift.sh` hook (tag-based since v1.1.0) prints a banner on next session:
+After a release tag push, every fork's `check-upstream-drift.sh` hook (tag-based since v1.1.0) prints a banner on next session:
 
 ```
 ApexYard: v1.2.0 available. Run /update to sync.
 ```
 
-`/update` pulls `upstream/main` into the fork's main — which now contains only the released content.
+`/update` pulls `upstream/main` into the fork's main, which now contains only the released content.
 
 ## Hotfix path (not implemented; revisit if needed)
 
 apexyard does NOT have a hotfix flow today. If a critical bug ships in `vX.Y.Z` and adopters need a fix without waiting for the next normal release, the workaround:
 
-1. Cut a normal `dev → main` release with just the fix (a `vX.Y.Z+1` patch).
+1. Cut a normal `dev → main` release with only the fix (a `vX.Y.Z+1` patch).
 2. Release within hours rather than days; cadence is the only difference.
 
-If multi-version maintenance becomes a real need (e.g. some adopters can't upgrade past `v1.x.x`), revisit AgDR-0007 with a new options table — full git flow's `hotfix/*` and `support/*` patterns become relevant.
+If multi-version maintenance becomes a real need (e.g. some adopters cannot upgrade past `v1.x.x`), revisit AgDR-0007 with a new options table. Full git flow's `hotfix/*` and `support/*` patterns become relevant.
 
 ## Branch protection (manual GitHub setting)
 
@@ -246,23 +246,23 @@ For maintainers of `me2resh/apexyard`, configure GitHub branch protection on `ma
 
 - Require pull request before merging
 - Require approvals: 1
-- Dismiss stale approvals when new commits are pushed
+- Dismiss stale approvals after new commit pushes
 - Require status checks to pass before merging (markdownlint, lychee, shellcheck, Verify Ticket ID)
 - Restrict who can push to matching branches (only repo admins, for the rare manual tag-fix case)
 
-Branch protection on `dev` matches the prior `main` setup — required reviews + required checks.
+Branch protection on `dev` matches the prior `main` setup: required reviews + required checks.
 
 ## Related
 
-- `AgDR-0007` — the original release-cut branch model decision record
-- `AgDR-0076` — the release-automation design record
-- `AgDR-0170` — the decision to replace `-X ours` with a plain merge that stops and asks on every conflict in `/release-sync`, and to add a behind-base check to `/approve-merge`
-- `AgDR-0197` — close changelog issues only from the PR body via `gh pr view` (scoped-title fallback + warning on fetch failure), and list lines a release removes from main (#1490)
-- `.claude/skills/release/SKILL.md` — the automated flow (this doc is the manual fallback)
-- `bin/release-changelog.sh` — the changelog generation helper
-- `bin/release-list-removed-lines.sh` — lists lines the release tip deletes from main
-- `.github/workflows/auto-tag-on-release-pr-merge.yml` — the auto-tag CI workflow
-- `golden-paths/pipelines/auto-tag-on-release-pr-merge.yml` — the reusable golden-path copy
-- `.claude/skills/update/SKILL.md` — the inverse skill, for adopters pulling new releases
-- `.claude/skills/release-sync/SKILL.md` — the mandatory main→dev sync after every release
-- `docs/multi-project.md § "Upgrades — pulling from upstream"` — adopter side of the relationship
+- `AgDR-0007`: the original release-cut branch model decision record
+- `AgDR-0076`: the release-automation design record
+- `AgDR-0170`: the decision to replace `-X ours` with a plain merge that stops and asks on every conflict in `/release-sync`. The decision also adds a behind-base check to `/approve-merge`
+- `AgDR-0197`: close changelog issues only from the PR body via `gh pr view` (scoped-title fallback + warning on fetch failure). Also list lines a release removes from main (#1490)
+- `.claude/skills/release/SKILL.md`: the automated flow (this doc is the manual fallback)
+- `bin/release-changelog.sh`: the changelog generation helper
+- `bin/release-list-removed-lines.sh`: lists lines the release tip deletes from main
+- `.github/workflows/auto-tag-on-release-pr-merge.yml`: the auto-tag CI workflow
+- `golden-paths/pipelines/auto-tag-on-release-pr-merge.yml`: the reusable golden-path copy
+- `.claude/skills/update/SKILL.md`: the inverse skill, for adopters pulling new releases
+- `.claude/skills/release-sync/SKILL.md`: the mandatory main→dev sync after every release
+- `docs/multi-project.md § "Upgrades — pulling from upstream"`: adopter side of the relationship
