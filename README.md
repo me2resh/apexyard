@@ -70,33 +70,41 @@ root. No runtime or service is required.
 >
 > **For AI coding agents:** `AGENTS.md` is the universal entry document for tools that do not load `CLAUDE.md`. See [`docs/harnesses/pi.md`](docs/harnesses/pi.md).
 
-## Quick Start — one command
+## Quick Start: one command
 
 ApexYard governs a **portfolio of repos** as one organisation. One command
 creates your ops repo. The repo can be private. Register each project you want
-to manage.
+to manage. `apexyard init` needs `git`, `jq` and the GitHub CLI `gh`.
+
+> **Not live yet.** The install URL, the Homebrew tap and the npm package are
+> not published. Until they are, use the fork and clone steps below.
 
 ```bash
 curl -fsSL https://apexyard.ai/install | sh   # installs the CLI only; no sudo
 apexyard init --org your-org --name ops --private
 ```
 
-Other ways to install the CLI: `brew install me2resh/tap/apexyard`, or
-`npx create-apexyard`. Each release has a checksum. The installer stops when
-the checksum does not match.
+You can also install the CLI with `brew install me2resh/tap/apexyard`. Each
+release has a checksum. The installer stops when the checksum does not match.
+
+Or run `npx create-apexyard --org your-org --name ops --private`. It installs
+the CLI when the CLI is absent, then runs `apexyard init` with these options.
+Do not run `apexyard init` again after it, because the target directory is no
+longer empty.
 
 `apexyard init` creates a new repo from the framework. It is not a fork. It
 adds the framework as the remote `upstream` and writes
 `.claude/framework-version`. Then open the folder in your agent tool and run
 `/setup`. To update later, run `apexyard update`.
 
-**Install count.** `apexyard init` sends one anonymous event. It holds four
-fields: a random install id, the CLI version, your operating system, and the
-agent tool you chose. It never sends a repo, organisation, user name, path or
-code. To turn it off, set `APEXYARD_TELEMETRY=0`. The CLI prints this notice on
-first run.
+**Install count.** When an install endpoint is set, `apexyard init` sends one
+anonymous event. Today no endpoint is set. The CLI prints the event and sends
+nothing. The event holds four fields: a random install id, the CLI version,
+your operating system, and the agent tool you chose. It never holds a repo,
+organisation, user name, path or code. To turn it off, set
+`APEXYARD_TELEMETRY=0`. The CLI prints a notice on first run.
 
-### Alternative — fork and go
+### Alternative: fork and go
 
 You can also fork the repository. GitHub does not allow a private fork of a
 public repo, so use `apexyard init` when you need a private ops repo. The fork

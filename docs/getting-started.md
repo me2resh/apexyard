@@ -9,7 +9,7 @@ for the directory layout, daily workflow, upgrade path, and FAQ.
 
 - A GitHub account and an org you can fork into
 - [Claude Code](https://claude.com/claude-code) installed
-- [GitHub CLI (`gh`)](https://cli.github.com) installed (recommended, but optional)
+- [GitHub CLI (`gh`)](https://cli.github.com) installed (required for `apexyard init`; the fork path can use the web UI)
 - [`jq`](https://jqlang.org/download/) installed — required. Framework hooks use jq to read `.claude/project-config.json` overrides; without it your overrides silently no-op. `brew install jq` / `apt-get install jq` / `dnf install jq` depending on platform. `/setup` refuses to run without it, and a SessionStart banner surfaces the gap if jq disappears later. See [AgDR-0038](agdr/AgDR-0038-jq-as-hard-dependency.md) for the rationale.
 - **Windows**: Use [Git for Windows](https://gitforwindows.org) or WSL. The
   `.claude/hooks/*.sh` files use Bash. Native `cmd.exe` and PowerShell cannot
@@ -39,7 +39,16 @@ curl -fsSL https://apexyard.ai/install | sh   # CLI only; no sudo; checks the re
 apexyard init --org your-org --name ops --private
 ```
 
-You can also install with `brew install me2resh/tap/apexyard` or `npx create-apexyard`.
+You can also install the CLI with `brew install me2resh/tap/apexyard`.
+
+Or run `npx create-apexyard --org your-org --name ops --private`. It installs
+the CLI when the CLI is absent, then runs `apexyard init` with these options.
+Do not run `apexyard init` again after it, because the target directory is no
+longer empty.
+
+Not live yet: the install URL, the Homebrew tap and the npm package are not
+published. Until they are, use the fork path below. `apexyard init` needs `git`,
+`jq` and `gh`.
 
 `apexyard init` creates a NEW repo from the framework, so it can be private.
 It clones the repo, adds the framework as the remote `upstream`, and writes
@@ -49,9 +58,10 @@ to record your agent tool. Add `--dry-run` to see the plan only.
 To update later, run `apexyard update`. It shows which files change and who
 owns them, then starts `/update`. Use `apexyard update --check` to preview only.
 
-`apexyard init` sends one anonymous install event: a random install id, the CLI
-version, your operating system, and the agent tool. Set `APEXYARD_TELEMETRY=0`
-to turn it off.
+When an install endpoint is set, `apexyard init` sends one anonymous install
+event: a random install id, the CLI version, your operating system, and the
+agent tool. Today no endpoint is set. The CLI prints the event and sends
+nothing. Set `APEXYARD_TELEMETRY=0` to turn it off.
 
 Go to Step 2.
 
