@@ -1,6 +1,6 @@
 ---
 name: performance-audit
-description: Performance audit — bundle size, image opt, lazy load, code split, caching, CWV. Deep-dive for /launch-check performance.
+description: Performance audit. Checks bundle size, image opt, lazy load, code split, caching, CWV. Deep-dive for /launch-check performance.
 disable-model-invocation: false
 argument-hint: "[project-path]"
 effort: medium

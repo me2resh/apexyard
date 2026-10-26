@@ -1,6 +1,6 @@
 ---
 name: codify-rule
-description: Turn a review comment that caught a Rex-miss into a draft handbook entry — Y/N gate, source-PR footer, bucket-routed.
+description: Turn a review comment that caught a Rex-miss into a draft handbook entry. Covers Y/N gate, source-PR footer, bucket-routed.
 argument-hint: "[--pr <N>] [--blocking] [<github-pr-comment-url>]"
 allowed-tools: Bash, Read, Write, AskUserQuestion
 ---

@@ -1,6 +1,6 @@
 ---
 name: tickets-batch
-description: File 5–20 structured tickets in one flow — shared-context Qs once, 3-Q micro-interview per ticket, then per-ticket `tracker_create` (gh/glab/custom).
+description: File 5–20 structured tickets in one flow. Covers shared-context Qs once, 3-Q micro-interview per ticket, then per-ticket `tracker_create` (gh/glab/custom).
 argument-hint: "<optional bulk description>"
 allowed-tools: Bash, Read, Write, AskUserQuestion
 ---

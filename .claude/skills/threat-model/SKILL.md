@@ -1,6 +1,6 @@
 ---
 name: threat-model
-description: STRIDE threat modelling — spoofing, tampering, repudiation, disclosure, DoS, EoP. Deep-dive for /launch-check security.
+description: STRIDE threat modelling. Covers spoofing, tampering, repudiation, disclosure, DoS, EoP. Deep-dive for /launch-check security.
 disable-model-invocation: false
 argument-hint: "[project-path] [--format=markdown|dragon|both]"
 effort: high

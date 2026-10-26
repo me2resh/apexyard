@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut an apexyard release — diff dev↔main, pick semver bump, generate CHANGELOG, open release PR, auto-tag on merge.
+description: Cut an apexyard release. Diff dev↔main, pick semver bump, generate CHANGELOG, open release PR, auto-tag on merge.
 argument-hint: "[--dry-run] [<version, e.g. v1.2.0>]"
 allowed-tools: Bash, Read, Write
 ---

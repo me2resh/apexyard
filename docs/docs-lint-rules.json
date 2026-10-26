@@ -17,7 +17,7 @@
   },
   "approved": {
     "about": "Words and phrases the lint accepts. A banned or passive match inside one of these phrases is not a finding.",
-    "terms": ["fail closed", "fails closed", "built-in", "just-in-time", "set up"]
+    "terms": ["fail closed", "fails closed", "built-in", "just-in-time", "set up", "understandable, robust"]
   },
   "emDash": {
     "about": "STE uses a period, a colon or a comma. The lint flags each em dash outside code.",

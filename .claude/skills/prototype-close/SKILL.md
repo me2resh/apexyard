@@ -1,6 +1,6 @@
 ---
 name: prototype-close
-description: Close a prototype via the disposition gate — `--promote` files a [Feature] follow-up, `--discard` writes a memo. Mirror of /spike-close for throwaway UX/demo prototypes.
+description: Close a prototype via the disposition gate. `--promote` files a [Feature] follow-up. `--discard` writes a memo. Mirror of /spike-close for throwaway UX/demo prototypes.
 argument-hint: "--promote | --discard [<prototype-ticket-number>]"
 allowed-tools: Bash, Read, Write
 ---

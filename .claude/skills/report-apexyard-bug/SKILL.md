@@ -1,6 +1,6 @@
 ---
 name: report-apexyard-bug
-description: Report a bug in the apexyard FRAMEWORK itself (hook misfire, skill gap, rule bug) — files a structured issue upstream to me2resh/apexyard. Distinct from /bug, which files into your own project.
+description: Report a bug in the apexyard FRAMEWORK itself (hook misfire, skill gap, rule bug). Files a structured issue upstream to me2resh/apexyard. Distinct from /bug, which files into your own project.
 argument-hint: "<short description of the framework bug>"
 allowed-tools: Bash, Read, Write
 ---

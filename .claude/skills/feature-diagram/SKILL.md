@@ -1,6 +1,6 @@
 ---
 name: feature-diagram
-description: Per-feature Mermaid flowchart — routes / models / jobs / screens. Consumes /extract-features inventory.
+description: Per-feature Mermaid flowchart. Covers routes / models / jobs / screens. Consumes /extract-features inventory.
 argument-hint: "<feature-slug> [project-name] [--force]"
 allowed-tools: Bash, Read, Grep, Glob, Write, Edit
 ---

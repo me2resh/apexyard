@@ -1,6 +1,6 @@
 ---
 name: spike-close
-description: Close a spike via the disposition gate — `--promote` files a [Feature] follow-up, `--discard` writes a memo.
+description: Close a spike via the disposition gate. `--promote` files a [Feature] follow-up. `--discard` writes a memo.
 argument-hint: "--promote | --discard [<spike-ticket-number>]"
 allowed-tools: Bash, Read, Write
 ---

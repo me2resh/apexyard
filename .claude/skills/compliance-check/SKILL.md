@@ -1,6 +1,6 @@
 ---
 name: compliance-check
-description: GDPR + ePrivacy audit — consent, privacy policy, data handling, right-to-deletion, DPAs. Deep-dive for /launch-check compliance.
+description: GDPR + ePrivacy audit. Checks consent, privacy policy, data handling, right-to-deletion, DPAs. Deep-dive for /launch-check compliance.
 disable-model-invocation: false
 argument-hint: "[project-path]"
 effort: high

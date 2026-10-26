@@ -1,6 +1,6 @@
 ---
 name: walking-skeleton
-description: Scaffold a [Feature]-class ticket for the thinnest end-to-end slice — one trivial path wired through every architectural layer. KEPT and grown; full SDLC (NOT exempt like /spike).
+description: Scaffold a [Feature]-class ticket for the thinnest end-to-end slice, one trivial path wired through every architectural layer. KEPT and grown; full SDLC (NOT exempt like /spike).
 argument-hint: "<feature or service the skeleton proves>"
 allowed-tools: Bash, Read, Write
 ---

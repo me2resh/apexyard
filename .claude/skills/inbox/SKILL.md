@@ -1,6 +1,6 @@
 ---
 name: inbox
-description: Show every item across managed projects needing the user's attention — PRs, assigned issues, comments, blockers.
+description: Show every item across managed projects needing the user's attention. Covers PRs, assigned issues, comments, blockers.
 allowed-tools: Bash, Read, Grep, Glob
 ---
 

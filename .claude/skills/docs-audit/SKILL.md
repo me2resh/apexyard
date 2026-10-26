@@ -1,6 +1,6 @@
 ---
 name: docs-audit
-description: Diataxis docs audit — tutorials, how-to, reference, explanation; checks README, API docs, deployment guides, changelog, staleness.
+description: Diataxis docs audit. Checks tutorials, how-to, reference, explanation; checks README, API docs, deployment guides, changelog, staleness.
 disable-model-invocation: false
 argument-hint: "[project-path]"
 effort: medium

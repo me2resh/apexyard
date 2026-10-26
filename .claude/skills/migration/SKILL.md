@@ -1,6 +1,6 @@
 ---
 name: migration
-description: Create a labelled migration ticket + matching migration AgDR — required by the migration gate.
+description: Create a labelled migration ticket + matching migration AgDR. The migration gate requires it.
 argument-hint: "[<project>]"
 allowed-tools: Bash, Read, Write, AskUserQuestion
 ---

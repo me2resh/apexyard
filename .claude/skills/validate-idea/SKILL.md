@@ -1,6 +1,6 @@
 ---
 name: validate-idea
-description: Lightweight 5-question pre-spec gate between /idea and /write-spec — catches "this isn't worth speccing" in 10 minutes.
+description: Lightweight 5-question pre-spec gate between /idea and /write-spec. Catches "this is not worth speccing" in 10 minutes.
 argument-hint: "<IDEA-NNN | project-name | free-form description>"
 allowed-tools: Bash, Read, Write
 ---

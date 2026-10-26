@@ -1,6 +1,6 @@
 ---
 name: setup
-description: First-run framework bootstrap — 3 exchanges (describe stack → defaults → accept/customize) and the fork is configured.
+description: First-run framework bootstrap. 3 exchanges (describe stack → defaults → accept/customize) produce a configured fork.
 disable-model-invocation: false
 argument-hint: "[--reset] [--enable-lsp]"
 effort: medium

@@ -1,6 +1,6 @@
 ---
 name: update
-description: Sync the ApexYard fork with upstream — per-file update by owner class on a sync branch (the default; --git-merge runs the history merge), walk per-version migrations.
+description: Sync the ApexYard fork with upstream. Covers per-file update by owner class on a sync branch (the default). --git-merge runs the history merge. Walk per-version migrations.
 argument-hint: "[--plan] [--dry-run] [--rebase] [--git-merge] [--from-version vN.N.N] [--skip-migrations] [--skip-adapter-sync]"
 allowed-tools: Bash, Read, Write, Edit, AskUserQuestion
 ---

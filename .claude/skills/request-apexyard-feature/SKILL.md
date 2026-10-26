@@ -1,6 +1,6 @@
 ---
 name: request-apexyard-feature
-description: Request a new feature or enhancement for the apexyard FRAMEWORK itself — files a structured issue upstream to me2resh/apexyard. Distinct from /feature, which files into your own project.
+description: Request a new feature or enhancement for the apexyard FRAMEWORK itself. Files a structured issue upstream to me2resh/apexyard. Distinct from /feature, which files into your own project.
 argument-hint: "<short description of the framework feature>"
 allowed-tools: Bash, Read, Write
 ---

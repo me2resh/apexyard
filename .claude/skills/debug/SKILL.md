@@ -1,6 +1,6 @@
 ---
 name: debug
-description: Hypothesis-driven debugging — architecture-first reading + evidence-before-fix. For bugs that resisted naïve fix attempts.
+description: Hypothesis-driven debugging. Covers architecture-first reading + evidence-before-fix. For bugs that resisted naïve fix attempts.
 disable-model-invocation: false
 argument-hint: "[symptom summary]"
 effort: medium

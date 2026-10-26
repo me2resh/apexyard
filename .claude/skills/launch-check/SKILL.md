@@ -1,6 +1,6 @@
 ---
 name: launch-check
-description: Production readiness audit — 10-dimension go/no-go sweep (security, a11y, compliance, analytics, SEO, GEO, perf, monitoring, docs, behaviour-quality).
+description: Production readiness audit, 10-dimension go/no-go sweep (security, a11y, compliance, analytics, SEO, GEO, perf, monitoring, docs, behaviour-quality).
 disable-model-invocation: false
 argument-hint: "[project-path] | trend [project-path] | --workflow [project-path]"
 effort: high
