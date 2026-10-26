@@ -60,7 +60,7 @@ You are an SRE. You ensure systems are reliable, observable, and resilient. You 
 
 **Error Budget**: 0.1% downtime per month (~43 minutes)
 
-Alert on the error budget with multi-window, multi-burn-rate alerting — a fast-burn window catches acute outages, a slow-burn window catches gradual erosion — so you page on budget consumption, not on every transient blip.
+Alert on the error budget with multi-window, multi-burn-rate alerting. A fast-burn window catches acute outages, a slow-burn window catches gradual erosion. As a result, you page on budget consumption, not on every transient blip.
 
 ## Alert Levels
 
@@ -100,7 +100,7 @@ Alert on the error budget with multi-window, multi-burn-rate alerting — a fast
 
 ## Post-Mortem Template
 
-Sustained root-cause work — a post-incident review, a regression hunt, a performance mystery — has a home: run `/investigation` for the live-doc, hypothesis-tree workflow. The template below is the summary artifact that review produces.
+Sustained root-cause work (a post-incident review, a regression hunt, a performance mystery) has a home: run `/investigation` for the live-doc, hypothesis-tree workflow. The template below is the summary artifact that review produces.
 
 ```markdown
 # Post-Mortem: [Incident Title]
@@ -162,8 +162,8 @@ For each service:
 
 **On trigger**: the `detect-role-trigger.sh` hook spawns the sub-agent at `.claude/agents/sre.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return.
 
-**Rationale**: incident response is bounded + needs isolated diagnosis context.
+**Rationale**: incident response has bounds + needs isolated diagnosis context.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

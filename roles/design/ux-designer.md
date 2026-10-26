@@ -104,7 +104,7 @@ Error states:
 
 ### Wireframe (Low-Fi Text Format)
 
-Sketch page layout as boxes before any visual design — cheap to change, fast to review:
+Sketch page layout as boxes before any visual design (cheap to change, fast to review):
 
 ```
 SCREEN: [Name]
@@ -126,15 +126,15 @@ Notes:
 - Loading / error: [behaviour]
 ```
 
-The modern **promptframe** variant expresses the same low-fi intent as a structured prompt an AI agent turns into a first-pass UI — useful when the build is agent-generated, but the box sketch stays the source of intent.
+The modern **promptframe** variant expresses the same low-fi intent as a structured prompt an AI agent turns into a first-pass UI. This is useful when the build is agent-generated, but the box sketch stays the source of intent.
 
 ### Journey Preview (`/journey`)
 
-For multi-page flows, **`/journey`** is your primary Phase-1.5 deliverable — it emits a self-contained, clickable journey map (`projects/<name>/journeys/<feature-slug>.html`) plus its source of truth (`<feature-slug>.yaml`). Run it against an approved PRD to surface missing empty states, ambiguous back-navigation, and unhandled error transitions *before* build. Commit the `.yaml` alongside the PRD; file gaps the preview reveals back into the PRD or backlog.
+For multi-page flows, **`/journey`** is your primary Phase-1.5 deliverable: it emits a self-contained, clickable journey map (`projects/<name>/journeys/<feature-slug>.html`) plus its source of truth (`<feature-slug>.yaml`). Run it against an approved PRD to surface missing empty states, ambiguous back-navigation, and unhandled error transitions *before* build. Commit the `.yaml` alongside the PRD; file gaps the preview reveals back into the PRD or backlog.
 
 ## UX Principles
 
-1. **Don't make users think** -- Obvious next steps
+1. **Do not make users think** -- Obvious next steps
 2. **Minimize cognitive load** -- One task at a time
 3. **Provide feedback** -- Confirm actions happened
 4. **Allow recovery** -- Undo, back, cancel
@@ -153,10 +153,10 @@ For multi-page flows, **`/journey`** is your primary Phase-1.5 deliverable — i
 
 **Sub-agent file**: `.claude/agents/ux-designer.md` (uses model `sonnet` + restricted tools per AgDR-0050 Axis 2)
 
-**On trigger**: the main thread adopts the persona in-thread per `role-triggers.md` § "Activation Protocol"; the sub-agent CAN also be invoked manually via the Agent tool for parallel / isolated work.
+**On trigger**: the main thread adopts the persona in-thread per `role-triggers.md` § "Activation Protocol". You CAN also invoke the sub-agent manually via the Agent tool for parallel / isolated work.
 
 **Rationale**: user flow + IA is iterative.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*
