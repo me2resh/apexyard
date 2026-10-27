@@ -57,7 +57,7 @@ to record your agent tool. Add `--dry-run` to see the plan only.
 To update later, run `apexyard update`. It shows which files change and who
 owns them, then starts `/update`. Use `apexyard update --check` to preview only.
 
-When you set an install endpoint, `apexyard init` sends one anonymous install event.
+When the CLI has an install endpoint, `apexyard init` sends one anonymous install event.
 The event contains a random install id, the CLI version, your operating system, and the agent tool.
 Today the CLI has no endpoint. The CLI prints the event and sends
 nothing. Set `APEXYARD_TELEMETRY=0` to stop these events.
