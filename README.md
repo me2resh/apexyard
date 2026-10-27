@@ -97,9 +97,9 @@ adds the framework as the remote `upstream` and writes
 `.claude/framework-version`. Then open the folder in your agent tool and run
 `/setup`. To update later, run `apexyard update`.
 
-**Install count.** When you set an install endpoint,
-`apexyard init` sends one anonymous event. Today the CLI has no
-endpoint. The CLI prints the event and sends nothing. The event holds four fields: a random install id, the CLI version,
+**Install count.** When the CLI has an install endpoint, `apexyard init` sends
+one anonymous event. Today the CLI has no endpoint. The CLI prints the event
+and sends nothing. The event holds four fields: a random install id, the CLI version,
 your operating system, and the agent tool you chose. It never holds a repo,
 organisation, user name, path or code. To turn it off, set
 `APEXYARD_TELEMETRY=0`. The CLI prints a notice on first run.
@@ -221,7 +221,7 @@ The band is on only for you, on this machine. After `/update`, run `/reload-plug
 
 ## Using another AI coding tool?
 
-**ApexYard started as a framework for Claude Code.** Its slash commands are native Claude
+**ApexYard is native to Claude Code.** Its slash commands are native Claude
 Code skills. The enforcement layer is plain Bash, so other tools can use the
 same rules through an adapter.
 
