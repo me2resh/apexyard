@@ -1048,10 +1048,13 @@ _has_opaque_merge_wrapper() {
 # Scan the bounded data view without evaluating shell input. A changed
 # phrase is opaque: its target must never borrow another call or checkout.
 # Return 0 for a split, 1 for clear text, and 2 for scan failure.
+# The scan reads bytes (LC_ALL=C). Under a UTF-8 locale, macOS awk fails on
+# a multi-byte character, and every gate then blocks the command (#1913).
+# The scan matches only ASCII words, so byte mode loses nothing.
 _has_split_merge_phrase() {
   local result
   if [ "${#1}" -gt 120000 ]; then return 2; fi
-  result=$(MERGE_SPLIT_INPUT="$1" awk '
+  result=$(MERGE_SPLIT_INPUT="$1" LC_ALL=C awk '
     function reset() { stage = 0; active = 1; redirected = 0; option_value = 0; api = 0; wrapper = wrapper_value = gap = skip_target = 0; phrase_lit = cmd_lit = prefixed = 0 }
     # Start a phrase window at a host word. Return 1 when the word can be a host.
     function open_window(value,    host) {

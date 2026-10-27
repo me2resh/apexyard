@@ -205,5 +205,26 @@ else
   printf 'FAIL [bounded dollar scan: rc=%s %ss]\n' "$rc" "$elapsed" >&2; FAIL=$((FAIL + 1))
 fi
 check 'large split phrase remains visible' yes "\"\$G\" $p $m 7 # $padding"
+
+# A multi-byte character under a UTF-8 locale must not fail the scan (#1913).
+# The source stays ASCII: printf builds the character (U+2718) from bytes.
+utf8_locale=$(locale -a 2>/dev/null | grep -i -m1 -E '^(en_US|en_GB|C)\.utf-?8$')
+if [ -n "$utf8_locale" ]; then
+  mb=$(printf '\342\234\230')
+  LC_ALL=$utf8_locale _has_split_merge_phrase "grep -E \"failed|$mb\" log"; rc=$?
+  if [ "$rc" -eq 1 ]; then
+    printf 'PASS [multi-byte clear text under %s]\n' "$utf8_locale"; PASS=$((PASS + 1))
+  else
+    printf 'FAIL [multi-byte clear text under %s: rc=%s]\n' "$utf8_locale" "$rc" >&2; FAIL=$((FAIL + 1))
+  fi
+  LC_ALL=$utf8_locale _has_split_merge_phrase "echo $mb; \"\$G\" $p $m 7"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    printf 'PASS [multi-byte split phrase under %s]\n' "$utf8_locale"; PASS=$((PASS + 1))
+  else
+    printf 'FAIL [multi-byte split phrase under %s: rc=%s]\n' "$utf8_locale" "$rc" >&2; FAIL=$((FAIL + 1))
+  fi
+else
+  printf 'SKIP [multi-byte scan: no UTF-8 locale]\n'
+fi
 printf 'RESULT: %s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
