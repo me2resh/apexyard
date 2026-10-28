@@ -1,0 +1,247 @@
+{
+  "specVersion": "0.1",
+  "id": "reconciliation-plan-apexyard-harness-golden-path-20261028T092303Z",
+  "planId": "plan-apexyard-harness-golden-path",
+  "planRevision": 4,
+  "projectSnapshotId": "snapshot-apexyard-20261028T092246Z",
+  "reconciledAt": "2026-10-28T09:23:03.355Z",
+  "observations": [
+    "Observed me2resh/apexyard at e4805389d859c86fe7feea96092cf959720422a4.",
+    "Plan revision 4 adds outcome o8, the Claude Code gate mod, with criteria ac8-1 to ac8-6. Assessments for ac1-1 to ac7-2 are copied from reconciliation-plan-apexyard-harness-golden-path-20261010T145545Z without a status change."
+  ],
+  "criterionAssessments": [
+    {
+      "criterionId": "ac1-1",
+      "status": "not-verified",
+      "evidence": [
+        "No per-hook timing profile exists in the repo at 53f0bae."
+      ],
+      "explanation": "Missing: The profile has not been taken. Next: Record the per-hook timing profile."
+    },
+    {
+      "criterionId": "ac1-2",
+      "status": "not-verified",
+      "evidence": [
+        "grep -n onFailure .claude/settings.json returns nothing.",
+        "Only one hook sets a timeout today: .claude/settings.json line 107 (3 s, the context injector)."
+      ],
+      "explanation": "Missing: No hook sets onFailure, so a crashed hook fails open. Next: Take timeouts from the ac1-1 profile."
+    },
+    {
+      "criterionId": "ac1-3",
+      "status": "not-verified",
+      "evidence": [
+        "No escape-hatch variable or settings override for fail-closed hooks is documented or tested."
+      ],
+      "explanation": "Missing: This criterion depends on ac1-2. Next: Finish ac1-2."
+    },
+    {
+      "criterionId": "ac1-4",
+      "status": "not-verified",
+      "evidence": [
+        ".claude-plugin/marketplace.json exists on dev (from #1608).",
+        "grep -rln 'plugin validate' .github/workflows returns nothing."
+      ],
+      "explanation": "Missing: CI does not validate the manifest. Next: Validate the manifest in CI."
+    },
+    {
+      "criterionId": "ac2-1",
+      "status": "not-verified",
+      "evidence": [
+        "docs/harnesses/cursor.md line 15 says cursor-agent ignores hooks.json (Cursor's own file); docs/cursor-adapter.md line 131 records a 2026-09-16 check.",
+        "docs/harnesses/README.md line 29 and both setup skills say more broadly that the CLI ignores hooks.",
+        "The Cursor CLI changelog (https://cursor.com/docs/cli/changelog, v2026.08.11) and https://cursor.com/docs/reference/third-party-hooks say Claude settings.json and plugin hooks load.",
+        "bin/quality-regression.sh line 198 already runs cursor-agent -p --trust, so a test harness exists."
+      ],
+      "explanation": "Missing: No recorded test artifact shows whether .claude/settings.json hooks fire under cursor-agent -p. Next: Record that test. The repo claim is about hooks.json. The broader ignores-hooks wording is unproven."
+    },
+    {
+      "criterionId": "ac2-2",
+      "status": "not-verified",
+      "evidence": [
+        "bin/install-cursor-adapter.sh line 161 prints that cursor-agent is NOT covered."
+      ],
+      "explanation": "Missing: The docs state a claim with no recorded test artifact. Next: Change the docs after ac2-1."
+    },
+    {
+      "criterionId": "ac3-1",
+      "status": "not-verified",
+      "evidence": [
+        "bin/sync-codex-adapter.sh generates .codex/hooks.json from .claude/settings.json, with test_sync_codex_adapter.sh (AgDR-0088, #730).",
+        "No setup step or check covers the Codex per-user hook trust state."
+      ],
+      "explanation": "Missing: Codex skips untrusted hooks without a warning. Next: Add the trust step and the warning."
+    },
+    {
+      "criterionId": "ac3-2",
+      "status": "not-verified",
+      "evidence": [
+        "grep -n apply_patch bin/sync-codex-adapter.sh returns nothing."
+      ],
+      "explanation": "Missing: No shim maps apply_patch patch text to file paths. Next: Add that shim."
+    },
+    {
+      "criterionId": "ac3-3",
+      "status": "partially-verified",
+      "evidence": [
+        "No executable path passes the flag. .github/workflows/conformance.yml lines 194-198 seed the user Codex hooks file instead. bin/quality-regression.sh line 199 omits it.",
+        "Docs and skills offer the flag as one of three ways to grant hook trust. The offer is in docs/harnesses/codex.md lines 3 and 52, and in docs/harnesses/README.md lines 28 and 51. It is in .claude/skills/setup/SKILL.md line 509 and .claude/skills/handover/SKILL.md line 245. It is in .agents/skills/setup/SKILL.md line 500 and .agents/skills/handover/SKILL.md line 270. It is in docs/spike-848/findings.md line 154."
+      ],
+      "explanation": "Missing: Guidance still offers the flag. Next: Update docs and skills only. Scripts and workflows already avoid the flag."
+    },
+    {
+      "criterionId": "ac3-4",
+      "status": "not-verified",
+      "evidence": [
+        "No test runs the Edit-matcher hooks in parallel."
+      ],
+      "explanation": "Missing: This criterion is not tested. Next: Add the test."
+    },
+    {
+      "criterionId": "ac4-1",
+      "status": "not-verified",
+      "evidence": [
+        "The Rex and Hakim agent files do not set omitClaudeMd at 53f0bae.",
+        ".claude/agents/code-reviewer.md is about 73 KB."
+      ],
+      "explanation": "Missing: The work has not started. Next: Set omitClaudeMd. It needs Claude Code v2.1.271 or later."
+    },
+    {
+      "criterionId": "ac4-2",
+      "status": "not-verified",
+      "evidence": [
+        "No recorded input-token baseline per review exists.",
+        "/eval-agents does not record token usage."
+      ],
+      "explanation": "Missing: The work has not started. Next: Define the measurement method in the slice."
+    },
+    {
+      "criterionId": "ac4-3",
+      "status": "not-verified",
+      "evidence": [
+        "docs/eval-agents/corpus/rex.json has 10 entries; docs/eval-agents/corpus/hakim.json has 4."
+      ],
+      "explanation": "Missing: The Hakim corpus is too small to detect a one-defect miss. Next: Grow the corpus."
+    },
+    {
+      "criterionId": "ac5-1",
+      "status": "not-verified",
+      "evidence": [
+        "golden-paths/ contains only pipelines/; no dependency-cruiser config exists in the repo."
+      ],
+      "explanation": "Missing: The work has not started. Next: Start this criterion."
+    },
+    {
+      "criterionId": "ac5-2",
+      "status": "not-verified",
+      "evidence": [
+        "golden-paths/pipelines/code-quality.yml has no dependency-cruiser step."
+      ],
+      "explanation": "Missing: The work has not started. Next: Start this criterion."
+    },
+    {
+      "criterionId": "ac5-3",
+      "status": "not-verified",
+      "evidence": [
+        "handbooks/architecture/clean-architecture-layers.md line 4 reads Enforcement: advisory.",
+        "The handbook does not mention CI enforcement."
+      ],
+      "explanation": "Missing: The CI statement would be false until ac5-2 lands. Next: Land ac5-2. The handbook is advisory already."
+    },
+    {
+      "criterionId": "ac6-1",
+      "status": "not-verified",
+      "evidence": [
+        ".claude/rules/code-standards.md has no logging section; grep -i log matches only line 40 (coverage).",
+        "grep for aws-lambda-powertools in .claude/rules and golden-paths returns nothing."
+      ],
+      "explanation": "Missing: The work has not started. Next: Record the logging recommendation. Portfolio survey on 2026-10-10: one managed project uses Powertools."
+    },
+    {
+      "criterionId": "ac6-2",
+      "status": "not-verified",
+      "evidence": [
+        "handbooks/general/ holds only commit-message-quality.md.",
+        ".claude/agents/code-reviewer.md has no logging or PII-in-logs rule; .claude/agents/security-reviewer.md line 167 checks PII handling in general."
+      ],
+      "explanation": "Missing: The work has not started. Next: Add the blocking handbook without editing the Rex agent file. That file also changes in o4."
+    },
+    {
+      "criterionId": "ac6-3",
+      "status": "not-verified",
+      "evidence": [
+        "No Logger port or adapter exists under golden-paths/."
+      ],
+      "explanation": "Missing: The work has not started. Next: Finish ac5-1 for the dependency-cruiser rules."
+    },
+    {
+      "criterionId": "ac7-1",
+      "status": "not-verified",
+      "evidence": [
+        "No wrapper script or result schema for codex exec or cursor-agent exists in bin/."
+      ],
+      "explanation": "Missing: Builds are reported from the build agent's own text today. Next: Replace that report with a checked result."
+    },
+    {
+      "criterionId": "ac7-2",
+      "status": "not-verified",
+      "evidence": [
+        "No offload guidance points at a wrapper."
+      ],
+      "explanation": "Missing: This criterion depends on ac7-1. Next: Finish ac7-1."
+    },
+    {
+      "criterionId": "ac8-1",
+      "status": "not-verified",
+      "evidence": [
+        "No AgDR in docs/agdr/ records a split between the hooks, a gate mod, and the Cockpit at e480538.",
+        "AgDR-0227 records where fork-only plugins live. AgDR-0234 records menu approval through the AskUserQuestion hook."
+      ],
+      "explanation": "Missing: No AgDR records the split. Next: Write the AgDR in the o8 slice before the band and pane code."
+    },
+    {
+      "criterionId": "ac8-2",
+      "status": "not-verified",
+      "evidence": [
+        "plugins/apexyard-status already draws a display-only band above the prompt (#1631).",
+        "The band shows the active ticket, the PRs that wait for /approve-merge, and the reviewer lock.",
+        "plugins/apexyard-status/hooks/band.ts and register.tsx read no CI check state."
+      ],
+      "explanation": "Missing: The band shows no CI state, and no recorded test covers the full ac8-2 list. Next: Add CI state and a test in the o8 slice."
+    },
+    {
+      "criterionId": "ac8-3",
+      "status": "not-verified",
+      "evidence": [
+        "No plugin pane shows Approve and Not yet for a PR at e480538.",
+        "The only pane in plugins/apexyard-status is the read-only ORBIT initiatives pane (#1676)."
+      ],
+      "explanation": "Missing: No approval pane exists. Next: Build the pane in the o8 slice."
+    },
+    {
+      "criterionId": "ac8-4",
+      "status": "not-verified",
+      "evidence": [
+        ".claude/hooks/record-menu-approval.sh records a menu approval from the AskUserQuestion payload (AgDR-0234).",
+        ".claude/hooks/block-forged-menu-approval.sh blocks model writes of approval_channel=menu."
+      ],
+      "explanation": "Missing: No pane approval goes through this hook path yet. Next: Route the pane approval through the AgDR-0234 hook path in the o8 slice."
+    },
+    {
+      "criterionId": "ac8-5",
+      "status": "not-verified",
+      "evidence": [
+        ".claude-plugin/marketplace.json lists orbit, apexyard-status, apexyard-explainer and apexyard-bootcamp. It has no gate mod entry."
+      ],
+      "explanation": "Missing: No gate mod plugin exists. Next: Package the mod as an opt-in plugin and test the gates with the mod off."
+    },
+    {
+      "criterionId": "ac8-6",
+      "status": "not-verified",
+      "evidence": [
+        "No Hakim review or test exists for a pane approval path at e480538."
+      ],
+      "explanation": "Missing: The approval path does not exist. Next: Add the three tests and run Hakim on the o8 slice PR."
+    }
+  ]
+}
