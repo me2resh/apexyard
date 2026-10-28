@@ -55,7 +55,7 @@
 # harness" step sets SELECTED=false and exits 0 without running a real
 # gated turn), and without this guard the publisher counted that clean skip
 # toward "(proven)" as if a real scheduled turn had run. See
-# docs/conformance-ci.md section "Badge and streak rules".
+# docs/conformance-ci.md section "The green-continuous rule".
 
 set -euo pipefail
 

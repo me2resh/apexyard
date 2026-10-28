@@ -4,7 +4,7 @@ The scheduled GitHub Actions workflow (`.github/workflows/conformance.yml`) runs
 
 ## What this proves (and what it does not)
 
-Each scheduled run drives **one** minimal, real, headless agent turn per harness. The turn instructs the model to run exactly `git add -A`. The turn runs inside a scratch git repo governed by the same, unmodified `.claude/hooks/block-git-add-all.sh` every apexyard adopter's Claude Code session uses. A run is only a **PASS** if both are true:
+Each run drives **one** minimal, real, headless agent turn per selected harness. A scheduled run selects only opencode. The turn instructs the model to run exactly `git add -A`. The turn runs inside a scratch git repo governed by the same, unmodified `.claude/hooks/block-git-add-all.sh` every apexyard adopter's Claude Code session uses. A run is only a **PASS** if both are true:
 
 1. **Nothing got staged** (`git diff --cached --name-only` is empty). This is the load-bearing side effect. The check runs independently of what the model said or did, so transcript phrasing cannot fool it.
 2. **The hook's own, live-captured block message appears in the transcript.** That proves the *specific* delegated `.claude/hooks/*.sh` script fired. It was not a harness self-block, not a fail-closed error, and not the model declining to run the command.
@@ -25,7 +25,7 @@ Pi and codex need these secrets only for a manual dispatch or an optional releas
 
 | Secret | Used by | Where to get it |
 |--------|---------|------------------|
-| `CONFORMANCE_ANTHROPIC_API_KEY` | pi's credentialed turn (`pi -p -a --provider anthropic ...`) | [console.anthropic.com](https://console.anthropic.com) → API Keys. Used only for this workflow's single daily gated turn per harness run. |
+| `CONFORMANCE_ANTHROPIC_API_KEY` | pi's credentialed turn (`pi -p -a --provider anthropic ...`) | [console.anthropic.com](https://console.anthropic.com) → API Keys. Used only for pi's gated turn in a dispatch or release-tier run. |
 | `CONFORMANCE_OPENAI_API_KEY` | Codex's credentialed turn (`codex exec ...`) | [platform.openai.com](https://platform.openai.com/api-keys) → API Keys. |
 
 **opencode needs no secret.** It runs against opencode's free, no-API-key model (`opencode/big-pickle`). It is the secret-free, always-on canary of the three (per the spike's finding, `docs/spike-848/findings.md`).
@@ -70,8 +70,8 @@ Replace `<owner>/<repo>` with this repo's slug. shields.io fetches the raw JSON 
 
 ## How it works (transport)
 
-- **Schedule**: daily (`cron: "17 6 * * *"`) plus `workflow_dispatch`. The dispatch may scope to a single harness via the `harness` input. An operator can re-run only the flaky one without re-billing the other two.
-- **Matrix**: one job per harness (`opencode`, `pi`, `codex`), each capped at `timeout-minutes: 10`.
+- **Schedule**: daily (`cron: "17 6 * * *"`) for opencode only, plus `workflow_dispatch` and `workflow_call` for all three. The dispatch may scope to a single harness via the `harness` input. An operator can re-run only the flaky one without re-billing the other two.
+- **Matrix**: one job per selected harness, each capped at `timeout-minutes: 10`. A scheduled run selects `opencode`. A dispatch or call selects `opencode`, `pi` and `codex`.
 - **Per job**: Resolve credentials (fail-closed). Install the pinned harness CLI and apexyard adapter. Create a scratch git repo governed by the delegated hooks. Drive one gated turn. Assert nothing staged and that the hook's verbatim message appears in the transcript. Upload the transcript as a build artifact for inspection.
 - **Badge job**: The job runs after the matrix (`needs: conform`, `if: always()`). It queries each matrix job's real conclusion via the GitHub Actions API (`gh api repos/<repo>/actions/runs/<id>/jobs`). It updates the per-harness streak counters **on a `schedule` run only** (see "The green-continuous rule" above). A `workflow_dispatch` run is a streak/badge no-op (me2resh/apexyard#880). It commits updated badge JSON to the orphan `conformance-badge` branch using the workflow's own `GITHUB_TOKEN` (`contents: write`, scoped to that job only, with no new PAT).
 
