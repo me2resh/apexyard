@@ -205,7 +205,8 @@ BODY
 # in tracker_create and rm below. The PreToolUse gate must read the file
 # before the create call runs; it cannot resolve a shell variable at that time.
 
-# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] → {"ref","url"}.
+# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] [<milestone>] → {"ref","url"}.
+# The milestone is optional: omit it and the project's tracker.milestone default (if any) applies.
 # Gated by require-skill-for-issue-create.sh; the step-0 marker keeps it allowed.
 result="$(tracker_create "{owner/repo}" "[Feature] {title}" "$body_file" "enhancement,{priority}")"
 rc=$?

@@ -179,6 +179,8 @@ owner_repo="{resolved owner/repo}"
 # For each item in Now and Next without a GH link in Notes:
 body_file="$(mktemp)"
 printf 'Tracking issue for roadmap item %s\n' "{RM-NNN}" > "$body_file"
+# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] [<milestone>] → {"ref","url"}.
+# The milestone is optional: omit it and the project's tracker.milestone default (if any) applies.
 result="$(tracker_create "$owner_repo" "[Roadmap] {item}" "$body_file" "roadmap,{priority}")"
 rc=$?
 rm -f "$body_file"
