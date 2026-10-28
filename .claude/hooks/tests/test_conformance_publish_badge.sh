@@ -5,23 +5,11 @@
 #   - a local bare git repo standing in for the GitHub remote (no network)
 #   - a stubbed `gh` on PATH returning synthetic `actions/runs/.../jobs` JSON
 #
-# What this proves:
-#   1. First run, all three harnesses green -> streak 1/1/1, brightgreen badges.
-#   2. Second run, opencode green / pi red / codex green -> opencode streak 2,
-#      pi streak RESET to 0 (red badge), codex streak 2.
-#   3. Third run all green -> opencode + codex reach the green-continuous
-#      threshold (3) and their badge message says "(proven)"; pi is back
-#      to streak 1 (not proven) because run 2 reset it.
-#   4. Cursor's badge is seeded once as a static grey "documented-manual"
-#      badge and is NEVER touched by a later run (no matrix job drives it).
-#   5. The conformance-badge branch is an orphan (no shared history with
-#      the default branch) — verified by `git merge-base` failing.
-#   6. Dispatch-path streak guard (me2resh/apexyard#880): a `workflow_dispatch`
-#      run — even one where every matrix job reports "success" (the
-#      strongest form of the regression: a single-harness dispatch leaves
-#      the two non-selected jobs reporting a trivial skip-success) — leaves
-#      every harness's streak file AND badge JSON byte-for-byte untouched,
-#      and produces no new commit on the conformance-badge branch.
+# Scheduled opencode results advance or reset its streak.
+# Pi and codex keep stored streaks and show grey manual badges.
+# Missing jobs do not create streak files for manual harnesses.
+# Dispatch leaves every streak and badge unchanged (#880).
+# Cursor stays manual. The badge branch stays orphaned.
 
 set -u
 
@@ -101,6 +89,11 @@ STUB
 chmod +x "$STUB_BIN/gh"
 
 jobs_json_for() {
+  # An empty pi conclusion represents a schedule with only opencode.
+  if [ -z "$2" ]; then
+    printf '{"jobs":[{"name":"conformance / opencode","conclusion":"%s"}]}' "$1"
+    return
+  fi
   # $1=opencode conclusion $2=pi conclusion $3=codex conclusion
   cat <<JSON
 {
@@ -114,12 +107,12 @@ JSON
 }
 
 # The publisher clones "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
-# — point REPO resolution at our local bare repo via a git insteadOf rewrite
+# -- point REPO resolution at our local bare repo via a git insteadOf rewrite
 # so no network call happens and no real GH_TOKEN is needed.
 #
 # Snapshot BOTH real global-config candidates BEFORE overwriting HOME
 # (me2resh/apexyard#1526). When XDG_CONFIG_HOME is set and ~/.gitconfig is
-# absent, `git config --global` writes to $XDG_CONFIG_HOME/git/config — so
+# absent, `git config --global` writes to $XDG_CONFIG_HOME/git/config -- so
 # HOME alone does not sandbox the developer identity.
 REAL_DOT_GITCONFIG="$HOME/.gitconfig"
 if [ -n "${XDG_CONFIG_HOME:-}" ]; then
@@ -214,48 +207,69 @@ run_publisher 1001 success success success
 opencode_json="$(read_badge_branch_file opencode.json)"
 assert_contains "run1: opencode message is 'green'" "$opencode_json" '"message": "green"'
 assert_eq "run1: opencode streak file = 1" "1" "$(read_badge_branch_file streak-opencode.txt)"
-assert_eq "run1: pi streak file = 1" "1" "$(read_badge_branch_file streak-pi.txt)"
-assert_eq "run1: codex streak file = 1" "1" "$(read_badge_branch_file streak-codex.txt)"
+for harness in pi codex; do
+  assert_eq "run1: $harness has no streak file" "" "$(read_badge_branch_file streak-$harness.txt)"
+  manual_json="$(read_badge_branch_file "$harness.json")"
+  assert_eq "run1: $harness endpoint schema" "1" "$(printf '%s' "$manual_json" | jq -r .schemaVersion)"
+  assert_eq "run1: $harness endpoint label" "conformance: $harness" "$(printf '%s' "$manual_json" | jq -r .label)"
+  assert_contains "run1: $harness badge is manual" "$manual_json" '"message": "manual"'
+  assert_contains "run1: $harness badge is grey" "$manual_json" '"color": "lightgrey"'
+done
+
+# Seed stored streaks from the previous schedule design.
+STORED="$TMPDIR/stored-streaks"
+git clone --quiet -b conformance-badge "$REMOTE" "$STORED"
+printf '7\n' > "$STORED/streak-pi.txt"
+printf '5\n' > "$STORED/streak-codex.txt"
+git -C "$STORED" add streak-pi.txt streak-codex.txt
+git -C "$STORED" commit --quiet -m 'seed stored streaks'
+git -C "$STORED" push --quiet origin conformance-badge
 
 cursor_json="$(read_badge_branch_file cursor.json)"
 assert_contains "run1: cursor badge seeded as documented-manual" "$cursor_json" "documented-manual"
 assert_contains "run1: cursor badge color lightgrey" "$cursor_json" "lightgrey"
 
-# --- Run 2: opencode green, pi red (failure), codex green -----------------
-run_publisher 1002 success failure success
+# --- Run 2: only opencode has a job ---------------------------------------
+# An empty pi conclusion makes the fixture omit both manual jobs.
+run_publisher 1002 success '' ''
 assert_eq "run2: opencode streak = 2" "2" "$(read_badge_branch_file streak-opencode.txt)"
-assert_eq "run2: pi streak RESET to 0" "0" "$(read_badge_branch_file streak-pi.txt)"
-assert_eq "run2: codex streak = 2" "2" "$(read_badge_branch_file streak-codex.txt)"
-pi_json="$(read_badge_branch_file pi.json)"
-assert_contains "run2: pi badge is red" "$pi_json" '"color": "red"'
-assert_contains "run2: pi badge names the failure conclusion" "$pi_json" "failure"
+for harness in pi codex; do
+  assert_eq "run2: $harness stored streak byte-identical" \
+    "$(cksum < "$STORED/streak-$harness.txt")" \
+    "$(git --git-dir="$REMOTE" show "conformance-badge:streak-$harness.txt" | cksum)"
+  manual_json="$(read_badge_branch_file "$harness.json")"
+  assert_contains "run2: $harness badge is manual" "$manual_json" '"message": "manual"'
+  assert_contains "run2: $harness badge is grey" "$manual_json" '"color": "lightgrey"'
+done
 
-# --- Run 3: all green again -> opencode/codex hit the 3-green threshold ---
-run_publisher 1003 success success success
+# --- Run 3: another green opencode reaches the threshold -------------------
+run_publisher 1003 success '' ''
 assert_eq "run3: opencode streak = 3" "3" "$(read_badge_branch_file streak-opencode.txt)"
-assert_eq "run3: pi streak = 1 (post-reset)" "1" "$(read_badge_branch_file streak-pi.txt)"
-assert_eq "run3: codex streak = 3" "3" "$(read_badge_branch_file streak-codex.txt)"
-
 opencode_json3="$(read_badge_branch_file opencode.json)"
 assert_contains "run3: opencode badge says proven at streak 3" "$opencode_json3" "(proven)"
-pi_json3="$(read_badge_branch_file pi.json)"
-assert_contains "run3: pi badge NOT proven (streak only 1)" "$pi_json3" '"message": "green"'
-case "$pi_json3" in
-  *"(proven)"*) FAIL=$((FAIL + 1)); FAILED_CASES="$FAILED_CASES\n  - run3: pi badge incorrectly says proven at streak 1" ;;
-  *) PASS=$((PASS + 1)) ;;
-esac
+
+# A red opencode resets only its own streak.
+run_publisher 1005 failure '' ''
+assert_eq "red opencode resets streak" "0" "$(read_badge_branch_file streak-opencode.txt)"
+assert_contains "red opencode badge names failure" "$(read_badge_branch_file opencode.json)" 'red (failure)'
+assert_contains "red opencode badge is red" "$(read_badge_branch_file opencode.json)" '"color": "red"'
+assert_eq "red opencode leaves pi streak" "7" "$(read_badge_branch_file streak-pi.txt)"
+assert_eq "red opencode leaves codex streak" "5" "$(read_badge_branch_file streak-codex.txt)"
+for harness in pi codex; do
+  assert_contains "red opencode leaves $harness manual" "$(read_badge_branch_file "$harness.json")" '"message": "manual"'
+done
 
 # Cursor untouched across all three runs
 cursor_json3="$(read_badge_branch_file cursor.json)"
 assert_eq "run3: cursor badge unchanged across runs" "$cursor_json" "$cursor_json3"
 
 # --- Run 4: workflow_dispatch must NOT touch any streak or badge JSON -----
-# All three conclusions read "success" here on purpose — this is the
+# All three conclusions read "success" here on purpose -- this is the
 # strongest form of the regression this guard closes. A real single-harness
 # dispatch would show one harness's REAL conclusion plus two trivial
 # skip-successes (SELECTED=false, exit 0, no gated turn run); collapsing
 # that to "all success" proves the guard doesn't cherry-pick which harness
-# to protect — EVENT_NAME != 'schedule' must leave every harness alone.
+# to protect -- EVENT_NAME != 'schedule' must leave every harness alone.
 BEFORE_OPENCODE_STREAK="$(read_badge_branch_file streak-opencode.txt)"
 BEFORE_PI_STREAK="$(read_badge_branch_file streak-pi.txt)"
 BEFORE_CODEX_STREAK="$(read_badge_branch_file streak-codex.txt)"

@@ -64,6 +64,24 @@ After the PR merges, the `auto-tag-on-release-pr-merge.yml` CI workflow fires an
 
 Then run `/release-sync vX.Y.Z` to sync main→dev and prevent squash-divergence accumulation. The skill merges main into dev with a plain merge, not a blind `-X ours`. It stops and asks on every conflict, including one caused only by the release squash commit. See `.claude/skills/release-sync/SKILL.md` § "Merge main with a plain merge" and AgDR-0170.
 
+## Local conformance evidence before merge
+
+Before the release PR merges, the owner records local pi and codex conformance evidence.
+First, confirm that each provider's terms allow scripted use of a subscription login.
+This document does not confirm that permission.
+Until that check is complete, use dedicated API keys with spending caps, or record the step as not run.
+
+1. Install the agent CLIs and their ApexYard adapters on a local machine.
+2. Run one gated turn with each CLI in a scratch repository, as described in [Conformance CI](conformance-ci.md).
+3. Save each turn's transcript.
+4. Confirm that `git diff --cached --name-only` returns no files in each scratch repository.
+5. Run `bin/conformance-assert-block-message.sh --check <transcript>` for each transcript.
+6. Paste each result into the release PR as evidence.
+
+Record the CLI versions, the assertion exit codes, and any step that did not run.
+Pi and codex have no daily scheduled check, so this release step detects adapter drift for those harnesses.
+The optional CI release tier still uses fail-closed API credentials and the `CONFORMANCE_ON_RELEASE` variable.
+
 ## Cutting a release: manual steps (fallback)
 
 If `/release` is unavailable or if you need to debug a release, run the steps manually:
