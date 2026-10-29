@@ -8,12 +8,13 @@ import sys
 from layout import layout
 from mermaid import check, emit
 from model import BadInput, load, validate
+from render import render
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
-    for name in ('validate', 'mermaid', 'layout', 'check'):
+    for name in ('validate', 'mermaid', 'layout', 'html', 'check'):
         command = commands.add_parser(name)
         command.add_argument('path')
         command.add_argument('--repo-dir', help='Clone containing the pinned commit')
@@ -28,6 +29,8 @@ def main(argv=None):
             if not errors:
                 if args.command == 'mermaid':
                     sys.stdout.write(emit(model))
+                elif args.command == 'html':
+                    sys.stdout.write(render(model))
                 elif args.command == 'layout':
                     print(json.dumps(layout(model), sort_keys=True, ensure_ascii=True, separators=(',', ':')))
         for error in errors:

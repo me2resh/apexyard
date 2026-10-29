@@ -13,10 +13,11 @@ Run `python3 .claude/skills/_lib-diagram/diagram.py <command> <path> [--repo-dir
 | `validate` | Model JSON | Diagnostics on stderr |
 | `mermaid` | Model JSON | Mermaid text on stdout, without a fence |
 | `layout` | Model JSON | Canonical JSON positions on stdout |
+| `html` | Model JSON | Self-contained ASCII HTML on stdout |
 | `check` | Markdown | Drift diagnostics on stderr |
 
 Every command returns 0 on success, 1 on validation or drift failure, and 2 on unreadable input or incorrect arguments.
-Warnings do not change the return code. Failed validation produces no Mermaid or layout output.
+Warnings do not change the return code. Failed validation produces no Mermaid, layout or HTML output.
 `--repo-dir` is required for a non-null commit. It never becomes part of the model.
 
 ## Fields
