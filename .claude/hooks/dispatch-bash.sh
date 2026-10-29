@@ -22,6 +22,15 @@ _rc=0
 
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 INPUT=$(cat)
+# The wildcard settings entry catches shell aliases and command-shaped calls.
+# Bash keeps its original matcher and dispatch path, including parse failures.
+if [ "${1:-}" = --shell-alias-only ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-fail-closed-json.sh" || exit 2
+  if printf '%s' "$INPUT" | jq -e '.tool_name == "Bash"' >/dev/null 2>&1; then exit 0; fi
+  hook_is_shell_call "$INPUT" || exit 0
+fi
+
 # Do not let a missing or broken jq abort dispatch with exit 127. Claude
 # Code only blocks on exit 2. Merge gates already fail closed on a raw
 # merge-shaped payload when they cannot parse the command (T13).

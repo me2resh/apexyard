@@ -16,6 +16,9 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 0
 fi
 tool=$(printf '%s' "$input" | jq -r '.tool_name // empty' 2>/dev/null)
+# shellcheck source=/dev/null
+. "$(dirname "$0")/_lib-fail-closed-json.sh" || exit 2
+if hook_is_shell_call "$input"; then tool=Bash; fi
 [ "$tool" = Bash ] || exit 0
 command=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null)
 [ -n "$command" ] || exit 0

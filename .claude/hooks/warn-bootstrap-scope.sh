@@ -24,6 +24,9 @@ INPUT="$_GIT_GATE_INPUT"
 
 # Only act on Bash tool calls.
 TOOL_NAME=$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
+# shellcheck source=/dev/null
+. "$(dirname "$0")/_lib-fail-closed-json.sh" || exit 2
+if hook_is_shell_call "$INPUT"; then TOOL_NAME=Bash; fi
 if [ "$TOOL_NAME" != "Bash" ]; then
   exit 0
 fi

@@ -46,6 +46,9 @@
 _git_gate_body() {
 INPUT="$_GIT_GATE_INPUT"
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
+# shellcheck source=/dev/null
+. "$(dirname "$0")/_lib-fail-closed-json.sh" || exit 2
+if hook_is_shell_call "$INPUT"; then TOOL_NAME=Bash; fi
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 
 if [ "$TOOL_NAME" != "Bash" ] || [ -z "$COMMAND" ]; then
