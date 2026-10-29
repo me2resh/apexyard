@@ -6,9 +6,12 @@ class Apexyard < Formula
   sha256 "__SHA256__"
   license "MIT"
 
+  depends_on "jq"
+  depends_on "gh"
+
   def install
-    libexec.install Dir["bin/*"]
-    bin.write_exec_script libexec/"apexyard"
+    libexec.install "bin", ".claude"
+    bin.write_exec_script libexec/"bin/apexyard"
   end
 
   test do

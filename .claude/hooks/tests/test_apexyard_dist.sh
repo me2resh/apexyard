@@ -36,6 +36,8 @@ mkdir -p "$stamped"
 cp "$archive.sha256" "$stamped/"
 check stamp-packaging /bin/bash "$root/bin/stamp-packaging.sh" v9.8.7 "$stamped"
 hash=$(awk '{print $1}' "$archive.sha256")
+check formula-jq grep -Fq 'depends_on "jq"' "$stamped/apexyard.rb"
+check formula-gh grep -Fq 'depends_on "gh"' "$stamped/apexyard.rb"
 check formula-version grep -Fq 'version "9.8.7"' "$stamped/apexyard.rb"
 check formula-url grep -Fq 'url "https://github.com/me2resh/apexyard/releases/download/v9.8.7/apexyard-v9.8.7.tar.gz"' "$stamped/apexyard.rb"
 check formula-sha grep -Fq "sha256 \"$hash\"" "$stamped/apexyard.rb"
@@ -96,7 +98,10 @@ if [ -f "$root/bin/_lib-ownership.sh" ]; then
 fi
 (cd "$bundle" && find . -type f | LC_ALL=C sort) > "$sb/actual"
 {
-  printf './VERSION\n'
+  printf '%s\n' './VERSION' './.claude/skills/preflight/preflight.sh'
+  for file in "$root/.claude/hooks/"_lib-*.sh; do
+    printf './.claude/hooks/%s\n' "${file##*/}"
+  done
   for file in _lib-ownership.sh _lib-telemetry.sh apexyard apexyard-init.sh apexyard-update.sh; do
     [ -f "$root/bin/$file" ] && printf './bin/%s\n' "$file"
   done
@@ -128,8 +133,29 @@ if command -v node >/dev/null 2>&1; then
   status=0
   node "$launcher" --org 'example org' > "$sb/launcher.out" 2>&1 || status=$?
   check npm-exit-status test "$status" -eq 7
-  printf '%s\n' init --org 'example org' > "$sb/args-expected"
+  printf '%s\n' doctor --dependencies > "$sb/args-expected"
   check npm-arguments cmp "$HOME/args" "$sb/args-expected"
+  printf '#!/bin/sh\nprintf "%%s\n" "$*" >> "$HOME/calls"\n[ "$1" != doctor ] || exit 0\nexit 7\n' > "$sb/tools/apexyard"
+  status=0
+  node "$launcher" --org example > "$sb/launcher.out" 2>&1 || status=$?
+  check npm-init-status test "$status" -eq 7
+  printf '%s\n' 'doctor --dependencies' 'init --org example' > "$sb/calls-expected"
+  check npm-check-before-init cmp "$HOME/calls" "$sb/calls-expected"
+  # A doctor warning (exit 1, for example gh missing) still runs init.
+  rm -f "$HOME/calls"
+  printf '#!/bin/sh\nprintf "%%s\n" "$*" >> "$HOME/calls"\n[ "$1" != doctor ] || exit 1\nexit 0\n' > "$sb/tools/apexyard"
+  status=0
+  node "$launcher" --org example > "$sb/launcher.out" 2>&1 || status=$?
+  check npm-warning-runs-init test "$status" -eq 0
+  check npm-warning-init-called cmp "$HOME/calls" "$sb/calls-expected"
+  # A doctor failure (exit 2, for example jq missing) stops before init.
+  rm -f "$HOME/calls"
+  printf '#!/bin/sh\nprintf "%%s\n" "$*" >> "$HOME/calls"\n[ "$1" != doctor ] || exit 2\nexit 0\n' > "$sb/tools/apexyard"
+  status=0
+  node "$launcher" --org example > "$sb/launcher.out" 2>&1 || status=$?
+  check npm-failure-status test "$status" -eq 2
+  printf '%s\n' 'doctor --dependencies' > "$sb/calls-fail-expected"
+  check npm-failure-skips-init cmp "$HOME/calls" "$sb/calls-fail-expected"
   rm "$sb/tools/apexyard" "$sb/tools/curl"
   mv "$sb/checksum" "$archive.sha256"
   export APEXYARD_PREFIX="$sb/npm-prefix"

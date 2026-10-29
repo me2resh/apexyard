@@ -28,7 +28,7 @@ name="apexyard-$tag"
 url="${base%/}/$tag/$name.tar.gz"
 dest="$prefix/share/apexyard/$tag"
 printf 'Plan:\n  Version: %s\n  Download: %s\n  Checksum: %s.sha256\n' "$version" "$url" "$url"
-printf '  Install directory: %s\n  Symlink: %s/bin/apexyard\n  no sudo is used\n' "$dest" "$prefix"
+printf '  Install directory: %s\n  Symlink: %s/bin/apexyard\n  CLI installation uses no sudo\n' "$dest" "$prefix"
 [ "$dry_run" -eq 0 ] || exit 0
 work=$(mktemp -d)
 trap 'rm -rf "$work"' 0
@@ -55,5 +55,9 @@ tar -xzf "$work/$name.tar.gz" -C "$work/extracted"
 mkdir -p "$prefix/share/apexyard" "$prefix/bin"
 mv "$work/extracted/$name" "$dest"
 ln -sfn "$dest/bin/apexyard" "$prefix/bin/apexyard"
+# Exit 1 is a warning (for example gh missing). Only exit 2 stops here.
+rc=0
+bash "$dest/.claude/skills/preflight/preflight.sh" --dependencies || rc=$?
+[ "$rc" -le 1 ] || fail 'The CLI is installed, but a required tool is missing. Run apexyard doctor --dependencies before init.'
 printf 'Installed apexyard %s.\n' "$version"
 case ":$PATH:" in *":$prefix/bin:"*) ;; *) printf 'Add this directory to PATH: %s/bin\n' "$prefix" ;; esac

@@ -12,11 +12,15 @@ function finish(result, label) {
   else if (result.signal) console.error(`create-apexyard: ${label} stopped by ${result.signal}`);
   process.exit(result.status === null ? 1 : result.status);
 }
-let result = run('apexyard', ['init', ...args]);
-if (!result.error || result.error.code !== 'ENOENT') finish(result, 'init');
+let result = run('apexyard', ['doctor', '--dependencies']);
+if (!result.error || result.error.code !== 'ENOENT') {
+  // Exit 1 is a warning (for example gh missing). Only exit 2 stops init.
+  if (result.error || (result.status !== 0 && result.status !== 1)) finish(result, 'dependency check');
+  finish(run('apexyard', ['init', ...args]), 'init');
+}
 console.error('create-apexyard: Install the CLI before repository creation.');
 const installer = path.join(__dirname, '..', 'install.sh');
-result = run('sh', [installer]); // The installer prints its plan and needs no prompt.
+result = run('sh', [installer]); // The installer runs the shared dependency check.
 if (result.error || result.status !== 0) finish(result, 'CLI installation failed. Set APEXYARD_VERSION if required');
 const prefix = process.env.APEXYARD_PREFIX || path.join(os.homedir(), '.local');
 finish(run(path.resolve(prefix, 'bin', 'apexyard'), ['init', ...args]), 'init');

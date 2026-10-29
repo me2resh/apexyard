@@ -68,6 +68,76 @@ ln -s "$REAL_JQ" "$TMP/tools/jq"
 mv "$TMP/tools/gh" "$TMP/gh"
 run; check missing-gh 1 'WARN gh: missing'
 mv "$TMP/gh" "$TMP/tools/gh"
+# Package managers are isolated stubs; no test can invoke a real installer.
+export INSTALL_LOG="$TMP/install.log" INSTALL_TOOLS="$TMP/tools" REAL_JQ
+cat > "$TMP/manager" <<'STUB'
+#!/bin/bash
+printf '%s\n' "$*" >> "$INSTALL_LOG"
+[ "${INSTALL_FAIL:-0}" = 0 ] || exit 1
+[ "${INSTALL_NO_TOOL:-0}" = 0 ] || exit 0
+case "$*" in
+  *jq*) /bin/ln -s "$REAL_JQ" "$INSTALL_TOOLS/jq" ;;
+  *gh*|*GitHub.cli*) /bin/cp "$INSTALL_TOOLS/../gh" "$INSTALL_TOOLS/gh" ;;
+esac
+STUB
+chmod +x "$TMP/manager"
+cp "$TMP/tools/gh" "$TMP/gh"
+export APEXYARD_TEST_INTERACTIVE=1
+unset CI APEXYARD_NO_INSTALL
+for manager in brew apt-get dnf winget; do
+  cp "$TMP/manager" "$TMP/tools/$manager"
+  if [ "$manager" = apt-get ] || [ "$manager" = dnf ]; then
+    printf '#!/bin/bash\nexec "$@"\n' > "$TMP/tools/sudo"
+    chmod +x "$TMP/tools/sudo"
+  fi
+  for missing in jq gh; do
+    rm "$TMP/tools/$missing"
+    rm -f "$INSTALL_LOG"
+    run <<<'no'
+    expected=2; [ "$missing" != gh ] || expected=1
+    check "$manager-$missing-declined" "$expected" "Install $missing with:"
+    RC=0; [ ! -f "$INSTALL_LOG" ] || RC=99
+    OUT='no install'; check "$manager-$missing-no-command" 0 'no install'
+    run <<<'YeS'
+    check "$manager-$missing-consent" 0 "OK $missing: Installed."
+    case "$manager" in
+      brew) command="install $missing" ;;
+      apt-get|dnf) command="install -y $missing" ;;
+      winget)
+        package=jqlang.jq; [ "$missing" != gh ] || package=GitHub.cli
+        command="install $package" ;;
+    esac
+    RC=0; OUT=$(cat "$INSTALL_LOG")
+    check "$manager-$missing-command" 0 "$command"
+  done
+  rm "$TMP/tools/$manager"
+done
+cp "$TMP/manager" "$TMP/tools/brew"
+rm "$TMP/tools/jq"
+export INSTALL_FAIL=1
+run <<<'y'; check failed-install 2 'FAIL jq: missing'
+unset INSTALL_FAIL
+export INSTALL_NO_TOOL=1
+run <<<'y'; check absent-after-install 2 'FAIL jq: missing'
+unset INSTALL_NO_TOOL
+for mode in no-tty ci disabled; do
+  rm -f "$INSTALL_LOG"
+  case "$mode" in
+    no-tty) export APEXYARD_TEST_INTERACTIVE=0 ;;
+    ci) export APEXYARD_TEST_INTERACTIVE=1 CI=true ;;
+    disabled) unset CI; export APEXYARD_NO_INSTALL=1 ;;
+  esac
+  run <<<'yes'; check "$mode-missing" 2 'brew install jq'
+  RC=0; [ ! -f "$INSTALL_LOG" ] || RC=99
+  OUT='no install'; check "$mode-no-install" 0 'no install'
+done
+unset CI APEXYARD_NO_INSTALL APEXYARD_TEST_INTERACTIVE
+rm "$TMP/tools/brew" "$TMP/tools/sudo"
+run; check manual-download 2 'https://jqlang.org/download/'
+ln -s "$REAL_JQ" "$TMP/tools/jq"
+RC=0
+OUT=$(cd "$TMP" && PATH="$TMP/tools" /bin/bash "$ROOT/.claude/skills/preflight/preflight.sh" --dependencies) || RC=$?
+check dependencies-outside-fork 0 'OK jq:'
 export AUTH_RC=1
 run; check gh-not-logged-in 1 'Fix: Run gh auth login.'
 unset AUTH_RC
