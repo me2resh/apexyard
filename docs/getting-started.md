@@ -35,9 +35,11 @@ Set `APEXYARD_NO_INSTALL=1` to disable installation offers.
 Install the CLI. Then create your ops repo with one command:
 
 ```bash
-curl -fsSL https://apexyard.ai/install | sh   # checks the release checksum; offers dependency installs
+curl -fsSL https://apexyard.ai/install | sh   # checks the release checksum; lists missing jq or gh
 apexyard init --org your-org --name ops --private
 ```
+
+A piped install cannot ask questions, so it installs no tools. Run `apexyard doctor` in a terminal to install a missing jq or gh, with your consent.
 
 You can also install the CLI with `brew install me2resh/tap/apexyard`. Homebrew installs jq and gh too.
 

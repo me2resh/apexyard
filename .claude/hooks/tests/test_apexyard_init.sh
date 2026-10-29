@@ -19,6 +19,10 @@ check 'version commit' test "$(git -C "$sb/ops" log -1 --format=%s)" = 'chore: r
 export FAKE_REMOTE="$sb/public.git"
 check public /bin/bash "$CLI" init --org other --name public-ops --public --dir "$sb/public" > "$sb/public.out" 2>&1
 check 'public create' grep -q 'repo create other/public-ops --public' "$FAKE_GH_LOG"
+check 'next step doctor' grep -q '1. Run apexyard doctor.' "$sb/public.out"
+check 'next step open' grep -q "2. Open $sb/public in your coding agent." "$sb/public.out"
+check 'next step setup' grep -q '3. Run /setup.' "$sb/public.out"
+check 'next step windows' grep -q '4. On Windows, use Git Bash or WSL.' "$sb/public.out"
 if /bin/bash "$CLI" init --dir "$sb/ops" > "$sb/refuse.out" 2>&1; then rc=0; else rc=$?; fi
 check 'refuse nonempty' test "$rc" = 2
 check 'refusal reason' grep -q 'not empty' "$sb/refuse.out"

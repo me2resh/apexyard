@@ -64,7 +64,11 @@ for pair in 'onboarding.example.yaml onboarding.yaml' 'apexyard.projects.yaml.ex
 done
 sed "s/name: \"Your Company Name\"/name: \"$org\"/" "$target/onboarding.yaml" > "$target/onboarding.yaml.tmp"
 mv "$target/onboarding.yaml.tmp" "$target/onboarding.yaml"
-printf 'Open %s in your agent tool. Run /setup to complete setup.\n' "$target"
+printf 'Next steps:\n'
+printf '  1. Run apexyard doctor. It checks jq and the GitHub CLI (gh) and offers to install a missing one, with your consent.\n'
+printf '  2. Open %s in your coding agent.\n' "$target"
+printf '  3. Run /setup.\n'
+printf '  4. On Windows, use Git Bash or WSL.\n'
 
 # Telemetry must not prevent repository creation.
 # shellcheck source=bin/_lib-telemetry.sh
