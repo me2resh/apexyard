@@ -41,7 +41,7 @@ HOOK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK_SCRIPT="$HOOK_DIR/require-migration-ticket.sh"
 DEFAULTS="$(cd "$HOOK_DIR/.." && pwd)/project-config.defaults.json"
 
-for f in "$HOOK_SCRIPT" "$HOOK_DIR/_lib-tracker.sh" "$HOOK_DIR/_lib-read-config.sh" "$DEFAULTS"; do
+for f in "$HOOK_SCRIPT" "$HOOK_DIR/_lib-tracker.sh" "$HOOK_DIR/_lib-fail-closed-json.sh" "$HOOK_DIR/_lib-read-config.sh" "$DEFAULTS"; do
   if [ ! -f "$f" ]; then
     echo "FAIL: required file not found: $f" >&2
     exit 1
@@ -83,7 +83,7 @@ projects:
     repo: example/other
 YAML
     mkdir -p .claude/hooks migrations
-    for f in _lib-tracker.sh _lib-read-config.sh _lib-portfolio-paths.sh _lib-ops-root.sh _lib-awk-fallback.sh _lib-detect-bash-write.sh _lib-path-resolve.sh _lib-active-ticket.sh _lib-ticket-path-exemptions.sh; do
+    for f in _lib-tracker.sh _lib-fail-closed-json.sh _lib-read-config.sh _lib-portfolio-paths.sh _lib-ops-root.sh _lib-awk-fallback.sh _lib-detect-bash-write.sh _lib-path-resolve.sh _lib-active-ticket.sh _lib-ticket-path-exemptions.sh; do
       [ -f "$HOOK_DIR/$f" ] && cp "$HOOK_DIR/$f" ".claude/hooks/$f"
     done
     cp "$HOOK_SCRIPT" .claude/hooks/require-migration-ticket.sh

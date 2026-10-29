@@ -37,6 +37,14 @@ INPUT=$(cat)
 
 HOOK_EVENT=$(printf '%s' "$INPUT" | jq -r '.hook_event_name // empty' 2>/dev/null)
 TOOL_NAME=$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
+case "$TOOL_NAME" in
+  Bash|Edit|Write|MultiEdit|NotebookEdit|'') ;;
+  *)
+    # shellcheck source=/dev/null
+    . "$(dirname "$0")/_lib-fail-closed-json.sh" || exit 2
+    if hook_is_shell_call "$INPUT"; then TOOL_NAME=Bash; fi
+    ;;
+esac
 
 # ---------------------------------------------------------------------------
 # Resolve REPO_ROOT once — needed by lookup_role_class for the role-file

@@ -20,12 +20,20 @@ PT_CWD=${PT_CWD:-${CLAUDE_PROJECT_DIR:-$PWD}}
 PT_CWD=$(pt_physical "$PT_CWD") || pt_block 'cannot resolve the effective directory.'
 PT_FALLBACK=${PT_OPS:-${PT_PROJECT:-$PT_CWD}}
 tool=$(jq -r '.tool_name // "Bash"' <<<"$INPUT")
-if [ "$tool" != Bash ]; then
-  target=$(jq -er '.tool_input.file_path // .tool_input.notebook_path // empty' <<<"$INPUT") || pt_block 'missing edit target.'
+if ! hook_is_shell_call "$INPUT"; then
+  target=$(jq -er '.tool_input.file_path // .tool_input.notebook_path // empty' <<<"$INPUT") || pt_block "missing edit target (tool_name: $tool)."
   pt_protected "$target" && pt_block 'the edit target is live hook state. Use an isolated worktree.'
   exit 0
 fi
-cmd=$(jq -er '.tool_input.command' <<<"$INPUT") || pt_block 'missing Bash command.'
+# Preserve Claude Code's Bash command validation. Other shell transports must
+# provide the non-empty string used by the command-shape classifier.
+if [ "$tool" != Bash ] && ! jq -e '.tool_input.command | type == "string" and length > 0' >/dev/null 2>&1 <<<"$INPUT"; then
+  pt_block "missing edit target (tool_name: $tool)."
+fi
+cmd=$(jq -er '.tool_input.command' <<<"$INPUT") || {
+  if [ "$tool" = Bash ]; then pt_block 'missing Bash command.'; fi
+  pt_block "missing edit target (tool_name: $tool)."
+}
 cwd="$PT_CWD"
 # Each protected-form test ignores letter case (pt_nocase).
 pt_token() { pt_nocase pt_token_nocase "$@"; }

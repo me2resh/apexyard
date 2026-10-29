@@ -16,7 +16,7 @@ sb=$(mktemp -d "${TMPDIR:-/tmp}/orbit-gate-test.XXXXXX") || exit 1
 trap 'rm -rf "$sb"' EXIT
 git -C "$sb" init -q
 mkdir -p "$sb/.claude/hooks" "$sb/workspace"
-cp "$src/.claude/hooks/require-orbit-slice-for-ticket.sh" "$src/.claude/hooks/_lib-read-config.sh" \
+cp "$src/.claude/hooks/require-orbit-slice-for-ticket.sh" "$src/.claude/hooks/_lib-read-config.sh" "$src/.claude/hooks/_lib-fail-closed-json.sh" \
   "$src/.claude/hooks/_lib-portfolio-paths.sh" "$src/.claude/hooks/_lib-ops-root.sh" \
   "$src/.claude/hooks/_lib-resolution-cache.sh" "$src/.claude/hooks/_lib-registry-parser.sh" \
   "$src/.claude/hooks/_lib-flag-value.sh" \

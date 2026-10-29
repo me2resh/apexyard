@@ -16,6 +16,13 @@
 
 **Advisory.** `.cursor/rules/apexyard.mdc` points at `CLAUDE.md` as the index. Load a named rule file when the work needs it.
 
+Shell calls use the Bash gates (GH-1909). A wildcard PreToolUse entry routes
+`shellToolCall` and Claude-format payloads with a non-empty command string and
+no file target to `dispatch-bash.sh`. The original `Bash` matcher stays in place.
+The name `shellToolCall` comes from the cursor-agent 2026.10.22 stream reproduced
+on 2026-10-29; hook payloads with other names use the command-field check. This
+fix does not establish full CLI coverage or change the session-pin overlay.
+
 ## Skills (one root, override wins)
 
 Cursor's skill root for an ops fork is `.claude/skills/`. Open that fork directory in Cursor. Do not open a parent folder that also contains the portfolio repo. A parent workspace can list the same custom skill from the fork symlink and from `custom-skills/` ([AgDR-0187](../agdr/AgDR-0187-cursor-skill-one-root-override-wins.md)).
