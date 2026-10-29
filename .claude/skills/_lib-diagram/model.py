@@ -203,7 +203,12 @@ def blob_lines(repo_dir, shas):
     offset = 0
     for sha in shas:
         end = data.index(b'\n', offset)
-        size = int(data[offset:end].split()[2])
+        header = data[offset:end].split()
+        if header == [sha.encode('ascii'), b'missing']:
+            counts[sha] = 'missing'
+            offset = end + 1
+            continue
+        size = int(header[2])
         blob = data[end + 1:end + 1 + size]
         offset = end + size + 2
         try:
@@ -228,7 +233,7 @@ def check_sources(model, repo_dir, sources, errors, warnings):
         if git(repo_dir, 'cat-file', '-t', commit).strip() != b'commit':
             errors.append('E_COMMIT /repo/commit: Pin a commit object, rather than a tag or tree.')
             return
-        tree = git(repo_dir, 'ls-tree', '-r', '-z', commit)
+        tree = git(repo_dir, 'ls-tree', '-r', '-z', '--full-tree', commit)
         if git(repo_dir, 'status', '--porcelain'):
             warnings.append('W_DIRTY /repo/commit: Clone has uncommitted changes. Sources use the pinned commit.')
     except (OSError, subprocess.CalledProcessError):
@@ -253,7 +258,9 @@ def check_sources(model, repo_dir, sources, errors, warnings):
         sha = blobs.get(source['path'])
         if 'line' in source and sha in cited:
             lines = cited[sha]
-            if lines is None or source['line'] > lines:
+            if lines == 'missing':
+                errors.append('E_SOURCE_OUTSIDE ' + pointer + '/path: Cite a blob available in the clone.')
+            elif lines is None or source['line'] > lines:
                 errors.append('E_SOURCE_LINE ' + pointer + '/line: Cite a line within a UTF-8 text blob.')
 
 

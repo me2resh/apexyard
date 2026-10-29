@@ -2,7 +2,7 @@
   "schema": "apexyard.diagram/v1",
   "diagram": {
     "type": "c4-container",
-    "title": "Sample c4-container",
+    "title": "Sample c4-container (v2), core: Q&A/path #1 [beta] \"quoted\"",
     "project": "sample-app",
     "direction": "LR"
   },
@@ -19,15 +19,16 @@
     {
       "id": "zone",
       "kind": "system_boundary",
-      "label": "Application"
+      "label": "Application (v2), core: Q&A/path #1 [beta] \"quoted\""
     }
   ],
   "nodes": [
     {
       "id": "actor",
       "kind": "person",
-      "label": "Customer",
-      "technology": ""
+      "label": "Customer (v2), core: Q&A/path #1 [beta] \"quoted\"",
+      "technology": "",
+      "description": "Description (v2), core: Q&A/path #1 [beta] \"quoted\""
     },
     {
       "id": "api",
@@ -37,21 +38,24 @@
       "tags": [
         "internal"
       ],
-      "technology": "Python"
+      "technology": "Python (v2), core: Q&A/path #1 [beta] \"quoted\"",
+      "description": "Description (v2), core: Q&A/path #1 [beta] \"quoted\""
     },
     {
       "id": "db",
       "kind": "store",
       "label": "Records",
       "group": "zone",
-      "technology": ""
+      "technology": "Python (v2), core: Q&A/path #1 [beta] \"quoted\"",
+      "description": "Description (v2), core: Q&A/path #1 [beta] \"quoted\""
     }
   ],
   "edges": [
     {
       "from": "actor",
       "to": "api",
-      "label": "HTTPS"
+      "label": "HTTPS (v2), core: Q&A/path #1 [beta] \"quoted\"",
+      "technology": "HTTPS (v2), core: Q&A/path #1 [beta] \"quoted\""
     },
     {
       "from": "api",

@@ -19,12 +19,12 @@
     {
       "id": "Screens",
       "kind": "layer",
-      "label": "Screens"
+      "label": "Screens (v2), core: Q&A/path #1 [beta] \"quoted\""
     },
     {
       "id": "Routes",
       "kind": "layer",
-      "label": "Routes"
+      "label": "Routes (v2), core: Q&A/path #1 [beta] \"quoted\""
     },
     {
       "id": "Jobs",
@@ -34,14 +34,14 @@
     {
       "id": "Models",
       "kind": "layer",
-      "label": "Models"
+      "label": "Models (v2), core: Q&A/path #1 [beta] \"quoted\""
     }
   ],
   "nodes": [
     {
       "id": "actor",
       "kind": "screen",
-      "label": "Customer",
+      "label": "Customer (v2), core: Q&A/path #1 [beta] \"quoted\"",
       "technology": "",
       "group": "Screens"
     },
@@ -67,7 +67,7 @@
     {
       "from": "Screens",
       "to": "Routes",
-      "label": "submits"
+      "label": "submits (v2), core: Q&A/path #1 [beta] \"quoted\""
     },
     {
       "from": "Routes",

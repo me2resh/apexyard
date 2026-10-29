@@ -19,14 +19,14 @@
     {
       "id": "zone",
       "kind": "trust_zone",
-      "label": "Application"
+      "label": "Application (v2), core: Q&A/path #1 [beta] \"quoted\""
     }
   ],
   "nodes": [
     {
       "id": "actor",
       "kind": "actor",
-      "label": "Customer"
+      "label": "Customer (v2), core: Q&A/path #1 [beta] \"quoted\""
     },
     {
       "id": "api",
@@ -48,7 +48,7 @@
     {
       "from": "actor",
       "to": "api",
-      "label": "HTTPS"
+      "label": "HTTPS (v2), core: Q&A/path #1 [beta] \"quoted\""
     },
     {
       "from": "api",

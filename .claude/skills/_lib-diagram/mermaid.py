@@ -9,11 +9,12 @@ from model import BadInput, load, model_hash, validate
 
 
 def escape(value, dialect='flowchart'):
-    # Mermaid numeric entities protect both DSL delimiters and HTML labels.
-    special = {'&', '"', '|', '[', ']', '<', '>', '\\', '{', '}', '#', '`'}
+    # C4 node and boundary text does not decode Mermaid entities.
     if dialect == 'c4':
-        special.update(('(', ')', ','))
-    return ''.join('#' + str(ord(c)) + ';' if c in special or c in '\r\n' else c
+        return value.replace(chr(34), chr(39)).replace('\r', ' ').replace('\n', ' ')
+    # Quoted flowchart labels and C4 relationships/title decode entities.
+    special = {'&', '"', '|', '[', ']', '<', '>', '\\', '{', '}', '#', '`'}
+    return ''.join('#quot;' if c == chr(34) else '#' + str(ord(c)) + ';' if c in special or c in '\r\n' else c
                    for c in value)
 
 
@@ -25,7 +26,7 @@ def emit(model):
     lines = [('C4Context' if diagram_type == 'c4-context' else 'C4Container')
              if is_c4 else 'flowchart ' + model['diagram']['direction']]
     if is_c4:
-        lines.append('    title ' + esc(model['diagram']['title']))
+        lines.append('    title ' + escape(model['diagram']['title']))
     groups = sorted(model['groups'], key=lambda g: g['id'])
     nodes = sorted(model['nodes'], key=lambda n: n['id'])
 
@@ -65,11 +66,11 @@ def emit(model):
 
     contents(None, 1)
     for edge in sorted(model['edges'], key=lambda e: e['id']):
-        label = esc(edge.get('label', ''))
+        label = escape(edge.get('label', ''))
         if is_c4:
-            lines.append('    Rel(' + edge['from'] + ', ' + edge['to'] + ', "' + label + '", "' + esc(edge.get('technology', '')) + '")')
+            lines.append('    Rel(' + edge['from'] + ', ' + edge['to'] + ', "' + label + '", "' + escape(edge.get('technology', '')) + '")')
         else:
-            arrow = ' -->|' + label + '| ' if label else ' --> '
+            arrow = ' -->|"' + label + '"| ' if label else ' --> '
             lines.append('    ' + edge['from'] + arrow + edge['to'])
     return '\n'.join(lines) + '\n'
 

@@ -103,16 +103,23 @@ Emission sorts groups, nodes and edges by id. Each group contains its direct nod
 C4 uses `C4Context`, `C4Container`, `System_Boundary`, node macros and `Rel`.
 DFD and feature diagrams use `flowchart` with labelled arrows.
 
-| Characters | Flowchart labels | C4 quoted arguments and title |
-| --- | --- | --- |
-| Quote, pipe, square brackets | Decimal entities `#34;`, `#124;`, `#91;`, `#93;` | Same |
-| Ampersand, angle brackets | Decimal entities `#38;`, `#60;`, `#62;` | Same |
-| Backslash, hash, backtick, braces | Decimal entities for each character | Same |
-| Parentheses, comma | Literal inside quoted labels | Decimal entities `#40;`, `#41;`, `#44;` |
-| CR, LF | Defensive entities `#13;`, `#10;` | Same |
+All flowchart node, group and nonempty edge labels are double quoted, including pipe labels
+(`-->|"Calls (HTTPS)"|`). Embedded double quotes use `#quot;`.
+Ampersands, pipes, square brackets, angle brackets, backslashes, hashes, backticks and braces
+use decimal Mermaid entities. Parentheses, commas, colons and slashes remain literal.
 
-Validation rejects literal CR and LF before emission. The escape function also handles them defensively.
-No Mermaid CLI runs during tests. Golden fixtures specify the expected text for all four dialect types.
+C4 node labels, technology, descriptions and boundary labels preserve punctuation literally
+inside double quoted macro arguments. Embedded double quotes become ASCII apostrophes:
+C4 node text does not decode entities, including `#quot;`.
+C4 `Rel` labels and technology, and the title, use the flowchart entity rules because
+those renderer fields decode entities. Thus they preserve double quotes as `#quot;`.
+
+Validation rejects literal CR and LF before emission. Defensively, flowchart labels and
+C4 relationships/title encode them as `#13;` and `#10;`; C4 node/boundary arguments
+replace them with spaces.
+No Mermaid CLI runs during automated tests. All four golden fixtures include parentheses,
+commas, colons, ampersands, slashes, hashes, square brackets and embedded double quotes.
+C4 fixtures also cover descriptions, container/store technology, relationships and boundaries.
 
 ## Layout contract
 

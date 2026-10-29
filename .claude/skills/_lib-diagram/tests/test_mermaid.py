@@ -36,17 +36,27 @@ class MermaidTests(unittest.TestCase):
         self.assertEqual(bad.stdout, b'')
 
     def test_escape_table(self):
-        for dialect in ('flowchart', 'c4'):
-            self.assertEqual(escape('"|[]\n', dialect), '#34;#124;#91;#93;#10;')
-            self.assertEqual(escape('&<>\\#`{}', dialect), '#38;#60;#62;#92;#35;#96;#123;#125;')
-        self.assertEqual(escape('(x),', 'c4'), '#40;x#41;#44;')
+        self.assertEqual(escape('"|[]\n'), '#quot;#124;#91;#93;#10;')
+        self.assertEqual(escape('&<>\\#`{}'), '#38;#60;#62;#92;#35;#96;#123;#125;')
         self.assertEqual(escape('(x),'), '(x),')
+        self.assertEqual(escape('API (v2), Q&A/path #1 [beta] "core"', 'c4'),
+                         "API (v2), Q&A/path #1 [beta] 'core'")
+
+    def test_quoted_punctuation(self):
+        for name in ('dfd', 'feature'):
+            text = emit(normalise(fixture(name)))
+            self.assertIn(' -->|"', text)
+            self.assertIn('(v2), core: Q#38;A/path #35;1 #91;beta#93; #quot;quoted#quot;', text)
+        for name in ('c4-context', 'c4-container'):
+            text = emit(normalise(fixture(name)))
+            self.assertIn("(v2), core: Q&A/path #1 [beta] 'quoted'", text)
+            self.assertNotIn('#40;', text)
 
     def test_labels_cannot_insert_syntax(self):
         model = fixture()
         model['nodes'][0]['label'] = '"] --> evil["<script>|'
         text = emit(normalise(model))
-        self.assertIn('#34;#93; --#62; evil#91;#34;#60;script#62;#124;', text)
+        self.assertIn('#quot;#93; --#62; evil#91;#quot;#60;script#62;#124;', text)
         self.assertNotIn('<script>', text)
 
     def test_empty_feature_layer(self):
@@ -54,7 +64,7 @@ class MermaidTests(unittest.TestCase):
 
     def test_self_loop_emitted(self):
         model = normalise(fixture('nested-cycle'))
-        self.assertIn('api -->|retry| api', emit(model))
+        self.assertIn('api -->|"retry"| api', emit(model))
 
     def test_nested_groups(self):
         text = emit(normalise(fixture('nested-cycle')))

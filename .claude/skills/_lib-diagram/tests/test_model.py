@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from common import LIB, FIXTURES, cli, fixture
 from model import derive_web_url, model_hash, normalise, validate
@@ -193,6 +194,24 @@ class ModelTests(unittest.TestCase):
         model = self.sourced('module',1)
         model['repo']['commit'] = self.git('rev-parse','HEAD').decode().strip()
         self.assertEqual(self.codes(model), ['E_SOURCE_OUTSIDE'])
+
+    def test_sources_from_subdirectory(self):
+        subdir = self.repo / 'subdir'
+        subdir.mkdir()
+        self.assertEqual(validate(self.sourced(), subdir)[1], [])
+        self.assertEqual([e.split()[0] for e in validate(self.sourced('subdir/text.txt'), subdir)[1]],
+                         ['E_SOURCE_OUTSIDE'])
+
+    def test_missing_batch_blob(self):
+        from model import git
+
+        def missing(repo_dir, *args, **kwargs):
+            if args == ('cat-file', '--batch'):
+                return b''.join(sha + b' missing\n' for sha in kwargs['input'].splitlines())
+            return git(repo_dir, *args, **kwargs)
+
+        with patch('model.git', side_effect=missing):
+            self.assertEqual(self.codes(self.sourced()), ['E_SOURCE_OUTSIDE'])
 
     def test_null_commit_and_missing_commit(self):
         model = self.sourced()
