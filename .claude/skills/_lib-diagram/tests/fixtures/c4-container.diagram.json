@@ -1,0 +1,66 @@
+{
+  "schema": "apexyard.diagram/v1",
+  "diagram": {
+    "type": "c4-container",
+    "title": "Sample c4-container (v2), core: Q&A/path #1 [beta] \"quoted\"",
+    "project": "sample-app",
+    "direction": "LR"
+  },
+  "generated": {
+    "by": "/c4",
+    "date": "2026-10-29"
+  },
+  "repo": {
+    "name": "example-org/sample-app",
+    "web_url": "https://github.com/example-org/sample-app",
+    "commit": null
+  },
+  "groups": [
+    {
+      "id": "zone",
+      "kind": "system_boundary",
+      "label": "Application (v2), core: Q&A/path #1 [beta] \"quoted\""
+    }
+  ],
+  "nodes": [
+    {
+      "id": "actor",
+      "kind": "person",
+      "label": "Customer (v2), core: Q&A/path #1 [beta] \"quoted\"",
+      "technology": "",
+      "description": "Description (v2), core: Q&A/path #1 [beta] \"quoted\""
+    },
+    {
+      "id": "api",
+      "kind": "container",
+      "label": "API",
+      "group": "zone",
+      "tags": [
+        "internal"
+      ],
+      "technology": "Python (v2), core: Q&A/path #1 [beta] \"quoted\"",
+      "description": "Description (v2), core: Q&A/path #1 [beta] \"quoted\""
+    },
+    {
+      "id": "db",
+      "kind": "store",
+      "label": "Records",
+      "group": "zone",
+      "technology": "Python (v2), core: Q&A/path #1 [beta] \"quoted\"",
+      "description": "Description (v2), core: Q&A/path #1 [beta] \"quoted\""
+    }
+  ],
+  "edges": [
+    {
+      "from": "actor",
+      "to": "api",
+      "label": "HTTPS (v2), core: Q&A/path #1 [beta] \"quoted\"",
+      "technology": "HTTPS (v2), core: Q&A/path #1 [beta] \"quoted\""
+    },
+    {
+      "from": "api",
+      "to": "db",
+      "label": "Read records"
+    }
+  ]
+}
