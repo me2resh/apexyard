@@ -384,11 +384,58 @@ fi
 
 # These commands have read-only subcommands that reviewers use for evidence;
 # block their write-capable forms while preserving the read forms.
-if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?branch([[:space:]]|$)" && \
-   ! printf '%s' "$COMMAND" | grep -qE "git[[:space:]]+branch([[:space:]]*$|[[:space:]]+(-a|--all|--show-current|--list|-l|-r|--remotes|-v|-vv|--verbose|--contains|--merged|--no-merged|--points-at|--format=|--sort=|--column|--color))"; then
-  echo "BLOCKED: review-class agent cannot create or alter branches during an active review." >&2
-  exit 2
-fi
+# Classify each branch/tag/hash-object segment independently. Consume only
+# values of known listing options; a remaining name can create a ref.
+_brrm_read_git_form() {
+  local verb="$1" arg skip=0
+  shift
+  while [ "$#" -gt 0 ]; do
+    arg="$1"; shift
+    if [ "$skip" = 1 ]; then
+      case "$arg" in -*) return 1 ;; esac
+      skip=0; continue
+    elif [ "$skip" = optional ]; then
+      skip=0
+      case "$arg" in -*) ;; *) continue ;; esac
+    fi
+    case "$verb:$arg" in
+      branch:-a|branch:-r|branch:--all|branch:--remotes|branch:--show-current|branch:-v|branch:-vv|branch:--verbose|branch:--list|branch:-l) ;;
+      tag:-l|tag:--list|tag:-n|tag:-n[0-9]*) ;;
+      branch:--contains|branch:--no-contains|branch:--merged|branch:--no-merged|tag:--contains) skip=optional ;;
+      branch:--points-at|branch:--sort|branch:--format|tag:--points-at|tag:--sort|tag:--format) skip=1 ;;
+      branch:--contains=*|branch:--no-contains=*|branch:--merged=*|branch:--no-merged=*|branch:--points-at=*|branch:--sort=*|branch:--format=*|tag:--contains=*|tag:--points-at=*|tag:--sort=*|tag:--format=*) ;;
+      hash-object:-w|hash-object:--stdin-paths) return 1 ;;
+      hash-object:--path) skip=1 ;;
+      hash-object:--stdin|hash-object:--no-filters|hash-object:--literally|hash-object:--path=*) ;;
+      hash-object:-t) skip=1 ;;
+      hash-object:-*) return 1 ;;
+      hash-object:*) ;;
+      *) return 1 ;;
+    esac
+  done
+  [ "$skip" != 1 ]
+}
+_brrm_filtered=""
+while IFS= read -r _brrm_seg; do
+  _brrm_ref_re='^[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?(branch|tag|hash-object)([[:space:]]|$)'
+  if [[ $_brrm_seg =~ $_brrm_ref_re ]]; then
+    _brrm_verb=${BASH_REMATCH[2]}
+    _brrm_args=${_brrm_seg#*"${BASH_REMATCH[0]}"}
+    # No eval or glob expansion. Quoted values remain inert tokens.
+    set -f
+    # shellcheck disable=SC2086
+    _brrm_read_git_form "$_brrm_verb" $_brrm_args
+    _brrm_rc=$?
+    set +f
+    if [ "$_brrm_rc" != 0 ]; then
+      echo "BLOCKED: review-class agent cannot create or alter refs or objects during an active review." >&2
+      exit 2
+    fi
+    _brrm_seg='true'
+  fi
+  _brrm_filtered="$_brrm_filtered ; $_brrm_seg"
+done < <(printf '%s\n' "$COMMAND" | tr ';&|' '\n\n\n')
+COMMAND=$_brrm_filtered
 # Judge each `git ... config` segment alone, so that a read in one segment
 # cannot cover a write in the next. A read may name a scope or display option
 # before the read action, for example `git config --local --get-regexp x`, and

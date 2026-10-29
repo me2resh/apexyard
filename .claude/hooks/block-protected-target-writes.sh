@@ -332,7 +332,7 @@ pt_simple() {
   # Operators have a separate token kind. A quoted ">" is an ordinary word.
   while IFS= read -r -d '' record; do
     kind=${record:0:1}; word=${record:1}
-    case "$kind" in D|H|P|S|E) continue ;; esac
+    case "$kind" in D|H|P|S|Q|E) continue ;; esac
     if [ "$skip" = 1 ]; then
       [ "$capture_string" = 0 ] || here_string="$word"
       [ "$capture_input" = 0 ] || redirect_input="$word"
@@ -515,14 +515,69 @@ pt_simple() {
           for arg in "${words[@]:1:$((i-1))}"; do case "$arg" in -*) ;; *) pt_judge "$arg" 1 ;; esac; done; words=("${words[@]:$((i+1))}"); pt_token_context && pt_block 'find has an unextractable mutation operand.'; return 0 ;; esac
       done; return 0 ;;
     patch) pt_patch; return 0 ;;
+    awk|gawk|mawk)
+      for word in "${words[@]:1}"; do
+        case "$word" in -i|-i*|--in-place*|-f|-f*|--file*) pt_token_context && pt_block 'awk in-place program names protected state.' ;; esac
+        # Awk output is program text, so shell redirection parsing cannot see it.
+        if [[ "$word" =~ system[[:space:]]*\( ]] || [[ "$word" =~ (print|printf)[^\;\}]*\| ]]; then
+          pt_token_context && pt_block 'awk shell program names protected state.'
+        fi
+        if [[ "$word" =~ (print|printf)[^\;\}]*\> ]]; then
+          # Judge every literal output, including multiple print statements.
+          # A computed output remains unresolved and fails closed.
+          local awk_output_re='>>?[[:space:]]*"([^"]+)"[[:space:]]*([;}
+]|$)' awk_rest="$word" awk_match
+          while [[ "$awk_rest" =~ $awk_output_re ]]; do
+            awk_match=${BASH_REMATCH[0]}
+            pt_judge "${BASH_REMATCH[1]}"
+            awk_rest=${awk_rest/"$awk_match"/}
+          done
+          if [[ "$awk_rest" =~ (print|printf)[^\;\}]*\> ]]; then
+            pt_token_context && pt_block 'awk output program names protected state.'
+          fi
+        fi
+      done
+      return 0 ;;
+    sort)
+      i=1
+      while [ "$i" -lt "${#words[@]}" ]; do
+        word=${words[$i]}; i=$((i+1))
+        case "$word" in
+          -o|--output) pt_judge "${words[$i]:-}"; i=$((i+1)) ;;
+          -o*) pt_judge "${word#-o}" ;;
+          --output=*) pt_judge "${word#*=}" ;;
+          --compress-program*) pt_token_context && pt_block 'sort runs an external program on protected input.' ;;
+          --*) ;;
+          -*o*)
+            arg=${word#*o}
+            if [ -n "$arg" ]; then pt_judge "$arg"
+            else pt_judge "${words[$i]:-}"; i=$((i+1)); fi ;;
+        esac
+      done
+      return 0 ;;
+    uniq)
+      i=1; local uniq_inputs=0
+      while [ "$i" -lt "${#words[@]}" ]; do
+        word=${words[$i]}; i=$((i+1))
+        case "$word" in
+          -f|-s|-w|--skip-fields|--skip-chars|--check-chars) i=$((i+1)) ;;
+          -*) ;;
+          *) uniq_inputs=$((uniq_inputs+1)); [ "$uniq_inputs" -lt 2 ] || pt_judge "$word" ;;
+        esac
+      done
+      return 0 ;;
+    active_issue_skill_marker_path)
+      # This library helper only prints the session's issue-skill path.
+      return 0 ;;
+
     cp|mv|install|dd|ln|link|rsync|ditto|rm|rmdir|unlink|shred|chmod|chown|chgrp|chflags|chattr|xattr|setfacl|touch|mkdir|truncate|tar|unzip|cpio|pax|perl|ruby|gsed|sed|ed|ex|vi|vim|sponge|tee|base64|openssl|iconv|plutil|uudecode|gzip|gunzip|bzip2|bunzip2|xz|unxz)
       pt_operands "$verb"; ;;
-    cat|grep|rg|jq|ls|diff|cmp|head|tail|wc|stat|file|readlink|realpath|shasum|sha256sum|test|'['|printf|echo|true|false|exit|return|pwd) ;;
+    cut|cat|grep|rg|jq|ls|diff|cmp|head|tail|wc|stat|file|readlink|realpath|shasum|sha256sum|test|'['|printf|echo|true|false|exit|return|pwd) ;;
     *)
       for word in "${words[@]:1}"; do
         expanded=$(pt_expand "$word")
         case "$expanded" in ''|-*|*'$'*|*'`'*) continue ;; esac
-        pt_token_context && pt_protected "$expanded" 1 && pt_block 'unknown verb has a live protected operand.'
+        pt_token_context && pt_protected "$expanded" 1 && pt_block "unknown verb '$verb' has a live protected operand '$expanded'."
       done ;;
   esac
   # Interpreter heredocs need the complete body, not just the header segment.
@@ -536,7 +591,7 @@ pt_simple() {
   # Literal read-only commands need no write-detector subprocesses. Redirects
   # were judged above. Keep substitutions on the detector path.
   case "$verb" in
-    cat|grep|rg|jq|ls|diff|cmp|head|tail|wc|stat|file|readlink|realpath|shasum|sha256sum|test|'['|printf|echo|true|false|exit|return|pwd|fi|done|break|continue)
+    cut|cat|grep|rg|jq|ls|diff|cmp|head|tail|wc|stat|file|readlink|realpath|shasum|sha256sum|test|'['|printf|echo|true|false|exit|return|pwd|fi|done|break|continue)
       case "$segment" in *'$('*|*'`'*) ;; *) return 0 ;; esac ;;
   esac
   # Interpreter writes and other unextractable writes use the additive rule.
@@ -625,6 +680,15 @@ pt_walk_tokens() {
     [ "$kind" != P ] || continue
     # A command substitution runs in a subshell with the current directory.
     if [ "$kind" = S ]; then ( pt_scan "$token" ) || exit 2; continue; fi
+    if [ "$kind" = Q ]; then
+      # Syntax-check quoted backtick bodies as data, without executing them.
+      # Regex fragments are not shell programs; real substitutions still
+      # receive the same protected-write scan as unquoted substitutions.
+      if /bin/bash -n <<<"$token" 2>/dev/null; then
+        ( pt_scan "$token" ) || exit 2
+      fi
+      continue
+    fi
     if [ "$kind" = W ]; then
       token=${token//\'/\'\\\'\'}
       segment="$segment '$token'"
