@@ -31,6 +31,14 @@ The original Bash matcher keeps its existing behavior. The wildcard dispatcher e
 - Malformed or targetless edits remain blocked. This change does not map Codex patch payloads or resolve #1900.
 - #1900 can reuse the shared classification entry point without copying tool-name tests.
 
+## Evolution (CI regressions on #1926)
+
+Unconditional `. _lib-fail-closed-json.sh || exit 2` in every remapping hook broke fixture sandboxes that copy a hook without that sibling library (process-budget, command-scrub false-positive checks, legacy markers, fan-out, tracker diagnostics). Claude Code Bash and Edit/Write paths must not load the library: remap only for `shellToolCall` and other unknown command-shaped names.
+
+The wildcard dispatcher early-outs used bare `exit 0`, which violates AgDR-0256 D9 33 (`test_prmeta_1759.sh`). Planned skip now sets `_dispatch_complete=1` and `exit "$_rc"` with `_rc=0`.
+
+`test_settings_fail_closed.sh` and `test_manage_portfolio_adapters.sh` now treat the wildcard `dispatch-bash.sh --shell-alias-only` entry as an intended seventh fail-closed settings entry and select the primary Bash matcher when exercising block behaviour.
+
 ## Artifacts
 
 - `.claude/hooks/_lib-fail-closed-json.sh`

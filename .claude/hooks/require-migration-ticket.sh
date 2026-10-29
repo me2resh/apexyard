@@ -84,9 +84,14 @@ _rmt_is_meta_exempt() {
 
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
-# shellcheck source=/dev/null
-. "$(dirname "$0")/_lib-fail-closed-json.sh" || exit 2
-if hook_is_shell_call "$INPUT"; then TOOL_NAME=Bash; fi
+case "$TOOL_NAME" in
+  Bash|Edit|Write|MultiEdit|NotebookEdit|'') ;;
+  *)
+    # shellcheck source=/dev/null
+    . "$(dirname "$0")/_lib-fail-closed-json.sh" || exit 2
+    if hook_is_shell_call "$INPUT"; then TOOL_NAME=Bash; fi
+    ;;
+esac
 # NOTE: the harness-supplied `.cwd` is deliberately NOT read. Rounds 3-8 joined
 # relative write targets to it, validated as absolute-and-existing. Security
 # review found the fail-open in round 9: `.cwd` is fixed when the tool call is
