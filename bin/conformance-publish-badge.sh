@@ -25,13 +25,14 @@
 # WHAT THIS SCRIPT DOES
 # ----------------------
 # 1. Queries the GitHub Actions API for this run's matrix job conclusions
-#    (one job per harness: opencode / pi / codex).
-# 2. For each harness: updates a green_streak counter — increments on a
+#    (opencode only on schedule, per AgDR-0278).
+# 2. For opencode: updates a green_streak counter, increments on a
 #    'success' conclusion, RESETS TO 0 on anything else (failure,
 #    cancelled, skipped — a flake resets the counter, per the AC's
 #    "green-continuous" definition; see docs/conformance-ci.md).
-# 3. Writes <harness>.json (shields.io endpoint schema) + a streak state
-#    file per harness to the conformance-badge branch and commits them.
+# 3. Writes opencode.json (shields.io endpoint schema) + its streak state
+#    file to the conformance-badge branch and commits them. Writes grey
+#    manual badges for pi and codex and keeps their streak files.
 # 4. Cursor is NOT computed here — it has no matrix job. Its badge is a
 #    static, hand-authored grey "manual" endpoint, checked in once and
 #    left alone by this script (see the Cursor block below), satisfying
@@ -54,13 +55,15 @@
 # harness" step sets SELECTED=false and exits 0 without running a real
 # gated turn), and without this guard the publisher counted that clean skip
 # toward "(proven)" as if a real scheduled turn had run. See
-# docs/conformance-ci.md § "The green-continuous rule".
+# docs/conformance-ci.md section "The green-continuous rule".
 
 set -euo pipefail
 
 GREEN_CONTINUOUS_THRESHOLD=3
 BADGE_BRANCH="conformance-badge"
-HARNESSES=(opencode pi codex)
+SCHEDULED_HARNESSES=(opencode)
+MANUAL_HARNESSES=(pi codex)
+HARNESSES=("${SCHEDULED_HARNESSES[@]}" "${MANUAL_HARNESSES[@]}")
 
 : "${GH_TOKEN:?GH_TOKEN must be set}"
 : "${RUN_ID:?RUN_ID must be set}"
@@ -104,7 +107,7 @@ git config user.name "apexyard-conformance-ci"
 CHANGED=0
 
 if [ "$EVENT_NAME" = "schedule" ]; then
-  for harness in "${HARNESSES[@]}"; do
+  for harness in "${SCHEDULED_HARNESSES[@]}"; do
     conclusion="$(conclusion_for "$harness")"
 
     streak_file="streak-${harness}.txt"
@@ -139,6 +142,18 @@ JSON
 
     echo "${harness}: conclusion=${conclusion} streak=${prev_streak}->${new_streak}"
     git add "${harness}.json" "$streak_file"
+    CHANGED=1
+  done
+  for harness in "${MANUAL_HARNESSES[@]}"; do
+    cat > "${harness}.json" <<JSON
+{
+  "schemaVersion": 1,
+  "label": "conformance: ${harness}",
+  "message": "manual",
+  "color": "lightgrey"
+}
+JSON
+    git add "${harness}.json"
     CHANGED=1
   done
 else

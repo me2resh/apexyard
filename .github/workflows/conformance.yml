@@ -3,6 +3,8 @@
 # Proves apexyard's mechanical governance gates still block a REAL,
 # credentialed agent turn under each live-proven third-party harness
 # (opencode, pi, Codex) — not a mock, not a by-construction unit test.
+# The schedule runs only opencode. Dispatch and workflow_call run all
+# three harnesses.
 # One matrix job per harness drives exactly one gated model turn
 # (instructing the agent to run `git add -A`) and asserts the delegated,
 # UNMODIFIED `.claude/hooks/block-git-add-all.sh` fired — via
@@ -21,12 +23,14 @@
 # See docs/conformance-ci.md for the full rationale (AgDR-0095).
 #
 # GREEN-CONTINUOUS: the harness-agnostic "proven" headline is gated on
-# N=3 consecutive scheduled green runs per harness, tracked via a
+# N=3 consecutive scheduled green runs for opencode, tracked via a
 # `green_streak` counter committed to the orphan `conformance-badge`
 # branch. Any red run (including a fail-closed missing-secret run)
-# resets that harness's streak to 0. See docs/conformance-ci.md.
+# resets opencode's streak to 0. Pi and codex show grey manual badges
+# and keep their streak files. See docs/conformance-ci.md.
 #
 # Decision record: docs/agdr/AgDR-0095-conformance-ci-badge.md
+# Schedule amendment: docs/agdr/AgDR-0278-conformance-zero-cost-schedule.md
 # Promoted from spike: me2resh/apexyard#848
 # Feature: me2resh/apexyard#871
 
@@ -35,12 +39,13 @@ name: Conformance CI
 on:
   workflow_call:
   schedule:
-    # Daily, not per-PR: pi and Codex bill a real per-turn API cost and
-    # per-PR frequency would multiply that cost with the number of PRs
+    # Only opencode runs daily on its free model. Pi and Codex run on
+    # dispatch and workflow_call because they bill a real per-turn API cost.
+    # Per-PR frequency would multiply that cost with the number of PRs
     # touching unrelated files. Daily is frequent enough to catch drift
     # (a harness upgrade silently breaking the adapter, a hook wording
     # change breaking the assertion anchor) inside the 3-day
-    # green-continuous window without meaningfully increasing spend.
+    # green-continuous window for opencode without increasing API spend.
     - cron: "17 6 * * *"
   workflow_dispatch:
     inputs:
@@ -64,7 +69,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        harness: [opencode, pi, codex]
+        harness: ${{ fromJSON(github.event_name == 'schedule' && '["opencode"]' || '["opencode", "pi", "codex"]') }}
     steps:
       - name: Skip non-selected harness (manual single-harness dispatch)
         if: github.event_name == 'workflow_dispatch' && inputs.harness != '' && inputs.harness != matrix.harness
@@ -166,7 +171,7 @@ jobs:
         env:
           SCRATCH_DIR: ${{ steps.scratch.outputs.dir }}
         run: |
-          npm install -g opencode-ai@1.17.16
+          npm install -g opencode-ai@1.19.4
           bash bin/install-opencode-adapter.sh --root "$(pwd)" --target-dir "$SCRATCH_DIR/.opencode/plugins"
           (cd harness-adapters/opencode && npm install)
 

@@ -238,7 +238,7 @@ manual configuration files from Quick Start when a skill is unavailable.
 | **Codex** | ✅ **Yes: proven.** Same, in a real Codex session. | `bash bin/sync-codex-adapter.sh` | Codex has to trust the rules once: `/hooks`, a one-off flag, or a user-level install. Details: [`docs/codex-adapter.md`](docs/codex-adapter.md). |
 | **Cursor** | ✅ **Yes: native in the IDE.** Cursor loads `.claude/` when third-party configs are on. The ticket-first rule refused a real Write call (2026-09-16). | Enable third-party configs. Then `bash bin/install-cursor-adapter.sh` for the session-pin overlay. | IDE only. The command-line `cursor-agent` ignores hooks. A leftover full adapter can lock the session. |
 
-*Inside:* your rules stay one set of portable bash scripts, and every tool reads the **same** ones. Tools never read a separate copy that can drift out of sync. A daily, credentialed [Conformance CI](docs/conformance-ci.md) job re-verifies opencode, pi, and Codex. Cursor has no headless path in that matrix. Full per-tool setup, limits, and how to add a new tool → **[`docs/harnesses/README.md`](docs/harnesses/README.md)**.
+*Inside:* your rules stay one set of portable bash scripts, and every tool reads the **same** ones. Tools never read a separate copy that can drift out of sync. A daily [Conformance CI](docs/conformance-ci.md) job re-verifies opencode on its free model. Pi and Codex run on manual dispatch and before each release. Cursor has no headless path in that matrix. Full per-tool setup, limits, and how to add a new tool → **[`docs/harnesses/README.md`](docs/harnesses/README.md)**.
 
 ## Roles, workflows & templates
 
