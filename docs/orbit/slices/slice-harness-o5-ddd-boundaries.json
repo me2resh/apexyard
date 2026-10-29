@@ -4,8 +4,8 @@
   "planId": "plan-apexyard-harness-golden-path",
   "outcomeId": "o5-ddd-boundaries-enforced",
   "basedOn": {
-    "planRevision": 3,
-    "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261010T145545Z",
+    "planRevision": 4,
+    "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261028T092303Z",
     "repositories": {}
   },
   "objective": "Ship a golden-path dependency-cruiser config that enforces the layer rules of handbooks/architecture/clean-architecture-layers.md. Run it in code-quality.yml only when a project has the config. Test it in a dedicated Node CI job. Make the handbook state that CI enforces it.",

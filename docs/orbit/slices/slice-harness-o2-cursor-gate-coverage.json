@@ -4,8 +4,8 @@
   "planId": "plan-apexyard-harness-golden-path",
   "outcomeId": "o2-cursor-gate-coverage",
   "basedOn": {
-    "planRevision": 3,
-    "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261010T145545Z",
+    "planRevision": 4,
+    "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261028T092303Z",
     "repositories": {}
   },
   "objective": "Capture the hook payloads cursor-agent sends once. Replay them offline through the real gates. A test records gate by gate whether each gate blocks under Cursor. Make the Cursor adapter and docs state that tested coverage.",

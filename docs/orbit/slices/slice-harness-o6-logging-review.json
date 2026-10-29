@@ -4,8 +4,8 @@
   "planId": "plan-apexyard-harness-golden-path",
   "outcomeId": "o6-logging-standard",
   "basedOn": {
-    "planRevision": 3,
-    "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261010T145545Z",
+    "planRevision": 4,
+    "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261028T092303Z",
     "repositories": {}
   },
   "objective": "State what application logging must provide. Recommend a logger without mandating it. Add a blocking logging handbook that Rex reliably loads for logger changes. Ship a swappable Logger port example tested in the o5 Node CI job.",
