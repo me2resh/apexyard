@@ -681,12 +681,10 @@ pt_walk_tokens() {
     # A command substitution runs in a subshell with the current directory.
     if [ "$kind" = S ]; then ( pt_scan "$token" ) || exit 2; continue; fi
     if [ "$kind" = Q ]; then
-      # Syntax-check quoted backtick bodies as data, without executing them.
-      # Regex fragments are not shell programs; real substitutions still
-      # receive the same protected-write scan as unquoted substitutions.
-      if /bin/bash -n <<<"$token" 2>/dev/null; then
-        ( pt_scan "$token" ) || exit 2
-      fi
+      # Paired backticks execute inside double quotes. Scan even a body with
+      # invalid syntax: Bash 3.2 can run its valid start before the error.
+      ( pt_scan "$token" ) || exit 2
+      /bin/bash -n <<<"$token" 2>/dev/null || pt_block 'cannot parse quoted command substitution.'
       continue
     fi
     if [ "$kind" = W ]; then

@@ -1,5 +1,5 @@
 #!/bin/bash
-# CLASS: CONTROL — blocks repository-mutating git commands while a sanctioned
+# CLASS: CONTROL -- blocks repository-mutating git commands while a sanctioned
 # review-class agent is active (me2resh/apexyard#1233, AgDR-0145). Worktree
 # creation remains available for a path outside the ops fork and managed
 # workspace so a reviewer can provision an isolated checkout after the
@@ -21,8 +21,8 @@
 # CLAUDE_CODE_SESSION_ID via active_reviewer_marker_path (_lib-review-markers.sh),
 # so this hook only ever sees the marker THIS session's own review wrote. A
 # review running in a different session (a different worktree, a different
-# terminal, on the same ops fork) can no longer block — or, on the overwrite
-# race the fixed shared path used to have, fail to block — this session.
+# terminal, on the same ops fork) can no longer block -- or, on the overwrite
+# race the fixed shared path used to have, fail to block -- this session.
 
 set -u
 
@@ -283,7 +283,7 @@ esac
 if command -v active_reviewer_marker_path >/dev/null 2>&1; then
   ACTIVE=$(active_reviewer_marker_path "$ROOT")
 else
-  # Defensive fallback if the lib is missing — pre-#1376 fixed path, so a
+  # Defensive fallback if the lib is missing -- pre-#1376 fixed path, so a
   # broken install fails no worse than it did before this change.
   ACTIVE="$ROOT/.claude/session/active-reviewer"
 fi
@@ -310,12 +310,12 @@ _brrm_has_marker() {
 # ADVISORY ONLY (me2resh/apexyard#1400 security re-review, LOW 3): a session
 # with an id resolves ACTIVE to the session-suffixed path and never falls
 # back to the bare legacy path once that id exists (AgDR-0166). A caller that
-# still writes the literal `.claude/session/active-reviewer` string — a
+# still writes the literal `.claude/session/active-reviewer` string -- a
 # prompt or doc that predates the #1376 fix, or a stale write left over from
-# before an upgrade — arms no lock for this session: this hook silently
+# before an upgrade -- arms no lock for this session: this hook silently
 # never reads that file, so a reviewing session's own git mutations are not
 # blocked, without any message saying why. This warning names that state on
-# stderr. It does not gate on the legacy file — the session-scoped check
+# stderr. It does not gate on the legacy file -- the session-scoped check
 # above and below remains the only thing that blocks.
 LEGACY_ACTIVE="$ROOT/.claude/session/active-reviewer"
 SID="${CLAUDE_CODE_SESSION_ID:-}"
@@ -332,12 +332,12 @@ fi
 # remote. The command-position anchor avoids matching quoted review prose such
 # as `echo 'git commit is forbidden'`. Options such as `git -C repo commit` are
 # accepted by the middle token span.
-MUTATING='add|commit|push|restore|reset|stash|clean|checkout|checkout-index|switch|mv|rm|rebase|cherry-pick|merge|tag|update-ref|fetch|apply|revert|am|bisect|replace|filter-branch|gc|init|repack|prune|fast-import|pull|read-tree|write-tree|commit-tree|update-index|hash-object|index-pack|pack-refs|mktag|mktree|clone|init-db|stage|subtree|replay'
+MUTATING='add|commit|push|restore|reset|stash|clean|checkout|checkout-index|switch|mv|rm|rebase|cherry-pick|merge|update-ref|fetch|apply|revert|am|bisect|replace|filter-branch|gc|init|repack|prune|fast-import|pull|read-tree|write-tree|commit-tree|update-index|index-pack|pack-refs|mktag|mktree|clone|init-db|stage|subtree|replay'
 
 # ADVISORY ONLY (me2resh/apexyard#1400, narrowed in #1408): when this session
 # resolves a scoped marker path but only a legacy shared file exists on disk,
 # mutations are not blocked. Name that fail-open state on stderr, but only when
-# the Bash payload is a git mutation — read-only commands such as `ls` must
+# the Bash payload is a git mutation -- read-only commands such as `ls` must
 # stay silent (the legacy file is irrelevant to them).
 if ! _brrm_has_marker && [ -n "$SID" ] && [ "$ACTIVE" != "$LEGACY_ACTIVE" ] && [ -f "$LEGACY_ACTIVE" ]; then
   _legacy_advise=0
@@ -387,7 +387,7 @@ fi
 # Classify each branch/tag/hash-object segment independently. Consume only
 # values of known listing options; a remaining name can create a ref.
 _brrm_read_git_form() {
-  local verb="$1" arg skip=0
+  local verb="$1" arg skip=0 list=0
   shift
   while [ "$#" -gt 0 ]; do
     arg="$1"; shift
@@ -399,10 +399,13 @@ _brrm_read_git_form() {
       case "$arg" in -*) ;; *) continue ;; esac
     fi
     case "$verb:$arg" in
-      branch:-a|branch:-r|branch:--all|branch:--remotes|branch:--show-current|branch:-v|branch:-vv|branch:--verbose|branch:--list|branch:-l) ;;
-      tag:-l|tag:--list|tag:-n|tag:-n[0-9]*) ;;
-      branch:--contains|branch:--no-contains|branch:--merged|branch:--no-merged|tag:--contains) skip=optional ;;
-      branch:--points-at|branch:--sort|branch:--format|tag:--points-at|tag:--sort|tag:--format) skip=1 ;;
+      branch:-a|branch:-r|branch:--all|branch:--remotes|branch:--show-current|branch:-v|branch:-vv|branch:--verbose) ;;
+      branch:--list|branch:-l) list=1 ;;
+      tag:-n|tag:-n[0-9]*) ;;
+      tag:-l|tag:--list) list=1 ;;
+      branch:--contains|branch:--no-contains|branch:--merged|branch:--no-merged|tag:--contains) skip=optional; list=1 ;;
+      branch:--points-at|tag:--points-at) skip=1; list=1 ;;
+      branch:--sort|branch:--format|tag:--sort|tag:--format) skip=1 ;;
       branch:--contains=*|branch:--no-contains=*|branch:--merged=*|branch:--no-merged=*|branch:--points-at=*|branch:--sort=*|branch:--format=*|tag:--contains=*|tag:--points-at=*|tag:--sort=*|tag:--format=*) ;;
       hash-object:-w|hash-object:--stdin-paths) return 1 ;;
       hash-object:--path) skip=1 ;;
@@ -410,18 +413,48 @@ _brrm_read_git_form() {
       hash-object:-t) skip=1 ;;
       hash-object:-*) return 1 ;;
       hash-object:*) ;;
-      *) return 1 ;;
+      *) case "$arg" in -*) return 1 ;; esac; [ "$list" = 1 ] || return 1 ;;
     esac
   done
   [ "$skip" != 1 ]
 }
-_brrm_filtered=""
-while IFS= read -r _brrm_seg; do
-  _brrm_ref_re='^[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?(branch|tag|hash-object)([[:space:]]|$)'
+# Split only shell separators outside quotes. Keep redirects and quoted text
+# intact, and never rewrite COMMAND: later mutation checks need the original.
+_brrm_segments() {
+  printf '%s' "$1" | awk '
+  BEGIN { q=""; s=""; esc=0 }
+  {
+    if(NR>1) text=text "\n"
+    text=text $0
+  }
+  END {
+    for(i=1;i<=length(text);i++) {
+      c=substr(text,i,1); n=substr(text,i+1,1); p=substr(text,i-1,1)
+      if(esc) {s=s c; esc=0; continue}
+      if(c=="\\" && q!="\047") {s=s c; esc=1; continue}
+      if(q!="") {s=s c; if(c==q) q=""; continue}
+      if(c=="\047" || c=="\"") {q=c; s=s c; continue}
+      if(c=="#" && (s=="" || p ~ /[ \t]/)) {
+        while(i<=length(text) && substr(text,i,1)!="\n") i++
+        c="\n"; n=""
+      }
+      if(c==";" || c=="\n" || c=="|" ||
+         (c=="&" && p!="<" && p!=">" && n!=">")) {
+        printf "%s%c",s,0; s=""
+        if((c=="&" || c=="|") && n==c) i++
+      } else s=s c
+    }
+    printf "%s%c",s,0
+  }'
+}
+while IFS= read -r -d '' _brrm_seg; do
+  _brrm_ref_re='^[[:space:]]*git[[:space:]]+((-C|-c)[[:space:]]+[^[:space:]]+[[:space:]]+|--(git-dir|work-tree)=[^[:space:]]+[[:space:]]+|(--no-pager|-P|--bare)[[:space:]]+)*(branch|tag|hash-object)([[:space:]]|$)'
   if [[ $_brrm_seg =~ $_brrm_ref_re ]]; then
-    _brrm_verb=${BASH_REMATCH[2]}
+    _brrm_verb=${BASH_REMATCH[5]}
     _brrm_args=${_brrm_seg#*"${BASH_REMATCH[0]}"}
-    # No eval or glob expansion. Quoted values remain inert tokens.
+    # Redirects do not name refs. Remove their operators and literal targets
+    # only in this classification view; downstream checks retain COMMAND.
+    _brrm_args=$(printf '%s' "$_brrm_args" | sed -E 's/(^|[[:space:]])([0-9]*[<>][<>]?\&?|\&>)[[:space:]]*[^[:space:]]+/ /g')
     set -f
     # shellcheck disable=SC2086
     _brrm_read_git_form "$_brrm_verb" $_brrm_args
@@ -431,11 +464,8 @@ while IFS= read -r _brrm_seg; do
       echo "BLOCKED: review-class agent cannot create or alter refs or objects during an active review." >&2
       exit 2
     fi
-    _brrm_seg='true'
   fi
-  _brrm_filtered="$_brrm_filtered ; $_brrm_seg"
-done < <(printf '%s\n' "$COMMAND" | tr ';&|' '\n\n\n')
-COMMAND=$_brrm_filtered
+done < <(_brrm_segments "$COMMAND")
 # Judge each `git ... config` segment alone, so that a read in one segment
 # cannot cover a write in the next. A read may name a scope or display option
 # before the read action, for example `git config --local --get-regexp x`, and

@@ -43,11 +43,16 @@ for cmd in 'grep --anything x .claude/hooks/x.sh' 'sed -n 1p .claude/hooks/x.sh'
 done
 protected 2 'unknown diagnostic' 'mytool .claude/hooks/x.sh'
 if grep -Fq "unknown verb 'mytool' has a live protected operand '.claude/hooks/x.sh'." "$TMP/err"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
-protected 0 'quoted backticks and dollar' 'git -C /some/clone grep -n -E "PK: ?`|'"'"'[A-Z]+#'"'"'|`[A-Z]+#\$" origin/main -- app/src/infrastructure app/src/main'
+# Paired unescaped backticks execute even in a double-quoted grep pattern.
+protected 2 'paired backtick issue repro stays blocked' 'git -C /some/clone grep -n -E "PK: ?`|'"'"'[A-Z]+#'"'"'|`[A-Z]+#\$" origin/main -- app/src/infrastructure app/src/main'
 protected 0 'single quoted backtick' 'git grep '"'"'`pattern$'"'"''
 protected 0 'escaped backtick' 'git grep "\`pattern"'
 protected 2 'unquoted sourced substitution write' 'echo $(. .claude/hooks/_lib-session-markers.sh; rm -f .claude/hooks/x.sh)'
 protected 2 'double quoted substitution write' 'echo "`rm -f .claude/hooks/x.sh`"'
+protected 0 'escaped paired issue pattern' 'git grep "PK: ?\`|[A-Z]+#|\`[A-Z]+#\$"'
+protected 0 'unmatched quoted backtick' 'git grep "`pattern"'
+protected 2 'invalid quoted backtick body writes before syntax error' 'echo "`rm -f .claude/hooks/x.sh
+if`"'
 printf '%s\n' rex > "$LIVE/.claude/session/active-reviewer.read1914"
 review() { check block-reviewer-repo-mutation.sh "$@"; }
 for cmd in 'git -C repo branch -a --contains abc' 'git tag --contains abc' 'git tag --sort=-v:refname' 'git hash-object file' 'git branch -r --no-contains abc --sort refname' 'git branch --list -vv --format=%(refname)' 'git tag -n --points-at abc' 'git branch --merged -a' 'git tag --contains' 'git -C /tmp/branch/repo branch --contains abc'; do
@@ -55,6 +60,13 @@ for cmd in 'git -C repo branch -a --contains abc' 'git tag --contains abc' 'git 
 done
 for cmd in 'git branch name' 'git branch -a name' 'git branch -d name' 'git branch -D name' 'git branch -m name' 'git branch -M name' 'git branch -c name' 'git branch -C name' 'git branch --set-upstream-to=main' 'git tag name' 'git tag -a name' 'git tag -d name' 'git tag -s name' 'git tag -f name' 'git hash-object -w file' 'git hash-object --stdin-paths' 'git tag --contains abc; git tag name' 'git branch -a; git branch name' 'git hash-object file; git hash-object -w file'; do
   review 2 "$cmd" "$cmd"
+done
+# Round 1: subcommand anchoring, redirects and real shell separators.
+for cmd in 'git checkout dev  # return to the base branch' 'git commit -am "add hash-object test"' 'git add tag' 'git stash push -m "branch work"' 'git config user.name branch' 'git branch new-name' 'git tag -d v1' 'git hash-object -w f' 'git branch --format="x;y|z&k" new-name' 'git branch -a & git tag -d v1' 'git branch -a && git tag -d v1' 'git branch -a || git tag -d v1' 'git branch -a | git tag -d v1' 'git branch -a; git tag -d v1' $'git branch -a\ngit tag -d v1'; do
+  review 2 "round 1 block $cmd" "$cmd"
+done
+for cmd in 'git branch -a 2>&1' 'git branch --show-current 2>/dev/null' "git branch --list 'fix/*'" 'git -C /x branch -a --contains abc123' 'git tag --contains abc123' 'git tag --sort=-v:refname' 'git hash-object f' 'git branch -a >&2' 'git branch -a &>/dev/null' 'git branch --format="x;y|z&k" --list "fix/*"' 'git -c x=y --git-dir=/x --work-tree=/y --no-pager -P --bare branch -a'; do
+  review 0 "round 1 read $cmd" "$cmd"
 done
 # Build UTF-8 at runtime: test source and hook changes stay ASCII.
 dash=$(printf '\342\200\224')
