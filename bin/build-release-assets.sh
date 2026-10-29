@@ -17,6 +17,9 @@ for file in apexyard apexyard-init.sh apexyard-update.sh _lib-telemetry.sh _lib-
 done
 sed "s/^APEXYARD_CLI_VERSION=.*/APEXYARD_CLI_VERSION=\"${version#v}\"/" "$root/bin/apexyard" > "$work/$name/bin/apexyard"
 chmod 755 "$work/$name/bin/"*
+mkdir -p "$work/$name/.claude/skills/preflight" "$work/$name/.claude/hooks"
+cp "$root/.claude/skills/preflight/preflight.sh" "$work/$name/.claude/skills/preflight/"
+cp "$root/.claude/hooks/"_lib-*.sh "$work/$name/.claude/hooks/"
 printf '%s\n' "$version" > "$work/$name/VERSION"
 # Stable input order and timestamps also work with BSD tar.
 (cd "$work" && find "$name" -exec env TZ=UTC touch -t 200001010000 {} +)

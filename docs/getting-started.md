@@ -9,8 +9,9 @@ for the directory layout, daily workflow, upgrade path, and FAQ.
 
 - A GitHub account and an organisation where you can create a fork
 - An installation of [Claude Code](https://claude.com/claude-code)
-- An installation of [GitHub CLI (`gh`)](https://cli.github.com). `apexyard init` needs this tool. The fork method can use the web UI.
-- An installation of [`jq`](https://jqlang.org/download/). The framework needs jq. Framework hooks use jq to read `.claude/project-config.json` overrides. Without jq, the hooks silently ignore your overrides. Use `brew install jq` / `apt-get install jq` / `dnf install jq` for your platform. `/setup` refuses to run without jq. A SessionStart banner shows a warning if jq disappears later. See [AgDR-0038](agdr/AgDR-0038-jq-as-hard-dependency.md) for the reason.
+- Homebrew installs `jq` and `gh` with ApexYard. Other install paths run the shared dependency check.
+- `apexyard doctor` offers to install missing tools after an explicit yes in an interactive terminal.
+- The framework requires jq 1.6 or later. `apexyard init` also requires GitHub CLI (`gh`).
 - **Windows**: Use [Git for Windows](https://gitforwindows.org) or WSL. The
   `.claude/hooks/*.sh` files use Bash. Native `cmd.exe` and PowerShell cannot
   run them. The project fixed the `C:`-drive path issue that [#691](https://github.com/me2resh/apexyard/issues/691) reports.
@@ -18,12 +19,12 @@ for the directory layout, daily workflow, upgrade path, and FAQ.
 
 After cloning, run `bash bin/apexyard doctor` before `/setup`, or use
 `apexyard doctor` if the CLI is on PATH. `/preflight` runs the same checks
-inside Claude Code. The report suggests fixes and makes no changes.
+inside Claude Code. The report is read-only. Optional dependency installs require your explicit yes.
 Exit codes are 0 (pass), 1 (warning), and 2 (failure).
 
-On Windows, install the optional GitHub CLI with `winget install GitHub.cli`.
-Install jq 1.6 or later with `winget install jqlang.jq`. You need jq. Run the
-check in Git Bash or WSL.
+On Windows, run the check in Git Bash or WSL. In Git Bash, doctor offers
+winget commands for missing jq and gh. Non-interactive checks install nothing.
+Set `APEXYARD_NO_INSTALL=1` to disable installation offers.
 
 ---
 
@@ -34,11 +35,13 @@ check in Git Bash or WSL.
 Install the CLI. Then create your ops repo with one command:
 
 ```bash
-curl -fsSL https://apexyard.ai/install | sh   # CLI only; no sudo; checks the release checksum
+curl -fsSL https://apexyard.ai/install | sh   # checks the release checksum; lists missing jq or gh
 apexyard init --org your-org --name ops --private
 ```
 
-You can also install the CLI with `brew install me2resh/tap/apexyard`.
+A piped install cannot ask questions, so it installs no tools. Run `apexyard doctor` in a terminal to install a missing jq or gh, with your consent.
+
+You can also install the CLI with `brew install me2resh/tap/apexyard`. Homebrew installs jq and gh too.
 
 Or run `npx create-apexyard --org your-org --name ops --private`. It installs
 the CLI when the CLI is absent, then runs `apexyard init` with these options.
@@ -316,7 +319,7 @@ The tool communicates with a language server instead of searching the file tree 
 
 ### Why turn it on?
 
-The LSP spike (PR #184, ticket #178) measured input-token cost for three representative queries on a real TypeScript backend (~9,750 LOC). Shallow semantic queries, such as single-symbol lookups and reference searches, cost ~3-15× less with LSP than with grep + Read. Multi-hop traces follow chains of definitions across modules. These traces cost only ~1.4× less, because the agent must still read prose to summarize behavior.
+The LSP spike (PR #184, ticket #178) measured input-token cost for three representative queries on a real TypeScript backend (~9,750 LOC). Shallow semantic queries, such as single-symbol lookups and reference searches, cost ~3-15x less with LSP than with grep + Read. Multi-hop traces follow chains of definitions across modules. These traces cost only ~1.4x less, because the agent must still read prose to summarize behavior.
 
 A Code Reviewer agent run on a typical PR can use fewer tokens. It can use a quarter to a tenth of the tokens of a review that uses grep. This applies when the review includes a few definition lookups. The agent can use the remaining token budget for review reasoning.
 
@@ -337,7 +340,7 @@ Run `/setup` for the first run, or `/setup --enable-lsp` to add LSP to a fork th
 
    Run its three commands inside Claude Code, not the shell: `/plugin marketplace add anthropics/claude-plugins-official`, `/plugin install <plugin-name>@claude-plugins-official`, and `/reload-plugins`. The skill replaces `<plugin-name>` with the name for your language, for example `typescript-lsp`, `pyright-lsp`, `gopls-lsp`, or `rust-analyzer-lsp`. The skill always prints the marketplace add command. The documentation states that `claude-plugins-official` loads automatically, but fresh installations do not always do this.
 
-The skill defaults to on for typical machines with ≥ 4 cores AND ≥ 8 GB RAM. It defaults to off for machines with fewer resources. The operator can change either default. Repeated runs of `/setup --enable-lsp` do not repeat configuration changes. If the environment variable and server binary already exist, the skill reports "already enabled" and exits.
+The skill defaults to on for typical machines with >= 4 cores AND >= 8 GB RAM. It defaults to off for machines with fewer resources. The operator can change either default. Repeated runs of `/setup --enable-lsp` do not repeat configuration changes. If the environment variable and server binary already exist, the skill reports "already enabled" and exits.
 
 The first version of the LSP automation does not support Windows. On Windows, `/setup` shows a manual-install reference to this section and continues without LSP.
 
@@ -389,7 +392,7 @@ The TypeScript compiler (`typescript` on npm) includes `tsserver`. Most TypeScri
 # Verify your project ships tsserver
 npx tsserver --version 2>/dev/null || npm ls typescript
 
-# Install the Claude Code plugin — run inside Claude Code, not the shell:
+# Install the Claude Code plugin -- run inside Claude Code, not the shell:
 #   /plugin install typescript-lsp@claude-plugins-official
 ```
 
@@ -403,7 +406,7 @@ npm install -g pyright
 uv add --dev pyright
 # pip install pyright
 
-# Then install the Python plugin — run inside Claude Code, not the shell:
+# Then install the Python plugin -- run inside Claude Code, not the shell:
 #   /plugin install pyright-lsp@claude-plugins-official
 ```
 
@@ -418,7 +421,7 @@ go install golang.org/x/tools/gopls@latest
 # Verify it's on $PATH
 which gopls
 
-# Then install the Go plugin — run inside Claude Code, not the shell:
+# Then install the Go plugin -- run inside Claude Code, not the shell:
 #   /plugin install gopls-lsp@claude-plugins-official
 ```
 
@@ -435,7 +438,7 @@ rustup component add rust-analyzer
 # Verify
 rust-analyzer --version
 
-# Then install the Rust plugin — run inside Claude Code, not the shell:
+# Then install the Rust plugin -- run inside Claude Code, not the shell:
 #   /plugin install rust-analyzer-lsp@claude-plugins-official
 ```
 
@@ -450,7 +453,7 @@ Cargo workspaces with many crates take a long time to index initially. See the c
 
 ## Optional: Fallow static analysis (JS/TS)
 
-For JavaScript / TypeScript projects, the Code Reviewer agent (Rex) can run [Fallow](https://docs.fallow.tools) static analysis during every code review. The analysis finds dead code, unused exports and dependencies, duplication, circular dependencies, and high complexity in changed code. It also previews fixes with a dry run. See `.claude/agents/code-reviewer.md` § 9 and [AgDR-0069](agdr/AgDR-0069-fallow-in-code-review.md).
+For JavaScript / TypeScript projects, the Code Reviewer agent (Rex) can run [Fallow](https://docs.fallow.tools) static analysis during every code review. The analysis finds dead code, unused exports and dependencies, duplication, circular dependencies, and high complexity in changed code. It also previews fixes with a dry run. See `.claude/agents/code-reviewer.md` section 9 and [AgDR-0069](agdr/AgDR-0069-fallow-in-code-review.md).
 
 You must enable this optional analysis. Rex runs it only when the diff touches `**/*.{js,jsx,mjs,cjs,ts,tsx}` AND the `fallow` CLI exists on `PATH`. If the CLI is absent, Rex silently skips the step. Reviews work without Fallow and give more information with it. Findings are advisory (`nit:` / `suggestion:`). They never change a verdict on their own. The review only previews fixes (`fallow fix --dry-run`). It never changes your tree.
 
