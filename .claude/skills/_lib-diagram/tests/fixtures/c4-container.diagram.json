@@ -1,0 +1,62 @@
+{
+  "schema": "apexyard.diagram/v1",
+  "diagram": {
+    "type": "c4-container",
+    "title": "Sample c4-container",
+    "project": "sample-app",
+    "direction": "LR"
+  },
+  "generated": {
+    "by": "/c4",
+    "date": "2026-10-29"
+  },
+  "repo": {
+    "name": "example-org/sample-app",
+    "web_url": "https://github.com/example-org/sample-app",
+    "commit": null
+  },
+  "groups": [
+    {
+      "id": "zone",
+      "kind": "system_boundary",
+      "label": "Application"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "actor",
+      "kind": "person",
+      "label": "Customer",
+      "technology": ""
+    },
+    {
+      "id": "api",
+      "kind": "container",
+      "label": "API",
+      "group": "zone",
+      "tags": [
+        "internal"
+      ],
+      "technology": "Python"
+    },
+    {
+      "id": "db",
+      "kind": "store",
+      "label": "Records",
+      "group": "zone",
+      "technology": ""
+    }
+  ],
+  "edges": [
+    {
+      "from": "actor",
+      "to": "api",
+      "label": "HTTPS"
+    },
+    {
+      "from": "api",
+      "to": "db",
+      "label": "Read records"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+flowchart LR
+    subgraph zone["Application"]
+        api(("API"))
+        db[("Records")]
+    end
+    actor["Customer"]
+    api -->|Read records| db
+    actor -->|HTTPS| api

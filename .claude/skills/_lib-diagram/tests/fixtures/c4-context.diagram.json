@@ -1,0 +1,54 @@
+{
+  "schema": "apexyard.diagram/v1",
+  "diagram": {
+    "type": "c4-context",
+    "title": "Sample c4-context",
+    "project": "sample-app",
+    "direction": "LR"
+  },
+  "generated": {
+    "by": "/c4",
+    "date": "2026-10-29"
+  },
+  "repo": {
+    "name": "example-org/sample-app",
+    "web_url": "https://github.com/example-org/sample-app",
+    "commit": null
+  },
+  "groups": [],
+  "nodes": [
+    {
+      "id": "actor",
+      "kind": "person",
+      "label": "Customer",
+      "technology": ""
+    },
+    {
+      "id": "api",
+      "kind": "system",
+      "label": "API",
+      "tags": [
+        "internal"
+      ],
+      "technology": ""
+    },
+    {
+      "id": "db",
+      "kind": "external_system",
+      "label": "Records",
+      "technology": ""
+    }
+  ],
+  "edges": [
+    {
+      "from": "actor",
+      "to": "api",
+      "label": "HTTPS"
+    },
+    {
+      "from": "api",
+      "to": "db",
+      "label": "Read records"
+    }
+  ]
+}

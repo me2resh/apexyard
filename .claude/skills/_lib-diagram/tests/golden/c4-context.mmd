@@ -1,0 +1,7 @@
+C4Context
+    title Sample c4-context
+    Person(actor, "Customer", "")
+    System(api, "API", "")
+    System_Ext(db, "Records", "")
+    Rel(api, db, "Read records", "")
+    Rel(actor, api, "HTTPS", "")

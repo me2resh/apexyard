@@ -1,0 +1,9 @@
+C4Container
+    title Sample c4-container
+    System_Boundary(zone, "Application") {
+        Container(api, "API", "Python", "")
+        ContainerDb(db, "Records", "", "")
+    }
+    Person(actor, "Customer", "")
+    Rel(api, db, "Read records", "")
+    Rel(actor, api, "HTTPS", "")

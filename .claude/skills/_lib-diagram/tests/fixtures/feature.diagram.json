@@ -1,0 +1,83 @@
+{
+  "schema": "apexyard.diagram/v1",
+  "diagram": {
+    "type": "feature",
+    "title": "Sample feature",
+    "project": "sample-app",
+    "direction": "LR"
+  },
+  "generated": {
+    "by": "/feature-diagram",
+    "date": "2026-10-29"
+  },
+  "repo": {
+    "name": "example-org/sample-app",
+    "web_url": "https://github.com/example-org/sample-app",
+    "commit": null
+  },
+  "groups": [
+    {
+      "id": "Screens",
+      "kind": "layer",
+      "label": "Screens"
+    },
+    {
+      "id": "Routes",
+      "kind": "layer",
+      "label": "Routes"
+    },
+    {
+      "id": "Jobs",
+      "kind": "layer",
+      "label": "Jobs"
+    },
+    {
+      "id": "Models",
+      "kind": "layer",
+      "label": "Models"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "actor",
+      "kind": "screen",
+      "label": "Customer",
+      "technology": "",
+      "group": "Screens"
+    },
+    {
+      "id": "api",
+      "kind": "route",
+      "label": "API",
+      "group": "Routes",
+      "tags": [
+        "internal"
+      ],
+      "technology": ""
+    },
+    {
+      "id": "db",
+      "kind": "model",
+      "label": "Records",
+      "group": "Models",
+      "technology": ""
+    }
+  ],
+  "edges": [
+    {
+      "from": "Screens",
+      "to": "Routes",
+      "label": "submits"
+    },
+    {
+      "from": "Routes",
+      "to": "Jobs",
+      "label": "enqueues"
+    },
+    {
+      "from": "Jobs",
+      "to": "Models",
+      "label": "writes"
+    }
+  ]
+}

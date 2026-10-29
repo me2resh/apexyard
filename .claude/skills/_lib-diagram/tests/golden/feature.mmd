@@ -1,0 +1,16 @@
+flowchart LR
+    subgraph Jobs["Jobs"]
+        Jobs_empty["(empty)"]
+    end
+    subgraph Models["Models"]
+        db["Records"]
+    end
+    subgraph Routes["Routes"]
+        api["API"]
+    end
+    subgraph Screens["Screens"]
+        actor["Customer"]
+    end
+    Jobs -->|writes| Models
+    Routes -->|enqueues| Jobs
+    Screens -->|submits| Routes
