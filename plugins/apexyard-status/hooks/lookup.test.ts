@@ -55,17 +55,26 @@ test('process pool never exceeds four concurrent calls, including failures', asy
   expect(active).toBe(0)
 })
 
-test('registration and headless lifecycle perform no engine operations', async () => {
+test('command exists before any turn and headless lifecycle starts no processes', async () => {
   type Hook = (engine: EngineInterface, event: never, next: (event: never) => Promise<string>) => Promise<unknown>
   const hooks = new Map<string, Hook>()
   const on = ((event: string, filter: unknown, handler?: Hook) => {
     if (event === 'session.start' || event === 'turn.complete') hooks.set(event, (handler ?? filter) as Hook)
   }) as unknown as import('claude-code').On
   let operations = 0
-  const engine = new Proxy({}, { get() { operations++; throw new Error('headless engine accessed') } }) as EngineInterface
+  const commands: string[] = []
+  const engine = new Proxy({ command: { register: async (command: { name: string }) => { commands.push(command.name) } } }, {
+    get(target, key) {
+      if (key === 'command') return target.command
+      operations++
+      throw new Error('headless engine accessed')
+    },
+  }) as unknown as EngineInterface
   register(on, {})
   expect(operations).toBe(0)
-  for (const event of ['session.start', 'turn.complete', 'turn.complete']) {
+  expect(await hooks.get('session.start')!(engine, {} as never, async () => 'continued')).toBe('continued')
+  expect(commands).toEqual(['orbit-progress'])
+  for (const event of ['turn.complete', 'turn.complete']) {
     expect(await hooks.get(event)!(engine, {} as never, async () => 'continued')).toBe('continued')
   }
   expect(operations).toBe(0)
@@ -114,7 +123,7 @@ test('one git snapshot reads records and notes together', async () => {
   let calls = 0
   const engine = { process: { run: async (argv: string[]) => {
     calls++
-    expect(argv).toEqual(['git', '-C', '/repo', 'grep', '--no-color', '-I', '-e', '^', 'origin/dev', '--', 'docs/orbit'])
+    expect(argv).toEqual(['git', '-C', '/repo', '-c', 'grep.lineNumber=false', '-c', 'grep.column=false', '-c', 'grep.fullName=true', '-c', 'color.grep=never', 'grep', '--no-color', '-I', '-e', '^', 'origin/dev', '--', 'docs/orbit'])
     return { exitCode: 0, stdout: 'origin/dev:docs/orbit/plans/p.json:{\norigin/dev:docs/orbit/plans/p.json:"id":"p"}\norigin/dev:docs/orbit/plans/p.notes.md:## Checks\n' }
   } } } as unknown as EngineInterface
   const files = await snapshot(engine, '/repo', 'dev')

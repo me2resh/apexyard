@@ -38,7 +38,7 @@ adapter_check_cached() {
   warning=$(printf '%b' 'ApexYard: installed Codex adapter may be stale \342\200\224 run bash bin/sync-codex-adapter.sh --reconcile-installed.')
   cache="$cache_dir/codex-adapter-check"
   hash=$(adapter_check_fingerprint 2>/dev/null) || hash=""
-  if [ -n "$hash" ] && [ -f "$cache" ]; then
+  if [ -n "$hash" ] && [ ! -L "$cache" ] && [ -f "$cache" ]; then
     saved=$(jq -er --arg hash "$hash" '
       select(.hash == $hash and .complete == true and (.diagnostic | type == "string"))
       | .diagnostic
@@ -67,7 +67,11 @@ $output"
         rm -f "$tmp"
         return 0
       fi
-      mv -f "$tmp" "$cache"
+      if [ -L "$cache" ]; then
+        rm -f "$tmp"
+        return 0
+      fi
+      mv -f "$tmp" "$cache" || rm -f "$tmp"
     fi
   fi
   return 0

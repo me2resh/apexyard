@@ -81,15 +81,16 @@ if [ -f "$CACHE_FILE" ]; then
 fi
 
 if [ "$SHOULD_FETCH" = "1" ]; then
-  # Quiet fetch with a short timeout. On failure (no network, no auth), exit
-  # silently — we don't want a startup banner yelling about offline state.
-  # `--tags --prune-tags` pulls tag refs and removes local copies of any tag
-  # upstream has retracted (rare, but keeps the local tag view honest).
-  if ! GIT_TERMINAL_PROMPT=0 _apexyard_gh_watchdog 3 git fetch upstream --tags --prune-tags --quiet 2>/dev/null; then
+  # A timed-out fetch leaves local release data usable. Retry next session.
+  # Other fetch failures remain silent. Only success updates the fetch stamp.
+  FETCH_RC=0
+  GIT_TERMINAL_PROMPT=0 _apexyard_gh_watchdog 3 git fetch upstream --tags --prune-tags --quiet 2>/dev/null || FETCH_RC=$?
+  if [ "$FETCH_RC" -eq 0 ]; then
+    mkdir -p "$CACHE_DIR"
+    echo "$NOW" > "$CACHE_FILE"
+  elif [ "$FETCH_RC" -ne 124 ]; then
     exit 0
   fi
-  mkdir -p "$CACHE_DIR"
-  echo "$NOW" > "$CACHE_FILE"
 fi
 
 # ---------------------------------------------------------------------------

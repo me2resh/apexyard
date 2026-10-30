@@ -83,7 +83,7 @@ const ORBIT_BRANCHES = ['main', 'dev']
 export async function snapshot($: EngineInterface, clone: string, ref: string): Promise<Map<string, string>> {
   const files = new Map<string, string>()
   try {
-    const r = await runProcess($, ['git', '-C', clone, 'grep', '--no-color', '-I', '-e', '^', `origin/${ref}`, '--', 'docs/orbit'], 5000)
+    const r = await runProcess($, ['git', '-C', clone, '-c', 'grep.lineNumber=false', '-c', 'grep.column=false', '-c', 'grep.fullName=true', '-c', 'color.grep=never', 'grep', '--no-color', '-I', '-e', '^', `origin/${ref}`, '--', 'docs/orbit'], 5000)
     if (r.exitCode !== 0) return files
     for (const line of r.stdout.split('\n')) {
       const match = line.match(/^origin\/(?:main|dev):(docs\/orbit\/[^:]+):(.*)$/)
@@ -521,14 +521,16 @@ export const register: Register = (on, options) => {
 
   // Only a real render proves that this session has a UI surface.
   let started = false
-  on('session.start', async ($, e, next) => next(e))
+  on('session.start', async ($, e, next) => {
+    await $.command.register({ name: 'orbit-progress', description: 'Show ORBIT initiatives (display only)' }).catch(() => {})
+    return next(e)
+  })
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
     if (hasSurface) {
       if (!started) {
         started = true
         $.clock.every(REFRESH_MS, () => background($))
-        void $.command.register({ name: 'orbit-progress', description: 'Show ORBIT initiatives (display only)' }).catch(() => {})
       }
       background($)
     }

@@ -58,7 +58,7 @@ Relative workspace paths resolve from the registry directory.
 - Display only. The plugin reads files. It runs read-only commands only: the ticket resolver, cached GitHub queries, Git record reads, and `ps` when you set a pattern. It never writes a file. It never replaces a shell hook. All gates stay in `.claude/hooks/`.
 - Band network call, read only: `gh pr list --repo <owner/repo> --state open --json number,headRefOid --limit 200`. The plugin runs it only for a repo that has a candidate PR, at most once every 120 seconds for each repo, with a 5-second time limit. It keeps the result in memory only. It never calls a write endpoint.
 - If `gh` is missing, is not signed in, fails or is too slow, the band counts from the markers only and shows `(offline)` next to the count.
-- Pane network calls use `gh issue list` and `gh pr list`. Each query is cached in memory for 120 seconds, including failures. Each call has a 5-second timeout and a 100-result limit. Counts describe those returned results. Expanding a slice reuses the same cache.
+- Pane network calls use `gh issue list` and `gh pr list`. Each query is cached in memory for 120 seconds, including failures. Each call has a 5-second timeout and a 100-result limit. Counts describe those returned results. Batched and single-slice queries use different cache keys. Expanding a slice can run another query.
 - Fork only. Outside an ops fork, the plugin draws nothing.
 
 ## Install
