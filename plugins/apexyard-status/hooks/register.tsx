@@ -29,6 +29,24 @@ import {
 } from './band'
 import type { GhCache, OpenPrs } from './band'
 
+export function processPool(limit: number) {
+  let active = 0
+  const queue: (() => void)[] = []
+  return async <T,>(work: () => Promise<T>): Promise<T> => {
+    await new Promise<void>(resolve => {
+      const enter = () => { active++; resolve() }
+      if (active < limit) enter()
+      else queue.push(enter)
+    })
+    try { return await work() }
+    finally { active--; queue.shift()?.() }
+  }
+}
+const pooled = processPool(4)
+function runProcess($: EngineInterface, argv: string[], timeoutMs: number, cwd?: string) {
+  return pooled(() => $.process.run(argv, { timeoutMs, ...(cwd ? { cwd } : {}) }))
+}
+
 const band = atom({ plugin: 'apexyard-status', key: 'band' } as const, null)
 
 const orbit = atom({ plugin: 'apexyard-status', key: 'orbit' } as const, null)
@@ -61,35 +79,32 @@ export function parseRegistry(yaml: string): { repo: string; workspace: string }
 // and release to main, so dev records appear before a release.
 const ORBIT_BRANCHES = ['main', 'dev']
 
-async function gitShow($: EngineInterface, clone: string, ref: string, path: string): Promise<unknown | null> {
+// One snapshot per ref and repo, including JSON records and optional notes.
+export async function snapshot($: EngineInterface, clone: string, ref: string): Promise<Map<string, string>> {
+  const files = new Map<string, string>()
   try {
-    const r = await $.process.run(['git', '-C', clone, 'show', `origin/${ref}:${path}`], { timeoutMs: 5000 })
-    return r.exitCode === 0 ? JSON.parse(r.stdout) : null
-  } catch {
-    return null
-  }
-}
-
-async function gitList($: EngineInterface, clone: string, ref: string, dir: string): Promise<string[]> {
-  try {
-    const r = await $.process.run(['git', '-C', clone, 'ls-tree', '--name-only', `origin/${ref}`, `${dir}/`], { timeoutMs: 5000 })
-    return r.exitCode === 0 ? r.stdout.split('\n').filter(l => l.endsWith('.json')) : []
-  } catch {
-    return []
-  }
-}
-
-async function loadRecords($: EngineInterface, clone: string, dir: string) {
-  const lists: Record<string, unknown>[][] = []
-  for (const ref of ORBIT_BRANCHES) {
-    const out: Record<string, unknown>[] = []
-    for (const f of await gitList($, clone, ref, `docs/orbit/${dir}`)) {
-      const j = await gitShow($, clone, ref, f)
-      if (j && typeof j === 'object') out.push(j as Record<string, unknown>)
+    const r = await runProcess($, ['git', '-C', clone, 'grep', '--no-color', '-I', '-e', '^', `origin/${ref}`, '--', 'docs/orbit'], 5000)
+    if (r.exitCode !== 0) return files
+    for (const line of r.stdout.split('\n')) {
+      const match = line.match(/^origin\/(?:main|dev):(docs\/orbit\/[^:]+):(.*)$/)
+      if (match) files.set(match[1], (files.get(match[1]) ?? '') + match[2] + '\n')
     }
-    lists.push(out)
-  }
-  return mergeRecords(lists)
+  } catch { /* Missing refs produce an empty snapshot. */ }
+  return files
+}
+
+function records(snapshots: Map<string, string>[], dir: string) {
+  return mergeRecords(snapshots.map(files => {
+    const out: Record<string, unknown>[] = []
+    for (const [path, text] of files) {
+      if (!path.startsWith(`docs/orbit/${dir}/`) || !path.endsWith('.json')) continue
+      try {
+        const value: unknown = JSON.parse(text)
+        if (value && typeof value === 'object') out.push(value as Record<string, unknown>)
+      } catch { /* Ignore malformed records. */ }
+    }
+    return out
+  }))
 }
 
 export async function refreshOrbit($: EngineInterface, root: string, activeRepo: string | null, force = false) {
@@ -111,23 +126,21 @@ export async function refreshOrbit($: EngineInterface, root: string, activeRepo:
   for (const e of entries) {
     const clone = e.workspace.startsWith('/') ? e.workspace : `${portfolio}/${e.workspace}`
     if (!(await exists($, clone))) continue
-    const all = await loadRecords($, clone, 'plans')
+    const snapshots = await Promise.all(ORBIT_BRANCHES.map(ref => snapshot($, clone, ref)))
+    const all = records(snapshots, 'plans')
     if (all.length === 0) continue
-    const recs = await loadRecords($, clone, 'reconciliations')
-    const slices = await loadRecords($, clone, 'slices')
+    const recs = records(snapshots, 'reconciliations')
+    const slices = records(snapshots, 'slices')
     const ids = [...new Set(all.map(p => (typeof p.id === 'string' ? p.id : '')))].filter(Boolean).sort()
     for (const id of ids) {
       const plan = pickPlan(all.filter(p => p.id === id))
       if (!plan) continue
       const summary = summarize(plan, pickReconciliation(recs, id), slices)
-      for (const ref of ORBIT_BRANCHES) {
-        try {
-          const r = await $.process.run(['git', '-C', clone, 'show', `origin/${ref}:docs/orbit/plans/${id}.notes.md`], { timeoutMs: GH_TIMEOUT_MS })
-          const date = r.exitCode === 0 ? checksDate(r.stdout) : null
-          if (date && (!summary.checkedAt || date > summary.checkedAt)) summary.checkedAt = date
-        } catch { /* Notes are optional. */ }
+      for (const files of snapshots) {
+        const date = checksDate(files.get(`docs/orbit/plans/${id}.notes.md`) ?? '')
+        if (date && (!summary.checkedAt || date > summary.checkedAt)) summary.checkedAt = date
       }
-      for (const sl of summary.slices) await lookupSlice($, e.repo, sl.id)
+      await lookupSlices($, e.repo, summary.slices.map(sl => sl.id))
       plans.push({ key: `${e.repo}#${id}`, repo: e.repo, summary })
     }
   }
@@ -145,7 +158,7 @@ export async function ghJson($: EngineInterface, argv: string[]): Promise<unknow
   if (hit && now - hit.at < GH_CACHE_MS) return hit.value
   let value: unknown[] | null = null
   try {
-    const r = await $.process.run(['gh', ...argv], { timeoutMs: GH_TIMEOUT_MS })
+    const r = await runProcess($, ['gh', ...argv], GH_TIMEOUT_MS)
     const v: unknown = r.exitCode === 0 ? JSON.parse(r.stdout) : null
     if (Array.isArray(v)) value = v
   } catch { /* Failed queries remain offline until the cache expires. */ }
@@ -161,31 +174,41 @@ export function namesSlice(text: string, sliceId: string): boolean {
 
 // Issues whose body names the slice id, and PRs whose title or body names "#<n>".
 export async function lookupSlice($: EngineInterface, owner: string, sliceId: string) {
-  const key = `${owner}/${sliceId}`
-  const found = await ghJson($, ['search', 'issues', `"${sliceId}"`, '--repo', owner,
-    '--json', 'repository,number,title,state,body,updatedAt', '--limit', '20'])
-  const issues: SliceLinks['issues'] = []
-  let offline = found === null
-  for (const raw of found ?? []) {
-    const i = raw as { repository?: { nameWithOwner?: string }; number?: number; title?: string; state?: string; body?: string; updatedAt?: string }
-    if (!namesSlice(i.body ?? '', sliceId)) continue
-    const repo = i.repository?.nameWithOwner ?? owner
-    if (typeof i.number !== 'number') continue
-    const prsRaw = await ghJson($, ['pr', 'list', '--repo', repo, '--state', 'all',
-      '--search', `#${i.number} in:title,body`, '--json', 'number,title,body,state,updatedAt,reviewDecision,mergeStateStatus,isDraft', '--limit', '20'])
-    if (prsRaw === null) offline = true
-    const prs: SliceLink[] = []
-    for (const rawPr of prsRaw ?? []) {
-      const pr = rawPr as { number?: number; title?: string; body?: string; state?: string; updatedAt?: string; reviewDecision?: string; mergeStateStatus?: string; isDraft?: boolean }
-      if (typeof pr.number !== 'number' || !new RegExp(`#${i.number}(?![0-9])`).test(`${pr.title ?? ''} ${pr.body ?? ''}`)) continue
-      prs.push({ repo, number: pr.number, title: pr.title ?? '', state: (pr.state ?? '').toLowerCase(),
-        updatedAt: pr.updatedAt, approved: pr.reviewDecision === 'APPROVED', ready: pr.mergeStateStatus === 'CLEAN' && pr.isDraft === false })
+  return lookupSlices($, owner, [sliceId])
+}
+
+export async function lookupSlices($: EngineInterface, owner: string, sliceIds: string[]) {
+  if (!sliceIds.length) return
+  // One issue query and one PR query per initiative. Match exact tokens locally.
+  const found = await ghJson($, ['issue', 'list', '--repo', owner, '--state', 'all',
+    '--search', sliceIds.map(id => `"${id}"`).join(' OR '),
+    '--json', 'number,title,state,body,updatedAt', '--limit', '100'])
+  const numbers = (found ?? []).map(raw => (raw as { number?: number }).number).filter(n => typeof n === 'number')
+  const prsRaw = numbers.length ? await ghJson($, ['pr', 'list', '--repo', owner, '--state', 'all',
+    '--search', numbers.map(n => `"#${n}"`).join(' OR ') + ' in:title,body',
+    '--json', 'number,title,body,state,updatedAt,reviewDecision,mergeStateStatus,isDraft', '--limit', '100']) : []
+  for (const sliceId of sliceIds) {
+    const key = `${owner}/${sliceId}`
+    const issues: SliceLinks['issues'] = []
+    const offline = found === null || prsRaw === null
+    for (const raw of found ?? []) {
+      const i = raw as { repository?: { nameWithOwner?: string }; number?: number; title?: string; state?: string; body?: string; updatedAt?: string }
+      if (!namesSlice(i.body ?? '', sliceId)) continue
+      const repo = i.repository?.nameWithOwner ?? owner
+      if (typeof i.number !== 'number') continue
+      const prs: SliceLink[] = []
+      for (const rawPr of prsRaw ?? []) {
+        const pr = rawPr as { number?: number; title?: string; body?: string; state?: string; updatedAt?: string; reviewDecision?: string; mergeStateStatus?: string; isDraft?: boolean }
+        if (typeof pr.number !== 'number' || !new RegExp(`#${i.number}(?![0-9])`).test(`${pr.title ?? ''} ${pr.body ?? ''}`)) continue
+        prs.push({ repo, number: pr.number, title: pr.title ?? '', state: (pr.state ?? '').toLowerCase(),
+          updatedAt: pr.updatedAt, approved: pr.reviewDecision === 'APPROVED', ready: pr.mergeStateStatus === 'CLEAN' && pr.isDraft === false })
+      }
+      issues.push({ repo, number: i.number, title: i.title ?? '', state: (i.state ?? '').toLowerCase(), updatedAt: i.updatedAt, prs })
     }
-    issues.push({ repo, number: i.number, title: i.title ?? '', state: (i.state ?? '').toLowerCase(), updatedAt: i.updatedAt, prs })
+    issues.sort((a, b) => a.state === b.state ? b.number - a.number : a.state === 'open' ? -1 : 1)
+    const done: SliceLinks = { status: offline ? 'error' : 'done', issues }
+    await update($, sliceLinks, cur => ({ ...cur, [key]: done }))
   }
-  issues.sort((a, b) => a.state === b.state ? b.number - a.number : a.state === 'open' ? -1 : 1)
-  const done: SliceLinks = { status: offline ? 'error' : 'done', issues }
-  await update($, sliceLinks, cur => ({ ...cur, [key]: done }))
 }
 
 
@@ -231,7 +254,7 @@ export const RESOLVE_TICKET =
 async function resolvedTicket($: EngineInterface, root: string, cwd: string): Promise<string | null> {
   if (!(await exists($, `${root}/.claude/hooks/_lib-active-ticket.sh`))) return null
   try {
-    const r = await $.process.run(['bash', '-c', RESOLVE_TICKET, '_', root, cwd], { cwd, timeoutMs: 5000 })
+    const r = await runProcess($, ['bash', '-c', RESOLVE_TICKET, '_', root, cwd], 5000, cwd)
     return r.exitCode === 0 && r.stdout.trim() ? r.stdout : null
   } catch {
     return null
@@ -297,7 +320,7 @@ async function refreshOnce($: EngineInterface) {
     for (const c of cands) {
       shas.set(c.name, markerSha(await readText($, `${reviews}/${c.name}`)))
       if (!open.has(c.repo)) {
-        open.set(c.repo, await openPrsFor(ghCache, c.repo, now, argv => $.process.run(argv, { timeoutMs: GH_TIMEOUT_MS })))
+        open.set(c.repo, await openPrsFor(ghCache, c.repo, now, argv => runProcess($, argv, GH_TIMEOUT_MS)))
       }
     }
     const q = classify(cands, shas, open)
@@ -320,7 +343,7 @@ async function refreshOnce($: EngineInterface) {
   let builds: number | null = null
   if (settings.pattern.trim()) {
     try {
-      const r = await $.process.run(['ps', '-axo', 'command='], { timeoutMs: 5000 })
+      const r = await runProcess($, ['ps', '-axo', 'command='], 5000)
       if (r.exitCode === 0) builds = countBuilds(r.stdout, settings.pattern)
     } catch {}
   }
@@ -340,7 +363,10 @@ async function refreshOnce($: EngineInterface) {
   await refreshOrbit($, root, markerRepo(marker))
 }
 
+function background($: EngineInterface) { void refresh($).catch(() => {}) }
+
 export const register: Register = (on, options) => {
+  let hasSurface = false
 
   on('command.run', { command: 'orbit-progress' }, async $ => {
     await $.ui.open({ id: ORBIT_PANE, title: 'ORBIT initiatives' })
@@ -348,6 +374,7 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'Pane', requestId: ORBIT_PANE }, async ($, e) => {
+    hasSurface = true
     const { Box, Text, Button } = $.ui.resolve(e)
     const v = await read($, orbit)
     const open = await read($, expanded)
@@ -452,7 +479,7 @@ export const register: Register = (on, options) => {
                           label={`${sOpen ? '▾' : '▸'} ⬡ ${sl.id} → ${sl.contributesTo.join(', ')}`}
                           onPress={async () => {
                             await toggle(skey, false)()
-                            if (!sOpen) await lookupSlice($, owner, sl.id)
+                            if (!sOpen) void lookupSlice($, owner, sl.id).catch(() => {})
                           }}
                         />
                         {sOpen ? (
@@ -492,23 +519,23 @@ export const register: Register = (on, options) => {
 
   settings = readSettings(options)
 
-  on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'orbit-progress', description: 'Show ORBIT initiatives (display only)' })
-    const result = await next(e)
-    await refresh($)
-    $.clock.every(REFRESH_MS, () => {
-      void refresh($)
-    })
-    return result
-  })
-
+  // Only a real render proves that this session has a UI surface.
+  let started = false
+  on('session.start', async ($, e, next) => next(e))
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
-    await refresh($)
+    if (hasSurface) {
+      if (!started) {
+        started = true
+        $.clock.every(REFRESH_MS, () => background($))
+        void $.command.register({ name: 'orbit-progress', description: 'Show ORBIT initiatives (display only)' }).catch(() => {})
+      }
+      background($)
+    }
     return result
   })
-
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    hasSurface = true
     const b = await read($, band)
     if (e.props.hasSurvey || b === null) return next(e)
     const { Box, Text } = $.ui.resolve(e)

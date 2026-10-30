@@ -44,17 +44,16 @@ cd "$REPO_ROOT" || exit 0
 # `--check-installed` mode (no writes, ever) and prints a one-line advisory
 # nudge on drift. The generator owns installation detection and is a silent
 # no-op for uninstalled adapters. Startup stays advisory: warn on drift or
-# failure, but never block the session, and never touch the working tree.
+# failure, but never block the session or modify installed adapter files.
+# Only the comparison cache under the gitignored .claude/session is written.
 CODEX_RECONCILER="$REPO_ROOT/bin/sync-codex-adapter.sh"
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=/dev/null
+. "$HOOK_DIR/_lib-gh-timeout.sh"
 if [ -f "$CODEX_RECONCILER" ]; then
-  _CODEX_TO=""
-  if command -v timeout >/dev/null 2>&1; then _CODEX_TO="timeout -k 2 5"
-  elif command -v gtimeout >/dev/null 2>&1; then _CODEX_TO="gtimeout -k 2 5"; fi
-  ADAPTER_ERROR=""
-  if ! ADAPTER_ERROR=$($_CODEX_TO bash "$CODEX_RECONCILER" --check-installed 2>&1 >/dev/null); then
-    echo "ApexYard: installed Codex adapter may be stale — run bash bin/sync-codex-adapter.sh --reconcile-installed." >&2
-    [ -n "$ADAPTER_ERROR" ] && printf '%s\n' "$ADAPTER_ERROR" >&2
-  fi
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-adapter-check-cache.sh"
+  adapter_check_cached
 fi
 
 # Bail if no upstream remote — either this IS the upstream repo, or the fork
@@ -86,10 +85,7 @@ if [ "$SHOULD_FETCH" = "1" ]; then
   # silently — we don't want a startup banner yelling about offline state.
   # `--tags --prune-tags` pulls tag refs and removes local copies of any tag
   # upstream has retracted (rare, but keeps the local tag view honest).
-  _TO=""
-  if command -v timeout >/dev/null 2>&1; then _TO="timeout -k 2 5"
-  elif command -v gtimeout >/dev/null 2>&1; then _TO="gtimeout -k 2 5"; fi
-  if ! GIT_TERMINAL_PROMPT=0 $_TO git fetch upstream --tags --prune-tags --quiet 2>/dev/null; then
+  if ! GIT_TERMINAL_PROMPT=0 _apexyard_gh_watchdog 3 git fetch upstream --tags --prune-tags --quiet 2>/dev/null; then
     exit 0
   fi
   mkdir -p "$CACHE_DIR"
