@@ -232,6 +232,8 @@ fi
 # APEXYARD_DISPATCH_GATE: Bash|tracker_pr_merge *|block-merge-on-red-ci.sh
 # APEXYARD_DISPATCH_GATE: Bash|tracker_pr_merge *|require-architecture-review.sh
 
+# The protected-target state-writer rule validates the exact start-ticket
+# helper grammar (_lib-start-ticket-command.sh). All other gates still run.
 # Hooks without a command predicate are safety checks for every Bash call.
 for script in \
   block-protected-target-writes.sh \

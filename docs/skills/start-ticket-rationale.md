@@ -46,3 +46,19 @@ Notes on the fallback:
 - Assumes `- name:` is the FIRST key in each project entry — that matches the shape in `apexyard.projects.yaml.example` and every entry produced by `/handover`. If your registry reorders keys so `repo:` appears before `name:` in an entry, the lookup misses. Fix: move `name:` to the top, or install `yq` (the preferred path).
 - Leading whitespace is tolerated via `^[[:space:]]*` — nested entries under `projects:` parse fine at any indent level, so long as the indent is consistent within the entry.
 
+
+## Headless declaration
+
+Use `bin/apexyard-start-ticket owner/repo#number` from the target working tree.
+The helper fetches tracker fields and writes markers without a Write tool call.
+The dispatcher grants only the exact literal command grammar (AgDR-0282).
+Interactive sessions retain the pending-file Write fallback.
+
+## Interactive writer details
+
+`active_ticket_write` writes `repo`, `number`, `title`, `url`, `suggested_branch`, `session_id`, `branch`, and `started_at` with `printf '%s\n'` (reject `\n`/`\r`; title one line; first-match reads; AgDR-0257). `APEXYARD_START_TICKET_TAKEOVER=1` is a cooperative signal: set it inline on the single write after take over -- never export or inherit. Headless and `/fan-out` must not set it. Residual: an agent can still set it, spoof session id, or edit the marker (as before this PR). Legacy writer writes the same keys.
+
+`active_ticket_write` refuses a tree that is not the ops fork or a registered clone. It also refuses a symlink in the path, a repo owned by another user, and a malformed `.git` file. It prints the reason to stderr. If it prints a hint about the sandbox, the session may not write into the git dir. Tell the user. The old-layout marker still covers the tree. See AgDR-0222 for the allowlist the user can add.
+
+`active_ticket_write_legacy` prints a one-line note and writes nothing when the old-layout path is blocked. An example is a `tickets/<project>` file where the per-worktree marker needs a directory. Report the note to the user. Do not delete the file.
+

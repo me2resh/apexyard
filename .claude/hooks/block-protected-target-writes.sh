@@ -35,6 +35,13 @@ cmd=$(jq -er '.tool_input.command' <<<"$INPUT") || {
   pt_block "missing edit target (tool_name: $tool)."
 }
 cwd="$PT_CWD"
+# The sole agent-callable state writer. Match the complete raw command.
+# shellcheck source=/dev/null
+. "$HOOK_DIR/_lib-start-ticket-command.sh" || pt_block 'ticket command matcher missing.'
+if start_ticket_command_allowed "$cmd" "$PT_CWD" "${HOOK_DIR%/.claude/hooks}"; then
+  exit 0
+fi
+case "$cmd" in *apexyard-start-ticket*) pt_block 'state writers are harness-only; use the exact start-ticket helper command.' ;; esac
 # Each protected-form test ignores letter case (pt_nocase).
 pt_token() { pt_nocase pt_token_nocase "$@"; }
 pt_token_nocase() {
@@ -325,7 +332,9 @@ pt_operands() {
 }
 pt_state_writer_nocase() {
   local val="$2"
-  case "$1" in pin-ops-root.sh|write-session-snapshot.sh|record-subagent-start.sh|dispatch-session-start.sh)
+  case "$1" in
+    apexyard-start-ticket) pt_block 'state writers are harness-only; use the exact start-ticket helper command.' ;;
+    pin-ops-root.sh|write-session-snapshot.sh|record-subagent-start.sh|dispatch-session-start.sh)
     case "$val" in ''|*'$'*|*'`'*) pt_block 'state writers are harness-only.' ;; esac
     pt_protected "$val" 1 && pt_block 'state writer sandbox is protected.'
     [[ "$(pt_physical "$val")" != "$PT_PIN_DIR" ]] || pt_block 'state writer sandbox is the live pin tree.' ;;
