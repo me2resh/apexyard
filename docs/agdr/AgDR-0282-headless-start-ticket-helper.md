@@ -15,6 +15,8 @@ The Bash state-writer rule also rejects harness-only writers.
 
 ## Decision
 
+> In the context of headless runs, facing denied pending-file writes, I decided to allow one vetted helper to achieve ticket declaration, accepting narrow command syntax.
+
 Use `bin/apexyard-start-ticket owner/repo#number` as the sole agent-callable state writer.
 The protected-target hook checks the complete raw command before granting this exception.
 The dispatcher still runs all other gates.

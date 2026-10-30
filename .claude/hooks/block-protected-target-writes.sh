@@ -41,7 +41,6 @@ cwd="$PT_CWD"
 if start_ticket_command_allowed "$cmd" "$PT_CWD" "${HOOK_DIR%/.claude/hooks}"; then
   exit 0
 fi
-case "$cmd" in *apexyard-start-ticket*) pt_block 'state writers are harness-only; use the exact start-ticket helper command.' ;; esac
 # Each protected-form test ignores letter case (pt_nocase).
 pt_token() { pt_nocase pt_token_nocase "$@"; }
 pt_token_nocase() {
@@ -333,13 +332,20 @@ pt_operands() {
 pt_state_writer_nocase() {
   local val="$2"
   case "$1" in
-    apexyard-start-ticket) pt_block 'state writers are harness-only; use the exact start-ticket helper command.' ;;
     pin-ops-root.sh|write-session-snapshot.sh|record-subagent-start.sh|dispatch-session-start.sh)
     case "$val" in ''|*'$'*|*'`'*) pt_block 'state writers are harness-only.' ;; esac
     pt_protected "$val" 1 && pt_block 'state writer sandbox is protected.'
     [[ "$(pt_physical "$val")" != "$PT_PIN_DIR" ]] || pt_block 'state writer sandbox is the live pin tree.' ;;
   esac
   return 0
+}
+pt_start_ticket_command() {
+  local command
+  command=$(pt_expand "$1")
+  case "${command##*/}" in
+    [aA][pP][eE][xX][yY][aA][rR][dD]-[sS][tT][aA][rR][tT]-[tT][iI][cC][kK][eE][tT])
+      pt_block 'state writers are harness-only; use the exact start-ticket helper command.' ;;
+  esac
 }
 pt_simple() {
   local segment="$1" word verb i start=0 savecwd="$PT_CWD" arg name val expanded sandbox_pin=""
@@ -440,6 +446,7 @@ pt_simple() {
   done
   [ "$start" -lt "${#words[@]}" ] || return 0
   words=("${words[@]:$start}"); verb=${words[0]##*/}
+  pt_start_ticket_command "${words[0]}"
   # State writers may run only with a literal sandbox assignment.
   for word in "${words[@]}"; do pt_nocase pt_state_writer_nocase "${word##*/}" "$sandbox_pin"; done
   case "$verb" in
@@ -481,6 +488,7 @@ pt_simple() {
         [ "$have_script" = 0 ] || { ( pt_scan "$script" ) || exit 2; }
         return 0
       fi
+      [ "$have_script" = 0 ] || pt_start_ticket_command "$script"
       case "$script" in /dev/stdin|/dev/fd/*|-) have_script=0 ;; esac
       if [ "$have_script" = 0 ] && [ -z "$here_string" ] && [ -z "$here_refs" ]; then
         # The shell reads its program from a pipe or a redirect. The gate

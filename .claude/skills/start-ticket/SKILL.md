@@ -66,7 +66,7 @@ The lib emits normalised JSON: `{state, title, url, labels}`. Each tracker adapt
 
 If the lib exits non-zero with empty stdout, the issue does not exist (or the CLI isn't installed / authenticated). Stop and report the error — do not write the marker.
 
-If `state` indicates the ticket is closed (gh: `CLOSED`; linear/jira/asana: `Done` / `Closed` / `Resolved` / `Cancelled`), warn the user and confirm before continuing (sometimes you do want to resume work on a re-opened issue).
+If `state` indicates the ticket is closed (gh: `CLOSED`; linear/jira/asana: `Done` / `Closed` / `Resolved` / `Cancelled` / `Canceled`), warn the user and confirm before continuing (sometimes you do want to resume work on a re-opened issue).
 
 When the resolved project has `orbit.default_planning: true`, check `body`
 for an `ORBIT slice:` line, including the bold form

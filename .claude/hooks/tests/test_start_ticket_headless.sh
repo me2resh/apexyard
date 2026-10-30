@@ -51,6 +51,29 @@ ln -s saved-session .claude/session
 check 1 'session symlink' /bin/bash bin/apexyard-start-ticket me2resh/apexyard#1928
 rm .claude/session
 mv .claude/saved-session .claude/session
+# A stale tree marker must not mask a failed tree write, even if legacy succeeds.
+sed 's/number=1928/number=1927/' .git/apexyard-ticket > "$TMP/stale"
+cp "$TMP/stale" .git/apexyard-ticket
+cp .claude/hooks/_lib-active-ticket.sh "$TMP/active-ticket.sh"
+cat >> .claude/hooks/_lib-active-ticket.sh <<'STUB'
+active_ticket_write() { return 1; }
+active_ticket_write_legacy() { printf 'legacy succeeded\n' > .claude/session/legacy-result; }
+STUB
+check 1 'tree write failure despite legacy success' /bin/bash bin/apexyard-start-ticket me2resh/apexyard#1928
+cp "$TMP/out" "$TMP/write-error"
+check 0 'tree write failure diagnostic' grep -q 'working tree marker write failed' "$TMP/write-error"
+check 0 'legacy write succeeded' grep -qx 'legacy succeeded' .claude/session/legacy-result
+check 0 'old tree marker remains' grep -qx 'number=1927' .git/apexyard-ticket
+check 0 'failed write leaves no pending' test ! -e .claude/session/start-ticket-headless-1928.pending
+cp "$TMP/active-ticket.sh" .claude/hooks/_lib-active-ticket.sh
+sed 's/"OPEN"/"Canceled"/' .claude/hooks/_lib-tracker.sh > "$TMP/canceled"
+cp .claude/hooks/_lib-tracker.sh "$TMP/tracker.sh"
+cp "$TMP/canceled" .claude/hooks/_lib-tracker.sh
+check 1 'Canceled issue refused' /bin/bash bin/apexyard-start-ticket me2resh/apexyard#1928
+cp "$TMP/out" "$TMP/canceled-error"
+check 0 'Canceled diagnostic' grep -q 'issue is closed' "$TMP/canceled-error"
+check 0 'Canceled leaves marker unchanged' grep -qx 'number=1927' .git/apexyard-ticket
+cp "$TMP/tracker.sh" .claude/hooks/_lib-tracker.sh
 # Use the real dispatcher and its hooks, with the fixture as effective cwd.
 # It must check the helper belonging to its own hook tree.
 cp "$ROOT"/.claude/hooks/*.sh .claude/hooks/
@@ -61,6 +84,20 @@ run_dispatch() {
 }
 check 0 'exact relative helper' run_dispatch 'bin/apexyard-start-ticket me2resh/apexyard#1928'
 check 0 'exact absolute helper' run_dispatch "$PWD/bin/apexyard-start-ticket me2resh/apexyard#1928"
+# Test the protected-target hook directly for mentions. PR validation belongs
+# to separate suites and requires tracker fixtures. No command is executed.
+run_protected() {
+  jq -cn --arg cwd "$PWD" --arg cmd "$1" '{tool_name:"Bash",cwd:$cwd,tool_input:{command:$cmd}}' |
+    /bin/bash .claude/hooks/block-protected-target-writes.sh
+}
+for cmd in \
+  'git commit -m "fix: document apexyard-start-ticket"' \
+  'gh pr create --title "fix(#1928): apexyard-start-ticket" --body "Refs #1928"' \
+  'gh pr create --title "fix(#1928): headless helper" --body "Use apexyard-start-ticket. Refs #1928"' \
+  'grep apexyard-start-ticket README.md' \
+  'echo apexyard-start-ticket'; do
+  check 0 "ordinary mention $cmd" run_protected "$cmd"
+done
 for cmd in \
   'bin/APEXYARD-START-TICKET me2resh/apexyard#1928' \
   './bin/apexyard-start-ticket me2resh/apexyard#1928' \
