@@ -1,6 +1,6 @@
 {
   "name": "apexyard-status",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Display-only ApexYard status band above the prompt: active ticket, PRs waiting for /approve-merge, reviewer lock, optional build count.",
   "author": { "name": "ApexYard" },
   "license": "MIT",
