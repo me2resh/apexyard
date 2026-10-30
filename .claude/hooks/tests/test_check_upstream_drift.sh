@@ -56,6 +56,7 @@ make_fork() {
     git fetch upstream --tags --quiet
     mkdir -p .claude/hooks .claude/session
     cp "$HOOK_SRC" .claude/hooks/check-upstream-drift.sh
+    cp "$(dirname "$HOOK_SRC")/_lib-gh-timeout.sh" "$(dirname "$HOOK_SRC")/_lib-adapter-check-cache.sh" .claude/hooks/
     chmod +x .claude/hooks/check-upstream-drift.sh
   )
   echo "$fk"
