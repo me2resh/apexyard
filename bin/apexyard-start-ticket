@@ -1,0 +1,78 @@
+#!/bin/bash
+# Declare a tracker-backed ticket without a Write tool call. AgDR-0282.
+set -eo pipefail
+export LC_ALL=C
+fail() { printf 'apexyard: %s\n' "$*" >&2; exit 1; }
+[ "$#" = 1 ] || fail 'usage: bin/apexyard-start-ticket owner/repo#number'
+ref=$1
+re='^[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*#[0-9]+$'
+[[ "$ref" =~ $re ]] || fail 'invalid owner/repo#number'
+repo=${ref%#*}; num=${ref##*#}
+lib=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.claude/hooks" && pwd -P)
+# shellcheck source=/dev/null
+. "$lib/_lib-ops-root.sh"
+# shellcheck source=/dev/null
+. "$lib/_lib-active-ticket.sh"
+# shellcheck source=/dev/null
+. "$lib/_lib-tracker.sh"
+ops=$(resolve_ops_root "$PWD")
+[ -n "$ops" ] || fail 'no ops root'
+tree=$(git rev-parse --show-toplevel) || fail 'no working tree'
+# Never inherit interactive take-over permission.
+unset APEXYARD_START_TICKET_TAKEOVER
+active_ticket_init "$tree" || fail 'cannot initialize ticket context'
+active_ticket_gitdir "$tree" || fail "${AT_REASON:-invalid working tree}"
+marker=$REPLY/apexyard-ticket
+_at_bound "$repo" || fail 'ticket repo does not belong to the current working tree'
+json=$(tracker_view "$num" "$repo") || fail 'tracker lookup failed'
+title=$(printf '%s' "$json" | jq -er '.title | select(type == "string" and length > 0)') || fail 'missing issue title'
+url=$(printf '%s' "$json" | jq -er '.url | select(type == "string" and length > 0)') || fail 'missing issue URL'
+state=$(printf '%s' "$json" | jq -er '.state | select(type == "string" and length > 0)') || fail 'missing issue state'
+case "$state" in CLOSED|Closed|Done|Resolved|Cancelled|Canceled|closed|done|resolved|cancelled|canceled) fail 'issue is closed' ;; esac
+title=${title//$'\n'/ }; title=${title//$'\r'/ }
+case "$url" in *$'\n'*|*$'\r'*) fail 'invalid issue URL' ;; esac
+type=feature
+case "$title" in '[Feat]'*) type=feature ;; '[Fix]'*) type=fix ;; '[Docs]'*) type=docs ;; '[Chore]'*) type=chore ;; esac
+slug=$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]' | sed -E 's/^\[[^]]*\][[:space:]]*//; s/[^a-z0-9]+/-/g; s/^-+//; s/-+$//; s/^(a|an|the)-//; s/-(a|an|the)$//' | cut -c1-40 | sed 's/-*$//')
+prefix=GH
+# The validated tree identifies the registry project. Honor its ticket prefix.
+if [ -n "${AT_PROJECT:-}" ] && [ -r "${_AT_REG:-}" ]; then
+  configured=$(awk -v project="$AT_PROJECT" '
+    /^[[:space:]]*- name:/ { name=$3; gsub(/["\047]/, "", name) }
+    /^[[:space:]]*ticket_prefix:/ && name == project {
+      value=$2; gsub(/["\047]/, "", value); print value; exit
+    }' "$_AT_REG")
+  if [ -n "$configured" ]; then
+    [[ "$configured" =~ ^[A-Za-z0-9_-]+$ ]] || fail 'invalid configured ticket prefix'
+    prefix=$configured
+  fi
+fi
+branch="$type/$prefix-$num-$slug"
+# Inspect every component before mkdir; never follow a session link.
+[ ! -L "$ops/.claude" ] && [ ! -L "$ops/.claude/session" ] || fail 'symlinked session directory'
+mkdir -p "$ops/.claude/session" || fail 'cannot create session directory'
+session=$(cd "$ops/.claude/session" && pwd -P)
+[ "$session" = "$ops/.claude/session" ] || fail 'session path escapes ops root'
+pending=$(active_ticket_pending_path "$ops")
+case "$pending" in "$session"/start-ticket-*.pending) ;; *) fail 'pending path escapes session directory' ;; esac
+[ ! -e "$pending" ] && [ ! -L "$pending" ] || fail 'pending file already exists'
+# noclobber refuses an existing file or symlink. Cleanup covers every failure.
+owned=0
+cleanup() { [ "$owned" = 0 ] || rm -f -- "$pending"; }
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+# Reserve the descriptor first, so cleanup owns even a failed partial write.
+umask 077
+set -C
+if exec 3> "$pending"; then
+  owned=1
+else
+  fail 'cannot create pending file'
+fi
+set +C
+chmod 600 "$pending" || fail 'cannot protect pending file'
+printf 'repo=%s\nnumber=%s\ntitle=%s\nurl=%s\nsuggested_branch=%s\n' "$repo" "$num" "$title" "$url" "$branch" >&3 || fail 'cannot write pending file'
+exec 3>&-
+active_ticket_write_from_file "$tree" "$pending" 1 || fail 'ticket write failed'
+[ -f "$marker" ] && [ ! -L "$marker" ] || fail 'working tree marker missing'
+printf '%s\n' "$marker"

@@ -1622,7 +1622,7 @@ active_ticket_pending_path() {
   printf '%s\n' "$REPLY"
 }
 
-# active_ticket_write_from_file <tree> <file>: /start-ticket writes the ticket
+# active_ticket_write_from_file <tree> <file> [require-tree=0]: /start-ticket writes the ticket
 # fields to <file> with the Write tool, one key=value line each (repo, number,
 # title, url, suggested_branch), and then runs this with paths only. The issue
 # title never reaches a command line, so a title with shell syntax in it
@@ -1637,6 +1637,7 @@ active_ticket_pending_path() {
 # symlink.
 active_ticket_write_from_file() {
   local dir="$1" f="$2" l repo="" num="" title="" url="" branch="" wrote=1 id=""
+  local require_tree="${3:-0}" tree_wrote=1
   local takeover=0 takeover_marker="" old_repo="" old_num="" old_sid="" new_sid=""
   local s_old_repo="" s_old_num="" s_old_sid="" s_repo="" s_num="" s_new_sid=""
   case "$f" in
@@ -1695,11 +1696,15 @@ active_ticket_write_from_file() {
   rm -f "$f"
   active_ticket_init "$dir" || true
   if active_ticket_gitdir "$dir"; then
-    active_ticket_write "$dir" "$repo" "$num" "$title" "$url" "$branch" && wrote=0
+    active_ticket_write "$dir" "$repo" "$num" "$title" "$url" "$branch" && { wrote=0; tree_wrote=0; }
   else
     echo "note: $dir failed validation (${AT_REASON:-unknown}). Only the old-layout marker is written." >&2
   fi
   active_ticket_write_legacy "$dir" "$repo" "$num" "$title" "$url" "$branch" && wrote=0
+  if [ "$require_tree" = 1 ] && [ "$tree_wrote" != 0 ]; then
+    echo "apexyard: working tree marker write failed for $dir" >&2
+    return 1
+  fi
   # Audit only after a successful write. Strip control characters from every
   # printed field (Hakim A2 / #1533).
   if [ "$takeover" = 1 ] && [ "$wrote" = 0 ]; then
