@@ -79,7 +79,7 @@ The earlier flip condition was:
 
 "Live end-to-end conformance proof" means the credentialed run described above: a gate blocks a real model turn under that harness. For example, the unmodified bash hook refuses a `git add -A`. A mock or a by-construction test does not qualify.
 
-**As of 2026-07-09 the trigger condition was MET**: three adapters (**opencode**, **pi**, and **Codex**) recorded that proof. Cursor IDE native exec was later observed (2026-09-16) but still has no headless conformance-CI path, so it does not add a fourth scheduled proof. On 2026-10-31 the owner decided: framework docs drop the Claude Code tagline. They state agent-agnostic positioning, with Claude Code as the default driver. Site (apexyard.ai) and channel positioning still need a coordinated follow-up pass. Until that pass lands, describe multi-harness support in the precise, per-harness terms above rather than as a blanket claim.
+**As of 2026-07-09 the trigger condition was MET**: three adapters (**opencode**, **pi**, and **Codex**) recorded that proof. Cursor IDE native exec was later observed (2026-09-16) but still has no headless conformance-CI path, so it does not add a fourth scheduled proof. On 2026-10-31 the owner decided: the README drops the Claude Code tagline. It states agent-agnostic positioning, with Claude Code as the default driver. Other files change in a later pass. Site (apexyard.ai) and channel positioning still need a coordinated follow-up pass. Until that pass lands, describe multi-harness support in the precise, per-harness terms above rather than as a blanket claim.
 
 ---
 
