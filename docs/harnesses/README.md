@@ -13,9 +13,9 @@ proof, preconditions, and limits stay on this page and the per-harness pages
 below.
 
 > **Positioning:** Owner decision 2026-10-31: the README drops the "built for
-> Claude Code" tagline. It says the framework is agent agnostic. Claude Code remains the default
-> driver. These pages document the current adapter support. See
-> [Rebrand trigger](#rebrand-trigger).
+> Claude Code" tagline. It states agent-agnostic positioning. Claude Code
+> remains the default driver. These pages document the current adapter
+> support. See [Rebrand trigger](#rebrand-trigger).
 
 ## Support matrix
 
@@ -71,7 +71,7 @@ In both shapes the non-negotiable is the same: **bash owns every gate decision.*
 ## Rebrand trigger
 
 Owner decision 2026-10-31: the README drops the "built for Claude Code"
-tagline. It says the framework is agent agnostic. Claude Code remains the default driver.
+tagline. It states agent-agnostic positioning. Claude Code remains the default driver.
 
 The earlier flip condition was:
 
