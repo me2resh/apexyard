@@ -62,8 +62,9 @@ owns them, then starts `/update`. Use `apexyard update --check` to preview only.
 
 When the CLI has an install endpoint, `apexyard init` sends one anonymous install event.
 The event contains a random install id, the CLI version, your operating system, and the agent tool.
+It never holds a repo, organisation, user name, path or code.
 Today the CLI has no endpoint. The CLI prints the event and sends
-nothing. Set `APEXYARD_TELEMETRY=0` to stop these events.
+nothing. Set `APEXYARD_TELEMETRY=0` to stop these events. The CLI prints a notice on first run.
 
 Go to Step 2.
 
@@ -102,6 +103,8 @@ Later, fetch and merge from `upstream/main` to update your fork:
 git fetch upstream
 git merge upstream/main
 ```
+
+> **Using opencode, pi, or Codex?** The fork and clone steps use plain `git` and `gh`. Install your tool's adapter before the setup steps that follow. Each step also gives a manual file option. The enforced rules are the same in both paths.
 
 ---
 
