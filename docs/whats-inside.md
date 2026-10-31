@@ -7,6 +7,25 @@ The [README](../README.md) gives the short version. This page is the detailed
 reference. The files use plain Markdown and shell. Claude Code reads them from
 the repository root. Hooks run when you use `git` or `gh`.
 
+## Marketing site
+
+The site that was previously bundled in this repository has moved to
+[me2resh/apexyard-site](https://github.com/me2resh/apexyard-site). It deploys
+independently at [apexyard.ai](https://apexyard.ai).
+
+## More ways ApexYard differs
+
+The README keeps five headline rows. These extra rows complete the comparison:
+
+| Area | Without ApexYard | With ApexYard |
+|---|---|---|
+| Database migrations | High-risk edits | Migrations require a migration ticket and rollback plan. |
+| Architecture | Scattered notes | C4 templates and the `/c4` skill create a shared model. |
+| Portfolio view | Several GitHub tabs | `/inbox`, `/status`, and `/tasks` read one registry. |
+| Upstream updates | Easy to forget | `/update` reports drift and guides the sync. |
+| Roles | Repeated context | Role files activate from clear triggers. |
+| Onboarding | Manual setup | `/setup` collects the required configuration. |
+
 ## Directory layout
 
 ```

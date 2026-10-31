@@ -7,7 +7,10 @@ ApexYard's initial development targeted Claude Code. Claude Code still provides 
 native experience. The enforcement layer uses portable Bash. Other harnesses
 can reach the same gates through thin adapters.
 
-This directory records what each harness supports today.
+This directory records what each harness supports today. The root
+[README](../../README.md) shows only tool, status, and setup command. Dated
+proof, preconditions, and limits stay on this page and the per-harness pages
+below.
 
 > **Positioning:** The primary tagline remains **"for Claude Code."** These
 > pages document the current adapter support. The headline needs a separate product decision
