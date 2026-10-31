@@ -12,9 +12,10 @@ This directory records what each harness supports today. The root
 proof, preconditions, and limits stay on this page and the per-harness pages
 below.
 
-> **Positioning:** The primary tagline remains **"for Claude Code."** These
-> pages document the current adapter support. The headline needs a separate product decision
-> before it changes. See [Rebrand trigger](#rebrand-trigger).
+> **Positioning:** Owner decision 2026-10-31: drop the "built for Claude Code"
+> tagline. The framework is agent agnostic. Claude Code remains the default
+> driver. These pages document the current adapter support. See
+> [Rebrand trigger](#rebrand-trigger).
 
 ## Support matrix
 
@@ -69,13 +70,16 @@ In both shapes the non-negotiable is the same: **bash owns every gate decision.*
 
 ## Rebrand trigger
 
-The headline stays **"for Claude Code"** until this condition is met, verbatim:
+Owner decision 2026-10-31: drop the "built for Claude Code" tagline. The
+framework is agent agnostic. Claude Code remains the default driver.
+
+The earlier flip condition was:
 
 > The headline flips to harness-neutral only when **≥2 adapters have live end-to-end conformance proof** (then the site + channel positioning follow in a coordinated pass).
 
 "Live end-to-end conformance proof" means the credentialed run described above: a gate blocks a real model turn under that harness. For example, the unmodified bash hook refuses a `git add -A`. A mock or a by-construction test does not qualify.
 
-**As of 2026-07-09 the trigger condition is MET**: three adapters (**opencode**, **pi**, and **Codex**) have recorded that proof. Cursor IDE native exec was later observed (2026-09-16) but still has no headless conformance-CI path, so it does not add a fourth scheduled proof. That does **not** auto-flip the headline: the flip is a **separate, deliberate decision**. That decision moves the site (apexyard.ai) and channel positioning in one coordinated pass, and remains pending. Until then, the framework keeps the Claude-Code tagline and describes multi-harness support in the precise, per-harness terms above rather than as a blanket claim.
+**As of 2026-07-09 the trigger condition was MET**: three adapters (**opencode**, **pi**, and **Codex**) recorded that proof. Cursor IDE native exec was later observed (2026-09-16) but still has no headless conformance-CI path, so it does not add a fourth scheduled proof. On 2026-10-31 the owner decided: framework docs drop the Claude Code tagline. They state agent-agnostic positioning, with Claude Code as the default driver. Site (apexyard.ai) and channel positioning still need a coordinated follow-up pass. Until that pass lands, describe multi-harness support in the precise, per-harness terms above rather than as a blanket claim.
 
 ---
 
