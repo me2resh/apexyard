@@ -15,7 +15,7 @@ Use this when ApexYard manages the repo through an ops fork:
 
 ## Built with
 
-Use this when the project was built through the ApexYard workflow:
+Use this when the ApexYard workflow built the project:
 
 ```markdown
 [![Built with ApexYard](https://img.shields.io/badge/built_with-ApexYard-2F6DF6?style=flat-square)](https://github.com/me2resh/apexyard)

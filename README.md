@@ -22,8 +22,8 @@ person approves the exact commit.
 - **Before the code:** a ticket, a plan, and the rules guide the agent.
 - **After the code:** an independent review runs, and merge stays closed until a
   named person approves the exact commit.
-- **When something slips through:** the miss becomes a rule. Next time the agent
-  is guided by it and the gate checks for it.
+- **When something slips through:** the miss becomes a rule. Next time the rule
+  guides the agent and the gate checks for it.
 
 The framework runs in your repo as plain Markdown and shell. You fork it,
 register your projects in one registry, and work across the portfolio from that
