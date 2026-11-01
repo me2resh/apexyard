@@ -5,6 +5,11 @@
 TM_HOOKS_TESTS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TM_SRC_ROOT="$(cd "$TM_HOOKS_TESTS/../../.." && pwd)"
 
+# One private directory per suite run. No caller sets an EXIT trap, and a
+# trap set inside tm_upstream_lib would run when its $(...) subshell exits.
+TM_TMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/apexyard-1533-ac.XXXXXX") || exit 1
+trap 'rm -rf "$TM_TMP_DIR"' EXIT
+
 tm_src_root() {
   printf '%s\n' "$TM_SRC_ROOT"
 }
@@ -16,8 +21,8 @@ tm_upstream_lib() {
   root=$(tm_src_root)
   sha="${APEXYARD_AC_BEFORE_SHA:-d970c194b0ff5e14aac71d486c32dd3aa976d78a}"
   if git -C "$root" show "$sha:.claude/hooks/_lib-active-ticket.sh" \
-    >/tmp/apexyard-1533-before-lib.sh 2>/dev/null; then
-    printf '%s\n' /tmp/apexyard-1533-before-lib.sh
+    >"$TM_TMP_DIR/before-lib.sh" 2>/dev/null; then
+    printf '%s\n' "$TM_TMP_DIR/before-lib.sh"
     return 0
   fi
   return 1

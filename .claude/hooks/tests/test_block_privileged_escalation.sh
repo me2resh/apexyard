@@ -2,6 +2,10 @@
 
 set -u
 
+# shellcheck disable=SC1007  # Intentionally empty CDPATH keeps cd silent.
+TMPDIR=$(CDPATH= cd -- "${TMPDIR:-/tmp}" && pwd) || exit 1
+export TMPDIR
+
 # Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
 # shellcheck disable=SC1091
 . "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
@@ -10,10 +14,12 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 HOOK="$ROOT/hooks/block-privileged-escalation.sh"
 PASS=0
 FAIL=0
+OUTPUT_DIR=$(mktemp -d "${TMPDIR:-/tmp}/privilege-guard.XXXXXX") || exit 1
+trap 'rm -rf "$OUTPUT_DIR"' EXIT
 
 run_case() {
   local name="$1" expected="$2" command="$3" actual
-  actual=$(printf '{"tool_input":{"command":%s}}' "$(printf '%s' "$command" | jq -Rs .)" | "$HOOK" >/tmp/privilege-guard.out 2>/tmp/privilege-guard.err; printf '%s' "$?")
+  actual=$(printf '{"tool_input":{"command":%s}}' "$(printf '%s' "$command" | jq -Rs .)" | "$HOOK" >"$OUTPUT_DIR/privilege-guard.out" 2>"$OUTPUT_DIR/privilege-guard.err"; printf '%s' "$?")
   if [ "$actual" -eq "$expected" ]; then
     echo "PASS [$name]"
     PASS=$((PASS + 1))
