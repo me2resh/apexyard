@@ -183,6 +183,7 @@ fi
 # APEXYARD_DISPATCH_GATE: Bash|*|require-active-ticket.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|warn-review-marker-write.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|warn-isolated-build-risk.sh
+# APEXYARD_DISPATCH_GATE: Bash|*|warn-raw-worktree-removal.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|block-reviewer-repo-mutation.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|block-reviewer-ci-wait.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|block-forged-menu-approval.sh
@@ -245,6 +246,7 @@ for script in \
   require-active-ticket.sh \
   warn-review-marker-write.sh \
   warn-isolated-build-risk.sh \
+  warn-raw-worktree-removal.sh \
   block-reviewer-repo-mutation.sh \
   block-reviewer-ci-wait.sh \
   block-forged-menu-approval.sh; do
