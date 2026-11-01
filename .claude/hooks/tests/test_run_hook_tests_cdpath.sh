@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # Resolve this test's paths before deliberately exporting a hostile CDPATH.
-unset CDPATH
+unset CDPATH HOOK_TEST_SHARD HOOK_TEST_SHARDS
 # shellcheck disable=SC1091
 . "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../../.." && pwd)
@@ -24,8 +24,8 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# There is no single-suite option. Execute the actual launch command from the
-# runner so this regression catches a missing -u CDPATH at the suite boundary.
+# Execute the runner's launch command directly to test its environment boundary.
+# This catches a missing -u CDPATH even if runner startup still clears CDPATH.
 SUITE_COMMAND=$(sed -n '/^  if env -u CLAUDE_CODE_SESSION_ID /,/; then$/p' bin/run-hook-tests.sh |
   sed '1s/^  if //; $s/; then$//')
 if [ -z "$SUITE_COMMAND" ]; then
