@@ -5,7 +5,7 @@
 #
 #   Bug 1 — --body-file content treated as invisible.
 #     When the body is in a file the sections check must read that file and
-#     validate its content.  An absolute-path --body-file with both required
+#     validate its content.  A sandbox-relative --body-file with both required
 #     sections must PASS; one with a missing section must BLOCK.
 #
 #   Bug 2 — backslash-continued multi-line commands mis-resolve --repo.
@@ -100,6 +100,8 @@ make_sandbox() {
 run_case() {
   local label="$1" cmd="$2" want_rc="$3" want_stderr_regex="${4:-}"
   local sb; sb=$(make_sandbox)
+  # Copy fixtures so command strings can use whitespace-free relative paths.
+  cp -R "$BODY_DIR/." "$sb/"
   mock_gh_install "$sb"
 
   local input
@@ -146,19 +148,19 @@ Change description.
 ## Testing
 1. Run the tests."
 
-# Write the test body files to a private temp directory (absolute paths) so they are visible to
-# the hook regardless of the sandbox's working directory.
+# Store the source fixtures in a private directory. Each case copies them into
+# its sandbox and uses their filenames in the command string.
 BODY_FILE_FULL="$BODY_DIR/full.md"
 BODY_FILE_PARTIAL="$BODY_DIR/partial.md"
 printf '%s' "$BODY_WITH_SECTIONS"    > "$BODY_FILE_FULL"
 printf '%s' "$BODY_MISSING_GLOSSARY" > "$BODY_FILE_PARTIAL"
 
 run_case "Bug1: --body-file with both sections → PASS" \
-  "gh pr create --repo me2resh/apexyard --title 'fix(#743): test' --body-file $BODY_FILE_FULL" \
+  "gh pr create --repo me2resh/apexyard --title 'fix(#743): test' --body-file ${BODY_FILE_FULL##*/}" \
   0 ""
 
 run_case "Bug1: --body-file missing ## Glossary → BLOCK" \
-  "gh pr create --repo me2resh/apexyard --title 'fix(#743): test' --body-file $BODY_FILE_PARTIAL" \
+  "gh pr create --repo me2resh/apexyard --title 'fix(#743): test' --body-file ${BODY_FILE_PARTIAL##*/}" \
   2 "missing required '## Glossary' section"
 
 # ---------------------------------------------------------------------------
@@ -187,7 +189,7 @@ printf '%s' "$BODY_WITH_SECTIONS" > "$BF2"
 #     the sections are found, and the hook passes.
 # (A --repo-only garble degrades gracefully and would pass either way — i.e. it
 # would pass for the wrong reason, which is exactly the gap Rex flagged.)
-MULTI_LINE_CMD=$'gh pr create --repo me2resh/apexyard \\\n  --title \'fix(#743): multiline\' \\\n  --head fix/GH-743-test \\\n  --body-file\\\n'"$BF2"
+MULTI_LINE_CMD=$'gh pr create --repo me2resh/apexyard \\\n  --title \'fix(#743): multiline\' \\\n  --head fix/GH-743-test \\\n  --body-file\\\n'"${BF2##*/}"
 
 run_case "Bug2: backslash-continued multi-line (--body-file on continuation) resolves cleanly → PASS" \
   "$MULTI_LINE_CMD" \
@@ -212,7 +214,7 @@ BF3="$BODY_DIR/bug3.md"
 printf 'Example usage:\n\ngh pr create --title "feat(#1): x" --body "body"\n' > "$BF3"
 
 run_case "Bug3B: gh issue create --body-file whose content has 'gh pr create' → no-op (exit 0)" \
-  "gh issue create --repo me2resh/apexyard --title '[Bug] test' --body-file $BF3" \
+  "gh issue create --repo me2resh/apexyard --title '[Bug] test' --body-file ${BF3##*/}" \
   0 ""
 
 # ---------------------------------------------------------------------------
@@ -228,11 +230,11 @@ printf '## Summary\nfoo\n\n## Testing\nbar\n' > "$BF_REG_FAIL"
 printf '## Summary\nfoo\n\n## Testing\nbar\n\n## Glossary\n| t | d |\n\nRefs #743\n' > "$BF_REG_PASS"
 
 run_case "Regression: --body-file missing ## Glossary still BLOCKS" \
-  "gh pr create --repo me2resh/apexyard --title 'fix(#743): test' --head fix/#743-test --body-file $BF_REG_FAIL" \
+  "gh pr create --repo me2resh/apexyard --title 'fix(#743): test' --head fix/#743-test --body-file ${BF_REG_FAIL##*/}" \
   2 "missing required '## Glossary' section"
 
 run_case "Regression: --body-file with both sections → PASS" \
-  "gh pr create --repo me2resh/apexyard --title 'fix(#743): test' --head fix/#743-test --body-file $BF_REG_PASS" \
+  "gh pr create --repo me2resh/apexyard --title 'fix(#743): test' --head fix/#743-test --body-file ${BF_REG_PASS##*/}" \
   0 ""
 
 # ---------------------------------------------------------------------------
