@@ -18,6 +18,7 @@ SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 HOOKS="$SRC_ROOT/.claude/hooks"
 
 export APEXYARD_OPS_DISABLE_PIN=1 APEXYARD_DISABLE_RESOLUTION_CACHE=1
+export CLAUDE_CODE_SESSION_ID=fan-out-owner-test
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
 unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE
 
@@ -45,8 +46,10 @@ make_sb() {
   printf 'projects:\n  - name: p1\n    repo: org/p1\n' > "$sb/apexyard.projects.yaml"
   mkdir -p "$sb/.claude/hooks" "$sb/.claude/skills/fan-out" "$sb/.claude/worktrees" "$sb/workspace"
   for f in require-active-ticket.sh _lib-awk-fallback.sh _lib-detect-bash-write.sh _lib-read-config.sh _lib-path-resolve.sh \
-           _lib-active-ticket.sh _lib-mask-quoted.sh _lib-ticket-path-exemptions.sh _lib-portfolio-paths.sh _lib-ops-root.sh _lib-resolution-cache.sh; do
-    cp "$HOOKS/$f" "$sb/.claude/hooks/$f"
+           _lib-active-ticket.sh _lib-worktree-owner.sh _lib-mask-quoted.sh _lib-ticket-path-exemptions.sh _lib-portfolio-paths.sh _lib-ops-root.sh _lib-resolution-cache.sh; do
+    if [ -f "$HOOKS/$f" ]; then
+      cp "$HOOKS/$f" "$sb/.claude/hooks/$f"
+    fi
   done
   cp "$SRC_ROOT/.claude/project-config.defaults.json" "$sb/.claude/project-config.defaults.json"
   cp "$SRC_ROOT/.claude/skills/fan-out/prepare-worktree.sh" "$sb/.claude/skills/fan-out/prepare-worktree.sh"
@@ -77,6 +80,51 @@ else
   bad "prepare_worktree_writes_marker_with_the_source_ticket" "$(cat "$wtg/apexyard-ticket" 2>/dev/null)"
 fi
 if [ ! -f "$SB/.git/worktrees/$(basename "$WT")/apexyard-ticket" ] && [ -z "$(git -C "$SB" worktree list --porcelain | grep "$WT")" ]; then ok "prepare_worktree_does_not_touch_the_ops_fork"; else bad "prepare_worktree_does_not_touch_the_ops_fork" "ops fork lists the worktree"; fi
+
+# --- preparation records the active owner in the worktree git dir ---------
+if jq -e --arg session "$CLAUDE_CODE_SESSION_ID" \
+  '.status == "active" and .generation == 1 and .owner.session_id == $session' \
+  "$wtg/apexyard-owner" >/dev/null 2>&1; then
+  ok "prepare_worktree_records_the_active_owner"
+else
+  bad "prepare_worktree_records_the_active_owner" "$(cat "$wtg/apexyard-owner" 2>/dev/null)"
+fi
+
+# --- a missing owner library prevents worktree and branch creation --------
+OWNER_SB=$(make_sb)
+OWNER_WT="$OWNER_SB/.claude/worktrees/owner-no-lib"
+rm -f "$OWNER_SB/.claude/hooks/_lib-worktree-owner.sh"
+out=$(prepare "$OWNER_SB" "$OWNER_SB/workspace/p1" "$OWNER_WT" "feature/owner-no-lib" 2>&1)
+rc=$?
+if [ "$rc" = 1 ] && [ ! -e "$OWNER_WT" ] \
+   && [ -z "$(git -C "$OWNER_SB/workspace/p1" worktree list --porcelain | grep "$OWNER_WT")" ] \
+   && [ -z "$(git -C "$OWNER_SB/workspace/p1" branch --list 'feature/owner-no-lib')" ] \
+   && printf '%s' "$out" | grep -q '_lib-worktree-owner.sh not found'; then
+  ok "prepare_worktree_requires_the_owner_library"
+else
+  bad "prepare_worktree_requires_the_owner_library" "rc=$rc out=$out"
+fi
+rm -rf "$OWNER_SB"
+
+# --- a failed owner write removes the worktree and branch -----------------
+OWNER_SB=$(make_sb)
+OWNER_WT="$OWNER_SB/.claude/worktrees/owner-fail"
+OWNER_SHIM="$OWNER_SB/shim"
+mkdir -p "$OWNER_SHIM"
+printf '#!/bin/bash\nexit 1\n' > "$OWNER_SHIM/jq"
+chmod +x "$OWNER_SHIM/jq"
+out=$(cd "$OWNER_SB" && PATH="$OWNER_SHIM:$PATH" \
+  "$OWNER_SB/.claude/skills/fan-out/prepare-worktree.sh" "$OWNER_SB/workspace/p1" "$OWNER_WT" "feature/owner-fail" 2>&1)
+rc=$?
+if [ "$rc" = 1 ] && [ ! -e "$OWNER_WT" ] \
+   && [ -z "$(git -C "$OWNER_SB/workspace/p1" worktree list --porcelain | grep "$OWNER_WT")" ] \
+   && [ -z "$(git -C "$OWNER_SB/workspace/p1" branch --list 'feature/owner-fail')" ] \
+   && printf '%s' "$out" | grep -q 'could not record the worktree owner'; then
+  ok "owner_write_failure_removes_tree"
+else
+  bad "owner_write_failure_removes_tree" "rc=$rc out=$out"
+fi
+rm -rf "$OWNER_SB"
 
 # --- the new worktree passes the ticket gate -----------------------------
 # These worktrees sit outside .claude/worktrees/, the default fan-out place.
