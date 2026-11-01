@@ -88,7 +88,7 @@ ALWAYS = [
     "block-privileged-escalation.sh", "require-skill-for-issue-create.sh",
     "require-orbit-slice-for-ticket.sh", "require-migration-ticket.sh",
     "require-active-ticket.sh", "warn-review-marker-write.sh",
-    "warn-isolated-build-risk.sh", "block-reviewer-repo-mutation.sh",
+    "warn-isolated-build-risk.sh", "warn-raw-worktree-removal.sh", "block-reviewer-repo-mutation.sh",
     "block-reviewer-ci-wait.sh", "block-forged-menu-approval.sh",
     "block-git-add-all.sh", "suggest-ticket-template.sh",
     "validate-issue-structure.sh", "block-private-refs-in-public-repos.sh",

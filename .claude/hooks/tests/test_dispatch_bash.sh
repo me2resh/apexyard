@@ -38,7 +38,9 @@ cp "$ROOT/_lib-git-global.sh" "$TMP/hooks/_lib-git-global.sh"
 cp "$ROOT/_lib-strip-heredoc.sh" "$TMP/hooks/_lib-strip-heredoc.sh"
 chmod +x "$TMP/hooks/dispatch-bash.sh"
 
-scripts='block-protected-target-writes.sh block-ambient-tracker-repo.sh block-privileged-escalation.sh require-skill-for-issue-create.sh require-orbit-slice-for-ticket.sh require-migration-ticket.sh require-active-ticket.sh warn-review-marker-write.sh warn-isolated-build-risk.sh block-reviewer-repo-mutation.sh block-reviewer-ci-wait.sh block-forged-menu-approval.sh block-git-add-all.sh block-main-push.sh validate-branch-name.sh pre-push-gate.sh block-agent-routing-drift.sh check-secrets.sh block-onboarding-in-git.sh verify-commit-refs.sh validate-commit-format.sh require-agdr-for-arch-changes.sh warn-bootstrap-scope.sh suggest-ticket-template.sh validate-issue-structure.sh block-private-refs-in-public-repos.sh validate-pr-create.sh require-agdr-for-arch-pr.sh nudge-control-adversarial-test.sh block-unreviewed-merge.sh require-design-review-for-ui.sh block-merge-on-red-ci.sh require-architecture-review.sh detect-role-trigger.sh'
+grep -qxF '# APEXYARD_DISPATCH_GATE: Bash|*|warn-raw-worktree-removal.sh' "$ROOT/dispatch-bash.sh"
+
+scripts='block-protected-target-writes.sh block-ambient-tracker-repo.sh block-privileged-escalation.sh require-skill-for-issue-create.sh require-orbit-slice-for-ticket.sh require-migration-ticket.sh require-active-ticket.sh warn-review-marker-write.sh warn-isolated-build-risk.sh warn-raw-worktree-removal.sh block-reviewer-repo-mutation.sh block-reviewer-ci-wait.sh block-forged-menu-approval.sh block-git-add-all.sh block-main-push.sh validate-branch-name.sh pre-push-gate.sh block-agent-routing-drift.sh check-secrets.sh block-onboarding-in-git.sh verify-commit-refs.sh validate-commit-format.sh require-agdr-for-arch-changes.sh warn-bootstrap-scope.sh suggest-ticket-template.sh validate-issue-structure.sh block-private-refs-in-public-repos.sh validate-pr-create.sh require-agdr-for-arch-pr.sh nudge-control-adversarial-test.sh block-unreviewed-merge.sh require-design-review-for-ui.sh block-merge-on-red-ci.sh require-architecture-review.sh detect-role-trigger.sh'
 for script in $scripts; do
   cat > "$TMP/hooks/$script" <<'EOF'
 #!/usr/bin/env bash
@@ -102,10 +104,30 @@ printf '%s' "$payload" | DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh" >
 run true
 grep -qx 'block-ambient-tracker-repo.sh' "$TMP/log"
 grep -qx 'block-reviewer-repo-mutation.sh' "$TMP/log"
+grep -qx 'warn-raw-worktree-removal.sh' "$TMP/log"
 grep -qx 'require-orbit-slice-for-ticket.sh' "$TMP/log"
 if grep -q 'block-unreviewed-merge.sh' "$TMP/log"; then
   exit 1
 fi
+
+# Run the real advisory through the dispatcher, with unrelated hooks stubbed.
+# Keep the stub for the failure-policy check and subsequent routing tests.
+cp "$TMP/hooks/warn-raw-worktree-removal.sh" "$TMP/raw-warning.stub"
+cp "$ROOT/warn-raw-worktree-removal.sh" "$TMP/hooks/warn-raw-worktree-removal.sh"
+run 'git worktree remove /abs/wt' >"$TMP/stdout" 2>"$TMP/stderr"
+[ ! -s "$TMP/stdout" ]
+grep -qF 'Warning: raw worktree removal skips the owner check and preservation check.' "$TMP/stderr"
+run 'git worktree list' >"$TMP/stdout" 2>"$TMP/stderr"
+[ ! -s "$TMP/stdout" ]
+[ ! -s "$TMP/stderr" ]
+cp "$TMP/raw-warning.stub" "$TMP/hooks/warn-raw-worktree-removal.sh"
+
+# A crash in this advisory must warn, return 0, and run the later hooks.
+: > "$TMP/log"
+DISPATCH_FAIL_SCRIPT=warn-raw-worktree-removal.sh run true >"$TMP/stdout" 2>"$TMP/stderr"
+grep -qF 'WARN: warn-raw-worktree-removal.sh exited 1; continuing with remaining gates.' "$TMP/stderr"
+grep -qx 'block-reviewer-repo-mutation.sh' "$TMP/log"
+grep -qx 'block-forged-menu-approval.sh' "$TMP/log"
 
 # PR-create text in data must not route any PR-create hook.
 for command in "printf '%s' 'gh pr create --title x'" \
