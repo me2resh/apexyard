@@ -543,6 +543,7 @@ if ! make_worktree; then
   exit 1
 fi
 check 'linked worktree initially has no owner' status_result none 3 "$WORKTREE"
+check 'missing owner record cannot be force released' rejects worktree_owner_force_release "$WORKTREE" 1
 before=$(date +%s)
 check 'first acquisition succeeds' worktree_owner_acquire "$WORKTREE"
 after=$(date +%s)
@@ -696,10 +697,60 @@ session_only_foreign() (
 )
 check 'foreign session only owner cannot be replaced or mutated' session_only_foreign
 
+force_release_match() (
+  printf '%s\n' "$owned" | jq -c \
+    '.owner = {session_id:"foreign-session",harness:null,pid:null,pid_start:null,boot_id:null}' > "$RECORD"
+  worktree_owner_force_release "$WORKTREE" 3 &&
+    record_matches '.status == "released" and .owner == null and .forced == true and .generation == 4' &&
+    same_json "$(jq -c .released_by "$RECORD")" "$identity" &&
+    status_result released 4 "$WORKTREE" &&
+    worktree_owner_acquire "$WORKTREE" && record_matches '.generation == 5 and (has("forced") | not)'
+)
+check 'force release matches the shown generation and records its actor' force_release_match
+force_release_refused() (
+  local mode=$1 generation=3
+  case "$mode" in
+    stale) generation=2 ;;
+    invalid) generation=invalid ;;
+    missing) generation='' ;;
+  esac
+  printf '%s\n' "$owned" | jq -c \
+    '.owner = {session_id:"foreign-session",harness:null,pid:null,pid_start:null,boot_id:null}' > "$RECORD"
+  case "$mode" in
+    released)
+      jq -c --argjson actor "$identity" '.status = "released" | .owner = null | .released_by = $actor' \
+        "$RECORD" > "$TMP/force-released"
+      cp "$TMP/force-released" "$RECORD" ;;
+    alive) printf '%s\n' "$owned" > "$RECORD" ;;
+    malformed) printf '{broken\n' > "$RECORD" ;;
+    overflow) generation=9007199254740991
+      jq -c '.generation = 9007199254740991' "$RECORD" > "$TMP/force-overflow"
+      cp "$TMP/force-overflow" "$RECORD" ;;
+  esac
+  cp "$RECORD" "$TMP/force-before" || return 1
+  ! worktree_owner_force_release "$WORKTREE" "$generation" && cmp -s "$TMP/force-before" "$RECORD"
+)
+for scenario in stale invalid missing released alive malformed overflow; do
+  check "force release refuses $scenario and preserves record bytes" force_release_refused "$scenario"
+done
+force_release_generation_race() (
+  printf '%s\n' "$owned" | jq -c \
+    '.owner = {session_id:"foreign-session",harness:null,pid:null,pid_start:null,boot_id:null}' > "$RECORD"
+  _wto_with_lock() {
+    shift
+    jq -c '.generation += 1' "$RECORD" > "$TMP/force-raced" || return 1
+    cp "$TMP/force-raced" "$RECORD" || return 1
+    "$@"
+  }
+  ! worktree_owner_force_release "$WORKTREE" 3 && cmp -s "$TMP/force-raced" "$RECORD"
+)
+check 'force release checks the generation inside the lock' force_release_generation_race
+
 malformed_refused() {
   cp "$RECORD" "$TMP/malformed-before" || return 1
   status_result unknown 2 "$WORKTREE" && ! worktree_owner_acquire "$WORKTREE" &&
     ! worktree_owner_renew "$WORKTREE" && ! worktree_owner_release "$WORKTREE" &&
+    ! worktree_owner_force_release "$WORKTREE" 3 &&
     cmp -s "$TMP/malformed-before" "$RECORD"
 }
 printf '{broken\n' > "$RECORD"
@@ -713,17 +764,31 @@ for filter in '[]' '.version = 2' '.generation = 0' '.generation = "three"' \
   check 'malformed owner schema fails closed and remains unchanged' malformed_refused
 done
 identity_failure_refused() (
+  local generation
   printf '%s\n' "$owned" > "$RECORD"
   cp "$RECORD" "$TMP/identity-before" || return 1
   worktree_owner_identity() { return 1; }
-  ! worktree_owner_acquire "$WORKTREE" && ! worktree_owner_renew "$WORKTREE" &&
-    ! worktree_owner_release "$WORKTREE" && cmp -s "$TMP/identity-before" "$RECORD"
+  ! worktree_owner_acquire "$WORKTREE" &&
+    ! worktree_owner_renew "$WORKTREE" &&
+    ! worktree_owner_release "$WORKTREE" &&
+    cmp -s "$TMP/identity-before" "$RECORD" || return 1
+
+  # A session-only foreign owner is releasable, and the generation matches,
+  # so only the identity failure can make this force release refuse.
+  printf '%s\n' "$owned" | jq -c \
+    '.owner = {session_id:"foreign-session",harness:null,pid:null,pid_start:null,boot_id:null}' \
+    > "$RECORD" || return 1
+  cp "$RECORD" "$TMP/identity-before" || return 1
+  generation=$(jq -r '.generation' "$RECORD") || return 1
+  ! worktree_owner_force_release "$WORKTREE" "$generation" &&
+    cmp -s "$TMP/identity-before" "$RECORD"
 )
 check 'identity capture failure refuses every write' identity_failure_refused
 
 unsafe_path_refused() {
   local target=$1
-  ! worktree_owner_acquire "$target" && ! worktree_owner_renew "$target" && ! worktree_owner_release "$target"
+  ! worktree_owner_acquire "$target" && ! worktree_owner_renew "$target" && ! worktree_owner_release "$target" &&
+    ! worktree_owner_force_release "$target" 3
 }
 check 'main checkout refuses ownership writes' unsafe_path_refused "$REPO/main"
 check 'main checkout has no owner record' test ! -e "$REPO/main/.git/apexyard-owner"
