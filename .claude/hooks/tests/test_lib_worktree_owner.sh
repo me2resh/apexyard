@@ -82,14 +82,17 @@ case "${2:-}" in
     else
       printf ' %s /bin/bash\n' "$OWNER_TEST_PID"
     fi ;;
-  lstart=) printf ' Sat Oct 31 10:00:00 2026 \n' ;;
+  lstart=)
+    if [ "${TZ:-}" = UTC0 ]; then printf ' Sat Oct 31 10:00:00 2026 \n'
+    else printf ' Sat Oct 31 05:00:00 2026 \n'; fi ;;
   args=) printf '%s\n' "${OWNER_TEST_ARGS:-node /opt/node_modules/@anthropic-ai/claude-code/cli.js --resume}" ;;
   *) exit 1 ;;
 esac
 SCRIPT
 cat > "$TMP/bin/sysctl" <<'SCRIPT'
 #!/bin/sh
-printf 'fixture-boot\n'
+if [ -n "${OWNER_TEST_BOOT:-}" ]; then printf '%s\n' "$OWNER_TEST_BOOT"
+else printf '{ sec = 123, usec = 456 } Sat Oct 31 10:00:00 2026\n'; fi
 SCRIPT
 chmod +x "$TMP/bin/ps" "$TMP/bin/sysctl"
 export OWNER_TEST_LIB="$LIB" OWNER_TEST_PID="$$"
@@ -109,6 +112,7 @@ complete_identity="$complete_identity$$ and .pid_start == \"Sat Oct 31 10:00:00 
 session_only='(keys | sort) == ["boot_id","harness","pid","pid_start","session_id"] and .harness == null and .pid == null and .pid_start == null and .boot_id == null'
 check 'identity records all fields and gives the Claude session precedence' identity_matches \
   "$complete_identity and .session_id == \"claude-session\"" CLAUDE_CODE_SESSION_ID=claude-session APEXYARD_SESSION_ID=fallback-session
+check 'process start inspection uses UTC despite the caller time zone' identity_matches "$complete_identity" TZ=EST5
 check 'identity falls back to the shared session variable' identity_matches \
   "$complete_identity and .session_id == \"fallback-session\"" CLAUDE_CODE_SESSION_ID= APEXYARD_SESSION_ID=fallback-session
 check 'identity preserves an empty session' identity_matches \
@@ -130,7 +134,7 @@ check 'ancestor discovery reports its harness and process' env PATH="$TMP/bin:$P
   '. "$OWNER_TEST_LIB"; test "$(_wto_harness_ancestor)" = "claude-code $OWNER_TEST_PID"'
 check 'lock identity belongs to the command shell rather than its ancestor' env PATH="$TMP/bin:$PATH" \
   CLAUDE_CODE_SESSION_ID=command-session "$BASH" -c \
-  '. "$OWNER_TEST_LIB"; identity=$(_wto_operation_identity) || exit 1; test "${identity%%|*}" = "$$" && test "$$" != "$OWNER_TEST_PID"'
+  '. "$OWNER_TEST_LIB"; _wto_operation_identity identity || exit 1; test "${identity%%|*}" = "$$" && test "$$" != "$OWNER_TEST_PID"'
 
 export CLAUDE_CODE_SESSION_ID=owner-session
 # A live shell supplies a stable owner while retaining real process inspection.
@@ -138,7 +142,8 @@ _wto_harness_ancestor() { printf 'claude-code %s\n' "$$"; }
 owner_start=$(_wto_pid_start "$$") || owner_start=''
 owner_boot=$(_wto_host_boot_id)
 identity=$(worktree_owner_identity)
-operation_identity=$(_wto_operation_identity) || operation_identity=''
+operation_identity=''
+_wto_operation_identity operation_identity || :
 # The command substitution reaps its child, so this PID belongs to no process.
 # Killing a background job instead races bash 3.2: a child killed before it
 # starts its command runs this shell's EXIT trap, which removes $TMP.
@@ -150,6 +155,27 @@ for invalid_pid in '' 0 01 -1 abc '1 2' '1|2'; do
 done
 check 'positive process identifiers are accepted' _wto_valid_pid "$$"
 check 'current process identity is alive' process_result alive 0 "$$" "$owner_start" "$owner_boot"
+cross_timezone_liveness() (
+  # Always use real process tools, including when the suite uses sandbox fixtures.
+  PATH=/bin:/usr/bin:/sbin:/usr/sbin
+  local capture_zone=$1 check_zone=$2 start boot
+  start=$(TZ="$capture_zone" _wto_pid_start "$$") || return 1
+  boot=$(TZ="$capture_zone" _wto_host_boot_id) || return 1
+  TZ="$check_zone" process_result alive 0 "$$" "$start" "$boot"
+)
+check 'UTC owner remains alive to an EST caller with real process tools' cross_timezone_liveness UTC0 EST5
+check 'EST owner remains alive to a UTC caller with real process tools' cross_timezone_liveness EST5 UTC0
+if [ ! -r /proc/sys/kernel/random/boot_id ]; then
+  mac_boot_has_no_local_text() (
+    PATH=/bin:/usr/bin:/sbin:/usr/sbin
+    local boot
+    boot=$(_wto_host_boot_id) || return 1
+    case "$boot" in *'}') return 0 ;; *) return 1 ;; esac
+  )
+  check 'macOS boot identity ends at the closing brace' mac_boot_has_no_local_text
+  check 'macOS boot output without a closing brace is unknown' env PATH="$TMP/bin:$PATH" \
+    OWNER_TEST_BOOT=malformed "$BASH" -c '. "$OWNER_TEST_LIB"; test "$(_wto_host_boot_id)" = unknown-boot'
+fi
 check 'exited and waited process is dead' process_result dead 1 "$gone_pid" unused "$owner_boot"
 large_process_not_alive() {
   local output rc=0
@@ -255,12 +281,89 @@ no_temporary_files() {
 }
 check 'atomic writes clean temporary files' no_temporary_files
 
+read_lock_owner_case() (
+  local mode=$1 directory="$TMP/lock-reader-$1" output rc=0
+  mkdir "$directory" || return 1
+  case "$mode" in
+    missing) ;;
+    symlink)
+      printf '%s\n' "$operation_identity" > "$directory/target"
+      ln -s "$directory/target" "$directory/owner" || return 1 ;;
+    multiple) printf '%s\nother\n' "$operation_identity" > "$directory/owner" ;;
+    extra-newline) printf '%s\n\n' "$operation_identity" > "$directory/owner" ;;
+    single) printf '%s\n' "$operation_identity" > "$directory/owner" ;;
+    unterminated) printf '%s' "$operation_identity" > "$directory/owner" ;;
+    zero-byte) : > "$directory/owner" ;;
+    newline-only) printf '\n' > "$directory/owner" ;;
+  esac
+  output=$(_wto_read_lock_owner "$directory") || rc=$?
+  case "$mode" in
+    single) [ "$rc" -eq 0 ] && [ "$output" = "$operation_identity" ] ;;
+    *) [ "$rc" -eq 1 ] && [ -z "$output" ] && lock_owner_result unknown 2 "$directory" ;;
+  esac
+)
+check 'lock owner read preserves a single identity line' read_lock_owner_case single
+check 'unterminated lock owner line fails closed' read_lock_owner_case unterminated
+check 'zero-byte lock owner fails closed' read_lock_owner_case zero-byte
+check 'newline-only lock owner fails closed' read_lock_owner_case newline-only
+check 'missing lock owner read fails closed' read_lock_owner_case missing
+check 'symlinked lock owner read fails closed' read_lock_owner_case symlink
+check 'multiple lock owner lines fail closed' read_lock_owner_case multiple
+check 'a trailing empty lock owner line fails closed' read_lock_owner_case extra-newline
+
+no_lock_temporary_files() {
+  local candidate
+  for candidate in "$1"/owner.*.tmp; do
+    [ -e "$candidate" ] || [ -L "$candidate" ] || continue
+    return 1
+  done
+}
+partial_publication_preserved() (
+  local directory="$TMP/partial-publication" lockdir output rc=0
+  lockdir="$directory/apexyard-owner.lock"
+  mkdir -p "$lockdir" || return 1
+  # Cut a live identity inside its boot id, before its terminating newline.
+  printf '%s' "${operation_identity%?}" > "$lockdir/owner"
+  cp "$lockdir/owner" "$TMP/partial-owner-before" || return 1
+  output=$(_wto_read_lock_owner "$lockdir") || rc=$?
+  [ "$rc" -eq 1 ] && [ -z "$output" ] || return 1
+  lock_owner_result unknown 2 "$lockdir" || return 1
+  rc=0
+  _wto_lock "$directory" || rc=$?
+  [ "$rc" -eq 1 ] && [ -d "$lockdir" ] && [ ! -e "$lockdir/reaping" ] &&
+    cmp -s "$TMP/partial-owner-before" "$lockdir/owner"
+)
+check 'partial publication is unknown and retains its lock and owner bytes' partial_publication_preserved
+failed_lock_publication() (
+  local mode=$1 directory="$TMP/failed-publication-$1" lockdir rc=0
+  local successor="$$|$owner_start|successor-session|$owner_boot"
+  mkdir "$directory" || return 1
+  lockdir="$directory/apexyard-owner.lock"
+  printf '%s\n' "$successor" > "$directory/expected-owner" || return 1
+  mv() {
+    if [ "$mode" = published ]; then
+      printf '%s\n' "$successor" > "$lockdir/owner" || return 1
+    fi
+    return 1
+  }
+  _wto_lock "$directory" || rc=$?
+  [ "$rc" -eq 1 ] && no_lock_temporary_files "$lockdir" || return 1
+  case "$mode" in
+    unpublished) [ ! -e "$lockdir" ] ;;
+    published) [ -d "$lockdir" ] && cmp -s "$directory/expected-owner" "$lockdir/owner" ;;
+  esac
+)
+check 'failed rename cleans an unpublished lock and its temporary file' failed_lock_publication unpublished
+check 'failed rename preserves a published successor and removes its temporary file' failed_lock_publication published
+
 mkdir "$TMP/lock-directory"
 lock_gitdir="$TMP/lock-directory"
 lock="$lock_gitdir/apexyard-owner.lock"
 check 'operation identity has all four lock fields' test "$operation_identity" = "$$|$owner_start|owner-session|$owner_boot"
 check 'first lock acquisition succeeds' _wto_lock "$lock_gitdir"
-check 'lock records the complete operation identity' test "$(cat "$lock/owner")" = "$operation_identity"
+printf '%s\n' "$operation_identity" > "$TMP/expected-lock-owner"
+check 'lock records the complete operation identity with exactly one newline' cmp -s "$TMP/expected-lock-owner" "$lock/owner"
+check 'successful lock publication leaves no temporary file' no_lock_temporary_files "$lock"
 bounded_contention() (
   local attempt_log="$TMP/lock-attempts" sleep_log="$TMP/lock-sleeps"
   mkdir() {
@@ -283,6 +386,68 @@ printf '%s|unused|old-session|%s\n' "$gone_pid" "$owner_boot" > "$lock/owner"
 check 'dead operation lock can be reclaimed' _wto_lock "$lock_gitdir"
 check 'reclaimed lock records its new operation owner' test "$(cat "$lock/owner")" = "$operation_identity"
 _wto_unlock "$lock_gitdir"
+recheck_preserves_guard() (
+  local calls="$TMP/recheck-calls" rc=0
+  mkdir "$lock" || return 1
+  printf '%s|unused|old-session|%s\n' "$gone_pid" "$owner_boot" > "$lock/owner"
+  printf '%s\n' "$operation_identity" > "$TMP/recheck-owner-before"
+  _wto_lock_identity_state() {
+    if [ ! -e "$calls" ]; then
+      : > "$calls"
+      printf '%s\n' "$operation_identity" > "$lock/owner"
+      printf 'dead\n'
+      return 1
+    fi
+    printf 'alive\n'
+  }
+  _wto_lock "$lock_gitdir" || rc=$?
+  [ "$rc" -eq 1 ] && [ -d "$lock/reaping" ] &&
+    cmp -s "$TMP/recheck-owner-before" "$lock/owner"
+)
+check 'a live recheck retains its reaping guard and owner bytes' recheck_preserves_guard
+rm -rf "$lock"
+reaper_generation_race() (
+  local calls="$TMP/reaper-generation-calls" count rc=0 holder
+  local holder_h="$$|$owner_start|holder-H|$owner_boot"
+  local holder_n="$$|$owner_start|holder-N|$owner_boot"
+  mkdir "$lock" || return 1
+  printf '%s|unused|original-A|%s\n' "$gone_pid" "$owner_boot" > "$lock/owner"
+  printf '0\n' > "$calls"
+  # The file counter survives the command substitutions that run each probe.
+  _wto_lock_identity_state() {
+    count=$(cat "$calls") || return 2
+    count=$((count + 1))
+    printf '%s\n' "$count" > "$calls"
+    case "$count" in
+      1|2)
+        rm -rf "$lock" || return 2
+        mkdir "$lock" || return 2
+        if [ "$count" -eq 1 ]; then holder=$holder_h; else holder=$holder_n; fi
+        printf '%s\n' "$holder" > "$lock/owner"
+        printf 'dead\n'
+        return 1 ;;
+      *) printf 'alive\n' ;;
+    esac
+  }
+  _wto_lock "$lock_gitdir" || rc=$?
+  [ "$rc" -eq 1 ] && [ -d "$lock" ] || return 1
+  holder=$(cat "$lock/owner") || return 1
+  [ "$holder" != "$operation_identity" ] || return 1
+  [ "$holder" = "$holder_h" ] || [ "$holder" = "$holder_n" ]
+)
+check 'a reaper never deletes a lock generation it did not prove dead' reaper_generation_race
+rm -rf "$lock"
+guard_blocks_reaping() (
+  local rc=0
+  mkdir -p "$lock/reaping" || return 1
+  printf '%s|unused|old-session|%s\n' "$gone_pid" "$owner_boot" > "$lock/owner"
+  cp "$lock/owner" "$TMP/guard-owner-before" || return 1
+  _wto_lock "$lock_gitdir" || rc=$?
+  [ "$rc" -eq 1 ] && [ -d "$lock" ] && [ -f "$lock/owner" ] &&
+    [ -d "$lock/reaping" ] && cmp -s "$TMP/guard-owner-before" "$lock/owner"
+)
+check 'a pre-existing reaping guard preserves a dead lock' guard_blocks_reaping
+rm -rf "$lock"
 mkdir "$lock"
 check 'lock with an unpublished identity is preserved' rejects _wto_lock "$lock_gitdir"
 check 'unpublished lock remains present' test -d "$lock"
@@ -323,6 +488,55 @@ rc=0
 _wto_with_lock "$lock_gitdir" exit 9 || rc=$?
 check 'locked command explicit exit retains its status' test "$rc" -eq 9
 check 'explicit exit releases its lock' test ! -e "$lock"
+callback_owns_lock() {
+  local callback_pid recorded
+  _wto_self_pid callback_pid >/dev/null || return 1
+  [ -f "$lock/owner" ] || return 1
+  IFS='|' read -r recorded _ < "$lock/owner" || return 1
+  [ "$recorded" = "$callback_pid" ] || return 1
+  if [ "$callback_pid" != "$$" ]; then [ "$recorded" != "$$" ]; fi
+}
+check 'the lock records the critical section shell PID' _wto_with_lock "$lock_gitdir" callback_owns_lock
+check 'the callback owner releases its lock' test ! -e "$lock"
+wait_for_log() {
+  local log=$1 entry=$2 attempts=0
+  while [ "$attempts" -lt 100 ]; do
+    if [ -f "$log" ] && grep -qx "$entry" "$log"; then return 0; fi
+    sleep 0.1
+    attempts=$((attempts + 1))
+  done
+  return 1
+}
+parent_death_keeps_lock() (
+  local child rc=0 log="$TMP/parent-death.log" directory="$TMP/parent-death"
+  mkdir "$directory" || return 1
+  "$BASH" -c '
+    . "$1"
+    writer() { printf "first-start\n" >> "$2"; sleep 3; printf "first-end\n" >> "$2"; }
+    _wto_with_lock "$2" writer "$2" "$3"
+  ' owner-parent "$LIB" "$directory" "$log" &
+  child=$!
+  if ! wait_for_log "$log" first-start; then
+    kill -9 "$child" 2>/dev/null || :
+    wait "$child" 2>/dev/null || :
+    return 1
+  fi
+  kill -9 "$child" || return 1
+  wait "$child" 2>/dev/null || :
+  second_writer() { printf 'second-in\n' >> "$log"; }
+  _wto_with_lock "$directory" second_writer || rc=$?
+  [ "$rc" -eq 1 ] && ! grep -qx second-in "$log" || return 1
+  wait_for_log "$log" first-end || return 1
+  # Wait for the surviving shell's EXIT trap after the callback finishes.
+  local attempts=0
+  while [ -d "$directory/apexyard-owner.lock" ] && [ "$attempts" -lt 100 ]; do
+    sleep 0.1
+    attempts=$((attempts + 1))
+  done
+  [ ! -d "$directory/apexyard-owner.lock" ] || return 1
+  _wto_with_lock "$directory" second_writer && grep -qx second-in "$log"
+)
+check 'a writer outlives its killed parent without losing its lock' parent_death_keeps_lock
 
 if ! make_worktree; then
   printf 'FAIL: could not create an isolated linked worktree\n'
@@ -386,11 +600,11 @@ default_duration() (
 )
 check 'unset lease duration uses the one hour default' default_duration
 
-for scenario in live expired-live unknown-start unknown-boot; do
+for scenario in live expired-live 'a record with a null start is malformed and unknown' unknown-boot; do
   case "$scenario" in
     live) filter='.'; expected=alive; expected_rc=0 ;;
     expired-live) filter='.lease_expires_at = 0'; expected=alive; expected_rc=0 ;;
-    unknown-start) filter='.owner.pid_start = null'; expected=unknown; expected_rc=2 ;;
+    'a record with a null start is malformed and unknown') filter='.owner.pid_start = null'; expected=unknown; expected_rc=2 ;;
     unknown-boot) filter='.owner.boot_id = "unknown-boot"'; expected=unknown; expected_rc=2 ;;
   esac
   printf '%s\n' "$owned" | jq -c '.owner.session_id = "foreign-session" | ('"$filter"')' > "$RECORD"
@@ -399,6 +613,27 @@ for scenario in live expired-live unknown-start unknown-boot; do
   check "foreign owner acquisition is refused for $scenario" rejects worktree_owner_acquire "$WORKTREE"
   check "foreign owner refusal preserves bytes for $scenario" cmp -s "$TMP/acquire-before" "$RECORD"
 done
+unreadable_live_start() (
+  mkdir "$TMP/unreadable-start" || return 1
+  cat > "$TMP/unreadable-start/ps" <<'SCRIPT'
+#!/bin/sh
+if [ "${1:-}" = -o ] && [ "${2:-}" = lstart= ] &&
+  [ "${3:-}" = -p ] && [ "${4:-}" = "$OWNER_TEST_RECORDED_PID" ]; then exit 1; fi
+exec /bin/ps "$@"
+SCRIPT
+  chmod +x "$TMP/unreadable-start/ps" || return 1
+  printf '%s\n' "$owned" | jq -c '.owner.session_id = "foreign-session"' > "$RECORD"
+  cp "$RECORD" "$TMP/unreadable-start-before" || return 1
+  # Use a real, valid active record; only the start-time lookup is unavailable.
+  _wto_read_record "$RECORD" >/dev/null || return 1
+  OWNER_TEST_RECORDED_PID=$(jq -r .owner.pid "$RECORD") || return 1
+  export OWNER_TEST_RECORDED_PID
+  PATH="$TMP/unreadable-start:$PATH"
+  _wto_with_lock "$GITDIR" true && status_result unknown 2 "$WORKTREE" &&
+    ! worktree_owner_acquire "$WORKTREE" &&
+    cmp -s "$TMP/unreadable-start-before" "$RECORD"
+)
+check 'an unreadable live start is unknown and refuses acquisition without changing bytes' unreadable_live_start
 printf '%s\n' "$owned" | jq -c --argjson pid "$gone_pid" \
   '.owner.pid = $pid | .owner.session_id = "gone-session" | .lease_expires_at = 10000000000' > "$RECORD"
 check 'verified dead owner has the dead status' status_result dead 1 "$WORKTREE"

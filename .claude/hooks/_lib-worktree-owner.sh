@@ -11,6 +11,10 @@ _wto_host_boot_id() {
     IFS= read -r boot < /proc/sys/kernel/random/boot_id || boot=""
   else
     boot=$(sysctl -n kern.boottime 2>/dev/null) || boot=""
+    case "$boot" in
+      *'}'*) boot="${boot%%\}*}}" ;;
+      *) boot="" ;;
+    esac
   fi
   printf '%s\n' "${boot:-unknown-boot}"
 }
@@ -22,7 +26,7 @@ _wto_valid_pid() {
 _wto_pid_start() {
   local start
   _wto_valid_pid "${1:-}" || return 1
-  start=$(LC_ALL=C ps -o lstart= -p "$1" 2>/dev/null) || return 1
+  start=$(TZ=UTC0 LC_ALL=C ps -o lstart= -p "$1" 2>/dev/null) || return 1
   printf '%s\n' "$start" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
 }
 
@@ -107,14 +111,37 @@ worktree_owner_identity() {
     '{session_id:$session,harness:null,pid:null,pid_start:null,boot_id:null}'
 }
 
+_wto_self_pid() {
+  local self_pid="${BASHPID:-}" file
+  if [ -z "$self_pid" ]; then
+    file=$(mktemp "${TMPDIR:-/tmp}/apexyard-owner-pid.XXXXXX") || return 1
+    # Run directly: command substitution would report its own short-lived child.
+    if ! sh -c 'echo "$PPID"' > "$file" || ! IFS= read -r self_pid < "$file"; then
+      rm -f "$file"
+      return 1
+    fi
+    rm -f "$file" || return 1
+  fi
+  _wto_valid_pid "$self_pid" || return 1
+  # An optional output variable avoids creating a command-substitution process.
+  if [ "$#" -gt 0 ]; then printf -v "$1" '%s' "$self_pid" || return 1; fi
+  printf '%s\n' "$self_pid"
+}
+
 _wto_operation_identity() {
-  local start boot session
+  local pid start boot session
+  _wto_self_pid pid >/dev/null || return 1
   session=$(_wto_session)
-  start=$(_wto_pid_start "$$") || return 1
+  start=$(_wto_pid_start "$pid") || return 1
   boot=$(_wto_host_boot_id)
   [ -n "$start" ] && [ -n "$boot" ] && [ "$boot" != unknown-boot ] || return 1
   case "$session$start$boot" in *'|'*|*$'\n'*) return 1 ;; esac
-  printf '%s|%s|%s|%s\n' "$$" "$start" "$session" "$boot"
+  # Lock and unlock call this directly, in the shell running the critical section.
+  if [ "$#" -gt 0 ]; then
+    printf -v "$1" '%s|%s|%s|%s' "$pid" "$start" "$session" "$boot"
+  else
+    printf '%s|%s|%s|%s\n' "$pid" "$start" "$session" "$boot"
+  fi
 }
 
 _wto_process_state() {
@@ -216,14 +243,21 @@ _wto_gitdir() (
   printf '%s\n' "$gitdir"
 )
 
-_wto_lock_owner_state() {
-  local owner pid start session boot
-  if [ -L "$1/owner" ] || ! owner=$(cat "$1/owner" 2>/dev/null); then
-    printf 'unknown\n'
-    return 2
-  fi
-  case "$owner" in *$'\n'*) printf 'unknown\n'; return 2 ;; esac
-  printf '%s\n' "$owner" | {
+_wto_read_lock_owner() {
+  local owner extra
+  [ ! -L "$1/owner" ] || return 1
+  {
+    IFS= read -r owner || return 1
+    [ -n "$owner" ] || return 1
+    if IFS= read -r extra || [ -n "$extra" ]; then return 1; fi
+  } 2>/dev/null < "$1/owner" || return 1
+  printf '%s\n' "$owner"
+}
+
+_wto_lock_identity_state() {
+  local pid start session boot
+  case "$1" in *$'\n'*) printf 'unknown\n'; return 2 ;; esac
+  printf '%s\n' "$1" | {
     IFS='|' read -r pid start session boot
     case "$boot" in *'|'*) printf 'unknown\n'; return 2 ;; esac
     if [ -z "$start" ] || [ -z "$boot" ] || [ "$boot" = unknown-boot ]; then
@@ -233,32 +267,51 @@ _wto_lock_owner_state() {
   }
 }
 
+_wto_lock_owner_state() {
+  local owner
+  if ! owner=$(_wto_read_lock_owner "$1"); then
+    printf 'unknown\n'
+    return 2
+  fi
+  _wto_lock_identity_state "$owner"
+}
+
 _wto_lock() {
-  local gitdir="${1:-}" lockdir identity holder attempts=0 reaped=0
+  local gitdir="${1:-}" lockdir identity holder dead_identity current_identity tmp attempts=0 reaped=0
   _wto_safe_gitdir "$gitdir" || return 1
   lockdir="$gitdir/apexyard-owner.lock"
-  identity=$(_wto_operation_identity) || return 1
+  _wto_operation_identity identity || return 1
   # Six attempts bound contention waits to five short sleeps.
   while [ "$attempts" -lt 6 ]; do
     [ ! -L "$lockdir" ] || return 1
     if mkdir "$lockdir" 2>/dev/null; then
-      if printf '%s\n' "$identity" > "$lockdir/owner"; then
+      tmp="$lockdir/owner.${identity%%|*}.tmp"
+      if printf '%s\n' "$identity" > "$tmp" && mv -f "$tmp" "$lockdir/owner"; then
         return 0
       fi
-      rm -rf "$lockdir"
+      rm -f "$tmp"
+      # No reaper acts without a published owner, and only the holder's own
+      # identity can unlock. A directory without an owner is still ours.
+      if [ ! -e "$lockdir/owner" ] && [ ! -L "$lockdir/owner" ]; then
+        rm -rf "$lockdir"
+      fi
       return 1
     fi
-    holder=$(_wto_lock_owner_state "$lockdir") || :
+    holder=unknown
+    if dead_identity=$(_wto_read_lock_owner "$lockdir"); then
+      holder=$(_wto_lock_identity_state "$dead_identity") || :
+    fi
     if [ "$holder" = dead ] && [ "$reaped" -eq 0 ] && mkdir "$lockdir/reaping" 2>/dev/null; then
-      # Serialize stale reapers, then recheck identity before deleting anything.
-      # A new lock with an unpublished owner is unknown and stays untouched.
-      holder=$(_wto_lock_owner_state "$lockdir") || :
-      if [ "$holder" = dead ]; then
+      # Only the guarded reaper can remove a dead holder's lock. If its owner
+      # still equals the identity proved dead, this is that generation's lock.
+      # Probing again could outlive that holder and then delete a newer lock.
+      if current_identity=$(_wto_read_lock_owner "$lockdir") && [ "$current_identity" = "$dead_identity" ]; then
         rm -rf "$lockdir" || return 1
         reaped=1
         continue
       fi
-      rmdir "$lockdir/reaping" 2>/dev/null || :
+      # A reaping guard disappears only with its whole lock directory.
+      # Removing it by path could remove another lock generation's guard.
     fi
     attempts=$((attempts + 1))
     if [ "$attempts" -lt 6 ]; then
@@ -272,7 +325,7 @@ _wto_unlock() {
   local gitdir="${1:-}" lockdir identity holder
   _wto_safe_gitdir "$gitdir" || return 1
   lockdir="$gitdir/apexyard-owner.lock"
-  identity=$(_wto_operation_identity) || return 1
+  _wto_operation_identity identity || return 1
   holder=$(cat "$lockdir/owner" 2>/dev/null) || return 1
   [ "$holder" = "$identity" ] || return 1
   rm -rf "$lockdir"
