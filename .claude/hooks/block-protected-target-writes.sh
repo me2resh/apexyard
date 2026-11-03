@@ -20,6 +20,10 @@ PT_CWD=${PT_CWD:-${CLAUDE_PROJECT_DIR:-$PWD}}
 PT_CWD=$(pt_physical "$PT_CWD") || pt_block 'cannot resolve the effective directory.'
 PT_FALLBACK=${PT_OPS:-${PT_PROJECT:-$PT_CWD}}
 tool=$(jq -r '.tool_name // "Bash"' <<<"$INPUT")
+if [ "$tool" = apply_patch ]; then
+  [ -r "$HOOK_DIR/dispatch-apply-patch.sh" ] || pt_block 'the patch dispatcher is missing or unreadable.'
+  exec bash "$HOOK_DIR/dispatch-apply-patch.sh" <<<"$INPUT"
+fi
 if ! hook_is_shell_call "$INPUT"; then
   target=$(jq -er '.tool_input.file_path // .tool_input.notebook_path // empty' <<<"$INPUT") || pt_block "missing edit target (tool_name: $tool)."
   pt_protected "$target" && pt_block 'the edit target is live hook state. Use an isolated worktree.'
