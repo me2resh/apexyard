@@ -17,12 +17,13 @@ raw_payload_tool_matches() {
 # reproduced with cursor-agent 2026.10.22 (GH-1909, 2026-10-29). Do not guess
 # further aliases: Claude-format hook payloads can be recognized by shape.
 # A file target takes precedence over the command-shape fallback.
+# apply_patch carries patch data in command; it must use edit dispatch.
 hook_is_shell_call() {
   local payload="$1"
   printf '%s' "$payload" | jq -e '
-    (.tool_name == "Bash" or .tool_name == "shellToolCall") or
+    .tool_name != "apply_patch" and ((.tool_name == "Bash" or .tool_name == "shellToolCall") or
     ((.tool_input.command | type == "string" and length > 0) and
      ((.tool_input.file_path // "") == "") and
-     ((.tool_input.notebook_path // "") == ""))
+     ((.tool_input.notebook_path // "") == "")))
   ' >/dev/null 2>&1
 }
