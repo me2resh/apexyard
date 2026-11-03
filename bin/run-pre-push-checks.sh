@@ -65,6 +65,9 @@
 
 set -euo pipefail
 
+# Keep relative cd silent in checks that launch suites directly.
+unset CDPATH
+
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 if [ -z "$REPO_ROOT" ]; then
   echo "ERROR: not inside a git repository." >&2
