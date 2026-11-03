@@ -87,7 +87,7 @@ _brrm_real_path() {
   dir="$abs"
   while [ -n "$dir" ] && [ "$dir" != / ] && [ ! -d "$dir" ]; do
     if [ -z "$tail" ]; then tail=$(basename "$dir"); else tail=$(basename "$dir")/$tail; fi
-    dir=$(dirname "$dir")
+    parent=$(dirname "$dir"); [ "$parent" = "$dir" ] && break; dir="$parent"
   done
   parent=$(cd "$dir" 2>/dev/null && pwd -P) || return 0
   if [ "$parent" = / ]; then printf '/%s' "$tail"; else printf '%s/%s' "$parent" "${tail:+$tail}"; fi
@@ -163,9 +163,9 @@ _brrm_check_worktree_add_segment() {
   # Read the governed roots once, not once per ancestor.
   # Walk from the resolved physical path. The raw path can hold `..`, and
   # dirname on it would climb lexically into the wrong directory.
-  local anc="$resolved" govs
+  local anc="$resolved" govs parent
   govs=$(_brrm_governed_roots "$root")
-  while [ -n "$anc" ] && [ "$anc" != / ] && [ ! -e "$anc" ]; do anc=$(dirname "$anc"); done
+  while [ -n "$anc" ] && [ "$anc" != / ] && [ ! -e "$anc" ]; do parent=$(dirname "$anc"); [ "$parent" = "$anc" ] && break; anc="$parent"; done
   while [ -n "$anc" ]; do
     while IFS= read -r gov; do
       [ -n "$gov" ] && [ -e "$gov" ] || continue
@@ -175,7 +175,7 @@ _brrm_check_worktree_add_segment() {
       fi
     done <<<"$govs"
     [ "$anc" = / ] && break
-    anc=$(dirname "$anc")
+    parent=$(dirname "$anc"); [ "$parent" = "$anc" ] && break; anc="$parent"
   done
   return 0
 }
@@ -245,7 +245,7 @@ if [ -z "$ROOT" ] || [ ! -d "$ROOT/.claude/session" ]; then
     if [ -f "$ROOT/.apexyard-fork" ] || { [ -f "$ROOT/onboarding.yaml" ] && [ -f "$ROOT/apexyard.projects.yaml" ]; }; then
       break
     fi
-    ROOT=$(dirname "$ROOT")
+    parent=$(dirname "$ROOT"); [ "$parent" = "$ROOT" ] && break; ROOT="$parent"
   done
 fi
 

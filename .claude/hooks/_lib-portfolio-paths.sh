@@ -308,7 +308,7 @@ _portfolio_root() {
 # entered outside a Windows-drive-letter input.
 # ------------------------------------------------------------------------------
 _portfolio_canonicalize() {
-  local p="$1" dir tail=""
+  local p="$1" dir tail="" parent
 
   case "$p" in
     [A-Za-z]:/*|[A-Za-z]:\\*)
@@ -333,7 +333,7 @@ _portfolio_canonicalize() {
     else
       tail="$(basename "$dir")/$tail"
     fi
-    dir="$(dirname "$dir")"
+    parent=$(dirname "$dir"); [ "$parent" = "$dir" ] && break; dir="$parent"
   done
 
   if [ ! -e "$dir" ]; then

@@ -164,7 +164,7 @@ PT_STATE_DIR=$(mktemp -d 2>/dev/null) || PT_STATE_DIR=""
 
 pt_git() {
   local unresolved=0
-  local i=1 arg verb tree="$PT_CWD" opts=0 first=1 raw="$cmd" gitcwd="$cwd"
+  local i=1 arg verb tree="$PT_CWD" opts=0 first=1 parent raw="$cmd" gitcwd="$cwd"
   local -a paths=()
   while [ "$i" -lt "${#words[@]}" ]; do
     arg=${words[$i]}; i=$((i+1))
@@ -189,7 +189,7 @@ pt_git() {
     PT_GIT_TREE_KEY="$tree"
     PT_CWD=$(pt_physical "$tree") || PT_CWD="$PT_FALLBACK"
     tree="$PT_CWD"
-    while [ "$tree" != / ] && [ ! -e "$tree/.git" ]; do tree=$(dirname "$tree"); done
+    while [ "$tree" != / ] && [ ! -e "$tree/.git" ]; do parent=$(dirname "$tree"); [ "$parent" = "$tree" ] && break; tree="$parent"; done
     PT_GIT_TREE_CWD="$PT_CWD"; PT_GIT_TREE_ROOT="$tree"
   fi
   case "$PT_CWD" in *'$'*) tree="$PT_FALLBACK"; PT_CWD="$tree" ;; esac
@@ -638,7 +638,7 @@ pt_simple() {
   return 0
 }
 pt_patch() {
-  local i=1 arg file="${redirect_input:-}" output="" inputs=() tree path header
+  local i=1 arg file="${redirect_input:-}" output="" inputs=() tree path header parent
   file=$(pt_expand "$file")
   case "$file" in ''|/*) ;; *) file="$PT_CWD/$file" ;; esac
   for arg in "${words[@]}"; do [ "$arg" != --dry-run ] || return 0; done
@@ -655,7 +655,7 @@ pt_patch() {
     esac
   done
   tree=$(pt_physical "$PT_CWD")
-  while [ "$tree" != / ] && [ ! -e "$tree/.git" ]; do tree=$(dirname "$tree"); done
+  while [ "$tree" != / ] && [ ! -e "$tree/.git" ]; do parent=$(dirname "$tree"); [ "$parent" = "$tree" ] && break; tree="$parent"; done
   pt_live "$tree" && pt_block 'patch writes a live work tree.'
   [ -z "$output" ] || pt_judge "$output"
   if [ "${#inputs[@]}" -gt 0 ]; then pt_judge "${inputs[0]}"; fi
