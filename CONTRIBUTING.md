@@ -60,7 +60,7 @@ Run what CI runs, locally:
 
 ```bash
 /bin/bash bin/run-hook-tests.sh   # hook test suite under Bash 3.2 — must be green
-npx markdownlint-cli2@0.23.2 '**/*.md'  # if you touched markdown (same pin as the gate)
+npx markdownlint-cli2@0.24.0 '**/*.md'  # if you touched markdown (same pin as the gate)
 shellcheck .claude/hooks/*.sh     # if you touched hooks
 ```
 
