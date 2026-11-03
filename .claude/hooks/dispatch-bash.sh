@@ -28,6 +28,15 @@ INPUT=$(cat)
 if [ "${1:-}" = --shell-alias-only ]; then
   # shellcheck source=/dev/null
   . "$HOOK_DIR/_lib-fail-closed-json.sh" || exit 2
+  if printf '%s' "$INPUT" | jq -e '.tool_name == "apply_patch"' >/dev/null 2>&1; then
+    bash "$HOOK_DIR/dispatch-apply-patch.sh" <<<"$INPUT" || _rc=$?
+    if [ "$_rc" -ne 0 ] && [ "$_rc" -ne 2 ]; then
+      printf 'BLOCKED: patch dispatcher exited %s instead of PASS.\n' "$_rc" >&2
+      _rc=2
+    fi
+    _dispatch_complete=1
+    exit "$_rc"
+  fi
   if printf '%s' "$INPUT" | jq -e '.tool_name == "Bash"' >/dev/null 2>&1 \
     || ! hook_is_shell_call "$INPUT"; then
     _dispatch_complete=1

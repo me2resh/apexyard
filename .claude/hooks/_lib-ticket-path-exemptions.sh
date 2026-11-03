@@ -16,9 +16,9 @@
 
 # Nearest existing ancestor of a path (handles not-yet-created files).
 _ticket_path_existing_dir() {
-  local dir="$1"
+  local dir="$1" parent
   while [ -n "$dir" ] && [ "$dir" != "/" ] && [ ! -d "$dir" ]; do
-    dir=$(dirname "$dir")
+    parent=$(dirname "$dir"); [ "$parent" = "$dir" ] && break; dir="$parent"
   done
   [ -d "$dir" ] && printf '%s' "$dir"
 }

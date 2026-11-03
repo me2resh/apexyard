@@ -4,6 +4,10 @@
 
 set -u
 
+# shellcheck disable=SC1007  # Intentionally empty CDPATH keeps cd silent.
+TMPDIR=$(CDPATH= cd -- "${TMPDIR:-/tmp}" && pwd) || exit 1
+export TMPDIR
+
 # Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
 # shellcheck disable=SC1091
 . "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
@@ -69,10 +73,10 @@ USERDIR="$TMPROOT/fake-home/.cursor"
 
 echo "== install-cursor-adapter.sh install"
 
-if bash "$SCRIPT" --root "$TMPROOT" --user-dir "$USERDIR" >/tmp/_install_cursor.out 2>&1; then
+if bash "$SCRIPT" --root "$TMPROOT" --user-dir "$USERDIR" >"$TMPROOT/_install_cursor.out" 2>&1; then
   mark_pass "default invocation installs into --user-dir"
 else
-  mark_fail "default invocation installs into --user-dir" "$(cat /tmp/_install_cursor.out)"
+  mark_fail "default invocation installs into --user-dir" "$(cat "$TMPROOT/_install_cursor.out")"
 fi
 
 assert_file "$USERDIR/hooks.json" "user hooks.json exists after install"
@@ -84,13 +88,13 @@ else
   mark_fail "installed hooks.json carries the session-pin overlay" "$(jq '.hooks' "$USERDIR/hooks.json")"
 fi
 
-if grep -F "Include third-party" /tmp/_install_cursor.out >/dev/null 2>&1 && grep -F "cursor-agent" /tmp/_install_cursor.out >/dev/null 2>&1; then
+if grep -F "Include third-party" "$TMPROOT/_install_cursor.out" >/dev/null 2>&1 && grep -F "cursor-agent" "$TMPROOT/_install_cursor.out" >/dev/null 2>&1; then
   mark_pass "install output names the native-loader toggle and CLI-not-covered limit"
 else
-  mark_fail "install output names the native-loader toggle and CLI-not-covered limit" "$(cat /tmp/_install_cursor.out)"
+  mark_fail "install output names the native-loader toggle and CLI-not-covered limit" "$(cat "$TMPROOT/_install_cursor.out")"
 fi
 
-if grep -F "MainThreadShellExec" /tmp/_install_cursor.out >/dev/null 2>&1; then
+if grep -F "MainThreadShellExec" "$TMPROOT/_install_cursor.out" >/dev/null 2>&1; then
   mark_fail "install output no longer claims the July failClosed limitation" "found MainThreadShellExec"
 else
   mark_pass "install output no longer claims the July failClosed limitation"
@@ -101,10 +105,10 @@ echo "== install-cursor-adapter.sh preserves a foreign hook across re-install"
 jq '.hooks.beforeShellExecution = [{"command": "some-other-tool --scan"}]' "$USERDIR/hooks.json" > "$USERDIR/hooks.json.tmp"
 mv "$USERDIR/hooks.json.tmp" "$USERDIR/hooks.json"
 
-if bash "$SCRIPT" --root "$TMPROOT" --user-dir "$USERDIR" >/tmp/_install_cursor_reinstall.out 2>&1; then
+if bash "$SCRIPT" --root "$TMPROOT" --user-dir "$USERDIR" >"$TMPROOT/_install_cursor_reinstall.out" 2>&1; then
   mark_pass "re-install succeeds"
 else
-  mark_fail "re-install succeeds" "$(cat /tmp/_install_cursor_reinstall.out)"
+  mark_fail "re-install succeeds" "$(cat "$TMPROOT/_install_cursor_reinstall.out")"
 fi
 
 if jq -e '[.hooks.beforeShellExecution[] | select(.command == "some-other-tool --scan")] | length == 1' "$USERDIR/hooks.json" >/dev/null 2>&1; then
@@ -121,10 +125,10 @@ fi
 
 echo "== install-cursor-adapter.sh --uninstall"
 
-if bash "$SCRIPT" --user-dir "$USERDIR" --uninstall >/tmp/_uninstall_cursor.out 2>&1; then
+if bash "$SCRIPT" --user-dir "$USERDIR" --uninstall >"$TMPROOT/_uninstall_cursor.out" 2>&1; then
   mark_pass "--uninstall succeeds"
 else
-  mark_fail "--uninstall succeeds" "$(cat /tmp/_uninstall_cursor.out)"
+  mark_fail "--uninstall succeeds" "$(cat "$TMPROOT/_uninstall_cursor.out")"
 fi
 
 if jq -e '[.hooks.sessionStart[]? | select(.command | contains("cursor-session-pin.sh"))] | length == 0' "$USERDIR/hooks.json" >/dev/null 2>&1; then
@@ -148,10 +152,10 @@ fi
 echo "== install-cursor-adapter.sh --uninstall is a no-op with nothing installed"
 
 EMPTY_USERDIR="$TMPROOT/fake-home-empty/.cursor"
-if bash "$SCRIPT" --user-dir "$EMPTY_USERDIR" --uninstall >/tmp/_uninstall_cursor_empty.out 2>&1; then
+if bash "$SCRIPT" --user-dir "$EMPTY_USERDIR" --uninstall >"$TMPROOT/_uninstall_cursor_empty.out" 2>&1; then
   mark_pass "--uninstall on a missing user config exits cleanly"
 else
-  mark_fail "--uninstall on a missing user config exits cleanly" "$(cat /tmp/_uninstall_cursor_empty.out)"
+  mark_fail "--uninstall on a missing user config exits cleanly" "$(cat "$TMPROOT/_uninstall_cursor_empty.out")"
 fi
 if [ -f "$EMPTY_USERDIR/hooks.json" ]; then
   mark_fail "--uninstall does not fabricate a hooks.json when none existed" "hooks.json was created"
