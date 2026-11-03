@@ -165,6 +165,10 @@ copy_tree() {
 
 generate_hooks_json() {
   jq '
+    def wrap_session:
+      .command = ("APEXYARD_CODEX_SESSION_HOOK=" + (.command | @sh) +
+        " bash -c " +
+        ("input=$(cat); sid=$(printf \"%s\" \"$input\" | jq -r \".session_id // empty | select(type == \\\"string\\\")\"); if [ -n \"$sid\" ]; then export APEXYARD_SESSION_ID=\"$sid\"; fi; printf \"%s\" \"$input\" | bash -c \"$APEXYARD_CODEX_SESSION_HOOK\"" | @sh));
     def wrap_if_handler:
       if has("if") then
         (.if | capture("^(?<tool>[^()]+)\\((?<glob>.*)\\)$")) as $predicate
@@ -184,7 +188,7 @@ generate_hooks_json() {
       (.hooks
        | with_entries(
            .value |= map(
-             .hooks |= map(wrap_if_handler)
+             .hooks |= map(wrap_if_handler | wrap_session)
            )
          ))
     }
