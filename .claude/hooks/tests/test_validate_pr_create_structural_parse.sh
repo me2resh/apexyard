@@ -5,7 +5,7 @@
 #
 #   Bug 1 — --body-file content treated as invisible.
 #     When the body is in a file the sections check must read that file and
-#     validate its content.  An absolute-path --body-file with both required
+#     validate its content.  A sandbox-relative --body-file with both required
 #     sections must PASS; one with a missing section must BLOCK.
 #
 #   Bug 2 — backslash-continued multi-line commands mis-resolve --repo.
@@ -28,6 +28,10 @@
 # Exit 0 if all cases pass; exit 1 on first failure.
 
 set -u
+
+# shellcheck disable=SC1007  # Intentionally empty CDPATH keeps cd silent.
+TMPDIR=$(CDPATH= cd -- "${TMPDIR:-/tmp}" && pwd) || exit 1
+export TMPDIR
 
 # Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
 # shellcheck disable=SC1091
@@ -52,6 +56,8 @@ fi
 PASS=0
 FAIL=0
 FAILED_CASES=""
+BODY_DIR=$(mktemp -d "${TMPDIR:-/tmp}/validate-pr-create-structural-parse.XXXXXX") || exit 1
+trap 'rm -rf "$BODY_DIR"' EXIT
 
 # ---------------------------------------------------------------------------
 # Sandbox helpers
@@ -94,12 +100,15 @@ make_sandbox() {
 run_case() {
   local label="$1" cmd="$2" want_rc="$3" want_stderr_regex="${4:-}"
   local sb; sb=$(make_sandbox)
+  # Copy fixtures so command strings can use whitespace-free relative paths.
+  cp -R "$BODY_DIR/." "$sb/"
   mock_gh_install "$sb"
 
   local input
   input=$(jq -nc --arg c "$cmd" '{tool_input:{command:$c}}')
   local got_stderr got_rc
-  got_stderr=$(cd "$sb" && printf '%s' "$input" | bash .claude/hooks/validate-pr-create.sh 2>&1 >/dev/null)
+  # shellcheck disable=SC1007  # Intentionally empty CDPATH keeps cd silent.
+  got_stderr=$(CDPATH= cd -- "$sb" && printf '%s' "$input" | bash "$sb/.claude/hooks/validate-pr-create.sh" 2>&1 >/dev/null)
   got_rc=$?
   rm -rf "$sb"
 
@@ -139,22 +148,20 @@ Change description.
 ## Testing
 1. Run the tests."
 
-# Write the test body files to /tmp (absolute paths) so they are visible to
-# the hook regardless of the sandbox's working directory.
-BODY_FILE_FULL=$(mktemp /tmp/test-743-body-full.XXXXXX.md)
-BODY_FILE_PARTIAL=$(mktemp /tmp/test-743-body-partial.XXXXXX.md)
+# Store the source fixtures in a private directory. Each case copies them into
+# its sandbox and uses their filenames in the command string.
+BODY_FILE_FULL="$BODY_DIR/full.md"
+BODY_FILE_PARTIAL="$BODY_DIR/partial.md"
 printf '%s' "$BODY_WITH_SECTIONS"    > "$BODY_FILE_FULL"
 printf '%s' "$BODY_MISSING_GLOSSARY" > "$BODY_FILE_PARTIAL"
 
 run_case "Bug1: --body-file with both sections → PASS" \
-  "gh pr create --repo me2resh/apexyard --title 'fix(#743): test' --body-file $BODY_FILE_FULL" \
+  "gh pr create --repo me2resh/apexyard --title 'fix(#743): test' --body-file ${BODY_FILE_FULL##*/}" \
   0 ""
 
 run_case "Bug1: --body-file missing ## Glossary → BLOCK" \
-  "gh pr create --repo me2resh/apexyard --title 'fix(#743): test' --body-file $BODY_FILE_PARTIAL" \
+  "gh pr create --repo me2resh/apexyard --title 'fix(#743): test' --body-file ${BODY_FILE_PARTIAL##*/}" \
   2 "missing required '## Glossary' section"
-
-rm -f "$BODY_FILE_FULL" "$BODY_FILE_PARTIAL"
 
 # ---------------------------------------------------------------------------
 # Bug 2 — backslash-continued multi-line command resolves --repo correctly
@@ -169,7 +176,7 @@ rm -f "$BODY_FILE_FULL" "$BODY_FILE_PARTIAL"
 # We use a body-file with the required sections so the only potential block
 # is the garbled-repo path.
 
-BF2=$(mktemp /tmp/test-743-bug2-body.XXXXXX.md)
+BF2="$BODY_DIR/bug2.md"
 printf '%s' "$BODY_WITH_SECTIONS" > "$BF2"
 
 # Embed actual backslash-newlines via $'...'. The regression is anchored on the
@@ -182,13 +189,11 @@ printf '%s' "$BODY_WITH_SECTIONS" > "$BF2"
 #     the sections are found, and the hook passes.
 # (A --repo-only garble degrades gracefully and would pass either way — i.e. it
 # would pass for the wrong reason, which is exactly the gap Rex flagged.)
-MULTI_LINE_CMD=$'gh pr create --repo me2resh/apexyard \\\n  --title \'fix(#743): multiline\' \\\n  --head fix/GH-743-test \\\n  --body-file\\\n'"$BF2"
+MULTI_LINE_CMD=$'gh pr create --repo me2resh/apexyard \\\n  --title \'fix(#743): multiline\' \\\n  --head fix/GH-743-test \\\n  --body-file\\\n'"${BF2##*/}"
 
 run_case "Bug2: backslash-continued multi-line (--body-file on continuation) resolves cleanly → PASS" \
   "$MULTI_LINE_CMD" \
   0 ""
-
-rm -f "$BF2"
 
 # ---------------------------------------------------------------------------
 # Bug 3 — gate does NOT fire when 'gh pr create' appears only in a body
@@ -205,14 +210,12 @@ run_case "Bug3A: gh issue create --body with embedded 'gh pr create' text → no
 # Case B: --body-file on a non-pr-create command.
 # The body file content (which could contain 'gh pr create') is never consulted
 # for the gate decision — only the command head matters.
-BF3=$(mktemp /tmp/test-743-bug3-body.XXXXXX.md)
+BF3="$BODY_DIR/bug3.md"
 printf 'Example usage:\n\ngh pr create --title "feat(#1): x" --body "body"\n' > "$BF3"
 
 run_case "Bug3B: gh issue create --body-file whose content has 'gh pr create' → no-op (exit 0)" \
-  "gh issue create --repo me2resh/apexyard --title '[Bug] test' --body-file $BF3" \
+  "gh issue create --repo me2resh/apexyard --title '[Bug] test' --body-file ${BF3##*/}" \
   0 ""
-
-rm -f "$BF3"
 
 # ---------------------------------------------------------------------------
 # Regression — existing inline --body behaviour unchanged
@@ -221,20 +224,18 @@ rm -f "$BF3"
 # Use a body file for the regression test so actual newlines are present —
 # the section grep requires '## Heading' at a real line start, which literal
 # '\n' in a shell string does not provide.
-BF_REG_PASS=$(mktemp /tmp/test-743-reg-pass.XXXXXX.md)
-BF_REG_FAIL=$(mktemp /tmp/test-743-reg-fail.XXXXXX.md)
+BF_REG_PASS="$BODY_DIR/reg-pass.md"
+BF_REG_FAIL="$BODY_DIR/reg-fail.md"
 printf '## Summary\nfoo\n\n## Testing\nbar\n' > "$BF_REG_FAIL"
 printf '## Summary\nfoo\n\n## Testing\nbar\n\n## Glossary\n| t | d |\n\nRefs #743\n' > "$BF_REG_PASS"
 
 run_case "Regression: --body-file missing ## Glossary still BLOCKS" \
-  "gh pr create --repo me2resh/apexyard --title 'fix(#743): test' --head fix/#743-test --body-file $BF_REG_FAIL" \
+  "gh pr create --repo me2resh/apexyard --title 'fix(#743): test' --head fix/#743-test --body-file ${BF_REG_FAIL##*/}" \
   2 "missing required '## Glossary' section"
 
 run_case "Regression: --body-file with both sections → PASS" \
-  "gh pr create --repo me2resh/apexyard --title 'fix(#743): test' --head fix/#743-test --body-file $BF_REG_PASS" \
+  "gh pr create --repo me2resh/apexyard --title 'fix(#743): test' --head fix/#743-test --body-file ${BF_REG_PASS##*/}" \
   0 ""
-
-rm -f "$BF_REG_PASS" "$BF_REG_FAIL"
 
 # ---------------------------------------------------------------------------
 # Summary
