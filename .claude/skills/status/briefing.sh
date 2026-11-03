@@ -62,7 +62,7 @@ if [ -z "$ops_root" ]; then
       ops_root="$cur"
       break
     fi
-    cur=$(dirname "$cur")
+    parent=$(dirname "$cur"); [ "$parent" = "$cur" ] && break; cur="$parent"
   done
 fi
 

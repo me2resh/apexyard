@@ -179,7 +179,7 @@ else
     if [ -f "$cur/onboarding.yaml" ] && [ -f "$cur/apexyard.projects.yaml" ]; then
       OPS_ROOT="$cur"; break
     fi
-    cur=$(dirname "$cur")
+    parent=$(dirname "$cur"); [ "$parent" = "$cur" ] && break; cur="$parent"
   done
 fi
 

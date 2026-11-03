@@ -90,11 +90,11 @@ lrw_real_path() {
     _resolve_real_path "$1"
     return
   fi
-  local dir tail=""
+  local dir tail="" parent
   dir="$1"
   while [ -n "$dir" ] && [ "$dir" != / ] && [ ! -e "$dir" ]; do
     if [ -z "$tail" ]; then tail=$(basename "$dir"); else tail=$(basename "$dir")/$tail; fi
-    dir=$(dirname "$dir")
+    parent=$(dirname "$dir"); [ "$parent" = "$dir" ] && break; dir="$parent"
   done
   dir=$(cd "$dir" 2>/dev/null && pwd -P) || return 0
   if [ -z "$tail" ]; then printf '%s' "$dir"
