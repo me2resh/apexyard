@@ -1,9 +1,6 @@
 #!/bin/bash
-# A linked worktree's owner record and lease live in its git dir, in
-# the file named apexyard-owner, next to its ticket marker.
-# Identity combines the AgDR-0250 session id with the optional harness table.
-# Unknown is never dead. Lease expiry alone never permits a takeover.
-# Location, identity and liveness decisions: AgDR-0284.
+# Owner records and leases live beside worktree ticket markers (AgDR-0284).
+# Unknown liveness and lease expiry never authorize takeover.
 
 _wto_host_boot_id() {
   local boot=""
@@ -27,7 +24,9 @@ _wto_pid_start() {
   local start
   _wto_valid_pid "${1:-}" || return 1
   start=$(TZ=UTC0 LC_ALL=C ps -o lstart= -p "$1" 2>/dev/null) || return 1
-  printf '%s\n' "$start" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+  start=$(printf '%s\n' "$start" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+  [ -n "$start" ] || return 1
+  printf 'UTC %s\n' "$start"
 }
 
 _wto_claude_code_matches() {
@@ -190,7 +189,11 @@ _wto_process_state() {
     printf 'dead\n'
     return 1
   fi
-  if [ -z "$start" ] || ! current_start=$(_wto_pid_start "$pid") || [ -z "$current_start" ]; then
+  case "$start" in
+    UTC\ ???\ ???\ *:*:*\ ????) ;;
+    *) printf 'unknown\n'; return 2 ;;
+  esac
+  if ! current_start=$(_wto_pid_start "$pid") || [ -z "$current_start" ]; then
     printf 'unknown\n'
     return 2
   fi
@@ -228,7 +231,9 @@ _wto_gitdir() (
   for var in $vars; do
     case "$var" in GIT_*) case "$var" in *[!A-Z0-9_]*) ;; *) unset "$var" ;; esac ;; esac
   done
-  tree=$(CDPATH='' cd -- "$1" 2>/dev/null && pwd -P) || return 1
+  CDPATH='' cd -P -- "$1" 2>/dev/null || return 1
+  tree=$PWD
+  case "$1$tree" in *$'\n'*|*$'\t'*) return 1 ;; esac
   [ ! -L "$tree/.git" ] || return 1
   if [ -f "$tree/.git" ]; then
     IFS= read -r pointer < "$tree/.git" || return 1
@@ -267,15 +272,6 @@ _wto_lock_identity_state() {
   }
 }
 
-_wto_lock_owner_state() {
-  local owner
-  if ! owner=$(_wto_read_lock_owner "$1"); then
-    printf 'unknown\n'
-    return 2
-  fi
-  _wto_lock_identity_state "$owner"
-}
-
 _wto_lock() {
   local gitdir="${1:-}" lockdir identity holder dead_identity current_identity tmp attempts=0 reaped=0
   _wto_safe_gitdir "$gitdir" || return 1
@@ -290,8 +286,7 @@ _wto_lock() {
         return 0
       fi
       rm -f "$tmp"
-      # No reaper acts without a published owner, and only the holder's own
-      # identity can unlock. A directory without an owner is still ours.
+      # No reaper acts without a published owner.
       if [ ! -e "$lockdir/owner" ] && [ ! -L "$lockdir/owner" ]; then
         rm -rf "$lockdir"
       fi
@@ -302,9 +297,7 @@ _wto_lock() {
       holder=$(_wto_lock_identity_state "$dead_identity") || :
     fi
     if [ "$holder" = dead ] && [ "$reaped" -eq 0 ] && mkdir "$lockdir/reaping" 2>/dev/null; then
-      # Only the guarded reaper can remove a dead holder's lock. If its owner
-      # still equals the identity proved dead, this is that generation's lock.
-      # Probing again could outlive that holder and then delete a newer lock.
+      # Reap only the exact identity proved dead, without another process probe.
       if current_identity=$(_wto_read_lock_owner "$lockdir") && [ "$current_identity" = "$dead_identity" ]; then
         rm -rf "$lockdir" || return 1
         reaped=1
