@@ -2,7 +2,9 @@
 # Fixed-point dirname results must not hang hook path walks.
 set -eu
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
-. "$ROOT/.claude/hooks/tests/_test-session-isolation.sh"
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/bin" "$WORK/existing"
