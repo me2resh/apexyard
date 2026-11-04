@@ -515,3 +515,18 @@ test("execute.before exports the native session id when the event carries one", 
     "unset CLAUDE_CODE_SESSION_ID\nexport APEXYARD_SESSION_ID='sub-agent-session'\necho hi",
   );
 });
+
+test("a subagent-shaped event (extra host fields, its own session id) is handled the same way", async () => {
+  const path = join(process.cwd(), THIS_FILE_AS_HOOK);
+  const { exec, calls } = mockExec({ [path]: { status: 0, stderr: "" } });
+  const handler = buildToolExecuteBeforeHandler(process.cwd(), [gate("subagent-call")], exec);
+  const input: { command: string } = { command: "echo subagent" };
+  // The real V2 event also carries agent, messageID and id; a subagent runs
+  // under its own sessionID, which must reach the hook unchanged.
+  const event = { tool: "shell", sessionID: "child-session", agent: "explore", messageID: "msg-1", id: "call-1", input };
+
+  await handler(event);
+
+  assert.equal(calls.length, 1);
+  assert.match(input.command, /export APEXYARD_SESSION_ID='child-session'/);
+});
