@@ -170,8 +170,8 @@ const CLAUDE_MATCHER_TO_OPENCODE_TOOLS: Record<string, string[]> = {
 /**
  * Reverse of the above — the `tool_name` field the bash hooks' own
  * `.tool_name` jq lookups expect. `patch` reports as `apply_patch`, the id
- * Claude Code and Codex use for patch-shaped tools, so every hook that
- * inspects `tool_name` sees the same value on all three harnesses.
+ * Codex's `apply_patch` path uses for patch-shaped tools, so a hook that
+ * inspects `tool_name` sees the same value there and here.
  */
 const OPENCODE_TOOL_TO_CLAUDE_NAME: Record<string, string> = {
   shell: "Bash",

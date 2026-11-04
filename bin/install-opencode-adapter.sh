@@ -181,7 +181,7 @@ if command -v opencode >/dev/null 2>&1; then
       OC_REST="${OC_VERSION#*.}"
       OC_MINOR="${OC_REST%%.*}"
       OC_PATCH="${OC_REST#*.}"
-      if [ "$OC_MAJOR" -eq 1 ] && { [ "$OC_MINOR" -lt 18 ] || { [ "$OC_MINOR" -eq 18 ] && [ "$OC_PATCH" -lt 29 ]; }; }; then
+      if [ "$OC_MAJOR" -lt 1 ] || { [ "$OC_MAJOR" -eq 1 ] && { [ "$OC_MINOR" -lt 18 ] || { [ "$OC_MINOR" -eq 18 ] && [ "$OC_PATCH" -lt 29 ]; }; }; }; then
         echo "WARNING: the 'opencode' on PATH reports $OC_VERSION, which predates 1.18.29." >&2
         echo "         This adapter serves opencode 1.x through the object entrypoint's server() member," >&2
         echo "         and that entrypoint only exists from 1.18.29. Upgrade opencode, or use an older adapter build." >&2

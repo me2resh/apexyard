@@ -460,10 +460,15 @@ export function deriveGatesFromOpsRoot(opsRoot: string, settingsRelativePath: st
 function patchRoutingGates(opsRoot: string, existing: GateDefinition[]): GateDefinition[] {
   const patchDispatcher = path.join(opsRoot, ".claude/hooks/dispatch-apply-patch.sh");
   if (!existsSync(patchDispatcher)) return [];
-  // A fork that wires an `apply_patch` matcher in settings.json has already
-  // produced a gate for this hook. Adding a second one would run it twice per
-  // call: harmless, but a wasted subprocess.
-  if (existing.some((gate) => gate.hookRelativePath === ".claude/hooks/dispatch-apply-patch.sh")) return [];
+  // A fork may already wire this hook in settings.json. Only skip when it is
+  // wired for the patch tools themselves: an edit-only wiring of the same
+  // script would otherwise drop the `patch` wire entirely.
+  const patchWired = existing.some(
+    (gate) =>
+      gate.hookRelativePath === ".claude/hooks/dispatch-apply-patch.sh" &&
+      gate.wires.some((wire) => wire.tool === "patch" || wire.tool === "apply_patch"),
+  );
+  if (patchWired) return [];
   return [
     {
       name: "apply-patch",

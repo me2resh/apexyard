@@ -567,3 +567,49 @@ test("setup warns when the host registers a file-writing tool that no wire route
   assert.doesNotMatch(combined, /file-writing tool "edit"/, "a routed tool must not be reported");
   assert.doesNotMatch(combined, /file-writing tool "read"/, "read does not write files");
 });
+
+test("patch routing is still added when settings.json wires that hook for edit only", () => {
+  const opsRoot = patchFixtureOpsRoot();
+  writeFileSync(
+    join(opsRoot, "settings.json"),
+    JSON.stringify({
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: "Edit",
+            hooks: [{ type: "command", command: "bash .claude/hooks/dispatch-apply-patch.sh" }],
+          },
+        ],
+      },
+    }),
+    "utf-8",
+  );
+
+  const gates = deriveGatesFromOpsRoot(opsRoot, "settings.json");
+  const patchWires = gates
+    .filter((g) => g.hookRelativePath === ".claude/hooks/dispatch-apply-patch.sh")
+    .flatMap((g) => g.wires.map((w) => w.tool));
+  assert.ok(patchWires.includes("patch"), "an edit-only wiring of the same script must not drop the patch wire");
+});
+
+test("patch routing is not duplicated when settings.json already wires the patch tool", () => {
+  const opsRoot = patchFixtureOpsRoot();
+  writeFileSync(
+    join(opsRoot, "settings.json"),
+    JSON.stringify({
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: "apply_patch",
+            hooks: [{ type: "command", command: "bash .claude/hooks/dispatch-apply-patch.sh" }],
+          },
+        ],
+      },
+    }),
+    "utf-8",
+  );
+
+  const gates = deriveGatesFromOpsRoot(opsRoot, "settings.json");
+  const patchGates = gates.filter((g) => g.hookRelativePath === ".claude/hooks/dispatch-apply-patch.sh");
+  assert.equal(patchGates.length, 1, "the patch dispatcher must run once per call, not twice");
+});
