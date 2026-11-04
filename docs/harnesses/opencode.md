@@ -11,7 +11,7 @@ One package serves both generations. The default export carries `{ id, setup }` 
 | 2.x | V2 | `setup(ctx)` → `ctx.tool.hook("execute.before", …)` | `shell`, `patch`, `edit`, `write`, `read`, `glob`, `grep` |
 | 1.18.29+ | V1 | `server()` → `{ "tool.execute.before": … }` | `bash`, `apply_patch`, `edit`, `write`, `read`, `glob`, `grep` |
 
-The adapter accepts both id sets on either runtime, so a gate cannot silently stop matching after an opencode upgrade. V2 requires a configured local plugin path to be a **directory**; the loader skips a single-file path and logs a warning.
+The adapter accepts both id sets on either runtime, so a gate cannot silently stop matching after an opencode upgrade. V2 requires a configured local plugin path to be a **directory**. The loader skips a single-file path and logs a warning.
 
 ## Verification
 
@@ -21,7 +21,7 @@ A credentialed opencode session, run with `--auto`, issued `git add -A` during a
 
 ## Enforcement vs advisory today
 
-**Delegated (blocking, by construction):** the pre-execution tool hook builds Claude-Code-shaped stdin and execs the matching bash hook. The plugin **throws to deny** on exit 2. That covers the two-marker merge gate (all five wired merge-command shapes, including both #47 variants), red-CI block, ticket-first, and secrets/leak-protection. Fail-closed is real. An execution-layer failure (spawn error, killed hook, no exit status) also denies. The adapter routes a `patch` call through `dispatch-apply-patch.sh`. That script re-runs every Edit/Write check once per target path, so a multi-file patch cannot step around those gates. 70 hermetic unit tests plus two smoke scripts back the transport. One is a genuine block from the real `block-unreviewed-merge.sh`; the other checks the shipped install layout's V2 definition shape.
+**Delegated (blocking, by construction):** the pre-execution tool hook builds Claude-Code-shaped stdin and execs the matching bash hook. The plugin **throws to deny** on exit 2. That covers the two-marker merge gate (all five wired merge-command shapes, including both #47 variants), red-CI block, ticket-first, and secrets/leak-protection. Fail-closed is real. An execution-layer failure (spawn error, killed hook, no exit status) also denies. The adapter routes a `patch` call through `dispatch-apply-patch.sh`. That script re-runs every Edit/Write check once per target path, so a multi-file patch cannot step around those gates. 70 hermetic unit tests plus two smoke scripts back the transport. One is a genuine block from the real `block-unreviewed-merge.sh`. The other checks the shipped install layout's V2 definition shape.
 
 **Gate derivation is drift-proof, with one named exception:** the plugin **derives its gate table from `.claude/settings.json` at load time**. There is no hand-maintained gate list, except the single patch-routing wire. That wire cannot come from `settings.json` (see `patchRoutingGates` in `src/gate-dispatcher.ts`), so the adapter adds it explicitly. The plugin also warns at init when the host registers a file-writing tool that no wire routes. A new gate wired in `settings.json` reaches opencode automatically with zero adapter changes. (This is the convergence pattern planned for the pi adapter. See #840.)
 
