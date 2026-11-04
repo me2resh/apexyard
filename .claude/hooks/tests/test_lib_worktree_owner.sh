@@ -82,6 +82,66 @@ check 'identity: failed inspection' identity_matches "$session_only" OWNER_TEST_
 check 'identity: empty start yields session only' identity_matches "$session_only" OWNER_TEST_EMPTY_START=1
 check 'identity: ancestor harness and PID' env PATH="$TMP/bin:$PATH" "$BASH" -c '. "$OWNER_TEST_LIB"; test "$(_wto_harness_ancestor)" = "claude-code $OWNER_TEST_PID"'
 check 'identity: command shell owns lock' env PATH="$TMP/bin:$PATH" CLAUDE_CODE_SESSION_ID=command-session "$BASH" -c '. "$OWNER_TEST_LIB"; _wto_operation_identity identity && test "${identity%%|*}" = "$$" && test "$$" != "$OWNER_TEST_PID"'
+unavailable_identity() (
+  local mode=$1 rc expected=2 action
+  make_worktree || return 1
+  if [ "$mode" = ps ]; then ps() { return 1; }
+  elif [ "$mode" = empty-start ]; then ps() { return 0; }
+  else
+    _wto_pid_start() { printf 'UTC Sat Oct 31 10:00:00 2026\n'; }
+    _wto_host_boot_id() { printf 'unknown-boot\n'; }
+    if [ "$mode" = empty-boot ]; then _wto_host_boot_id() { :; }; fi
+    if [ "$mode" = invalid-session ]; then
+      export CLAUDE_CODE_SESSION_ID='invalid|session'
+      _wto_host_boot_id() { printf 'fixture-boot\n'; }
+      expected=1
+    fi
+  fi
+  for action in acquire renew release; do
+    rc=0
+    "worktree_owner_$action" "$WORKTREE" || rc=$?
+    [ "$rc" -eq "$expected" ] && [ ! -e "$RECORD" ] && [ ! -e "$GITDIR/apexyard-owner.lock" ] || return 1
+    expected=1
+  done
+)
+for mode in ps empty-start no-boot empty-boot; do check "identity unavailable: $mode acquire=2 renew=1 release=1 without state" unavailable_identity "$mode"; done
+check 'acquire: invalid session returns 1 without state' unavailable_identity invalid-session
+pid_temp_failure() (
+  local mode=$1 rc=0 candidate directory="$TMP/pid-$1"
+  make_worktree && mkdir "$directory" || return 1
+  export TMPDIR="$directory"
+  # Exercise the Bash 3.2 fallback under newer shells too.
+  unset BASHPID
+  mktemp() {
+    case "$1" in */apexyard-owner-pid.*) [ "$mode" != create ] || return 1 ;; esac
+    command mktemp "$@"
+  }
+  rm() {
+    case "$*" in *apexyard-owner-pid.*) [ "$mode" != cleanup ] || return 1 ;; esac
+    command rm "$@"
+  }
+  sh() { [ "$mode" != write ] || return 1; command sh "$@"; }
+  worktree_owner_acquire "$WORKTREE" || rc=$?
+  [ "$rc" -eq 1 ] && [ ! -e "$RECORD" ] && [ ! -e "$GITDIR/apexyard-owner.lock" ] || return 1
+  for candidate in "$directory"/apexyard-owner-pid.*; do
+    [ "$mode" = cleanup ] || [ ! -e "$candidate" ] || return 1
+  done
+  # A refused deletion can leave a file. Remove it once cleanup is possible.
+  for candidate in "$directory"/apexyard-owner-pid.*; do command rm -f "$candidate" || return 1; done
+  for candidate in "$directory"/apexyard-owner-pid.*; do [ ! -e "$candidate" ] || return 1; done
+)
+for mode in create write cleanup; do check "acquire: PID temp $mode failure returns 1" pid_temp_failure "$mode"; done
+predictable_temp() (
+  local directory="$TMP/predictable" file target
+  mkdir "$directory" || return 1
+  file="$directory/apexyard-owner" target="$directory/target"
+  printf 'unchanged\n' > "$target"
+  ln -s "$target" "$file.tmp.$$" || return 1
+  _wto_write_json "$file" '{"value":1}' && [ ! -L "$file" ] &&
+    [ -L "$file.tmp.$$" ] && [ "$(cat "$target")" = unchanged ] &&
+    [ "$(cat "$file")" = '{"value":1}' ]
+)
+check 'atomic: predictable symlink is not followed' predictable_temp
 export CLAUDE_CODE_SESSION_ID=owner-session
 _wto_harness_ancestor() { printf 'claude-code %s\n' "$$"; }
 owner_start=$(_wto_pid_start "$$") || owner_start=''; owner_boot=$(_wto_host_boot_id)

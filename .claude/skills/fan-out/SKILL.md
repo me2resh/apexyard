@@ -140,6 +140,7 @@ For every task with `isolation: worktree`, create the worktree and its marker **
 - The helper runs `git -C <source-tree> worktree add <path> -b <branch>`. A managed-project task therefore gets a worktree of its own clone, not of the ops fork.
 - The helper writes `apexyard-ticket` into the git dir of the new worktree, with the ticket of the source tree. The ticket's repo must belong to that clone's registry entry. Otherwise only the old-layout marker is written. It also writes the old-layout per-worktree marker, so the hooks from before the move see the ticket. When the new worktree fails validation, it writes only the old marker and prints a note. Pass the ticket fields as extra arguments to give a task its own ticket (`--from-tickets`).
 - The helper also records the worktree's owner and lease in the worktree's git dir (AgDR-0284). This change adds no release step, so the record stays active.
+- Preparation can succeed with the "has no owner record" note, and the orchestrator then spawns the task as usual.
 - The helper never uses `--force`. If it writes no marker at all, it removes the worktree and branch it created. Stop the whole fan-out and report its message.
 - Do not pass `isolation: worktree` to the `Agent` call for these tasks. The worktree exists already. Tell the agent to work only under the worktree path and to run `git` and every edit there.
 - If the spawn itself fails, remove each worktree this step created with `git -C <source-tree> worktree remove <path>` (no `--force`).

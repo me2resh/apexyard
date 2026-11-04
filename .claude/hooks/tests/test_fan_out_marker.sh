@@ -47,9 +47,7 @@ make_sb() {
   mkdir -p "$sb/.claude/hooks" "$sb/.claude/skills/fan-out" "$sb/.claude/worktrees" "$sb/workspace"
   for f in require-active-ticket.sh _lib-awk-fallback.sh _lib-detect-bash-write.sh _lib-read-config.sh _lib-path-resolve.sh \
            _lib-active-ticket.sh _lib-worktree-owner.sh _lib-mask-quoted.sh _lib-ticket-path-exemptions.sh _lib-portfolio-paths.sh _lib-ops-root.sh _lib-resolution-cache.sh; do
-    if [ -f "$HOOKS/$f" ]; then
-      cp "$HOOKS/$f" "$sb/.claude/hooks/$f"
-    fi
+    cp "$HOOKS/$f" "$sb/.claude/hooks/$f" || exit 1
   done
   cp "$SRC_ROOT/.claude/project-config.defaults.json" "$sb/.claude/project-config.defaults.json"
   cp "$SRC_ROOT/.claude/skills/fan-out/prepare-worktree.sh" "$sb/.claude/skills/fan-out/prepare-worktree.sh"
@@ -63,7 +61,7 @@ make_sb() {
 prepare() {
   local sb="$1"
   shift
-  (cd "$sb" && "$sb/.claude/skills/fan-out/prepare-worktree.sh" "$@")
+  (cd "$sb" && "$BASH" "$sb/.claude/skills/fan-out/prepare-worktree.sh" "$@")
 }
 
 # --- creates from the clone and writes the marker -------------------------
@@ -111,10 +109,16 @@ OWNER_SB=$(make_sb)
 OWNER_WT="$OWNER_SB/.claude/worktrees/owner-fail"
 OWNER_SHIM="$OWNER_SB/shim"
 mkdir -p "$OWNER_SHIM"
-printf '#!/bin/bash\nexit 1\n' > "$OWNER_SHIM/jq"
+# Fail record validation after the temporary file write, not identity setup.
+REAL_JQ=$(command -v jq)
+cat > "$OWNER_SHIM/jq" <<SCRIPT
+#!/bin/bash
+if [ "\${1:-}" = -e ] && [ "\${2:-}" = . ]; then exit 1; fi
+exec "$REAL_JQ" "\$@"
+SCRIPT
 chmod +x "$OWNER_SHIM/jq"
 out=$(cd "$OWNER_SB" && PATH="$OWNER_SHIM:$PATH" \
-  "$OWNER_SB/.claude/skills/fan-out/prepare-worktree.sh" "$OWNER_SB/workspace/p1" "$OWNER_WT" "feature/owner-fail" 2>&1)
+  "$BASH" "$OWNER_SB/.claude/skills/fan-out/prepare-worktree.sh" "$OWNER_SB/workspace/p1" "$OWNER_WT" "feature/owner-fail" 2>&1)
 rc=$?
 if [ "$rc" = 1 ] && [ ! -e "$OWNER_WT" ] \
    && [ -z "$(git -C "$OWNER_SB/workspace/p1" worktree list --porcelain | grep "$OWNER_WT")" ] \
@@ -124,7 +128,95 @@ if [ "$rc" = 1 ] && [ ! -e "$OWNER_WT" ] \
 else
   bad "owner_write_failure_removes_tree" "rc=$rc out=$out"
 fi
+if [ ! -e "$OWNER_SB/.claude/session/tickets/p1/feature__owner-fail" ]; then
+  ok "owner_write_failure_leaves_no_branch_marker"
+else
+  bad "owner_write_failure_leaves_no_branch_marker" "old-layout marker remains"
+fi
 rm -rf "$OWNER_SB"
+
+# --- PID-temp failures remove the worktree and branch --------------------
+for mode in create write cleanup; do
+  OWNER_SB=$(make_sb)
+  OWNER_WT="$OWNER_SB/.claude/worktrees/owner-pid-$mode"
+  OWNER_SHIM="$OWNER_SB/shim"
+  mkdir -p "$OWNER_SHIM" "$OWNER_SB/pid-temp"
+  # Force the Bash 3.2 PID path on newer shells without replacing the helper.
+  printf 'unset BASHPID\n' > "$OWNER_SB/bash-env"
+  REAL_MKTEMP=$(command -v mktemp)
+  REAL_RM=$(command -v rm)
+  REAL_SH=$(command -v sh)
+  cat > "$OWNER_SHIM/mktemp" <<SCRIPT
+#!/bin/sh
+case "\${1:-}" in */apexyard-owner-pid.*) [ "$mode" != create ] || exit 1 ;; esac
+exec "$REAL_MKTEMP" "\$@"
+SCRIPT
+  cat > "$OWNER_SHIM/rm" <<SCRIPT
+#!/bin/sh
+case "\$*" in *apexyard-owner-pid.*) [ "$mode" != cleanup ] || exit 1 ;; esac
+exec "$REAL_RM" "\$@"
+SCRIPT
+  cat > "$OWNER_SHIM/sh" <<SCRIPT
+#!/bin/sh
+if [ "\${1:-}" = -c ] && [ "\${2:-}" = 'echo "\$PPID"' ] && [ "$mode" = write ]; then exit 1; fi
+exec "$REAL_SH" "\$@"
+SCRIPT
+  chmod +x "$OWNER_SHIM/"*
+  out=$(cd "$OWNER_SB" && PATH="$OWNER_SHIM:$PATH" TMPDIR="$OWNER_SB/pid-temp" \
+    BASH_ENV="$OWNER_SB/bash-env" "$BASH" "$OWNER_SB/.claude/skills/fan-out/prepare-worktree.sh" \
+    "$OWNER_SB/workspace/p1" "$OWNER_WT" "feature/owner-pid-$mode" 2>&1)
+  rc=$?
+  if [ "$rc" = 1 ] && [ ! -e "$OWNER_WT" ] \
+     && [ -z "$(git -C "$OWNER_SB/workspace/p1" worktree list --porcelain | grep "$OWNER_WT")" ] \
+     && [ -z "$(git -C "$OWNER_SB/workspace/p1" branch --list "feature/owner-pid-$mode")" ] \
+     && printf '%s' "$out" | grep -q 'could not record the worktree owner'; then
+    ok "owner_pid_${mode}_failure_removes_tree"
+  else
+    bad "owner_pid_${mode}_failure_removes_tree" "rc=$rc out=$out"
+  fi
+  for candidate in "$OWNER_SB/pid-temp/"apexyard-owner-pid.*; do
+    [ "$mode" = cleanup ] || [ ! -e "$candidate" ] || bad "owner_pid_temp_cleanup" "$candidate remains"
+  done
+  # Cleanup is possible once the failing shim leaves PATH.
+  rm -f "$OWNER_SB/pid-temp/"apexyard-owner-pid.*
+  for candidate in "$OWNER_SB/pid-temp/"apexyard-owner-pid.*; do
+    [ ! -e "$candidate" ] || bad "owner_pid_temp_cleanup" "$candidate remains"
+  done
+  rm -rf "$OWNER_SB"
+done
+
+# --- missing operation identity keeps the tree without ownership state ----
+for mode in ps no-boot; do
+  OWNER_SB=$(make_sb)
+  OWNER_WT="$OWNER_SB/.claude/worktrees/owner-$mode"
+  OWNER_SHIM="$OWNER_SB/shim"
+  mkdir -p "$OWNER_SHIM"
+  case "$mode" in
+    ps) printf '#!/bin/sh\n# This ps has no -o support.\nexit 1\n' > "$OWNER_SHIM/ps" ;;
+    no-boot)
+      # Hide the Linux source too, so this case also runs on Linux hosts.
+      sed "s@/proc/sys/kernel/random/boot_id@$OWNER_SB/no-boot-id@g" \
+        "$OWNER_SB/.claude/hooks/_lib-worktree-owner.sh" > "$OWNER_SB/owner-lib"
+      mv "$OWNER_SB/owner-lib" "$OWNER_SB/.claude/hooks/_lib-worktree-owner.sh"
+      printf '#!/bin/sh\nexit 1\n' > "$OWNER_SHIM/sysctl" ;;
+  esac
+  chmod +x "$OWNER_SHIM/"*
+  out=$(cd "$OWNER_SB" && PATH="$OWNER_SHIM:$PATH" \
+    "$BASH" "$OWNER_SB/.claude/skills/fan-out/prepare-worktree.sh" \
+    "$OWNER_SB/workspace/p1" "$OWNER_WT" "feature/owner-$mode" 2>&1)
+  rc=$?
+  wtg=$(git -C "$OWNER_WT" rev-parse --absolute-git-dir 2>/dev/null)
+  if [ "$rc" = 0 ] && [ -d "$OWNER_WT" ] && [ -n "$wtg" ] \
+     && [ -n "$(git -C "$OWNER_SB/workspace/p1" branch --list "feature/owner-$mode")" ] \
+     && [ -f "$wtg/apexyard-ticket" ] && [ ! -e "$wtg/apexyard-owner" ] \
+     && [ ! -e "$wtg/apexyard-owner.lock" ] \
+     && printf '%s' "$out" | grep -Fq "$OWNER_WT has no owner record"; then
+    ok "owner_identity_unavailable_keeps_tree_$mode"
+  else
+    bad "owner_identity_unavailable_keeps_tree_$mode" "rc=$rc out=$out"
+  fi
+  rm -rf "$OWNER_SB"
+done
 
 # --- the new worktree passes the ticket gate -----------------------------
 # These worktrees sit outside .claude/worktrees/, the default fan-out place.
@@ -174,7 +266,7 @@ SB=$(make_sb)
 mkrepo "$SB/elsewhere-repo"
 WT="$SB/.claude/worktrees/feature-GH-48-env"
 out=$(cd "$SB" && GIT_DIR="$SB/elsewhere-repo/.git" GIT_WORK_TREE="$SB/elsewhere-repo" \
-  "$SB/.claude/skills/fan-out/prepare-worktree.sh" "$SB/workspace/p1" "$WT" "feature/GH-48-env" 2>&1)
+  "$BASH" "$SB/.claude/skills/fan-out/prepare-worktree.sh" "$SB/workspace/p1" "$WT" "feature/GH-48-env" 2>&1)
 rc=$?
 common=$(git -C "$WT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
 if [ "$rc" = 0 ] && [ "$common" = "$SB/workspace/p1/.git" ] && [ -z "$(git -C "$SB/elsewhere-repo" worktree list --porcelain | grep "$WT")" ]; then
@@ -187,7 +279,7 @@ fi
 # creation fail.
 WT2="$SB/.claude/worktrees/feature-GH-49-env"
 out=$(cd "$SB" && GIT_OBJECT_DIRECTORY="$SB/no-such-objects" GIT_CONFIG_PARAMETERS="'core.bare'='true'" \
-  "$SB/.claude/skills/fan-out/prepare-worktree.sh" "$SB/workspace/p1" "$WT2" "feature/GH-49-env" 2>&1)
+  "$BASH" "$SB/.claude/skills/fan-out/prepare-worktree.sh" "$SB/workspace/p1" "$WT2" "feature/GH-49-env" 2>&1)
 rc=$?
 if [ "$rc" = 0 ] && [ -f "$WT2/.git" ] && [ ! -e "$SB/no-such-objects" ]; then
   ok "prepare_worktree_scrubs_gits_local_env_vars"
@@ -274,9 +366,14 @@ SB=$(make_sb)
 WT="$SB/.claude/worktrees/feature-GH-45-fail"
 SHIM="$SB/shim"
 mkdir -p "$SHIM"
-printf '#!/bin/bash\nexit 1\n' > "$SHIM/mktemp"
+REAL_MKTEMP=$(command -v mktemp)
+cat > "$SHIM/mktemp" <<SCRIPT
+#!/bin/sh
+case "\${1:-}" in */apexyard-ticket.tmp.*|*/.apexyard-ticket.tmp.*) exit 1 ;; esac
+exec "$REAL_MKTEMP" "\$@"
+SCRIPT
 chmod +x "$SHIM/mktemp"
-out=$(cd "$SB" && PATH="$SHIM:$PATH" "$SB/.claude/skills/fan-out/prepare-worktree.sh" "$SB/workspace/p1" "$WT" "feature/GH-45-fail" 2>&1)
+out=$(cd "$SB" && PATH="$SHIM:$PATH" "$BASH" "$SB/.claude/skills/fan-out/prepare-worktree.sh" "$SB/workspace/p1" "$WT" "feature/GH-45-fail" 2>&1)
 rc=$?
 if [ "$rc" != 0 ] && [ ! -e "$WT" ] && [ -z "$(git -C "$SB/workspace/p1" worktree list --porcelain | grep "$WT")" ] \
    && [ -z "$(git -C "$SB/workspace/p1" branch --list 'feature/GH-45-fail')" ]; then

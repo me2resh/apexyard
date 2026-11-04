@@ -131,9 +131,9 @@ _wto_operation_identity() {
   local pid start boot session
   _wto_self_pid pid >/dev/null || return 1
   session=$(_wto_session)
-  start=$(_wto_pid_start "$pid") || return 1
+  start=$(_wto_pid_start "$pid") || return 2
   boot=$(_wto_host_boot_id)
-  [ -n "$start" ] && [ -n "$boot" ] && [ "$boot" != unknown-boot ] || return 1
+  [ -n "$start" ] && [ -n "$boot" ] && [ "$boot" != unknown-boot ] || return 2
   case "$session$start$boot" in *'|'*|*$'\n'*) return 1 ;; esac
   # Lock and unlock call this directly, in the shell running the critical section.
   if [ "$#" -gt 0 ]; then
@@ -207,7 +207,7 @@ _wto_process_state() {
 _wto_write_json() {
   local file="${1:-}" json="${2:-}" tmp
   [ -n "$file" ] || return 1
-  tmp="$file.tmp.$$"
+  tmp=$(mktemp "${file%/*}/apexyard-owner.XXXXXX") || return 1
   if ! printf '%s\n' "$json" > "$tmp"; then
     rm -f "$tmp"
     return 1
@@ -276,7 +276,8 @@ _wto_lock() {
   local gitdir="${1:-}" lockdir identity holder dead_identity current_identity tmp attempts=0 reaped=0
   _wto_safe_gitdir "$gitdir" || return 1
   lockdir="$gitdir/apexyard-owner.lock"
-  _wto_operation_identity identity || return 1
+  # Preserve 2 for missing process start/boot and 1 for all other failures.
+  _wto_operation_identity identity || return "$?"
   # Six attempts bound contention waits to five short sleeps.
   while [ "$attempts" -lt 6 ]; do
     [ ! -L "$lockdir" ] || return 1
@@ -329,7 +330,7 @@ _wto_with_lock() (
   local gitdir="${1:-}"
   [ "$#" -ge 2 ] || return 1
   shift
-  _wto_lock "$gitdir" || return 1
+  _wto_lock "$gitdir" || return "$?"
   trap '_wto_unlock "$gitdir"' EXIT
   trap 'exit 130' INT
   trap 'exit 143' TERM
@@ -410,9 +411,12 @@ _wto_update() {
   _wto_with_lock "$gitdir" _wto_update_locked "$gitdir" "$action" "$owner" "$ttl"
 }
 
+# Writes return 0 on success and 1 on refusal or failure, including PID-helper I/O.
+# Only acquire returns 2 for missing/empty process start or missing/empty/unknown
+# boot identity. Return 2 creates no new lock or record. Renew/release return 1.
 worktree_owner_acquire() { _wto_update "${1:-}" acquire; }
-worktree_owner_renew() { _wto_update "${1:-}" renew; }
-worktree_owner_release() { _wto_update "${1:-}" release; }
+worktree_owner_renew() { _wto_update "${1:-}" renew || return 1; }
+worktree_owner_release() { _wto_update "${1:-}" release || return 1; }
 
 worktree_owner_status() {
   local gitdir file record

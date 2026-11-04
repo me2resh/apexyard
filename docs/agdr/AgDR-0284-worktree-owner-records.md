@@ -21,7 +21,7 @@ Issue #1940 needs ownership evidence for concurrent lifecycle commands. Ticket a
 - Before deletion, reapers require the recorded identity to match the exact identity proved dead. The check and deletion remain non-atomic.
 - Replace records atomically through a temporary file beside the record. Increment the generation after each successful acquisition, renewal, or release write.
 - Lease expiry indicates a missed renewal. It never proves process death or permits automatic takeover.
-- Fan-out preparation acquires ownership after writing ticket markers. On acquisition failure, the helper attempts to remove its newly created worktree and branch.
+- Fan-out preparation acquires ownership before writing ticket markers. On refusal or write failure, the helper attempts to remove its new worktree and branch.
 - Preserve the existing fallback when worktree git dirs fail validation. Report the missing owner record.
 
 ## Alternatives
@@ -41,7 +41,9 @@ Issue #1940 needs ownership evidence for concurrent lifecycle commands. Ticket a
 - Later lifecycle commands must preserve that uncertainty when deciding whether to remove worktrees.
 - Callers without session ids or harness matches have equal identities. Either caller can renew or release the other's record.
 - Git removes records with the worktree administrative directory. No extra ignore rules or separate state directory are needed.
-- The preparation helper now requires `jq` through the library. Locks and validated paths coordinate cooperating processes but cannot prevent direct filesystem modifications.
+- The preparation helper requires `jq`. Ownership writes also require `ps` with `-o lstart=` and `-p`, plus a boot-id source.
+- Without process-identity support, preparation keeps the worktree without an owner record. Such worktrees have no ownership protection.
+- Locks and validated paths coordinate cooperating processes but cannot prevent direct filesystem modifications.
 - A `reaping` guard prevents another reaper from acquiring the guarded directory. Holder or reaper death can strand it unless pending deletion removes it.
 - A stranded guard makes later ownership writes refuse. This change provides no recovery command. A later lifecycle change can add one.
 
