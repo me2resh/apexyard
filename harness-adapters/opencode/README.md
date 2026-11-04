@@ -1,6 +1,6 @@
 # apexyard opencode Gate Adapter
 
-Enforces apexyard's mechanical governance gates inside [opencode](https://opencode.ai) (opencode.ai's agent CLI) by shelling out to the **existing, unmodified** bash hooks under `.claude/hooks/` — zero logic duplication. The bash hooks stay the single source of truth for every gate's approval decision; this package is a thin transport adapter between opencode's `execute.before` tool hook and each hook's stdin/exit-code contract.
+Enforces apexyard's mechanical governance gates inside [opencode](https://opencode.ai) (opencode.ai's agent CLI) by shelling out to the **existing, unmodified** bash hooks under `.claude/hooks/`. Zero logic duplication. The bash hooks stay the single source of truth for every gate's approval decision. This package is a thin transport adapter between opencode's `execute.before` tool hook and each hook's stdin/exit-code contract.
 
 **Targets opencode 2.x (V2 plugin API).** V1 plugins — a default-exported `async (input) => hooks` factory — are rejected by opencode 2.x with `Plugin must export a default definition with an id and an effect or setup function`. This adapter default-exports `{ id: "apexyard.gates", setup }` and registers its hook through `ctx.tool.hook("execute.before", …)`. See "Migrating from V1" below.
 
