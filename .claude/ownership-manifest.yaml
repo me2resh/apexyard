@@ -1,0 +1,223 @@
+# Ownership manifest (me2resh/apexyard#1887).
+#
+# This file says who owns each path that the framework ships. An update reads
+# it to decide what to do with each file. Each release ships its own copy.
+#
+# Format:
+#   version: 1
+#   paths:
+#     - glob: "<glob>"
+#       owner: framework | adopter | shared
+#       security: true        # optional; default false
+#
+# Rules:
+#   - The first glob that matches a path wins. Put a narrow glob before a
+#     wide glob.
+#   - A glob is relative to the repository root.
+#     `**` matches zero or more path segments.
+#     `*` matches zero or more characters in one segment.
+#     `?` matches one character in one segment.
+#   - `owner: framework`  The framework owns the file. An update replaces it.
+#     The update re-applies a local edit with a three-way merge. If the merge
+#     fails, the update stops and suggests an overlay.
+#   - `owner: adopter`    The adopter owns the file. An update never changes it.
+#   - `owner: shared`     Both sides may edit the file. An update merges it
+#     with a three-way merge.
+#   - `security: true`    The file enforces a gate. An update shows a local
+#     edit loudly and asks for explicit confirmation.
+#   - A shipped path that no glob matches is an error. The CI check
+#     `bin/check-ownership-manifest.sh` fails on it.
+#   - An update changes only paths that the framework ships. A local path
+#     that the framework does not ship (for example a custom skill linked
+#     into .claude/skills/) is never touched, whatever its class.
+#
+# Library: bin/_lib-ownership.sh (ownership_class, ownership_is_security).
+version: 1
+paths:
+  # ---------------------------------------------------------------------
+  # Adopter-owned. An update never changes these paths.
+  # ---------------------------------------------------------------------
+  - glob: "apexyard.projects.yaml"
+    owner: adopter
+  - glob: "onboarding.yaml"
+    owner: adopter
+  - glob: "agent-routing.yaml"
+    owner: adopter
+  - glob: "agent-routing.local.yaml"
+    owner: adopter
+  - glob: ".mcp.json"
+    owner: adopter
+  - glob: "projects/README.md"
+    owner: framework
+  - glob: "projects/**"
+    owner: adopter
+  - glob: "workspace/README.md"
+    owner: framework
+  - glob: "workspace/**"
+    owner: adopter
+  - glob: "custom-skills/**"
+    owner: adopter
+  - glob: "custom-handbooks/**"
+    owner: adopter
+  - glob: ".claude/project-config.json"
+    owner: adopter
+  - glob: ".claude/settings.local.json"
+    owner: adopter
+  # The update engine writes the version anchor itself, as its last step.
+  - glob: ".claude/framework-version"
+    owner: adopter
+  - glob: ".claude/session/**"
+    owner: adopter
+  - glob: ".claude/worktrees/**"
+    owner: adopter
+  - glob: ".claude/memory/MEMORY.md"
+    owner: adopter
+  - glob: ".claude/memory/USER.md"
+    owner: adopter
+  - glob: ".claude/memory/db/.gitkeep"
+    owner: framework
+  - glob: ".claude/memory/db/**"
+    owner: adopter
+  - glob: ".claude/agents/.framework-defaults.json"
+    owner: adopter
+  - glob: ".claude/skill-framework-bak/**"
+    owner: adopter
+
+  # ---------------------------------------------------------------------
+  # Framework-owned gates. A local edit is shown loudly before an update.
+  # ---------------------------------------------------------------------
+  - glob: ".claude/hooks/tests/**"
+    owner: framework
+  - glob: ".claude/hooks/**"
+    owner: framework
+    security: true
+  - glob: ".githooks/**"
+    owner: framework
+    security: true
+
+  # Delegated gate runners and harness gate wiring. They enforce or wire a
+  # gate, so they sit before the wide rules for bin/, .cursor/ and
+  # harness-adapters/.
+  - glob: "bin/run-pre-push-checks.sh"
+    owner: framework
+    security: true
+  - glob: "bin/run-configured-pre-push-checks.sh"
+    owner: framework
+    security: true
+  - glob: "bin/install-git-hooks.sh"
+    owner: framework
+    security: true
+  - glob: ".cursor/hooks.json"
+    owner: framework
+    security: true
+  - glob: "harness-adapters/opencode/src/gate-dispatcher.ts"
+    owner: framework
+    security: true
+  - glob: "harness-adapters/pi/src/gate-dispatcher.ts"
+    owner: framework
+    security: true
+
+  # ---------------------------------------------------------------------
+  # Shared. Adopters may edit these files. An update merges them.
+  # ---------------------------------------------------------------------
+  # settings.json wires the hooks. It is shared because adopters add
+  # permissions and hooks, and it is a security file because it can turn a
+  # gate off.
+  - glob: ".claude/settings.json"
+    owner: shared
+    security: true
+  - glob: "handbooks/**"
+    owner: shared
+  - glob: "CLAUDE.md"
+    owner: shared
+  - glob: "AGENTS.md"
+    owner: shared
+  - glob: "README.md"
+    owner: shared
+  - glob: ".gitignore"
+    owner: shared
+  - glob: ".cursorignore"
+    owner: shared
+  - glob: ".github/**"
+    owner: shared
+
+  # ---------------------------------------------------------------------
+  # Framework-owned. An update replaces these paths and re-applies a local
+  # edit with a three-way merge.
+  # ---------------------------------------------------------------------
+  - glob: ".claude/skills/**"
+    owner: framework
+  - glob: ".claude/rules/**"
+    owner: framework
+  - glob: ".claude/agents/**"
+    owner: framework
+  - glob: ".claude/migrations/**"
+    owner: framework
+  - glob: ".claude/memory/**"
+    owner: framework
+  - glob: ".claude/output-styles/**"
+    owner: framework
+  - glob: ".claude/registries/**"
+    owner: framework
+  - glob: ".claude/harness-models.json"
+    owner: framework
+  - glob: ".claude/project-config.defaults.json"
+    owner: framework
+  - glob: ".claude/project-config.example.json"
+    owner: framework
+  - glob: ".claude/ownership-manifest.yaml"
+    owner: framework
+  - glob: ".claude-plugin/**"
+    owner: framework
+  - glob: ".cursor/**"
+    owner: framework
+  - glob: "bin/**"
+    owner: framework
+  - glob: "install.sh"
+    owner: framework
+  - glob: "packaging/**"
+    owner: framework
+  - glob: "docs/**"
+    owner: framework
+  - glob: "golden-paths/**"
+    owner: framework
+  - glob: "harness-adapters/**"
+    owner: framework
+  - glob: "marketplace/**"
+    owner: framework
+  - glob: "plugins/**"
+    owner: framework
+  - glob: "roles/**"
+    owner: framework
+  - glob: "rule-tests/**"
+    owner: framework
+  - glob: "templates/**"
+    owner: framework
+  - glob: "topologies/**"
+    owner: framework
+  - glob: "workflows/**"
+    owner: framework
+  - glob: ".apexyard-fork"
+    owner: framework
+  - glob: ".gitkeep"
+    owner: framework
+  - glob: ".lycheeignore"
+    owner: framework
+  - glob: ".markdownlint.json"
+    owner: framework
+  - glob: "*.example"
+    owner: framework
+  - glob: "*.example.yaml"
+    owner: framework
+  - glob: "CHANGELOG.md"
+    owner: framework
+  - glob: "CODE_OF_CONDUCT.md"
+    owner: framework
+  - glob: "CONTRIBUTING.md"
+    owner: framework
+  - glob: "LICENSE"
+    owner: framework
+  - glob: "SECURITY.md"
+    owner: framework
+  - glob: "SYSTEM.md"
+    owner: framework

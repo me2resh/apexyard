@@ -1,6 +1,6 @@
 ---
 name: mutation-test
-description: Mutation-testing sensor — language-dispatched (Stryker/MutPy/go-mutesting/mutant), milestone-cadence not per-PR, exit-3 graceful-degrade.
+description: Mutation-testing sensor, language-dispatched (Stryker/MutPy/go-mutesting/mutant), milestone-cadence not per-PR, exit-3 graceful-degrade.
 argument-hint: "[project-path] [--language=ts|js|python|go|ruby] [--runner=<name>] [--threshold=<N>] [--check-only]"
 allowed-tools: Bash, Read, Glob, Grep, Write
 ---

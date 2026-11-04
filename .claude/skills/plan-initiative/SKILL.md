@@ -452,7 +452,8 @@ tracker_lib="$(r="$PWD"; while [ -n "$r" ] && [ "$r" != / ]; do \
 # ── per milestone ────────────────────────────────────────────────────────────
 body_file="$(mktemp)"
 printf '%s\n' "$body" > "$body_file"
-# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] → {"ref","url"}.
+# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] [<milestone>] → {"ref","url"}.
+# The milestone is optional: omit it and the project's tracker.milestone default (if any) applies.
 result="$(tracker_create "$repo" "[Feature] {milestone-name}" "$body_file" "enhancement,${priority:-P2}")"
 rc=$?
 rm -f "$body_file"

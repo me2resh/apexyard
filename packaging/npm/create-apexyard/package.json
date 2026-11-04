@@ -1,0 +1,9 @@
+{
+  "name": "create-apexyard",
+  "version": "__VERSION__",
+  "description": "Create an ApexYard ops repository",
+  "bin": {"create-apexyard": "bin/create-apexyard.js"},
+  "files": ["bin/create-apexyard.js", "install.sh", "README.md"],
+  "license": "MIT",
+  "engines": {"node": ">=18"}
+}

@@ -22,6 +22,29 @@ _rc=0
 
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 INPUT=$(cat)
+# The wildcard settings entry catches shell aliases and command-shaped calls.
+# Bash keeps its original matcher and dispatch path, including parse failures.
+# Planned success must use exit "$_rc" after _dispatch_complete=1 (AgDR-0256 D9 33).
+if [ "${1:-}" = --shell-alias-only ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-fail-closed-json.sh" || exit 2
+  if printf '%s' "$INPUT" | jq -e '.tool_name == "apply_patch"' >/dev/null 2>&1; then
+    bash "$HOOK_DIR/dispatch-apply-patch.sh" <<<"$INPUT" || _rc=$?
+    if [ "$_rc" -ne 0 ] && [ "$_rc" -ne 2 ]; then
+      printf 'BLOCKED: patch dispatcher exited %s instead of PASS.\n' "$_rc" >&2
+      _rc=2
+    fi
+    _dispatch_complete=1
+    exit "$_rc"
+  fi
+  if printf '%s' "$INPUT" | jq -e '.tool_name == "Bash"' >/dev/null 2>&1 \
+    || ! hook_is_shell_call "$INPUT"; then
+    _dispatch_complete=1
+    _rc=0
+    exit "$_rc"
+  fi
+fi
+
 # Do not let a missing or broken jq abort dispatch with exit 127. Claude
 # Code only blocks on exit 2. Merge gates already fail closed on a raw
 # merge-shaped payload when they cannot parse the command (T13).
@@ -218,6 +241,8 @@ fi
 # APEXYARD_DISPATCH_GATE: Bash|tracker_pr_merge *|block-merge-on-red-ci.sh
 # APEXYARD_DISPATCH_GATE: Bash|tracker_pr_merge *|require-architecture-review.sh
 
+# The protected-target state-writer rule validates the exact start-ticket
+# helper grammar (_lib-start-ticket-command.sh). All other gates still run.
 # Hooks without a command predicate are safety checks for every Bash call.
 for script in \
   block-protected-target-writes.sh \

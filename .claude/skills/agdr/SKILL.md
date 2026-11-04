@@ -1,6 +1,6 @@
 ---
 name: agdr
-description: Browse / search / show / stats AgDRs across the portfolio — recalls "have we decided this before?".
+description: Browse / search / show / stats AgDRs across the portfolio. Recalls "have we decided this before?".
 argument-hint: "[browse|search <term>|show <id>|stats] [--project <name>] [--category <cat>] [--no-cache]"
 allowed-tools: Bash, Read, Grep, Glob
 ---

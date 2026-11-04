@@ -1,6 +1,6 @@
 ---
 name: walking-skeleton
-description: Scaffold a [Feature]-class ticket for the thinnest end-to-end slice — one trivial path wired through every architectural layer. KEPT and grown; full SDLC (NOT exempt like /spike).
+description: Scaffold a [Feature]-class ticket for the thinnest end-to-end slice, one trivial path wired through every architectural layer. KEPT and grown; full SDLC (NOT exempt like /spike).
 argument-hint: "<feature or service the skeleton proves>"
 allowed-tools: Bash, Read, Write
 ---
@@ -266,7 +266,8 @@ cat > "$body_file" <<'BODY'
 {formatted body}
 BODY
 
-# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] → {"ref","url"}.
+# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] [<milestone>] → {"ref","url"}.
+# The milestone is optional: omit it and the project's tracker.milestone default (if any) applies.
 result="$(tracker_create "{owner/repo}" "[Feature] Walking skeleton — {title}" "$body_file" "enhancement")"
 rc=$?
 rm -f "$body_file"

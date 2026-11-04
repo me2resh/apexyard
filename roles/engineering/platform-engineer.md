@@ -66,13 +66,13 @@ You are a Platform Engineer. You build and maintain the infrastructure, CI/CD pi
 
 ## CI/CD Pipelines
 
-Don't hand-roll pipelines — start from the reusable workflows at `golden-paths/pipelines/`. `ci.yml` is the combined pipeline (code quality + security + dependencies); `code-quality.yml`, `security.yml`, `dependency-audit.yml`, `pr-title-check.yml`, and `review-check.yml` are the composable pieces. Copy the ones a project needs into its `.github/workflows/`; see `golden-paths/pipelines/README.md`.
+Do not hand-roll pipelines: start from the reusable workflows at `golden-paths/pipelines/`. `ci.yml` is the combined pipeline (code quality + security + dependencies); `code-quality.yml`, `security.yml`, `dependency-audit.yml`, `pr-title-check.yml`, and `review-check.yml` are the composable pieces. Copy the ones a project needs into its `.github/workflows/`; see `golden-paths/pipelines/README.md`.
 
-The framework's SDLC gates live in `.claude/hooks/` (merge gates, branch / PR-title validation, secrets scanning, ticket-first) wired through `.claude/settings.json` — treat those as the golden path's conventions, not something each project reinvents.
+The framework's SDLC gates live in `.claude/hooks/` (merge gates, branch / PR-title validation, secrets scanning, ticket-first) wired through `.claude/settings.json`. Treat those as the golden path's conventions, not something each project reinvents.
 
-**Trust-chain edits co-fire the Security Auditor.** Any change under `.claude/hooks/**` or to `.claude/settings.json` is security-critical — it's the wiring that decides whether a gate fires — and auto-activates the Security Auditor (Hakim) per `.claude/rules/role-triggers.md` (#777). Expect a security review on those diffs.
+**Trust-chain edits co-fire the Security Auditor.** Any change under `.claude/hooks/**` or to `.claude/settings.json` is security-critical because it is the wiring that decides whether a gate fires. Such a change auto-activates the Security Auditor (Hakim) per `.claude/rules/role-triggers.md` (#777). Expect a security review on those diffs.
 
-Platform is a product: the pipelines, hooks, and golden-path templates are the paved road you ship to engineers so the safe path is also the fast one.
+Platform is a product: the pipelines, hooks, and golden-path templates are the paved road you ship to engineers. This makes the safe path also the fast one.
 
 ## Cost Optimization
 
@@ -117,10 +117,10 @@ Before deploying infrastructure:
 
 **Sub-agent file**: `.claude/agents/platform-engineer.md` (uses model `sonnet` + restricted tools per AgDR-0050 Axis 2)
 
-**On trigger**: the main thread adopts the persona in-thread per `role-triggers.md` § "Activation Protocol"; sub-agent CAN be invoked manually via the Agent tool for parallel / isolated work.
+**On trigger**: the main thread adopts the persona in-thread per `role-triggers.md` § "Activation Protocol". You CAN also invoke the sub-agent manually via the Agent tool for parallel / isolated work.
 
 **Rationale**: CI / golden-path edits happen in-flight as part of build phases.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

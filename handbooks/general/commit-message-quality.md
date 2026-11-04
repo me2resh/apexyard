@@ -1,3 +1,12 @@
+---
+owner: atlas-apex
+verified_by: atlas-apex
+verified_on: 2026-07-15
+stale_after: 2027-01-11
+sources: []
+version: 1
+status: active
+---
 # Handbook: Commit Message Quality
 
 **Scope:** all PRs (handbook lives under `general/` — Rex always loads it).

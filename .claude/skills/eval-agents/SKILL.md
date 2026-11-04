@@ -1,6 +1,6 @@
 ---
 name: eval-agents
-description: Score a review agent (Rex/Hakim/Tariq) against a labeled PR corpus — ground-truth defect-set overlap, never a prose rubric. Headline metric is approve-precision.
+description: Score a review agent (Rex/Hakim/Tariq) against a labeled PR corpus, ground-truth defect-set overlap, never a prose rubric. Headline metric is approve-precision.
 argument-hint: "<rex|hakim|tariq> [--corpus <path>] [--check-only]"
 allowed-tools: Bash, Read, Glob, Grep, Agent
 ---

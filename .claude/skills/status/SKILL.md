@@ -1,6 +1,6 @@
 ---
 name: status
-description: Project snapshot — git state, open PRs + CI, recent merges, in-progress issue. Use `--briefing` for compact form.
+description: Project snapshot. Covers git state, open PRs + CI, recent merges, in-progress issue. Use `--briefing` for compact form.
 allowed-tools: Bash, Read, Grep, Glob
 ---
 

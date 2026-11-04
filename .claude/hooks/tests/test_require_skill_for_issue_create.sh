@@ -59,6 +59,7 @@ make_sandbox() {
   cp "$HOOK_SRC" "$sb/.claude/hooks/require-skill-for-issue-create.sh"
   [ "$HAVE_LIB_OPS" = "1" ] && cp "$LIB_OPS" "$sb/.claude/hooks/_lib-ops-root.sh"
   cp "$LIB_CFG" "$sb/.claude/hooks/_lib-read-config.sh"
+  cp "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)/_lib-fail-closed-json.sh" "$sb/.claude/hooks/_lib-fail-closed-json.sh"
   cp "$(cd "$(dirname "$0")/.." && pwd)/_lib-session-markers.sh" "$sb/.claude/hooks/_lib-session-markers.sh"
   cp "$DEFAULTS" "$sb/.claude/project-config.defaults.json"
   chmod +x "$sb/.claude/hooks/require-skill-for-issue-create.sh"

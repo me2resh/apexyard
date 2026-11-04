@@ -4,8 +4,8 @@
   "planId": "plan-apexyard-harness-golden-path",
   "outcomeId": "o1-gates-fail-closed-measured",
   "basedOn": {
-    "planRevision": 3,
-    "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261010T145545Z",
+    "planRevision": 4,
+    "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261028T092303Z",
     "repositories": {}
   },
   "objective": "Make the dispatch-bash.sh and ticket-first gates fail closed. Take timeouts from a recorded per-hook timing profile. Document and test the disableAllHooks launch override as the escape hatch. Validate the plugin marketplace in CI.",

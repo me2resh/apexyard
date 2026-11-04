@@ -240,7 +240,7 @@ _ratc_in_temp_dir() {
 # links. Still inspect every component beneath that root, including the final
 # entry. Outside a temp root, inspect the whole path.
 _ratc_path_has_symlink_component() {
-  local path="$1" probe="$1" root="/" candidate physical
+  local path="$1" probe="$1" root="/" candidate physical parent
   for candidate in /tmp /var/tmp "${TMPDIR:-}"; do
     [ -n "$candidate" ] && [ -d "$candidate" ] || continue
     candidate="${candidate%/}"
@@ -267,7 +267,7 @@ _ratc_path_has_symlink_component() {
       */) probe="${probe%/}"; continue ;;
     esac
     [ -L "$probe" ] && return 0
-    probe="$(dirname "$probe")"
+    parent=$(dirname "$probe"); [ "$parent" = "$probe" ] && break; probe="$parent"
   done
   return 1
 }
@@ -542,7 +542,7 @@ _ratc_evaluate_target() {
   # walk-up finds the real ops fork. Path exemptions below MUST NOT use
   # that rewritten root — they match against the file's OWN toplevel via
   # ticket_path_is_meta_exempt (AgDR-0219 / #1531).
-  local REPO_ROOT="" _fp_dir _wt_gd _wt_gcd _main_root
+  local REPO_ROOT="" _fp_dir _wt_gd _wt_gcd _main_root parent
   if [ -n "$FILE_PATH" ]; then
     case "$FILE_PATH" in
       /*)
@@ -551,7 +551,7 @@ _ratc_evaluate_target() {
         # case where the new file's parent dir doesn't exist yet.
         _fp_dir="$(dirname "$FILE_PATH")"
         while [ -n "$_fp_dir" ] && [ "$_fp_dir" != "/" ] && [ ! -d "$_fp_dir" ]; do
-          _fp_dir="$(dirname "$_fp_dir")"
+          parent=$(dirname "$_fp_dir"); [ "$parent" = "$_fp_dir" ] && break; _fp_dir="$parent"
         done
         if [ -d "$_fp_dir" ]; then
           REPO_ROOT=$(git -C "$_fp_dir" rev-parse --show-toplevel 2>/dev/null)
@@ -818,7 +818,7 @@ _ratc_evaluate_target() {
       # target always land on the same physical directory.
       _og_probe="$_og_real_target"
       while [ -n "$_og_probe" ] && [ "$_og_probe" != "/" ] && [ ! -d "$_og_probe" ]; do
-        _og_probe="$(dirname "$_og_probe")"
+        parent=$(dirname "$_og_probe"); [ "$parent" = "$_og_probe" ] && break; _og_probe="$parent"
       done
       if [ -n "$_og_probe" ] && [ -d "$_og_probe" ]; then
         _og_git_root=$(git -C "$_og_probe" rev-parse --show-toplevel 2>/dev/null) || _og_git_root=""
@@ -1072,6 +1072,17 @@ MSG
 # ------------------------------------------------------------------------------
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
+# Remap Cursor shell aliases only. Known Claude Code tools keep the prior path
+# so fixture sandboxes that omit _lib-fail-closed-json.sh still behave as on
+# 5c9df59 (GH-1909 CI regressions).
+case "$TOOL_NAME" in
+  Bash|Edit|Write|MultiEdit|NotebookEdit|'') ;;
+  *)
+    # shellcheck source=/dev/null
+    . "$(dirname "$0")/_lib-fail-closed-json.sh" || exit 2
+    if hook_is_shell_call "$INPUT"; then TOOL_NAME=Bash; fi
+    ;;
+esac
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)
 
 # If jq cannot decode the envelope, do not silently allow an edit/write tool

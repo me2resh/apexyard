@@ -1,6 +1,6 @@
 ---
 name: monitoring-audit
-description: Observability audit — logging, error tracking, health endpoints, alerting, runbooks. Deep-dive for /launch-check monitoring.
+description: Observability audit. Checks logging, error tracking, health endpoints, alerting, runbooks. Deep-dive for /launch-check monitoring.
 disable-model-invocation: false
 argument-hint: "[project-path]"
 effort: medium

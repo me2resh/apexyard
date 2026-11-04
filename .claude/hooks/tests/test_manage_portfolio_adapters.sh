@@ -97,7 +97,12 @@ YAML
 workspace="$FIXTURE/portfolio/workspace/ok"
 [ -f "$workspace/.codex/hooks.json" ]
 # Wave 2 (AgDR-0157) emits dispatch-bash.sh, not a per-hook command.
-hook=$(jq -r '.hooks.PreToolUse[]?.hooks[]? | select(.command | contains("dispatch-bash.sh")) | .command' "$workspace/.codex/hooks.json")
+# Prefer the Bash matcher entry; the Cursor wildcard also names
+# dispatch-bash.sh --shell-alias-only and exits 0 for Bash (GH-1909).
+hook=$(jq -r '.hooks.PreToolUse[]?.hooks[]?
+  | select(.command | contains("dispatch-bash.sh"))
+  | select(.command | contains("--shell-alias-only") | not)
+  | .command' "$workspace/.codex/hooks.json")
 if [ -z "$hook" ]; then
   echo "expected a dispatch-bash.sh PreToolUse command in generated hooks.json" >&2
   exit 1

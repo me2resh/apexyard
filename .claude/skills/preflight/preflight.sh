@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Read-only environment report. Do not execute the suggested fixes.
+# Environment report with optional, explicitly approved dependency installation.
 # Bash 3.2; jq is optional for this report.
 set -u
 export APEXYARD_DISABLE_RESOLUTION_CACHE=1 APEXYARD_OPS_DISABLE_PIN=1
@@ -14,49 +14,104 @@ report() {
   esac
   case "$level" in WARN|FAIL) printf '  Fix: %s\n' "$fix" ;; esac
 }
+dependencies_only=0
+if [ "${1:-}" = --dependencies ]; then dependencies_only=1; shift; fi
 if [ "$#" -ne 0 ]; then
   report FAIL arguments 'No arguments are supported.' 'Run apexyard doctor.'
   exit "$result"
 fi
-script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
-lib="$script_dir/../../hooks"
-# shellcheck source=/dev/null
-. "$lib/_lib-ops-root.sh"
-# Normalize Git's root output before the shared detector walks the file system.
-# Keep this wrapper in a subshell so later checks can show the raw Git form.
-# shellcheck source=/dev/null
-. "$lib/_lib-path-resolve.sh"
-root=$(
-  git() {
-    local output rc=0
-    output=$(command git "$@") || rc=$?
-    [ "$rc" -eq 0 ] || return "$rc"
-    if [ "$*" = 'rev-parse --show-toplevel' ]; then
-      if command -v cygpath >/dev/null 2>&1; then
-        output=$(cygpath -u "$output" 2>/dev/null) || return 1
+if [ "$dependencies_only" -eq 0 ]; then
+  script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+  lib="$script_dir/../../hooks"
+  # shellcheck source=/dev/null
+  . "$lib/_lib-ops-root.sh"
+  # Normalize Git's root output before the shared detector walks the file system.
+  # Keep this wrapper in a subshell so later checks can show the raw Git form.
+  # shellcheck source=/dev/null
+  . "$lib/_lib-path-resolve.sh"
+  root=$(
+    git() {
+      local output rc=0
+      output=$(command git "$@") || rc=$?
+      [ "$rc" -eq 0 ] || return "$rc"
+      if [ "$*" = 'rev-parse --show-toplevel' ]; then
+        if command -v cygpath >/dev/null 2>&1; then
+          output=$(cygpath -u "$output" 2>/dev/null) || return 1
+        fi
+        _windows_path_to_posix "$output"
+      else
+        printf '%s\n' "$output"
       fi
-      _windows_path_to_posix "$output"
-    else
-      printf '%s\n' "$output"
-    fi
-  }
-  resolve_ops_root_walk "$PWD"
-)
-if [ -n "$root" ]; then
-  root=$(cd "$root" && pwd -P)
-  report OK fork "$root"
-else
-  report FAIL fork 'No .apexyard-fork or legacy anchor found.' 'Run from the fork root.'
+    }
+    resolve_ops_root_walk "$PWD"
+  )
+  if [ -n "$root" ]; then
+    root=$(cd "$root" && pwd -P)
+    report OK fork "$root"
+  else
+    report FAIL fork 'No .apexyard-fork or legacy anchor found.' 'Run from the fork root.'
+  fi
 fi
+interactive() {
+  [ -z "${CI:-}" ] && [ "${APEXYARD_NO_INSTALL:-}" != 1 ] || return 1
+  # Test seam: production reads answers from the controlling terminal.
+  case "${APEXYARD_TEST_INTERACTIVE:-}" in 1) return 0 ;; 0) return 1 ;; esac
+  [ -t 0 ] && [ -t 1 ]
+}
+install_tool() {
+  local tool="$1" answer='' manager='' package="$1"
+  install_command=''
+  for manager in brew apt-get dnf winget; do
+    command -v "$manager" >/dev/null 2>&1 || continue
+    case "$manager" in
+      brew) install_command="brew install $tool" ;;
+      apt-get|dnf) install_command="sudo $manager install -y $tool" ;;
+      winget)
+        case "$tool" in jq) package=jqlang.jq ;; gh) package=GitHub.cli ;; esac
+        install_command="winget install $package" ;;
+    esac
+    break
+  done
+  if [ -z "$install_command" ]; then
+    case "$tool" in
+      jq) install_command='Install jq manually: https://jqlang.org/download/' ;;
+      gh) install_command='Install gh manually: https://cli.github.com/' ;;
+    esac
+    return 1
+  fi
+  interactive || return 1
+  printf 'Install %s with: %s ? [y/N] ' "$tool" "$install_command"
+  if [ "${APEXYARD_TEST_INTERACTIVE:-}" = 1 ]; then
+    IFS= read -r answer || answer=''
+  else
+    IFS= read -r answer </dev/tty || answer=''
+  fi
+  case "$answer" in [yY]|[yY][eE][sS]) ;; *) return 1 ;; esac
+  case "$manager" in
+    brew) brew install "$tool" ;;
+    apt-get|dnf) sudo "$manager" install -y "$tool" ;;
+    winget) winget install "$package" ;;
+  esac || return 1
+  hash -r
+  command -v "$tool" >/dev/null 2>&1 || return 1
+  report OK "$tool" 'Installed.'
+}
 for tool in git bash jq gh; do
   if ! command -v "$tool" >/dev/null 2>&1; then
-    case "$tool" in
-      git) report FAIL git missing 'Install Git for Windows, or run brew install git / apt-get install git.' ;;
-      bash) report FAIL bash missing 'Install Bash 3.2 or later with brew install bash / apt-get install bash / Git for Windows.' ;;
-      jq) report FAIL jq missing 'Run brew install jq / apt-get install jq / winget install jqlang.jq.' ;;
-      gh) report WARN gh missing 'Run brew install gh / apt-get install gh / winget install GitHub.cli.' ;;
-    esac
-    continue
+    if [ "$tool" = jq ] || [ "$tool" = gh ]; then
+      if ! install_tool "$tool"; then
+        level=FAIL
+        [ "$tool" != gh ] || level=WARN
+        report "$level" "$tool" missing "$install_command"
+        continue
+      fi
+    else
+      case "$tool" in
+        git) report FAIL git missing 'Install Git for Windows, or run brew install git / apt-get install git.' ;;
+        bash) report FAIL bash missing 'Install Bash 3.2 or later with brew install bash / apt-get install bash / Git for Windows.' ;;
+      esac
+      continue
+    fi
   fi
   version=$("$tool" --version 2>/dev/null | head -n 1)
   case "$tool" in
@@ -73,6 +128,7 @@ for tool in git bash jq gh; do
       fi ;;
   esac
 done
+[ "$dependencies_only" -eq 0 ] || exit "$result"
 if command -v gh >/dev/null 2>&1; then
   if gh auth status >/dev/null 2>&1; then
     report OK gh-auth 'Logged in with an active account.'

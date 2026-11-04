@@ -1,6 +1,6 @@
 ---
 name: prototype
-description: Create a throwaway UX/demo prototype ticket (mockup / demo flow) — answers "what should it look and feel like?". DISCARD-by-default; same AgDR + coverage exemptions as /spike.
+description: Create a throwaway UX/demo prototype ticket (mockup / demo flow). Answers "what should it look and feel like?". DISCARD-by-default; same AgDR + coverage exemptions as /spike.
 argument-hint: "<short title of the prototype>"
 allowed-tools: Bash, Read, Write, AskUserQuestion
 ---
@@ -257,7 +257,8 @@ cat > "$body_file" <<'BODY'
 {formatted body}
 BODY
 
-# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] → {"ref","url"}.
+# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] [<milestone>] → {"ref","url"}.
+# The milestone is optional: omit it and the project's tracker.milestone default (if any) applies.
 result="$(tracker_create "{owner/repo}" "[Prototype] {title}" "$body_file" "prototype")"
 rc=$?
 rm -f "$body_file"

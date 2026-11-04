@@ -22,7 +22,7 @@ The CLI supplies deterministic record construction and validation. The skill sup
 
 Before saving each Plan, Reconciliation, or Execution Slice, the skill runs Naqid's advisory challenge pass. Naqid steelmans the draft, then identifies assumptions, failure modes, missing evidence, and cheaper alternatives. The operator decides whether to revise, accept, or stop. The challenge does not block ApexYard gates.
 
-Install the `orbit-spec` CLI before using the skill. Set `ORBIT_BIN` when the CLI is installed outside `PATH`.
+Install the `orbit-spec` CLI before using the skill. Set `ORBIT_BIN` when the CLI lives outside `PATH`.
 
 Example:
 

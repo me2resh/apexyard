@@ -1,0 +1,223 @@
+#!/usr/bin/env bash
+# Add knowledge-base front matter to handbook markdown files.
+# Usage: bin/kb-migrate [--root DIR] [--dry-run] [PATH...]
+# Default targets: every .md under handbooks/ except README.md and index.md.
+
+set -u
+
+SCRIPT_DIR=$(CDPATH='' cd "$(dirname "$0")" && pwd)
+# shellcheck disable=SC1091
+. "$SCRIPT_DIR/_lib-kb.sh"
+
+ROOT=""
+DRY_RUN=0
+PATHS=()
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --root)
+      ROOT=$2
+      shift 2
+      ;;
+    --root=*)
+      ROOT=${1#--root=}
+      shift
+      ;;
+    --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
+    -h|--help)
+      cat <<'EOF'
+Usage: bin/kb-migrate [--root DIR] [--dry-run] [PATH...]
+
+Add knowledge-base front matter to handbook entries.
+Default targets: handbooks/**/*.md except README.md and index.md.
+EOF
+      exit 0
+      ;;
+    --)
+      shift
+      while [ $# -gt 0 ]; do PATHS[${#PATHS[@]}]=$1; shift; done
+      ;;
+    -*)
+      echo "kb-migrate: unknown option: $1" >&2
+      exit 2
+      ;;
+    *)
+      PATHS[${#PATHS[@]}]=$1
+      shift
+      ;;
+  esac
+done
+
+if [ -z "$ROOT" ]; then
+  ROOT=$(git rev-parse --show-toplevel) || exit 1
+else
+  ROOT=$(cd "$ROOT" && pwd) || exit 1
+fi
+
+if [ ${#PATHS[@]} -eq 0 ]; then
+  if [ -d "$ROOT/handbooks" ]; then
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      PATHS[${#PATHS[@]}]=$f
+    done <<EOF
+$(find "$ROOT/handbooks" -type f -name '*.md' ! -name 'README.md' ! -name 'index.md' | LC_ALL=C sort)
+EOF
+  fi
+fi
+
+ROOT_REAL=$(cd "$ROOT" && pwd -P) || exit 1
+HB_REAL=$ROOT_REAL/handbooks
+if [ -d "$ROOT/handbooks" ]; then
+  HB_REAL=$(cd "$ROOT/handbooks" && pwd -P) || exit 1
+fi
+
+# Print the physical path of a file. Follows symlinks and removes ..
+real_file() {
+  local p=$1 d l n=0
+  while [ -L "$p" ]; do
+    n=$((n + 1))
+    if [ "$n" -gt 20 ]; then return 1; fi
+    l=$(readlink "$p") || return 1
+    case "$l" in
+      /*) p=$l ;;
+      *) p=$(dirname "$p")/$l ;;
+    esac
+  done
+  d=$(cd "$(dirname "$p")" 2>/dev/null && pwd -P) || return 1
+  printf '%s/%s\n' "$d" "$(basename "$p")"
+}
+
+migrate_one() {
+  local abs=$1
+  local rel body missing tmp missfile first rest
+  local enforcement=""
+
+  case "$abs" in
+    /*) ;;
+    *) abs="$ROOT/$abs" ;;
+  esac
+  if [ ! -f "$abs" ]; then
+    echo "kb-migrate: missing file: $abs" >&2
+    return 1
+  fi
+
+  # Resolve symlinks and .. first. Refuse any target outside <root>/handbooks.
+  if ! abs=$(real_file "$abs"); then
+    echo "kb-migrate: cannot resolve: $1" >&2
+    return 1
+  fi
+  case "$abs" in
+    "$HB_REAL"/*) ;;
+    *)
+      echo "kb-migrate: refused, outside handbooks/: $1" >&2
+      return 1
+      ;;
+  esac
+
+  rel=${abs#"$ROOT_REAL"/}
+
+  if kb_has_front_matter "$abs"; then
+    body=$(kb_front_matter_body "$abs")
+    if kb_fm_complete "$body"; then
+      printf 'unchanged %s\n' "$rel"
+      return 0
+    fi
+    missing=$(kb_missing_schema_lines "$ROOT" "$rel" "$body")
+    if [ -z "$missing" ]; then
+      printf 'unchanged %s\n' "$rel"
+      return 0
+    fi
+
+    missfile=$(mktemp)
+    printf '%s' "$missing" > "$missfile"
+    # Guarantee a trailing newline in the miss file.
+    last=$(tail -c 1 "$missfile" | od -An -tx1 | tr -d ' \n')
+    if [ "$last" != "0a" ]; then
+      printf '\n' >> "$missfile"
+    fi
+
+    tmp=$(mktemp)
+    awk -v missfile="$missfile" '
+      BEGIN {
+        miss = ""
+        while ((getline line < missfile) > 0) {
+          miss = miss line "\n"
+        }
+        close(missfile)
+        in_fm = 0
+      }
+      NR == 1 && /^---[[:space:]]*$/ { print; in_fm = 1; next }
+      in_fm && /^---[[:space:]]*$/ {
+        printf "%s", miss
+        print
+        in_fm = 0
+        next
+      }
+      { print }
+    ' "$abs" > "$tmp"
+    rm -f "$missfile"
+
+    if cmp -s "$abs" "$tmp"; then
+      rm -f "$tmp"
+      printf 'unchanged %s\n' "$rel"
+      return 0
+    fi
+    if [ "$DRY_RUN" -eq 1 ]; then
+      rm -f "$tmp"
+      printf 'would-update %s\n' "$rel"
+      return 0
+    fi
+    mv "$tmp" "$abs"
+    printf 'updated %s\n' "$rel"
+    return 0
+  fi
+
+  # No front matter. Build a new block. Keep ENFORCEMENT right after it.
+  body=""
+  first=$(head -n 1 "$abs" || true)
+  if printf '%s\n' "$first" | grep -q '^ENFORCEMENT:'; then
+    enforcement=$first
+    rest=$(tail -n +2 "$abs")
+    rest=$(printf '%s\n' "$rest" | awk 'NR==1 && /^[[:space:]]*$/ { next } { print }')
+  else
+    rest=$(cat "$abs")
+  fi
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf 'would-update %s\n' "$rel"
+    return 0
+  fi
+
+  # Write via temp file. Avoid $(...) so trailing newlines in schema lines stay.
+  tmp=$(mktemp)
+  {
+    printf -- '---\n'
+    kb_missing_schema_lines "$ROOT" "$rel" "$body"
+    printf -- '---\n'
+    if [ -n "$enforcement" ]; then
+      printf '%s\n\n' "$enforcement"
+    fi
+    printf '%s\n' "$rest"
+  } > "$tmp"
+  mv "$tmp" "$abs"
+  printf 'updated %s\n' "$rel"
+}
+
+fail=0
+if [ ${#PATHS[@]} -eq 0 ]; then
+  echo "kb-migrate: no handbook entries found" >&2
+  exit 0
+fi
+
+i=0
+while [ $i -lt ${#PATHS[@]} ]; do
+  if ! migrate_one "${PATHS[$i]}"; then
+    fail=1
+  fi
+  i=$((i + 1))
+done
+
+exit "$fail"

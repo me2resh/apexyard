@@ -15,13 +15,13 @@ See [AgDR-0235](../agdr/AgDR-0235-reviewer-github-app.md).
 | Term | Meaning |
 | --- | --- |
 | Operator login | The `gh` credentials of the person who runs the agent. |
-| GitHub App | A registered app that acts as its own GitHub account. |
+| GitHub App | An app that you register with GitHub. It acts as its own GitHub account. |
 | App ID | The numeric id of that app. GitHub shows it on the app settings page. |
 | Installation | One install of the app on a user or an organization. |
 | Installation id | The numeric id of that install. It is in the installation URL. |
 | Private key | The PEM file that signs the app credential. Store the file outside git. |
 | Installation token | A short-lived token for one installation. The library requests it per review. |
-| Fail closed | The review is not posted. The command returns an error. |
+| Fail closed | The library does not post the review. The command returns an error. |
 
 ## Create the app
 
@@ -114,7 +114,7 @@ Open the app settings page.
 Install the app on the repositories that agents review.
 Select only those repositories.
 One installation id covers one user or one organization.
-Every reviewed repository must belong to that installation.
+Every repository that agents review must belong to that installation.
 
 Open the installation settings page.
 Copy the numeric id from the URL.
@@ -127,10 +127,10 @@ An organization install has the same number at the end of its URL.
 Keep the PEM file outside every git work tree.
 Keep it outside `.claude/`.
 `$HOME/.config/apexyard/reviewer.pem` is a valid location.
-A path inside this repository is refused.
-A path inside another repository is refused.
-A symlink into a repository is refused.
-A path under a `.claude` directory is refused.
+The library refuses a path inside this repository.
+The library refuses a path inside another repository.
+The library refuses a symlink into a repository.
+The library refuses a path under a `.claude` directory.
 
 Confirm the location before you set the config.
 
@@ -146,7 +146,7 @@ Restrict the file to your user with `chmod 600`.
 
 Add `review_identity` to `.claude/project-config.json`.
 Do not put the key in that file.
-Put the absolute path of the PEM file.
+Enter the absolute path of the PEM file.
 
 ```json
 {
@@ -162,7 +162,7 @@ Put the absolute path of the PEM file.
 
 `kind` must be `github_app`.
 `app_id` and `installation_id` are decimal numbers.
-`fallback` empty means fail closed.
+An empty `fallback` means fail closed.
 Set `fallback` to `comment` only when a failed app review should post as a comment.
 
 ```json
@@ -182,7 +182,7 @@ On each `gh` review, the library does four checks.
 4. It sets `GH_TOKEN` to the installation token for that one `gh pr review` command.
 
 The token request uses `https://api.github.com`.
-GitHub Enterprise Server is not covered.
+The library does not cover GitHub Enterprise Server.
 The library does not export the token.
 The library does not write the token to disk.
 The library does not print the token or the private key.
@@ -194,7 +194,7 @@ The library requests a new token for each review.
 `/approve-merge` does not use the app token.
 Those commands keep the operator login.
 
-GitLab reviews and custom tracker reviews are unchanged.
+The library does not change GitLab reviews or custom tracker reviews.
 They ignore `review_identity`.
 
 ## Limits
@@ -202,7 +202,7 @@ They ignore `review_identity`.
 Merging requires `contents: write`.
 The app has only `contents: read`.
 This library never uses the app token for a merge.
-Keep the private key private so nothing else can mint a token.
+Keep the private key private so nothing else can make a token.
 
 Keep agents on the `comment` verdict.
 Require a CODEOWNERS or team review that excludes the App.

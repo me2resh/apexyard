@@ -2,6 +2,9 @@
 # onboarding flag. Per-machine, per-clone. Never committed.
 .claude/session/
 
+# Python bytecode from the diagram library tests (#1919).
+__pycache__/
+
 # Transient per-agent git worktrees created by the Agent tool's
 # isolation:"worktree" mode. Each is a full linked working copy; leaving them
 # un-ignored makes the editor's language server re-index every copy (e.g. the

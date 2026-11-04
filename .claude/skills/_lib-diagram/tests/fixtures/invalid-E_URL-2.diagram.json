@@ -1,0 +1,59 @@
+{
+  "schema": "apexyard.diagram/v1",
+  "diagram": {
+    "type": "dfd",
+    "title": "Sample data flow",
+    "project": "sample-app",
+    "direction": "LR"
+  },
+  "generated": {
+    "by": "/dfd",
+    "date": "2026-10-29"
+  },
+  "repo": {
+    "name": "example-org/sample-app",
+    "web_url": "https://github.com/example-org/sample-app?tab=1",
+    "commit": null
+  },
+  "groups": [
+    {
+      "id": "zone",
+      "kind": "trust_zone",
+      "label": "Application"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "actor",
+      "kind": "actor",
+      "label": "Customer"
+    },
+    {
+      "id": "api",
+      "kind": "process",
+      "label": "API",
+      "group": "zone",
+      "tags": [
+        "internal"
+      ]
+    },
+    {
+      "id": "db",
+      "kind": "store",
+      "label": "Records",
+      "group": "zone"
+    }
+  ],
+  "edges": [
+    {
+      "from": "actor",
+      "to": "api",
+      "label": "HTTPS"
+    },
+    {
+      "from": "api",
+      "to": "db",
+      "label": "Read records"
+    }
+  ]
+}

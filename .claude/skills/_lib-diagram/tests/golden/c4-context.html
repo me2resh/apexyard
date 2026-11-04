@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; form-action 'none'; script-src 'sha256-xxDf2gOm5MOhVXZ66ttbL1thhRCZw9Ti/SzckqvscFs='; style-src 'sha256-hniX3avX573WxgFzTCB+uP2sMJ3SCzE6HfIDaA8IAdU='">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diagram</title>
+<style>
+:root {
+  color-scheme: light;
+  --ay-bg: #f4f6fa; --ay-surface: #ffffff; --ay-text: #202938;
+  --ay-muted: #526074; --ay-line: #b9c3d2; --ay-edge: #526074;
+  --ay-accent: #2F6DF6; --ay-link: #2455bd; --ay-on-accent: #ffffff;
+  --ay-teal: #006d77; --ay-green: #27663c; --ay-violet: #6740a8;
+  --ay-tint: #edf2ff; --ay-shadow: #20293814;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ay-bg: #111720; --ay-surface: #1b2431; --ay-text: #eef2f8;
+    --ay-muted: #b4c1d3; --ay-line: #56667d; --ay-edge: #b4c1d3;
+    --ay-link: #9dbaff; --ay-teal: #77d7df; --ay-green: #91d7a7;
+    --ay-violet: #c5a7ff; --ay-tint: #263550; --ay-shadow: #00000033;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ay-bg: #111720; --ay-surface: #1b2431; --ay-text: #eef2f8;
+  --ay-muted: #b4c1d3; --ay-line: #56667d; --ay-edge: #b4c1d3;
+  --ay-link: #9dbaff; --ay-teal: #77d7df; --ay-green: #91d7a7;
+  --ay-violet: #c5a7ff; --ay-tint: #263550; --ay-shadow: #00000033;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--ay-bg); color: var(--ay-text);
+  font: 14px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+header { padding: 20px 28px 14px; background: var(--ay-surface); border-bottom: 1px solid var(--ay-line); }
+h1 { margin: 0; font-size: 22px; letter-spacing: -.4px; overflow-wrap: anywhere; }
+h2 { margin: 0 0 12px; font-size: 19px; overflow-wrap: anywhere; }
+h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; margin: 22px 0 8px; color: var(--ay-muted); }
+p { margin: 8px 0; }
+#meta, #caption, footer, .muted { color: var(--ay-muted); }
+#toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 28px; }
+button, input { font: inherit; border: 1px solid var(--ay-line); border-radius: 6px;
+  color: var(--ay-text); background: var(--ay-surface); padding: 7px 11px; min-height: 36px; }
+button { cursor: pointer; }
+button:hover { background: var(--ay-tint); }
+button:disabled { opacity: .6; cursor: default; }
+:focus-visible { outline: 3px solid var(--ay-link); outline-offset: 3px; }
+.primary { background: var(--ay-accent); color: var(--ay-on-accent); border-color: var(--ay-accent); }
+.primary:hover { background: var(--ay-accent); text-decoration: underline; }
+#find { width: 200px; }
+#status { color: var(--ay-muted); }
+main { display: grid; grid-template-columns: minmax(0, 1fr) 330px; margin: 0 20px; min-height: 520px; }
+#viewport { width: 100%; height: 66vh; min-height: 520px; display: block; touch-action: none;
+  background: var(--ay-surface); border: 1px solid var(--ay-line); border-radius: 10px 0 0 10px; }
+#viewport.panning { cursor: grabbing; }
+#panel { padding: 22px; background: var(--ay-surface); border: 1px solid var(--ay-line);
+  border-left: 0; border-radius: 0 10px 10px 0; overflow: auto; max-height: max(66vh, 520px); overflow-wrap: anywhere; }
+#panel button { margin: 3px 4px 3px 0; }
+#panel ul { list-style: none; padding: 0; margin: 0; }
+#panel li { margin: 6px 0; }
+#panel .relation { width: 100%; text-align: left; }
+a { color: var(--ay-link); }
+footer { padding: 14px 28px 24px; font-size: 12px; }
+code { overflow-wrap: anywhere; }
+.group rect { fill: var(--ay-bg); stroke: var(--ay-line); stroke-dasharray: 6 4; }
+.group text { fill: var(--ay-muted); font-size: 12px; font-weight: 600; }
+.node { cursor: pointer; }
+.node rect { fill: var(--ay-surface); stroke: var(--ay-line); stroke-width: 1.5; }
+.node text { fill: var(--ay-text); font-size: 13px; pointer-events: none; }
+.node .kind { fill: var(--ay-teal); font-size: 10px; letter-spacing: .5px; }
+.node .technology { fill: var(--ay-muted); font-size: 11px; }
+.node.store .kind, .node.model .kind { fill: var(--ay-violet); }
+.node.job .kind, .node.route .kind { fill: var(--ay-green); }
+.node:hover rect, .node:focus rect, .node.selected rect { stroke: var(--ay-accent); stroke-width: 3; }
+.node.selected rect { fill: var(--ay-tint); }
+.edge path { fill: none; stroke: var(--ay-edge); stroke-width: 1.5; }
+.edge text { fill: var(--ay-text); font-size: 11px; paint-order: stroke; stroke: var(--ay-surface); stroke-width: 4px; }
+.edge.crossing path { stroke: var(--ay-violet); stroke-dasharray: 6 4; }
+.edge:hover path, .edge.highlight path { stroke: var(--ay-link); stroke-width: 3; }
+#arrow path { fill: var(--ay-edge); }
+.dense .edge text { display: none; }
+.dense .edge:hover text, .dense .edge.highlight text, .dense .edge:focus text { display: block; }
+.faded { opacity: .18; }
+.tag { display: inline-block; padding: 2px 7px; margin: 2px; border: 1px solid var(--ay-line);
+  border-radius: 4px; font-size: 12px; color: var(--ay-violet); }
+@media (max-width: 760px) {
+  header, #toolbar { padding-left: 16px; padding-right: 16px; }
+  main { grid-template-columns: 1fr; margin: 0 12px; }
+  #viewport { border-radius: 10px 10px 0 0; height: 52vh; min-height: 320px; }
+  #panel { border: 1px solid var(--ay-line); border-top: 0; border-radius: 0 0 10px 10px; max-height: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+</style>
+</head>
+<body>
+<header><h1 id="title">Diagram</h1><p id="meta"></p><p id="caption"></p></header>
+<div id="toolbar" role="toolbar" aria-label="Diagram navigation">
+  <label for="find">Find</label><input id="find" type="search" placeholder="Node label" autocomplete="off">
+  <button id="zoom-in" aria-label="Zoom in">+</button><button id="zoom-out" aria-label="Zoom out">-</button>
+  <button id="fit">Fit</button><button id="theme">Theme: system</button>
+  <span id="status" role="status"></span>
+</div>
+<main>
+  <svg id="viewport" aria-label="Interactive diagram"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs><g id="scene"></g></svg>
+  <aside id="panel" aria-label="Node details" aria-live="polite"></aside>
+</main>
+<footer><p>Drag to pan. Scroll to zoom. Tab to a node, then Enter to select. U: upstream. D: downstream. Escape: clear.</p><code id="regenerate"></code></footer>
+<script type="application/json" id="ay-diagram-data">{"diagram":{"direction":"LR","project":"sample-app","title":"Sample c4-context (v2), core: Q\u0026A/path #1 [beta] \"quoted\"","type":"c4-context"},"edges":[{"from":"actor","id":"e_e78a1d95fc","label":"HTTPS (v2), core: Q\u0026A/path #1 [beta] \"quoted\"","technology":"HTTPS (v2), core: Q\u0026A/path #1 [beta] \"quoted\"","to":"api"},{"from":"api","id":"e_b233d598b0","label":"Read records","to":"db"}],"generated":{"by":"/c4","date":"2026-10-29"},"groups":[],"model_sha256":"d0d2762fdfafea09856a7d8c028102db5efcb68c951d3059820c0dc487552202","nodes":[{"description":"Description (v2), core: Q\u0026A/path #1 [beta] \"quoted\"","id":"actor","kind":"person","label":"Customer (v2), core: Q\u0026A/path #1 [beta] \"quoted\"","technology":""},{"description":"Description (v2), core: Q\u0026A/path #1 [beta] \"quoted\"","id":"api","kind":"system","label":"API","tags":["internal"],"technology":""},{"description":"Description (v2), core: Q\u0026A/path #1 [beta] \"quoted\"","id":"db","kind":"external_system","label":"Records","technology":""}],"positions":{"edges":{"e_b233d598b0":{"back":false,"offset":0,"points":[[716,276],[806,276],[806,276],[896,276]]},"e_e78a1d95fc":{"back":false,"offset":0,"points":[[316,140],[406,140],[406,276],[496,276]]}},"groups":{},"height":352,"nodes":{"actor":{"height":88,"width":220,"x":96,"y":96},"api":{"height":88,"width":220,"x":496,"y":232},"db":{"height":88,"width":220,"x":896,"y":232}},"width":1148},"repo":{"commit":null,"name":"example-org/sample-app","web_url":"https://github.com/example-org/sample-app"},"schema":"apexyard.diagram/v1"}</script>
+<script>
+'use strict';
+/* ay:graph:start */
+// Group endpoints expand to their leaf members. Empty groups remain endpoints.
+function makeGraph(model) {
+  const groups = new Map(model.groups.map(g => [g.id, g]));
+  const members = id => {
+    if (!groups.has(id)) return [id];
+    const result = model.nodes.filter(n => {
+      let parent = n.group;
+      while (parent) {
+        if (parent === id) return true;
+        parent = groups.get(parent).parent;
+      }
+      return false;
+    }).map(n => n.id);
+    return result.length ? result : [id];
+  };
+  const outgoing = new Map(), incoming = new Map();
+  const arcs = [];
+  model.edges.forEach(edge => members(edge.from).forEach(from => members(edge.to).forEach(to => {
+    const arc = {from, to, id: edge.id};
+    arcs.push(arc);
+    if (!outgoing.has(from)) outgoing.set(from, []);
+    if (!incoming.has(to)) incoming.set(to, []);
+    outgoing.get(from).push(arc);
+    incoming.get(to).push(arc);
+  })));
+  return {outgoing, incoming, arcs, members};
+}
+function reachable(graph, start, reverse) {
+  const seen = new Set(graph.members(start)), queue = Array.from(seen);
+  const adjacency = reverse ? graph.incoming : graph.outgoing;
+  for (let i = 0; i < queue.length; i++) {
+    (adjacency.get(queue[i]) || []).forEach(arc => {
+      const next = reverse ? arc.from : arc.to;
+      if (!seen.has(next)) { seen.add(next); queue.push(next); }
+    });
+  }
+  return seen;
+}
+function trace(graph, start, reverse) {
+  const nodes = reachable(graph, start, reverse);
+  const edges = new Set(graph.arcs.filter(a => nodes.has(a.from) && nodes.has(a.to)).map(a => a.id));
+  return {nodes, edges};
+}
+function directedPath(graph, from, to) {
+  const forward = reachable(graph, from, false), backward = reachable(graph, to, true);
+  const nodes = new Set(Array.from(forward).filter(id => backward.has(id)));
+  const edges = new Set(graph.arcs.filter(a => nodes.has(a.from) && nodes.has(a.to)).map(a => a.id));
+  return {nodes, edges};
+}
+function pathBetween(graph, from, to) {
+  let result = directedPath(graph, from, to);
+  if (!result.nodes.size) result = directedPath(graph, to, from);
+  return result;
+}
+/* ay:graph:end */
+(function () {
+  const data = JSON.parse(document.getElementById('ay-diagram-data').textContent);
+  const positions = data.positions, graph = makeGraph(data);
+  const nodes = new Map(data.nodes.map(n => [n.id, n]));
+  const groups = new Map(data.groups.map(g => [g.id, g]));
+  const entities = new Map([...groups, ...nodes]);
+  const nodeElements = new Map(), groupElements = new Map(), edgeElements = new Map();
+  const svg = document.getElementById('viewport'), scene = document.getElementById('scene');
+  const panel = document.getElementById('panel'), status = document.getElementById('status');
+  let selected = null, pathFrom = null, theme = 'system';
+  let camera = {x: 0, y: 0, width: positions.width, height: positions.height};
+  function element(tag, text, parent, attrs) {
+    const el = document.createElement(tag);
+    if (text !== null) el.textContent = text;
+    Object.entries(attrs || {}).forEach(([key, value]) => el.setAttribute(key, value));
+    if (parent) parent.appendChild(el);
+    return el;
+  }
+  function vector(tag, parent, attrs, text) {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    Object.entries(attrs || {}).forEach(([key, value]) => el.setAttribute(key, value));
+    if (text !== undefined) el.textContent = text;
+    parent.appendChild(el);
+    return el;
+  }
+  function short(text, length) { return text.length > length ? text.slice(0, length - 3) + '...' : text; }
+  function chain(id) {
+    const result = [];
+    let parent = nodes.has(id) ? nodes.get(id).group : id;
+    while (parent) { result.unshift(parent); parent = groups.get(parent).parent; }
+    return result;
+  }
+  function crosses(edge) {
+    return data.diagram.type === 'dfd' && chain(edge.from).join('/') !== chain(edge.to).join('/');
+  }
+  function box(id) { return positions.nodes[id] || positions.groups[id]; }
+  function selectEvent(id, event) {
+    if ((event.shiftKey && selected) || pathFrom) {
+      const origin = pathFrom || selected;
+      pathFrom = null;
+      select(id);
+      const result = pathBetween(graph, origin, id);
+      highlight(result);
+      status.textContent = result.nodes.size ? 'Path: ' + entities.get(origin).label + ' / ' + entities.get(id).label : 'No path';
+      element('p', status.textContent, panel);
+    } else select(id);
+  }
+  function drawGroups() {
+    data.groups.slice().sort((a, b) => chain(a.id).length - chain(b.id).length || a.id.localeCompare(b.id)).forEach(group => {
+      const b = box(group.id), el = vector('g', scene, {class: 'group'});
+      vector('rect', el, {x: b.x, y: b.y, width: b.width, height: b.height, rx: 8});
+      vector('text', el, {x: b.x + 12, y: b.y + 19}, short(group.label, 48));
+      groupElements.set(group.id, el);
+    });
+  }
+  function drawEdges() {
+    data.edges.forEach(edge => {
+      const points = positions.edges[edge.id].points;
+      const el = vector('g', scene, {class: 'edge' + (crosses(edge) ? ' crossing' : ''), tabindex: '0',
+        'aria-label': entities.get(edge.from).label + ' to ' + entities.get(edge.to).label + ': ' + (edge.label || '')});
+      const d = 'M ' + points[0].join(' ') + ' C ' + points.slice(1).map(p => p.join(' ')).join(' ');
+      vector('path', el, {d, 'marker-end': 'url(#arrow)'});
+      const x = (points[0][0] + 3 * points[1][0] + 3 * points[2][0] + points[3][0]) / 8;
+      const y = (points[0][1] + 3 * points[1][1] + 3 * points[2][1] + points[3][1]) / 8;
+      vector('text', el, {x, y: y - 8, 'text-anchor': 'middle'}, short(edge.label || '', 40));
+      vector('title', el, {}, (edge.label || '') + (crosses(edge) ? ' (crosses boundary)' : ''));
+      el.addEventListener('click', () => edgePanel(edge));
+      el.addEventListener('keydown', event => { if (event.key === 'Enter') edgePanel(edge); });
+      edgeElements.set(edge.id, el);
+    });
+  }
+  function drawNodes() {
+    data.nodes.forEach(node => {
+      const b = box(node.id), el = vector('g', scene, {class: 'node ' + node.kind, tabindex: '0', role: 'button',
+        'aria-label': node.label + ', ' + node.kind, 'aria-pressed': 'false'});
+      vector('rect', el, {x: b.x, y: b.y, width: b.width, height: b.height, rx: 7});
+      vector('title', el, {}, node.label);
+      const limit = Math.max(8, Math.floor((b.width - 24) / 7));
+      vector('text', el, {x: b.x + 12, y: b.y + 20, class: 'kind'}, node.kind.toUpperCase());
+      vector('text', el, {x: b.x + 12, y: b.y + 43}, short(node.label, limit));
+      vector('text', el, {x: b.x + 12, y: b.y + 65, class: 'technology'}, short(node.technology || '', limit));
+      el.addEventListener('click', event => selectEvent(node.id, event));
+      el.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectEvent(node.id, event); }
+      });
+      el.addEventListener('focus', () => center(node.id));
+      nodeElements.set(node.id, el);
+    });
+  }
+  function highlight(result) {
+    const visibleGroups = new Set();
+    if (result) result.nodes.forEach(id => chain(id).forEach(g => visibleGroups.add(g)));
+    nodeElements.forEach((el, id) => el.classList.toggle('faded', !!result && !result.nodes.has(id)));
+    groupElements.forEach((el, id) => el.classList.toggle('faded', !!result && !visibleGroups.has(id) && !result.nodes.has(id)));
+    edgeElements.forEach((el, id) => {
+      el.classList.toggle('faded', !!result && !result.edges.has(id));
+      el.classList.toggle('highlight', !!result && result.edges.has(id));
+    });
+  }
+  function button(label, parent, action, primary) {
+    const el = element('button', label, parent, {type: 'button'});
+    if (primary) el.classList.add('primary');
+    el.addEventListener('click', action);
+    return el;
+  }
+  function sources(item) {
+    element('h3', 'Sources', panel);
+    if (!data.repo.commit) { element('p', 'No source links: no local clone', panel); return; }
+    if (!(item.sources || []).length) { element('p', 'No source references', panel); return; }
+    const list = element('ul', null, panel);
+    (item.sources || []).forEach(source => {
+      const text = source.path + (source.line ? ':' + source.line : '') + ' @ ' + data.repo.commit.slice(0, 7);
+      const li = element('li', null, list);
+      let url = null;
+      if (data.repo.web_url && data.repo.web_url.startsWith('https:')) {
+        const host = new URL(data.repo.web_url).hostname;
+        const form = host === 'github.com' ? '/blob/' : host === 'gitlab.com' ? '/-/blob/' : null;
+        if (form) url = data.repo.web_url + form + encodeURIComponent(data.repo.commit) + '/' +
+          source.path.split('/').map(segment => encodeURIComponent(segment)).join('/') + (source.line ? '#L' + source.line : '');
+      }
+      if (url && url.startsWith('https:')) {
+        element('a', text, li, {href: url, target: '_blank', rel: 'noopener noreferrer'});
+      } else element('span', text, li);
+    });
+  }
+  function emptyPanel() {
+    while (panel.firstChild) panel.removeChild(panel.firstChild);
+  }
+  function details(item) {
+    element('h2', item.label || 'Relation', panel);
+    if (item.kind) element('p', item.kind, panel, {class: 'muted'});
+    if (item.technology) element('p', item.technology, panel);
+    if (item.description) element('p', item.description, panel);
+    (item.tags || []).forEach(tag => element('span', tag, panel, {class: 'tag'}));
+    sources(item);
+  }
+  function relationList(id, reverse) {
+    element('h3', reverse ? 'Incoming relations' : 'Outgoing relations', panel);
+    const list = element('ul', null, panel);
+    const members = new Set(graph.members(id));
+    let count = 0;
+    data.edges.forEach(edge => {
+      const here = reverse ? edge.to : edge.from, there = reverse ? edge.from : edge.to;
+      if (!graph.members(here).some(member => members.has(member))) return;
+      count++;
+      const layer = groups.has(here) || groups.has(there);
+      const label = entities.get(there).label + ': ' + (edge.label || 'relation') +
+        (layer ? ' (layer-level)' : '') + (crosses(edge) ? ' (crosses boundary)' : '');
+      const li = element('li', null, list);
+      button(label, li, () => { select(there); center(there); }).classList.add('relation');
+    });
+    if (!count) element('li', 'None', list);
+  }
+  function select(id) {
+    selected = id;
+    highlight(null);
+    nodeElements.forEach((el, key) => {
+      el.classList.toggle('selected', key === id);
+      el.setAttribute('aria-pressed', String(key === id));
+    });
+    emptyPanel();
+    details(entities.get(id));
+    const ancestry = chain(id).map(g => groups.get(g).label).join(' / ');
+    if (ancestry) { element('h3', 'Group chain', panel); element('p', ancestry, panel); }
+    element('h3', 'Explore', panel);
+    button('Upstream (against arrows)', panel, () => runTrace(true));
+    button('Downstream (follows arrows)', panel, () => runTrace(false));
+    button('Path to', panel, () => { pathFrom = id; status.textContent = 'Select a destination node'; }, true);
+    relationList(id, true);
+    relationList(id, false);
+    status.textContent = entities.get(id).label;
+  }
+  function edgePanel(edge) {
+    emptyPanel();
+    details(edge);
+    if (crosses(edge)) element('p', 'Crosses boundary: review this trust-zone transition for STRIDE threats.', panel);
+    if (groups.has(edge.from) || groups.has(edge.to)) element('p', 'Layer-level relation', panel);
+    button('From: ' + entities.get(edge.from).label, panel, () => select(edge.from));
+    button('To: ' + entities.get(edge.to).label, panel, () => select(edge.to));
+  }
+  function runTrace(reverse) {
+    if (!selected) return;
+    pathFrom = null;
+    highlight(trace(graph, selected, reverse));
+    status.textContent = reverse ? 'Upstream (against arrows)' : 'Downstream (follows arrows)';
+  }
+  function clear() {
+    selected = null; pathFrom = null;
+    nodeElements.forEach(el => { el.classList.remove('selected'); el.setAttribute('aria-pressed', 'false'); });
+    highlight(null);
+    emptyPanel();
+    element('h2', 'Explore the diagram', panel);
+    element('p', 'Select a node to see its sources and relations.', panel);
+    element('p', 'Shift-click a second node to highlight paths between them.', panel, {class: 'muted'});
+    status.textContent = '';
+  }
+  function applyCamera() { svg.setAttribute('viewBox', [camera.x, camera.y, camera.width, camera.height].join(' ')); }
+  function fit() {
+    const ratio = svg.clientWidth / svg.clientHeight;
+    const width = Math.max(positions.width, positions.height * ratio);
+    const height = width / ratio;
+    camera = {x: (positions.width - width) / 2, y: (positions.height - height) / 2, width, height};
+    applyCamera();
+  }
+  function center(id) {
+    const b = box(id);
+    camera.x = b.x + b.width / 2 - camera.width / 2;
+    camera.y = b.y + b.height / 2 - camera.height / 2;
+    applyCamera();
+  }
+  function zoom(factor, fx, fy) {
+    const width = Math.max(100, Math.min(positions.width * 5, camera.width * factor));
+    const scale = width / camera.width;
+    camera.x += camera.width * fx * (1 - scale);
+    camera.y += camera.height * fy * (1 - scale);
+    camera.width = width; camera.height *= scale;
+    applyCamera();
+  }
+  function navigation() {
+    let drag = null;
+    svg.addEventListener('pointerdown', event => {
+      if (event.button !== 0 || event.target.closest('.node, .edge')) return;
+      drag = {x: event.clientX, y: event.clientY, camera: Object.assign({}, camera)};
+      svg.setPointerCapture(event.pointerId); svg.classList.add('panning');
+    });
+    svg.addEventListener('pointermove', event => {
+      if (!drag) return;
+      camera.x = drag.camera.x - (event.clientX - drag.x) * camera.width / svg.clientWidth;
+      camera.y = drag.camera.y - (event.clientY - drag.y) * camera.height / svg.clientHeight;
+      applyCamera();
+    });
+    const stop = () => { drag = null; svg.classList.remove('panning'); };
+    svg.addEventListener('pointerup', stop); svg.addEventListener('pointercancel', stop);
+    svg.addEventListener('wheel', event => {
+      event.preventDefault();
+      const rect = svg.getBoundingClientRect();
+      zoom(event.deltaY > 0 ? 1.12 : 1 / 1.12, (event.clientX - rect.left) / rect.width, (event.clientY - rect.top) / rect.height);
+    }, {passive: false});
+    document.getElementById('zoom-in').addEventListener('click', () => zoom(1 / 1.25, .5, .5));
+    document.getElementById('zoom-out').addEventListener('click', () => zoom(1.25, .5, .5));
+    document.getElementById('fit').addEventListener('click', fit);
+    window.addEventListener('resize', fit);
+    document.getElementById('find').addEventListener('input', event => {
+      const query = event.target.value.toLowerCase();
+      if (!query) { status.textContent = ''; return; }
+      const match = data.nodes.find(node => node.label.toLowerCase().includes(query));
+      if (match) { select(match.id); center(match.id); } else status.textContent = 'No match';
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape') { clear(); return; }
+      if (event.target.closest('input, textarea, button, a') || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key.toLowerCase() === 'u') runTrace(true);
+      if (event.key.toLowerCase() === 'd') runTrace(false);
+    });
+  }
+  function applyTheme() {
+    if (theme === 'system') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', theme);
+    document.getElementById('theme').textContent = 'Theme: ' + theme;
+  }
+  try {
+    const stored = localStorage.getItem('ay-diagram-theme');
+    if (['system', 'light', 'dark'].includes(stored)) theme = stored;
+  } catch (error) { /* Storage can be unavailable for file URLs. */ }
+  document.getElementById('theme').addEventListener('click', () => {
+    theme = ['system', 'light', 'dark'][(['system', 'light', 'dark'].indexOf(theme) + 1) % 3];
+    applyTheme();
+    try { localStorage.setItem('ay-diagram-theme', theme); } catch (error) { /* Optional persistence. */ }
+  });
+  document.title = data.diagram.title;
+  document.getElementById('title').textContent = data.diagram.title;
+  document.getElementById('meta').textContent = [data.diagram.project, data.diagram.type, data.generated.date,
+    data.repo.commit ? data.repo.commit.slice(0, 7) : 'No pinned commit'].join(' / ');
+  const captions = {dfd: 'Arrows show data flow.', feature: 'Arrows show feature relations.',
+    'c4-context': 'Arrows show system relations.', 'c4-container': 'Arrows show container relations.'};
+  document.getElementById('caption').textContent = captions[data.diagram.type] + ' Downstream follows arrows. Upstream goes against arrows.';
+  document.getElementById('regenerate').textContent = 'Regenerate: ' + data.generated.by + ' ' + data.diagram.project + ' --html --force';
+  if (data.edges.length > 40) svg.classList.add('dense');
+  applyTheme(); drawGroups(); drawEdges(); drawNodes(); clear(); navigation(); fit();
+})();
+</script>
+</body>
+</html>

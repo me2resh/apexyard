@@ -1,3 +1,12 @@
+---
+owner: atlas-apex
+verified_by: atlas-apex
+verified_on: 2026-05-24
+stale_after: 2026-11-20
+sources: []
+version: 1
+status: active
+---
 # Handbook: TypeScript Strict Mode
 
 **Scope:** PRs touching `**/*.{ts,tsx}` files (handbook lives under `language/typescript/` — Rex loads it only when the PR diff includes TypeScript files).

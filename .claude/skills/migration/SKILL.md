@@ -1,6 +1,6 @@
 ---
 name: migration
-description: Create a labelled migration ticket + matching migration AgDR — required by the migration gate.
+description: Create a labelled migration ticket + matching migration AgDR. The migration gate requires it.
 argument-hint: "[<project>]"
 allowed-tools: Bash, Read, Write, AskUserQuestion
 ---
@@ -242,7 +242,8 @@ tracker_lib="$(r="$PWD"; while [ -n "$r" ] && [ "$r" != / ]; do \
 body_file="$(mktemp)"
 printf '%s\n' "$BODY" > "$body_file"
 
-# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] → {"ref","url"}.
+# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] [<milestone>] → {"ref","url"}.
+# The milestone is optional: omit it and the project's tracker.milestone default (if any) applies.
 result="$(tracker_create "<owner/repo>" "[Migration] <type>: <summary>" "$body_file" "migration,<priority>")"
 rc=$?
 rm -f "$body_file"

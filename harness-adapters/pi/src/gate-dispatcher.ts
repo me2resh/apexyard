@@ -62,10 +62,7 @@
  *     `multi_edit` tool in pi — pi's `edit` tool already accepts multiple
  *     `{oldText, newText}` pairs in one call via its `edits` array — and
  *     the edit/write tools key their target path as `path`, not
- *     `file_path` (which is exactly the CLAUDE-CODE tool_input field name
- *     `require-active-ticket.sh` primarily checks, falling back to
- *     `.tool_input.path` — see that hook's line 40 — so this maps
- *     directly with no gap).
+ *     `file_path`. The adapter sends both fields to each file hook.
  */
 
 import { randomUUID } from "node:crypto";
@@ -111,11 +108,43 @@ export function buildPiToolInput(event: ToolCallEvent): Record<string, unknown> 
     case "write": {
       const targetPath = event.input.path;
       if (typeof targetPath !== "string" || targetPath.length === 0) return undefined;
-      return { path: targetPath };
+      return { file_path: targetPath, path: targetPath };
     }
     default:
       return undefined;
   }
+}
+
+/** Build one hook input for each target. */
+export function buildPiToolInputs(event: ToolCallEvent): Record<string, unknown>[] {
+  const input = "input" in event.input ? event.input.input : undefined;
+  if (event.toolName !== "edit" || typeof input !== "string") {
+    const single = buildPiToolInput(event);
+    return single ? [single] : [];
+  }
+  const targets = new Set<string>();
+  const targetPath = event.input.path;
+  if (typeof targetPath === "string" && targetPath.length > 0) targets.add(targetPath);
+  const paths = "paths" in event.input ? event.input.paths : undefined;
+  if (Array.isArray(paths)) {
+    for (const target of paths) {
+      if (typeof target === "string" && target.length > 0) targets.add(target);
+    }
+  }
+  for (const line of input.split(/\r?\n/)) {
+    const header = /^\[(.+)#[0-9a-fA-F]{4}\]$/.exec(line);
+    if (header) targets.add(header[1]);
+    const move = /^MV\s+(?:"([^"\r\n]+)"|'([^'\r\n]+)'|([^\s"']+))\s*$/.exec(line);
+    if (move) targets.add(move[1] ?? move[2] ?? move[3]);
+    if ((!header && line.trimStart().startsWith("[")) ||
+        (!move && /^\s*MV(?:\s|$)/i.test(line))) {
+      throw new Error("apexyard Pi gate adapter: The edit target could not be read.");
+    }
+  }
+  if (targets.size === 0 && input.length > 0) {
+    throw new Error("apexyard Pi gate adapter: The edit target could not be read.");
+  }
+  return [...targets].map((target) => ({ file_path: target, path: target }));
 }
 
 export interface DispatcherOptions {
@@ -125,7 +154,7 @@ export interface DispatcherOptions {
   resolveOpsRoot?: (startCwd: string) => string | undefined;
   /** Path to settings.json relative to the ops root. Defaults to ".claude/settings.json". */
   settingsRelativePath?: string;
-  /** Override tool_input reconstruction (mainly for tests). Defaults to buildPiToolInput. */
+  /** Replace buildPiToolInputs (mainly for tests). The default builds a list; this option returns one input. */
   buildToolInput?: (event: ToolCallEvent) => Record<string, unknown> | undefined;
 }
 
@@ -340,7 +369,6 @@ export function registerGateDispatcher(pi: ExtensionAPI, options: DispatcherOpti
     process.env.APEXYARD_SESSION_ID = ctx.sessionManager.getSessionId() || fallbackId;
   });
   const resolve = options.resolveOpsRoot ?? ((startCwd: string) => resolveOpsRootForPi({ startCwd }));
-  const buildToolInput = options.buildToolInput ?? buildPiToolInput;
   const settingsRelativePath = options.settingsRelativePath ?? ".claude/settings.json";
 
   pi.on("tool_call", async (event, ctx) => {
@@ -349,8 +377,30 @@ export function registerGateDispatcher(pi: ExtensionAPI, options: DispatcherOpti
     const opsRoot = resolve(startCwd);
     if (!opsRoot) return undefined; // no apexyard fork found on this machine/session — nothing to enforce
 
+    // eval can run commands without the bash gates. Always block it inside an ApexYard fork.
+    if (event.toolName === "eval") {
+      return {
+        block: true,
+        reason: "The ApexYard gate adapter blocks the omp eval tool. " +
+          "Code run by eval can do what the bash gates block. " +
+          "Use the bash tool so the gates can check the command.",
+      };
+    }
+
     const gates = options.gates ?? deriveGatesFromOpsRoot(opsRoot, settingsRelativePath);
     if (!options.gates) warnUnsupportedGateWiresOnce(opsRoot, gates);
+
+    let toolInputs: Record<string, unknown>[];
+    try {
+      if (options.buildToolInput) {
+        const toolInput = options.buildToolInput(event);
+        toolInputs = toolInput ? [toolInput] : [];
+      } else {
+        toolInputs = buildPiToolInputs(event);
+      }
+    } catch (err) {
+      return { block: true, reason: err instanceof Error ? err.message : String(err) };
+    }
 
     // Run every gate wired to this tool. First hook to return a block wins
     // — mirrors Claude Code's own PreToolUse semantics, where any matching
@@ -359,11 +409,11 @@ export function registerGateDispatcher(pi: ExtensionAPI, options: DispatcherOpti
     for (const gate of gates) {
       const command = event.toolName === "bash" ? event.input.command : undefined;
       if (!gateMatchesToolCall(gate, toolName, typeof command === "string" ? command : undefined)) continue;
-      const toolInput = buildToolInput(event);
-      if (!toolInput) continue;
       const claudeToolName = claudeToolNameFor(toolName);
-      const result = runGateHook(opsRoot, gate, toolInput, claudeToolName);
-      if (result?.block) return result;
+      for (const toolInput of toolInputs) {
+        const result = runGateHook(opsRoot, gate, toolInput, claudeToolName);
+        if (result?.block) return result;
+      }
     }
     return undefined;
   });

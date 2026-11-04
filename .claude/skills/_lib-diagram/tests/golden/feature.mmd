@@ -1,0 +1,16 @@
+flowchart LR
+    subgraph Jobs["Jobs"]
+        Jobs_empty["(empty)"]
+    end
+    subgraph Models["Models (v2), core: Q#38;A/path #35;1 #91;beta#93; #quot;quoted#quot;"]
+        db["Records"]
+    end
+    subgraph Routes["Routes (v2), core: Q#38;A/path #35;1 #91;beta#93; #quot;quoted#quot;"]
+        api["API"]
+    end
+    subgraph Screens["Screens (v2), core: Q#38;A/path #35;1 #91;beta#93; #quot;quoted#quot;"]
+        actor["Customer (v2), core: Q#38;A/path #35;1 #91;beta#93; #quot;quoted#quot;"]
+    end
+    Jobs -->|"writes"| Models
+    Routes -->|"enqueues"| Jobs
+    Screens -->|"submits (v2), core: Q#38;A/path #35;1 #91;beta#93; #quot;quoted#quot;"| Routes

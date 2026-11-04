@@ -4,8 +4,8 @@
   "planId": "plan-apexyard-harness-golden-path",
   "outcomeId": "o7-offload-result-schema",
   "basedOn": {
-    "planRevision": 3,
-    "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261010T145545Z",
+    "planRevision": 4,
+    "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261028T092303Z",
     "repositories": {}
   },
   "objective": "Make Codex and Cursor build offloads return a structured result. A named wrapper validates that result against a JSON schema. It then verifies the result against the repository before a build is reported as done.",

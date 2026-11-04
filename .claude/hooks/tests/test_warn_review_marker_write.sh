@@ -193,6 +193,7 @@ make_sandbox() {
   )
   mkdir -p "$sb/.claude/hooks" "$sb/.claude/session/reviews"
   cp "$HOOK_SRC" "$sb/.claude/hooks/warn-review-marker-write.sh"
+  cp "$(dirname "$HOOK_SRC")/_lib-fail-closed-json.sh" "$sb/.claude/hooks/_lib-fail-closed-json.sh"
   cp "$LIB_OPS_ROOT" "$sb/.claude/hooks/_lib-ops-root.sh"
   cp "$LIB_BDW" "$sb/.claude/hooks/_lib-detect-bash-write.sh"
   cp "$(dirname "$LIB_BDW")/_lib-awk-fallback.sh" "$sb/.claude/hooks/_lib-awk-fallback.sh"

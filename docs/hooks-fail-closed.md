@@ -41,7 +41,7 @@ kill signal.
 A Bash syntax error in a gate already exits 2, so it blocks too.
 
 The dispatcher sets no timer of its own.
-A gate that hangs is ended by the `timeout` on the dispatcher entry.
+The `timeout` on the dispatcher entry ends a gate that hangs.
 `onFailure` set to `block` then blocks the call.
 Timeout values come from a recorded profile.
 See `docs/perf/hook-fail-closed-profile-2026-10.md`.
@@ -54,7 +54,7 @@ See `docs/perf/hook-fail-closed-profile-2026-10.md`.
 | `block-hook-disabling-config-change.sh` | 10 seconds | 5 x p95 (141 ms) is under the 10 second floor |
 | `limit-reviewer-writes.sh` | 10 seconds | 5 x p95 (80 ms, measured 2026-10-21 on macOS, /bin/bash 3.2, 40 runs) is under the 10 second floor |
 
-The two new rows were measured on 2026-10-19 on macOS, /bin/bash 3.2, 40 runs each.
+The two new rows have measurements from 2026-10-19 on macOS, /bin/bash 3.2, 40 runs each.
 The Bash channel of `block-protected-target-writes.sh` runs inside the
 dispatcher entry and its 75 second timeout. A short command such as
 `git status && ls` measured p95 125 ms.
@@ -63,8 +63,8 @@ dispatcher entry and its 75 second timeout. A short command such as
 
 `block-reviewer-ci-wait.sh` stays fail open.
 It is a cost guard (me2resh/apexyard#1625). It stops a review agent from
-polling CI. If it crashes, the reviewer pays for a CI poll. No safety
-property is lost.
+polling CI. If it crashes, the reviewer pays for a CI poll. The crash loses
+no safety property.
 A crash in it must not block a whole review run.
 So the dispatcher runs it with `run_cost_guard_hook`.
 A crash prints `WARN` and the dispatcher continues.
@@ -73,7 +73,7 @@ The hook's own exit 2 still blocks.
 
 Do not move this hook to `run_fail_closed_hook`.
 
-### What is not changed
+### What stays the same
 
 - No other hook entry sets `onFailure`. Six entries set it in all, including `limit-reviewer-writes.sh` (AgDR-0266).
 - The `exit 0` in the settings wrapper stays.
@@ -147,7 +147,7 @@ The fallback knows only built-in types when the library is missing.
 ```
 
 **Warning:** A name shared with a build agent locks that build agent during an active review.
-`limit-reviewer-writes.sh` also limits the Edit, Write and MultiEdit tools of a listed type at all times, with no active review: that type may write only under `.claude/session/reviews/bodies/` (AgDR-0266).
+`limit-reviewer-writes.sh` also limits the Edit, Write and MultiEdit tools of a listed type at all times, with no active review. That type may write only under `.claude/session/reviews/bodies/` (AgDR-0266).
 
 ## Operator escape hatch
 
@@ -161,7 +161,7 @@ claude --settings '{"disableAllHooks": true}'
 `disableAllHooks` turns off all hooks for the session.
 Claude Code documents that the same setting also turns off a custom status
 line and a custom `@` file suggestion command.
-The flag applies to that launch only. Nothing is written to a settings file.
+The flag applies to that launch only. The launch writes nothing to a settings file.
 
 Rules for the escape hatch:
 
@@ -192,5 +192,5 @@ claude plugin validate --strict .claude-plugin/marketplace.json
 `--strict` treats a warning as an error.
 A marketplace without a `description` fails this check.
 The workflow also validates each plugin that the marketplace lists with a local path.
-A plugin from a GitHub source is validated in its own repository.
+A plugin from a GitHub source gets its validation in its own repository, not in this workflow.
 To change the pinned version, edit `CLAUDE_CODE_VERSION` in the workflow.

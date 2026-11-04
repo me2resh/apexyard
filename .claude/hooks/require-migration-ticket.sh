@@ -84,6 +84,14 @@ _rmt_is_meta_exempt() {
 
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
+case "$TOOL_NAME" in
+  Bash|Edit|Write|MultiEdit|NotebookEdit|'') ;;
+  *)
+    # shellcheck source=/dev/null
+    . "$(dirname "$0")/_lib-fail-closed-json.sh" || exit 2
+    if hook_is_shell_call "$INPUT"; then TOOL_NAME=Bash; fi
+    ;;
+esac
 # NOTE: the harness-supplied `.cwd` is deliberately NOT read. Rounds 3-8 joined
 # relative write targets to it, validated as absolute-and-existing. Security
 # review found the fail-open in round 9: `.cwd` is fixed when the tool call is
@@ -563,7 +571,7 @@ if command -v active_ticket_warn_if_mismatch >/dev/null 2>&1; then
         _rmt_warn_tree=$(cd "$_rmt_warn_cand" 2>/dev/null && pwd) || _rmt_warn_tree=""
         break
       fi
-      _rmt_warn_cand=$(dirname "$_rmt_warn_cand")
+      parent=$(dirname "$_rmt_warn_cand"); [ "$parent" = "$_rmt_warn_cand" ] && break; _rmt_warn_cand="$parent"
     done
   fi
   active_ticket_warn_if_mismatch "$MARKER" "${_rmt_warn_tree:-}" "${OPS_ROOT:-}" || true

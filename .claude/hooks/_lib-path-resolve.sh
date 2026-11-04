@@ -37,7 +37,7 @@
 # ~/link-into-repo → the ops fork) would compare as "outside" the repo
 # under a naive string-prefix check, silently bypassing the gate.
 _resolve_real_path() {
-  local p="$1" dir tail=""
+  local p="$1" dir tail="" parent
   [ -n "$p" ] || return 0
   dir="$p"
   while [ -n "$dir" ] && [ "$dir" != "/" ] && [ ! -e "$dir" ]; do
@@ -46,7 +46,7 @@ _resolve_real_path() {
     else
       tail="$(basename "$dir")/$tail"
     fi
-    dir="$(dirname "$dir")"
+    parent=$(dirname "$dir"); [ "$parent" = "$dir" ] && break; dir="$parent"
   done
   if [ ! -e "$dir" ]; then
     return 0

@@ -4,8 +4,8 @@
   "planId": "plan-apexyard-harness-golden-path",
   "outcomeId": "o3-codex-native-gates",
   "basedOn": {
-    "planRevision": 3,
-    "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261010T145545Z",
+    "planRevision": 4,
+    "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261028T092303Z",
     "repositories": {}
   },
   "objective": "Make the ApexYard gates run inside Codex after a guided one-time trust step per user. Warn when trust is missing or stale. Block Codex apply_patch edits the same way as Claude edits. Remove the hook-trust bypass flag from all guidance. Prove the Edit-matcher hooks give the same decisions when Codex runs them in parallel.",

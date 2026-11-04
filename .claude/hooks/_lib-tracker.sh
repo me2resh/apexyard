@@ -30,8 +30,10 @@
 #                                      plain string, passed through). The `custom` adapter still omits
 #                                      body unless the operator's `normalise_jq` emits one (consumers
 #                                      read it as `.body // empty`).
-#   tracker_create <owner/repo> <title> [<body_file>] [<labels_csv>]
+#   tracker_create <owner/repo> <title> [<body_file>] [<labels_csv>] [<milestone>]
 #                                      creates a ticket via the per-project CLI; emits {ref,url}.
+#                                      The optional milestone falls back to the project's
+#                                      `tracker.milestone` registry key; empty = none (#1830).
 #   tracker_review_submit <owner/repo> <pr> <verdict> [<body_file>]  (#758)
 #                                      submits a PR/MR review to the git host. verdict is one of
 #                                      approve|comment|request-changes (default comment). gh + glab
@@ -700,7 +702,14 @@ tracker_state() {
 # the `create_command` TEMPLATE is reserved for the trusted `custom` kind (same
 # trust class as view_command's custom adapter).
 #
-# Contract: tracker_create <owner/repo> <title> [<body_file>] [<labels_csv>]
+# Contract: tracker_create <owner/repo> <title> [<body_file>] [<labels_csv>] [<milestone>]
+#   milestone (#1830): opt-in. An explicit 5th argument wins; otherwise the
+#     project's `tracker.milestone` registry value is used; with neither, no
+#     milestone flag reaches the CLI and behaviour is unchanged. An empty
+#     argument counts as unset, so one call cannot opt out of the default. gh and glab
+#     pass it as a `--milestone` argument in the create call itself, so an
+#     unknown title makes the CLI fail and nothing is filed. The `custom`
+#     adapter exposes it as $TRACKER_MILESTONE, which a template may ignore.
 #   On success: emits normalised JSON {"ref":..., "url":...} on stdout, exit 0.
 #     - ref is the tracker's issue reference as a STRING (callers must not do
 #       arithmetic on it — a future tracker may return a key like LIN-42). The
@@ -771,11 +780,14 @@ _tracker_check_private_refs() {
 
 # Internal adapter: gh → run `gh issue create` with safe arg passing.
 _tracker_create_gh() {
-  local repo="$1" title="$2" body_file="$3" labels="$4"
+  local repo="$1" title="$2" body_file="$3" labels="$4" milestone="${5:-}"
   local -a args
   args=(issue create --repo "$repo" --title "$title")
   if [ -n "$body_file" ] && [ -f "$body_file" ]; then
     args+=(--body-file "$body_file")
+  fi
+  if [ -n "$milestone" ]; then
+    args+=(--milestone "$milestone")
   fi
   if [ -n "$labels" ]; then
     local l
@@ -794,11 +806,14 @@ _tracker_create_gh() {
 # as a single quoted arg (injection-safe — not re-evaluated). Labels are a
 # single comma-separated --label value. --yes skips the interactive prompt.
 _tracker_create_glab() {
-  local repo="$1" title="$2" body_file="$3" labels="$4"
+  local repo="$1" title="$2" body_file="$3" labels="$4" milestone="${5:-}"
   local -a args
   args=(issue create -R "$repo" --title "$title")
   if [ -n "$body_file" ] && [ -f "$body_file" ]; then
     args+=(--description "$(cat "$body_file")")
+  fi
+  if [ -n "$milestone" ]; then
+    args+=(--milestone "$milestone")
   fi
   if [ -n "$labels" ]; then
     args+=(--label "$labels")
@@ -832,7 +847,8 @@ _tracker_create_template() {
 # it is scoped to the trusted, operator-authored `custom` template. Only the
 # {owner_repo} placeholder — a safe slug — is substituted into the command
 # string. The arbitrary values (title / body file / labels) are exposed as
-# ENVIRONMENT VARIABLES ($TRACKER_TITLE / $TRACKER_BODY_FILE / $TRACKER_LABELS)
+# ENVIRONMENT VARIABLES ($TRACKER_TITLE / $TRACKER_BODY_FILE / $TRACKER_LABELS /
+# $TRACKER_MILESTONE, the last empty when unset)
 # that the operator references with double-quoted expansions — so they are
 # quoted VALUES at eval time, never re-tokenised as command syntax. A title full
 # of `; rm -rf …` is inert. The custom command is expected to emit the issue URL
@@ -843,7 +859,7 @@ _tracker_create_template() {
 # config authored by the maintainer), not agent/user-supplied free text. Only
 # the arbitrary, untrusted values (title/body/labels) go via env.
 _tracker_create_custom() {
-  local repo="$1" title="$2" body_file="$3" labels="$4"
+  local repo="$1" title="$2" body_file="$3" labels="$4" milestone="${5:-}"
   local tpl
   tpl=$(_tracker_create_template "$repo")
   if [ -z "$tpl" ]; then
@@ -852,12 +868,12 @@ _tracker_create_custom() {
   local cmd="$tpl"
   cmd="${cmd//\{owner_repo\}/$repo}"
   TRACKER_REPO="$repo" TRACKER_TITLE="$title" TRACKER_BODY_FILE="$body_file" TRACKER_LABELS="$labels" \
-    eval "$cmd"
+    TRACKER_MILESTONE="$milestone" eval "$cmd"
 }
 
-# Public: tracker_create <owner/repo> <title> [<body_file>] [<labels_csv>]
+# Public: tracker_create <owner/repo> <title> [<body_file>] [<labels_csv>] [<milestone>]
 tracker_create() {
-  local repo="$1" title="$2" body_file="${3:-}" labels="${4:-}"
+  local repo="$1" title="$2" body_file="${3:-}" labels="${4:-}" milestone="${5:-}"
   if [ -z "$repo" ] || [ -z "$title" ]; then
     return 1
   fi
@@ -882,12 +898,22 @@ tracker_create() {
 
   _tracker_check_private_refs "$repo" "$title" "$body_file" || return $?
 
+  # Opt-in milestone (#1830): an explicit argument wins, else the project's
+  # `tracker.milestone` registry key. With neither, it stays empty and no
+  # adapter adds a milestone flag.
+  if [ -z "$milestone" ]; then
+    milestone=$(_tracker_project_value "$repo" milestone 2>/dev/null) || milestone=""
+    # First line only: the python reader can return a multi-line value that
+    # the yq reader would have cut.
+    milestone=${milestone%%$'\n'*}
+  fi
+
   local raw rc
   case "$kind" in
-    gh)     raw=$(_tracker_create_gh     "$repo" "$title" "$body_file" "$labels"); rc=$? ;;
-    glab)   raw=$(_tracker_create_glab   "$repo" "$title" "$body_file" "$labels"); rc=$? ;;
-    custom) raw=$(_tracker_create_custom "$repo" "$title" "$body_file" "$labels"); rc=$? ;;
-    *)      raw=$(_tracker_create_gh     "$repo" "$title" "$body_file" "$labels"); rc=$? ;;  # best-effort default
+    gh)     raw=$(_tracker_create_gh     "$repo" "$title" "$body_file" "$labels" "$milestone"); rc=$? ;;
+    glab)   raw=$(_tracker_create_glab   "$repo" "$title" "$body_file" "$labels" "$milestone"); rc=$? ;;
+    custom) raw=$(_tracker_create_custom "$repo" "$title" "$body_file" "$labels" "$milestone"); rc=$? ;;
+    *)      raw=$(_tracker_create_gh     "$repo" "$title" "$body_file" "$labels" "$milestone"); rc=$? ;;  # best-effort default
   esac
   if [ $rc -ne 0 ] || [ -z "$raw" ]; then
     return 1

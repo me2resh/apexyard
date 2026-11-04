@@ -1,6 +1,6 @@
 ---
 name: challenge
-description: Invoke The Contrarian (Naqid) to steelman-then-challenge an idea, feature, decision, or plan — surfaces assumptions, failure modes, and alternatives. Advisory only; never blocks a gate.
+description: Invoke The Contrarian (Naqid) to steelman-then-challenge an idea, feature, decision, or plan. Surfaces assumptions, failure modes, and alternatives. Advisory only; never blocks a gate.
 argument-hint: "<idea | #N | path/to/doc | 'the plan'>"
 ---
 

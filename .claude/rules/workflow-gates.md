@@ -39,22 +39,22 @@ Do not start coding until **all** of these exist in your ticket tracker:
 
 ### Bootstrap-skill exemption
 
-The pre-build gate is enforced mechanically by `require-active-ticket.sh`, which fires on `Edit`, `Write`, `MultiEdit`, **and** `Bash` (the Bash matcher uses `_lib-detect-bash-write.sh` to detect `>` redirection, `tee`, `sed -i`, `python -c '…write…'`, `node -e '…writeFile…'`, etc. — closing the bypass surface from me2resh/apexyard#151).
+`require-active-ticket.sh` mechanically enforces the pre-build gate. It fires on `Edit`, `Write`, `MultiEdit`, **and** `Bash`. The Bash matcher uses `_lib-detect-bash-write.sh` to detect `>` redirection, `tee`, `sed -i`, `python -c '…write…'`, `node -e '…writeFile…'`, among other writes. This closes the bypass surface from me2resh/apexyard#151.
 
-A small set of **bootstrap-class skills** runs before any portfolio is configured, before any project is registered, and therefore before any tracker tickets can exist. For these, the gate is exempt:
+A small set of **bootstrap-class skills** runs before any portfolio configuration, before any project registration, and therefore before any tracker tickets can exist. For these, the gate is exempt:
 
-- `/setup` — first-run framework bootstrap on a fresh fork
-- `/handover` — adopting an external project (registry / `projects/<name>/` writes happen before the project's own tracker is wired up)
-- `/update` — upstream sync (touches framework files; the only "ticket" for this work is the sync itself)
-- `/split-portfolio` — destructive migration to split-portfolio mode (rewriting fork-root files; existing private-name tickets being redacted *as the work proceeds*)
+- `/setup`: first-run framework bootstrap on a fresh fork
+- `/handover`: adopting an external project (registry / `projects/<name>/` writes happen before the project's own tracker has working connections)
+- `/update`: upstream sync (touches framework files; the only "ticket" for this work is the sync itself)
+- `/split-portfolio`: destructive migration to split-portfolio mode (rewriting fork-root files; redaction of existing private-name tickets *as the work proceeds*)
 
 The list lives at `.claude/project-config.defaults.json` → `ticket.bootstrap_skills`. Adopters replace this array via `.claude/project-config.json` if they have custom bootstrap skills. Config objects merge recursively, while arrays replace the inherited array wholesale, so retain the shipped entries explicitly when extending the list.
 
-**Mechanism:** each bootstrap skill writes its name to the session path from `active_bootstrap_marker_path` on entry and removes the file on completion. The hook reads the marker and exempts skills on the configured list. The `clear-bootstrap-marker.sh` SessionStart hook clears the current session's marker so a crashed / killed skill can't leave the exemption open forever.
+**Mechanism:** each bootstrap skill writes its name to the session path from `active_bootstrap_marker_path` on entry and removes the file on completion. The hook reads the marker and exempts skills on the configured list. The `clear-bootstrap-marker.sh` SessionStart hook clears the current session's marker so a crashed / killed skill cannot leave the exemption open forever.
 
 ### Out-of-repo exemption (apexyard#883)
 
-The pre-build gate exists to protect **governed content** — the ops fork itself and every registered `workspace/<project>` clone. A write target entirely outside those trees, and not inside any git repository at all (a home dotfile like `~/.zshrc`, `/etc`-style machine config, `/tmp` scratch files), is outside the gate's jurisdiction: there is nothing here for a ticket to track, and on a fork with GitHub Issues disabled there would otherwise be no legitimate way to satisfy the gate for routine machine setup.
+The pre-build gate exists to protect **governed content**: the ops fork itself and every registered `workspace/<project>` clone. A write target entirely outside those trees, and not inside any git repository at all, is outside the gate's jurisdiction. Examples include a home dotfile like `~/.zshrc`, `/etc`-style machine config, and `/tmp` scratch files. There is nothing here for a ticket to track. Also, on a fork with GitHub Issues disabled, there would otherwise be no legitimate way to satisfy the gate for routine machine setup.
 
 `require-active-ticket.sh` resolves the write target's real (symlink-free) path and exempts it only when **all three** of the following hold:
 
@@ -62,7 +62,7 @@ The pre-build gate exists to protect **governed content** — the ops fork itsel
 - outside every registered `workspace/<project>`
 - not inside any git repository at all
 
-This is deliberately narrower than "not inside a *registered* repo" — being inside some unrelated, unregistered git repository does **not** exempt a write; only a target with no git repository anywhere in its ancestry qualifies. Any symlink in the target path prevents the exemption, including a dangling link at the final component. An unresolvable or ambiguous target (an unextractable Bash write-target, in particular) is never exempted here — it falls straight through to the ticket gate, unchanged. See `require-active-ticket.sh`'s "Out-of-governance exemption" comment block for the full fail-closed reasoning, and `.claude/hooks/tests/test_require_active_ticket_bash.sh` cases 31–38 for the test coverage.
+This is deliberately narrower than "not inside a *registered* repo". Being inside some unrelated, unregistered git repository does **not** exempt a write: only a target with no git repository anywhere in its ancestry qualifies. Any symlink in the target path prevents the exemption, including a dangling link at the final component. An unresolvable or ambiguous target (an unextractable Bash write-target, in particular) never qualifies for exemption here. It falls straight through to the ticket gate, unchanged. See `require-active-ticket.sh`'s "Out-of-governance exemption" comment block for the full fail-closed reasoning, and `.claude/hooks/tests/test_require_active_ticket_bash.sh` cases 31–38 for the test coverage.
 
 **Reviewer scratch clone exception (#1402):** A sanctioned reviewer can write inside a standalone git clone under a temporary directory. The clone must have an origin remote. The hook requires this session's active-reviewer marker for Rex, Security, or Architecture review. It checks every write target against the ops fork and managed workspace before allowing the write. Any symlink in the target path prevents the exemption, including a dangling link or a link within the clone. Linked `git worktree add` checkouts and unresolved targets remain gated. See [AgDR-0188](../../docs/agdr/AgDR-0188-reviewer-scratch-clone-ticket-gate.md).
 
@@ -70,7 +70,7 @@ This is deliberately narrower than "not inside a *registered* repo" — being in
 
 See AgDR-0011 + me2resh/apexyard#150 for the full design rationale.
 
-## Migration Gate (3a) — dedicated ticket + AgDR
+## Migration Gate (3a): dedicated ticket + AgDR
 
 Any edit to a file that matches the migration-path patterns (configurable via `.claude/project-config.json` → `migration_paths`) requires:
 
@@ -79,53 +79,53 @@ Any edit to a file that matches the migration-path patterns (configurable via `.
 
 Default migration paths:
 
-- `**/migrate-*.{ts,js,py,sql}` — one-off migration scripts
-- `**/migrations/**` — any file under a migrations/ directory
-- `prisma/schema.prisma`, `prisma/migrations/**` — Prisma
-- `src/migrations/*.{ts,js}` — TypeORM
-- `alembic/versions/*.py` — Alembic
-- `db/migrate/*.rb` — Rails
+- `**/migrate-*.{ts,js,py,sql}`: one-off migration scripts
+- `**/migrations/**`: any file under a migrations/ directory
+- `prisma/schema.prisma`, `prisma/migrations/**`: Prisma
+- `src/migrations/*.{ts,js}`: TypeORM
+- `alembic/versions/*.py`: Alembic
+- `db/migrate/*.rb`: Rails
 
-**Enforcement**: `require-migration-ticket.sh` fires on PreToolUse for Edit / Write / MultiEdit. Runs BEFORE `require-active-ticket.sh` in the hook chain — if the path isn't a migration path, it's a no-op and the normal active-ticket check applies.
+**Enforcement**: `require-migration-ticket.sh` fires on PreToolUse for Edit / Write / MultiEdit. Runs BEFORE `require-active-ticket.sh` in the hook chain: if the path is not a migration path, it is a no-op and the normal active-ticket check applies.
 
-**How to satisfy**: run `/migration` — it asks for migration type, affected tables, rollback plan, downtime estimate, cross-service consumers, data volume, testing plan, and observability, then creates the labelled issue AND writes the AgDR in one flow.
+**How to satisfy**: run `/migration`. It asks for migration type, affected tables, rollback plan, downtime estimate, cross-service consumers, data volume, testing plan, and observability. It then creates the labelled issue AND writes the AgDR in one flow.
 
-## Architecture Review Gate (3b) — Solution Architect sign-off before Build
+## Architecture Review Gate (3b): Solution Architect sign-off before Build
 
-In the ApexYard SDLC a technical design lands as a **committed document** — a technical design doc, a migration AgDR, or a feature spec / PRD — that is merged *before* the team builds against it. The Tech Lead (Hisham) **authors** that design; the Solution Architect (Tariq) **independently reviews** it. The two roles are deliberately split — an author reviewing their own design is the gap this gate closes. Tariq is "Rex for the non-code stuff".
+In the ApexYard SDLC a technical design lands as a **committed document**. This document can be a technical design doc, a migration AgDR, or a feature spec / PRD. Its merge occurs *before* the team builds against it. The Tech Lead (Hisham) **authors** that design; the Solution Architect (Tariq) **independently reviews** it. The two roles are deliberately split: an author reviewing their own design is the gap this gate closes. Tariq is "Rex for the non-code design artifacts".
 
 Any merge of a PR whose diff carries a design artifact requires:
 
-1. A Solution Architect sign-off marker at `.claude/session/reviews/<owner>__<repo>__<pr>-architecture.approved` (repo-qualified, AgDR-0060 — the bare-number form is read by no gate)
+1. A Solution Architect sign-off marker at `.claude/session/reviews/<owner>__<repo>__<pr>-architecture.approved` (repo-qualified, AgDR-0060: no gate reads the bare-number form)
 2. Whose SHA matches the PR's HEAD on GitHub
 
 Default design-artifact patterns (configurable via `.claude/project-config.json` → `design_paths` to REPLACE, `design_paths_exclude` to additively carve out):
 
-- `*technical-design*.md`, `*tech-design*.md` — technical design docs
-- `**/designs/**` — design docs
-- `**/prds/**`, `*prd*.md`, `*feature-spec*.md` — product requirements / feature specs
-- `docs/agdr/*migration*.md` — migration AgDRs
+- `*technical-design*.md`, `*tech-design*.md`: technical design docs
+- `**/designs/**`: design docs
+- `**/prds/**`, `*prd*.md`, `*feature-spec*.md`: product requirements / feature specs
+- `docs/agdr/*migration*.md`: migration AgDRs
 
-**Enforcement**: `require-architecture-review.sh` fires on PreToolUse for both merge shapes (`gh pr merge` and `gh api .../pulls/<N>/merge`). If the PR carries no design artifact, it's a no-op and the merge proceeds.
+**Enforcement**: `require-architecture-review.sh` fires on PreToolUse for both merge shapes (`gh pr merge` and `gh api .../pulls/<N>/merge`). If the PR carries no design artifact, it is a no-op and the merge proceeds.
 
-**How to satisfy**: run `/design-review <pr>` — the Solution Architect (Tariq) reviews the design against the architecture review lens (quality attributes / NFRs, design patterns, technical debt, AgDR linkage, risk, trade-off analysis, requirements traceability, migration safety) plus adopter handbooks, and writes the marker on an APPROVED verdict. A human architect can instead record it with `/approve-architecture <pr>`. New commits after sign-off invalidate the marker (SHA mismatch) — re-review.
+**How to satisfy**: run `/design-review <pr>`. The Solution Architect (Tariq) reviews the design against the architecture review lens plus adopter handbooks. The lens covers quality attributes / NFRs, design patterns, technical debt, AgDR linkage, risk, trade-off analysis, requirements traceability, and migration safety. Tariq writes the marker on an APPROVED verdict. A human architect can instead record it with `/approve-architecture <pr>`. New commits after sign-off invalidate the marker (SHA mismatch): re-review.
 
-## Spike work — exempt from a defined subset of these gates
+## Spike work: exempt from a defined subset of these gates
 
-Spike tickets (prefix `[Spike]`, label `spike`) are hypothesis-driven, time-boxed, throw-away exploration. The full production SDLC is the wrong bar — author avoidance is the failure mode. The exemption set below is **surgical, not blanket**:
+Spike tickets (prefix `[Spike]`, label `spike`) are hypothesis-driven, time-boxed, throw-away exploration. The full production SDLC is the wrong bar: author avoidance is the failure mode. The exemption set below is **surgical, not blanket**:
 
-> **Prototype work shares this exemption.** Prototype tickets (prefix `[Prototype]`, label `prototype`, branch `prototype/...`, PR type `prototype(...)`) are the throw-away **UX/demo** sibling of spikes — same disposable lifecycle, different question ("what should it look/feel like?" vs "will it work?"). The AgDR + coverage exemptions in the table below apply to prototype work identically; substitute `/prototype` for `/spike` and `/prototype-close` for `/spike-close`. The **walking skeleton** (`/walking-skeleton`) is the deliberate opposite — a **kept** thin end-to-end slice held to the FULL SDLC with **no** exemptions. See `.claude/skills/{spike,prototype,walking-skeleton}/SKILL.md`.
+> **Prototype work shares this exemption.** Prototype tickets (prefix `[Prototype]`, label `prototype`, branch `prototype/...`, PR type `prototype(...)`) are the throw-away **UX/demo** sibling of spikes. They have the same disposable lifecycle, but a different question ("what should it look/feel like?" vs "will it work?"). The AgDR + coverage exemptions in the table below apply to prototype work identically; substitute `/prototype` for `/spike` and `/prototype-close` for `/spike-close`. The **walking skeleton** (`/walking-skeleton`) is the deliberate opposite: a **kept** thin end-to-end slice held to the FULL SDLC with **no** exemptions. See `.claude/skills/{spike,prototype,walking-skeleton}/SKILL.md`.
 
 | Gate | Production work | Spike work |
 |------|----------------|------------|
-| Pre-Build (parent epic, story tickets, ACs, design review) | Required | Skipped — the spike ticket IS the unit |
-| AgDR for technical decisions (`require-agdr-for-arch-pr.sh`, `require-agdr-for-arch-changes.sh`) | Required | Skipped — ship a memo on `/spike-close --discard` instead |
-| Test coverage > 80% | Required | Skipped — coverage is irrelevant for throw-away code |
-| Code Reviewer agent (Rex) | Required on every PR | **Required** — even throw-away code gets a sanity check |
-| Security Auditor (auth/crypto/secrets diff) | Required | **Required** — security gates fire regardless of intent |
-| Glossary in PR body | Required | **Required** — spike PRs explain WHAT WAS LEARNED, which is the artefact |
+| Pre-Build (parent epic, story tickets, ACs, design review) | Required | Skipped: the spike ticket IS the unit |
+| AgDR for technical decisions (`require-agdr-for-arch-pr.sh`, `require-agdr-for-arch-changes.sh`) | Required | Skipped: ship a memo on `/spike-close --discard` instead |
+| Test coverage > 80% | Required | Skipped: coverage is irrelevant for throw-away code |
+| Code Reviewer agent (Rex) | Required on every PR | **Required**: even throw-away code gets a sanity check |
+| Security Auditor (auth/crypto/secrets diff) | Required | **Required**: security gates fire regardless of intent |
+| Glossary in PR body | Required | **Required**: spike PRs explain WHAT THE SPIKE TAUGHT, which is the artefact |
 | QA Engineer verification | Required (AC verification) | **Required** (Hypothesis verification: did we answer the question?) |
-| Disposition decision before close | N/A | **Required** — operator must declare PROMOTE or DISCARD via `/spike-close` |
+| Disposition decision before close | N/A | **Required**: operator must declare PROMOTE or DISCARD via `/spike-close` |
 
 **Detection.** AgDR-required hooks detect a spike (or prototype) PR via:
 
@@ -148,10 +148,10 @@ In Progress → In Review → QA → Done
 
 ### What counts as QA evidence
 
-If the ticket touches a rendered surface, the QA record must state, per acceptance criterion, whether it was verified in a browser. The not-verified list is mandatory: a QA agent that could not boot the surface must name the affected criteria rather than stay silent. A database query, a source read, or a green test suite is not evidence that a rendered criterion is met. **Reject a PASS whose evidence does not match the criterion.**
+If the ticket touches a rendered surface, the QA record must state, per acceptance criterion, whether someone verified it in a browser. The not-verified list is mandatory: a QA agent that could not boot the surface must name the affected criteria rather than stay silent. A database query, a source read, or a green test suite is not evidence that a rendered criterion is met. **Reject a PASS whose evidence does not match the criterion.**
 
-A ticket with no rendered surface needs no browser evidence. Full requirement and sign-off shape: `roles/engineering/qa-engineer.md` § "Browser Evidence (rendered surfaces only)"; the design-gate equivalent is `roles/design/ui-designer.md` § "Browser evidence is a named deliverable". No hook enforces this — a `PreToolUse` hook cannot see whether a sub-agent opened a browser, so the orchestrator must reject a report that skips the breakdown.
+A ticket with no rendered surface needs no browser evidence. Full requirement and sign-off shape: `roles/engineering/qa-engineer.md` § "Browser Evidence (rendered surfaces only)"; the design-gate equivalent is `roles/design/ui-designer.md` § "Browser evidence is a named deliverable". No hook enforces this. A `PreToolUse` hook cannot see whether a sub-agent opened a browser, so the orchestrator must reject a report that skips the breakdown.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

@@ -1,6 +1,6 @@
 ---
 name: prototype-close
-description: Close a prototype via the disposition gate — `--promote` files a [Feature] follow-up, `--discard` writes a memo. Mirror of /spike-close for throwaway UX/demo prototypes.
+description: Close a prototype via the disposition gate. `--promote` files a [Feature] follow-up. `--discard` writes a memo. Mirror of /spike-close for throwaway UX/demo prototypes.
 argument-hint: "--promote | --discard [<prototype-ticket-number>]"
 allowed-tools: Bash, Read, Write
 ---
@@ -147,7 +147,8 @@ cat > "$body_file" <<'BODY'
 {body}
 BODY
 
-# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] → {"ref","url"}.
+# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] [<milestone>] → {"ref","url"}.
+# The milestone is optional: omit it and the project's tracker.milestone default (if any) applies.
 result="$(tracker_create "{owner/repo}" "[Feature] {title}" "$body_file" "enhancement")"
 rc=$?
 rm -f "$body_file"

@@ -1,6 +1,6 @@
 ---
 name: tickets-batch
-description: File 5–20 structured tickets in one flow — shared-context Qs once, 3-Q micro-interview per ticket, then per-ticket `tracker_create` (gh/glab/custom).
+description: File 5–20 structured tickets in one flow. Covers shared-context Qs once, 3-Q micro-interview per ticket, then per-ticket `tracker_create` (gh/glab/custom).
 argument-hint: "<optional bulk description>"
 allowed-tools: Bash, Read, Write, AskUserQuestion
 ---
@@ -256,7 +256,8 @@ body_file="$(mktemp)"
 cat > "$body_file" <<'BODY'
 {formatted body}
 BODY
-# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] → {"ref","url"}.
+# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] [<milestone>] → {"ref","url"}.
+# The milestone is optional: omit it and the project's tracker.milestone default (if any) applies.
 result="$(tracker_create "{owner/repo}" "[{Type}] {title}" "$body_file" "{type-label},{priority},{area-labels}")"
 rc=$?
 rm -f "$body_file"

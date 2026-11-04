@@ -13,7 +13,7 @@ receives. Add an `adapters` list to a project entry, for example:
 ```
 
 Run `bash bin/manage-portfolio-adapters.sh --install` after onboarding or an
-ApexYard update. The command invokes the existing generators and installers;
+ApexYard update. The command invokes the existing generators and installers.
 `.claude/hooks/*.sh` remains the only enforcement source.
 
 In split-portfolio mode, installation also creates a `.apexyard-fork` anchor
@@ -25,13 +25,13 @@ those relative links.
 
 Use `--check` for a read-only drift report. It reports missing workspaces,
 missing adapter files, unsupported declarations, and stale Codex output with a
-non-zero exit status. Cursor `--check` looks for the session-pin overlay. A
-leftover full generated adapter (`APEXYARD_CURSOR_HOOK_GLOB`) is reported as
+non-zero exit status. Cursor `--check` looks for the session-pin overlay. The
+check reports a leftover full generated adapter (`APEXYARD_CURSOR_HOOK_GLOB`) as
 stale.
 
 Supported declarations are `claude`, `codex`, `pi`, `opencode`, and `cursor`.
 An explicit `adapters: []` field opts a project out of adapter management.
 
-When `adapters` is omitted, the framework default is all four supported
+When you omit `adapters`, the framework default is all four supported
 third-party adapters. Set `adapters: []` only when a project intentionally
-opts out; use a list to select a smaller set.
+opts out. Use a list to select a smaller set.

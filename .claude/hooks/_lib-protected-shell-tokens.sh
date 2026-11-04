@@ -99,12 +99,19 @@ END {
       if(!subdepth) token(substr(text,sub_start,i-sub_start),"S")
       continue
     }
+    if(c=="\\" && quote=="\"" && (nextc=="`" || nextc=="$")) {word=word nextc;have=1;i++;continue}
     if(c=="$" && nextc=="(" && quote!="\047") {word=word "$(";have=1;subdepth=1;i++;sub_start=i+1;continue}
     if(c=="`" && quote!="\047") {
       start=i+1; j=start
       while(j<=length(text) && substr(text,j,1)!="`") {if(substr(text,j,1)=="\\")j++; j++}
-      if(j>length(text)) exit 2
-      token(substr(text,start,j-start),"S")
+      # Quoted search patterns can contain literal unmatched backticks.
+      # Preserve paired quoted text separately so executable bodies are
+      # still scanned by the caller.
+      if(j>length(text)) {
+        if(quote=="\"") {word=word c;have=1;continue}
+        exit 2
+      }
+      token(substr(text,start,j-start),(quote=="\""?"Q":"S"))
       word=word substr(text,i,j-i+1); have=1; i=j; continue
     }
     if(quote!="") {

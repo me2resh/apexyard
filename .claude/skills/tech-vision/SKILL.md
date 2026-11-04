@@ -1,6 +1,6 @@
 ---
 name: tech-vision
-description: Interactive author for the architecture vision template — target, gap, migration, anti-scope, cadence.
+description: Interactive author for the architecture vision template. Covers target, gap, migration, anti-scope, cadence.
 argument-hint: "[project-slug | . | --framework]"
 allowed-tools: Bash, Read, Grep, Glob, Write, AskUserQuestion
 ---
