@@ -49,11 +49,12 @@
  * pioneered (AgDR-0092), and that parsing logic was 100% identical between
  * the two runtimes; only the Claude-matcher -> runtime-tool-id translation
  * and `buildToolInput` genuinely differ (opencode has a `glob` tool and
- * uses `filePath`; pi has no `glob` tool — its closest analog is `find` —
- * and uses `path`). This module is now a thin translation layer over that
- * shared core: `deriveGatesFromSettings` below calls the core's parser,
+ * passes the edited file as `path` on V2 / `filePath` on V1; pi has no
+ * `glob` tool — its closest analog is `find` — and uses `path`). This
+ * module is now a thin translation layer over that shared core:
+ * `deriveGatesFromSettings` below calls the core's parser,
  * then maps each core wire's raw Claude matcher token onto opencode's own
- * tool vocabulary via `CLAUDE_MATCHER_TO_OPENCODE_TOOL`. See
+ * tool vocabulary via `CLAUDE_MATCHER_TO_OPENCODE_TOOLS`. See
  * `derive-gates-core.ts`'s header comment for the full rationale, and
  * `harness-adapters/pi/src/derive-gates.ts` for the sibling translation
  * layer.
@@ -83,12 +84,6 @@ import {
 export type { RawHookEntry, RawMatcherGroup, RawSettings };
 export { extractCommandGlob, extractHookRelativePath, globToRegExp };
 
-export interface ToolCallInput {
-  tool: string;
-  sessionID: string;
-  callID: string;
-}
-
 export interface ToolCallOutput {
   args: Record<string, unknown> | undefined;
 }
@@ -107,7 +102,7 @@ export interface ToolCallOutput {
  * predicate.
  */
 export interface GateWire {
-  /** opencode tool id (e.g. "bash", "edit", "write") this wire applies to. */
+  /** opencode tool id (e.g. "shell", "edit", "write") this wire applies to. */
   tool: string;
   /** Bash-command glob (from Claude Code's `if: "Bash(<glob>)"`), or null. */
   commandGlob: string | null;
@@ -128,28 +123,43 @@ export interface GateDefinition {
 }
 
 /**
- * Claude Code matcher token -> opencode built-in tool id. Confirmed against
- * opencode's real, installed tool registry (`packages/opencode/src/tool/`):
- * the bash tool's registered id is literally `"bash"` (kept for backwards
- * compatibility even though the source file implementing it is
- * `shell.ts`), and `edit`/`write`/`read`/`grep`/`glob` match their Claude
- * Code matcher names 1:1. `MultiEdit` has no opencode equivalent — opencode's
- * `edit` tool already accepts the same "one file, N find/replace pairs"
- * shape MultiEdit covers, so MultiEdit collapses onto `edit` (the same
- * choice the pi adapter made for the same reason).
+ * Claude Code matcher token -> the opencode built-in tool id(s) that matcher
+ * governs. A LIST per matcher, not a single id, because opencode renamed its
+ * command-execution tool between the two plugin API generations:
+ *
+ *   - V1 (opencode 1.x) registered it as `"bash"` — the id was kept for
+ *     backwards compatibility even though the implementing source file was
+ *     `shell.ts` (verified live against 1.17.16, me2resh/apexyard#844).
+ *   - V2 (opencode 2.x) registers it as `"shell"` — confirmed live against
+ *     opencode 2.1.4: the model-visible tool catalog advertises `shell`, and
+ *     the V2 tools documentation documents it under "Shell".
+ *
+ * Carrying BOTH ids costs nothing and removes a silent fail-open: a gate wire
+ * only fires for a tool id that matches exactly, so shipping the wrong single
+ * id would leave every Bash-wired gate — the merge gate, secrets scan,
+ * ticket-first, red-CI — matching nothing at all, with no error anywhere. Each
+ * session only ever emits one of the two ids, so only one wire per matcher can
+ * ever fire.
+ *
+ * `edit`/`write`/`read`/`grep`/`glob` match their Claude Code matcher names
+ * 1:1 in both generations. `MultiEdit` has no opencode equivalent — opencode's
+ * `edit` tool already accepts the same "one file, N find/replace pairs" shape
+ * MultiEdit covers, so MultiEdit collapses onto `edit` (the same choice the pi
+ * adapter made for the same reason).
  */
-const CLAUDE_MATCHER_TO_OPENCODE_TOOL: Record<string, string> = {
-  Bash: "bash",
-  Edit: "edit",
-  MultiEdit: "edit",
-  Write: "write",
-  Read: "read",
-  Glob: "glob",
-  Grep: "grep",
+const CLAUDE_MATCHER_TO_OPENCODE_TOOLS: Record<string, string[]> = {
+  Bash: ["shell", "bash"],
+  Edit: ["edit"],
+  MultiEdit: ["edit"],
+  Write: ["write"],
+  Read: ["read"],
+  Glob: ["glob"],
+  Grep: ["grep"],
 };
 
 /** Reverse of the above — the `tool_name` field the bash hooks' own `.tool_name` jq lookups expect. */
 const OPENCODE_TOOL_TO_CLAUDE_NAME: Record<string, string> = {
+  shell: "Bash",
   bash: "Bash",
   edit: "Edit",
   write: "Write",
@@ -166,7 +176,7 @@ export function claudeToolNameFor(opencodeTool: string): string {
  * Derives the full gate table from a parsed `.claude/settings.json`, by
  * calling the shared, harness-agnostic core parser
  * (`derive-gates-core.ts`) and translating each wire's raw Claude matcher
- * token into an opencode tool id via `CLAUDE_MATCHER_TO_OPENCODE_TOOL`. A
+ * token into opencode tool ids via `CLAUDE_MATCHER_TO_OPENCODE_TOOLS`. A
  * wire whose matcher has no opencode translation (no such token exists in
  * this framework's own wiring today; a future adopter-added Claude-only
  * matcher would be the only way to hit this) is dropped — and a gate left
@@ -181,9 +191,9 @@ export function deriveGatesFromSettings(settings: RawSettings): GateDefinition[]
   for (const coreGate of coreGates) {
     const wires: GateWire[] = [];
     for (const wire of coreGate.wires) {
-      const tool = CLAUDE_MATCHER_TO_OPENCODE_TOOL[wire.claudeMatcher];
-      if (!tool) continue; // matcher this adapter has no opencode tool for (e.g. a future Claude-only matcher)
-      wires.push({ tool, commandGlob: wire.commandGlob });
+      const tools = CLAUDE_MATCHER_TO_OPENCODE_TOOLS[wire.claudeMatcher];
+      if (!tools) continue; // matcher this adapter has no opencode tool for (e.g. a future Claude-only matcher)
+      for (const tool of tools) wires.push({ tool, commandGlob: wire.commandGlob });
     }
     if (wires.length === 0) continue; // every wire for this gate was for an untranslatable matcher
     translated.push({ name: coreGate.name, hookRelativePath: coreGate.hookRelativePath, wires });
@@ -198,8 +208,8 @@ export function deriveGatesFromDispatcher(source: string): GateDefinition[] {
   const translated: GateDefinition[] = [];
   for (const coreGate of coreGates) {
     const wires = coreGate.wires.flatMap((wire) => {
-      const tool = CLAUDE_MATCHER_TO_OPENCODE_TOOL[wire.claudeMatcher];
-      return tool ? [{ tool, commandGlob: wire.commandGlob }] : [];
+      const tools = CLAUDE_MATCHER_TO_OPENCODE_TOOLS[wire.claudeMatcher];
+      return tools ? tools.map((tool) => ({ tool, commandGlob: wire.commandGlob })) : [];
     });
     if (wires.length > 0) translated.push({ name: coreGate.name, hookRelativePath: coreGate.hookRelativePath, wires });
   }
@@ -230,7 +240,7 @@ export function gateMatchesToolCall(gate: GateDefinition, toolId: string, comman
 
 /**
  * Builds the Claude-Code-shaped `tool_input` object each hook's own `jq`
- * parsing expects, from an opencode `tool.execute.before` event. Returns
+ * parsing expects, from an opencode tool-execution event. Returns
  * `undefined` when the event doesn't carry the field a hook needs — the
  * dispatcher then skips invoking that hook for that event rather than
  * invoking it with a garbage payload (same "skip, don't guess" contract
@@ -238,16 +248,25 @@ export function gateMatchesToolCall(gate: GateDefinition, toolId: string, comman
  *
  * Field names are chosen to match Claude Code's OWN `tool_input` shape
  * directly (`command`, `file_path`) rather than opencode's native field
- * names (`command`, `filePath`) — this is simpler than the pi adapter's
- * approach (which relied on `require-active-ticket.sh`'s existing
- * `.tool_input.file_path // .tool_input.path` fallback because pi's own
- * field is named `path`); since this module constructs the JSON payload
- * itself rather than forwarding a native field name, it can just emit the
- * name the hooks already read as their primary key.
+ * names — this is simpler than the pi adapter's approach (which relied on
+ * `require-active-ticket.sh`'s existing `.tool_input.file_path //
+ * .tool_input.path` fallback because pi's own field is named `path`); since
+ * this module constructs the JSON payload itself rather than forwarding a
+ * native field name, it can just emit the name the hooks already read as
+ * their primary key.
+ *
+ * The NATIVE field names it reads differ by opencode generation: V2 passes
+ * the tool's own arguments as `path` (read/edit/write) and `command`
+ * (`shell`); V1 used `filePath` and `bash`. Both are accepted — see
+ * `CLAUDE_MATCHER_TO_OPENCODE_TOOLS`'s header comment for why the two are
+ * carried side by side rather than version-probed.
  */
 export function buildToolInput(toolId: string, output: ToolCallOutput | undefined): Record<string, unknown> | undefined {
   const args = output?.args ?? {};
   switch (toolId) {
+    // V2 (opencode 2.x) calls this tool `shell`; V1 called it `bash` — see
+    // CLAUDE_MATCHER_TO_OPENCODE_TOOLS's header comment for why both are handled.
+    case "shell":
     case "bash": {
       const command = (args as Record<string, unknown>).command;
       if (typeof command !== "string" || command.length === 0) return undefined;
@@ -255,7 +274,12 @@ export function buildToolInput(toolId: string, output: ToolCallOutput | undefine
     }
     case "edit":
     case "write": {
-      const filePath = (args as Record<string, unknown>).filePath;
+      // V2 renamed the file argument `filePath` -> `path` (the V2 tools
+      // documentation gives `path` for read/edit/write; confirmed live against
+      // opencode 2.1.4). `path` is read first, then V1's `filePath`, so the
+      // same build works against either generation without a version probe.
+      const raw = args as Record<string, unknown>;
+      const filePath = raw.path ?? raw.filePath;
       if (typeof filePath !== "string" || filePath.length === 0) return undefined;
       return { file_path: filePath };
     }
@@ -269,7 +293,7 @@ export function buildToolInput(toolId: string, output: ToolCallOutput | undefine
  * stdin for. Kept as a single source of truth so `findUnsupportedGateWires`
  * below can never drift from `buildToolInput`'s own `switch` cases.
  */
-const SUPPORTED_TOOL_INPUT_TOOLS = new Set(["bash", "edit", "write"]);
+const SUPPORTED_TOOL_INPUT_TOOLS = new Set(["shell", "bash", "edit", "write"]);
 
 /**
  * One `(gate name, tool)` pair this dispatcher cannot build stdin for —
@@ -289,17 +313,18 @@ export interface UnsupportedGateWire {
  * `deriveGatesFromSettings` derives gates for every `PreToolUse` matcher
  * `.claude/settings.json` wires, including `Read|Glob|Grep` (no hook is
  * wired to those matchers today). `buildToolInput`,
- * by contrast, only reconstructs stdin for `bash`/`edit`/`write` — Hakim's
- * #839 finding (ported to this adapter as #840 C2) is that a FUTURE
+ * by contrast, only reconstructs stdin for `shell`/`bash`/`edit`/`write` —
+ * Hakim's #839 finding (ported to this adapter as #840 C2) is that a FUTURE
  * blocking gate wired to `Read`/`Glob`/`Grep` would be silently skipped at
  * every matching tool call, with nothing surfaced anywhere.
  *
  * This adapter deliberately does NOT guess opencode's real `read`/`glob`/
  * `grep` tool argument field names to construct stdin for them — every
- * other field-name mapping in this adapter family (`command` for bash,
- * `filePath` for edit/write) was verified against opencode's real,
- * installed `.d.ts` / source per AgDR-0092's explicit "real types, not
- * guesses" discipline; guessing field names for three more tools here
+ * other field-name mapping in this adapter family (`command` for
+ * shell/bash, `path` for edit/write on V2, `filePath` on V1) was verified
+ * against opencode's real, installed `.d.ts` / documentation per
+ * AgDR-0092's explicit "real types, not guesses" discipline; guessing field
+ * names for three more tools here
  * would silently violate that same discipline and could hand a hook a
  * garbage payload it would misparse. The safer, honest alternative: fail
  * LOUD instead of silently skipping. Call this once at gate-table

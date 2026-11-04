@@ -43,6 +43,15 @@
 # target shape. See `bin/install-pi-adapter.sh` for the pi-flavored sibling
 # of this script; the two are near-identical except for the discovery
 # directory name and default target path.
+#
+# WHAT IT INSTALLS IS A V2 PLUGIN
+# ----------------------------------
+# Adapter 0.2.0 targets opencode 2.x: the shipped `index.ts` default-exports
+# a `{ id, setup }` definition and registers `ctx.tool.hook("execute.before",
+# …)`. opencode 1.x expects the V1 shape (a default-exported async factory)
+# and will reject this one — this script warns if the `opencode` on PATH
+# reports major version 1, so the mismatch surfaces at install time instead
+# of as a silent "failed to load plugin" WARN in the server log.
 
 set -euo pipefail
 
@@ -145,6 +154,24 @@ fi
 
 if [ "$(basename "$TARGET_DIR")" = "plugin" ]; then
   echo "WARNING: --target-dir ends in the singular 'plugin' — opencode's real, live-verified discovery dir is PLURAL ('plugins'). Continuing, but opencode will not find this install unless '$TARGET_DIR' is itself scanned." >&2
+fi
+
+# The adapter targets opencode 2.x's (V2) plugin API: its default export is a
+# `{ id, setup }` definition object, which opencode 1.x cannot load (1.x calls
+# the default export as a function). Fail loudly at install time rather than
+# leaving the adopter to find a "failed to load plugin" WARN in the server log.
+if command -v opencode >/dev/null 2>&1; then
+  OC_MAJOR="$(opencode --version 2>/dev/null | sed -n 's/^opencode v\{0,1\}\([0-9][0-9]*\).*/\1/p' | head -n 1)"
+  case "${OC_MAJOR:-}" in
+    ''|*[!0-9]*) : ;; # unparseable/absent version — say nothing rather than guess
+    *)
+      if [ "$OC_MAJOR" -lt 2 ]; then
+        echo "WARNING: the 'opencode' on PATH reports major version $OC_MAJOR, but this adapter targets the opencode 2.x (V2) plugin API." >&2
+        echo "         A V2 { id, setup } definition will not load on opencode 1.x. Pin harness-adapters/opencode@0.1.0 for opencode 1.x," >&2
+        echo "         or upgrade opencode. Continuing with the V2 install." >&2
+      fi
+      ;;
+  esac
 fi
 
 echo "Installed the apexyard opencode gate adapter:"
