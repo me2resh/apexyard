@@ -299,3 +299,51 @@ test("deriveGatesFromSettings, run against this repo's real .claude/settings.jso
     assert.ok(globs.includes(expected), `expected glob "${expected}" to be wired for block-unreviewed-merge`);
   }
 });
+
+// ---------------------------------------------------------------------
+// Patch-shaped tool (Rex F3 / Hakim F1 on #1959)
+// ---------------------------------------------------------------------
+
+test("deriveGatesFromSettings maps an apply_patch matcher onto both patch tool ids", () => {
+  const settings: RawSettings = {
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: "apply_patch",
+          hooks: [{ type: "command", command: "bash .claude/hooks/dispatch-apply-patch.sh" }],
+        },
+      ],
+    },
+  };
+  const gates = deriveGatesFromSettings(settings);
+  const patchGate = gates.find((g) => g.name === "dispatch-apply-patch");
+  assert.ok(patchGate);
+  assert.deepEqual(patchGate!.wires.map((w) => w.tool).sort(), ["apply_patch", "patch"]);
+});
+
+test("buildToolInput hands a patch envelope to the hook as `command`", () => {
+  const envelope = "*** Begin Patch\n*** Update File: src/a.ts\n*** End Patch";
+  assert.deepEqual(buildToolInput("patch", { args: { patchText: envelope } }), { command: envelope });
+  assert.deepEqual(buildToolInput("apply_patch", { args: { patch: envelope } }), { command: envelope }, "legacy argument name");
+  assert.equal(buildToolInput("patch", { args: { patchText: "" } }), undefined);
+  assert.equal(buildToolInput("patch", { args: {} }), undefined);
+});
+
+test("claudeToolNameFor reports patch tools as apply_patch, the id the bash hooks route on", () => {
+  assert.equal(claudeToolNameFor("patch"), "apply_patch");
+  assert.equal(claudeToolNameFor("apply_patch"), "apply_patch");
+});
+
+test("findUnsupportedGateWires does not report the patch tools as unsupported", () => {
+  const gates: GateDefinition[] = [
+    {
+      name: "apply-patch",
+      hookRelativePath: ".claude/hooks/dispatch-apply-patch.sh",
+      wires: [
+        { tool: "patch", commandGlob: null },
+        { tool: "apply_patch", commandGlob: null },
+      ],
+    },
+  ];
+  assert.deepEqual(findUnsupportedGateWires(gates), []);
+});

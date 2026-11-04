@@ -112,6 +112,8 @@ console.log("DEFAULT_IS_OBJECT:" + (def !== null && typeof def === "object"));
 console.log("HAS_STRING_ID:" + (typeof def?.id === "string" && def.id.length > 0));
 console.log("PLUGIN_ID:" + (def?.id ?? ""));
 console.log("HAS_SETUP_OR_EFFECT:" + (typeof def?.setup === "function" || typeof def?.effect === "function"));
+// Dual support (#1956 AC1/AC6): the same object must also expose V1's server().
+console.log("HAS_V1_SERVER:" + (typeof def?.server === "function"));
 
 // Drive setup() the way opencode does: hand it a plugin Context and capture
 // what it registers on the tool domain.
@@ -156,6 +158,10 @@ if ! echo "$OUTPUT" | grep -q '^HAS_STRING_ID:true$'; then
 fi
 if ! echo "$OUTPUT" | grep -q '^HAS_SETUP_OR_EFFECT:true$'; then
   echo "FAIL: expected the default export to expose a \`setup\` (or \`effect\`) function" >&2
+  FAIL=1
+fi
+if ! echo "$OUTPUT" | grep -q '^HAS_V1_SERVER:true$'; then
+  echo "FAIL: expected the default export to expose the V1 server() member — opencode 1.18.29+ calls that instead of setup(), so without it the 1.x path regresses" >&2
   FAIL=1
 fi
 if ! echo "$OUTPUT" | grep -q '^HAS_EXECUTE_BEFORE:true$'; then

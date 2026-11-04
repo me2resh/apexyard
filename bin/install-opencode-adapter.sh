@@ -119,6 +119,16 @@ ADAPTER_SRC="$ROOT/harness-adapters/opencode/src"
 SHARED_CORE="$ROOT/harness-adapters/_shared/derive-gates-core.ts"
 [ -z "$TARGET_DIR" ] && TARGET_DIR="$(pwd)/.opencode/plugins"
 
+# The install path is deleted with `rm -rf "$TARGET_DIR/$NAME"` below, so a
+# blank or path-escaping --name must be rejected rather than expanding to the
+# target dir itself.
+case "$NAME" in
+  ""|.|..|*/*)
+    echo "ERROR: --name must be a single non-empty path segment (got: '$NAME') — it is removed with rm -rf under the target dir." >&2
+    exit 2
+    ;;
+esac
+
 for f in index.ts gate-dispatcher.ts derive-gates.ts resolve-ops-root.ts; do
   [ -f "$ADAPTER_SRC/$f" ] || { echo "ERROR: expected source file not found: $ADAPTER_SRC/$f" >&2; exit 1; }
 done

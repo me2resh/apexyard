@@ -15,13 +15,15 @@
  */
 
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
 import {
+  apexyardGateDispatcher,
   buildToolExecuteBeforeHandler,
+  createV1Hooks,
   registerGateDispatcher,
   runGateHook,
   execGateHookReal,
@@ -387,4 +389,129 @@ test("deriveGatesFromOpsRoot: a missing settings.json is silent (the expected \"
 
   assert.deepEqual(gates, []);
   assert.equal(combined, "", "a missing file is not a parse failure — warning here would be noise for every non-apexyard session");
+});
+
+// ---------------------------------------------------------------------
+// V2 `patch` tool (Rex F3 / Hakim F1 on #1959) — opencode 2.x ships a
+// patch tool that edits files under the `edit` permission. Before this
+// wire existed a `patch` call matched NO gate at all.
+// ---------------------------------------------------------------------
+
+/** A fixture ops root whose only hook is the framework's patch dispatcher. */
+function patchFixtureOpsRoot(): string {
+  const opsRoot = mkdtempSync(join(tmpdir(), "apexyard-opencode-patch-test-"));
+  mkdirSync(join(opsRoot, ".claude/hooks"), { recursive: true });
+  writeFileSync(join(opsRoot, "settings.json"), JSON.stringify({ hooks: { PreToolUse: [] } }), "utf-8");
+  writeFileSync(join(opsRoot, ".claude/hooks/dispatch-apply-patch.sh"), "#!/bin/bash\nexit 0\n", { mode: 0o755 });
+  return opsRoot;
+}
+
+test("deriveGatesFromOpsRoot wires opencode's patch tool to the framework's patch dispatcher", () => {
+  const opsRoot = patchFixtureOpsRoot();
+  const gates = deriveGatesFromOpsRoot(opsRoot, "settings.json");
+  const patchGate = gates.find((g) => g.hookRelativePath === ".claude/hooks/dispatch-apply-patch.sh");
+  assert.ok(patchGate, "a `patch` call must not be gate-less");
+  assert.deepEqual(patchGate!.wires.map((w) => w.tool).sort(), ["apply_patch", "patch"]);
+});
+
+test("deriveGatesFromOpsRoot adds no patch wire when the ops fork has no patch dispatcher", () => {
+  const opsRoot = mkdtempSync(join(tmpdir(), "apexyard-opencode-patch-absent-"));
+  mkdirSync(join(opsRoot, ".claude/hooks"), { recursive: true });
+  writeFileSync(join(opsRoot, "settings.json"), JSON.stringify({ hooks: { PreToolUse: [] } }), "utf-8");
+  const gates = deriveGatesFromOpsRoot(opsRoot, "settings.json");
+  assert.equal(gates.some((g) => g.hookRelativePath === ".claude/hooks/dispatch-apply-patch.sh"), false);
+});
+
+test("a patch call runs the patch dispatcher as apply_patch, with the envelope as `command`", async () => {
+  const opsRoot = patchFixtureOpsRoot();
+  const hookPath = join(opsRoot, ".claude/hooks/dispatch-apply-patch.sh");
+  const { exec, calls } = mockExec({ [hookPath]: { status: 0, stderr: "" } });
+  const gates = deriveGatesFromOpsRoot(opsRoot, "settings.json");
+  const handler = buildToolExecuteBeforeHandler(opsRoot, gates, exec);
+  const envelope = "*** Begin Patch\n*** Update File: src/a.ts\n*** End Patch";
+
+  await handler({ tool: "patch", sessionID: "s1", input: { patchText: envelope } });
+
+  assert.equal(calls.length, 1, "the patch dispatcher must run for a patch call");
+  assert.deepEqual(JSON.parse(calls[0]!.stdinPayload), {
+    tool_name: "apply_patch",
+    tool_input: { command: envelope },
+  });
+});
+
+test("a blocked patch call throws, so the edit is denied", async () => {
+  const opsRoot = patchFixtureOpsRoot();
+  const hookPath = join(opsRoot, ".claude/hooks/dispatch-apply-patch.sh");
+  const { exec } = mockExec({ [hookPath]: { status: 2, stderr: "BLOCKED: no active ticket\n" } });
+  const gates = deriveGatesFromOpsRoot(opsRoot, "settings.json");
+  const handler = buildToolExecuteBeforeHandler(opsRoot, gates, exec);
+
+  await assert.rejects(
+    () => handler({ tool: "patch", input: { patchText: "*** Begin Patch\n*** End Patch" } }),
+    /no active ticket/,
+  );
+});
+
+// ---------------------------------------------------------------------
+// Dual V1 + V2 entrypoint (#1956 AC1/AC6) — one file serves both plugin
+// generations: V2 calls setup(), V1 (1.18.29+) calls server().
+// ---------------------------------------------------------------------
+
+test("the default export is a V2 definition that also exposes the V1 server() member", async () => {
+  assert.equal(apexyardGateDispatcher.id, "apexyard.gates");
+  assert.equal(typeof apexyardGateDispatcher.setup, "function");
+  assert.equal(typeof apexyardGateDispatcher.server, "function");
+
+  const hooks = await apexyardGateDispatcher.server({ directory: "/nowhere" });
+  assert.equal(typeof hooks["tool.execute.before"], "function");
+});
+
+test("the V1 server() hook blocks a matching call, sharing the same cascade as V2", async () => {
+  const path = join(process.cwd(), THIS_FILE_AS_HOOK);
+  const { exec } = mockExec({ [path]: { status: 2, stderr: "blocked through the v1 hook\n" } });
+
+  const hooks = createV1Hooks(
+    { directory: "/wherever" },
+    {
+      resolveOpsRoot: () => process.cwd(),
+      // V1 emits the `bash` tool id, so the wire must name it.
+      gates: [{ name: "via-v1", hookRelativePath: THIS_FILE_AS_HOOK, wires: [{ tool: "bash", commandGlob: null }] }],
+      execGateHook: exec,
+    },
+  );
+
+  await assert.rejects(
+    () => hooks["tool.execute.before"]({ tool: "bash", sessionID: "s1" }, { args: { command: "gh pr merge 1" } }),
+    /blocked through the v1 hook/,
+  );
+});
+
+// ---------------------------------------------------------------------
+// Session-id prefix (Hakim F4 on #1959) — the `unset` line must survive
+// an event with no native session id, or an inherited Claude Code id wins
+// the marker-path resolver again (#1783).
+// ---------------------------------------------------------------------
+
+test("execute.before always strips an inherited CLAUDE_CODE_SESSION_ID, even with no native id", async () => {
+  const { exec } = mockExec({});
+  const handler = buildToolExecuteBeforeHandler(process.cwd(), [], exec);
+  const input: { command: string } = { command: "echo hi" };
+
+  await handler({ tool: "shell", input });
+
+  assert.equal(input.command, "unset CLAUDE_CODE_SESSION_ID\necho hi");
+  assert.doesNotMatch(input.command, /APEXYARD_SESSION_ID/);
+});
+
+test("execute.before exports the native session id when the event carries one", async () => {
+  const { exec } = mockExec({});
+  const handler = buildToolExecuteBeforeHandler(process.cwd(), [], exec);
+  const input: { command: string } = { command: "echo hi" };
+
+  await handler({ tool: "shell", sessionID: "sub-agent-session", input });
+
+  assert.equal(
+    input.command,
+    "unset CLAUDE_CODE_SESSION_ID\nexport APEXYARD_SESSION_ID='sub-agent-session'\necho hi",
+  );
 });

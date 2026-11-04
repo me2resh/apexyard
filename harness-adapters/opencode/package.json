@@ -9,13 +9,11 @@
     "test": "node --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "@opencode/plugin": "^2.1.4"
-  },
   "overrides": {
     "toml": "^4.2.0"
   },
   "devDependencies": {
+    "@opencode/plugin": "^2.1.4",
     "@types/node": "^26.6.6",
     "typescript": "^7.0.2"
   },

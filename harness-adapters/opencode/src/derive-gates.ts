@@ -146,6 +146,16 @@ export interface GateDefinition {
  * `edit` tool already accepts the same "one file, N find/replace pairs" shape
  * MultiEdit covers, so MultiEdit collapses onto `edit` (the same choice the pi
  * adapter made for the same reason).
+ *
+ * `apply_patch` is the patch-shaped tool. V2 exposes it as `patch`; V1 (and
+ * Claude Code) call it `apply_patch`, and opencode aliases the legacy id onto
+ * the new one. It maps to BOTH ids, and the wire it matches points at
+ * `.claude/hooks/dispatch-bash.sh`, which routes `tool_name == "apply_patch"`
+ * to `dispatch-apply-patch.sh`. That script re-runs every Edit/Write check
+ * once per target path, so a multi-file patch cannot step around the
+ * ticket-first, protected-target and reviewer-marker gates. Without this
+ * mapping an opencode `patch` call ran NO gate at all — see
+ * `deriveGatesFromOpsRoot`'s patch-routing note in `gate-dispatcher.ts`.
  */
 const CLAUDE_MATCHER_TO_OPENCODE_TOOLS: Record<string, string[]> = {
   Bash: ["shell", "bash"],
@@ -155,14 +165,22 @@ const CLAUDE_MATCHER_TO_OPENCODE_TOOLS: Record<string, string[]> = {
   Read: ["read"],
   Glob: ["glob"],
   Grep: ["grep"],
+  apply_patch: ["patch", "apply_patch"],
 };
 
-/** Reverse of the above — the `tool_name` field the bash hooks' own `.tool_name` jq lookups expect. */
+/**
+ * Reverse of the above — the `tool_name` field the bash hooks' own
+ * `.tool_name` jq lookups expect. `patch` deliberately reports as
+ * `apply_patch`: that is the id `.claude/hooks/dispatch-bash.sh` keys its
+ * patch routing on.
+ */
 const OPENCODE_TOOL_TO_CLAUDE_NAME: Record<string, string> = {
   shell: "Bash",
   bash: "Bash",
   edit: "Edit",
   write: "Write",
+  patch: "apply_patch",
+  apply_patch: "apply_patch",
   read: "Read",
   glob: "Glob",
   grep: "Grep",
@@ -283,6 +301,19 @@ export function buildToolInput(toolId: string, output: ToolCallOutput | undefine
       if (typeof filePath !== "string" || filePath.length === 0) return undefined;
       return { file_path: filePath };
     }
+    case "patch":
+    case "apply_patch": {
+      // A patch carries many targets, so it has no single `file_path`. Hand
+      // the envelope to `dispatch-bash.sh` under the `apply_patch` tool name;
+      // `dispatch-apply-patch.sh` then re-runs every Edit/Write check once per
+      // target with a real `file_path`. The V2 docs name the argument
+      // `patchText`; older/other callers have used `patch`, `input`, and
+      // `command`, so all four are accepted rather than guessed at.
+      const raw = args as Record<string, unknown>;
+      const envelope = raw.patchText ?? raw.patch ?? raw.input ?? raw.command;
+      if (typeof envelope !== "string" || envelope.length === 0) return undefined;
+      return { command: envelope };
+    }
     default:
       return undefined;
   }
@@ -293,7 +324,7 @@ export function buildToolInput(toolId: string, output: ToolCallOutput | undefine
  * stdin for. Kept as a single source of truth so `findUnsupportedGateWires`
  * below can never drift from `buildToolInput`'s own `switch` cases.
  */
-const SUPPORTED_TOOL_INPUT_TOOLS = new Set(["shell", "bash", "edit", "write"]);
+const SUPPORTED_TOOL_INPUT_TOOLS = new Set(["shell", "bash", "edit", "write", "patch", "apply_patch"]);
 
 /**
  * One `(gate name, tool)` pair this dispatcher cannot build stdin for —
