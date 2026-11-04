@@ -530,3 +530,40 @@ test("a subagent-shaped event (extra host fields, its own session id) is handled
   assert.equal(calls.length, 1);
   assert.match(input.command, /export APEXYARD_SESSION_ID='child-session'/);
 });
+
+test("setup warns when the host registers a file-writing tool that no wire routes", async () => {
+  const { exec } = mockExec({});
+  const ctx: GateDispatcherContext = {
+    location: { directory: "/wherever" },
+    tool: {
+      hook: async () => ({ dispose: async () => {} }),
+      // `edit` is routed, `patch` is not in this gate table, `read` is not a
+      // file-writing tool. Only `patch` may be reported.
+      list: async () => [{ id: "edit" }, { id: "patch" }, { id: "read" }],
+    },
+  };
+
+  const originalWrite = process.stderr.write.bind(process.stderr);
+  const written: string[] = [];
+  process.stderr.write = ((chunk: string) => {
+    written.push(String(chunk));
+    return true;
+  }) as typeof process.stderr.write;
+  let combined = "";
+  try {
+    await registerGateDispatcher(ctx, {
+      resolveOpsRoot: () => process.cwd(),
+      gates: [{ name: "edit-only", hookRelativePath: THIS_FILE_AS_HOOK, wires: [{ tool: "edit", commandGlob: null }] }],
+      execGateHook: exec,
+    });
+    // The host-tool check is fire-and-forget; let it settle before restoring.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  } finally {
+    process.stderr.write = originalWrite;
+    combined = written.join("");
+  }
+
+  assert.match(combined, /file-writing tool "patch"/);
+  assert.doesNotMatch(combined, /file-writing tool "edit"/, "a routed tool must not be reported");
+  assert.doesNotMatch(combined, /file-writing tool "read"/, "read does not write files");
+});

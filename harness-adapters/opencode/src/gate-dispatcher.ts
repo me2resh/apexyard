@@ -419,7 +419,8 @@ export function deriveGatesFromOpsRoot(opsRoot: string, settingsRelativePath: st
     const dispatcherPath = path.join(opsRoot, ".claude/hooks/dispatch-bash.sh");
     const dispatcher = existsSync(dispatcherPath) ? deriveGatesFromDispatcher(readFileSync(dispatcherPath, "utf-8")) : [];
     const settingsGates = deriveGatesFromSettings(raw).filter((gate) => gate.hookRelativePath !== ".claude/hooks/dispatch-bash.sh");
-    return [...settingsGates, ...dispatcher, ...patchRoutingGates(opsRoot)];
+    const derived = [...settingsGates, ...dispatcher];
+    return [...derived, ...patchRoutingGates(opsRoot, derived)];
   } catch (err) {
     process.stderr.write(
       `apexyard gate dispatcher: WARNING — failed to parse ${settingsPath}; NO gates are enforced this session. ` +
@@ -453,13 +454,16 @@ export function deriveGatesFromOpsRoot(opsRoot: string, settingsRelativePath: st
  * to prevent.
  *
  * If the framework's patch dispatcher is absent (an older ops fork), no wire
- * is added. `findUnsupportedGateWires` still cannot see a tool with no wire,
- * so callers get the loud init-time warning from
- * `warnOnUnroutedEditClassTools` instead.
+ * is added. `findUnsupportedGateWires` cannot see a tool with no wire, so
+ * callers get the loud init-time warning from `warnOnWiringGaps` instead.
  */
-function patchRoutingGates(opsRoot: string): GateDefinition[] {
+function patchRoutingGates(opsRoot: string, existing: GateDefinition[]): GateDefinition[] {
   const patchDispatcher = path.join(opsRoot, ".claude/hooks/dispatch-apply-patch.sh");
   if (!existsSync(patchDispatcher)) return [];
+  // A fork that wires an `apply_patch` matcher in settings.json has already
+  // produced a gate for this hook. Adding a second one would run it twice per
+  // call: harmless, but a wasted subprocess.
+  if (existing.some((gate) => gate.hookRelativePath === ".claude/hooks/dispatch-apply-patch.sh")) return [];
   return [
     {
       name: "apply-patch",
@@ -492,8 +496,11 @@ export async function registerGateDispatcher(ctx: GateDispatcherContext, options
   const gates =
     options.gates ?? (opsRoot ? deriveGatesFromOpsRoot(opsRoot, options.settingsRelativePath ?? ".claude/settings.json") : []);
 
-  warnOnWiringGaps(ctx, gates);
+  // Register the hook FIRST. The wiring warnings below are advisory, and a
+  // host that throws while enumerating tools must never leave the session
+  // with a registered nothing.
   await ctx.tool.hook("execute.before", buildToolExecuteBeforeHandler(opsRoot, gates, options.execGateHook));
+  warnOnWiringGaps(ctx, gates);
 }
 
 /**
@@ -530,24 +537,28 @@ function warnOnWiringGaps(ctx: GateDispatcherContext, gates: GateDefinition[]): 
   // table, so ask the host which tools it registers.
   const list = ctx.tool.list;
   if (typeof list !== "function") return;
-  void list
-    .call(ctx.tool)
-    .then((tools) => {
-      const routed = new Set(gates.flatMap((gate) => gate.wires.map((wire) => wire.tool)));
-      for (const tool of tools) {
-        const id = tool.id.split(".").pop() ?? tool.id;
-        if (!EDIT_CLASS_TOOL_IDS.has(id) || routed.has(id)) continue;
-        process.stderr.write(
-          `apexyard gate dispatcher: WARNING — opencode registers the file-writing tool "${id}", but no gate is wired to it. ` +
-            `Every gate wired to edit/write is SILENTLY SKIPPED for "${id}" calls. See derive-gates.ts's patch/apply_patch mapping and ` +
-            `gate-dispatcher.ts's patchRoutingGates.\n`,
-        );
-      }
-    })
-    .catch(() => {
-      // A host that cannot enumerate tools is not a governance failure; the
-      // rest of setup must not depend on it.
-    });
+  try {
+    void list
+      .call(ctx.tool)
+      .then((tools) => {
+        const routed = new Set(gates.flatMap((gate) => gate.wires.map((wire) => wire.tool)));
+        for (const tool of tools) {
+          const id = tool.id.split(".").pop() ?? tool.id;
+          if (!EDIT_CLASS_TOOL_IDS.has(id) || routed.has(id)) continue;
+          process.stderr.write(
+            `apexyard gate dispatcher: WARNING — opencode registers the file-writing tool "${id}", but no gate is wired to it. ` +
+              `Every gate wired to edit/write is SILENTLY SKIPPED for "${id}" calls. See derive-gates.ts's patch/apply_patch mapping and ` +
+              `gate-dispatcher.ts's patchRoutingGates.\n`,
+          );
+        }
+      })
+      .catch(() => {
+        // A host that cannot enumerate tools is not a governance failure; the
+        // rest of setup must not depend on it.
+      });
+  } catch {
+    // Same reasoning for a synchronous throw out of the host's list().
+  }
 }
 
 /**

@@ -1,6 +1,6 @@
 # Harness support: opencode
 
-**Status:** ✅ **Live-proven** on both plugin generations. 2026-07-09: the delegated `block-git-add-all.sh` blocked a real `opencode run --auto` model turn's `git add -A` (verbatim hook output, nothing staged). 2026-11-04: on opencode 2.1.4 the V2 port blocked a real agent turn's fabricated `gh pr merge` through `block-unreviewed-merge.sh` (#1956). Adapter merged (#821 → PR #839, [AgDR-0092](../agdr/AgDR-0092-opencode-gate-adapter.md)). Install shape hardened in #845.
+**Status:** ✅ **Live-proven on opencode 2.1.4.** 2026-07-09: the delegated `block-git-add-all.sh` blocked a real `opencode run --auto` model turn's `git add -A` (verbatim hook output, nothing staged), on the then-current 1.x plugin API. 2026-11-04: on opencode 2.1.4 the V2 path blocked a real agent turn's fabricated `gh pr merge` through `block-unreviewed-merge.sh` (#1956). The V1 path is served again through `server()`, but it is covered by unit tests and a smoke script, not by a fresh live 1.x run. Adapter merged (#821 → PR #839, [AgDR-0092](../agdr/AgDR-0092-opencode-gate-adapter.md)). Install shape hardened in #845.
 
 ## Supported plugin APIs
 
@@ -21,9 +21,9 @@ A credentialed opencode session, run with `--auto`, issued `git add -A` during a
 
 ## Enforcement vs advisory today
 
-**Delegated (blocking, by construction):** on the pre-execution tool hook, the plugin builds Claude-Code-shaped stdin, execs the matching bash hook, and **throws to deny** on exit 2. That covers the two-marker merge gate (all five wired merge-command shapes, including both #47 variants), red-CI block, ticket-first, and secrets/leak-protection. Fail-closed is real. An execution-layer failure (spawn error, killed hook, no exit status) also denies. A `patch` call is routed through `dispatch-apply-patch.sh`, which re-runs every Edit/Write check once per target path, so a multi-file patch cannot step around those gates. 68 hermetic unit tests plus two smoke scripts (a genuine block from the real `block-unreviewed-merge.sh`, and the shipped install layout's V2 definition shape) back the transport.
+**Delegated (blocking, by construction):** on the pre-execution tool hook, the plugin builds Claude-Code-shaped stdin, execs the matching bash hook, and **throws to deny** on exit 2. That covers the two-marker merge gate (all five wired merge-command shapes, including both #47 variants), red-CI block, ticket-first, and secrets/leak-protection. Fail-closed is real. An execution-layer failure (spawn error, killed hook, no exit status) also denies. A `patch` call is routed through `dispatch-apply-patch.sh`, which re-runs every Edit/Write check once per target path, so a multi-file patch cannot step around those gates. 69 hermetic unit tests plus two smoke scripts (a genuine block from the real `block-unreviewed-merge.sh`, and the shipped install layout's V2 definition shape) back the transport.
 
-**Gate derivation is drift-proof:** the plugin **derives its gate table from `.claude/settings.json` at load time**. There is no hand-maintained gate list. A new gate wired in `settings.json` reaches opencode automatically with zero adapter changes. (This is the convergence pattern planned for the pi adapter. See #840.)
+**Gate derivation is drift-proof, with one named exception:** the plugin **derives its gate table from `.claude/settings.json` at load time**. There is no hand-maintained gate list, except the single patch-routing wire. That wire cannot come from `settings.json` (see `patchRoutingGates` in `src/gate-dispatcher.ts`), so it is added explicitly. The plugin also warns at init when the host registers a file-writing tool that no wire routes. A new gate wired in `settings.json` reaches opencode automatically with zero adapter changes. (This is the convergence pattern planned for the pi adapter. See #840.)
 
 **Advisory:** `AGENTS.md` carries the advisory governance bridge, per opencode's own convention.
 

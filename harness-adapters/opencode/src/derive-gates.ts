@@ -149,13 +149,12 @@ export interface GateDefinition {
  *
  * `apply_patch` is the patch-shaped tool. V2 exposes it as `patch`; V1 (and
  * Claude Code) call it `apply_patch`, and opencode aliases the legacy id onto
- * the new one. It maps to BOTH ids, and the wire it matches points at
- * `.claude/hooks/dispatch-bash.sh`, which routes `tool_name == "apply_patch"`
- * to `dispatch-apply-patch.sh`. That script re-runs every Edit/Write check
- * once per target path, so a multi-file patch cannot step around the
- * ticket-first, protected-target and reviewer-marker gates. Without this
- * mapping an opencode `patch` call ran NO gate at all — see
- * `deriveGatesFromOpsRoot`'s patch-routing note in `gate-dispatcher.ts`.
+ * the new one. It maps to BOTH ids, and `gate-dispatcher.ts`'s
+ * `patchRoutingGates` points that wire at
+ * `.claude/hooks/dispatch-apply-patch.sh`. That script re-runs every
+ * Edit/Write check once per target path, so a multi-file patch cannot step
+ * around the ticket-first, protected-target and reviewer-marker gates.
+ * Without this mapping an opencode `patch` call ran NO gate at all.
  */
 const CLAUDE_MATCHER_TO_OPENCODE_TOOLS: Record<string, string[]> = {
   Bash: ["shell", "bash"],
@@ -170,9 +169,9 @@ const CLAUDE_MATCHER_TO_OPENCODE_TOOLS: Record<string, string[]> = {
 
 /**
  * Reverse of the above — the `tool_name` field the bash hooks' own
- * `.tool_name` jq lookups expect. `patch` deliberately reports as
- * `apply_patch`: that is the id `.claude/hooks/dispatch-bash.sh` keys its
- * patch routing on.
+ * `.tool_name` jq lookups expect. `patch` reports as `apply_patch`, the id
+ * Claude Code and Codex use for patch-shaped tools, so every hook that
+ * inspects `tool_name` sees the same value on all three harnesses.
  */
 const OPENCODE_TOOL_TO_CLAUDE_NAME: Record<string, string> = {
   shell: "Bash",
@@ -304,11 +303,11 @@ export function buildToolInput(toolId: string, output: ToolCallOutput | undefine
     case "patch":
     case "apply_patch": {
       // A patch carries many targets, so it has no single `file_path`. Hand
-      // the envelope to `dispatch-bash.sh` under the `apply_patch` tool name;
-      // `dispatch-apply-patch.sh` then re-runs every Edit/Write check once per
-      // target with a real `file_path`. The V2 docs name the argument
-      // `patchText`; older/other callers have used `patch`, `input`, and
-      // `command`, so all four are accepted rather than guessed at.
+      // the envelope to `dispatch-apply-patch.sh` under the `apply_patch` tool
+      // name; that script re-runs every Edit/Write check once per target with
+      // a real `file_path`. The V2 docs name the argument `patchText`;
+      // older/other callers have used `patch`, `input`, and `command`, so all
+      // four are accepted rather than guessed at.
       const raw = args as Record<string, unknown>;
       const envelope = raw.patchText ?? raw.patch ?? raw.input ?? raw.command;
       if (typeof envelope !== "string" || envelope.length === 0) return undefined;

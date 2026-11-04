@@ -44,14 +44,14 @@
 # of this script; the two are near-identical except for the discovery
 # directory name and default target path.
 #
-# WHAT IT INSTALLS IS A V2 PLUGIN
-# ----------------------------------
-# Adapter 0.2.0 targets opencode 2.x: the shipped `index.ts` default-exports
-# a `{ id, setup }` definition and registers `ctx.tool.hook("execute.before",
-# …)`. opencode 1.x expects the V1 shape (a default-exported async factory)
-# and will reject this one — this script warns if the `opencode` on PATH
-# reports major version 1, so the mismatch surfaces at install time instead
-# of as a silent "failed to load plugin" WARN in the server log.
+# WHAT IT INSTALLS SERVES BOTH PLUGIN GENERATIONS
+# ------------------------------------------------
+# The shipped `index.ts` default-exports one object: `{ id, setup }` for
+# opencode 2.x, plus `server()` for the object entrypoint opencode 1.18.29+
+# accepts. `setup` registers `ctx.tool.hook("execute.before", …)`; `server`
+# returns the V1 `{ "tool.execute.before": … }` hooks. The script warns only
+# when the `opencode` on PATH is older than 1.18.29, which cannot load an
+# object entrypoint at all.
 
 set -euo pipefail
 
@@ -166,19 +166,25 @@ if [ "$(basename "$TARGET_DIR")" = "plugin" ]; then
   echo "WARNING: --target-dir ends in the singular 'plugin' — opencode's real, live-verified discovery dir is PLURAL ('plugins'). Continuing, but opencode will not find this install unless '$TARGET_DIR' is itself scanned." >&2
 fi
 
-# The adapter targets opencode 2.x's (V2) plugin API: its default export is a
-# `{ id, setup }` definition object, which opencode 1.x cannot load (1.x calls
-# the default export as a function). Fail loudly at install time rather than
-# leaving the adopter to find a "failed to load plugin" WARN in the server log.
+# The adapter serves BOTH plugin generations from one default export: a
+# `{ id, setup }` definition for opencode 2.x, plus a `server()` member for
+# the object entrypoint opencode 1.18.29+ accepts. The only unsupported case
+# is a 1.x older than 1.18.29, which cannot load an object entrypoint at all.
+# Warn about that at install time rather than leaving it to a
+# "failed to load plugin" WARN in the server log.
 if command -v opencode >/dev/null 2>&1; then
-  OC_MAJOR="$(opencode --version 2>/dev/null | sed -n 's/^opencode v\{0,1\}\([0-9][0-9]*\).*/\1/p' | head -n 1)"
-  case "${OC_MAJOR:-}" in
-    ''|*[!0-9]*) : ;; # unparseable/absent version — say nothing rather than guess
+  OC_VERSION="$(opencode --version 2>/dev/null | sed -n 's/^opencode v\{0,1\}\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' | head -n 1)"
+  case "${OC_VERSION:-}" in
+    ''|*[!0-9.]*) : ;; # unparseable/absent version — say nothing rather than guess
     *)
-      if [ "$OC_MAJOR" -lt 2 ]; then
-        echo "WARNING: the 'opencode' on PATH reports major version $OC_MAJOR, but this adapter targets the opencode 2.x (V2) plugin API." >&2
-        echo "         A V2 { id, setup } definition will not load on opencode 1.x. Pin harness-adapters/opencode@0.1.0 for opencode 1.x," >&2
-        echo "         or upgrade opencode. Continuing with the V2 install." >&2
+      OC_MAJOR="${OC_VERSION%%.*}"
+      OC_REST="${OC_VERSION#*.}"
+      OC_MINOR="${OC_REST%%.*}"
+      OC_PATCH="${OC_REST#*.}"
+      if [ "$OC_MAJOR" -eq 1 ] && { [ "$OC_MINOR" -lt 18 ] || { [ "$OC_MINOR" -eq 18 ] && [ "$OC_PATCH" -lt 29 ]; }; }; then
+        echo "WARNING: the 'opencode' on PATH reports $OC_VERSION, which predates 1.18.29." >&2
+        echo "         This adapter serves opencode 1.x through the object entrypoint's server() member," >&2
+        echo "         and that entrypoint only exists from 1.18.29. Upgrade opencode, or use an older adapter build." >&2
       fi
       ;;
   esac
