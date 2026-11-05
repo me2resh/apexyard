@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Diagram library CLI. No skills call this library yet."""
+"""Diagram library CLI for /c4, /dfd and /feature-diagram HTML views."""
 
 import argparse
 import json
 import sys
 
+from adapters import from_dfd, from_tsv
 from layout import layout
 from mermaid import check, emit
 from model import BadInput, load, validate
@@ -18,9 +19,23 @@ def main(argv=None):
         command = commands.add_parser(name)
         command.add_argument('path')
         command.add_argument('--repo-dir', help='Clone containing the pinned commit')
+    for name in ('from-dfd', 'from-tsv'):
+        command = commands.add_parser(name)
+        command.add_argument('path')
+        command.add_argument('--repo-dir', required=True)
+        command.add_argument('--commit', required=True)
+        command.add_argument('--project', default='Diagram')
     args = parser.parse_args(argv)
     try:
-        if args.command == 'check':
+        if args.command in ('from-dfd', 'from-tsv'):
+            adapter = from_dfd if args.command == 'from-dfd' else from_tsv
+            model, errors, warnings = validate(
+                adapter(args.path, args.repo_dir, args.commit, args.project), args.repo_dir)
+            for warning in warnings:
+                print(warning, file=sys.stderr)
+            if not errors:
+                print(json.dumps(model, indent=2, ensure_ascii=True))
+        elif args.command == 'check':
             errors = check(args.path, args.repo_dir)
         else:
             model, errors, warnings = validate(load(args.path), args.repo_dir)
@@ -39,7 +54,7 @@ def main(argv=None):
     except BadInput as exc:
         print('E_INPUT /: ' + str(exc), file=sys.stderr)
         return 2
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
         print('E_INPUT /: Cannot read diagram input or repository data.', file=sys.stderr)
         return 2
 
