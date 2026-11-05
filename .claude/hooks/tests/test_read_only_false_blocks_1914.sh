@@ -53,7 +53,11 @@ for option in --outp --outpu --output; do
   protected 2 "git output equals $option" "git log $option=.claude/hooks/a.sh"
   protected 2 "git output separate $option" "git log $option .claude/hooks/a.sh"
 done
-protected 0 'git output after option terminator' 'git log -- --output=.claude/hooks/a.sh'
+protected 2 'git output after option terminator' 'git log -- --output=.claude/hooks/a.sh'
+protected 2 'git log output after option value terminator' 'git log -S -- --output=.claude/hooks/a.sh'
+protected 2 'git shortlog output after option value terminator' 'git shortlog --author -- --output=.claude/hooks/a.sh HEAD'
+protected 0 'git grep output text as pattern' 'git grep -e --output .claude/hooks/a.sh'
+protected 0 'git grep output text after option terminator' 'git grep -n -- --output .claude/hooks/a.sh'
 protected 2 'git later protected output' 'git log --output=/tmp/x --output=.claude/hooks/a.sh'
 protected 0 'git ls-tree path operand' 'git ls-tree HEAD .claude/hooks/tests'
 protected 0 'git grep hooks pathspec' 'git grep -n foo -- .claude/hooks/*.sh'

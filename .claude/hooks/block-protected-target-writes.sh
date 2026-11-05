@@ -234,12 +234,13 @@ pt_git() {
     read-tree) for arg in "${words[@]}"; do [ "$arg" != -u ] || { pt_live "$tree" && pt_block 'read-tree writes a live root.'; }; done; return 0 ;;
     rm|mv) pt_operands "git $verb" "$i"; return 0 ;;
     checkout|restore) ;;
-    log|show|diff|blame|ls-files|status|ls-tree|grep|cat-file|rev-parse|rev-list|for-each-ref|show-ref|merge-base|describe|name-rev|shortlog|range-diff|check-ignore|check-attr)
+    ls-files|status|ls-tree|grep|cat-file|rev-parse|for-each-ref|show-ref|merge-base|describe|name-rev|check-ignore|check-attr) return 0 ;;
+    log|show|diff|blame|rev-list|shortlog|range-diff)
       # Diff output options write even when the verb otherwise only reads.
+      # Scan past -- because an earlier option can consume it as a value.
       while [ "$i" -lt "${#words[@]}" ]; do
         arg=${words[$i]}; i=$((i+1))
         case "$arg" in
-          --) break ;;
           --outp|--outpu|--output) pt_judge "${words[$i]:-}"; i=$((i+1)) ;;
           --outp=*|--outpu=*|--output=*) pt_judge "${arg#*=}" ;;
         esac
