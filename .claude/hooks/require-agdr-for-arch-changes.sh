@@ -187,10 +187,11 @@ fi
 # Extract the message using the multi-line-safe pattern (flatten first).
 COMMAND_FLAT=$(echo "$COMMAND" | tr '\n' ' ')
 MSG=""
-MSG=$(echo "$COMMAND_FLAT" | sed -nE "s/.*-m[[:space:]]+'([^']*)'.*/\1/p" | head -1)
-if [ -z "$MSG" ]; then
-  MSG=$(echo "$COMMAND_FLAT" | sed -nE 's/.*-m[[:space:]]+"([^"]*)".*/\1/p' | head -1)
-fi
+MSG_SEPARATOR=""
+while IFS= read -r MSG_VALUE; do
+  MSG="${MSG}${MSG_SEPARATOR}${MSG_VALUE}"
+  MSG_SEPARATOR=$'\n\n'
+done < <(printf '%s\n' "$COMMAND_FLAT" | grep -oE -- "-m[[:space:]]+('[^']*'|\"[^\"]*\")" | sed -E "s/^-m[[:space:]]+['\"]//; s/['\"]$//")
 if [ -z "$MSG" ]; then
   MSG_FILE=$(echo "$COMMAND_FLAT" | sed -nE 's/.*(-F|--file)[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
   if [ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ]; then
