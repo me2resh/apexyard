@@ -211,6 +211,15 @@ pt_git() {
   if [ "$unresolved" = 1 ]; then
     case "${verb:-}" in checkout|restore|apply|am|checkout-index|read-tree) pt_block 'non-literal git work tree.' ;; esac
   fi
+  # Pager-opening grep forms keep the existing operand checks.
+  if [ "${verb:-}" = grep ]; then
+    for arg in "${words[@]:$i}"; do
+      case "$arg" in
+        --) break ;;
+        -O*|-[!-]*O*|--open-files-in-pager|--open-files-in-pager=*) verb=grep-with-pager; break ;;
+      esac
+    done
+  fi
   case "${verb:-}" in
     apply)
       for arg in "${words[@]}"; do [ "$arg" != --unsafe-paths ] || pt_block 'git apply --unsafe-paths is not safe.'; done
@@ -220,7 +229,7 @@ pt_git() {
     read-tree) for arg in "${words[@]}"; do [ "$arg" != -u ] || { pt_live "$tree" && pt_block 'read-tree writes a live root.'; }; done; return 0 ;;
     rm|mv) pt_operands "git $verb" "$i"; return 0 ;;
     checkout|restore) ;;
-    log|show|diff|blame|ls-files|status) return 0 ;;
+    log|show|diff|blame|ls-files|status|ls-tree|grep|cat-file|rev-parse|rev-list|for-each-ref|show-ref|merge-base|describe|name-rev|shortlog|range-diff|check-ignore|check-attr) return 0 ;;
     archive)
       while [ "$i" -lt "${#words[@]}" ]; do
         arg=${words[$i]}; i=$((i+1))
@@ -595,13 +604,13 @@ pt_simple() {
         esac
       done
       return 0 ;;
-    active_issue_skill_marker_path)
-      # This library helper only prints the session's issue-skill path.
+    active_issue_skill_marker_path|review_marker_path|review_markers_dir|review_body_path|review_body_dir)
+      # These library helpers only print paths.
       return 0 ;;
 
     cp|mv|install|dd|ln|link|rsync|ditto|rm|rmdir|unlink|shred|chmod|chown|chgrp|chflags|chattr|xattr|setfacl|touch|mkdir|truncate|tar|unzip|cpio|pax|perl|ruby|gsed|sed|ed|ex|vi|vim|sponge|tee|base64|openssl|iconv|plutil|uudecode|gzip|gunzip|bzip2|bunzip2|xz|unxz)
       pt_operands "$verb"; ;;
-    cut|cat|grep|rg|jq|ls|diff|cmp|head|tail|wc|stat|file|readlink|realpath|shasum|sha256sum|test|'['|printf|echo|true|false|exit|return|pwd) ;;
+    cut|cat|grep|rg|jq|ls|diff|cmp|head|tail|wc|stat|file|readlink|realpath|shasum|sha256sum|du|md5|md5sum|shellcheck|test|'['|printf|echo|true|false|exit|return|pwd) ;;
     *)
       for word in "${words[@]:1}"; do
         expanded=$(pt_expand "$word")
@@ -620,7 +629,7 @@ pt_simple() {
   # Literal read-only commands need no write-detector subprocesses. Redirects
   # were judged above. Keep substitutions on the detector path.
   case "$verb" in
-    cut|cat|grep|rg|jq|ls|diff|cmp|head|tail|wc|stat|file|readlink|realpath|shasum|sha256sum|test|'['|printf|echo|true|false|exit|return|pwd|fi|done|break|continue)
+    cut|cat|grep|rg|jq|ls|diff|cmp|head|tail|wc|stat|file|readlink|realpath|shasum|sha256sum|du|md5|md5sum|shellcheck|test|'['|printf|echo|true|false|exit|return|pwd|fi|done|break|continue)
       case "$segment" in *'$('*|*'`'*) ;; *) return 0 ;; esac ;;
   esac
   # Interpreter writes and other unextractable writes use the additive rule.

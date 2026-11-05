@@ -41,6 +41,28 @@ done
 for cmd in 'grep --anything x .claude/hooks/x.sh' 'sed -n 1p .claude/hooks/x.sh' 'cut -d: -f1 .claude/hooks/x.sh' 'head .claude/hooks/x.sh' 'tail .claude/hooks/x.sh' 'wc .claude/hooks/x.sh' 'cat .claude/hooks/x.sh' 'sort .claude/hooks/x.sh' 'uniq .claude/hooks/x.sh'; do
   protected 0 "read $cmd" "$cmd"
 done
+# Read-only additions for #1958. These commands are inspected, never run.
+for verb in ls-tree grep cat-file rev-parse rev-list for-each-ref show-ref merge-base describe name-rev shortlog range-diff check-ignore check-attr; do
+  protected 0 "git read $verb" "git $verb HEAD .claude/hooks/tests"
+done
+protected 0 'git ls-tree path operand' 'git ls-tree HEAD .claude/hooks/tests'
+protected 0 'git grep hooks pathspec' 'git grep -n foo -- .claude/hooks/*.sh'
+for cmd in 'git grep -nOless foo -- .claude/hooks/a.sh' 'git grep -O foo -- .claude/hooks/a.sh' 'git grep -Oless foo -- .claude/hooks/a.sh' 'git grep --open-files-in-pager foo -- .claude/hooks/a.sh' 'git grep --open-files-in-pager=less foo -- .claude/hooks/a.sh'; do
+  protected 2 "git grep pager $cmd" "$cmd"
+done
+protected 0 'git grep pager text after option terminator' 'git grep -e foo -- .claude/hooks/-Oless'
+for verb in du md5 md5sum shellcheck; do
+  protected 0 "plain read $verb" "$verb .claude/hooks/a.sh"
+done
+for helper in review_marker_path review_body_path; do
+  protected 0 "print-only $helper" "$helper me2resh/apexyard 12 rex \"$LIVE\""
+done
+for helper in review_markers_dir review_body_dir; do
+  protected 0 "print-only $helper" "$helper \"$LIVE\""
+done
+for cmd in 'tree -o .claude/hooks/a.sh .' 'xxd x .claude/hooks/a.sh' 'cp x .claude/hooks/a.sh' 'git checkout -- .claude/hooks/a.sh'; do
+  protected 2 "write stays blocked $cmd" "$cmd"
+done
 protected 2 'unknown diagnostic' 'mytool .claude/hooks/x.sh'
 if grep -Fq "unknown verb 'mytool' has a live protected operand '.claude/hooks/x.sh'." "$TMP/err"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
 # Paired unescaped backticks execute even in a double-quoted grep pattern.
