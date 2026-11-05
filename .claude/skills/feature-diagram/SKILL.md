@@ -1,7 +1,7 @@
 ---
 name: feature-diagram
 description: Per-feature Mermaid flowchart. Covers routes / models / jobs / screens. Consumes /extract-features inventory.
-argument-hint: "<feature-slug> [project-name] [--force]"
+argument-hint: "<feature-slug> [project-name] [--force] [--html]"
 allowed-tools: Bash, Read, Grep, Glob, Write, Edit
 ---
 
@@ -74,6 +74,15 @@ When `/feature-diagram` runs, activate the **[Tech Lead](../../../roles/engineer
 ## Process
 
 ### 1. Resolve the target
+
+When `--html` is set, check Python before target discovery:
+
+```bash
+python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' || exit 1
+```
+
+Stop with `Python 3.9 or later is required for --html.` if this check fails.
+Without `--html`, skip this check.
 
 - If `<project-name>` is given and the registry has it → use that project.
 - If no `<project-name>` and cwd is inside `workspace/<name>/` → use that project.
@@ -177,6 +186,50 @@ end
 | Job | Model | `"reads/writes"` (only if the inventory row mentions both as participating) |
 
 Don't invent edges. If the inventory row doesn't corroborate a screen → route mapping (no shared URL prefix, no shared component name), don't draw the edge — emit the nodes only and add a one-line coverage-gap note at the bottom of the file.
+
+### 5a. HTML view (`--html` only)
+
+Use diagram type `feature` and four `layer` groups: Screens, Routes, Models and Jobs.
+Map the inventory elements to `screen`, `route`, `model` and `job` nodes.
+Use stable underscore identifiers that meet MODEL.md, including underscores in place of slug hyphens.
+Keep layer-level edges and the existing edge inference rules.
+Represent empty layers as empty groups. The emitter supplies their placeholders.
+This path replaces step 5's Mermaid authoring.
+
+With `--html`, use Python 3.9 or later and the shared diagram library.
+Without `--html`, keep the existing generation steps, Mermaid content and file layout.
+Do not write a model or run Python without the flag.
+
+1. Read `.claude/skills/_lib-diagram/MODEL.md`.
+2. Resolve `<stem>.md`, `<stem>.diagram.json` and `<stem>.html` before any output write.
+   Apply the existing overwrite rules to each path before writing any of these files.
+   Treat the three files as one output set. A refusal must preserve all existing files.
+   Stop on refusal.
+3. Read the adapter input contract in `.claude/skills/_lib-diagram/MODEL.md`.
+4. Prepare `adapter_input` from the approved feature elements and confirmed edges as TSV.
+5. Set `commit` to the target clone's full commit hash.
+6. Run `from-tsv` to create the model after all overwrite checks pass.
+7. Stop on any command failure.
+
+Set `diagram_cli` to the framework's absolute `.claude/skills/_lib-diagram/diagram.py` path.
+Set `model_path`, `target_dir` and `stem` to the resolved model path, clone and output stem.
+
+```bash
+model_text=$(python3 "$diagram_cli" from-tsv "$adapter_input" --repo-dir "$target_dir" --commit "$commit" --project "$PROJECT") || exit 1
+printf '%s\n' "$model_text" > "$model_path"
+python3 "$diagram_cli" validate "$model_path" --repo-dir "$target_dir" || exit 1
+mermaid_text=$(python3 "$diagram_cli" mermaid "$model_path" --repo-dir "$target_dir") || exit 1
+html_text=$(python3 "$diagram_cli" html "$model_path" --repo-dir "$target_dir") || exit 1
+```
+
+Insert `mermaid_text` into the existing markdown's Mermaid fence.
+Immediately before the fence, insert `<!-- diagram-model: <stem>.diagram.json sha256=<hash12> -->`.
+Use the first 12 characters of `model.model_hash(model.normalise(model.load(model_path)))` for `hash12`.
+Keep the existing headings, tables, provenance and footer.
+Write `html_text` to `<stem>.html` beside `<stem>.md`.
+Run `python3 "$diagram_cli" check "${stem}.md" --repo-dir "$target_dir"` after writing.
+Stop on failure. Report all three paths on success.
+Edit the model and regenerate both views to correct drift.
 
 ### 6. Write the file
 

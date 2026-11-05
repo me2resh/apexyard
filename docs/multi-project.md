@@ -860,6 +860,11 @@ Templates:
 - `templates/architecture/c4-context.md`: L1, system + external actors
 - `templates/architecture/c4-container.md`: L2, deployable units inside the system boundary
 
+**Optional HTML view.** Add `--html` to `/c4`, `/dfd` or `/feature-diagram` for a self-contained HTML view beside each markdown file.
+The flag also writes `<stem>.diagram.json` and requires Python 3.9 or later.
+Both views use the validated model. Runs without the flag keep their existing output.
+Do not combine `--html` with `/c4 --dsl` or `/dfd --scope-all`.
+
 **Escape hatch for L3+ (Structurizr DSL).** Some projects need component-level (L3) precision, auto-zoom across all levels from one model, or Structurizr Workspace features (tags, filtered views). In these cases, `/c4 <project> --dsl` generates a `workspace.dsl` file instead. See `templates/architecture/c4-structurizr.dsl` and the `/c4` skill's "Escape hatch" section. Mermaid stays the default for L1/L2. This is additive, not a replacement, and introduces no new runtime dependency. Rendering the `.dsl` is the adopter's own choice at [structurizr.com/dsl](https://structurizr.com/dsl), Structurizr Lite, or `structurizr-cli`. Decision rationale: [`docs/agdr/AgDR-0085-structurizr-dsl-escape-hatch.md`](agdr/AgDR-0085-structurizr-dsl-escape-hatch.md).
 
 Where to put the diagrams (same split as every other kind of doc: "would this follow the code if the project spun out?"):
