@@ -23,8 +23,7 @@
 # want a broader list can override via .claude/project-config.json
 # `.architecture_paths` (a JSON array of globs).
 #
-# Multi-line -m messages are handled the same way as verify-commit-refs.sh:
-# flatten newlines before sed parsing.
+# Repeated message options are joined with a blank line, as git does.
 
 # Run one target check. The visitor isolates each call in a subshell.
 _git_gate_body() {
@@ -184,13 +183,34 @@ if echo "$STAGED" | grep -qE '^docs/agdr/AgDR-[0-9]+-.*\.md$'; then
 fi
 
 # (2) AgDR reference in commit message?
-# Extract the message using the multi-line-safe pattern (flatten first).
+# Read message words without executing any shell text.
 COMMAND_FLAT=$(echo "$COMMAND" | tr '\n' ' ')
 MSG=""
-MSG=$(echo "$COMMAND_FLAT" | sed -nE "s/.*-m[[:space:]]+'([^']*)'.*/\1/p" | head -1)
-if [ -z "$MSG" ]; then
-  MSG=$(echo "$COMMAND_FLAT" | sed -nE 's/.*-m[[:space:]]+"([^"]*)".*/\1/p' | head -1)
-fi
+_GIT_SCAN="$COMMAND"
+MSG_SEPARATOR=""
+while [ -n "$_GIT_SCAN" ]; do
+  MSG_SCAN_BEFORE="$_GIT_SCAN"
+  if ! _git_take_value; then
+    # Empty quoted words are valid; stop on an unresolved shell word.
+    [ "$_GIT_SCAN" != "$MSG_SCAN_BEFORE" ] && continue
+    break
+  fi
+  case "$_GIT_TAKEN" in
+    --) break ;;
+    -m|--message)
+      MSG_SCAN_BEFORE="$_GIT_SCAN"
+      _git_take_value || {
+        [ "$_GIT_SCAN" != "$MSG_SCAN_BEFORE" ] || break
+      }
+      MSG_VALUE="$_GIT_TAKEN"
+      ;;
+    --message=*) MSG_VALUE="${_GIT_TAKEN#--message=}" ;;
+    -m?*) MSG_VALUE="${_GIT_TAKEN#-m}" ;;
+    *) continue ;;
+  esac
+  MSG+="${MSG_SEPARATOR}${MSG_VALUE}"
+  MSG_SEPARATOR=$'\n\n'
+done
 if [ -z "$MSG" ]; then
   MSG_FILE=$(echo "$COMMAND_FLAT" | sed -nE 's/.*(-F|--file)[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
   if [ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ]; then
