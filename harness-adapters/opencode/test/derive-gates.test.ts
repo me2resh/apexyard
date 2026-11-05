@@ -113,7 +113,10 @@ test("deriveGatesFromSettings collapses multiple wiring rows for the same hook i
   assert.ok(mergeGate, "block-unreviewed-merge gate must be derived");
   assert.equal(mergeGate!.hookRelativePath, ".claude/hooks/block-unreviewed-merge.sh");
   // Two `if` rows for the same tool -> two wires, not deduped into one.
-  const bashWires = mergeGate!.wires.filter((w) => w.tool === "bash");
+  // (The Bash matcher maps to BOTH the V2 `shell` id and the V1 `bash` id —
+  // see CLAUDE_MATCHER_TO_OPENCODE_TOOLS — so filtering by either yields the
+  // same two rows.)
+  const bashWires = mergeGate!.wires.filter((w) => w.tool === "shell");
   assert.equal(bashWires.length, 2);
   assert.deepEqual(
     bashWires.map((w) => w.commandGlob).sort(),
@@ -129,7 +132,7 @@ test("deriveGatesFromSettings marks a hook unconditional for a tool when any row
   // wire for every one of those tools is unconditional.
   assert.ok(ticketGate!.wires.some((w) => w.tool === "edit" && w.commandGlob === null));
   assert.ok(ticketGate!.wires.some((w) => w.tool === "write" && w.commandGlob === null));
-  assert.ok(ticketGate!.wires.some((w) => w.tool === "bash" && w.commandGlob === null));
+  assert.ok(ticketGate!.wires.some((w) => w.tool === "shell" && w.commandGlob === null));
 });
 
 test("deriveGatesFromSettings derives every hook, not a curated subset — check-secrets.sh (not in pi's DEFAULT_GATES omission list logic) is present", () => {
@@ -149,16 +152,17 @@ test("deriveGatesFromSettings returns an empty table for settings with no PreToo
 test("gateMatchesToolCall: a gate with an unconditional wire for this tool always matches", () => {
   const gates = deriveGatesFromSettings(fixtureSettings());
   const ticketGate = gates.find((g) => g.name === "require-active-ticket")!;
-  assert.ok(gateMatchesToolCall(ticketGate, "bash", "literally anything"));
+  assert.ok(gateMatchesToolCall(ticketGate, "shell", "literally anything"));
+  assert.ok(gateMatchesToolCall(ticketGate, "bash", "literally anything"), "V1's tool id stays gated too");
   assert.ok(gateMatchesToolCall(ticketGate, "edit", undefined));
 });
 
 test("gateMatchesToolCall: a gate with only conditional wires matches ONLY a command satisfying one of the globs", () => {
   const gates = deriveGatesFromSettings(fixtureSettings());
   const mergeGate = gates.find((g) => g.name === "block-unreviewed-merge")!;
-  assert.ok(gateMatchesToolCall(mergeGate, "bash", "gh pr merge 42 --squash"));
-  assert.ok(gateMatchesToolCall(mergeGate, "bash", "gh api repos/x/y/pulls/1/merge -X PUT"));
-  assert.ok(!gateMatchesToolCall(mergeGate, "bash", "gh pr view 42"));
+  assert.ok(gateMatchesToolCall(mergeGate, "shell", "gh pr merge 42 --squash"));
+  assert.ok(gateMatchesToolCall(mergeGate, "shell", "gh api repos/x/y/pulls/1/merge -X PUT"));
+  assert.ok(!gateMatchesToolCall(mergeGate, "shell", "gh pr view 42"));
 });
 
 test("gateMatchesToolCall: a gate never matches a tool it isn't wired to at all", () => {
@@ -171,13 +175,15 @@ test("gateMatchesToolCall: a gate never matches a tool it isn't wired to at all"
 // buildToolInput / claudeToolNameFor — the stdin-construction unit tests
 // ---------------------------------------------------------------------
 
-test("buildToolInput reconstructs {command} for the bash tool from output.args.command", () => {
-  assert.deepEqual(buildToolInput("bash", { args: { command: "gh pr merge 1" } }), { command: "gh pr merge 1" });
+test("buildToolInput reconstructs {command} for the command tool from its own `command` argument", () => {
+  assert.deepEqual(buildToolInput("shell", { args: { command: "gh pr merge 1" } }), { command: "gh pr merge 1" });
+  assert.deepEqual(buildToolInput("bash", { args: { command: "gh pr merge 1" } }), { command: "gh pr merge 1" }, "V1's tool id");
 });
 
-test("buildToolInput reconstructs {file_path} for edit/write from output.args.filePath", () => {
-  assert.deepEqual(buildToolInput("edit", { args: { filePath: "/repo/src/foo.ts" } }), { file_path: "/repo/src/foo.ts" });
-  assert.deepEqual(buildToolInput("write", { args: { filePath: "/repo/src/bar.ts" } }), { file_path: "/repo/src/bar.ts" });
+test("buildToolInput reconstructs {file_path} for edit/write from the V2 `path` argument, falling back to V1's `filePath`", () => {
+  assert.deepEqual(buildToolInput("edit", { args: { path: "/repo/src/foo.ts" } }), { file_path: "/repo/src/foo.ts" });
+  assert.deepEqual(buildToolInput("write", { args: { path: "/repo/src/bar.ts" } }), { file_path: "/repo/src/bar.ts" });
+  assert.deepEqual(buildToolInput("edit", { args: { filePath: "/repo/src/legacy.ts" } }), { file_path: "/repo/src/legacy.ts" });
 });
 
 // ---------------------------------------------------------------------
@@ -186,7 +192,7 @@ test("buildToolInput reconstructs {file_path} for edit/write from output.args.fi
 // builder for.
 // ---------------------------------------------------------------------
 
-test("findUnsupportedGateWires: a gate wired only to bash/edit/write reports nothing", () => {
+test("findUnsupportedGateWires: a gate wired only to shell/bash/edit/write reports nothing", () => {
   const gates: GateDefinition[] = [
     { name: "require-active-ticket", hookRelativePath: ".claude/hooks/require-active-ticket.sh", wires: [{ tool: "bash", commandGlob: null }, { tool: "edit", commandGlob: null }] },
   ];
@@ -228,18 +234,19 @@ test("findUnsupportedGateWires, run against this repo's real .claude/settings.js
 });
 
 test("buildToolInput returns undefined when the expected field is missing or the wrong type", () => {
-  assert.equal(buildToolInput("bash", { args: {} }), undefined);
-  assert.equal(buildToolInput("bash", { args: { command: 123 } }), undefined);
+  assert.equal(buildToolInput("shell", { args: {} }), undefined);
+  assert.equal(buildToolInput("shell", { args: { command: 123 } }), undefined);
   assert.equal(buildToolInput("edit", { args: {} }), undefined);
-  assert.equal(buildToolInput("bash", undefined), undefined);
+  assert.equal(buildToolInput("shell", undefined), undefined);
 });
 
 test("buildToolInput returns undefined for a tool this dispatcher doesn't reconstruct input for (e.g. read/grep/glob)", () => {
-  assert.equal(buildToolInput("read", { args: { filePath: "/repo/README.md" } }), undefined);
+  assert.equal(buildToolInput("read", { args: { path: "/repo/README.md" } }), undefined);
 });
 
 test("claudeToolNameFor maps opencode tool ids back to the Claude Code tool_name hooks expect", () => {
-  assert.equal(claudeToolNameFor("bash"), "Bash");
+  assert.equal(claudeToolNameFor("shell"), "Bash");
+  assert.equal(claudeToolNameFor("bash"), "Bash", "V1's tool id");
   assert.equal(claudeToolNameFor("edit"), "Edit");
   assert.equal(claudeToolNameFor("write"), "Write");
   assert.equal(claudeToolNameFor("read"), "Read");
@@ -287,8 +294,56 @@ test("deriveGatesFromSettings, run against this repo's real .claude/settings.jso
   const dispatcherPath = join(here, "..", "..", "..", ".claude", "hooks", "dispatch-bash.sh");
   const gates = [...deriveGatesFromSettings(raw), ...deriveGatesFromDispatcher(readFileSync(dispatcherPath, "utf-8"))];
   const mergeGate = gates.find((g) => g.name === "block-unreviewed-merge")!;
-  const globs = mergeGate.wires.filter((w) => w.tool === "bash").map((w) => w.commandGlob);
+  const globs = mergeGate.wires.filter((w) => w.tool === "shell").map((w) => w.commandGlob);
   for (const expected of ["gh pr merge *", "gh api *", "glab mr merge *", "glab api *", "tracker_pr_merge *"]) {
     assert.ok(globs.includes(expected), `expected glob "${expected}" to be wired for block-unreviewed-merge`);
   }
+});
+
+// ---------------------------------------------------------------------
+// Patch-shaped tool (Rex F3 / Hakim F1 on #1959)
+// ---------------------------------------------------------------------
+
+test("deriveGatesFromSettings maps an apply_patch matcher onto both patch tool ids", () => {
+  const settings: RawSettings = {
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: "apply_patch",
+          hooks: [{ type: "command", command: "bash .claude/hooks/dispatch-apply-patch.sh" }],
+        },
+      ],
+    },
+  };
+  const gates = deriveGatesFromSettings(settings);
+  const patchGate = gates.find((g) => g.name === "dispatch-apply-patch");
+  assert.ok(patchGate);
+  assert.deepEqual(patchGate!.wires.map((w) => w.tool).sort(), ["apply_patch", "patch"]);
+});
+
+test("buildToolInput hands a patch envelope to the hook as `command`", () => {
+  const envelope = "*** Begin Patch\n*** Update File: src/a.ts\n*** End Patch";
+  assert.deepEqual(buildToolInput("patch", { args: { patchText: envelope } }), { command: envelope });
+  assert.deepEqual(buildToolInput("apply_patch", { args: { patch: envelope } }), { command: envelope }, "legacy argument name");
+  assert.equal(buildToolInput("patch", { args: { patchText: "" } }), undefined);
+  assert.equal(buildToolInput("patch", { args: {} }), undefined);
+});
+
+test("claudeToolNameFor reports patch tools as apply_patch, the id the bash hooks route on", () => {
+  assert.equal(claudeToolNameFor("patch"), "apply_patch");
+  assert.equal(claudeToolNameFor("apply_patch"), "apply_patch");
+});
+
+test("findUnsupportedGateWires does not report the patch tools as unsupported", () => {
+  const gates: GateDefinition[] = [
+    {
+      name: "apply-patch",
+      hookRelativePath: ".claude/hooks/dispatch-apply-patch.sh",
+      wires: [
+        { tool: "patch", commandGlob: null },
+        { tool: "apply_patch", commandGlob: null },
+      ],
+    },
+  ];
+  assert.deepEqual(findUnsupportedGateWires(gates), []);
 });

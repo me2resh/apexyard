@@ -30,10 +30,13 @@
 #      assertion for opencode specifically: if index.ts leaked even one
 #      more named export, opencode's real loader would try to invoke it —
 #      exactly the mechanism that crashed the server in #844.
-#   3. Calls that default export the way opencode calls a plugin factory
-#      (`await plugin({directory, worktree, ...})`) against a minimal
-#      fixture ops root, and asserts it resolves to a `Hooks` object with a
-#      working `"tool.execute.before"` function, without throwing.
+#   3. Drives that default export the way opencode 2.x's loader does: it
+#      must be a DEFINITION OBJECT with a non-empty string `id` and a
+#      `setup` function (a bare V1 `async (input) => hooks` factory is
+#      rejected with "Plugin must export a default definition with an id and
+#      an effect or setup function"). `setup()` is then called against a
+#      minimal plugin Context and must register an `execute.before` hook on
+#      the tool domain — without that it would load but enforce nothing.
 #
 # This does NOT re-verify a live, model-driven opencode session (that gap is
 # already documented in docs/opencode-adapter.md's "honest breakdown" table
@@ -98,17 +101,40 @@ const mod = await import(pathToFileURL(entryPath).href);
 
 const keys = Object.keys(mod).sort();
 console.log("EXPORT_KEYS:" + JSON.stringify(keys));
-console.log("DEFAULT_IS_FUNCTION:" + (typeof mod.default === "function"));
 
-// Call it the way opencode calls a plugin factory: once, with PluginInput.
-const hooks = await mod.default({ directory: opsRoot, worktree: opsRoot });
-console.log("HOOKS_KEYS:" + JSON.stringify(Object.keys(hooks).sort()));
-console.log("HAS_TOOL_EXECUTE_BEFORE:" + (typeof hooks["tool.execute.before"] === "function"));
+// opencode V2's loader validates the default export against
+//   { id: string, setup: fn } | { id: string, effect: fn }
+// and fails with "Plugin must export a default definition with an id and an
+// effect or setup function" otherwise (the exact regression this check now
+// guards). A bare V1 `async (input) => hooks` factory fails that schema.
+const def = mod.default;
+console.log("DEFAULT_IS_OBJECT:" + (def !== null && typeof def === "object"));
+console.log("HAS_STRING_ID:" + (typeof def?.id === "string" && def.id.length > 0));
+console.log("PLUGIN_ID:" + (def?.id ?? ""));
+console.log("HAS_SETUP_OR_EFFECT:" + (typeof def?.setup === "function" || typeof def?.effect === "function"));
+// Dual support (#1956 AC1/AC6): the same object must also expose V1's server().
+console.log("HAS_V1_SERVER:" + (typeof def?.server === "function"));
+
+// Drive setup() the way opencode does: hand it a plugin Context and capture
+// what it registers on the tool domain.
+const registered = [];
+const ctx = {
+  location: { directory: opsRoot },
+  tool: {
+    hook: async (name, _cb) => {
+      registered.push(name);
+      return { dispose: async () => {} };
+    },
+  },
+};
+if (typeof def?.setup === "function") await def.setup(ctx);
+console.log("REGISTERED_HOOKS:" + JSON.stringify(registered.sort()));
+console.log("HAS_EXECUTE_BEFORE:" + (registered.includes("execute.before")));
 RUNNER_EOF
 
 echo ""
-echo "== Check 3: dynamic import + factory call against the installed apexyard/index.ts =="
-# opencode resolves the ops root at plugin-call time (unlike pi, which
+echo "== Check 3: dynamic import + V2 definition/setup drive against the installed apexyard/index.ts =="
+# opencode resolves the ops root at plugin-load time (unlike pi, which
 # defers to per-tool_call resolution — see gate-dispatcher.ts's header
 # comment), so this MUST run hermetically: an ambient APEXYARD_OPS_ROOT
 # (e.g. set by a Claude Code dev session working on this very repo) would
@@ -119,21 +145,33 @@ OUTPUT=$("${RUN_NODE[@]}" "$RUNNER" "$ENTRY" "$FIXTURE_OPS_ROOT")
 echo "$OUTPUT"
 
 if ! echo "$OUTPUT" | grep -q '^EXPORT_KEYS:\["default"\]$'; then
-  echo "FAIL: expected apexyard/index.ts's module namespace to be exactly [\"default\"] — opencode's real loader invokes EVERY exported function as a candidate plugin, so a leaked named export here is exactly the #844 crash mechanism" >&2
+  echo "FAIL: expected apexyard/index.ts's module namespace to be exactly [\"default\"] — the closed export surface is the structural invariant that kept the #844 crash from recurring, and it is the entry point opencode's loader validates" >&2
   FAIL=1
 fi
-if ! echo "$OUTPUT" | grep -q '^DEFAULT_IS_FUNCTION:true$'; then
-  echo "FAIL: expected the default export to be a function" >&2
+if ! echo "$OUTPUT" | grep -q '^DEFAULT_IS_OBJECT:true$'; then
+  echo "FAIL: expected the default export to be a plugin DEFINITION OBJECT — a bare function is rejected by opencode 2.x with 'Plugin must export a default definition with an id and an effect or setup function'" >&2
   FAIL=1
 fi
-if ! echo "$OUTPUT" | grep -q '^HAS_TOOL_EXECUTE_BEFORE:true$'; then
-  echo "FAIL: expected calling the default export to resolve to a Hooks object with a working tool.execute.before handler" >&2
+if ! echo "$OUTPUT" | grep -q '^HAS_STRING_ID:true$'; then
+  echo "FAIL: expected the default export to carry a non-empty string \`id\`" >&2
+  FAIL=1
+fi
+if ! echo "$OUTPUT" | grep -q '^HAS_SETUP_OR_EFFECT:true$'; then
+  echo "FAIL: expected the default export to expose a \`setup\` (or \`effect\`) function" >&2
+  FAIL=1
+fi
+if ! echo "$OUTPUT" | grep -q '^HAS_V1_SERVER:true$'; then
+  echo "FAIL: expected the default export to expose the V1 server() member — opencode 1.3.4+ calls that instead of setup(), so without it the 1.x path regresses" >&2
+  FAIL=1
+fi
+if ! echo "$OUTPUT" | grep -q '^HAS_EXECUTE_BEFORE:true$'; then
+  echo "FAIL: expected setup() to register an 'execute.before' hook on ctx.tool — without it the plugin loads but enforces nothing" >&2
   FAIL=1
 fi
 
 echo ""
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: the real, shipped install layout (bin/install-opencode-adapter.sh's output) loads cleanly — no top-level helper files in the discovery dir, and apexyard/index.ts exports only a working default plugin factory."
+  echo "PASS: the real, shipped install layout (bin/install-opencode-adapter.sh's output) loads cleanly — no top-level helper files in the discovery dir, and apexyard/index.ts default-exports a V2 definition whose setup registers the execute.before gate hook."
   exit 0
 fi
 exit 1

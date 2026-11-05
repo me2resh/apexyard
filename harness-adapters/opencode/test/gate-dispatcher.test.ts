@@ -15,18 +15,22 @@
  */
 
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
 import {
-  buildToolExecuteBeforeHook,
+  apexyardGateDispatcher,
+  buildToolExecuteBeforeHandler,
+  createV1Hooks,
   registerGateDispatcher,
   runGateHook,
   execGateHookReal,
   deriveGatesFromOpsRoot,
   type ExecGateHook,
+  type GateDispatcherContext,
+  type ToolExecuteBeforeEvent,
 } from "../src/gate-dispatcher.ts";
 import type { GateDefinition } from "../src/derive-gates.ts";
 
@@ -51,7 +55,41 @@ function gate(name: string, hookRelativePath = THIS_FILE_AS_HOOK): GateDefinitio
   return {
     name,
     hookRelativePath,
-    wires: [{ tool: "bash", commandGlob: null }],
+    wires: [{ tool: "shell", commandGlob: null }],
+  };
+}
+
+/**
+ * Minimal stand-in for opencode's V2 `Context`: captures the callback
+ * registered via `ctx.tool.hook("execute.before", …)` so a test can drive it
+ * directly, exactly as opencode's own dispatcher would.
+ */
+function fakeContext(directory: string): {
+  ctx: GateDispatcherContext;
+  handler: () => (event: ToolExecuteBeforeEvent) => Promise<void>;
+  hookNames: string[];
+} {
+  const hookNames: string[] = [];
+  let registered: ((event: ToolExecuteBeforeEvent) => Promise<void> | void) | undefined;
+  const ctx: GateDispatcherContext = {
+    location: { directory },
+    tool: {
+      hook: async (name, callback) => {
+        hookNames.push(name);
+        registered = callback;
+        return { dispose: async () => {} };
+      },
+    },
+  };
+  return {
+    ctx,
+    hookNames,
+    handler: () => {
+      if (!registered) throw new Error("no execute.before hook was registered");
+      return async (event) => {
+        await registered!(event);
+      };
+    },
   };
 }
 
@@ -113,7 +151,7 @@ test("execGateHookReal: a hook that exceeds the bounded timeout is killed and re
 test("FAILS CLOSED: runGateHook maps a real timeout to a block, naming the hook and the timeout (#840 C1)", () => {
   const opsRoot = mkdtempSync(join(tmpdir(), "apexyard-opencode-gate-test-"));
   writeFileSync(join(opsRoot, "hangs.sh"), "#!/bin/bash\nsleep 5\nexit 0\n", { mode: 0o755 });
-  const hangGate: GateDefinition = { name: "hangs", hookRelativePath: "hangs.sh", wires: [{ tool: "bash", commandGlob: null }] };
+  const hangGate: GateDefinition = { name: "hangs", hookRelativePath: "hangs.sh", wires: [{ tool: "shell", commandGlob: null }] };
 
   const result = runGateHook(opsRoot, hangGate, { command: "anything" }, "Bash", execGateHookReal, 1024 * 1024, 100);
 
@@ -137,57 +175,58 @@ test("runGateHook: reconstructs the exact Claude-Code-shaped stdin payload", () 
   assert.deepEqual(JSON.parse(calls[0]!.stdinPayload), {
     tool_name: "Bash",
     tool_input: { command: "gh pr merge 7 --squash" },
+    cwd: process.cwd(),
   });
 });
 
 // ---------------------------------------------------------------------
-// buildToolExecuteBeforeHook — the plugin's actual event handler, with a
-// mocked exec, driven end-to-end through tool.execute.before's real
-// input/output shape.
+// buildToolExecuteBeforeHandler — the plugin's actual V2 event handler, with
+// a mocked exec, driven end-to-end through the real `{ tool, input }` event
+// shape opencode's `execute.before` hook delivers.
 // ---------------------------------------------------------------------
 
-test("tool.execute.before: a blocked bash call THROWS with the hook's reason (opencode has no {block:true} return contract)", async () => {
+test("execute.before: a blocked shell call THROWS with the hook's reason (opencode has no {block:true} return contract)", async () => {
   const path = join(process.cwd(), THIS_FILE_AS_HOOK);
   const { exec } = mockExec({ [path]: { status: 2, stderr: "BLOCKED: fabricated for test\n" } });
-  const handler = buildToolExecuteBeforeHook(process.cwd(), [gate("block-unreviewed-merge")], exec);
+  const handler = buildToolExecuteBeforeHandler(process.cwd(), [gate("block-unreviewed-merge")], exec);
 
   await assert.rejects(
-    () => handler({ tool: "bash", sessionID: "s1", callID: "c1" }, { args: { command: "gh pr merge 1 --squash" } }),
+    () => handler({ tool: "shell", input: { command: "gh pr merge 1 --squash" } }),
     /BLOCKED: fabricated for test/,
   );
 });
 
-test("tool.execute.before: an allowed bash call resolves without throwing", async () => {
+test("execute.before: an allowed shell call resolves without throwing", async () => {
   const path = join(process.cwd(), THIS_FILE_AS_HOOK);
   const { exec } = mockExec({ [path]: { status: 0, stderr: "" } });
-  const handler = buildToolExecuteBeforeHook(process.cwd(), [gate("noop-allow")], exec);
+  const handler = buildToolExecuteBeforeHandler(process.cwd(), [gate("noop-allow")], exec);
 
-  await assert.doesNotReject(() => handler({ tool: "bash", sessionID: "s1", callID: "c1" }, { args: { command: "echo hello" } }));
+  await assert.doesNotReject(() => handler({ tool: "shell", input: { command: "echo hello" } }));
 });
 
-test("tool.execute.before: a non-bash tool call with no matching gate is a silent pass-through", async () => {
+test("execute.before: a non-shell tool call with no matching gate is a silent pass-through", async () => {
   const { exec, calls } = mockExec({});
-  const handler = buildToolExecuteBeforeHook(process.cwd(), [gate("block-unreviewed-merge")], exec); // only wired to "bash"
+  const handler = buildToolExecuteBeforeHandler(process.cwd(), [gate("block-unreviewed-merge")], exec); // only wired to "shell"
 
-  await assert.doesNotReject(() => handler({ tool: "read", sessionID: "s1", callID: "c1" }, { args: { filePath: "/repo/README.md" } }));
+  await assert.doesNotReject(() => handler({ tool: "read", input: { path: "/repo/README.md" } }));
   assert.equal(calls.length, 0);
 });
 
-test("tool.execute.before: no ops root resolved => silent no-op (fails toward not-enforcing, never toward false-blocking)", async () => {
+test("execute.before: no ops root resolved => silent no-op (fails toward not-enforcing, never toward false-blocking)", async () => {
   const { exec, calls } = mockExec({});
-  const handler = buildToolExecuteBeforeHook(undefined, [gate("block-unreviewed-merge")], exec);
+  const handler = buildToolExecuteBeforeHandler(undefined, [gate("block-unreviewed-merge")], exec);
 
-  await assert.doesNotReject(() => handler({ tool: "bash", sessionID: "s1", callID: "c1" }, { args: { command: "gh pr merge 1 --squash" } }));
+  await assert.doesNotReject(() => handler({ tool: "shell", input: { command: "gh pr merge 1 --squash" } }));
   assert.equal(calls.length, 0);
 });
 
-test("tool.execute.before: the first matching gate that blocks wins — later gates are not evaluated", async () => {
+test("execute.before: the first matching gate that blocks wins — later gates are not evaluated", async () => {
   const hookA = join(process.cwd(), THIS_FILE_AS_HOOK);
   const { exec, calls } = mockExec({ [hookA]: { status: 2, stderr: "first gate blocks\n" } });
   const gates = [gate("gate-a", THIS_FILE_AS_HOOK), gate("gate-b", THIS_FILE_AS_HOOK)];
-  const handler = buildToolExecuteBeforeHook(process.cwd(), gates, exec);
+  const handler = buildToolExecuteBeforeHandler(process.cwd(), gates, exec);
 
-  await assert.rejects(() => handler({ tool: "bash", sessionID: "s1", callID: "c1" }, { args: { command: "anything" } }), /first gate blocks/);
+  await assert.rejects(() => handler({ tool: "shell", input: { command: "anything" } }), /first gate blocks/);
   assert.equal(calls.length, 1, "the second gate must not run once the first one already blocked");
 });
 
@@ -198,39 +237,106 @@ test("tool.execute.before: the first matching gate that blocks wins — later ga
 // parsing, which derive-gates.test.ts already covers on its own).
 // ---------------------------------------------------------------------
 
-test("registerGateDispatcher wires the returned Hooks object's tool.execute.before to the resolved ops root + gate table", async () => {
+test("registerGateDispatcher registers an execute.before hook on ctx.tool, wired to the resolved ops root + gate table", async () => {
   // resolveOpsRoot is overridden to point at this package's own cwd (a real
   // directory) so existsSync(hookPath) — checked before the mocked exec is
   // ever called — passes for THIS_FILE_AS_HOOK, same trick every other test
   // in this file uses.
   const path = join(process.cwd(), THIS_FILE_AS_HOOK);
   const { exec } = mockExec({ [path]: { status: 2, stderr: "blocked via registerGateDispatcher\n" } });
+  const { ctx, handler, hookNames } = fakeContext("/wherever/opencode/was/launched/from");
 
-  const hooks = registerGateDispatcher(
-    { directory: "/wherever/opencode/was/launched/from", worktree: "/wherever" },
-    {
-      resolveOpsRoot: () => process.cwd(),
-      gates: [gate("via-register", THIS_FILE_AS_HOOK)],
-      execGateHook: exec,
-    },
-  );
+  await registerGateDispatcher(ctx, {
+    resolveOpsRoot: () => process.cwd(),
+    gates: [gate("via-register", THIS_FILE_AS_HOOK)],
+    execGateHook: exec,
+  });
 
-  assert.ok(hooks["tool.execute.before"]);
-  await assert.rejects(
-    () => hooks["tool.execute.before"]!({ tool: "bash", sessionID: "s1", callID: "c1" }, { args: { command: "gh pr merge 1" } }),
-    /blocked via registerGateDispatcher/,
-  );
+  assert.deepEqual(hookNames, ["execute.before"]);
+  await assert.rejects(() => handler()({ tool: "shell", input: { command: "gh pr merge 1" } }), /blocked via registerGateDispatcher/);
 });
 
 test("registerGateDispatcher: when resolveOpsRoot returns undefined, the hook is registered but is a permanent no-op", async () => {
   const { exec, calls } = mockExec({});
-  const hooks = registerGateDispatcher(
-    { directory: "/nowhere", worktree: "/nowhere" },
-    { resolveOpsRoot: () => undefined, gates: [gate("unreachable")], execGateHook: exec },
-  );
+  const { ctx, handler } = fakeContext("/nowhere");
 
-  await assert.doesNotReject(() => hooks["tool.execute.before"]!({ tool: "bash", sessionID: "s1", callID: "c1" }, { args: { command: "gh pr merge 1" } }));
+  await registerGateDispatcher(ctx, { resolveOpsRoot: () => undefined, gates: [gate("unreachable")], execGateHook: exec });
+
+  await assert.doesNotReject(() => handler()({ tool: "shell", input: { command: "gh pr merge 1" } }));
   assert.equal(calls.length, 0);
+});
+
+test("registerGateDispatcher resolves the ops root from ctx.location.directory", async () => {
+  const seen: string[] = [];
+  const { ctx } = fakeContext("/the/session/directory");
+
+  await registerGateDispatcher(ctx, {
+    resolveOpsRoot: (c) => {
+      seen.push(c.directory);
+      return undefined;
+    },
+    gates: [],
+  });
+
+  assert.deepEqual(seen, ["/the/session/directory"]);
+});
+
+test("registerGateDispatcher runs hooks from the session directory when it sits inside the ops root", async () => {
+  const opsRoot = patchFixtureOpsRoot();
+  const sessionDir = join(opsRoot, "workspace/project");
+  mkdirSync(sessionDir, { recursive: true });
+  const hookPath = join(opsRoot, ".claude/hooks/dispatch-apply-patch.sh");
+  const { exec, calls } = mockExec({ [hookPath]: { status: 0, stderr: "" } });
+  const { ctx, handler } = fakeContext(sessionDir);
+
+  await registerGateDispatcher(ctx, {
+    resolveOpsRoot: () => opsRoot,
+    gates: [
+      {
+        name: "patch-gate",
+        hookRelativePath: ".claude/hooks/dispatch-apply-patch.sh",
+        wires: [{ tool: "patch", commandGlob: null }],
+      },
+    ],
+    execGateHook: exec,
+  });
+  await handler()({
+    tool: "patch",
+    input: { patchText: "*** Begin Patch\n*** Update File: src/a.ts\n*** End Patch" },
+  });
+
+  assert.equal(calls[0]!.cwd, sessionDir, "the hook runs in the project tree opencode writes into");
+  assert.equal(JSON.parse(calls[0]!.stdinPayload).cwd, sessionDir);
+});
+
+test("registerGateDispatcher falls back to the ops root when the session directory is outside it", async () => {
+  const opsRoot = patchFixtureOpsRoot();
+  const outside = mkdtempSync(join(tmpdir(), "apexyard-opencode-outside-"));
+  const hookPath = join(opsRoot, ".claude/hooks/dispatch-apply-patch.sh");
+  const { exec, calls } = mockExec({ [hookPath]: { status: 0, stderr: "" } });
+  const { ctx, handler } = fakeContext(outside);
+
+  await registerGateDispatcher(ctx, {
+    resolveOpsRoot: () => opsRoot,
+    gates: [
+      {
+        name: "patch-gate",
+        hookRelativePath: ".claude/hooks/dispatch-apply-patch.sh",
+        wires: [{ tool: "patch", commandGlob: null }],
+      },
+    ],
+    execGateHook: exec,
+  });
+  await handler()({
+    tool: "patch",
+    input: { patchText: "*** Begin Patch\n*** Update File: src/a.ts\n*** End Patch" },
+  });
+
+  assert.equal(
+    calls[0]!.cwd,
+    opsRoot,
+    "an APEXYARD_OPS_ROOT session outside the fork falls back to the ops root, where the bash checks can find it",
+  );
 });
 
 // ---------------------------------------------------------------------
@@ -254,40 +360,60 @@ function captureStderr(fn: () => void): string {
   return written.join("");
 }
 
-test("registerGateDispatcher warns to stderr when a gate is wired to a tool with no stdin builder (read/glob/grep)", () => {
+test("registerGateDispatcher warns to stderr when a gate is wired to a tool with no stdin builder (read/glob/grep)", async () => {
   const { exec } = mockExec({});
   const unsupportedGate: GateDefinition = {
     name: "example-advisory",
     hookRelativePath: THIS_FILE_AS_HOOK,
     wires: [{ tool: "read", commandGlob: null }],
   };
+  const { ctx } = fakeContext("/wherever");
 
-  const combined = captureStderr(() => {
-    registerGateDispatcher(
-      { directory: "/wherever", worktree: "/wherever" },
-      { resolveOpsRoot: () => process.cwd(), gates: [unsupportedGate], execGateHook: exec },
-    );
-  });
+  let combined = "";
+  const originalWrite = process.stderr.write.bind(process.stderr);
+  const written: string[] = [];
+  process.stderr.write = ((chunk: string) => {
+    written.push(String(chunk));
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    await registerGateDispatcher(ctx, { resolveOpsRoot: () => process.cwd(), gates: [unsupportedGate], execGateHook: exec });
+  } finally {
+    process.stderr.write = originalWrite;
+    combined = written.join("");
+  }
 
   assert.match(combined, /WARNING/);
   assert.match(combined, /example-advisory/);
   assert.match(combined, /"read"/);
 });
 
-test("registerGateDispatcher does NOT warn when every gate is wired only to bash/edit/write", () => {
+test("registerGateDispatcher does NOT warn when every gate is wired only to shell/bash/edit/write", async () => {
   const { exec } = mockExec({});
   const supportedGate: GateDefinition = {
     name: "require-active-ticket",
     hookRelativePath: THIS_FILE_AS_HOOK,
-    wires: [{ tool: "bash", commandGlob: null }, { tool: "edit", commandGlob: null }],
+    wires: [
+      { tool: "shell", commandGlob: null },
+      { tool: "bash", commandGlob: null },
+      { tool: "edit", commandGlob: null },
+    ],
   };
+  const { ctx } = fakeContext("/wherever");
 
-  const combined = captureStderr(() => {
-    registerGateDispatcher(
-      { directory: "/wherever", worktree: "/wherever" },
-      { resolveOpsRoot: () => process.cwd(), gates: [supportedGate], execGateHook: exec },
-    );
-  });
+  let combined = "";
+  const originalWrite = process.stderr.write.bind(process.stderr);
+  const written: string[] = [];
+  process.stderr.write = ((chunk: string) => {
+    written.push(String(chunk));
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    await registerGateDispatcher(ctx, { resolveOpsRoot: () => process.cwd(), gates: [supportedGate], execGateHook: exec });
+  } finally {
+    process.stderr.write = originalWrite;
+    combined = written.join("");
+  }
 
   assert.equal(combined, "");
 });
@@ -322,4 +448,301 @@ test("deriveGatesFromOpsRoot: a missing settings.json is silent (the expected \"
 
   assert.deepEqual(gates, []);
   assert.equal(combined, "", "a missing file is not a parse failure — warning here would be noise for every non-apexyard session");
+});
+
+// ---------------------------------------------------------------------
+// V2 `patch` tool (Rex F3 / Hakim F1 on #1959) — opencode 2.x ships a
+// patch tool that edits files under the `edit` permission. Before this
+// wire existed a `patch` call matched NO gate at all.
+// ---------------------------------------------------------------------
+
+/** A fixture ops root whose only hook is the framework's patch dispatcher. */
+function patchFixtureOpsRoot(): string {
+  const opsRoot = mkdtempSync(join(tmpdir(), "apexyard-opencode-patch-test-"));
+  mkdirSync(join(opsRoot, ".claude/hooks"), { recursive: true });
+  writeFileSync(join(opsRoot, "settings.json"), JSON.stringify({ hooks: { PreToolUse: [] } }), "utf-8");
+  writeFileSync(join(opsRoot, ".claude/hooks/dispatch-apply-patch.sh"), "#!/bin/bash\nexit 0\n", { mode: 0o755 });
+  return opsRoot;
+}
+
+test("deriveGatesFromOpsRoot wires opencode's patch tool to the framework's patch dispatcher", () => {
+  const opsRoot = patchFixtureOpsRoot();
+  const gates = deriveGatesFromOpsRoot(opsRoot, "settings.json");
+  const patchGate = gates.find((g) => g.hookRelativePath === ".claude/hooks/dispatch-apply-patch.sh");
+  assert.ok(patchGate, "a `patch` call must not be gate-less");
+  assert.deepEqual(patchGate!.wires.map((w) => w.tool).sort(), ["apply_patch", "patch"]);
+});
+
+test("deriveGatesFromOpsRoot adds no patch wire when the ops fork has no patch dispatcher", () => {
+  const opsRoot = mkdtempSync(join(tmpdir(), "apexyard-opencode-patch-absent-"));
+  mkdirSync(join(opsRoot, ".claude/hooks"), { recursive: true });
+  writeFileSync(join(opsRoot, "settings.json"), JSON.stringify({ hooks: { PreToolUse: [] } }), "utf-8");
+  const gates = deriveGatesFromOpsRoot(opsRoot, "settings.json");
+  assert.equal(gates.some((g) => g.hookRelativePath === ".claude/hooks/dispatch-apply-patch.sh"), false);
+});
+
+test("a patch call runs the patch dispatcher as apply_patch, with the envelope as `command`", async () => {
+  const opsRoot = patchFixtureOpsRoot();
+  const hookPath = join(opsRoot, ".claude/hooks/dispatch-apply-patch.sh");
+  const { exec, calls } = mockExec({ [hookPath]: { status: 0, stderr: "" } });
+  const gates = deriveGatesFromOpsRoot(opsRoot, "settings.json");
+  const handler = buildToolExecuteBeforeHandler(opsRoot, gates, exec);
+  const envelope = "*** Begin Patch\n*** Update File: src/a.ts\n*** End Patch";
+
+  await handler({ tool: "patch", sessionID: "s1", input: { patchText: envelope } });
+
+  assert.equal(calls.length, 1, "the patch dispatcher must run for a patch call");
+  assert.deepEqual(JSON.parse(calls[0]!.stdinPayload), {
+    tool_name: "apply_patch",
+    tool_input: { command: envelope },
+    cwd: opsRoot,
+  });
+});
+
+test("a patch call sends the session directory as the payload cwd and hook working directory", async () => {
+  const opsRoot = patchFixtureOpsRoot();
+  const sessionDir = join(opsRoot, "workspace/project");
+  mkdirSync(sessionDir, { recursive: true });
+  const hookPath = join(opsRoot, ".claude/hooks/dispatch-apply-patch.sh");
+  const { exec, calls } = mockExec({ [hookPath]: { status: 0, stderr: "" } });
+  const gates = deriveGatesFromOpsRoot(opsRoot, "settings.json");
+  const handler = buildToolExecuteBeforeHandler(opsRoot, gates, exec, sessionDir);
+  const envelope = "*** Begin Patch\n*** Update File: src/a.ts\n*** End Patch";
+
+  await handler({ tool: "patch", input: { patchText: envelope } });
+
+  assert.equal(calls.length, 1);
+  const payload = JSON.parse(calls[0]!.stdinPayload);
+  assert.equal(payload.cwd, sessionDir, "the hook must resolve relative targets against the session directory, not the ops root");
+  assert.equal(calls[0]!.cwd, sessionDir, "the hook subprocess must run in the session directory");
+});
+
+test("an edit call with no target path blocks instead of skipping every gate", async () => {
+  const hookPath = join(process.cwd(), THIS_FILE_AS_HOOK);
+  const { exec, calls } = mockExec({ [hookPath]: { status: 0, stderr: "" } });
+  const handler = buildToolExecuteBeforeHandler(
+    process.cwd(),
+    [{ name: "edit-gate", hookRelativePath: THIS_FILE_AS_HOOK, wires: [{ tool: "edit", commandGlob: null }] }],
+    exec,
+  );
+
+  await assert.rejects(() => handler({ tool: "edit", input: {} }), /carried no path/);
+  assert.equal(calls.length, 0, "a malformed edit must not skip its path checks");
+});
+
+test("a patch call with no patch envelope blocks instead of skipping every gate", async () => {
+  const opsRoot = patchFixtureOpsRoot();
+  const hookPath = join(opsRoot, ".claude/hooks/dispatch-apply-patch.sh");
+  const { exec, calls } = mockExec({ [hookPath]: { status: 0, stderr: "" } });
+  const gates = deriveGatesFromOpsRoot(opsRoot, "settings.json");
+  const handler = buildToolExecuteBeforeHandler(opsRoot, gates, exec);
+
+  await assert.rejects(() => handler({ tool: "patch", input: {} }), /carried no patch envelope/);
+  assert.equal(calls.length, 0, "the hook must not be asked to evaluate an empty envelope");
+});
+
+test("a blocked patch call throws, so the edit is denied", async () => {
+  const opsRoot = patchFixtureOpsRoot();
+  const hookPath = join(opsRoot, ".claude/hooks/dispatch-apply-patch.sh");
+  const { exec } = mockExec({ [hookPath]: { status: 2, stderr: "BLOCKED: no active ticket\n" } });
+  const gates = deriveGatesFromOpsRoot(opsRoot, "settings.json");
+  const handler = buildToolExecuteBeforeHandler(opsRoot, gates, exec);
+
+  await assert.rejects(
+    () => handler({ tool: "patch", input: { patchText: "*** Begin Patch\n*** End Patch" } }),
+    /no active ticket/,
+  );
+});
+
+// ---------------------------------------------------------------------
+// Dual V1 + V2 entrypoint (#1956 AC1/AC6) — one file serves both plugin
+// generations: V2 calls setup(), V1 (1.3.4+) calls server().
+// ---------------------------------------------------------------------
+
+test("the default export is a V2 definition that also exposes the V1 server() member", async () => {
+  assert.equal(apexyardGateDispatcher.id, "apexyard.gates");
+  assert.equal(typeof apexyardGateDispatcher.setup, "function");
+  assert.equal(typeof apexyardGateDispatcher.server, "function");
+
+  const hooks = await apexyardGateDispatcher.server({ directory: "/nowhere" });
+  assert.equal(typeof hooks["tool.execute.before"], "function");
+});
+
+test("the V1 server() hook blocks a matching call, sharing the same cascade as V2", async () => {
+  const path = join(process.cwd(), THIS_FILE_AS_HOOK);
+  const { exec } = mockExec({ [path]: { status: 2, stderr: "blocked through the v1 hook\n" } });
+
+  const hooks = createV1Hooks(
+    { directory: "/wherever" },
+    {
+      resolveOpsRoot: () => process.cwd(),
+      // V1 emits the `bash` tool id, so the wire must name it.
+      gates: [{ name: "via-v1", hookRelativePath: THIS_FILE_AS_HOOK, wires: [{ tool: "bash", commandGlob: null }] }],
+      execGateHook: exec,
+    },
+  );
+
+  await assert.rejects(
+    () => hooks["tool.execute.before"]({ tool: "bash", sessionID: "s1" }, { args: { command: "gh pr merge 1" } }),
+    /blocked through the v1 hook/,
+  );
+});
+
+test("the V1 edit check reads filePath only, ignoring a decoy path argument", async () => {
+  const hookPath = join(process.cwd(), THIS_FILE_AS_HOOK);
+  const { exec, calls } = mockExec({ [hookPath]: { status: 0, stderr: "" } });
+
+  const hooks = createV1Hooks(
+    { directory: "/wherever" },
+    {
+      resolveOpsRoot: () => process.cwd(),
+      gates: [{ name: "v1-edit", hookRelativePath: THIS_FILE_AS_HOOK, wires: [{ tool: "edit", commandGlob: null }] }],
+      execGateHook: exec,
+    },
+  );
+
+  await hooks["tool.execute.before"]({ tool: "edit" }, { args: { path: "/decoy.ts", filePath: "/real.ts" } });
+
+  assert.equal(calls.length, 1);
+  assert.deepEqual(JSON.parse(calls[0]!.stdinPayload).tool_input, { file_path: "/real.ts" });
+});
+
+test("a namespaced tool id is normalised before gate matching", async () => {
+  const hookPath = join(process.cwd(), THIS_FILE_AS_HOOK);
+  const { exec, calls } = mockExec({ [hookPath]: { status: 0, stderr: "" } });
+  const handler = buildToolExecuteBeforeHandler(process.cwd(), [
+    { name: "edit-gate", hookRelativePath: THIS_FILE_AS_HOOK, wires: [{ tool: "edit", commandGlob: null }] },
+  ], exec);
+
+  await handler({ tool: "acme.edit", input: { path: "/repo/a.ts" } });
+
+  assert.equal(calls.length, 1, "a namespaced id must still reach the gate wired to the bare id");
+});
+
+// ---------------------------------------------------------------------
+// Session-id prefix (Hakim F4 on #1959) — the `unset` line must survive
+// an event with no native session id, or an inherited Claude Code id wins
+// the marker-path resolver again (#1783).
+// ---------------------------------------------------------------------
+
+test("execute.before always strips an inherited CLAUDE_CODE_SESSION_ID, even with no native id", async () => {
+  const { exec } = mockExec({});
+  const handler = buildToolExecuteBeforeHandler(process.cwd(), [], exec);
+  const input: { command: string } = { command: "echo hi" };
+
+  await handler({ tool: "shell", input });
+
+  assert.equal(input.command, "unset CLAUDE_CODE_SESSION_ID\necho hi");
+  assert.doesNotMatch(input.command, /APEXYARD_SESSION_ID/);
+});
+
+test("execute.before exports the native session id when the event carries one", async () => {
+  const { exec } = mockExec({});
+  const handler = buildToolExecuteBeforeHandler(process.cwd(), [], exec);
+  const input: { command: string } = { command: "echo hi" };
+
+  await handler({ tool: "shell", sessionID: "sub-agent-session", input });
+
+  assert.equal(
+    input.command,
+    "unset CLAUDE_CODE_SESSION_ID\nexport APEXYARD_SESSION_ID='sub-agent-session'\necho hi",
+  );
+});
+
+test("a subagent-shaped event (extra host fields, its own session id) is handled the same way", async () => {
+  const path = join(process.cwd(), THIS_FILE_AS_HOOK);
+  const { exec, calls } = mockExec({ [path]: { status: 0, stderr: "" } });
+  const handler = buildToolExecuteBeforeHandler(process.cwd(), [gate("subagent-call")], exec);
+  const input: { command: string } = { command: "echo subagent" };
+  // The real V2 event also carries agent, messageID and id; a subagent runs
+  // under its own sessionID, which must reach the hook unchanged.
+  const event = { tool: "shell", sessionID: "child-session", agent: "explore", messageID: "msg-1", id: "call-1", input };
+
+  await handler(event);
+
+  assert.equal(calls.length, 1);
+  assert.match(input.command, /export APEXYARD_SESSION_ID='child-session'/);
+});
+
+test("setup warns when the host registers a file-writing tool that no wire routes", async () => {
+  const { exec } = mockExec({});
+  const ctx: GateDispatcherContext = {
+    location: { directory: "/wherever" },
+    tool: {
+      hook: async () => ({ dispose: async () => {} }),
+      // `edit` is routed, `patch` is not in this gate table, `read` is not a
+      // file-writing tool. Only `patch` may be reported.
+      list: async () => [{ id: "edit" }, { id: "patch" }, { id: "read" }],
+    },
+  };
+
+  const originalWrite = process.stderr.write.bind(process.stderr);
+  const written: string[] = [];
+  process.stderr.write = ((chunk: string) => {
+    written.push(String(chunk));
+    return true;
+  }) as typeof process.stderr.write;
+  let combined = "";
+  try {
+    await registerGateDispatcher(ctx, {
+      resolveOpsRoot: () => process.cwd(),
+      gates: [{ name: "edit-only", hookRelativePath: THIS_FILE_AS_HOOK, wires: [{ tool: "edit", commandGlob: null }] }],
+      execGateHook: exec,
+    });
+    // The host-tool check is fire-and-forget; let it settle before restoring.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  } finally {
+    process.stderr.write = originalWrite;
+    combined = written.join("");
+  }
+
+  assert.match(combined, /file-writing tool "patch"/);
+  assert.doesNotMatch(combined, /file-writing tool "edit"/, "a routed tool must not be reported");
+  assert.doesNotMatch(combined, /file-writing tool "read"/, "read does not write files");
+});
+
+test("patch routing is still added when settings.json wires that hook for edit only", () => {
+  const opsRoot = patchFixtureOpsRoot();
+  writeFileSync(
+    join(opsRoot, "settings.json"),
+    JSON.stringify({
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: "Edit",
+            hooks: [{ type: "command", command: "bash .claude/hooks/dispatch-apply-patch.sh" }],
+          },
+        ],
+      },
+    }),
+    "utf-8",
+  );
+
+  const gates = deriveGatesFromOpsRoot(opsRoot, "settings.json");
+  const patchWires = gates
+    .filter((g) => g.hookRelativePath === ".claude/hooks/dispatch-apply-patch.sh")
+    .flatMap((g) => g.wires.map((w) => w.tool));
+  assert.ok(patchWires.includes("patch"), "an edit-only wiring of the same script must not drop the patch wire");
+});
+
+test("patch routing is not duplicated when settings.json already wires the patch tool", () => {
+  const opsRoot = patchFixtureOpsRoot();
+  writeFileSync(
+    join(opsRoot, "settings.json"),
+    JSON.stringify({
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: "apply_patch",
+            hooks: [{ type: "command", command: "bash .claude/hooks/dispatch-apply-patch.sh" }],
+          },
+        ],
+      },
+    }),
+    "utf-8",
+  );
+
+  const gates = deriveGatesFromOpsRoot(opsRoot, "settings.json");
+  const patchGates = gates.filter((g) => g.hookRelativePath === ".claude/hooks/dispatch-apply-patch.sh");
+  assert.equal(patchGates.length, 1, "the patch dispatcher must run once per call, not twice");
 });
