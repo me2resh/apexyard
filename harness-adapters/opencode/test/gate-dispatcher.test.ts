@@ -281,6 +281,64 @@ test("registerGateDispatcher resolves the ops root from ctx.location.directory",
   assert.deepEqual(seen, ["/the/session/directory"]);
 });
 
+test("registerGateDispatcher runs hooks from the session directory when it sits inside the ops root", async () => {
+  const opsRoot = patchFixtureOpsRoot();
+  const sessionDir = join(opsRoot, "workspace/project");
+  mkdirSync(sessionDir, { recursive: true });
+  const hookPath = join(opsRoot, ".claude/hooks/dispatch-apply-patch.sh");
+  const { exec, calls } = mockExec({ [hookPath]: { status: 0, stderr: "" } });
+  const { ctx, handler } = fakeContext(sessionDir);
+
+  await registerGateDispatcher(ctx, {
+    resolveOpsRoot: () => opsRoot,
+    gates: [
+      {
+        name: "patch-gate",
+        hookRelativePath: ".claude/hooks/dispatch-apply-patch.sh",
+        wires: [{ tool: "patch", commandGlob: null }],
+      },
+    ],
+    execGateHook: exec,
+  });
+  await handler()({
+    tool: "patch",
+    input: { patchText: "*** Begin Patch\n*** Update File: src/a.ts\n*** End Patch" },
+  });
+
+  assert.equal(calls[0]!.cwd, sessionDir, "the hook runs in the project tree opencode writes into");
+  assert.equal(JSON.parse(calls[0]!.stdinPayload).cwd, sessionDir);
+});
+
+test("registerGateDispatcher falls back to the ops root when the session directory is outside it", async () => {
+  const opsRoot = patchFixtureOpsRoot();
+  const outside = mkdtempSync(join(tmpdir(), "apexyard-opencode-outside-"));
+  const hookPath = join(opsRoot, ".claude/hooks/dispatch-apply-patch.sh");
+  const { exec, calls } = mockExec({ [hookPath]: { status: 0, stderr: "" } });
+  const { ctx, handler } = fakeContext(outside);
+
+  await registerGateDispatcher(ctx, {
+    resolveOpsRoot: () => opsRoot,
+    gates: [
+      {
+        name: "patch-gate",
+        hookRelativePath: ".claude/hooks/dispatch-apply-patch.sh",
+        wires: [{ tool: "patch", commandGlob: null }],
+      },
+    ],
+    execGateHook: exec,
+  });
+  await handler()({
+    tool: "patch",
+    input: { patchText: "*** Begin Patch\n*** Update File: src/a.ts\n*** End Patch" },
+  });
+
+  assert.equal(
+    calls[0]!.cwd,
+    opsRoot,
+    "an APEXYARD_OPS_ROOT session outside the fork falls back to the ops root, where the bash checks can find it",
+  );
+});
+
 // ---------------------------------------------------------------------
 // findUnsupportedGateWires wiring into registerGateDispatcher (#840 C2) —
 // a gate matched to read/glob/grep must warn loudly at init, not vanish.
@@ -457,6 +515,19 @@ test("a patch call sends the session directory as the payload cwd and hook worki
   const payload = JSON.parse(calls[0]!.stdinPayload);
   assert.equal(payload.cwd, sessionDir, "the hook must resolve relative targets against the session directory, not the ops root");
   assert.equal(calls[0]!.cwd, sessionDir, "the hook subprocess must run in the session directory");
+});
+
+test("an edit call with no target path blocks instead of skipping every gate", async () => {
+  const hookPath = join(process.cwd(), THIS_FILE_AS_HOOK);
+  const { exec, calls } = mockExec({ [hookPath]: { status: 0, stderr: "" } });
+  const handler = buildToolExecuteBeforeHandler(
+    process.cwd(),
+    [{ name: "edit-gate", hookRelativePath: THIS_FILE_AS_HOOK, wires: [{ tool: "edit", commandGlob: null }] }],
+    exec,
+  );
+
+  await assert.rejects(() => handler({ tool: "edit", input: {} }), /carried no path/);
+  assert.equal(calls.length, 0, "a malformed edit must not skip its path checks");
 });
 
 test("a patch call with no patch envelope blocks instead of skipping every gate", async () => {

@@ -309,7 +309,22 @@ function isCommandTool(toolId: string): boolean {
  * gate misses it.
  */
 function normaliseToolId(toolId: string): string {
-  return toolId.split(".").pop() ?? toolId;
+  const tail = toolId.split(".").pop();
+  return tail === undefined || tail === "" ? toolId : tail;
+}
+
+/**
+ * The directory a hook should run in. The session directory is correct only
+ * when it sits inside the ops root: the bash checks locate the ops root by
+ * walking up from `$PWD`, so running them from an unrelated directory (the
+ * `APEXYARD_OPS_ROOT` override case) makes them exit without enforcing. Fall
+ * back to the ops root there — the pre-port behaviour, which cannot fail open.
+ */
+function resolveHookCwd(opsRoot: string | undefined, directory: string): string {
+  if (!opsRoot) return directory;
+  const relative = path.relative(opsRoot, directory);
+  const inside = relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  return inside ? directory : opsRoot;
 }
 
 /** Single-quotes a value for safe interpolation into a POSIX shell command. */
@@ -351,13 +366,20 @@ async function evaluateToolCall(
     if (!gateMatchesToolCall(gate, toolId, typeof command === "string" ? command : undefined)) continue;
     const toolInput = buildToolInput(toolId, { args }, generation);
     if (!toolInput) {
-      // A patch tool with no envelope skips every target-path check silently.
-      // If a fork renamed the argument, that is a governance hole, not an
-      // empty patch. Block and name the problem rather than allow it through.
+      // An edit or patch call with no target skips every path check silently.
+      // If a host renamed the argument, that is a governance hole, not an
+      // empty tool call. Block and name the problem rather than allow it.
       if (toolId === "patch" || toolId === "apply_patch") {
         throw new Error(
           `Blocked by apexyard governance gate (${gate.name}): the ${toolId} tool call carried no patch envelope, ` +
             "so its target paths could not be checked.",
+        );
+      }
+      if (toolId === "edit" || toolId === "write") {
+        const argument = generation === "v1" ? "filePath" : "path";
+        throw new Error(
+          `Blocked by apexyard governance gate (${gate.name}): the ${toolId} tool call carried no ${argument}, ` +
+            "so its target path could not be checked.",
         );
       }
       continue;
@@ -566,7 +588,12 @@ export async function registerGateDispatcher(ctx: GateDispatcherContext, options
   // with a registered nothing.
   await ctx.tool.hook(
     "execute.before",
-    buildToolExecuteBeforeHandler(opsRoot, gates, options.execGateHook, ctx.location.directory),
+    buildToolExecuteBeforeHandler(
+      opsRoot,
+      gates,
+      options.execGateHook,
+      resolveHookCwd(opsRoot, ctx.location.directory),
+    ),
   );
   warnOnWiringGaps(ctx, gates);
 }
@@ -645,7 +672,12 @@ export function createV1Hooks(input: V1PluginInput, options: DispatcherOptions =
     );
   }
   return {
-    "tool.execute.before": buildToolExecuteBeforeHook(opsRoot, gates, options.execGateHook, input.directory),
+    "tool.execute.before": buildToolExecuteBeforeHook(
+      opsRoot,
+      gates,
+      options.execGateHook,
+      resolveHookCwd(opsRoot, input.directory),
+    ),
   };
 }
 
