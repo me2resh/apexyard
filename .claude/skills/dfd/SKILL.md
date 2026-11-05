@@ -1,7 +1,7 @@
 ---
 name: dfd
 description: DFD with trust boundaries + data classifications (Mermaid + optional Threat Dragon JSON). Source-of-truth for /threat-model.
-argument-hint: "[project-name | . | --scope-all] [--format=mermaid|dragon|all]"
+argument-hint: "[project-name | . | --scope-all] [--format=mermaid|dragon|all] [--html]"
 allowed-tools: Bash, Read, Grep, Glob, Write, AskUserQuestion
 ---
 
@@ -189,6 +189,47 @@ cat "$discovery_yaml" "$classifications_yaml" > "${projects_dir}/${PROJECT}/arch
 ```
 
 The generator writes a fixed skeleton with placeholder nodes and rows. It appends both YAML reports under `## Discovery provenance`. Every cross-boundary arrow MUST carry a payload label.
+
+#### 5a.1. HTML view (`--html` only)
+
+Reject `--html --scope-all` before discovery.
+Use diagram type `dfd`.
+Map the approved actors, processes, stores and boundaries to nodes and `trust_zone` groups.
+Map flows to labelled edges and classifications to tags.
+This path replaces the Mermaid block from step 5a, including its placeholder nodes.
+Keep the Threat Dragon export unchanged.
+
+With `--html`, use Python 3.9 or later and the shared diagram library.
+Without `--html`, keep the existing generation steps, Mermaid content and file layout.
+Do not write a model or run Python without the flag.
+Stop with `Python 3.9 or later is required for --html.` if the runtime check fails.
+
+1. Read `.claude/skills/_lib-diagram/MODEL.md`.
+2. Write `<stem>.diagram.json` beside the planned markdown, from the approved proposal.
+3. Set `repo.commit` to the target clone's full commit hash.
+4. Derive `repo.web_url` from its origin with `model.derive_web_url`.
+5. Use repository-relative source paths and committed line numbers.
+6. Run the commands below before writing either view. Stop on any failure.
+
+Set `diagram_cli` to the framework's absolute `.claude/skills/_lib-diagram/diagram.py` path.
+Set `model_path`, `target_dir` and `stem` to the resolved model path, clone and output stem.
+
+```bash
+python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' || exit 1
+python3 "$diagram_cli" validate "$model_path" --repo-dir "$target_dir" || exit 1
+mermaid_text=$(python3 "$diagram_cli" mermaid "$model_path" --repo-dir "$target_dir") || exit 1
+html_text=$(python3 "$diagram_cli" html "$model_path" --repo-dir "$target_dir") || exit 1
+```
+
+Insert `mermaid_text` into the existing markdown's Mermaid fence.
+Immediately before the fence, insert `<!-- diagram-model: <stem>.diagram.json sha256=<hash12> -->`.
+Use the first 12 characters of `model.model_hash(model.normalise(model.load(model_path)))` for `hash12`.
+Keep the existing headings, tables, provenance and footer.
+Apply the existing overwrite rules to all three files before writing any file.
+Write `html_text` to `<stem>.html` beside `<stem>.md`.
+Run `python3 "$diagram_cli" check "${stem}.md" --repo-dir "$target_dir"` after writing.
+Stop on failure. Report all three paths on success.
+Edit the model and regenerate both views to correct drift.
 
 #### 5b. Threat Dragon v2 JSON (on `--format=dragon` or `--format=all`)
 

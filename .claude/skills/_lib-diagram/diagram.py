@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Diagram library CLI. No skills call this library yet."""
+"""Diagram library CLI for /c4, /dfd and /feature-diagram HTML views."""
 
 import argparse
 import json

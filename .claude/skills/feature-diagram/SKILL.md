@@ -1,7 +1,7 @@
 ---
 name: feature-diagram
 description: Per-feature Mermaid flowchart. Covers routes / models / jobs / screens. Consumes /extract-features inventory.
-argument-hint: "<feature-slug> [project-name] [--force]"
+argument-hint: "<feature-slug> [project-name] [--force] [--html]"
 allowed-tools: Bash, Read, Grep, Glob, Write, Edit
 ---
 
@@ -177,6 +177,47 @@ end
 | Job | Model | `"reads/writes"` (only if the inventory row mentions both as participating) |
 
 Don't invent edges. If the inventory row doesn't corroborate a screen → route mapping (no shared URL prefix, no shared component name), don't draw the edge — emit the nodes only and add a one-line coverage-gap note at the bottom of the file.
+
+### 5a. HTML view (`--html` only)
+
+Use diagram type `feature` and four `layer` groups: Screens, Routes, Models and Jobs.
+Map the inventory elements to `screen`, `route`, `model` and `job` nodes.
+Use stable underscore identifiers that meet MODEL.md, including underscores in place of slug hyphens.
+Keep layer-level edges and the existing edge inference rules.
+Represent empty layers as empty groups. The emitter supplies their placeholders.
+This path replaces step 5's Mermaid authoring.
+
+With `--html`, use Python 3.9 or later and the shared diagram library.
+Without `--html`, keep the existing generation steps, Mermaid content and file layout.
+Do not write a model or run Python without the flag.
+Stop with `Python 3.9 or later is required for --html.` if the runtime check fails.
+
+1. Read `.claude/skills/_lib-diagram/MODEL.md`.
+2. Write `<stem>.diagram.json` beside the planned markdown, from the approved proposal.
+3. Set `repo.commit` to the target clone's full commit hash.
+4. Derive `repo.web_url` from its origin with `model.derive_web_url`.
+5. Use repository-relative source paths and committed line numbers.
+6. Run the commands below before writing either view. Stop on any failure.
+
+Set `diagram_cli` to the framework's absolute `.claude/skills/_lib-diagram/diagram.py` path.
+Set `model_path`, `target_dir` and `stem` to the resolved model path, clone and output stem.
+
+```bash
+python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' || exit 1
+python3 "$diagram_cli" validate "$model_path" --repo-dir "$target_dir" || exit 1
+mermaid_text=$(python3 "$diagram_cli" mermaid "$model_path" --repo-dir "$target_dir") || exit 1
+html_text=$(python3 "$diagram_cli" html "$model_path" --repo-dir "$target_dir") || exit 1
+```
+
+Insert `mermaid_text` into the existing markdown's Mermaid fence.
+Immediately before the fence, insert `<!-- diagram-model: <stem>.diagram.json sha256=<hash12> -->`.
+Use the first 12 characters of `model.model_hash(model.normalise(model.load(model_path)))` for `hash12`.
+Keep the existing headings, tables, provenance and footer.
+Apply the existing overwrite rules to all three files before writing any file.
+Write `html_text` to `<stem>.html` beside `<stem>.md`.
+Run `python3 "$diagram_cli" check "${stem}.md" --repo-dir "$target_dir"` after writing.
+Stop on failure. Report all three paths on success.
+Edit the model and regenerate both views to correct drift.
 
 ### 6. Write the file
 

@@ -1,7 +1,7 @@
 ---
 name: c4
 description: Generate C4 L1 (Context) + L2 (Container) Mermaid diagrams from a project's codebase. Structurizr DSL escape hatch (--dsl) for L3+ component precision.
-argument-hint: "[project-name] [--level=1|2|both] [--force] [--dsl]"
+argument-hint: "[project-name] [--level=1|2|both] [--force] [--dsl] [--html]"
 allowed-tools: Bash, Read, Grep, Glob, Write
 ---
 
@@ -213,6 +213,45 @@ C4Container
 - All `System_Ext` arrows point **outward** from the system boundary
 
 Don't over-annotate. If a relationship is obvious ("Web calls API"), keep the verb to one word.
+
+### 4a. HTML view (`--html` only)
+
+Reject `--html --dsl` before generation. Support L1 and L2 only.
+Use separate `c4-context` and `c4-container` models for the requested levels.
+Map the confirmed actors, containers, boundaries and relationships to their model kinds.
+This path replaces step 4's Mermaid authoring for each requested level.
+
+With `--html`, use Python 3.9 or later and the shared diagram library.
+Without `--html`, keep the existing generation steps, Mermaid content and file layout.
+Do not write a model or run Python without the flag.
+Stop with `Python 3.9 or later is required for --html.` if the runtime check fails.
+
+1. Read `.claude/skills/_lib-diagram/MODEL.md`.
+2. Write `<stem>.diagram.json` beside the planned markdown, from the approved proposal.
+3. Set `repo.commit` to the target clone's full commit hash.
+4. Derive `repo.web_url` from its origin with `model.derive_web_url`.
+5. Use repository-relative source paths and committed line numbers.
+6. Run the commands below before writing either view. Stop on any failure.
+
+Set `diagram_cli` to the framework's absolute `.claude/skills/_lib-diagram/diagram.py` path.
+Set `model_path`, `target_dir` and `stem` to the resolved model path, clone and output stem.
+
+```bash
+python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' || exit 1
+python3 "$diagram_cli" validate "$model_path" --repo-dir "$target_dir" || exit 1
+mermaid_text=$(python3 "$diagram_cli" mermaid "$model_path" --repo-dir "$target_dir") || exit 1
+html_text=$(python3 "$diagram_cli" html "$model_path" --repo-dir "$target_dir") || exit 1
+```
+
+Insert `mermaid_text` into the existing markdown's Mermaid fence.
+Immediately before the fence, insert `<!-- diagram-model: <stem>.diagram.json sha256=<hash12> -->`.
+Use the first 12 characters of `model.model_hash(model.normalise(model.load(model_path)))` for `hash12`.
+Keep the existing headings, tables, provenance and footer.
+Apply the existing overwrite rules to all three files before writing any file.
+Write `html_text` to `<stem>.html` beside `<stem>.md`.
+Run `python3 "$diagram_cli" check "${stem}.md" --repo-dir "$target_dir"` after writing.
+Stop on failure. Report all three paths on success.
+Edit the model and regenerate both views to correct drift.
 
 ### 4b. Generate the Structurizr DSL (`--dsl` only)
 
