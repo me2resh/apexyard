@@ -1,7 +1,27 @@
 #!/bin/bash
 # Exact raw-command grammar. Do not tokenize or expand caller text here.
 start_ticket_command_allowed() {
-  local cmd="$1" cwd="$2" root="$3" ref re
+  local cmd="$1" cwd="$2" root="$3" ref re dir path
+  case "$cmd" in
+    'cd '*)
+      dir=${cmd#'cd '}
+      dir=${dir%%' && '*}
+      case "$dir" in
+        /*) ;;
+        *) return 1 ;;
+      esac
+      case "$dir" in
+        *[[:space:]]*|*'$'*|*'`'*|*'"'*|*"'"*|*'\'*|*'*'*|*'?'*|*'['*|*'~'*|*';'*|*'&'*|*'|'*|*'<'*|*'>'*|*'('*|*')'*) return 1 ;;
+      esac
+      path=$dir
+      # A trailing slash must not hide a symlink at the path itself.
+      while [ "$path" != / ] && [ "${path%/}" != "$path" ]; do path=${path%/}; done
+      [ -d "$dir" ] && [ ! -L "$path" ] || return 1
+      case "$cmd" in
+        "cd $dir && $root/bin/apexyard-start-ticket "*) cmd=${cmd#"cd $dir && "} ;;
+        *) return 1 ;;
+      esac ;;
+  esac
   case "$cmd" in
     "$root/bin/apexyard-start-ticket "*) ref=${cmd#"$root/bin/apexyard-start-ticket "} ;;
     'bin/apexyard-start-ticket '*)

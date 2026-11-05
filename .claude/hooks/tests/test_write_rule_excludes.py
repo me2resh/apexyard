@@ -9,7 +9,7 @@ import tempfile
 
 sys.dont_write_bytecode = True
 
-source = Path(sys.argv[1])
+source = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location('writer', source / '.claude/hooks/lib/rule-excludes.py')
 writer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(writer)
@@ -29,7 +29,7 @@ with tempfile.TemporaryDirectory() as temporary:
     (root / '.apexyard-fork').touch()
     hooks = root / '.claude/hooks'
     hooks.mkdir(parents=True)
-    for name in ['write-rule-excludes.sh', '_lib-ops-root.sh']:
+    for name in ['write-rule-excludes.sh', '_lib-ops-root.sh', '_lib-portfolio-paths.sh', '_lib-read-config.sh']:
         shutil.copy2(source / '.claude/hooks' / name, hooks / name)
     shutil.copytree(source / '.claude/hooks/lib', hooks / 'lib')
     (root / '.gitignore').write_text('.claude/settings.local.json\n.claude/session/\n')

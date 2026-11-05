@@ -1007,3 +1007,17 @@ portfolio_resolve_template() {
   # 3. Neither exists.
   return 1
 }
+
+# Exact registry parent for permission validation. Keep symlinks unresolved so
+# the writer can refuse them rather than silently granting their destination.
+portfolio_permissions_root() {
+  local registry root
+  root=$(_portfolio_root)
+  registry=$(_portfolio_get '.portfolio.registry' './apexyard.projects.yaml')
+  [ -n "$root" ] && [ -n "$registry" ] || return 1
+  case "$registry" in
+    /*) ;;
+    *) registry="$root/$registry" ;;
+  esac
+  dirname "$registry"
+}

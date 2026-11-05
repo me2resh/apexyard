@@ -43,6 +43,16 @@
 # target shape. See `bin/install-pi-adapter.sh` for the pi-flavored sibling
 # of this script; the two are near-identical except for the discovery
 # directory name and default target path.
+#
+# WHAT IT INSTALLS SERVES BOTH PLUGIN GENERATIONS
+# ------------------------------------------------
+# The shipped `index.ts` default-exports one object: `{ id, setup }` for
+# opencode 2.x, plus `server()` for the object entrypoint opencode 1.3.4+
+# accepts. `setup` registers `ctx.tool.hook("execute.before", …)`; `server`
+# returns the V1 `{ "tool.execute.before": … }` hooks. The script warns only
+# when the `opencode` on PATH predates 1.3.4, the first release verified to
+# load an object entrypoint. 1.3.3 and earlier require a factory function and
+# fail with "fn3 is not a function".
 
 set -euo pipefail
 
@@ -110,6 +120,16 @@ ADAPTER_SRC="$ROOT/harness-adapters/opencode/src"
 SHARED_CORE="$ROOT/harness-adapters/_shared/derive-gates-core.ts"
 [ -z "$TARGET_DIR" ] && TARGET_DIR="$(pwd)/.opencode/plugins"
 
+# The install path is deleted with `rm -rf "$TARGET_DIR/$NAME"` below, so a
+# blank or path-escaping --name must be rejected rather than expanding to the
+# target dir itself.
+case "$NAME" in
+  ""|.|..|*/*)
+    echo "ERROR: --name must be a single non-empty path segment (got: '$NAME') — it is removed with rm -rf under the target dir." >&2
+    exit 2
+    ;;
+esac
+
 for f in index.ts gate-dispatcher.ts derive-gates.ts resolve-ops-root.ts; do
   [ -f "$ADAPTER_SRC/$f" ] || { echo "ERROR: expected source file not found: $ADAPTER_SRC/$f" >&2; exit 1; }
 done
@@ -145,6 +165,33 @@ fi
 
 if [ "$(basename "$TARGET_DIR")" = "plugin" ]; then
   echo "WARNING: --target-dir ends in the singular 'plugin' — opencode's real, live-verified discovery dir is PLURAL ('plugins'). Continuing, but opencode will not find this install unless '$TARGET_DIR' is itself scanned." >&2
+fi
+
+# The adapter serves BOTH plugin generations from one default export: a
+# `{ id, setup }` definition for opencode 2.x, plus a `server()` member for
+# the object entrypoint opencode 1.3.4+ accepts. 1.3.3 and earlier require a
+# factory function, so they cannot load this object entrypoint at all. Warn
+# about that at install time rather than leaving it to a "failed to load
+# plugin" WARN in the server log.
+if command -v opencode >/dev/null 2>&1; then
+  # Real output is a bare version ("1.17.16") on 1.x and a prefixed version
+  # ("opencode v2.1.4") on 2.x. Accept both; the old pattern required the
+  # prefix, so the warning never fired on a real 1.x install.
+  OC_VERSION="$(opencode --version 2>/dev/null | sed -n 's/^[^0-9]*\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' | head -n 1)"
+  case "${OC_VERSION:-}" in
+    ''|*[!0-9.]*) : ;; # unparseable/absent version — say nothing rather than guess
+    *)
+      OC_MAJOR="${OC_VERSION%%.*}"
+      OC_REST="${OC_VERSION#*.}"
+      OC_MINOR="${OC_REST%%.*}"
+      OC_PATCH="${OC_REST#*.}"
+      if [ "$OC_MAJOR" -lt 1 ] || { [ "$OC_MAJOR" -eq 1 ] && { [ "$OC_MINOR" -lt 3 ] || { [ "$OC_MINOR" -eq 3 ] && [ "$OC_PATCH" -lt 4 ]; }; }; }; then
+        echo "WARNING: the 'opencode' on PATH reports $OC_VERSION, which predates 1.3.4." >&2
+        echo "         This adapter serves opencode 1.x through the object entrypoint's server() member," >&2
+        echo "         and 1.3.4 is the first release verified to load an object entrypoint. Upgrade opencode." >&2
+      fi
+      ;;
+  esac
 fi
 
 echo "Installed the apexyard opencode gate adapter:"

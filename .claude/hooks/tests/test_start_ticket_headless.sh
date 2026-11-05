@@ -84,6 +84,35 @@ run_dispatch() {
 }
 check 0 'exact relative helper' run_dispatch 'bin/apexyard-start-ticket me2resh/apexyard#1928'
 check 0 'exact absolute helper' run_dispatch "$PWD/bin/apexyard-start-ticket me2resh/apexyard#1928"
+# Check literal cd grammar directly and through the dispatcher.
+. .claude/hooks/_lib-start-ticket-command.sh
+mkdir -p "$TMP/real" "$TMP/space dir" "$TMP/\$literal"
+ln -s "$TMP/real" "$TMP/link"
+helper="$PWD/bin/apexyard-start-ticket o/r#1"
+check 0 'absolute cd matcher' start_ticket_command_allowed "cd $TMP/real && $helper" "$TMP/real" "$PWD"
+check 0 'absolute cd dispatcher' run_dispatch "cd $TMP/real && $helper"
+check 1 'relative helper outside root' start_ticket_command_allowed 'bin/apexyard-start-ticket o/r#1' "$TMP/real" "$PWD"
+for cmd in \
+  "cd real && $helper" \
+  "cd $TMP/space dir && $helper" \
+  "cd $TMP/\$literal && $helper" \
+  "cd $TMP/link && $helper" \
+  "cd $TMP/link/ && $helper" \
+  "cd $TMP/missing && $helper" \
+  "cd -P $TMP/real && $helper" \
+  "cd -L $TMP/real && $helper" \
+  "cd -- $TMP/real && $helper" \
+  "pushd $TMP/real && $helper" \
+  "cd $TMP/real; $helper" \
+  "cd $TMP/real && bin/apexyard-start-ticket o/r#1" \
+  "cd $TMP/real && cd $TMP/real && $helper" \
+  "cd $TMP/real && $helper && echo x" \
+  "cd  $TMP/real && $helper" \
+  "cd $TMP/real  && $helper" \
+  "cd $TMP/real &&  $helper"; do
+  check 1 "cd matcher refuses $cmd" start_ticket_command_allowed "$cmd" "$PWD" "$PWD"
+  check 2 "cd dispatcher refuses $cmd" run_dispatch "$cmd"
+done
 # Test the protected-target hook directly for mentions. PR validation belongs
 # to separate suites and requires tracker fixtures. No command is executed.
 run_protected() {

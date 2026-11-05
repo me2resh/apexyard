@@ -166,6 +166,41 @@ class RenderTests(unittest.TestCase):
             (folder / 'dfd.html').write_text(render(model).replace(model_hash(model), '0' * 64))
             self.assertEqual(cli('check', folder / 'dfd.md').returncode, 1)
 
+    def test_skill_output_pipeline(self):
+        model = fixture()
+        model['repo']['web_url'] = None
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            path = folder / 'sample.diagram.json'
+            path.write_text(json.dumps(model))
+            result = cli('validate', path)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            outputs = {}
+            for command in ('mermaid', 'html'):
+                result = cli(command, path)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                outputs[command] = result.stdout.decode('ascii')
+            payload = json.loads(data_block(outputs['html']))
+            self.assertEqual(payload['nodes'], normalise(model)['nodes'])
+            for node in model['nodes']:
+                self.assertIn(node['id'], outputs['mermaid'])
+                self.assertIn(node['id'], outputs['html'])
+            # The SVG namespace identifies markup; it makes no network request.
+            source = outputs['html'].replace('http://www.w3.org/2000/svg', '')
+            self.assertIsNone(re.search(r'https?://', source))
+            marker = '<!-- diagram-model: sample.diagram.json sha256='
+            marker += model_hash(normalise(model))[:12] + ' -->\n'
+            markdown = marker + '```mermaid\n' + outputs['mermaid'] + '```\n'
+            (folder / 'sample.md').write_text(markdown)
+            (folder / 'sample.html').write_text(outputs['html'])
+            result = cli('check', folder / 'sample.md')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for invalid in ('invalid-E_EDGE_UNKNOWN_NODE', 'invalid-E_SOURCE_PATH'):
+                for command in ('validate', 'mermaid', 'html'):
+                    result = cli(command, FIXTURES / (invalid + '.diagram.json'))
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertEqual(result.stdout, b'')
+
     def test_source_constraints(self):
         for path in LIB.rglob('*'):
             if path.is_file() and path.suffix in ('.py', '.html', '.sh', '.js'):
