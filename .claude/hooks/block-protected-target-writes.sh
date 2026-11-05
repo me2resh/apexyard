@@ -218,7 +218,8 @@ pt_git() {
         --) break ;;
         -O*|-[!-]*O*) verb=grep-with-pager; break ;;
         --op*)
-          case --open-files-in-pager in
+          local pager_option=--open-files-in-pager
+          case "$pager_option" in
             "${arg%%=*}"*) verb=grep-with-pager; break ;;
           esac ;;
       esac
