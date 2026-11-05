@@ -75,6 +75,15 @@ When `/feature-diagram` runs, activate the **[Tech Lead](../../../roles/engineer
 
 ### 1. Resolve the target
 
+When `--html` is set, check Python before target discovery:
+
+```bash
+python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' || exit 1
+```
+
+Stop with `Python 3.9 or later is required for --html.` if this check fails.
+Without `--html`, skip this check.
+
 - If `<project-name>` is given and the registry has it → use that project.
 - If no `<project-name>` and cwd is inside `workspace/<name>/` → use that project.
 - If no `<project-name>` and cwd is the ops fork root → ask which registered project (list from `apexyard.projects.yaml`).
@@ -190,20 +199,24 @@ This path replaces step 5's Mermaid authoring.
 With `--html`, use Python 3.9 or later and the shared diagram library.
 Without `--html`, keep the existing generation steps, Mermaid content and file layout.
 Do not write a model or run Python without the flag.
-Stop with `Python 3.9 or later is required for --html.` if the runtime check fails.
 
 1. Read `.claude/skills/_lib-diagram/MODEL.md`.
-2. Write `<stem>.diagram.json` beside the planned markdown, from the approved proposal.
-3. Set `repo.commit` to the target clone's full commit hash.
-4. Derive `repo.web_url` from its origin with `model.derive_web_url`.
-5. Use repository-relative source paths and committed line numbers.
-6. Run the commands below before writing either view. Stop on any failure.
+2. Resolve `<stem>.md`, `<stem>.diagram.json` and `<stem>.html` before any output write.
+   Apply the existing overwrite rules to each path before writing any of these files.
+   Treat the three files as one output set. A refusal must preserve all existing files.
+   Stop on refusal.
+3. Read the adapter input contract in `.claude/skills/_lib-diagram/MODEL.md`.
+4. Prepare `adapter_input` from the approved feature elements and confirmed edges as TSV.
+5. Set `commit` to the target clone's full commit hash.
+6. Run `from-tsv` to create the model after all overwrite checks pass.
+7. Stop on any command failure.
 
 Set `diagram_cli` to the framework's absolute `.claude/skills/_lib-diagram/diagram.py` path.
 Set `model_path`, `target_dir` and `stem` to the resolved model path, clone and output stem.
 
 ```bash
-python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' || exit 1
+model_text=$(python3 "$diagram_cli" from-tsv "$adapter_input" --repo-dir "$target_dir" --commit "$commit" --project "$PROJECT") || exit 1
+printf '%s\n' "$model_text" > "$model_path"
 python3 "$diagram_cli" validate "$model_path" --repo-dir "$target_dir" || exit 1
 mermaid_text=$(python3 "$diagram_cli" mermaid "$model_path" --repo-dir "$target_dir") || exit 1
 html_text=$(python3 "$diagram_cli" html "$model_path" --repo-dir "$target_dir") || exit 1
@@ -213,7 +226,6 @@ Insert `mermaid_text` into the existing markdown's Mermaid fence.
 Immediately before the fence, insert `<!-- diagram-model: <stem>.diagram.json sha256=<hash12> -->`.
 Use the first 12 characters of `model.model_hash(model.normalise(model.load(model_path)))` for `hash12`.
 Keep the existing headings, tables, provenance and footer.
-Apply the existing overwrite rules to all three files before writing any file.
 Write `html_text` to `<stem>.html` beside `<stem>.md`.
 Run `python3 "$diagram_cli" check "${stem}.md" --repo-dir "$target_dir"` after writing.
 Stop on failure. Report all three paths on success.

@@ -1,7 +1,7 @@
 # Diagram model v1
 
 Schema `apexyard.diagram/v1` is provisional until PR 3 for the diagram library merges.
-This library has no skill callers yet. It requires Python 3.9 or later and uses only the standard library.
+The HTML skill paths use this library. It requires Python 3.9 or later and uses only the standard library.
 The model contains one repository. It contains no layout positions or absolute clone path.
 
 ## Commands
@@ -183,3 +183,49 @@ Tests require no network, Mermaid CLI or third-party packages.
 - Band: a horizontal region that separates groups or ungrouped nodes.
 - Back edge: an edge removed during ranking because it returns to an active traversal ancestor.
 - Drift: disagreement between the model and a generated view.
+
+## Skill adapters
+
+Adapters require `--repo-dir`, `--commit` and an input path.
+Use `--project` to set the feature title or a default DFD title.
+Both commands validate the result before they write model JSON to stdout.
+They derive the repository URL from the clone's origin.
+Source paths must refer to blobs in the pinned repository commit.
+
+```bash
+python3 diagram.py from-dfd approved.json --repo-dir "$target_dir" --commit "$commit"
+python3 diagram.py from-tsv selected.tsv --repo-dir "$target_dir" --commit "$commit" --project "$PROJECT"
+```
+
+`from-dfd` reads the approved JSON object from `dfd/generate-dragon.sh`.
+It reads `project`, `actors`, `processes`, `stores`, `flows` and `boundaries`.
+Elements have `id`, `name` and `type` fields.
+Flows have `source`, `target` and `label` fields. Discovery's `payload_hint` also supplies a label.
+Boundaries have `id`, `name` and `contains` fields. Each member must identify one node.
+Discovery's `evidence` field contains a repository path, optionally followed by `:line`.
+Elements and flows can also contain MODEL source objects in `sources`.
+Classifications have `label` and either `element` or matching `evidence` fields.
+The adapter adds lowercase classification tags and evidence to matching nodes.
+Resolve discovery gaps and boundary membership before conversion. The adapter does not infer missing endpoints.
+
+`from-tsv` reads a selected feature interchange, with this exact header:
+
+```text
+kind\tname\tfile\tline\tfrom\tto\tlabel
+```
+
+Use literal tabs between columns. Each row must contain all seven columns.
+The existing feature helper reads Markdown tables. It has no TSV export.
+Create this interchange from the selected per-axis rows after the feature review.
+Use `screen`, `route`, `model` or `job` for element rows.
+Copy Component, METHOD plus Path, Model or Job into `name`, respectively.
+Copy File into `file`. Supply `line` only when committed evidence supports it.
+Leave `from`, `to` and `label` empty for element rows.
+Use `edge` rows for confirmed edges. Supply `from`, `to` and `label` without element columns.
+Endpoints can identify nodes or layer groups. No edge inference occurs in this adapter.
+All four layer groups remain present, including empty layers.
+
+Node IDs match `feature-diagram/generate.sh`: kind, underscore slug and zero-based per-kind row index.
+The slug uses lowercase ASCII letters and digits. Other characters become underscores.
+The slug contains at most 40 characters. Thus hyphens become underscores, as in the existing helper.
+Keep selected rows in their existing order to preserve IDs and row suffixes.
