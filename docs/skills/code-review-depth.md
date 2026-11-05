@@ -29,6 +29,7 @@ Pass the base SHA, reviewed SHA, result, and complete path list to Rex.
 `Reduced-scope-allowed` permits the existing Reduced-Scope pass only.
 Rex still checks all five eligibility conditions, both rails, and content.
 Use the stricter result. A Full result cannot become Reduced-scope.
+A PR from an external contributor always means Full, for the code review and for the security review. See `workflows/code-review.md` § External contributions.
 Re-query the forge head immediately before dispatch and before accepting a review.
 A changed head invalidates the result. Fetch and repeat the check for the new head.
 The script also checks the fetched head ref before and after classification.

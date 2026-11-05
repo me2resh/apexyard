@@ -163,6 +163,19 @@ QUESTION:   "Why did you choose Map over Object here?"
 | Security-related | 1 + Security review |
 | UI change | 1 + UI Designer (routine design gate; Head of Design on escalation) |
 | Architecture change | Head of Engineering |
+| External contribution (any files) | Full code review (Rex) + full security review (Hakim). See below. |
+
+### External contributions
+
+An external contributor is a PR author who is not an owner, member or collaborator of the repository, and is not a bot.
+Run a full code review and a full security review for every external contribution.
+Do not reduce the scope of either review.
+Apply both reviews to every file the diff touches.
+A forge UI approval does not replace either review.
+The per-PR human merge approval still applies.
+Allow a delta re-review after the contributor pushes a fix.
+Keep the first review from Rex full.
+Keep the first review from Hakim full.
 
 ---
 
