@@ -195,6 +195,13 @@ Keep both repositories in the same account and side by side on disk. Inside the 
 
 The `/split-portfolio` skill (introduced #146) automates the single-fork → split-portfolio migration. The `/update` skill (extended in #242) automates the v1 → v2 split-portfolio migration for adopters already in split mode with the older layout. See § "Migrating from split-portfolio v1 to v2" below.
 
+SessionStart and `/setup` add the resolved portfolio root to `permissions.additionalDirectories` by default.
+The entry lives in the ops clone's gitignored `.claude/settings.local.json` and takes effect next session.
+The writer preserves existing entries and other settings. Single-fork mode adds no directory permission.
+The writer refuses missing, non-directory, symlinked, home-folder, and filesystem roots, and prints one warning.
+To opt out, set `APEXYARD_DISABLE_PORTFOLIO_PERMISSIONS=1` in the environment before starting the session or running `/setup`.
+Opting out prevents additions. Remove an existing portfolio entry manually if you also want to revoke it.
+
 ### Setup: seven steps, about six minutes
 
 #### 1. Fork apexyard on GitHub
