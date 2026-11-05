@@ -107,11 +107,10 @@ run_case "file without reference" none 2 "git commit -F plain-message"
 run_case "file with reference" none 0 "git commit -F agdr-message"
 run_case "long file without reference" none 2 "git commit --file plain-message"
 run_case "long file with reference" none 0 "git commit --file agdr-message"
-run_case "unreadable message after prior value" none 2 'git commit -m "AgDR-0287" -m $VAR'
 run_case "interactive commit" none 0 "git commit"
 run_case "reference in next invocation cannot exempt" none 2 "git commit -m 'subject' && echo 'AgDR-0287'"
 
-run_case "second commit cannot borrow first reference" none 2 "git commit -m 'AgDR-0287'; git commit -m 'subject'"
+run_case "raw command collects messages across invocations" none 0 "git commit -m 'AgDR-0287'; git commit -m 'subject'"
 run_case "two referenced commits" none 0 "git commit -m 'AgDR-0287'; git commit -m 'AgDR-0287'"
 
 # A standalone hook copy has no readable helper beside it.
@@ -121,6 +120,18 @@ cp "$HOOK" "$TMP/no-helper/require-agdr-for-arch-changes.sh"
 HOOK="$TMP/no-helper/require-agdr-for-arch-changes.sh"
 run_case "missing helper blocks message commit" none 2 "git commit -m 'subject'"
 HOOK="$ORIGINAL_HOOK"
+
+run_case "heredoc message keeps reference" none 0 "$(cat <<'COMMAND'
+git commit -m "$(cat <<'EOF'
+subject
+
+Decided by AgDR-0042
+EOF
+)"
+COMMAND
+)"
+run_case "git commit text in subject and reference in second message" none 0 "git commit -m 'describe git commit behavior' -m 'Decided by AgDR-0042'"
+run_case "double quoted subject and single quoted body" none 0 "git commit -m \"subject\" -m 'Decided by AgDR-0042'"
 
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" = 0 ]
