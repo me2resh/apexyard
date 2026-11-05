@@ -183,47 +183,76 @@ if echo "$STAGED" | grep -qE '^docs/agdr/AgDR-[0-9]+-.*\.md$'; then
 fi
 
 # (2) AgDR reference in commit message?
-# Read message words without executing any shell text.
-COMMAND_FLAT=$(echo "$COMMAND" | tr '\n' ' ')
+# Read only the selected invocation without executing shell text.
 MSG=""
-_GIT_SCAN="$COMMAND"
+MSG_HAS_OPTION=0
+MSG_UNREADABLE=0
 MSG_SEPARATOR=""
-while [ -n "$_GIT_SCAN" ]; do
-  MSG_SCAN_BEFORE="$_GIT_SCAN"
-  if ! _git_take_value; then
-    # Empty quoted words are valid; stop on an unresolved shell word.
-    [ "$_GIT_SCAN" != "$MSG_SCAN_BEFORE" ] && continue
-    break
-  fi
-  case "$_GIT_TAKEN" in
-    --) break ;;
-    -m|--message)
-      MSG_SCAN_BEFORE="$_GIT_SCAN"
-      _git_take_value || {
-        [ "$_GIT_SCAN" != "$MSG_SCAN_BEFORE" ] || break
-      }
-      MSG_VALUE="$_GIT_TAKEN"
-      ;;
-    --message=*) MSG_VALUE="${_GIT_TAKEN#--message=}" ;;
-    -m?*) MSG_VALUE="${_GIT_TAKEN#-m}" ;;
-    *) continue ;;
-  esac
-  MSG+="${MSG_SEPARATOR}${MSG_VALUE}"
-  MSG_SEPARATOR=$'\n\n'
-done
-if [ -z "$MSG" ]; then
-  MSG_FILE=$(echo "$COMMAND_FLAT" | sed -nE 's/.*(-F|--file)[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
-  if [ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ]; then
-    MSG=$(cat "$MSG_FILE")
+if command -v _git_take_value >/dev/null 2>&1; then
+  MSG_REST=$(_git_structure_text "$COMMAND")
+  MSG_INDEX=0
+  while IFS= read -r MSG_PREFIX; do
+    [ -n "$MSG_PREFIX" ] || continue
+    MSG_INDEX=$((MSG_INDEX + 1))
+    MSG_REST="${MSG_REST#*"$MSG_PREFIX"}"
+    if [ "$MSG_INDEX" -eq "${_GIT_VISIT_INDEX:-1}" ]; then
+      # The prefix includes the boundary after the verb. Restore that byte.
+      _GIT_SCAN="${MSG_PREFIX: -1}${MSG_REST}"
+      break
+    fi
+    MSG_REST="${MSG_PREFIX: -1}${MSG_REST}"
+  done <<< "$(git_invocation_prefixes "$MSG_REST" commit)"
+  while [ -n "${_GIT_SCAN:-}" ]; do
+    _GIT_SCAN="${_GIT_SCAN#"${_GIT_SCAN%%[![:space:]]*}"}"
+    case "$_GIT_SCAN" in ''|[\;\&\|\)]*) break ;; esac
+    MSG_SCAN_BEFORE="$_GIT_SCAN"
+    _GIT_TAKEN=""
+    if ! _git_take_value; then
+      # Consume an unresolved word, but never use its undecoded value.
+      if [ "$_GIT_SCAN" = "$MSG_SCAN_BEFORE" ]; then
+        MSG_UNREADABLE=1
+        _git_take_raw_word || break
+      fi
+      continue
+    fi
+    case "$_GIT_TAKEN" in
+      -m|--message|-F|--file)
+        MSG_HAS_OPTION=1
+        MSG_OPTION="$_GIT_TAKEN"
+        _GIT_TAKEN=""
+        if ! _git_take_value; then
+          MSG_UNREADABLE=1
+          break
+        fi
+        MSG_VALUE="$_GIT_TAKEN"
+        case "$MSG_OPTION" in
+          -F|--file)
+            if [ -f "$MSG_VALUE" ]; then MSG_VALUE=$(cat "$MSG_VALUE")
+            else MSG_UNREADABLE=1; fi
+            ;;
+        esac
+        ;;
+      --message=*) MSG_HAS_OPTION=1; MSG_VALUE="${_GIT_TAKEN#--message=}" ;;
+      -m?*) MSG_HAS_OPTION=1; MSG_VALUE="${_GIT_TAKEN#-m}" ;;
+      *) continue ;;
+    esac
+    MSG+="${MSG_SEPARATOR}${MSG_VALUE}"
+    MSG_SEPARATOR=$'\n\n'
+  done
+else
+  # Without the reader, a message option must never become interactive.
+  if printf '%s\n' "$COMMAND" | grep -qE '(^|[[:space:]])(-m|--message|-F|--file)'; then
+    MSG_HAS_OPTION=1
+    MSG_UNREADABLE=1
   fi
 fi
 
-if [ -z "$MSG" ]; then
-  # Interactive commit — skip (matches verify-commit-refs.sh policy)
+if [ "$MSG_HAS_OPTION" -eq 0 ] && [ "$MSG_UNREADABLE" -eq 0 ]; then
+  # Interactive commit has no message option.
   exit 0
 fi
 
-if echo "$MSG" | grep -qE 'AgDR-[0-9]+|docs/agdr/AgDR-'; then
+if [ "$MSG_UNREADABLE" -eq 0 ] && echo "$MSG" | grep -qE 'AgDR-[0-9]+|docs/agdr/AgDR-'; then
   exit 0
 fi
 
@@ -264,6 +293,10 @@ exit 2
 }
 
 _GIT_GATE_INPUT=$(cat)
+# Join shell line continuations before invocation selection and message reads.
+_GIT_GATE_INPUT=$(printf '%s' "$_GIT_GATE_INPUT" | jq '
+  .tool_input.command |= gsub("\\\\\\n"; "")
+')
 _GIT_GATE_LIB="$(cd "$(dirname "$0")" && pwd)/_lib-git-global.sh"
 if [ -r "$_GIT_GATE_LIB" ]; then
   # shellcheck disable=SC1090

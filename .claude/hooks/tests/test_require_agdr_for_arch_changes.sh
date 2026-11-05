@@ -59,6 +59,9 @@ setup() {
   esac
   printf 'FROM scratch\n' > "$b/Dockerfile"
   git -C "$b" add Dockerfile
+  ln -s . "$b/repo"
+  printf 'subject\n' > "$b/plain-message"
+  printf 'decided by AgDR-0287\n' > "$b/agdr-message"
   echo "$b"
 }
 
@@ -91,6 +94,33 @@ run_case "attached short message form" none 0 "git commit -m'subject' -m'decided
 run_case "separate long message form" none 0 "git commit --message 'subject' --message 'decided by AgDR-0287'"
 run_case "no reference in any message" none 2 "git commit -m 'subject' -m 'body' -m 'details'"
 run_case "invalid AgDR id" none 2 "git commit -m 'subject' -m 'decided by AgDR-XYZ'"
+
+run_case "chained add then commit" none 2 "git add Dockerfile && git commit -m 'feat(#1): add a Dockerfile'"
+run_case "cd then commit with and" none 2 "cd repo && git commit -m 'subject'"
+run_case "cd then commit with semicolon" none 2 "cd repo; git commit -m 'subject'"
+run_case "continued first message" none 2 $'git commit \\\n-m \'feat(#1): add a Dockerfile\''
+run_case "variable before message" none 2 'git commit $VAR -m "subject"'
+run_case "separator before message" none 2 "git commit -- -m 'subject'"
+run_case "continued second message reference" none 0 $'git commit -m \'subject\' \\\n-m \'decided by AgDR-0287\''
+run_case "chained second message reference" none 0 "git add Dockerfile && git commit -m 'subject' -m 'AgDR-0287'"
+run_case "file without reference" none 2 "git commit -F plain-message"
+run_case "file with reference" none 0 "git commit -F agdr-message"
+run_case "long file without reference" none 2 "git commit --file plain-message"
+run_case "long file with reference" none 0 "git commit --file agdr-message"
+run_case "unreadable message after prior value" none 2 'git commit -m "AgDR-0287" -m $VAR'
+run_case "interactive commit" none 0 "git commit"
+run_case "reference in next invocation cannot exempt" none 2 "git commit -m 'subject' && echo 'AgDR-0287'"
+
+run_case "second commit cannot borrow first reference" none 2 "git commit -m 'AgDR-0287'; git commit -m 'subject'"
+run_case "two referenced commits" none 0 "git commit -m 'AgDR-0287'; git commit -m 'AgDR-0287'"
+
+# A standalone hook copy has no readable helper beside it.
+ORIGINAL_HOOK="$HOOK"
+mkdir -p "$TMP/no-helper"
+cp "$HOOK" "$TMP/no-helper/require-agdr-for-arch-changes.sh"
+HOOK="$TMP/no-helper/require-agdr-for-arch-changes.sh"
+run_case "missing helper blocks message commit" none 2 "git commit -m 'subject'"
+HOOK="$ORIGINAL_HOOK"
 
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" = 0 ]
