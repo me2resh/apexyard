@@ -47,11 +47,12 @@
 # WHAT IT INSTALLS SERVES BOTH PLUGIN GENERATIONS
 # ------------------------------------------------
 # The shipped `index.ts` default-exports one object: `{ id, setup }` for
-# opencode 2.x, plus `server()` for the object entrypoint opencode 1.18.29+
+# opencode 2.x, plus `server()` for the object entrypoint opencode 1.3.4+
 # accepts. `setup` registers `ctx.tool.hook("execute.before", …)`; `server`
 # returns the V1 `{ "tool.execute.before": … }` hooks. The script warns only
-# when the `opencode` on PATH is older than 1.18.29, which cannot load an
-# object entrypoint at all.
+# when the `opencode` on PATH predates 1.3.4, the first release verified to
+# load an object entrypoint. 1.3.3 and earlier require a factory function and
+# fail with "fn3 is not a function".
 
 set -euo pipefail
 
@@ -168,12 +169,15 @@ fi
 
 # The adapter serves BOTH plugin generations from one default export: a
 # `{ id, setup }` definition for opencode 2.x, plus a `server()` member for
-# the object entrypoint opencode 1.18.29+ accepts. The only unsupported case
-# is a 1.x older than 1.18.29, which cannot load an object entrypoint at all.
-# Warn about that at install time rather than leaving it to a
-# "failed to load plugin" WARN in the server log.
+# the object entrypoint opencode 1.3.4+ accepts. 1.3.3 and earlier require a
+# factory function, so they cannot load this object entrypoint at all. Warn
+# about that at install time rather than leaving it to a "failed to load
+# plugin" WARN in the server log.
 if command -v opencode >/dev/null 2>&1; then
-  OC_VERSION="$(opencode --version 2>/dev/null | sed -n 's/^opencode v\{0,1\}\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' | head -n 1)"
+  # Real output is a bare version ("1.17.16") on 1.x and a prefixed version
+  # ("opencode v2.1.4") on 2.x. Accept both; the old pattern required the
+  # prefix, so the warning never fired on a real 1.x install.
+  OC_VERSION="$(opencode --version 2>/dev/null | sed -n 's/^[^0-9]*\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' | head -n 1)"
   case "${OC_VERSION:-}" in
     ''|*[!0-9.]*) : ;; # unparseable/absent version — say nothing rather than guess
     *)
@@ -181,10 +185,10 @@ if command -v opencode >/dev/null 2>&1; then
       OC_REST="${OC_VERSION#*.}"
       OC_MINOR="${OC_REST%%.*}"
       OC_PATCH="${OC_REST#*.}"
-      if [ "$OC_MAJOR" -lt 1 ] || { [ "$OC_MAJOR" -eq 1 ] && { [ "$OC_MINOR" -lt 18 ] || { [ "$OC_MINOR" -eq 18 ] && [ "$OC_PATCH" -lt 29 ]; }; }; }; then
-        echo "WARNING: the 'opencode' on PATH reports $OC_VERSION, which predates 1.18.29." >&2
+      if [ "$OC_MAJOR" -lt 1 ] || { [ "$OC_MAJOR" -eq 1 ] && { [ "$OC_MINOR" -lt 3 ] || { [ "$OC_MINOR" -eq 3 ] && [ "$OC_PATCH" -lt 4 ]; }; }; }; then
+        echo "WARNING: the 'opencode' on PATH reports $OC_VERSION, which predates 1.3.4." >&2
         echo "         This adapter serves opencode 1.x through the object entrypoint's server() member," >&2
-        echo "         and that entrypoint only exists from 1.18.29. Upgrade opencode, or use an older adapter build." >&2
+        echo "         and 1.3.4 is the first release verified to load an object entrypoint. Upgrade opencode." >&2
       fi
       ;;
   esac

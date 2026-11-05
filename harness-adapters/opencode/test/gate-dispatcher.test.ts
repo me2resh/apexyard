@@ -175,6 +175,7 @@ test("runGateHook: reconstructs the exact Claude-Code-shaped stdin payload", () 
   assert.deepEqual(JSON.parse(calls[0]!.stdinPayload), {
     tool_name: "Bash",
     tool_input: { command: "gh pr merge 7 --squash" },
+    cwd: process.cwd(),
   });
 });
 
@@ -436,7 +437,37 @@ test("a patch call runs the patch dispatcher as apply_patch, with the envelope a
   assert.deepEqual(JSON.parse(calls[0]!.stdinPayload), {
     tool_name: "apply_patch",
     tool_input: { command: envelope },
+    cwd: opsRoot,
   });
+});
+
+test("a patch call sends the session directory as the payload cwd and hook working directory", async () => {
+  const opsRoot = patchFixtureOpsRoot();
+  const sessionDir = join(opsRoot, "workspace/project");
+  mkdirSync(sessionDir, { recursive: true });
+  const hookPath = join(opsRoot, ".claude/hooks/dispatch-apply-patch.sh");
+  const { exec, calls } = mockExec({ [hookPath]: { status: 0, stderr: "" } });
+  const gates = deriveGatesFromOpsRoot(opsRoot, "settings.json");
+  const handler = buildToolExecuteBeforeHandler(opsRoot, gates, exec, sessionDir);
+  const envelope = "*** Begin Patch\n*** Update File: src/a.ts\n*** End Patch";
+
+  await handler({ tool: "patch", input: { patchText: envelope } });
+
+  assert.equal(calls.length, 1);
+  const payload = JSON.parse(calls[0]!.stdinPayload);
+  assert.equal(payload.cwd, sessionDir, "the hook must resolve relative targets against the session directory, not the ops root");
+  assert.equal(calls[0]!.cwd, sessionDir, "the hook subprocess must run in the session directory");
+});
+
+test("a patch call with no patch envelope blocks instead of skipping every gate", async () => {
+  const opsRoot = patchFixtureOpsRoot();
+  const hookPath = join(opsRoot, ".claude/hooks/dispatch-apply-patch.sh");
+  const { exec, calls } = mockExec({ [hookPath]: { status: 0, stderr: "" } });
+  const gates = deriveGatesFromOpsRoot(opsRoot, "settings.json");
+  const handler = buildToolExecuteBeforeHandler(opsRoot, gates, exec);
+
+  await assert.rejects(() => handler({ tool: "patch", input: {} }), /carried no patch envelope/);
+  assert.equal(calls.length, 0, "the hook must not be asked to evaluate an empty envelope");
 });
 
 test("a blocked patch call throws, so the edit is denied", async () => {
@@ -454,7 +485,7 @@ test("a blocked patch call throws, so the edit is denied", async () => {
 
 // ---------------------------------------------------------------------
 // Dual V1 + V2 entrypoint (#1956 AC1/AC6) — one file serves both plugin
-// generations: V2 calls setup(), V1 (1.18.29+) calls server().
+// generations: V2 calls setup(), V1 (1.3.4+) calls server().
 // ---------------------------------------------------------------------
 
 test("the default export is a V2 definition that also exposes the V1 server() member", async () => {
@@ -484,6 +515,37 @@ test("the V1 server() hook blocks a matching call, sharing the same cascade as V
     () => hooks["tool.execute.before"]({ tool: "bash", sessionID: "s1" }, { args: { command: "gh pr merge 1" } }),
     /blocked through the v1 hook/,
   );
+});
+
+test("the V1 edit check reads filePath only, ignoring a decoy path argument", async () => {
+  const hookPath = join(process.cwd(), THIS_FILE_AS_HOOK);
+  const { exec, calls } = mockExec({ [hookPath]: { status: 0, stderr: "" } });
+
+  const hooks = createV1Hooks(
+    { directory: "/wherever" },
+    {
+      resolveOpsRoot: () => process.cwd(),
+      gates: [{ name: "v1-edit", hookRelativePath: THIS_FILE_AS_HOOK, wires: [{ tool: "edit", commandGlob: null }] }],
+      execGateHook: exec,
+    },
+  );
+
+  await hooks["tool.execute.before"]({ tool: "edit" }, { args: { path: "/decoy.ts", filePath: "/real.ts" } });
+
+  assert.equal(calls.length, 1);
+  assert.deepEqual(JSON.parse(calls[0]!.stdinPayload).tool_input, { file_path: "/real.ts" });
+});
+
+test("a namespaced tool id is normalised before gate matching", async () => {
+  const hookPath = join(process.cwd(), THIS_FILE_AS_HOOK);
+  const { exec, calls } = mockExec({ [hookPath]: { status: 0, stderr: "" } });
+  const handler = buildToolExecuteBeforeHandler(process.cwd(), [
+    { name: "edit-gate", hookRelativePath: THIS_FILE_AS_HOOK, wires: [{ tool: "edit", commandGlob: null }] },
+  ], exec);
+
+  await handler({ tool: "acme.edit", input: { path: "/repo/a.ts" } });
+
+  assert.equal(calls.length, 1, "a namespaced id must still reach the gate wired to the bare id");
 });
 
 // ---------------------------------------------------------------------

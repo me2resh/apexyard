@@ -274,11 +274,15 @@ export function gateMatchesToolCall(gate: GateDefinition, toolId: string, comman
  *
  * The NATIVE field names it reads differ by opencode generation: V2 passes
  * the tool's own arguments as `path` (read/edit/write) and `command`
- * (`shell`); V1 used `filePath` and `bash`. Both are accepted — see
+ * (`shell`); V1 used `filePath` and the `bash` tool id. Both are accepted — see
  * `CLAUDE_MATCHER_TO_OPENCODE_TOOLS`'s header comment for why the two are
  * carried side by side rather than version-probed.
  */
-export function buildToolInput(toolId: string, output: ToolCallOutput | undefined): Record<string, unknown> | undefined {
+export function buildToolInput(
+  toolId: string,
+  output: ToolCallOutput | undefined,
+  generation: "v1" | "v2" = "v2",
+): Record<string, unknown> | undefined {
   const args = output?.args ?? {};
   switch (toolId) {
     // V2 (opencode 2.x) calls this tool `shell`; V1 called it `bash` — see
@@ -293,10 +297,11 @@ export function buildToolInput(toolId: string, output: ToolCallOutput | undefine
     case "write": {
       // V2 renamed the file argument `filePath` -> `path` (the V2 tools
       // documentation gives `path` for read/edit/write; confirmed live against
-      // opencode 2.1.4). `path` is read first, then V1's `filePath`, so the
-      // same build works against either generation without a version probe.
+      // opencode 2.1.4). V1 reads `filePath` only, exactly as `dev` did: a
+      // decoy `path` sitting next to it would otherwise redirect the checks
+      // while the V1 tool still writes `filePath`.
       const raw = args as Record<string, unknown>;
-      const filePath = raw.path ?? raw.filePath;
+      const filePath = generation === "v1" ? raw.filePath : raw.path ?? raw.filePath;
       if (typeof filePath !== "string" || filePath.length === 0) return undefined;
       return { file_path: filePath };
     }

@@ -161,7 +161,7 @@ if ! echo "$OUTPUT" | grep -q '^HAS_SETUP_OR_EFFECT:true$'; then
   FAIL=1
 fi
 if ! echo "$OUTPUT" | grep -q '^HAS_V1_SERVER:true$'; then
-  echo "FAIL: expected the default export to expose the V1 server() member — opencode 1.18.29+ calls that instead of setup(), so without it the 1.x path regresses" >&2
+  echo "FAIL: expected the default export to expose the V1 server() member — opencode 1.3.4+ calls that instead of setup(), so without it the 1.x path regresses" >&2
   FAIL=1
 fi
 if ! echo "$OUTPUT" | grep -q '^HAS_EXECUTE_BEFORE:true$'; then

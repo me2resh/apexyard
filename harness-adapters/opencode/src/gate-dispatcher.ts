@@ -193,12 +193,19 @@ export function runGateHook(
   execGateHook: ExecGateHook = execGateHookReal,
   maxBufferBytes: number = MAX_HOOK_OUTPUT_BYTES,
   timeoutMs: number = HOOK_EXEC_TIMEOUT_MS,
+  callCwd: string = opsRoot,
 ): GateHookResult | undefined {
   const hookPath = path.join(opsRoot, gate.hookRelativePath);
   if (!existsSync(hookPath)) return undefined; // gate not present in this fork — no-op, not a failure
 
-  const stdinPayload = JSON.stringify({ tool_name: claudeToolName, tool_input: toolInput });
-  const { status, stderr, timedOut } = execGateHook(hookPath, stdinPayload, opsRoot, maxBufferBytes, timeoutMs);
+  // The top-level `cwd` is what Claude Code and Codex send, and what the bash
+  // hooks read first (`dispatch-apply-patch.sh` and
+  // `block-protected-target-writes.sh` both prefer `.cwd`). It must be the
+  // directory the HOST resolves relative tool paths against, not the ops root:
+  // a relative patch/edit target under `workspace/<project>` belongs to that
+  // project, which may be a different tree from the ops fork above it.
+  const stdinPayload = JSON.stringify({ tool_name: claudeToolName, tool_input: toolInput, cwd: callCwd });
+  const { status, stderr, timedOut } = execGateHook(hookPath, stdinPayload, callCwd, maxBufferBytes, timeoutMs);
 
   if (status === 2) {
     return { block: true, reason: stderr.trim() || `Blocked by apexyard governance gate (${gate.name})` };
@@ -280,11 +287,29 @@ interface NormalisedToolCall {
   readonly sessionId?: string;
   /** The tool's own argument object, same reference the host will execute. */
   readonly args: Record<string, unknown>;
+  /**
+   * Directory the host resolves relative tool paths against — V2's
+   * `ctx.location.directory`, V1's `input.directory`. Sent as the payload's
+   * top-level `cwd` and used as the hook subprocess's working directory.
+   */
+  readonly cwd?: string;
+  /** Plugin generation the call arrived on; V1's edit/write use `filePath` only. */
+  readonly generation: "v1" | "v2";
 }
 
 /** The opencode tool ids whose `command` argument is a shell command line. */
 function isCommandTool(toolId: string): boolean {
   return toolId === "shell" || toolId === "bash";
+}
+
+/**
+ * Strips a host namespace from a tool id (`acme.edit` -> `edit`). The wiring
+ * warning has always normalised this way; the dispatcher now uses the same
+ * normalisation, so a namespaced id cannot be reported as routed while every
+ * gate misses it.
+ */
+function normaliseToolId(toolId: string): string {
+  return toolId.split(".").pop() ?? toolId;
 }
 
 /** Single-quotes a value for safe interpolation into a POSIX shell command. */
@@ -311,11 +336,12 @@ async function evaluateToolCall(
   execGateHook: ExecGateHook,
 ): Promise<void> {
   if (!opsRoot) return; // no apexyard fork found on this machine/session — nothing to enforce, fail toward not-blocking
-  const { tool: toolId, sessionId, args } = call;
+  const { tool: toolId, sessionId, args, cwd, generation } = call;
   const command = args.command;
+  const effectiveCwd = cwd ?? opsRoot;
   // opencode can host concurrent sessions. Carry the native id per call.
-  const sessionExec: ExecGateHook = (hook, payload, cwd, maxBuffer, timeout) =>
-    execGateHook(hook, payload, cwd, maxBuffer, timeout, sessionId);
+  const sessionExec: ExecGateHook = (hook, payload, hookCwd, maxBuffer, timeout) =>
+    execGateHook(hook, payload, hookCwd, maxBuffer, timeout, sessionId);
 
   // Run every gate wired to this tool. First hook to block wins — mirrors
   // Claude Code's own PreToolUse semantics, where any matching hook
@@ -323,10 +349,30 @@ async function evaluateToolCall(
   // would have said.
   for (const gate of gates) {
     if (!gateMatchesToolCall(gate, toolId, typeof command === "string" ? command : undefined)) continue;
-    const toolInput = buildToolInput(toolId, { args });
-    if (!toolInput) continue;
+    const toolInput = buildToolInput(toolId, { args }, generation);
+    if (!toolInput) {
+      // A patch tool with no envelope skips every target-path check silently.
+      // If a fork renamed the argument, that is a governance hole, not an
+      // empty patch. Block and name the problem rather than allow it through.
+      if (toolId === "patch" || toolId === "apply_patch") {
+        throw new Error(
+          `Blocked by apexyard governance gate (${gate.name}): the ${toolId} tool call carried no patch envelope, ` +
+            "so its target paths could not be checked.",
+        );
+      }
+      continue;
+    }
     const claudeToolName = claudeToolNameFor(toolId);
-    const result = runGateHook(opsRoot, gate, toolInput, claudeToolName, sessionExec);
+    const result = runGateHook(
+      opsRoot,
+      gate,
+      toolInput,
+      claudeToolName,
+      sessionExec,
+      undefined,
+      undefined,
+      effectiveCwd,
+    );
     if (result?.block) {
       // opencode has no `{block: true}` return contract — throwing inside
       // the execute.before hook is the documented way to deny a tool call.
@@ -354,15 +400,22 @@ export function buildToolExecuteBeforeHandler(
   opsRoot: string | undefined,
   gates: GateDefinition[],
   execGateHook: ExecGateHook = execGateHookReal,
+  cwd?: string,
 ): (event: ToolExecuteBeforeEvent) => Promise<void> {
   return async (event) => {
+    // `input` is `unknown` in the host's type, so narrow it before the cast.
+    // A non-object falls back to an empty argument set, as before.
+    const rawInput = event.input;
+    const args = typeof rawInput === "object" && rawInput !== null ? (rawInput as Record<string, unknown>) : {};
     await evaluateToolCall(
       opsRoot,
       gates,
       {
-        tool: event.tool,
+        tool: normaliseToolId(event.tool),
         sessionId: event.sessionID,
-        args: (event.input ?? {}) as Record<string, unknown>,
+        args,
+        cwd,
+        generation: "v2",
       },
       execGateHook,
     );
@@ -378,12 +431,19 @@ export function buildToolExecuteBeforeHook(
   opsRoot: string | undefined,
   gates: GateDefinition[],
   execGateHook: ExecGateHook = execGateHookReal,
+  cwd?: string,
 ): V1ToolExecuteBeforeHandler {
   return async (input, output) => {
     await evaluateToolCall(
       opsRoot,
       gates,
-      { tool: input.tool, sessionId: input.sessionID, args: output.args ?? {} },
+      {
+        tool: normaliseToolId(input.tool),
+        sessionId: input.sessionID,
+        args: output.args ?? {},
+        cwd,
+        generation: "v1",
+      },
       execGateHook,
     );
   };
@@ -504,7 +564,10 @@ export async function registerGateDispatcher(ctx: GateDispatcherContext, options
   // Register the hook FIRST. The wiring warnings below are advisory, and a
   // host that throws while enumerating tools must never leave the session
   // with a registered nothing.
-  await ctx.tool.hook("execute.before", buildToolExecuteBeforeHandler(opsRoot, gates, options.execGateHook));
+  await ctx.tool.hook(
+    "execute.before",
+    buildToolExecuteBeforeHandler(opsRoot, gates, options.execGateHook, ctx.location.directory),
+  );
   warnOnWiringGaps(ctx, gates);
 }
 
@@ -548,7 +611,7 @@ function warnOnWiringGaps(ctx: GateDispatcherContext, gates: GateDefinition[]): 
       .then((tools) => {
         const routed = new Set(gates.flatMap((gate) => gate.wires.map((wire) => wire.tool)));
         for (const tool of tools) {
-          const id = tool.id.split(".").pop() ?? tool.id;
+          const id = normaliseToolId(tool.id);
           if (!EDIT_CLASS_TOOL_IDS.has(id) || routed.has(id)) continue;
           process.stderr.write(
             `apexyard gate dispatcher: WARNING — opencode registers the file-writing tool "${id}", but no gate is wired to it. ` +
@@ -581,17 +644,20 @@ export function createV1Hooks(input: V1PluginInput, options: DispatcherOptions =
         `which this adapter has no stdin builder for. This gate is SILENTLY SKIPPED for "${gap.tool}" tool calls.\n`,
     );
   }
-  return { "tool.execute.before": buildToolExecuteBeforeHook(opsRoot, gates, options.execGateHook) };
+  return {
+    "tool.execute.before": buildToolExecuteBeforeHook(opsRoot, gates, options.execGateHook, input.directory),
+  };
 }
 
 /**
  * V2 plugin definition plus the V1 `server()` member.
  *
  * opencode 2.x validates the default export against `{ id, setup }` (or
- * `{ id, effect }`) and ignores extra members. opencode 1.18.29+ accepts an
- * object entrypoint and calls `server()` instead of `setup()`. One file
- * therefore serves both generations, which is the vendor's own documented
- * migration shape.
+ * `{ id, effect }`) and ignores extra members. opencode 1.3.4+ accepts an
+ * object entrypoint and calls `server()` (1.3.3 and earlier require a
+ * factory function and fail with "fn3 is not a function"). One file therefore
+ * serves both generations, which is the vendor's own documented migration
+ * shape.
  *
  * The object is written literally rather than as
  * `{ ...Plugin.define({ id, setup }), server }` on purpose: `Plugin.define`
