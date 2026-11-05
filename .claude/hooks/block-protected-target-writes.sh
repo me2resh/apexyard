@@ -216,7 +216,12 @@ pt_git() {
     for arg in "${words[@]:$i}"; do
       case "$arg" in
         --) break ;;
-        -O*|-[!-]*O*|--open-files-in-pager|--open-files-in-pager=*) verb=grep-with-pager; break ;;
+        -O*|-[!-]*O*) verb=grep-with-pager; break ;;
+        --op*)
+          local pager_option=--open-files-in-pager
+          case "$pager_option" in
+            "${arg%%=*}"*) verb=grep-with-pager; break ;;
+          esac ;;
       esac
     done
   fi
@@ -229,7 +234,18 @@ pt_git() {
     read-tree) for arg in "${words[@]}"; do [ "$arg" != -u ] || { pt_live "$tree" && pt_block 'read-tree writes a live root.'; }; done; return 0 ;;
     rm|mv) pt_operands "git $verb" "$i"; return 0 ;;
     checkout|restore) ;;
-    log|show|diff|blame|ls-files|status|ls-tree|grep|cat-file|rev-parse|rev-list|for-each-ref|show-ref|merge-base|describe|name-rev|shortlog|range-diff|check-ignore|check-attr) return 0 ;;
+    ls-files|status|ls-tree|grep|cat-file|rev-parse|for-each-ref|show-ref|merge-base|describe|name-rev|check-ignore|check-attr) return 0 ;;
+    log|show|diff|blame|rev-list|shortlog|range-diff)
+      # Diff output options write even when the verb otherwise only reads.
+      # Scan past -- because an earlier option can consume it as a value.
+      while [ "$i" -lt "${#words[@]}" ]; do
+        arg=${words[$i]}; i=$((i+1))
+        case "$arg" in
+          --outp|--outpu|--output) pt_judge "${words[$i]:-}"; i=$((i+1)) ;;
+          --outp=*|--outpu=*|--output=*) pt_judge "${arg#*=}" ;;
+        esac
+      done
+      return 0 ;;
     archive)
       while [ "$i" -lt "${#words[@]}" ]; do
         arg=${words[$i]}; i=$((i+1))
