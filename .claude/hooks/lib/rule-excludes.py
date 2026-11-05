@@ -134,6 +134,73 @@ def advisory(root, home, excludes):
         print('Rule excludes advisory: personal or managed-project rule files are excluded by existing settings.')
 
 
+def splice_member(raw, key, value):
+    spans, end = members(raw)
+    encoded = json.dumps(value, ensure_ascii=True)
+    if key in spans:
+        start, stop = spans[key]
+        return raw[:start] + encoded + raw[stop:]
+    return raw[:end] + (',' if spans else '') + json.dumps(key) + ': ' + encoded + raw[end:]
+
+
+def portfolio_permissions(root, home, portfolio):
+    """Add only the helper's exact portfolio directory, preserving other bytes."""
+    if not home:
+        raise ValueError('missing home directory')
+    path = Path(portfolio)
+    if not portfolio or not path.is_absolute():
+        raise ValueError('missing portfolio root')
+    # Inspect the original components before collapsing '..' or symlinks.
+    current = Path(path.anchor)
+    for part in path.parts[1:]:
+        current = current / part
+        if current.is_symlink():
+            raise ValueError('symlinked portfolio root')
+    path = path.resolve(strict=True)
+    ops = Path(root).resolve(strict=True)
+    if path == ops or ops in path.parents:
+        return
+    home_path = Path(home).resolve()
+    personal = home_path / '.claude'
+    if (not path.is_dir() or path == Path('/') or path == home_path
+            or path in home_path.parents or path == personal or personal in path.parents
+            or path in ops.parents):
+        raise ValueError('unsafe portfolio root')
+    registry = read_safe(path / 'apexyard.projects.yaml')
+    if registry is None or not re.search(rb'^projects:[ \t]*(?:[^\r\n]*)$', registry, re.MULTILINE):
+        raise ValueError('missing portfolio registry or top-level projects key')
+    target = Path(root, '.claude/settings.local.json')
+    original = read_safe(target)
+    raw = (original if original is not None else b'{}\n').decode('utf-8')
+    existing = json.loads(raw)
+    if not isinstance(existing, dict):
+        raise ValueError('settings must be an object')
+    spans, _ = members(raw)
+    permissions = existing.get('permissions', {})
+    if not isinstance(permissions, dict):
+        raise ValueError('permissions must be an object')
+    entries = permissions.get('additionalDirectories', [])
+    if not isinstance(entries, list) or not all(isinstance(p, str) for p in entries):
+        raise ValueError('invalid additional directories')
+    if 'permissions' in spans:
+        start, stop = spans['permissions']
+        nested = raw[start:stop]
+        members(nested)
+    else:
+        nested = '{}'
+    if str(path) in entries:
+        return
+    updated_permissions = splice_member(nested, 'additionalDirectories', entries + [str(path)])
+    if 'permissions' in spans:
+        updated = raw[:start] + updated_permissions + raw[stop:]
+    else:
+        _, end = members(raw)
+        updated = raw[:end] + (',' if spans else '') + '"permissions": ' + updated_permissions + raw[end:]
+    json.loads(updated)
+    replace_safe(target, updated.encode('utf-8'), original)
+    print('Portfolio permissions: updated .claude/settings.local.json (effective next session).')
+
+
 def main(root, home):
     target = Path(root, '.claude/settings.local.json')
     session = Path(root, '.claude/session')
@@ -188,4 +255,7 @@ def main(root, home):
 
 
 if __name__ == '__main__':
-    main(*sys.argv[1:])
+    if sys.argv[1:2] == ['--portfolio-permissions']:
+        portfolio_permissions(*sys.argv[2:])
+    else:
+        main(*sys.argv[1:])

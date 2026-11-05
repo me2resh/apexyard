@@ -101,7 +101,7 @@ Run the advisory writer once from the ops fork:
 bash .claude/hooks/write-rule-excludes.sh
 ```
 
-The writer changes only `claudeMdExcludes` in gitignored `.claude/settings.local.json`.
+The writer updates `claudeMdExcludes` and split-portfolio `permissions.additionalDirectories` in gitignored `.claude/settings.local.json`.
 A warning does not block setup. Restart the session after setup to apply the exclude.
 SessionStart repairs missing or relocated entries. See AgDR-0233.
 
@@ -330,6 +330,9 @@ Before item 4, run `git rev-parse --show-toplevel` in the ops fork. Record the p
      exit 1
    fi
    ```
+
+Run `bash .claude/hooks/write-rule-excludes.sh` again after the split-portfolio config exists.
+This adds the portfolio directory permission for the next session.
 
 Then proceed to Step 2c with the user's earlier description, configuring `onboarding.yaml` as normal. The rest of the skill is unchanged — the only difference between modes is where the registry physically lives.
 
