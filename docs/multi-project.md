@@ -195,6 +195,21 @@ Keep both repositories in the same account and side by side on disk. Inside the 
 
 The `/split-portfolio` skill (introduced #146) automates the single-fork → split-portfolio migration. The `/update` skill (extended in #242) automates the v1 → v2 split-portfolio migration for adopters already in split mode with the older layout. See § "Migrating from split-portfolio v1 to v2" below.
 
+SessionStart and `/setup` add the resolved portfolio root to `permissions.additionalDirectories` by default.
+The entry lives in the ops clone's gitignored `.claude/settings.local.json` and takes effect next session.
+The writer preserves existing entries and other settings. Single-fork mode adds no directory permission.
+The writer prints one warning and refuses these inputs:
+
+- Missing roots, non-directory roots, and paths with symlinked components.
+- The filesystem root, the home folder, and ancestors of either the home folder or the ops clone.
+- `~/.claude` and every directory under it.
+- An empty `HOME` value.
+- A missing, symlinked, or non-regular `apexyard.projects.yaml` file in the portfolio root.
+- A registry without a top-level `projects:` key.
+- Invalid settings JSON, duplicate settings keys, or invalid permission types.
+To opt out, set `APEXYARD_DISABLE_PORTFOLIO_PERMISSIONS=1` in the environment before starting the session or running `/setup`.
+Opting out prevents additions. Remove an existing portfolio entry manually if you also want to revoke it.
+
 ### Setup: seven steps, about six minutes
 
 #### 1. Fork apexyard on GitHub
@@ -844,6 +859,11 @@ Templates:
 
 - `templates/architecture/c4-context.md`: L1, system + external actors
 - `templates/architecture/c4-container.md`: L2, deployable units inside the system boundary
+
+**Optional HTML view.** Add `--html` to `/c4`, `/dfd` or `/feature-diagram` for a self-contained HTML view beside each markdown file.
+The flag also writes `<stem>.diagram.json` and requires Python 3.9 or later.
+Both views use the validated model. Runs without the flag keep their existing output.
+Do not combine `--html` with `/c4 --dsl` or `/dfd --scope-all`.
 
 **Escape hatch for L3+ (Structurizr DSL).** Some projects need component-level (L3) precision, auto-zoom across all levels from one model, or Structurizr Workspace features (tags, filtered views). In these cases, `/c4 <project> --dsl` generates a `workspace.dsl` file instead. See `templates/architecture/c4-structurizr.dsl` and the `/c4` skill's "Escape hatch" section. Mermaid stays the default for L1/L2. This is additive, not a replacement, and introduces no new runtime dependency. Rendering the `.dsl` is the adopter's own choice at [structurizr.com/dsl](https://structurizr.com/dsl), Structurizr Lite, or `structurizr-cli`. Decision rationale: [`docs/agdr/AgDR-0085-structurizr-dsl-escape-hatch.md`](agdr/AgDR-0085-structurizr-dsl-escape-hatch.md).
 
