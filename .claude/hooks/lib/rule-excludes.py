@@ -145,6 +145,8 @@ def splice_member(raw, key, value):
 
 def portfolio_permissions(root, home, portfolio):
     """Add only the helper's exact portfolio directory, preserving other bytes."""
+    if not home:
+        raise ValueError('missing home directory')
     path = Path(portfolio)
     if not portfolio or not path.is_absolute():
         raise ValueError('missing portfolio root')
@@ -158,8 +160,15 @@ def portfolio_permissions(root, home, portfolio):
     ops = Path(root).resolve(strict=True)
     if path == ops or ops in path.parents:
         return
-    if not path.is_dir() or path == Path('/') or path == Path(home).resolve() or path in ops.parents:
+    home_path = Path(home).resolve()
+    personal = home_path / '.claude'
+    if (not path.is_dir() or path == Path('/') or path == home_path
+            or path in home_path.parents or path == personal or personal in path.parents
+            or path in ops.parents):
         raise ValueError('unsafe portfolio root')
+    registry = read_safe(path / 'apexyard.projects.yaml')
+    if registry is None or not re.search(rb'^projects:[ \t]*(?:[^\r\n]*)$', registry, re.MULTILINE):
+        raise ValueError('missing portfolio registry or top-level projects key')
     target = Path(root, '.claude/settings.local.json')
     original = read_safe(target)
     raw = (original if original is not None else b'{}\n').decode('utf-8')
@@ -187,6 +196,7 @@ def portfolio_permissions(root, home, portfolio):
     else:
         _, end = members(raw)
         updated = raw[:end] + (',' if spans else '') + '"permissions": ' + updated_permissions + raw[end:]
+    json.loads(updated)
     replace_safe(target, updated.encode('utf-8'), original)
     print('Portfolio permissions: updated .claude/settings.local.json (effective next session).')
 

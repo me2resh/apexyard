@@ -35,6 +35,8 @@ Run the writer again after `/setup` creates split-portfolio configuration.
 
 ## Consequences
 
+Managed-project clones under portfolio `workspace/` open to file tools without a prompt, and the registry check limits the grant to a real portfolio.
+
 The permission takes effect next session. Single-fork mode adds no permission.
 Opting out does not remove an existing entry. The owner can remove that entry manually.
 Invalid paths produce an advisory warning. Existing hook-disabling protections remain active.

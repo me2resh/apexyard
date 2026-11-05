@@ -33,10 +33,14 @@ fi
 if [ "${APEXYARD_DISABLE_PORTFOLIO_PERMISSIONS:-}" != 1 ]; then
   if ! (
     source "$HOOK_DIR/_lib-portfolio-paths.sh" || exit 1
-    # Anchor helper resolution to this clone, including linked worktrees.
-    _PORTFOLIO_ROOT_CACHE="$OPS_ROOT"
+    # Config paths belong to the main worktree; settings remain clone-local.
+    _PORTFOLIO_ROOT_CACHE=$(_ops_root_main_worktree "$OPS_ROOT") || exit 1
     cd "$OPS_ROOT" || exit 1
     portfolio=$(portfolio_permissions_root) || exit 1
+    # Single-fork configuration grants no extra directory in linked worktrees.
+    case "$portfolio" in
+      "$_PORTFOLIO_ROOT_CACHE"|"$_PORTFOLIO_ROOT_CACHE/.") exit 0 ;;
+    esac
     python3 "$HOOK_DIR/lib/rule-excludes.py" --portfolio-permissions "$OPS_ROOT" "${HOME:-}" "$portfolio"
   ) 2>/dev/null; then
     printf '%s\n' 'WARN: portfolio permissions could not be updated; continuing with existing settings.' >&2
