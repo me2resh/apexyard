@@ -64,10 +64,10 @@ concurrency:
 jobs:
   conform:
     name: conformance / ${{ matrix.harness }}
-    # Run a schedule only in the upstream repository (#1981). In a fork, the
+    # Run a schedule only in the canonical repository (#1981). In a fork, the
     # daily run spends the fork's Actions minutes, and the badge job below
-    # commits an orphan branch into the fork. pull_request, push,
-    # workflow_call and workflow_dispatch runs still work in forks.
+    # commits an orphan branch into the fork. workflow_call and
+    # workflow_dispatch runs still work in forks.
     if: github.event_name != 'schedule' || github.repository == 'me2resh/apexyard'
     runs-on: ubuntu-latest
     timeout-minutes: 10

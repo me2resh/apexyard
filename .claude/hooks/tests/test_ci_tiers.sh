@@ -82,9 +82,10 @@ const conformance = JSON.parse(fs.readFileSync(`${tmp}/conformance.json`));
 assert('workflow_call' in conformance.on);
 assert.equal(w.jobs['hook-test-suite'].name, 'hook test suite');
 assert.deepEqual(w.jobs['hook-test-suite'].needs, ['tier', 'hook-tests', 'conformance']);
-// A schedule runs only in the upstream repository (#1981). tier gates every
+// A schedule runs only in the canonical repository (#1981). tier gates every
 // job that needs it; hook-test-suite and badge start with always(), so they
-// carry the guard themselves.
+// carry the guard themselves. nightly-failure skips in a fork only through its
+// failure clause, so this test pins that condition too.
 const scheduleGuard = "github.event_name != 'schedule' || github.repository == 'me2resh/apexyard'";
 assert.equal(w.jobs['hook-test-suite'].if, `always() && (${scheduleGuard})`);
 assert.equal(w.jobs.tier.if, scheduleGuard);
@@ -100,6 +101,7 @@ assert.equal(w.jobs.conformance.secrets, 'inherit');
 assert.equal(w.jobs.conformance.if, "needs.tier.outputs.tier == 'release' && vars.CONFORMANCE_ON_RELEASE == 'true'");
 assert.deepEqual(w.jobs.conformance.permissions, { contents: 'write', actions: 'read' });
 assert.deepEqual(w.jobs['nightly-failure'].permissions, { issues: 'write' });
+assert.equal(w.jobs['nightly-failure'].if, "always() && github.event_name == 'schedule' && needs.hook-test-suite.result == 'failure'");
 assert.equal(w.permissions.contents, 'read');
 const select = w.jobs.tier.steps.find(s => s.id === 'select').run;
 function tier(event, paths, branch = '', title = '') {

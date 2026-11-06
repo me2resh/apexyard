@@ -19,9 +19,11 @@ concurrency:
 
 jobs:
   tier:
-    # Run the nightly schedule only in the upstream repository (#1981). Every
+    # Run the nightly schedule only in the canonical repository (#1981). Every
     # other job needs this one, so a fork's schedule stops here.
     # hook-test-suite starts with always(), so it carries the same guard.
+    # nightly-failure needs hook-test-suite and runs only when it failed, so a
+    # skipped hook-test-suite skips it too.
     if: github.event_name != 'schedule' || github.repository == 'me2resh/apexyard'
     runs-on: ubuntu-latest
     timeout-minutes: 10
