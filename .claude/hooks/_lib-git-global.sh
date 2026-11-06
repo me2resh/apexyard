@@ -17,6 +17,12 @@ if [ -n "${_LIB_GIT_GLOBAL_LOADED:-}" ]; then
 fi
 _LIB_GIT_GLOBAL_LOADED=1
 
+# Variables keep these expressions parseable in both shell grammars.
+_git_external_env_re='(^|[^[:alnum:]_])PATH([^[:alnum:]_]|$)|GIT_EXEC_PATH|--exec-path|env[[:space:]]+(-i|-([[:space:]]|$)|-u|--unset|--ignore-environment)|exec[[:space:]]+-c'
+
+_git_fd_space_re='^([0-9]+|-)([[:space:];&|]|$)'
+_git_fd_end_re='^([0-9]+|-)([;&|]|$)'
+
 # Share this expression with the dispatcher and the gates.
 # #1748: escaped pairs and quoted values belong to a single option word.
 _git_opt_val='(\\.|"[^"]*"|'"'"'[^'"'"']*'"'"'|\$\([^)]*\)|`[^`]*`|[^[:space:];&|"'"'"']+)+'
@@ -51,7 +57,7 @@ _git_sub_re='(^|[^[:alnum:]_.-])'${_git_cmd_word}${_git_sub_opts}
 _git_quoted_literal() {
   local s="$1" out="" i c
   for ((i = 0; i < ${#s}; i++)); do
-    c="${s:i:1}"
+    c="${s:$i:1}"
     case "$c" in
       \\|'.'|'['|']'|'('|')'|'*'|'+'|'?'|'{'|'}'|'|'|'^'|'$')
         c="\\$c"
@@ -77,17 +83,20 @@ git_push_segment_re() {
 # Only simple data commands can suppress a raw-text match.
 _git_text_is_simple_data() {
   local text="$1" state="" i c
-  local lead='^[[:blank:]]*([A-Za-z_][A-Za-z0-9_]*='
-  lead+="${_git_opt_val}"'[[:blank:]]+)*(grep|egrep|fgrep|rg|ag|ack|echo|printf)([[:blank:]]|$)'
+  local lead='^[[:blank:]]*(grep|egrep|fgrep|echo|printf)([[:blank:]]|$)'
+  local unsafe_option="[[:blank:]]+['\"]?(-v|--pre[^[:blank:]]*|-P[^[:blank:]]*|--perl[^[:blank:]]*)([[:blank:]]|$|['\"])"
   [[ "$text" =~ $lead ]] || return 1
-  # Keep substitutions and input scripts conservative, even inside quotes.
-  case "$text" in *'$('*|*'`'*|*'<<'*) return 1 ;; esac
+  # Unclear option or quote shapes retain the raw-text match.
+  case "$text" in
+    *'$('*|*'`'*|*'<<'*|*"$'"*|*'\"'*|*"\'"*|*"'\""*|*"\"'"*) return 1 ;;
+  esac
+  [[ "$text" =~ $unsafe_option ]] && return 1
   for ((i = 0; i < ${#text}; i++)); do
-    c="${text:i:1}"
+    c="${text:$i:1}"
     case "$c" in
       \\)
         if [ "$state" != "'" ]; then
-          [ "${text:i+1:1}" != $'\n' ] || return 1
+          [ "${text:$((i+1)):1}" != $'\n' ] || return 1
           i=$((i + 1))
         fi
         ;;
@@ -112,12 +121,12 @@ command_has_git_subcommand() {
     prefix="${text%%"$m"*}"
     # Carry the enclosing argument quote into the existing quoted_ws rule.
     for ((i = 0; i < ${#prefix}; i++)); do
-      c="${prefix:i:1}"
+      c="${prefix:$i:1}"
       case "$c" in
         # Substitutions can run commands inside a double-quoted argument.
         # Preserve the existing raw-text result for these uncertain shapes.
         '$')
-          if [ "$state" != "'" ] && [ "${prefix:i+1:1}" = '(' ]; then return 0; fi
+          if [ "$state" != "'" ] && [ "${prefix:$((i+1)):1}" = '(' ]; then return 0; fi
           ;;
         '`') [ "$state" = "'" ] || return 0 ;;
         \\) [ "$state" = "'" ] || i=$((i + 1)) ;;
@@ -198,7 +207,7 @@ _git_match_hides_words() {
   local m="$1" i c state="${2:-}" phase=0 letters=0 want=3 split=0 marks=0 quoted_ws=0
   _GIT_MATCH_QUOTED_WS=0
   for ((i = 0; i < ${#m}; i++)); do
-    c="${m:i:1}"
+    c="${m:$i:1}"
     case "$c" in
       \"|\'|\\)
         if [ "$phase" = 1 ] || [ "$phase" = 4 ]; then
@@ -344,7 +353,7 @@ EOF_REDIR_PIECES
               _GIT_SCAN="${_GIT_SCAN#"${_GIT_SCAN%%[![:space:]]*}"}"
             done
             case "$_GIT_SCAN" in ''|[\;\&\|]*) break ;; esac
-            if [[ "$_GIT_SCAN" =~ ^([0-9]+|-)([[:space:];&|]|$) ]]; then
+            if [[ "$_GIT_SCAN" =~ $_git_fd_space_re ]]; then
               _GIT_SCAN="${_GIT_SCAN:${#BASH_REMATCH[1]}}"
               continue
             fi
@@ -709,7 +718,7 @@ _git_take_redir() {
   # Digit-only target for >&1 / <&0 / >&- forms.
   # The target must end at a word boundary. A digit that runs into more text
   # is one file name, so the raw-word reader takes the whole word.
-  if [[ "$_GIT_SCAN" =~ ^([0-9]+|-)([[:space:];&|]|$) ]]; then
+  if [[ "$_GIT_SCAN" =~ $_git_fd_space_re ]]; then
     _GIT_SCAN="${_GIT_SCAN:${#BASH_REMATCH[1]}}"
     return 0
   fi
@@ -932,7 +941,7 @@ EOF_PUSH_PIECES
         _GIT_SCAN="${pieces[wpi]}"
       done
       case "$_GIT_SCAN" in ''|[\;\&\|]*) break ;; esac
-      if [[ "$_GIT_SCAN" =~ ^([0-9]+|-)([;&|]|$) ]]; then
+      if [[ "$_GIT_SCAN" =~ $_git_fd_end_re ]]; then
         _GIT_SCAN="${_GIT_SCAN:${#BASH_REMATCH[1]}}"
         continue
       fi
@@ -1608,7 +1617,7 @@ EOF_POSITIONS
   local channel_re='(^|[^[:alnum:]_])(HOME|XDG_CONFIG_HOME|GIT_DIR|GIT_COMMON_DIR|GIT_CONFIG[A-Za-z_0-9]*)([^[:alnum:]_]|$)'
   if [[ "$clean" =~ $channel_re ]]; then _GA_CHANNEL="${BASH_REMATCH[2]}"; fi
   case "$clean" in *--config-env*) _GA_CHANNEL="${_GA_CHANNEL:---config-env}" ;; esac
-  if [[ "$clean" =~ (^|[^[:alnum:]_])PATH([^[:alnum:]_]|$)|GIT_EXEC_PATH|--exec-path|env[[:space:]]+(-i|-([[:space:]]|$)|-u|--unset|--ignore-environment)|exec[[:space:]]+-c ]]; then _GA_EXTERNAL_OFF=1; fi
+  if [[ "$clean" =~ $_git_external_env_re ]]; then _GA_EXTERNAL_OFF=1; fi
   local include_channel_re='-c[[:space:]]+["'"'"']?([iI][nN][cC][lL][uU][dD][eE]\.|[iI][nN][cC][lL][uU][dD][eE][iI][fF]\.)'
   if [[ "$clean" =~ $include_channel_re ]]; then _GA_CHANNEL="${_GA_CHANNEL:-include}"; fi
   _git_alias_lower "$clean"; clean="$_GA_LOWER"

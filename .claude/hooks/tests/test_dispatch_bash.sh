@@ -576,7 +576,7 @@ done
 
 # One quoted argument is data; nested shell command strings still route.
 for command in "grep -n -E 'git push|credential' f" \
-  'echo "run git push later"' 'rg -n "git push origin dev" docs/' \
+  'echo "run git push later"' \
   "echo 'run git push later' > notes.txt" $"echo 'git"$'\\\n'$"push'"; do
   : > "$TMP/log"
   run_json "$command"
@@ -585,7 +585,7 @@ for command in "grep -n -E 'git push|credential' f" \
     exit 1
   fi
 done
-for command in "sh -c 'git push origin main'" \
+for command in 'rg -n "git push origin dev" docs/' "sh -c 'git push origin main'" \
   "python3 -c 'import os; os.system(\"git push origin dev\")'" \
   "bash <<< 'git push origin dev'" "grep x f | sh -c 'git push'" \
   "echo 'git push origin dev' | sh"; do

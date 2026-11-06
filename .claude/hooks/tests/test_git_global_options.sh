@@ -58,7 +58,7 @@ check cd-and yes "$(has "cd /some/repo && git -C /other commit -m x" commit)"
 for verb in push commit; do
   check "quoted-grep-$verb" no "$(has "grep -n -E 'git $verb|credential' f" "$verb")"
   check "quoted-echo-$verb" no "$(has "echo \"run git $verb later\"" "$verb")"
-  check "quoted-rg-$verb" no "$(has "rg -n \"git $verb origin dev\" docs/" "$verb")"
+  check "quoted-rg-$verb" yes "$(has "rg -n \"git $verb origin dev\" docs/" "$verb")"
   for cmd in "git $verb origin dev" "bash -c 'git $verb origin dev'" \
     "sh -c \"git $verb origin dev\"" "eval 'git $verb origin dev'" "cd x && git $verb" \
     "echo 'git $verb later'; git $verb"; do
@@ -75,7 +75,7 @@ for cmd in "python3 -c 'import os; os.system(\"git push origin dev\")'" \
   check "raw-push-$cmd" yes "$(has "$cmd" push)"
 done
 for data_word in grep egrep fgrep rg ag ack echo printf; do
-  check "assigned-data-$data_word" no "$(has "A='some value' B=x $data_word 'git push' >> notes.txt" push)"
+  check "assigned-raw-$data_word" yes "$(has "A='some value' B=x $data_word 'git push' >> notes.txt" push)"
 done
 
 # A command substitution keeps the existing conservative raw-text result.
@@ -254,11 +254,10 @@ run_hook() {
   printf '%s' "$rc"
 }
 
-for cmd in "grep -n -E 'git push|credential' f" 'echo "run git push later"' \
-  'rg -n "git push origin dev" docs/'; do
+for cmd in "grep -n -E 'git push|credential' f" 'echo "run git push later"'; do
   check "quoted-push-allowed-$cmd" 0 "$(run_hook "$HOOKS/block-main-push.sh" "$cmd" "$protected")"
 done
-for cmd in 'git push origin dev' "bash -c 'git push origin dev'" \
+for cmd in 'rg -n "git push origin dev" docs/' 'git push origin dev' "bash -c 'git push origin dev'" \
   'sh -c "git push origin dev"' "eval 'git push origin dev'" 'cd x && git push'; do
   check "real-push-blocked-$cmd" 2 "$(run_hook "$HOOKS/block-main-push.sh" "$cmd" "$protected")"
 done
