@@ -7,6 +7,8 @@
 #
 # Presence checks stay on the raw command. Do not strip quotes or heredoc
 # bodies before asking whether a commit or push is present (AgDR-0113).
+# A single quoted argument containing both words is data unless a nested
+# shell is present.
 # #1772: a redirection before the verb is skipped like the shell does.
 #
 # Not a hook. Hooks source this file.
@@ -75,7 +77,43 @@ git_push_segment_re() {
 
 # 0 when the raw command contains `git [global options] <sub>`.
 command_has_git_subcommand() {
-  printf '%s\n' "$1" | LC_ALL=C grep -qE "$(git_subcommand_re "$2")"
+  local text="$1" re m prefix state="" i c
+  re="$(git_subcommand_re "$2")"
+  [[ "$text" =~ $re ]] || return 1
+  _git_text_has_nested_shell "$text" && return 0
+  while [[ "$text" =~ $re ]]; do
+    m="${BASH_REMATCH[0]}"
+    prefix="${text%%"$m"*}"
+    # Carry the enclosing argument quote into the existing quoted_ws rule.
+    for ((i = 0; i < ${#prefix}; i++)); do
+      c="${prefix:i:1}"
+      case "$c" in
+        # Substitutions can run commands inside a double-quoted argument.
+        # Preserve the existing raw-text result for these uncertain shapes.
+        '$')
+          if [ "$state" != "'" ] && [ "${prefix:i+1:1}" = '(' ]; then return 0; fi
+          ;;
+        '`') [ "$state" = "'" ] || return 0 ;;
+        \\) [ "$state" = "'" ] || i=$((i + 1)) ;;
+        \"|\')
+          if [ -z "$state" ]; then state="$c"; elif [ "$state" = "$c" ]; then state=""; fi
+          ;;
+      esac
+    done
+    _git_match_hides_words "$m" "$state" || :
+    [ "$_GIT_MATCH_QUOTED_WS" = 1 ] || return 0
+    text="${text#*"$m"}"
+    # Re-scan the consumed match to preserve quote state for later matches.
+    text="$m$text"
+    prefix="${text:0:1}"
+    case "$prefix" in
+      \"|\')
+        if [ -z "$state" ]; then state="$prefix"; elif [ "$state" = "$prefix" ]; then state=""; fi
+        ;;
+    esac
+    text="${text:1}"
+  done
+  return 1
 }
 
 # 0 when a shell token is the git command word (#1816 G1/G4).
@@ -131,7 +169,8 @@ _git_text_has_nested_shell() {
 # word is prose or a pattern, not a command: not hidden.
 # Quotes only at the edges of two separate words: hidden (fail closed).
 _git_match_hides_words() {
-  local m="$1" i c state="" phase=0 letters=0 want=3 split=0 marks=0 quoted_ws=0
+  local m="$1" i c state="${2:-}" phase=0 letters=0 want=3 split=0 marks=0 quoted_ws=0
+  _GIT_MATCH_QUOTED_WS=0
   for ((i = 0; i < ${#m}; i++)); do
     c="${m:i:1}"
     case "$c" in
@@ -164,6 +203,7 @@ _git_match_hides_words() {
         ;;
     esac
   done
+  _GIT_MATCH_QUOTED_WS="$quoted_ws"
   [ "$split" = 0 ] || return 0
   [ "$quoted_ws" = 0 ] || return 1
   [ "$marks" = 0 ] && return 1

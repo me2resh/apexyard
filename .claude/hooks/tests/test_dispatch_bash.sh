@@ -383,7 +383,7 @@ run_json() {
 
 # broad-space retains older routing, even where Bash removes the pair.
 # Prefix routing cannot see these later verbs, so this exercises the join.
-for command in $'echo ok; git\\\npush' $"echo 'git"$'\\\n'$"push'"; do
+for command in $'echo ok; git\\\npush'; do
   : > "$TMP/log"
   run_json "$command"
   [ "$(grep -c '^block-main-push.sh$' "$TMP/log")" -eq 1 ]
@@ -575,12 +575,17 @@ for command in \
   fi
 done
 
-# The scan does not scrub quoted data. Text that only mentions a push still
-# routes the push gates. Pin that over-match so a later change does not
-# scrub the input and lose `sh -c '...'` routing with it.
-: > "$TMP/log"
-run_json "echo 'run git push later' > notes.txt"
-[ "$(grep -c '^block-main-push.sh$' "$TMP/log")" -eq 1 ]
+# One quoted argument is data; nested shell command strings still route.
+for command in "grep -n -E 'git push|credential' f" \
+  'echo "run git push later"' 'rg -n "git push origin dev" docs/' \
+  "echo 'run git push later' > notes.txt" $"echo 'git"$'\\\n'$"push'"; do
+  : > "$TMP/log"
+  run_json "$command"
+  if grep -qE '^(block-main-push|check-secrets)\.sh$' "$TMP/log"; then
+    echo "FAIL: quoted data routed protected gates: $command" >&2
+    exit 1
+  fi
+done
 : > "$TMP/log"
 run_json "sh -c 'git push origin main'"
 [ "$(grep -c '^block-main-push.sh$' "$TMP/log")" -eq 1 ]
