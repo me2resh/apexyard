@@ -19,6 +19,10 @@ concurrency:
 
 jobs:
   tier:
+    # Run the nightly schedule only in the upstream repository (#1981). Every
+    # other job needs this one, so a fork's schedule stops here.
+    # hook-test-suite starts with always(), so it carries the same guard.
+    if: github.event_name != 'schedule' || github.repository == 'me2resh/apexyard'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -150,7 +154,7 @@ jobs:
   hook-test-suite:
     name: hook test suite
     needs: [tier, hook-tests, conformance]
-    if: always()
+    if: always() && (github.event_name != 'schedule' || github.repository == 'me2resh/apexyard')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

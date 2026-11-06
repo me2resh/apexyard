@@ -82,7 +82,14 @@ const conformance = JSON.parse(fs.readFileSync(`${tmp}/conformance.json`));
 assert('workflow_call' in conformance.on);
 assert.equal(w.jobs['hook-test-suite'].name, 'hook test suite');
 assert.deepEqual(w.jobs['hook-test-suite'].needs, ['tier', 'hook-tests', 'conformance']);
-assert.equal(w.jobs['hook-test-suite'].if, 'always()');
+// A schedule runs only in the upstream repository (#1981). tier gates every
+// job that needs it; hook-test-suite and badge start with always(), so they
+// carry the guard themselves.
+const scheduleGuard = "github.event_name != 'schedule' || github.repository == 'me2resh/apexyard'";
+assert.equal(w.jobs['hook-test-suite'].if, `always() && (${scheduleGuard})`);
+assert.equal(w.jobs.tier.if, scheduleGuard);
+assert.equal(conformance.jobs.conform.if, scheduleGuard);
+assert.equal(conformance.jobs.badge.if, "always() && ((github.event_name == 'schedule' && github.repository == 'me2resh/apexyard') || github.event_name == 'workflow_dispatch')");
 assert.deepEqual(w.on.push.branches, ['dev', 'main']);
 assert.equal(w.on.schedule[0].cron, '17 3 * * *');
 assert('workflow_dispatch' in w.on);
