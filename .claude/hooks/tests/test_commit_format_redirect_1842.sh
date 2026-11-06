@@ -34,6 +34,11 @@ BAD_FILE="$TMP/bad-msg.txt"
 printf 'fix(#1842): valid subject from a file\n' > "$GOOD_FILE"
 printf 'not a valid subject\n' > "$BAD_FILE"
 
+mkdir -p "$FX/sub"
+printf 'feat(#1): valid root message\n' > "$FX/msg.txt"
+printf 'bad subject\n' > "$FX/sub/msg.txt"
+printf 'bad subject\n' > "$FX/bad.txt"
+
 V=commit
 GOOD='"fix(#1842): valid subject"'
 BAD='"not a valid subject"'
@@ -171,6 +176,25 @@ run_case "list: interactive refused" "$H" "git commit && x" 2 "cannot read"
 run_case "list: unquoted message refused" "$H" "git commit -m feat:good && x" 2 "cannot read"
 run_case "list: expansion refused" "$H" 'git commit -m "feat: $subject" && x' 2 "cannot read"
 run_case "list: empty file refused" "$H" "git commit -F /dev/null && x" 2 "cannot read"
+
+# --- #1958 B1/B3: fixed file paths and commit position ---------------------
+COMPOUND="cannot read this compound commit message"
+run_case "list: cd && relative file refused" "$H" "cd sub && git commit -F msg.txt" 2 "$COMPOUND"
+run_case "list: cd ; relative file refused" "$H" "cd sub; git commit -F msg.txt" 2 "$COMPOUND"
+run_case "list: cd && dot relative file refused" "$H" "cd sub && git commit -F ./msg.txt" 2 "$COMPOUND"
+run_case "list: -C relative file refused" "$H" "git -C sub commit -F msg.txt && git log -1" 2 "$COMPOUND"
+run_case "list: prior copy refused" "$H" "cp bad.txt $FX/msg.txt && git commit -F $FX/msg.txt" 2 "$COMPOUND"
+run_case "list: prior add with absolute file refused" "$H" "git add a && git commit -F $GOOD_FILE" 2 "$COMPOUND"
+run_case "list: first commit absolute file allowed" "$H" "git commit -F $GOOD_FILE && git log -1" 0 ""
+# Non-list relative file handling remains unchanged.
+run_case "plain: relative file allowed" "$H" "git commit -F msg.txt" 0 ""
+run_case "plain: -C relative file unchanged" "$H" "git -C sub commit -F msg.txt" 0 ""
+for form in "--file $GOOD_FILE" "--file=$GOOD_FILE"; do
+  run_case "list: prior add with $form refused" "$H" "git add a && git commit $form" 2 "$COMPOUND"
+done
+for writer in "mv bad.txt" "sed -i s/good/bad/" "ln -sf bad.txt"; do
+  run_case "list: prior $writer refused" "$H" "$writer $FX/msg.txt && git commit -F $FX/msg.txt" 2 "$COMPOUND"
+done
 
 # --- Through the dispatcher -----------------------------------------------
 pair "dispatcher: 2>&1 before the verb" "$D" "git 2>&1 ${V} -m @MSG@"

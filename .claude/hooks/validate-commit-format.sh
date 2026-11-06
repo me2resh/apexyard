@@ -379,6 +379,7 @@ _fmt_read_words() {
     out+=(${COMMAND_TOKENS[@]+"${COMMAND_TOKENS[@]}"})
     raw+=("$_GIT_TAKEN")
   done
+  # COMMAND_TOKENS and RAW_TOKENS must stay index-aligned.
   COMMAND_TOKENS=(${out[@]+"${out[@]}"})
   RAW_TOKENS=(${raw[@]+"${raw[@]}"})
   return 0
@@ -401,6 +402,7 @@ fi
 
 token_count=${#COMMAND_TOKENS[@]}
 commit_index=-1
+_fmt_git_index=-1
 for ((i=0; i < token_count; i++)); do
   # #1816: accept a quoted or case-variant command word and a quoted verb.
   if command -v git_token_is_cmd_word >/dev/null 2>&1; then
@@ -432,7 +434,10 @@ for ((i=0; i < token_count; i++)); do
     fi
     break
   done
-  [ "$commit_index" -ge 0 ] && break
+  if [ "$commit_index" -ge 0 ]; then
+    _fmt_git_index=$i
+    break
+  fi
 done
 
 if [ "$commit_index" -lt 0 ]; then
@@ -460,7 +465,18 @@ for ((i=0; i < token_count; i++)); do
   esac
 done
 
+# Refs AgDR-0288: list file sources need a fixed path and no earlier command.
 if [ "$_fmt_compound" -eq 1 ]; then
+  if [ "${#RAW_TOKENS[@]}" -ne "$token_count" ]; then
+    echo "BLOCKED: commit-format hook does not accept compound commit commands." >&2
+    exit 2
+  fi
+  _fmt_commit_first=1
+  for ((i=0; i < _fmt_git_index; i++)); do
+    case "${COMMAND_TOKENS[i]}" in
+      ";"|"&&"|"||") _fmt_commit_first=0 ;;
+    esac
+  done
   _fmt_commits=0
   if command -v git_invocation_prefixes >/dev/null 2>&1; then
     while IFS= read -r _fmt_prefix; do
@@ -562,7 +578,7 @@ if [ "$_fmt_compound" -eq 1 ]; then
       exit 2
       ;;
   esac
-  if { [ "$_fmt_literal_message" -ne 1 ] && { [ -z "$_fmt_file_source" ] || [ -z "$MSG_FILE" ] || [ "$MSG_FILE" = - ] || [ ! -f "$MSG_FILE" ]; }; } \
+  if { [ "$_fmt_literal_message" -ne 1 ] && { [ -z "$_fmt_file_source" ] || [ -z "$MSG_FILE" ] || [ "${MSG_FILE:0:1}" != / ] || [ "$_fmt_commit_first" -ne 1 ] || [ ! -f "$MSG_FILE" ]; }; } \
     || [ -z "$MSG$MSG_FILE" ]; then
     echo "BLOCKED: commit-format hook cannot read this compound commit message. Use literal -m or an existing regular file with -F." >&2
     exit 2
