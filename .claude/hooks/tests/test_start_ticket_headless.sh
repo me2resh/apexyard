@@ -87,6 +87,7 @@ check 0 'exact absolute helper' run_dispatch "$PWD/bin/apexyard-start-ticket me2
 # Check literal cd grammar directly and through the dispatcher.
 . .claude/hooks/_lib-start-ticket-command.sh
 mkdir -p "$TMP/real" "$TMP/space dir" "$TMP/\$literal"
+mkdir -p "$TMP/d{1..1}" "$TMP/d{a,b}" "$TMP/d!" '=literal'
 ln -s "$TMP/real" "$TMP/link"
 helper="$PWD/bin/apexyard-start-ticket o/r#1"
 check 0 'absolute cd matcher' start_ticket_command_allowed "cd $TMP/real && $helper" "$TMP/real" "$PWD"
@@ -96,6 +97,10 @@ for cmd in \
   "cd real && $helper" \
   "cd $TMP/space dir && $helper" \
   "cd $TMP/\$literal && $helper" \
+  "cd $TMP/d{1..1} && $helper" \
+  "cd $TMP/d{a,b} && $helper" \
+  "cd $TMP/d! && $helper" \
+  "cd =literal && $helper" \
   "cd $TMP/link && $helper" \
   "cd $TMP/link/ && $helper" \
   "cd $TMP/missing && $helper" \
