@@ -383,11 +383,10 @@ run_json() {
 
 # broad-space retains older routing, even where Bash removes the pair.
 # Prefix routing cannot see these later verbs, so this exercises the join.
-for command in $'echo ok; git\\\npush'; do
-  : > "$TMP/log"
-  run_json "$command"
-  [ "$(grep -c '^block-main-push.sh$' "$TMP/log")" -eq 1 ]
-done
+command=$'echo ok; git\\\npush'
+: > "$TMP/log"
+run_json "$command"
+[ "$(grep -c '^block-main-push.sh$' "$TMP/log")" -eq 1 ]
 for command in $'echo ok; git\\\ncommit' $'echo # git\\\ncommit'; do
   : > "$TMP/log"
   run_json "$command"
@@ -586,9 +585,14 @@ for command in "grep -n -E 'git push|credential' f" \
     exit 1
   fi
 done
-: > "$TMP/log"
-run_json "sh -c 'git push origin main'"
-[ "$(grep -c '^block-main-push.sh$' "$TMP/log")" -eq 1 ]
+for command in "sh -c 'git push origin main'" \
+  "python3 -c 'import os; os.system(\"git push origin dev\")'" \
+  "bash <<< 'git push origin dev'" "grep x f | sh -c 'git push'" \
+  "echo 'git push origin dev' | sh"; do
+  : > "$TMP/log"
+  run_json "$command"
+  [ "$(grep -c '^block-main-push.sh$' "$TMP/log")" -eq 1 ]
+done
 
 # A blocking push gate still blocks when only the scan reaches it.
 : > "$TMP/log"

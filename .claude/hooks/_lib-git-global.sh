@@ -7,8 +7,7 @@
 #
 # Presence checks stay on the raw command. Do not strip quotes or heredoc
 # bodies before asking whether a commit or push is present (AgDR-0113).
-# A single quoted argument containing both words is data unless a nested
-# shell is present.
+# Only a simple allowlisted data command can exempt a quoted argument.
 # #1772: a redirection before the verb is skipped like the shell does.
 #
 # Not a hook. Hooks source this file.
@@ -75,12 +74,39 @@ git_push_segment_re() {
   printf '%s%s([^|;&[:alnum:]_.-][^|;&]*)?' "$_git_sub_re" "$(_git_quoted_literal push)"
 }
 
+# Only simple data commands can suppress a raw-text match.
+_git_text_is_simple_data() {
+  local text="$1" state="" i c
+  local lead='^[[:blank:]]*([A-Za-z_][A-Za-z0-9_]*='
+  lead+="${_git_opt_val}"'[[:blank:]]+)*(grep|egrep|fgrep|rg|ag|ack|echo|printf)([[:blank:]]|$)'
+  [[ "$text" =~ $lead ]] || return 1
+  # Keep substitutions and input scripts conservative, even inside quotes.
+  case "$text" in *'$('*|*'`'*|*'<<'*) return 1 ;; esac
+  for ((i = 0; i < ${#text}; i++)); do
+    c="${text:i:1}"
+    case "$c" in
+      \\)
+        if [ "$state" != "'" ]; then
+          [ "${text:i+1:1}" != $'\n' ] || return 1
+          i=$((i + 1))
+        fi
+        ;;
+      \"|\')
+        if [ -z "$state" ]; then state="$c"; elif [ "$state" = "$c" ]; then state=""; fi
+        ;;
+      '|'|'&'|';'|$'\n'|'<'|'('|')'|'#') [ -n "$state" ] || return 1 ;;
+    esac
+  done
+  [ -z "$state" ]
+}
+
 # 0 when the raw command contains `git [global options] <sub>`.
 command_has_git_subcommand() {
   local text="$1" re m prefix state="" i c
   re="$(git_subcommand_re "$2")"
   [[ "$text" =~ $re ]] || return 1
   _git_text_has_nested_shell "$text" && return 0
+  _git_text_is_simple_data "$text" || return 0
   while [[ "$text" =~ $re ]]; do
     m="${BASH_REMATCH[0]}"
     prefix="${text%%"$m"*}"

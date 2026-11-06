@@ -66,6 +66,18 @@ for verb in push commit; do
   done
 done
 
+# Only simple allowlisted commands can treat a quoted push as data.
+for cmd in "python3 -c 'import os; os.system(\"git push origin dev\")'" \
+  "bash <<< 'git push origin dev'" "grep x f | sh -c 'git push'" \
+  "echo 'git push origin dev' | sh" "echo 'git push'; echo ok" \
+  "echo 'git push' && echo ok" "echo 'git push' || echo ok" \
+  $'echo \'git push\'\necho ok' "echo 'git push"; do
+  check "raw-push-$cmd" yes "$(has "$cmd" push)"
+done
+for data_word in grep egrep fgrep rg ag ack echo printf; do
+  check "assigned-data-$data_word" no "$(has "A='some value' B=x $data_word 'git push' >> notes.txt" push)"
+done
+
 # A command substitution keeps the existing conservative raw-text result.
 check substitution-push yes "$(has 'echo "$(cat <<EOF
 git push origin dev
