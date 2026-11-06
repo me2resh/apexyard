@@ -335,12 +335,13 @@ tokenize_shell_command() {
 # be read. Return 2 when a redirection target cannot be read.
 _fmt_read_words() {
   local before used rrc blank_re in_re
-  local -a out=()
+  local -a out=() raw=()
   blank_re=$'^[ \t]+'
   # _git_redir_fd comes from _lib-git-global.sh.
   # shellcheck disable=SC2154
   in_re='^'"${_git_redir_fd}"'<'
   _FMT_SAW_INPUT=0
+  _FMT_SAW_REDIR=0
   _GIT_SCAN="$1"
   while :; do
     if [[ "$_GIT_SCAN" =~ $blank_re ]]; then
@@ -351,16 +352,24 @@ _fmt_read_words() {
     rrc=0
     _git_take_redir || rrc=$?
     if [ "$rrc" -eq 0 ]; then
+      _FMT_SAW_REDIR=1
       [[ "$before" =~ $in_re ]] && _FMT_SAW_INPUT=1
       used="${before:0:$((${#before} - ${#_GIT_SCAN}))}"
       # A line break after the operator or in the target ends the command.
-      case "$used" in *$'\n'*) out+=(";") ;; esac
+      case "$used" in *$'\n'*) out+=(";"); raw+=(";") ;; esac
       continue
     fi
     [ "$rrc" -eq 1 ] || return 2
     case "$_GIT_SCAN" in
+      '&&'*|'||'*)
+        out+=("${_GIT_SCAN:0:2}")
+        raw+=("${_GIT_SCAN:0:2}")
+        _GIT_SCAN="${_GIT_SCAN:2}"
+        continue
+        ;;
       [\;\&\|\(\)]*)
         out+=("${_GIT_SCAN:0:1}")
+        raw+=("${_GIT_SCAN:0:1}")
         _GIT_SCAN="${_GIT_SCAN:1}"
         continue
         ;;
@@ -368,8 +377,10 @@ _fmt_read_words() {
     _git_take_raw_word || return 1
     tokenize_shell_command "$_GIT_TAKEN" || return 1
     out+=(${COMMAND_TOKENS[@]+"${COMMAND_TOKENS[@]}"})
+    raw+=("$_GIT_TAKEN")
   done
   COMMAND_TOKENS=(${out[@]+"${out[@]}"})
+  RAW_TOKENS=(${raw[@]+"${raw[@]}"})
   return 0
 }
 
@@ -433,22 +444,43 @@ if printf '%s' "$COMMAND" | grep -qF '$('; then
   exit 2
 fi
 
-token_count=${#COMMAND_TOKENS[@]}
+# Only list separators can qualify for the readable-message exception.
+_fmt_compound=0
 for ((i=0; i < token_count; i++)); do
   case "${COMMAND_TOKENS[i]}" in
-    ";"|"|"|"&"|"<"|">")
+    ";"|"&&"|"||") _fmt_compound=1 ;;
+    "|"|"&")
+      echo "BLOCKED: commit-format hook does not accept compound commit commands." >&2
+      exit 2
+      ;;
+    "<"|">")
       echo "BLOCKED: commit-format hook does not accept compound commit commands." >&2
       exit 2
       ;;
   esac
 done
 
+if [ "$_fmt_compound" -eq 1 ]; then
+  _fmt_commits=0
+  if command -v git_invocation_prefixes >/dev/null 2>&1; then
+    while IFS= read -r _fmt_prefix; do
+      [ -z "$_fmt_prefix" ] || _fmt_commits=$((_fmt_commits + 1))
+    done <<< "$(git_invocation_prefixes "$COMMAND" commit)"
+  fi
+  if [ "$_fmt_commits" -ne 1 ] || [ "${_FMT_SAW_REDIR:-0}" -ne 0 ]; then
+    echo "BLOCKED: commit-format hook does not accept compound commit commands." >&2
+    exit 2
+  fi
+fi
+
 MSG=""
 MSG_FILE=""
+_fmt_literal_message=0
+_fmt_file_source=""
 for ((i=commit_index; i < token_count; i++)); do
   token="${COMMAND_TOKENS[i]}"
   case "$token" in
-    ";"|"|"|"&"|"<"|">"|"("|")")
+    ";"|"&&"|"||"|"|"|"&"|"<"|">"|"("|")")
       break
       ;;
     -m|--message)
@@ -458,6 +490,13 @@ for ((i=commit_index; i < token_count; i++)); do
         exit 2
       fi
       MSG="${COMMAND_TOKENS[next]}"
+      # A complete quoted word is literal only without shell expansion.
+      _fmt_raw="${RAW_TOKENS[next]:-}"
+      _fmt_single="^'[^']*'$"
+      _fmt_double='^"[^"$`\\]*"$'
+      if [ "$token" = -m ] && { [[ "$_fmt_raw" =~ $_fmt_single ]] || [[ "$_fmt_raw" =~ $_fmt_double ]]; }; then
+        _fmt_literal_message=1
+      fi
       break
       ;;
     --message=*)
@@ -471,10 +510,12 @@ for ((i=commit_index; i < token_count; i++)); do
         exit 2
       fi
       MSG_FILE="${COMMAND_TOKENS[next]}"
+      _fmt_file_source="${RAW_TOKENS[next]:-}"
       break
       ;;
     --file=*)
       MSG_FILE="${token#--file=}"
+      _fmt_file_source="${RAW_TOKENS[i]:-}"
       break
       ;;
     -[!-]?*)
@@ -514,6 +555,20 @@ for ((i=commit_index; i < token_count; i++)); do
   esac
 done
 
+if [ "$_fmt_compound" -eq 1 ]; then
+  case "$_fmt_file_source" in
+    *'$'*|*'`'*)
+      echo "BLOCKED: commit-format hook cannot read this compound commit message source." >&2
+      exit 2
+      ;;
+  esac
+  if { [ "$_fmt_literal_message" -ne 1 ] && { [ -z "$_fmt_file_source" ] || [ -z "$MSG_FILE" ] || [ "$MSG_FILE" = - ] || [ ! -f "$MSG_FILE" ]; }; } \
+    || [ -z "$MSG$MSG_FILE" ]; then
+    echo "BLOCKED: commit-format hook cannot read this compound commit message. Use literal -m or an existing regular file with -F." >&2
+    exit 2
+  fi
+fi
+
 # #1842: with `-F -` the message comes from standard input. When an input
 # redirection supplies it, the gate cannot read it. Fail closed.
 if [ "$MSG_FILE" = "-" ] && [ "${_FMT_SAW_INPUT:-0}" -eq 1 ]; then
@@ -523,6 +578,11 @@ fi
 
 if [ -z "$MSG" ] && [ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ]; then
   MSG=$(cat "$MSG_FILE")
+fi
+
+if [ -z "$MSG" ] && [ "$_fmt_compound" -eq 1 ]; then
+  echo "BLOCKED: commit-format hook cannot read this compound commit message." >&2
+  exit 2
 fi
 
 if [ -z "$MSG" ]; then
