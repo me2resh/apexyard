@@ -21,7 +21,7 @@ jobs:
   dep-audit:
     name: Dependency audit
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     permissions:
       contents: read
 
@@ -51,8 +51,7 @@ jobs:
         run: |
           # Keep fixtures outside the audit root. Preserve the source paths.
           audit_root="$RUNNER_TEMP/dep-audit-input"
-          for adapter in pi opencode; do
-            directory="harness-adapters/$adapter"
+          for directory in harness-adapters/pi harness-adapters/opencode topologies/typescript-nextjs/starter; do
             mkdir -p "$audit_root/$directory"
             cp "$directory/package.json" "$directory/package-lock.json" "$audit_root/$directory/"
           done
@@ -93,7 +92,7 @@ jobs:
           if [ -f "$RUNNER_TEMP/dep-audit-report.md" ]; then
             {
               cat "$RUNNER_TEMP/dep-audit-report.md"
-              echo 'Policy: HIGH and CRITICAL fail. MODERATE (Medium) and LOW are advisory.'
+              echo 'Policy: The job fails on HIGH or CRITICAL findings. It also fails when the audit cannot complete (helper exit 3, incomplete coverage, such as a registry outage) or a severity is Unknown (exit 4). MODERATE (Medium) and LOW are reported only.'
             } >> "$GITHUB_STEP_SUMMARY"
           else
             echo '## Dependency audit: FAILED - no report was produced.' >> "$GITHUB_STEP_SUMMARY"

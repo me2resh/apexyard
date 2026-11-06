@@ -13,7 +13,11 @@ status: executed
 
 ## Context
 
-- `security-scan.yml` had a `Dependency audit (N/A)` stub. The repo now has `harness-adapters/pi/package-lock.json`, `harness-adapters/opencode/package-lock.json` and `golden-paths/pipelines/scripts/dependency-audit-tools.requirements.txt`.
+- `security-scan.yml` had a `Dependency audit (N/A)` stub. The audit covers these files:
+  - `harness-adapters/pi/package-lock.json` and its `package.json`.
+  - `harness-adapters/opencode/package-lock.json` and its `package.json`.
+  - `topologies/typescript-nextjs/starter/package-lock.json` and its `package.json`.
+  - `golden-paths/pipelines/scripts/dependency-audit-tools.requirements.txt`.
 - Dependabot alerts cover only the default branch, `main`. A vulnerable dependency on `dev` stays invisible until a release. In early November 2026, the undici and certifi fixes sat unseen on `dev` for this reason.
 - Security Scan runs on release, tag push and manual dispatch only. Its gitleaks and Semgrep jobs are release-gated on purpose.
 - The framework ships its own audit golden path: `golden-paths/pipelines/dependency-audit.yml` and `scripts/dependency-audit.py`.
@@ -29,13 +33,17 @@ status: executed
 
 ## Decision
 
-Chosen: **A**, because it audits `dev` on every PR with the framework's own tool, keeps the release-gated scans unchanged, and keeps one copy of the audit steps. The job installs the audit tools in an isolated venv with `--require-hashes`, stages only the three dependency sets so test fixtures are not audited, fails on HIGH and CRITICAL, and reports MODERATE and LOW in the step summary.
+Chosen: **A**. The job audits `dev` on every PR with the framework's own tool. The release scans keep their existing triggers. One workflow contains the audit steps.
+
+The job installs the audit tools in an isolated venv with `--require-hashes`. It stages the four dependency sets and excludes test fixtures.
+
+The job fails on HIGH or CRITICAL findings. It also fails when the audit cannot complete (helper exit 3). Incomplete coverage, such as a registry outage, causes this failure. The job also fails when a severity is Unknown (exit 4). MODERATE and LOW are reported only.
 
 ## Consequences
 
 - Every PR to `dev` runs one more Linux job. No macOS runner.
 - A PR that adds or keeps a HIGH or CRITICAL dependency finding fails until the dependency is fixed.
-- A new dependency manifest in the repo needs a line in the staging step, or the audit does not see it.
+- The audit now includes the topology starter. Add each new dependency manifest to the staging step so the audit includes it.
 - The Security Gate on releases now fails when the dependency audit fails.
 
 ## Artifacts
