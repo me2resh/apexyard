@@ -265,7 +265,17 @@ When the merged PR adds a slice record, print `Next: /orbit handoff --slice <pat
 ### 9a. Optional: offer to remove the merged PR's worktree
 
 Skip unless `MERGE_RC` is 0 without `--no-merge`. Follow docs/skills/approve-merge-worktree-offer.md.
-List candidates with `.claude/skills/approve-merge/remove-worktree.sh list "<source-tree>" "<head-branch>"`. Ask with `AskUserQuestion` ("Remove it" or "Keep it") and show the ignored files the helper lists. On "Remove it", run `remove-worktree.sh remove "<source-tree>" "<path>" "<head-branch>"`. Never remove a path the helper did not list. Never pass `--force`. Never remove without a yes.
+List candidates with `.claude/skills/approve-merge/remove-worktree.sh list "<source-tree>" "<head-branch>" --merged-head "<merged-head-sha>"`.
+Use the verified PR head from step 4 for `<merged-head-sha>`.
+Shell variables do not carry over.
+For an `owner unknown` refusal, follow the operator release procedure in the linked instructions.
+Never offer release for an `alive` owner.
+Ask with `AskUserQuestion` ("Remove it" or "Keep it").
+Show the ignored files the helper lists.
+On "Remove it", run `remove-worktree.sh remove "<source-tree>" "<path>" "<head-branch>" --merged-head "<merged-head-sha>"`.
+Never remove a path the helper did not list.
+Never pass `--force`.
+Never remove without a yes.
 
 ### 10. Optional: post-merge child-issue closure
 
