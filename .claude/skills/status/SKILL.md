@@ -143,9 +143,43 @@ Surface anything unusual:
 - More than 20 dirty files (probably forgot to commit)
 - Branch is more than 5 commits behind `origin/main` (rebase recommended)
 
+### G. Worktrees
+
+Run the helper once for each locally cloned project in scope.
+Also run it once for the ops repo.
+Use the helper from the ops repo, passing the clone directory as its argument:
+
+```bash
+bash "$ops_root/.claude/skills/status/worktree-report.sh" "$repo_dir"
+```
+
+Capture stdout, stderr, and the exit status separately.
+The helper prints tab-separated fields with a header: `path`, `branch`, `owner`, `work`, and `ticket`.
+Render the rows as a table with Path, Branch, Owner, Work, and Ticket columns.
+The helper omits the main working tree.
+After exit 0 with only a header, show `Worktrees: none` for that repo.
+After exit 2, show `Worktrees: report failed — <stderr>`.
+Mark an uncloned project's section as `(workspace not cloned)`.
+
+Owner values are `alive`, `dead`, `unknown`, `none`, or `released`.
+Work values are `dirty`, `unpushed`, `preserved`, or `unknown:<reason>`.
+`preserved` means every HEAD commit exists on a local remote-tracking ref.
+The report does not fetch those refs or check whether a PR merged.
+An unknown value preserves uncertainty about the worktree.
+Treat a `none` owner as unknown evidence, even when work is `preserved`.
+
+Split indexes report `unknown:split index` and skip status inspection.
+The helper detects the setting or shared-index files without opening the index through Git.
+
+This section is read-only.
+A `dead` or `none` owner with `dirty` or `unpushed` work needs a human decision.
+Never remove, release, or relaunch a worktree from this section.
+
 ## Portfolio output
 
-Run sections A–D for each project in the registry. Use a per-project header:
+Run sections A–D and G for each project in the registry.
+Include section G for the ops repo under its own header.
+Use a per-project header:
 
 ```
 ═══════════════════════════════════════
@@ -161,6 +195,11 @@ Open PRs: 2
 
 Recently merged: 3
   …
+
+Worktrees:
+  | Path | Branch | Owner | Work | Ticket |
+  |------|--------|-------|------|--------|
+  | … | … | … | … | … |
 
 ═══════════════════════════════════════
 PROJECT: billing-api  (handover)
@@ -204,6 +243,11 @@ Recent AgDRs:
 
 Warnings:
   ⚠ 1 untracked .env.local file (don't commit it)
+
+Worktrees:
+  | Path | Branch | Owner | Work | Ticket |
+  |------|--------|-------|------|--------|
+  | … | … | … | … | … |
 ```
 
 ## Briefing mode (`--briefing` / `-b`)
@@ -261,7 +305,7 @@ The shim walks up from `$PWD` looking for the apexyard fork root — the `.apexy
 1. **Read-only** — never modify state from this skill
 2. **Always show branch + dirty count** — even if everything is clean
 3. **Map branch → issue automatically** — saves the user from looking it up
-4. **Don't print empty sections** — except git, which always appears
+4. **Don't print empty sections** — except git and `Worktrees: none`, which always appear
 5. **Multi-project iterates the registry** — not "all repos in the org"
 6. **Never fail noisily** — if `gh` is unavailable, show git data and a warning
 7. **Always include warnings section if there are any** — silence on dirty `.env` is dangerous
