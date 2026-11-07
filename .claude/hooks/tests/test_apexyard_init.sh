@@ -90,4 +90,12 @@ check 'capital N cancels' grep -q 'Nothing created.' "$sb/cancel-upper.out"
 check 'capital N no folder' test ! -e "$sb/cancel-upper"
 printf '\n\n\n~/tilde-ops\n\n' | /bin/bash "$CLI" init -i --dry-run > "$sb/tilde.out" 2> "$sb/tilde.err"
 check 'tilde folder expands' grep -Fq "into $HOME/tilde-ops with" "$sb/tilde.out"
+mkdir -p "$HOME/full"
+echo x > "$HOME/full/file"
+printf '\n\n\n~/full\n~/empty-ops\n\n' | /bin/bash "$CLI" init -i --dry-run > "$sb/tilde-retry.out" 2> "$sb/tilde-retry.err"
+check 'tilde non-empty asks again' grep -q 'target directory is not empty' "$sb/tilde-retry.err"
+check 'tilde retry in plan' grep -Fq "into $HOME/empty-ops with" "$sb/tilde-retry.out"
+export FAKE_REMOTE="$sb/no-newline.git"
+printf '\n\n\n%s\n\ny' "$sb/no-newline" | /bin/bash "$CLI" init -i > "$sb/no-newline.out" 2> "$sb/no-newline.err" || true
+check 'last answer without newline' test -d "$sb/no-newline/.git"
 finish

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Keep all repositories and command stubs inside one temporary directory.
 set -euo pipefail
+# A terminal on stdin starts the init wizard. Tests that want it pipe input.
+exec </dev/null
 CLI=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/bin/apexyard
 sb=$(mktemp -d)
 trap 'rm -rf "$sb"' EXIT

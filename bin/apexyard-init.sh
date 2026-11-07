@@ -49,8 +49,14 @@ ask() {
   local kind=$1 question=$2 default=$3 reason
   while :; do
     printf '%s [%s]: ' "$question" "$default" >&2
-    IFS= read -r answer || fail "no answer for $question"
+    # A last line with no newline is still an answer.
+    IFS= read -r answer || [ -n "$answer" ] || fail "no answer for $question"
     [ -n "$answer" ] || answer=$default
+    if [ "$kind" = target ]; then
+      # The shell does not expand ~ in a typed answer. Match it literally.
+      # shellcheck disable=SC2088
+      case "$answer" in '~') answer=$HOME ;; '~/'*) answer="$HOME/${answer#\~/}" ;; esac
+    fi
     if [ "$kind" = visibility ]; then
       answer=$(printf '%s' "$answer" | tr '[:upper:]' '[:lower:]')
       case "$answer" in private|public) return 0 ;; esac
@@ -90,9 +96,6 @@ if [ "$interactive" -eq 1 ]; then
   if [ "$target_set" -eq 0 ]; then
     ask target 'Folder to create' "./$name"
     target=$answer
-    # The shell does not expand ~ in a typed answer. Match it literally.
-    # shellcheck disable=SC2088
-    case "$target" in '~') target=$HOME ;; '~/'*) target="$HOME/${target#\~/}" ;; esac
   fi
   if [ "$agent_set" -eq 0 ]; then
     ask agent 'Coding agent (claude, codex, cursor, opencode, pi, other)' claude
@@ -112,7 +115,7 @@ printf '  Create %s/%s %s and push main.\n  Create local setup files.\n' "$org" 
 if [ "$interactive" -eq 1 ]; then
   while :; do
     printf 'Create it? [Y/n] ' >&2
-    IFS= read -r answer || fail 'no answer for Create it?'
+    IFS= read -r answer || [ -n "$answer" ] || fail 'no answer for Create it?'
     answer=$(printf '%s' "$answer" | tr '[:upper:]' '[:lower:]')
     case "$answer" in
       y|yes|'') break ;;
