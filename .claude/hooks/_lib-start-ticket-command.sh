@@ -11,7 +11,7 @@ start_ticket_command_allowed() {
         *) return 1 ;;
       esac
       case "$dir" in
-        *[[:space:]]*|*'$'*|*'`'*|*'"'*|*"'"*|*'\'*|*'*'*|*'?'*|*'['*|*'~'*|*';'*|*'&'*|*'|'*|*'<'*|*'>'*|*'('*|*')'*) return 1 ;;
+        *[[:space:]]*|*'$'*|*'`'*|*'"'*|*"'"*|*'\'*|*'*'*|*'?'*|*'['*|*'~'*|*';'*|*'&'*|*'|'*|*'<'*|*'>'*|*'('*|*')'*|*'{'*|*'}'*|*'!'*) return 1 ;;
       esac
       path=$dir
       # A trailing slash must not hide a symlink at the path itself.

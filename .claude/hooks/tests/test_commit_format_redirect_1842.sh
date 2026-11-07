@@ -34,6 +34,11 @@ BAD_FILE="$TMP/bad-msg.txt"
 printf 'fix(#1842): valid subject from a file\n' > "$GOOD_FILE"
 printf 'not a valid subject\n' > "$BAD_FILE"
 
+mkdir -p "$FX/sub"
+printf 'feat(#1): valid root message\n' > "$FX/msg.txt"
+printf 'bad subject\n' > "$FX/sub/msg.txt"
+printf 'bad subject\n' > "$FX/bad.txt"
+
 V=commit
 GOOD='"fix(#1842): valid subject"'
 BAD='"not a valid subject"'
@@ -148,6 +153,48 @@ run_case "compound: ; before a redirected verb: block" "$H" \
 run_case "not a commit: git log with 2>&1 and prose: allow" "$H" \
   "git log --oneline 2>&1 ; echo ${V}" 0 ""
 run_case "interactive commit with 2>&1: allow" "$H" "git ${V} 2>&1" 0 ""
+
+# --- #1958 C5: one readable commit in a shell list -------------------------
+run_case "list: add before commit" "$H" "git add a && git commit -m 'feat(#1): add a'" 0 ""
+run_case "list: push after commit" "$H" "git commit -m 'feat(#1): add a' && git push" 0 ""
+run_case "list: file with -C" "$H" "git -C $FX commit -F $GOOD_FILE && git -C $FX log -1" 0 ""
+run_case "list: cd before commit" "$H" "cd $FX; git commit -m 'fix(#2): b'" 0 ""
+run_case "list: fallback after commit" "$H" 'git commit -m "feat(#1): add a" || echo failed' 0 ""
+run_case "list: --file" "$H" "git commit --file $GOOD_FILE && git log -1" 0 ""
+run_case "list: --file=" "$H" "git commit --file=$GOOD_FILE; git log -1" 0 ""
+run_case "list: pipe refused" "$H" "git commit -m 'x' | tee log" 2 "compound commit commands"
+run_case "list: stdin heredoc refused" "$H" "git commit -F - <<EOF" 2 "BLOCKED"
+run_case "list: two commits refused" "$H" "git commit -m 'a' && git commit -m 'b'" 2 "compound commit commands"
+run_case "list: bad format still refused" "$H" "git commit -m 'bad message' && git push" 2 "$SUBJ"
+run_case "list: substitution refused" "$H" 'git commit -m "$(cmd)" && x' 2 "command substitutions"
+run_case "list: separated backgrounds refused" "$H" "git commit -m $GOOD & & x" 2 "compound commit commands"
+run_case "list: separated pipes refused" "$H" "git commit -m $GOOD | | x" 2 "compound commit commands"
+run_case "list: background refused" "$H" "git commit -m $GOOD &" 2 "compound commit commands"
+run_case "list: missing file refused" "$H" "git commit -F $TMP/missing && x" 2 "cannot read"
+run_case "list: stdin refused" "$H" "git commit -F - && x" 2 "cannot read"
+run_case "list: interactive refused" "$H" "git commit && x" 2 "cannot read"
+run_case "list: unquoted message refused" "$H" "git commit -m feat:good && x" 2 "cannot read"
+run_case "list: expansion refused" "$H" 'git commit -m "feat: $subject" && x' 2 "cannot read"
+run_case "list: empty file refused" "$H" "git commit -F /dev/null && x" 2 "cannot read"
+
+# --- #1958 B1/B3: fixed file paths and commit position ---------------------
+COMPOUND="cannot read this compound commit message"
+run_case "list: cd && relative file refused" "$H" "cd sub && git commit -F msg.txt" 2 "$COMPOUND"
+run_case "list: cd ; relative file refused" "$H" "cd sub; git commit -F msg.txt" 2 "$COMPOUND"
+run_case "list: cd && dot relative file refused" "$H" "cd sub && git commit -F ./msg.txt" 2 "$COMPOUND"
+run_case "list: -C relative file refused" "$H" "git -C sub commit -F msg.txt && git log -1" 2 "$COMPOUND"
+run_case "list: prior copy refused" "$H" "cp bad.txt $FX/msg.txt && git commit -F $FX/msg.txt" 2 "$COMPOUND"
+run_case "list: prior add with absolute file refused" "$H" "git add a && git commit -F $GOOD_FILE" 2 "$COMPOUND"
+run_case "list: first commit absolute file allowed" "$H" "git commit -F $GOOD_FILE && git log -1" 0 ""
+# Non-list relative file handling remains unchanged.
+run_case "plain: relative file allowed" "$H" "git commit -F msg.txt" 0 ""
+run_case "plain: -C relative file unchanged" "$H" "git -C sub commit -F msg.txt" 0 ""
+for form in "--file $GOOD_FILE" "--file=$GOOD_FILE"; do
+  run_case "list: prior add with $form refused" "$H" "git add a && git commit $form" 2 "$COMPOUND"
+done
+for writer in "mv bad.txt" "sed -i s/good/bad/" "ln -sf bad.txt"; do
+  run_case "list: prior $writer refused" "$H" "$writer $FX/msg.txt && git commit -F $FX/msg.txt" 2 "$COMPOUND"
+done
 
 # --- Through the dispatcher -----------------------------------------------
 pair "dispatcher: 2>&1 before the verb" "$D" "git 2>&1 ${V} -m @MSG@"

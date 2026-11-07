@@ -51,8 +51,38 @@ check git-dir yes "$(has "git --git-dir=/some/repo/.git push origin main" push)"
 check git-dir-sp yes "$(has "git --git-dir /some/repo/.git push origin main" push)"
 check work-tree yes "$(has "git --work-tree /some/repo push origin main" push)"
 check no-pager yes "$(has "git --no-pager push origin main" push)"
-check quoted-text yes "$(has "echo 'run git push later'" push)"
+check quoted-text no "$(has "echo 'run git push later'" push)"
 check cd-and yes "$(has "cd /some/repo && git -C /other commit -m x" commit)"
+
+# Quoted arguments are data; nested shell command strings still execute.
+for verb in push commit; do
+  check "quoted-grep-$verb" no "$(has "grep -n -E 'git $verb|credential' f" "$verb")"
+  check "quoted-echo-$verb" no "$(has "echo \"run git $verb later\"" "$verb")"
+  check "quoted-rg-$verb" yes "$(has "rg -n \"git $verb origin dev\" docs/" "$verb")"
+  for cmd in "git $verb origin dev" "bash -c 'git $verb origin dev'" \
+    "sh -c \"git $verb origin dev\"" "eval 'git $verb origin dev'" "cd x && git $verb" \
+    "echo 'git $verb later'; git $verb"; do
+    check "executable-$cmd" yes "$(has "$cmd" "$verb")"
+  done
+done
+
+# Only simple allowlisted commands can treat a quoted push as data.
+for cmd in "python3 -c 'import os; os.system(\"git push origin dev\")'" \
+  "bash <<< 'git push origin dev'" "grep x f | sh -c 'git push'" \
+  "echo 'git push origin dev' | sh" "echo 'git push'; echo ok" \
+  "echo 'git push' && echo ok" "echo 'git push' || echo ok" \
+  $'echo \'git push\'\necho ok' "echo 'git push"; do
+  check "raw-push-$cmd" yes "$(has "$cmd" push)"
+done
+for data_word in grep egrep fgrep rg ag ack echo printf; do
+  check "assigned-raw-$data_word" yes "$(has "A='some value' B=x $data_word 'git push' >> notes.txt" push)"
+done
+
+# A command substitution keeps the existing conservative raw-text result.
+check substitution-push yes "$(has 'echo "$(cat <<EOF
+git push origin dev
+EOF
+)"' push)"
 
 git_prepare_invocation "git -C /repo -c core.quotepath=off commit -m x" commit ""
 check dash-c-value /repo "$GIT_DASH_C"
@@ -223,6 +253,14 @@ run_hook() {
   set -e
   printf '%s' "$rc"
 }
+
+for cmd in "grep -n -E 'git push|credential' f" 'echo "run git push later"'; do
+  check "quoted-push-allowed-$cmd" 0 "$(run_hook "$HOOKS/block-main-push.sh" "$cmd" "$protected")"
+done
+for cmd in 'rg -n "git push origin dev" docs/' 'git push origin dev' "bash -c 'git push origin dev'" \
+  'sh -c "git push origin dev"' "eval 'git push origin dev'" 'cd x && git push'; do
+  check "real-push-blocked-$cmd" 2 "$(run_hook "$HOOKS/block-main-push.sh" "$cmd" "$protected")"
+done
 rc=$(run_hook "$HOOKS/block-main-push.sh" "git -C $feature push origin main" "$other")
 if [ "$rc" -eq 2 ]; then
   echo PASS block-protected-dash-c
