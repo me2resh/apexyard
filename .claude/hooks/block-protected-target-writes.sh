@@ -639,7 +639,9 @@ pt_simple() {
       if [ "$start" = 0 ] && [ "${words[0]}" = mkdir ] &&
          [ "${#words[@]}" = 3 ] && [ "${words[1]}" = -p ]; then
         case "${words[2]}" in
-          ''|-*|*'$'*|*'`'*) ;;
+          # No `..` part and no leading `~`: those can resolve differently at
+          # run time (symlink parents, home lookup), so they keep the fallback.
+          ''|-*|'~'*|*'$'*|*'`'*|..|../*|*/..|*/../*) ;;
           *) PT_MKDIR_CANDIDATE=${words[2]} ;;
         esac
       fi
