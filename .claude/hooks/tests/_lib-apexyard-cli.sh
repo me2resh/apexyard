@@ -19,7 +19,10 @@ cat > "$APEXYARD_GH" <<'SH'
 #!/usr/bin/env bash
 set -eu
 printf '%s\n' "$*" >> "$FAKE_GH_LOG"
-if [ "$1" = api ]; then echo example-org; exit 0; fi
+if [ "$1" = api ]; then
+  if [ "$2" = user/orgs ]; then printf 'acme\nbeta\n'; else echo example-org; fi
+  exit 0
+fi
 [ "$1" = repo ] && [ "$2" = create ] || exit 2
 git -C "$FAKE_ROOT" init --bare "$FAKE_REMOTE" >/dev/null
 git -C "$PWD" remote add origin "$FAKE_REMOTE"

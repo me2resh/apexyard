@@ -36,8 +36,10 @@ Install the CLI. Then create your ops repo with one command:
 
 ```bash
 curl -fsSL https://apexyard.ai/install | sh   # checks the release checksum; lists missing jq or gh
-apexyard init --org your-org --name ops --private
+apexyard init
 ```
+
+`apexyard init` asks for the account or organisation, the repo name, private or public, the folder and your coding agent. Then it shows the plan and asks before it creates anything. To skip the questions, pass them as options: `apexyard init --org your-org --name ops --private --yes`.
 
 A piped install cannot ask questions, so it installs no tools. Run `apexyard doctor` in a terminal to install a missing jq or gh, with your consent.
 

@@ -39,4 +39,55 @@ git -C "$sb/fixture" add -- new.txt
 git -C "$sb/fixture" commit -m newer >/dev/null
 check 'branch ref succeeds' /bin/bash "$CLI" init --org other --dir "$sb/branch" > "$sb/branch.out" 2>&1
 check 'branch version' test "$(cat "$sb/branch/.claude/framework-version")" = "$(git -C "$sb/fixture" describe --tags --always)"
+# Each wizard run uses its own local remote and target.
+export FAKE_REMOTE="$sb/defaults.git"
+printf '\n\n\n\n\n' | /bin/bash "$CLI" init -i --dir "$sb/defaults" > "$sb/defaults.out" 2> "$sb/defaults.err"
+check 'wizard defaults create' grep -q 'repo create example-org/ops --private' "$FAKE_GH_LOG"
+check 'wizard defaults folder' test -d "$sb/defaults/.git"
+check 'org choices' grep -q 'Your account: example-org. Your organisations: acme, beta.' "$sb/defaults.err"
+check 'wizard question default' grep -Fq 'Repository name [ops]' "$sb/defaults.err"
+export FAKE_REMOTE="$sb/answers.git"
+printf 'acme\nteam-ops\nPUBLIC\n%s\ncodex\ny\n' "$sb/answers" | /bin/bash "$CLI" init --interactive > "$sb/answers.out" 2> "$sb/answers.err"
+check 'wizard answers create' grep -q 'repo create acme/team-ops --public' "$FAKE_GH_LOG"
+check 'wizard answers folder' test -d "$sb/answers/.git"
+creates=$(grep -c 'repo create' "$FAKE_GH_LOG")
+if printf '\n\n\n\nno\n' | /bin/bash "$CLI" init -i --dir "$sb/cancel" > "$sb/cancel.out" 2> "$sb/cancel.err"; then rc=0; else rc=$?; fi
+check 'cancel exit' test "$rc" = 0
+check 'cancel message' grep -q 'Nothing created.' "$sb/cancel.out"
+check 'cancel no create' test "$(grep -c 'repo create' "$FAKE_GH_LOG")" = "$creates"
+check 'cancel no folder' test ! -e "$sb/cancel"
+export FAKE_REMOTE="$sb/retry.git"
+printf '\nbad name!\nops2\n\n\n\ny\n' | /bin/bash "$CLI" init -i --dir "$sb/retry" > "$sb/retry.out" 2> "$sb/retry.err"
+check 'invalid name reason' grep -q 'invalid repository name' "$sb/retry.err"
+check 'valid name after retry' grep -q 'repo create example-org/ops2 --private' "$FAKE_GH_LOG"
+if printf '\n' | /bin/bash "$CLI" init -i --dir "$sb/eof" > "$sb/eof.out" 2> "$sb/eof.err"; then rc=0; else rc=$?; fi
+check 'wizard eof exit' test "$rc" = 2
+check 'wizard eof reason' grep -q 'no answer for Repository name' "$sb/eof.err"
+check 'wizard eof no folder' test ! -e "$sb/eof"
+printf '\n\n' | /bin/bash "$CLI" init -i --org acme --name x --dir "$sb/skipped" --dry-run > "$sb/skipped.out" 2> "$sb/skipped.err"
+check 'flag skips org question' test "$(grep -c 'GitHub account or organisation for the new repo' "$sb/skipped.err" || true)" = 0
+check 'flag skips name question' test "$(grep -c 'Repository name' "$sb/skipped.err" || true)" = 0
+check 'dry run skips confirmation' test "$(grep -c 'Create it?' "$sb/skipped.err" || true)" = 0
+check 'wizard dry run no folder' test ! -e "$sb/skipped"
+export FAKE_REMOTE="$sb/yes.git"
+/bin/bash "$CLI" init --yes --interactive --dir "$sb/yes" < /dev/null > "$sb/yes.out" 2> "$sb/yes.err"
+check 'yes creates' test -d "$sb/yes/.git"
+check 'yes skips prompts' test "$(grep -Ec 'Repository name|Create it\?|GitHub account or organisation' "$sb/yes.err" || true)" = 0
+check 'piped default no prompts' test "$(grep -Ec 'Repository name|Create it\?|GitHub account or organisation' "$sb/init.out" || true)" = 0
+printf 'bad org!\nacme\nops3\ninvalid\nprivate\n%s\n%s\ninvalid\npi\n' "$sb/ops" "$sb/validated" | /bin/bash "$CLI" init -i --dry-run > "$sb/validated.out" 2> "$sb/validated.err"
+check 'invalid org reason' grep -q 'invalid organisation name' "$sb/validated.err"
+check 'invalid visibility reason' grep -q 'enter private or public' "$sb/validated.err"
+check 'invalid folder reason' grep -q 'target directory is not empty' "$sb/validated.err"
+check 'invalid agent reason' grep -q 'invalid agent: invalid' "$sb/validated.err"
+check 'retried values in plan' grep -q 'Create acme/ops3 --private' "$sb/validated.out"
+if /bin/bash "$CLI" init -i --org acme --name x --private --dir "$sb/confirm-eof" --agent codex < /dev/null > "$sb/confirm-eof.out" 2> "$sb/confirm-eof.err"; then rc=0; else rc=$?; fi
+check 'confirmation eof exit' test "$rc" = 2
+check 'confirmation eof reason' grep -q 'no answer for Create it?' "$sb/confirm-eof.err"
+/bin/bash "$CLI" init -i -y --dry-run --dir "$sb/short-yes" < /dev/null > "$sb/short-yes.out" 2> "$sb/short-yes.err"
+check 'short yes skips prompts' test ! -s "$sb/short-yes.err"
+if printf '\n\n\n\nN\n' | /bin/bash "$CLI" init -i --dir "$sb/cancel-upper" > "$sb/cancel-upper.out" 2> "$sb/cancel-upper.err"; then rc=0; else rc=$?; fi
+check 'capital N cancels' grep -q 'Nothing created.' "$sb/cancel-upper.out"
+check 'capital N no folder' test ! -e "$sb/cancel-upper"
+printf '\n\n\n~/tilde-ops\n\n' | /bin/bash "$CLI" init -i --dry-run > "$sb/tilde.out" 2> "$sb/tilde.err"
+check 'tilde folder expands' grep -Fq "into $HOME/tilde-ops with" "$sb/tilde.out"
 finish
