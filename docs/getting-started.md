@@ -41,16 +41,21 @@ apexyard init --org your-org --name ops --private
 
 A piped install cannot ask questions, so it installs no tools. Run `apexyard doctor` in a terminal to install a missing jq or gh, with your consent.
 
-You can also install the CLI with `brew install me2resh/tap/apexyard`. Homebrew installs jq and gh too.
+The install URL works from the first release that ships the installer. If it
+returns an error, use the fork method below. `apexyard init` needs `git`, `jq`
+and `gh`.
 
-Or run `npx create-apexyard --org your-org --name ops --private`. It installs
-the CLI when the CLI is absent, then runs `apexyard init` with these options.
-Do not run `apexyard init` again after it, because the target directory is no
-longer empty.
+Coming soon:
 
-The project has not yet published the install URL, the Homebrew tap, or the npm package.
-Until the project publishes them, use the fork method below. `apexyard init` needs `git`,
-`jq` and `gh`.
+- A Homebrew tap: `brew install me2resh/tap/apexyard`. Homebrew will install jq
+  and gh too.
+- An npm package: `npx create-apexyard --org your-org --name ops --private`. It
+  will install the CLI when the CLI is absent, then run `apexyard init` with
+  these options. Do not run `apexyard init` again after it, because the target
+  directory is no longer empty.
+
+Until the project publishes the tap and the npm package, use the install URL or
+the fork method below.
 
 `apexyard init` creates a new repo from the framework, so it can be private.
 It clones the repo, adds the framework as the remote `upstream`, and writes
