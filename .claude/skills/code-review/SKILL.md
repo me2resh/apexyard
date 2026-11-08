@@ -8,7 +8,11 @@ allowed-tools: Bash, Read, Grep, Glob
 
 # /code-review — Code Review
 
-Review a pull request for quality, security, and adherence to standards.
+Review PR quality, security, and standards.
+
+
+Call `progress_note_update "$tree" Completed 'Review verdict: <evidence and head SHA>'` after the observed result.
+Details: docs/progress-notes.md.
 
 ## LSP-aware (optional, recommended)
 
@@ -42,8 +46,8 @@ The reviewer mutation lock blocks `git clone`, `git fetch`, and `git checkout` w
 
 ## Process
 
-Before you draft or post a review, read .claude/rules/writing-standard.md.
-Use the controlled technical writing profile. The review is a durable artifact.
+Read .claude/rules/writing-standard.md before drafting or posting a review.
+Apply its controlled technical writing profile.
 Treat a writing-profile fault in the PR as advisory, per the Code Reviewer
 agent's § "Blocking-Severity Bar", unless the fault changes meaning or drops
 evidence — request changes only for that kind of fault.
@@ -69,7 +73,10 @@ The check is `rex_approval_carries_over` in `.claude/hooks/_lib-merge-behind.sh`
 
 ### 0. Write the active-reviewer marker (REQUIRED — me2resh/apexyard#843)
 
-Before spawning the Code Reviewer agent (Rex), write the active-reviewer session marker. It records that this review pass is the sanctioned one, and suppresses `warn-review-marker-write.sh`'s advisory warning on Rex's `*-rex.approved` write (that hook warns and never blocks since #1026 — AgDR-0111). The marker is scoped to THIS Claude Code session (me2resh/apexyard#1376) — resolve its path through `active_reviewer_marker_path`, never write the bare `.claude/session/active-reviewer` path directly, or a concurrent session's review would read or clobber it. At skill entry:
+Before spawning Rex, write the active-reviewer marker to sanction this pass and suppress the advisory review-marker warning.
+Resolve its session-scoped path with `active_reviewer_marker_path` (me2resh/apexyard#1376).
+Never write `.claude/session/active-reviewer` directly: concurrent sessions could overwrite it.
+At skill entry:
 
 ```bash
 # Ops root: pin first, then walk up (docs/skills/shared/ops-root.md).
@@ -80,7 +87,7 @@ mkdir -p "$(dirname "$active_marker")"
 printf '%s\n' "<owner/repo>#<pr>:rex" > "$active_marker"
 ```
 
-On skill exit (after Rex posts its verdict, whether APPROVED or CHANGES REQUESTED), clear the marker. Shell variables do not persist across separate Bash tool calls, so the exit step re-resolves `ops_root` and `active_marker` from scratch — it does not reuse the step-0 variable, which would silently be empty in a later call and turn the `rm -f` into a no-op:
+Clear the marker after Rex posts APPROVED or CHANGES REQUESTED. Shell variables do not persist across separate Bash tool calls, so the exit step re-resolves `ops_root` and `active_marker` from scratch. It does not reuse the step-0 variable, which would silently be empty in a later call and turn the `rm -f` into a no-op:
 
 ```bash
 # Ops root: pin first, then walk up (docs/skills/shared/ops-root.md).
