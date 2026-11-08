@@ -171,18 +171,23 @@ The tracked `.claude/settings.json` has these deny rules:
 The default `review_identity.private_key_path` is empty.
 The reviewer guide uses `$HOME/.config/apexyard/reviewer.pem`.
 
-With the Claude Code sandbox on, Read deny rules also join the sandbox file restrictions.
-A sandboxed Bash command then cannot read a key that these rules cover.
-If you use the reviewer GitHub App with the sandbox on, the review step cannot sign its token.
+With the Claude Code sandbox on, Read deny rules also join the sandbox read-deny list.
+On macOS, a sandboxed Bash command then cannot read a key that these rules cover.
+So a sandboxed review step on macOS cannot sign the reviewer GitHub App token.
 Keep the key outside the covered paths, or run the review step outside the sandbox.
+On Linux and WSL2, the sandbox can ignore glob paths such as `**/*.pem` in that list.
+There, do not rely on these rules to stop a sandboxed command from reading a key.
 The repository has no configured MCP file or documented user-level token config path.
 The MCP rule uses only the generic `.mcp.json` pattern.
 It does not cover `~/.claude.json`, where Claude Code keeps user-level MCP config.
 
-Use `bin/apexyard-gh-as <gh-user> <gh args...>` for one command as a named GitHub user.
+Use `bin/apexyard-gh-as <gh-user> <subcommand> [args...]` for one command as a named GitHub user.
+The subcommand must be one of `api`, `issue`, `label`, `pr`, `release`, `repo`, `run` or `workflow`.
+The wrapper refuses gh global flags before the subcommand.
 The wrapper reads the token inside the script.
 It sets `GH_TOKEN` for one `gh` process.
-It refuses `gh auth` commands and the `--show-token` flag, because they print the token.
+It refuses any argument that is `auth`, `-t` or `--show-token`, because gh can print the token for them.
+So `gh api -t` (the template flag) does not work through the wrapper.
 It exits 2 when the user has no login.
 A `gh` extension or a shell alias that the command starts inherits `GH_TOKEN`.
 It supports `gh` commands only.

@@ -1,21 +1,28 @@
 #!/bin/bash
 # Run one gh command with the named user's token. Do not print the token.
-# gh auth commands and --show-token would print it, so they are refused.
+# An allowlist, not a denylist: the first gh argument must be a listed
+# subcommand, so gh global flags and the auth command group cannot run.
+# Any argument that is auth, -t or --show-token is also refused, because gh
+# can print the token for them.
 set +x
 if [ "$#" -lt 2 ]; then
-  echo 'Usage: apexyard-gh-as <gh-user> <gh args...>' >&2
+  echo 'Usage: apexyard-gh-as <gh-user> <subcommand> [args...]' >&2
+  echo 'Subcommands: api issue label pr release repo run workflow' >&2
   exit 2
 fi
 user=$1
 shift
-if [ "$1" = auth ]; then
-  echo 'apexyard-gh-as: gh auth commands are refused. They can print the token.' >&2
-  exit 2
-fi
+case "$1" in
+  api|issue|label|pr|release|repo|run|workflow) ;;
+  *)
+    echo 'apexyard-gh-as: the first gh argument must be one of: api issue label pr release repo run workflow.' >&2
+    exit 2
+    ;;
+esac
 for arg in "$@"; do
   case "$arg" in
-    --show-token|--show-token=*)
-      echo 'apexyard-gh-as: --show-token is refused.' >&2
+    auth|-t|--show-token|--show-token=*)
+      echo "apexyard-gh-as: the argument '$arg' is refused. It can print the token." >&2
       exit 2
       ;;
   esac

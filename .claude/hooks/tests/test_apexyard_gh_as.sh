@@ -19,6 +19,10 @@ if [ "$1" = auth ] && [ "$2" = token ]; then
   [ "$4" != empty ] || exit 0
   printf '%s\n' "$FAKE_TOKEN"
 else
+  # Like the real gh: these arguments make it print GH_TOKEN.
+  for arg in "$@"; do
+    case "$arg" in auth|-t|--show-token*) printf '%s\n' "$GH_TOKEN" ;; esac
+  done
   printf '%s' "$GH_TOKEN" > "$RECORD.env"
   printf '%s\n' "$@" > "$RECORD.args"
   exit "${FAKE_STATUS:-0}"
@@ -43,7 +47,9 @@ done
 "$ROOT/bin/apexyard-gh-as" owner > "$tmp/out" 2>&1
 check test "$?" -eq 2
 # Commands that make gh print GH_TOKEN are refused before any token read.
-for refused in 'auth token' 'auth status --show-token' 'api user --show-token' 'auth status --show-token=true'; do
+for refused in 'auth token' 'auth status --show-token' 'api user --show-token' 'auth status --show-token=true' \
+  '--hostname github.com auth token' '--hostname=github.com auth token' 'pr list auth' 'api user -t' \
+  'config get oauth_token' 'extension exec x' 'alias set x !env'; do
   rm -f "$RECORD.env"
   # shellcheck disable=SC2086
   "$ROOT/bin/apexyard-gh-as" owner $refused > "$tmp/out" 2>&1
