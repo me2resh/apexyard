@@ -250,6 +250,21 @@ bash -c '. "$1/.claude/hooks/_lib-active-ticket.sh" && active_ticket_init "$PWD"
 
 The command prints the marker (`repo=`, `number=`, `title=`, `url=`), or nothing when no marker covers the tree. It reads the marker in the tree's git dir first, then the old-layout marker.
 
+### Create the progress note and goal
+
+The helper creates `apexyard-progress.md` beside the worktree's active-ticket marker.
+For the interactive fallback, source `.claude/hooks/_lib-progress-note.sh` from the ops root.
+Call `progress_note_create "$tree"` after the marker write succeeds.
+Report any failure and stop. Preserve the note when resuming the same ticket.
+
+Set Claude Code's `/goal` before building. Copy the ticket's acceptance criteria into its done condition.
+Add this evidence requirement: PR open, CI green on the current head SHA, Rex APPROVED at that head, progress note current.
+Set a limit of 20 turns. At that limit, stop and report the blocker with evidence.
+Include the same done condition and turn limit in every build-agent brief.
+Build agents hand results to the orchestrator for independent review.
+This goal does not authorize a merge.
+See [Resume ticket work](../../../docs/progress-notes.md) for updates and recovery steps.
+
 ### 6. Move the board card to "In progress" (opt-in)
 
 After writing the marker, call `board_move_card` so the GitHub Projects board

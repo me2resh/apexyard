@@ -10,6 +10,18 @@ allowed-tools: Bash, Read, Grep, Glob
 
 Review a pull request for quality, security, and adherence to standards.
 
+
+## Ticket progress note
+
+The orchestrator updates the progress note at PR opened, CI result, review verdict, fix pushed, and merge.
+Source `.claude/hooks/_lib-progress-note.sh` from the framework checkout.
+Set `$tree` to the ticket worktree, including when the orchestrator runs elsewhere.
+Call `progress_note_update "$tree" Completed '<stage>: <evidence and head SHA>'` after each observed result.
+Record failures and requested changes too. Update Outputs and Next action with separate calls.
+Do not call the helper from gate hooks.
+See [Resume ticket work](../../../docs/progress-notes.md) for examples and recovery steps.
+
+
 ## LSP-aware (optional, recommended)
 
 This skill performs semantic code navigation — finding definitions, walking references, tracing handlers across modules. With LSP enabled (`ENABLE_LSP_TOOL=1` + per-language plugin per `docs/getting-started.md`), queries are ~3-15× cheaper in token cost than grep + Read. Without LSP, the skill falls back to grep + Read transparently — no new failure mode, just optional speed.

@@ -75,4 +75,8 @@ printf 'repo=%s\nnumber=%s\ntitle=%s\nurl=%s\nsuggested_branch=%s\n' "$repo" "$n
 exec 3>&-
 active_ticket_write_from_file "$tree" "$pending" 1 || fail 'ticket write failed'
 [ -f "$marker" ] && [ ! -L "$marker" ] || fail 'working tree marker missing'
+# shellcheck source=/dev/null
+. "$lib/_lib-progress-note.sh"
+# The ticket is set at this point. A missing note must not undo that.
+progress_note_create "$tree" || printf '%s\n' 'apexyard: progress note not created; the ticket is set.' >&2
 printf '%s\n' "$marker"

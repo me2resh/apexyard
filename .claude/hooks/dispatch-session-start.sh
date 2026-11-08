@@ -22,6 +22,7 @@ INPUT=$(cat)
 # APEXYARD_SESSION_START_HOOK: print-portfolio-primer.sh
 # APEXYARD_SESSION_START_HOOK: warn-unqualified-review-marker.sh
 # APEXYARD_SESSION_START_HOOK: warn-legacy-ticket-markers.sh
+# APEXYARD_SESSION_START_HOOK: print-progress-note.sh
 
 run_direct() {
   local script="$1" rc=0
@@ -52,6 +53,7 @@ scripts=(
   print-portfolio-primer.sh
   warn-unqualified-review-marker.sh
   warn-legacy-ticket-markers.sh
+  print-progress-note.sh
 )
 
 # Pinning is the one ordering dependency. Run it before the remaining hooks.

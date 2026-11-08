@@ -13,6 +13,18 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 Write per-PR approval, then merge through the tracker adapter.
 Rationale: read docs/skills/approve-merge-rationale.md for gate history and AgDR references.
 
+
+## Ticket progress note
+
+The orchestrator updates the progress note at PR opened, CI result, review verdict, fix pushed, and merge.
+Source `.claude/hooks/_lib-progress-note.sh` from the framework checkout.
+Set `$tree` to the ticket worktree, including when the orchestrator runs elsewhere.
+Call `progress_note_update "$tree" Completed '<stage>: <evidence and head SHA>'` after each observed result.
+Record failures and requested changes too. Update Outputs and Next action with separate calls.
+Do not call the helper from gate hooks.
+See [Resume ticket work](../../../docs/progress-notes.md) for examples and recovery steps.
+
+
 ## The one rule you must not break
 
 Invoke only on explicit user approval for this PR. A plan-level "go" is not merge approval.
