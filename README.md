@@ -116,6 +116,7 @@ small adapter. Dated proof and limits live in
 
 ## Further reading
 
+- Agent authority and human gates: [Escalation pattern](docs/escalation-pattern.md)
 - Site move note: [`docs/whats-inside.md`](docs/whats-inside.md#marketing-site)
 - Roles, workflows, and templates: [`docs/whats-inside.md`](docs/whats-inside.md#roles)
 - Project badges: [`docs/badges.md`](docs/badges.md)
