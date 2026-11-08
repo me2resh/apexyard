@@ -46,6 +46,13 @@ fi
 export APEXYARD_OPS_PIN_DIR="${_APEXYARD_TEST_PIN_DIR}"
 _TEST_SESSION_ISOLATION_SOURCED=1
 
+# #1988 - the CLI saves the last ops repo under XDG_CONFIG_HOME. A test must
+# never write the operator's real config. Keep a value that a suite already
+# pointed somewhere else.
+if [ -z "${XDG_CONFIG_HOME:-}" ] || [ "${XDG_CONFIG_HOME}" = "${HOME:-}/.config" ]; then
+  export XDG_CONFIG_HOME="${_APEXYARD_TEST_PIN_DIR}/xdg-config"
+fi
+
 # #1528 — the leak scans look up remote visibility with `gh api`. A test must
 # never reach the network. Default the test-only lookup command to `false`
 # (lookup fails → fail closed → scan) and set APEXYARD_LEAK_TEST_MODE=1 so
