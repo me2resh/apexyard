@@ -168,6 +168,8 @@ Claude Code reads it automatically when you start a session inside the fork. You
 
 ### Start a skill from the terminal
 
+The CLI works from any folder and remembers the last ops repo you used. Run `apexyard use <dir>` to change it.
+
 Every framework skill also runs from the terminal. The CLI opens Claude Code in your ops repo with the skill already started:
 
 ```bash

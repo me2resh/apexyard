@@ -7,6 +7,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/_lib-apexyard-cli.sh"
 sb=$(cd "$sb" && pwd -P)
 exec </dev/null
+unset APEXYARD_OPS_ROOT
 root=$(cd "$(dirname "$CLI")/.." && pwd)
 mkdir -p "$sb/ops/.claude/skills" "$sb/ops/bin"
 cp -R "$root/.claude/hooks" "$sb/ops/.claude/"
@@ -42,10 +43,53 @@ check 'no argument prompt' grep -Fxq /inbox "$AGENT_LOG"
 run unknown
 check unknown test "$rc" = 2
 check 'unknown message' grep -Fq "apexyard: unknown command or skill 'unknown'. Run 'apexyard skills' to list them." "$sb/out"
-rc=0
-(cd "$sb" && /bin/bash "$CLI" inbox) > "$sb/out" 2>&1 || rc=$?
+saved="$XDG_CONFIG_HOME/apexyard/ops-root"
+check 'inside saves root' test "$(cat "$saved")" = "$sb/ops"
+outside() {
+  rc=0
+  (cd "$sb" && /bin/bash "$CLI" "$@") > "$sb/out" 2>&1 || rc=$?
+}
+outside inbox
+check 'saved launch' test "$rc" = 0
+check 'saved agent cwd' test "$(head -1 "$AGENT_LOG")" = "$sb/ops"
+mkdir -p "$sb/second"
+touch "$sb/second/.apexyard-fork"
+printf '%s\n' "$sb/second" > "$saved"
+run inbox
+check 'walk wins' test "$(head -1 "$AGENT_LOG")" = "$sb/ops"
+check 'walk replaces saved' test "$(cat "$saved")" = "$sb/ops"
+mkdir -p "$sb/second/.claude/skills/inbox"
+cp "$sb/ops/.claude/skills/inbox/SKILL.md" "$sb/second/.claude/skills/inbox/"
+APEXYARD_OPS_ROOT="$sb/second" run inbox
+check 'walk beats override' test "$(head -1 "$AGENT_LOG")" = "$sb/ops"
+APEXYARD_OPS_ROOT="$sb/second" outside inbox
+check 'override launch' test "$rc" = 0
+check 'override beats saved' test "$(head -1 "$AGENT_LOG")" = "$sb/second"
+APEXYARD_OPS_ROOT="$sb/missing" outside inbox
+check 'bad override' test "$rc" = 2
+check 'bad override message' grep -Fxq "APEXYARD_OPS_ROOT is not an ApexYard ops repo: $sb/missing" "$sb/out"
+printf '%s\n' "$sb/missing" > "$saved"
+outside inbox
 check outside test "$rc" = 2
 check 'outside message' grep -q 'not inside an apexyard fork' "$sb/out"
+check 'stale warning' grep -Fxq "apexyard: the saved ops repo $sb/missing is gone. Run apexyard use $sb/missing." "$sb/out"
+check 'one warning' test "$(grep -c 'saved ops repo' "$sb/out")" = 1
+rm "$saved"
+outside use
+check 'no saved repo' grep -Fxq 'No ops repo saved.' "$sb/out"
+outside use ops
+check 'use saves' test "$(cat "$saved")" = "$sb/ops"
+check 'use message' grep -Fxq "Saved $sb/ops as your ops repo." "$sb/out"
+outside use
+check 'use prints' grep -Fxq "$sb/ops" "$sb/out"
+outside use "$sb/missing"
+check 'bad use' test "$rc" = 2
+mkdir -p "$sb/ops/.claude/skills/status"
+printf '#!/bin/bash\nprintf "%%s\n" "$PWD"\n' > "$sb/ops/.claude/skills/status/briefing.sh"
+outside status
+check 'saved status' test "$rc" = 0
+check 'status cwd' grep -Fxq "$sb/ops" "$sb/out"
+rm "$sb/ops/.claude/skills/status/briefing.sh"
 run skills
 printf '  approve  One line (inside the agent only)\n  inbox  One line\n  status  One line\n' > "$sb/expected"
 check listing cmp "$sb/expected" "$sb/out"
@@ -91,7 +135,8 @@ check 'ticket agent cwd' test "$(head -1 "$AGENT_LOG")" = "$wt"
 check 'ticket prompt' grep -Fxq '/start-ticket org/app#12' "$AGENT_LOG"
 check 'helper cwd' test "$(head -1 "$START_LOG")" = "$wt"
 check 'helper target' grep -Fxq org/app#12 "$START_LOG"
-run ticket org/app#12
+outside ticket org/app#12
+check 'saved ticket cwd' test "$(head -1 "$AGENT_LOG")" = "$wt"
 check reuse test "$rc" = 0
 check 'issue read once' test "$(grep -c 'issue view' "$FAKE_GH_LOG")" = 1
 FAIL_START=1 run ticket org/app#12

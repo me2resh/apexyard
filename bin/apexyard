@@ -48,6 +48,61 @@ find_ops_root() {
   return 1
 }
 
+# Test the same anchors without walking to a parent directory.
+is_ops_root() {
+  [ -n "$1" ] || return 1
+  [ -e "$1/.apexyard-fork" ] || {
+    [ -e "$1/onboarding.yaml" ] && [ -e "$1/apexyard.projects.yaml" ]
+  }
+}
+
+ops_root_file() {
+  printf '%s/apexyard/ops-root' "${XDG_CONFIG_HOME:-$HOME/.config}"
+}
+
+saved_ops_root() {
+  local file
+  file=$(ops_root_file)
+  [ -f "$file" ] || return 1
+  cat "$file"
+}
+
+save_ops_root() (
+  umask 077
+  file=$(ops_root_file)
+  [ "$(saved_ops_root)" != "$1" ] || exit 0
+  mkdir -p "$(dirname "$file")" || exit 1
+  tmp=$(mktemp "$file.tmp.XXXXXX") || exit 1
+  trap 'rm -f "$tmp"' EXIT
+  printf '%s\n' "$1" > "$tmp" && mv -f "$tmp" "$file"
+)
+
+# Order: the folder you are in, then APEXYARD_OPS_ROOT, then the saved path.
+# Agent sessions export APEXYARD_OPS_ROOT, so it must never beat the folder.
+resolve_ops_root_any() {
+  local root
+  if root=$(find_ops_root); then
+    save_ops_root "$root" 2>/dev/null || true
+    printf '%s' "$root"
+    return 0
+  fi
+  if [ -n "${APEXYARD_OPS_ROOT:-}" ]; then
+    if ! is_ops_root "$APEXYARD_OPS_ROOT"; then
+      printf 'APEXYARD_OPS_ROOT is not an ApexYard ops repo: %s\n' "$APEXYARD_OPS_ROOT" >&2
+      return 2
+    fi
+    (cd "$APEXYARD_OPS_ROOT" && pwd -P)
+    return
+  fi
+  root=$(saved_ops_root) || return 1
+  if is_ops_root "$root"; then
+    printf '%s' "$root"
+    return 0
+  fi
+  printf 'apexyard: the saved ops repo %s is gone. Run apexyard use %s.\n' "$root" "$root" >&2
+  return 1
+}
+
 # Follow each symlink to the real script. Bash 3.2 has no readlink -f.
 resolve_cli_path() {
   local path="${BASH_SOURCE[0]}" hops=0 target dir
@@ -73,7 +128,8 @@ resolve_cli_path() {
 
 # Require the same fork anchors as status, with the skill exit code.
 skill_root() {
-  find_ops_root || {
+  resolve_ops_root_any || {
+    [ "$?" -ne 2 ] || return 2
     echo "apexyard: not inside an apexyard fork (no .apexyard-fork marker, and no onboarding.yaml + apexyard.projects.yaml found above $PWD)" >&2
     return 2
   }
@@ -180,13 +236,14 @@ Commands:
   status [-b|--briefing]   Compact "where am I" briefing -- workspace, ticket,
                            branch, role. Defaults to --briefing today (the
                            full /status report runs inside Claude Code).
+  use [<dir>]            Save or show the ops repository.
   skills                 List framework skills.
   <skill> [args]         Run a framework skill from the ops root.
   ticket owner/repo#N    Open a ticket worktree and start its skill.
   migrate [opts]         Keep the CLI only, or move this fork to a new repo
                            (init layout). See: apexyard migrate --help.
 
-Run from inside an apexyard fork or any of its workspace/<name>/ clones.
+Run from any folder after selecting an ops repo with apexyard use <dir>.
 EOF
 }
 
@@ -220,7 +277,8 @@ case "$cmd" in
   init|update)
     cli_path=$(resolve_cli_path) || exit 2
     if [ "$cmd" = update ]; then
-      APEXYARD_UPDATE_ROOT=$(find_ops_root) || {
+      APEXYARD_UPDATE_ROOT=$(resolve_ops_root_any) || {
+        [ "$?" -ne 2 ] || exit 2
         echo "apexyard update: not inside an apexyard fork" >&2
         exit 2
       }
@@ -231,7 +289,10 @@ case "$cmd" in
   doctor)
     # Use the fork that contains the current directory.
     # Outside a fork, use the real script directory. A PATH symlink must not hide it.
-    ops_root=$(find_ops_root) || ops_root=""
+    ops_root=$(resolve_ops_root_any) || {
+      [ "$?" -ne 2 ] || exit 2
+      ops_root=""
+    }
     if [ -z "$ops_root" ]; then
       cli_path=$(resolve_cli_path) || cli_path="${BASH_SOURCE[0]}"
       ops_root=$(cd "$(dirname "$cli_path")/.." && pwd -P) || ops_root=""
@@ -252,7 +313,10 @@ case "$cmd" in
     exec "$BASH" "$helper" "$@"
     ;;
   status)
-    if ! ops_root=$(find_ops_root); then
+    if ops_root=$(resolve_ops_root_any); then
+      :
+    else
+      [ "$?" -ne 2 ] || exit 2
       echo "apexyard: not inside an apexyard fork (no .apexyard-fork marker, and no onboarding.yaml + apexyard.projects.yaml found above $PWD)" >&2
       exit 1
     fi
@@ -275,11 +339,16 @@ case "$cmd" in
         ;;
     esac
 
+    case "$PWD/" in
+      "$ops_root/"*) ;;
+      *) cd "$ops_root" || exit 2 ;;
+    esac
     exec bash "$helper"
     ;;
   migrate)
     # Resolve ops root the same way as doctor/status, then source the
     # migrate library next to this script (or under the fork's bin/).
+    # Migrate changes a repository, so it never uses the saved ops repo.
     ops_root=$(find_ops_root) || ops_root=""
     if [ -z "$ops_root" ]; then
       cli_path=$(resolve_cli_path) || cli_path="${BASH_SOURCE[0]}"
@@ -300,6 +369,24 @@ case "$cmd" in
     . "$migrate_lib"
     apexyard_migrate "$@"
     exit $?
+    ;;
+  use)
+    if [ "$#" -eq 0 ]; then
+      saved_ops_root || echo 'No ops repo saved.'
+    else
+      [ "$#" -eq 1 ] || { echo 'Usage: apexyard use [<dir>]' >&2; exit 2; }
+      ops_root=$(cd "$1" 2>/dev/null && pwd -P) || ops_root=""
+      if ! is_ops_root "$ops_root"; then
+        printf 'apexyard use: not an ApexYard ops repo: %s\n' "$1" >&2
+        exit 2
+      fi
+      if save_ops_root "$ops_root"; then
+        printf 'Saved %s as your ops repo.\n' "$ops_root"
+      else
+        echo 'apexyard: could not save the ops repo.' >&2
+        exit 2
+      fi
+    fi
     ;;
   skills)
     ops_root=$(skill_root) || exit 2

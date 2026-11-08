@@ -98,7 +98,9 @@ Keep a fork current with [`docs/upgrading.md`](docs/upgrading.md).
 
 ### Run a skill from the terminal
 
-Run `apexyard skills` to list skills. Run `apexyard inbox` from your ops repo to start `/inbox`.
+Run `apexyard skills` to list skills. Run `apexyard inbox` to start `/inbox`.
+
+The CLI works from any folder and remembers the last ops repo you used. Run `apexyard use <dir>` to change it.
 Use `apexyard ticket owner/repo#N` to create or reuse a ticket worktree.
 Human approval skills must run inside your agent.
 
