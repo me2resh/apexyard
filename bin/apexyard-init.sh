@@ -160,7 +160,11 @@ step=1 repo_created=0
 cleanup() {
   local status=$?
   [ "$status" -ne 0 ] || return 0
-  if [ "$repo_created" -eq 1 ]; then
+  # gh can create the repo and then fail the push. Never delete the only copy.
+  if [ "$repo_created" -eq 0 ] && [ "$step" -eq 3 ] && repo_exists "$name"; then
+    printf 'Init stopped at step 3. The GitHub repo %s/%s exists, but the upload failed. It kept %s.\n' "$org" "$name" "$target" >&2
+    printf 'Finish with: cd %s && git push -u origin main, then run /onboard.\n' "$target" >&2
+  elif [ "$repo_created" -eq 1 ]; then
     printf 'Init stopped at step %s. The GitHub repo %s/%s exists. Finish with: cd %s and run /onboard.\n' "$step" "$org" "$name" "$target" >&2
   elif [ "$target_existed" -eq 0 ]; then
     rm -rf -- "$target"

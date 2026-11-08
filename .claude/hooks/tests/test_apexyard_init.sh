@@ -137,6 +137,14 @@ if /bin/bash "$CLI" init --org acme --name fresh --dir "$sb/create-fail" > "$sb/
 check 'create failure exit' test "$rc" -ne 0
 check 'create failure removes new folder' test ! -e "$sb/create-fail"
 check 'create failure message' grep -Fq "Init stopped at step 3. It removed $sb/create-fail. Nothing was created on GitHub." "$sb/create-fail.out"
+unset FAKE_GH_FAIL_CREATE
+if FAKE_GH_FAIL_PUSH=1 /bin/bash "$CLI" init --org acme --name pushfail --dir "$sb/push-fail" > "$sb/push-fail.out" 2>&1; then rc=0; else rc=$?; fi
+check 'push failure exit' test "$rc" -ne 0
+check 'push failure keeps folder' test -d "$sb/push-fail/.git"
+check 'push failure message' grep -Fq "The GitHub repo acme/pushfail exists, but the upload failed. It kept $sb/push-fail." "$sb/push-fail.out"
+check 'push failure next step' grep -Fq "Finish with: cd $sb/push-fail && git push -u origin main" "$sb/push-fail.out"
+check 'push failure no nothing-created claim' test "$(grep -c 'Nothing was created' "$sb/push-fail.out" || true)" = 0
+export FAKE_GH_FAIL_CREATE=1
 mkdir "$sb/existing-target"
 if /bin/bash "$CLI" init --org acme --name fresh --dir "$sb/existing-target" > "$sb/existing-target.out" 2>&1; then rc=0; else rc=$?; fi
 check 'existing target failure exit' test "$rc" -ne 0

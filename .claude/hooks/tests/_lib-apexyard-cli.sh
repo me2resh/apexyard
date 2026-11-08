@@ -33,11 +33,14 @@ if [ "$1" = repo ] && [ "$2" = view ]; then
       echo 'view: target absent' >> "$FAKE_GH_LOG"
     fi
   fi
+  if [ -f "$FAKE_ROOT/gh-created" ] && grep -Fxq -- "$3" "$FAKE_ROOT/gh-created"; then exit 0; fi
   [ -n "${FAKE_GH_EXISTING:-}" ] && grep -Fxq -- "$3" "$FAKE_GH_EXISTING"
   exit $?
 fi
 [ "$1" = repo ] && [ "$2" = create ] || exit 2
 [ "${FAKE_GH_FAIL_CREATE:-0}" != 1 ] || exit 1
+# Create the repo, then fail the push, as gh does without a loaded ssh key.
+if [ "${FAKE_GH_FAIL_PUSH:-0}" = 1 ]; then printf '%s\n' "$3" >> "$FAKE_ROOT/gh-created"; exit 1; fi
 git -C "$FAKE_ROOT" init --bare "$FAKE_REMOTE" >/dev/null
 git -C "$PWD" remote add origin "$FAKE_REMOTE"
 git -C "$PWD" push -u origin main
