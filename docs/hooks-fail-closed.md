@@ -186,10 +186,16 @@ The subcommand must be one of `api`, `issue`, `label`, `pr`, `release`, `repo`, 
 The wrapper refuses gh global flags before the subcommand.
 The wrapper reads the token inside the script.
 It sets `GH_TOKEN` for one `gh` process.
-It refuses any argument that is `auth`, `-t` or `--show-token`, because gh can print the token for them.
-So `gh api -t` (the template flag) does not work through the wrapper.
+It refuses any argument that is `auth`, `-t`, `--show-token`, `--jq` or `-q`, because gh can print the token for them.
+So `gh api -t` (the template flag) and `--jq` filters do not work through the wrapper.
+It sets the gh pager to `cat` and the gh browser and editor to no-ops.
+It removes `PAGER`, `BROWSER`, `EDITOR`, `VISUAL` and `GH_FORCE_TTY` before it runs gh.
 It exits 2 when the user has no login.
-A `gh` extension or a shell alias that the command starts inherits `GH_TOKEN`.
+The allowlist refuses gh extensions and aliases.
+
+The wrapper stops accidental prints of the token.
+It does not stop a caller who wants the token.
+The token is in the gh process environment, so a determined caller can still reach it.
 It supports `gh` commands only.
 The repository has no existing `gh` credential helper pattern for `git push`.
 

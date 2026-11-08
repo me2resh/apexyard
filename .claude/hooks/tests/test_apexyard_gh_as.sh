@@ -21,8 +21,13 @@ if [ "$1" = auth ] && [ "$2" = token ]; then
 else
   # Like the real gh: these arguments make it print GH_TOKEN.
   for arg in "$@"; do
-    case "$arg" in auth|-t|--show-token*) printf '%s\n' "$GH_TOKEN" ;; esac
+    case "$arg" in auth|-t|--show-token*|--jq|--jq=*|-q) printf '%s\n' "$GH_TOKEN" ;; esac
   done
+  # Like the real gh: an inherited pager or browser command runs with GH_TOKEN.
+  for hook in "${GH_PAGER:-}" "${PAGER:-}" "${GH_BROWSER:-}" "${BROWSER:-}"; do
+    [ -z "$hook" ] || [ "$hook" = cat ] || [ "$hook" = true ] || printf '%s\n' "$GH_TOKEN"
+  done
+  printf '%s|%s|%s|%s\n' "${GH_PAGER:-}" "${GH_BROWSER:-}" "${GH_EDITOR:-}" "${PAGER:-}${BROWSER:-}${EDITOR:-}${VISUAL:-}${GH_FORCE_TTY:-}" > "$RECORD.hooks"
   printf '%s' "$GH_TOKEN" > "$RECORD.env"
   printf '%s\n' "$@" > "$RECORD.args"
   exit "${FAKE_STATUS:-0}"
@@ -47,9 +52,11 @@ done
 "$ROOT/bin/apexyard-gh-as" owner > "$tmp/out" 2>&1
 check test "$?" -eq 2
 # Commands that make gh print GH_TOKEN are refused before any token read.
+# shellcheck disable=SC2016 # $ENV is jq syntax, passed literally.
 for refused in 'auth token' 'auth status --show-token' 'api user --show-token' 'auth status --show-token=true' \
   '--hostname github.com auth token' '--hostname=github.com auth token' 'pr list auth' 'api user -t' \
-  'config get oauth_token' 'extension exec x' 'alias set x !env'; do
+  'config get oauth_token' 'extension exec x' 'alias set x !env' \
+  'api user --jq $ENV.GH_TOKEN' 'api user --jq=env.GH_TOKEN' 'pr list --json url -q env.GH_TOKEN'; do
   rm -f "$RECORD.env"
   # shellcheck disable=SC2086
   "$ROOT/bin/apexyard-gh-as" owner $refused > "$tmp/out" 2>&1
@@ -57,6 +64,12 @@ for refused in 'auth token' 'auth status --show-token' 'api user --show-token' '
   check test ! -e "$RECORD.env"
   if grep -Fq "$FAKE_TOKEN" "$tmp/out"; then check false; else check true; fi
 done
+# An inherited pager, browser or editor must not reach gh.
+GH_FORCE_TTY=1 GH_PAGER='printenv GH_TOKEN' PAGER='printenv GH_TOKEN' BROWSER=x EDITOR=x VISUAL=x \
+  "$ROOT/bin/apexyard-gh-as" owner api user > "$tmp/out" 2>&1
+check test "$?" -eq 0
+if grep -Fq "$FAKE_TOKEN" "$tmp/out"; then check false; else check true; fi
+check test "$(cat "$RECORD.hooks")" = 'cat|true|true|'
 FAKE_STATUS=7 "$ROOT/bin/apexyard-gh-as" owner api > "$tmp/out" 2>&1
 check test "$?" -eq 7
 bash "$ROOT/bin/secrets-selftest.sh" > "$tmp/selftest" 2>&1

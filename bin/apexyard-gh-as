@@ -2,8 +2,11 @@
 # Run one gh command with the named user's token. Do not print the token.
 # An allowlist, not a denylist: the first gh argument must be a listed
 # subcommand, so gh global flags and the auth command group cannot run.
-# Any argument that is auth, -t or --show-token is also refused, because gh
-# can print the token for them.
+# Any argument that is auth, -t, --show-token, --jq or -q is also refused,
+# because gh can print the token for them. The pager, browser and editor are
+# fixed to no-ops, so an inherited variable cannot run a command that prints
+# the token. This stops accidental prints. A caller who wants the token can
+# still find a way, because the token is in the gh process environment.
 set +x
 if [ "$#" -lt 2 ]; then
   echo 'Usage: apexyard-gh-as <gh-user> <subcommand> [args...]' >&2
@@ -21,7 +24,7 @@ case "$1" in
 esac
 for arg in "$@"; do
   case "$arg" in
-    auth|-t|--show-token|--show-token=*)
+    auth|-t|--show-token|--show-token=*|--jq|--jq=*|-q)
       echo "apexyard-gh-as: the argument '$arg' is refused. It can print the token." >&2
       exit 2
       ;;
@@ -31,6 +34,8 @@ if ! token=$(gh auth token --user "$user" 2>/dev/null) || [ -z "$token" ]; then
   echo 'apexyard-gh-as: no login for the requested user.' >&2
   exit 2
 fi
+unset GH_FORCE_TTY PAGER BROWSER EDITOR VISUAL
+export GH_PAGER=cat GH_BROWSER=true GH_EDITOR=true
 export GH_TOKEN="$token"
 unset token
 exec gh "$@"
