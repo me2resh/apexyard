@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# apexyard -- tiny CLI shim that exposes a subset of ApexYard skills as
-# shell-runnable commands: status, doctor, init, update, and migrate.
+# apexyard -- CLI commands and framework skills from the shell.
 #
 # Install: symlink this script into a directory on your PATH.
 #
@@ -72,6 +71,101 @@ resolve_cli_path() {
   printf '%s' "$dir/$(basename "$path")"
 }
 
+# Require the same fork anchors as status, with the skill exit code.
+skill_root() {
+  find_ops_root || {
+    echo "apexyard: not inside an apexyard fork (no .apexyard-fork marker, and no onboarding.yaml + apexyard.projects.yaml found above $PWD)" >&2
+    return 2
+  }
+}
+
+# Read only the frontmatter, never matching instructions in the body.
+skill_field() {
+  awk -v key="$2" '
+    NR == 1 { if ($0 != "---") exit; next }
+    /^---[[:space:]]*$/ { exit }
+    index($0, key ":") == 1 {
+      sub(/^[^:]*:[[:space:]]*/, "")
+      sub(/[[:space:]\r]+$/, "")
+      gsub(/^["\047]|["\047]$/, "")
+      print; exit
+    }
+  ' "$1"
+}
+
+launch_skill() {
+  local root=$1 skill=$2 prompt agent arg
+  shift 2
+  prompt="/$skill"
+  for arg in "$@"; do prompt="$prompt $arg"; done
+  agent=${APEXYARD_AGENT_CMD:-claude}
+  if ! command -v "$agent" >/dev/null 2>&1; then
+    printf 'Run this in your agent tool, from %s: %s\n' "$root" "$prompt"
+    return 0
+  fi
+  cd "$root" || return 2
+  exec "$agent" "$prompt"
+}
+
+ticket_skill() {
+  local root=$1 target=${2:-} repo number parsed name registered ws rest clone=""
+  local worktree="" line candidate="" title type slug branch base helper
+  [ "$#" -eq 2 ] && [[ "$target" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+$ ]] || {
+    echo 'Usage: apexyard ticket owner/repo#N' >&2; return 2;
+  }
+  repo=${target%#*}; number=${target##*#}
+  cd "$root" || return 2
+  # shellcheck source=/dev/null
+  source "$root/.claude/hooks/_lib-read-config.sh"
+  # shellcheck source=/dev/null
+  source "$root/.claude/hooks/_lib-portfolio-paths.sh"
+  # shellcheck source=/dev/null
+  source "$root/.claude/hooks/_lib-multi-repo-trace.sh"
+  parsed=$(_mrt_parse_registry) || return 2
+  while IFS='|' read -r name registered ws rest; do
+    [ "$registered" = "$repo" ] || continue
+    ws=${ws:-workspace/$name}
+    case "$ws" in
+      /*) clone=$ws ;;
+      *) clone="$(dirname "$(portfolio_registry)")/$ws" ;;
+    esac
+    break
+  done <<< "$parsed"
+  [ -n "$clone" ] || {
+    echo "$repo is not in the registry. Register it with /handover first." >&2; return 2;
+  }
+  [ -d "$clone" ] || {
+    printf 'apexyard: no clone of %s at %s. Clone it first:\n' "$repo" "$clone" >&2
+    printf 'gh repo clone %s %s\n' "$repo" "$clone" >&2; return 2;
+  }
+  parsed=$(git -C "$clone" worktree list --porcelain) || return 2
+  while IFS= read -r line; do
+    case "$line" in
+      'worktree '*) candidate=${line#worktree } ;;
+      branch\ refs/heads/*/GH-"$number"-*) worktree=$candidate; break ;;
+    esac
+  done <<< "$parsed"
+  if [ -z "$worktree" ]; then
+    title=$("${APEXYARD_GH:-gh}" issue view "$number" --repo "$repo" --json title -q .title) || return 2
+    case "$title" in
+      '[Feature]'*) type=feature ;; '[Bug]'*) type=fix ;;
+      '[Docs]'*) type=docs ;; '[Refactor]'*) type=refactor ;;
+      '[CI]'*) type=ci ;; '[Testing]'*) type="test" ;; *) type=chore ;;
+    esac
+    slug=$(printf '%s' "$title" | sed 's/^\[[^]]*\]//' | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C sed 's/[^a-z0-9]/-/g; s/-\{1,\}/-/g; s/^-//; s/-$//' | cut -c1-40 | sed 's/-$//')
+    slug=${slug:-ticket}
+    branch="$type/GH-$number-$slug"
+    worktree="$clone.worktrees/gh-$number-$slug"
+    git -C "$clone" fetch origin || return 2
+    base=$(git -C "$clone" symbolic-ref refs/remotes/origin/HEAD) || base=origin/main
+    git -C "$clone" worktree add -b "$branch" "$worktree" "$base" || return 2
+  fi
+  helper=${APEXYARD_START_TICKET:-$root/bin/apexyard-start-ticket}
+  cd "$worktree" || return 2
+  "$helper" "$target" || return 2
+  launch_skill "$worktree" start-ticket "$target"
+}
+
 usage() {
   cat <<'EOF'
 Usage: apexyard <command> [args]
@@ -86,6 +180,9 @@ Commands:
   status [-b|--briefing]   Compact "where am I" briefing -- workspace, ticket,
                            branch, role. Defaults to --briefing today (the
                            full /status report runs inside Claude Code).
+  skills                 List framework skills.
+  <skill> [args]         Run a framework skill from the ops root.
+  ticket owner/repo#N    Open a ticket worktree and start its skill.
   migrate [opts]         Keep the CLI only, or move this fork to a new repo
                            (init layout). See: apexyard migrate --help.
 
@@ -204,9 +301,36 @@ case "$cmd" in
     apexyard_migrate "$@"
     exit $?
     ;;
+  skills)
+    ops_root=$(skill_root) || exit 2
+    while IFS= read -r file; do
+      name=${file%/SKILL.md}; name=${name##*/}
+      description=$(skill_field "$file" description)
+      mark=""
+      [ "$(skill_field "$file" disable-model-invocation)" != true ] || mark=' (inside the agent only)'
+      printf '  %s  %s%s\n' "$name" "$description" "$mark"
+    done < <(find "$ops_root/.claude/skills" -mindepth 2 -maxdepth 2 -name SKILL.md | LC_ALL=C sort)
+    ;;
+  ticket)
+    ops_root=$(skill_root) || exit 2
+    ticket_skill "$ops_root" "$@"
+    exit $?
+    ;;
   *)
-    echo "apexyard: unknown command '$cmd'" >&2
-    usage >&2
+    ops_root=$(skill_root) || exit 2
+    case "$cmd" in
+      ''|*[!a-zA-Z0-9_-]*) file="" ;;
+      *) file="$ops_root/.claude/skills/$cmd/SKILL.md" ;;
+    esac
+    if [ -f "$file" ]; then
+      if [ "$(skill_field "$file" disable-model-invocation)" = true ]; then
+        echo "apexyard: /$cmd records a human approval. Run it inside your agent." >&2
+        exit 2
+      fi
+      launch_skill "$ops_root" "$cmd" "$@"
+      exit $?
+    fi
+    echo "apexyard: unknown command or skill '$cmd'. Run 'apexyard skills' to list them." >&2
     exit 2
     ;;
 esac

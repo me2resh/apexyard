@@ -166,6 +166,19 @@ Claude Code reads it automatically when you start a session inside the fork. You
 
 ## Step 4: Start Using It
 
+### Start a skill from the terminal
+
+Every framework skill also runs from the terminal. The CLI opens Claude Code in your ops repo with the skill already started:
+
+```bash
+apexyard skills                 # list the skills
+apexyard inbox                  # starts /inbox
+apexyard code-review 42         # starts /code-review 42
+apexyard ticket owner/repo#N    # makes or reuses the ticket worktree, then starts the ticket
+```
+
+Approval skills, such as `/approve-merge`, run only inside your agent. If `claude` is not on your PATH, the CLI prints the command to run in your agent tool.
+
 ### Ask Claude Code to act as a role
 
 ```

@@ -96,6 +96,12 @@ CLI install and `apexyard init` (including private ops repos):
 [`docs/getting-started.md`](docs/getting-started.md).
 Keep a fork current with [`docs/upgrading.md`](docs/upgrading.md).
 
+### Run a skill from the terminal
+
+Run `apexyard skills` to list skills. Run `apexyard inbox` from your ops repo to start `/inbox`.
+Use `apexyard ticket owner/repo#N` to create or reuse a ticket worktree.
+Human approval skills must run inside your agent.
+
 ## Using another AI coding tool?
 
 Claude Code is the default driver. The same rules reach other tools through a
