@@ -1,5 +1,17 @@
 # PR Workflow: Hard Stops
 
+
+## Ticket progress note
+
+The orchestrator updates the progress note at PR opened, CI result, review verdict, fix pushed, and merge.
+Source `.claude/hooks/_lib-progress-note.sh` from the framework checkout.
+Set `$tree` to the ticket worktree, including when the orchestrator runs elsewhere.
+Call `progress_note_update "$tree" Completed '<stage>: <evidence and head SHA>'` after each observed result.
+Record failures and requested changes too. Update Outputs and Next action with separate calls.
+Do not call the helper from gate hooks.
+See [Resume ticket work](../../docs/progress-notes.md) for examples and recovery steps.
+
+
 ## Before `git push` (HARD STOP)
 
 **Never** push without running CI checks locally. This prevents wasted CI minutes and failed checks.
