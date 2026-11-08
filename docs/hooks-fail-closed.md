@@ -153,12 +153,48 @@ The fallback knows only built-in types when the library is missing.
 
 The hooks read command text. They catch honest mistakes, but they are not a security boundary (AgDR-0267).
 
-Claude Code permission rules work at the tool boundary, with no text parsing. The tracked `.claude/settings.json` has two deny rules:
+The tracked `.claude/settings.json` has these deny rules:
 
 | Rule | Effect |
 |------|--------|
 | `Read(//**/.env)` | The Read tool cannot read a `.env` file in any folder. |
 | `Read(//**/.env.*)` | The Read tool cannot read `.env.local`, `.env.production` and similar files in any folder. This also covers `.env.example`. |
+
+| `Bash(gh auth token)` | Block the bare token command. |
+| `Bash(gh auth token:*)` | Block the token command with arguments. |
+| `Bash(printenv)` | Block the bare environment print command. |
+| `Bash(printenv:*)` | Block the environment print command with arguments. |
+| `Bash(env)` | Block bare `env`. Permit `env FOO=bar cmd`. |
+| `Read(//**/*.private-key.pem)` | Block reads of the generic private key file pattern. |
+| `Read(//**/.config/apexyard/reviewer.pem)` | Block reads of the reviewer key path from the setup guide. |
+| `Read(//**/.mcp.json)` | Block reads of MCP config files that can contain client tokens. |
+
+The default `review_identity.private_key_path` is empty.
+The reviewer guide uses `$HOME/.config/apexyard/reviewer.pem`.
+The repository has no configured MCP file or documented user-level token config path.
+The MCP rule uses only the generic `.mcp.json` pattern.
+
+Use `bin/apexyard-gh-as <gh-user> <gh args...>` for one command as a named GitHub user.
+The wrapper reads the token inside the script.
+It sets `GH_TOKEN` for one `gh` process.
+It prints no token.
+It exits 2 when the user has no login.
+It supports `gh` commands only.
+The repository has no existing `gh` credential helper pattern for `git push`.
+
+Run `bash scripts/secrets-selftest.sh` for the 13 Nov bypass self-test.
+It checks each deny rule, secret scan output, and the wrapper with a fake `gh`.
+It prints one PASS or FAIL line per check.
+Any failed check causes exit 1.
+The current secret scan prints matched values.
+The self-test reports this failure until the separate scan fix is present.
+The script states that the cockpit run environment check belongs in `apexyard-premium`.
+
+Deny rules match command text.
+A run can still read a file through another command.
+These rules catch honest mistakes.
+They are not a security boundary.
+They do not provide complete protection.
 
 A rule that starts with `//` matches from the filesystem root. A rule that starts with `**/` matches only under the folder the session runs in. It would miss the workspace clones and a split-portfolio sibling repo.
 

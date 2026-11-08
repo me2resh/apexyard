@@ -1,0 +1,15 @@
+#!/bin/bash
+# Run one gh command with the named user's token. Do not print the token.
+set +x
+if [ "$#" -lt 2 ]; then
+  echo 'Usage: apexyard-gh-as <gh-user> <gh args...>' >&2
+  exit 2
+fi
+if ! token=$(gh auth token --user "$1" 2>/dev/null) || [ -z "$token" ]; then
+  echo 'apexyard-gh-as: no login for the requested user.' >&2
+  exit 2
+fi
+shift
+export GH_TOKEN="$token"
+unset token
+exec gh "$@"
