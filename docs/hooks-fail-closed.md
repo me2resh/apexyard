@@ -182,7 +182,7 @@ It exits 2 when the user has no login.
 It supports `gh` commands only.
 The repository has no existing `gh` credential helper pattern for `git push`.
 
-Run `bash scripts/secrets-selftest.sh` for the 13 Nov bypass self-test.
+Run `bash bin/secrets-selftest.sh` for the 13 Nov bypass self-test.
 It checks each deny rule, secret scan output, and the wrapper with a fake `gh`.
 It prints one PASS or FAIL line per check.
 Any failed check causes exit 1.

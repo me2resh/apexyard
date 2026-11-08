@@ -44,30 +44,30 @@ done
 check test "$?" -eq 2
 FAKE_STATUS=7 "$ROOT/bin/apexyard-gh-as" owner api > "$tmp/out" 2>&1
 check test "$?" -eq 7
-bash "$ROOT/scripts/secrets-selftest.sh" > "$tmp/selftest" 2>&1
+bash "$ROOT/bin/secrets-selftest.sh" > "$tmp/selftest" 2>&1
 check test "$?" -eq 0
 check grep -Fxq 'PASS secret scan hides the value' "$tmp/selftest"
 check test "$(grep -c '^PASS ' "$tmp/selftest")" -eq 13
 check grep -Fxq 'Cockpit run environment: checked in apexyard-premium, not here.' "$tmp/selftest"
 # Use a copy to verify a missing rule and a leaking wrapper each fail.
-mkdir -p "$tmp/tree/scripts" "$tmp/tree/bin" "$tmp/tree/.claude/hooks"
-cp "$ROOT/scripts/secrets-selftest.sh" "$tmp/tree/scripts/"
+mkdir -p "$tmp/tree/bin" "$tmp/tree/.claude/hooks"
+cp "$ROOT/bin/secrets-selftest.sh" "$tmp/tree/bin/"
 cp "$ROOT/bin/apexyard-gh-as" "$tmp/tree/bin/"
 cp "$ROOT/.claude/hooks/"*.sh "$tmp/tree/.claude/hooks/"
 jq 'del(.permissions.deny[0])' "$ROOT/.claude/settings.json" > "$tmp/tree/.claude/settings.json"
-bash "$tmp/tree/scripts/secrets-selftest.sh" > "$tmp/selftest" 2>&1
+bash "$tmp/tree/bin/secrets-selftest.sh" > "$tmp/selftest" 2>&1
 check test "$?" -eq 1
 check grep -Fq 'FAIL deny Read(//**/.env)' "$tmp/selftest"
 cp "$ROOT/.claude/settings.json" "$tmp/tree/.claude/settings.json"
 # shellcheck disable=SC2016
 printf '#!/bin/bash\ngh auth token --user "$1"\n' > "$tmp/tree/bin/apexyard-gh-as"
-bash "$tmp/tree/scripts/secrets-selftest.sh" > "$tmp/selftest" 2>&1
+bash "$tmp/tree/bin/secrets-selftest.sh" > "$tmp/selftest" 2>&1
 check test "$?" -eq 1
 check grep -Fq 'FAIL wrapper keeps its token private' "$tmp/selftest"
 # A safe scanner fixture proves the self-test can also pass all checks.
 cp "$ROOT/bin/apexyard-gh-as" "$tmp/tree/bin/apexyard-gh-as"
 printf '#!/bin/bash\necho "hardcoded secrets" >&2\nexit 2\n' > "$tmp/tree/.claude/hooks/check-secrets.sh"
-bash "$tmp/tree/scripts/secrets-selftest.sh" > "$tmp/selftest" 2>&1
+bash "$tmp/tree/bin/secrets-selftest.sh" > "$tmp/selftest" 2>&1
 check test "$?" -eq 0
 check test "$(grep -c '^PASS ' "$tmp/selftest")" -eq 13
 echo "Tests: $count; failures: $fail"
