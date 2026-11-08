@@ -216,13 +216,14 @@ for mode in yes no default direct install-fail setup-fail missing override; do
       export FAKE_PIPX_STATUS=0 FAKE_SETUP_STATUS=0
       [ "$mode" != install-fail ] || export FAKE_PIPX_STATUS=1
       [ "$mode" != setup-fail ] || export FAKE_SETUP_STATUS=1
-      [ "$mode" != missing ] || mv "$sb/tools/pipx" "$sb/pipx.saved"
+      # Point at a pipx that does not exist. Removing the stub from PATH
+      # would let a system pipx in /usr/bin run and reach the network.
+      [ "$mode" != missing ] || export APEXYARD_PIPX="$sb/no-such-pipx"
       if [ "$mode" = override ]; then
         export APEXYARD_COCKPIT_SOURCE=git+file:///sandbox/premium APEXYARD_COCKPIT_TAG=test-tag
       fi
       check "$mode exits zero" /bin/bash "$CLI" init --yes --cockpit --org acme --name "$mode" --dir "$target" > "$target.out" 2>&1
-      [ "$mode" != missing ] || mv "$sb/pipx.saved" "$sb/tools/pipx"
-      unset APEXYARD_COCKPIT_SOURCE APEXYARD_COCKPIT_TAG ;;
+      unset APEXYARD_COCKPIT_SOURCE APEXYARD_COCKPIT_TAG APEXYARD_PIPX ;;
   esac
   check "$mode keeps setup" test -f "$target/onboarding.yaml"
   check "$mode next steps" grep -q 'Next:' "$target.out"

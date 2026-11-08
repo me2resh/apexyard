@@ -20,6 +20,7 @@ interactive=0 yes=0
 ref=${APEXYARD_FRAMEWORK_REF:-main}
 framework=${APEXYARD_FRAMEWORK_URL:-https://github.com/me2resh/apexyard.git}
 gh_cmd=${APEXYARD_GH:-gh}
+pipx_cmd=${APEXYARD_PIPX:-pipx}
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --org|--name|--dir|--ref|--agent)
@@ -237,13 +238,13 @@ fi
 trap - EXIT
 
 install_cockpit() {
-  if ! command -v pipx >/dev/null 2>&1; then
+  if ! command -v "$pipx_cmd" >/dev/null 2>&1; then
     echo 'Cockpit skipped: pipx is missing. Install pipx with python3 -m pip install --user pipx, then run python3 -m pipx ensurepath. Install the premium CLI separately afterward.' >&2
     return 0
   fi
   # Leave authentication to the existing git credential configuration.
   # Suppress child output so credential diagnostics cannot expose secrets.
-  if ! GIT_TERMINAL_PROMPT=0 pipx install "${COCKPIT_SOURCE}@${COCKPIT_TAG}" >/dev/null 2>&1; then
+  if ! GIT_TERMINAL_PROMPT=0 "$pipx_cmd" install "${COCKPIT_SOURCE}@${COCKPIT_TAG}" >/dev/null 2>&1; then
     echo 'Cockpit install failed. Request access to apexyard-premium from the owner and check your existing GitHub login, then retry.' >&2
   elif ! apexyard-premium setup --ops "$target" --portfolio "$target" >/dev/null 2>&1; then
     echo 'Cockpit setup failed. Check your Cockpit access with the owner, then run apexyard-premium setup with --ops and --portfolio pointing to this repo.' >&2

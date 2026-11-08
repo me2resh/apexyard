@@ -14,6 +14,8 @@ export GIT_AUTHOR_NAME=Test GIT_AUTHOR_EMAIL=test@example.invalid
 export GIT_COMMITTER_NAME=Test GIT_COMMITTER_EMAIL=test@example.invalid
 export GIT_TERMINAL_PROMPT=0
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+# A caller's own Cockpit settings must not reach a real pipx or install source.
+unset APEXYARD_PIPX APEXYARD_COCKPIT APEXYARD_COCKPIT_SOURCE APEXYARD_COCKPIT_TAG
 mkdir -p "$sb/fixture/.claude" "$sb/tools"
 export APEXYARD_FRAMEWORK_URL="$sb/fixture" APEXYARD_FRAMEWORK_REF=v1.0.0
 export APEXYARD_GH="$sb/tools/gh" FAKE_GH_LOG="$sb/gh.log" FAKE_REMOTE="$sb/remote.git"
