@@ -188,9 +188,9 @@ Code loads it when it is at the repository root.
 | **Skills** | `.claude/skills/` | 68 slash commands |
 | **Settings** | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### The 22 rule files
+### The 23 rule files
 
-`agdr-decisions`, `agent-role-selection`, `build-handbook-discovery`, `code-standards`, `evidence-grounding`, `git-conventions`, `glossary-lookup`, `isolated-builds`, `leak-protection`, `loop-mode`, `parallel-work`, `plan-mode`, `pr-quality`, `pr-workflow`, `reconcile-before-build`, `reporting-style`, `right-size-ceremony`, `role-triggers`, `skill-first`, `ticket-vocabulary`, `workflow-gates`, `writing-standard`.
+`agdr-decisions`, `agent-role-selection`, `build-handbook-discovery`, `code-standards`, `evidence-grounding`, `external-write-retry`, `git-conventions`, `glossary-lookup`, `isolated-builds`, `leak-protection`, `loop-mode`, `parallel-work`, `plan-mode`, `pr-quality`, `pr-workflow`, `reconcile-before-build`, `reporting-style`, `right-size-ceremony`, `role-triggers`, `skill-first`, `ticket-vocabulary`, `workflow-gates`, `writing-standard`.
 
 ### The 23 sub-agents
 

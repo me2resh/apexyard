@@ -146,8 +146,8 @@ case "$1 $2" in
       echo 'write response lost' >&2; exit 1
     fi ;;
   "issue list") cat "$GH_CANDIDATES" ;;
-  "label list") echo '[]' ;;
-  "label create") exit 0 ;;
+  "label list") printf '%s\n' "${GH_LABELS:-[]}" ;;
+  "label create") exit "${GH_LABEL_CREATE_RC:-0}" ;;
   *) exit 1 ;;
 esac
 EOF
@@ -184,6 +184,28 @@ assert_eq "priority label created before issue" "label create urgent --repo o/r
 issue create --repo o/r --title Priority issue --body-file $BODY --label chore --label urgent" "$(grep -E '^(label create|issue create)' "$GH_LOG")"
 assert_eq "nonpriority label not created" 0 "$(grep -c '^label create chore' "$GH_LOG")"
 assert_eq "priority label action reported" 1 "$(grep -c 'created missing priority label urgent' "$SB/label.err")"
+
+# A label that exists in another case is not created again (names are case-insensitive).
+: > "$GH_LOG"
+out=$(GH_LABELS='[{"name":"URGENT"}]' PATH="$SB/bin:$PATH" tracker_create "o/r" "Case issue" "$BODY" "urgent" 2>/dev/null); rc=$?
+assert_eq "other-case label create succeeds" 0 "$rc"
+assert_eq "other-case label not created again" 0 "$(grep -c '^label create' "$GH_LOG")"
+
+# A failed label create warns and never stops the issue create.
+: > "$GH_LOG"
+out=$(GH_LABEL_CREATE_RC=1 PATH="$SB/bin:$PATH" tracker_create "o/r" "Label fail issue" "$BODY" "urgent" 2>"$SB/labelfail.err"); rc=$?
+assert_eq "label create failure does not stop create" 0 "$rc"
+assert_eq "issue still created after label failure" 1 "$(grep -c '^issue create ' "$GH_LOG")"
+assert_eq "label failure warned" 1 "$(grep -c 'could not create priority label urgent' "$SB/labelfail.err")"
+
+# zsh does not split an unquoted variable on IFS. Two labels must still be
+# checked. Under zsh the library reads only the default scheme (P0 to P3).
+if command -v zsh >/dev/null 2>&1; then
+  : > "$GH_LOG"
+  # Run from the repo root, so the library reads the shipped default scheme.
+  (cd "$HOOK_DIR" && PATH="$SB/bin:$PATH" GH_LOG="$GH_LOG" zsh -c '. "$1"; tracker_create o/r "Zsh issue" "$2" "chore,P1"' _ "$TRACKER_LIB" "$BODY" >/dev/null 2>&1)
+  assert_eq "zsh checks the priority label in a two-label list" 1 "$(grep -c '^label list --repo o/r --search P1' "$GH_LOG")"
+fi
 unset GH_LOG GH_CANDIDATES GH_CREATE_OK
 
 rm -rf "$SB"

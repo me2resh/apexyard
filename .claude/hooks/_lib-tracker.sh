@@ -778,24 +778,38 @@ _tracker_check_private_refs() {
   "$scanner" "$repo" "$title" "$body_file"
 }
 
-# Prepare only priority labels named by the configured scheme.
+# Prepare only priority labels named by the configured scheme. This step only
+# helps: a failure warns and never stops the create. The loop splits by hand,
+# because zsh does not word-split an unquoted variable on IFS.
 _tracker_priority_labels_gh() {
-  local repo="$1" labels="$2" scheme label names exists
+  local repo="$1" labels="$2" scheme label rest names exists
   [ -n "$labels" ] || return 0
   scheme=$(_tracker_config_get_or '.ticket.label_priority_scheme' 'P0,P1,P2,P3')
-  local IFS=','
-  for label in $labels; do
+  rest="$labels,"
+  while [ -n "$rest" ]; do
+    label=${rest%%,*}
+    rest=${rest#*,}
+    [ -n "$label" ] || continue
     case ",$scheme," in
-      *,"$label",*)
-        names=$(gh label list --repo "$repo" --search "$label" --json name --limit 100) || return 1
-        exists=$(printf '%s' "$names" | jq -r --arg name "$label" 'any(.[]; .name == $name)') || return 1
-        if [ "$exists" = false ]; then
-          gh label create "$label" --repo "$repo" >/dev/null || return 1
-          printf 'tracker_create: created missing priority label %s.\n' "$label" >&2
-        fi
-        ;;
+      *,"$label",*) ;;
+      *) continue ;;
     esac
+    # GitHub label names are unique without regard to case.
+    if ! names=$(gh label list --repo "$repo" --search "$label" --json name --limit 100) ||
+       ! exists=$(printf '%s' "$names" | jq -r --arg name "$label" \
+         'any(.[]; (.name | ascii_downcase) == ($name | ascii_downcase))'); then
+      printf 'tracker_create: could not check priority label %s; continuing.\n' "$label" >&2
+      continue
+    fi
+    if [ "$exists" = false ]; then
+      if gh label create "$label" --repo "$repo" >/dev/null 2>&1; then
+        printf 'tracker_create: created missing priority label %s.\n' "$label" >&2
+      else
+        printf 'tracker_create: could not create priority label %s; continuing.\n' "$label" >&2
+      fi
+    fi
   done
+  return 0
 }
 
 # Recover a completed write without issuing another create command.
