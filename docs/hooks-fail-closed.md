@@ -149,6 +149,29 @@ The fallback knows only built-in types when the library is missing.
 **Warning:** A name shared with a build agent locks that build agent during an active review.
 `limit-reviewer-writes.sh` also limits the Edit, Write and MultiEdit tools of a listed type at all times, with no active review. That type may write only under `.claude/session/reviews/bodies/` (AgDR-0266).
 
+## Permission rules and hooks
+
+The hooks read command text. They catch honest mistakes, but they are not a security boundary (AgDR-0267).
+
+Claude Code permission rules work at the tool boundary, with no text parsing. The tracked `.claude/settings.json` has two deny rules:
+
+| Rule | Effect |
+|------|--------|
+| `Read(//**/.env)` | The Read tool cannot read a `.env` file in any folder. |
+| `Read(//**/.env.*)` | The Read tool cannot read `.env.local`, `.env.production` and similar files in any folder. This also covers `.env.example`. |
+
+A rule that starts with `//` matches from the filesystem root. A rule that starts with `**/` matches only under the folder the session runs in. It would miss the workspace clones and a split-portfolio sibling repo.
+
+What the rules cover:
+
+- The Read tool, in every folder.
+- Shell commands too, but only when the Claude Code Bash sandbox is on. The sandbox adds the deny rules to its own list.
+- Only sessions that load this settings file. A session started in a workspace clone loads that clone's settings, not these.
+
+Review markers have no permission rule. The approval skills and the reviewer write markers with shell helpers. With the sandbox on, an `Edit(...)` deny rule on the markers would block those helpers too. The hooks still protect the markers.
+
+`/permissions` shows the rules that a session loaded.
+
 ## Operator escape hatch
 
 If a gate blocks all work, for example after a bad hook edit, start Claude

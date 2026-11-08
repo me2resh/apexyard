@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# apexyard -- tiny CLI shim that exposes a subset of ApexYard skills as
-# shell-runnable commands: status, doctor, init, update, and migrate.
+# apexyard -- CLI commands and framework skills from the shell.
 #
 # Install: symlink this script into a directory on your PATH.
 #
@@ -49,6 +48,72 @@ find_ops_root() {
   return 1
 }
 
+# Test the same anchors without walking to a parent directory.
+is_ops_root() {
+  [ -n "$1" ] || return 1
+  # The skills folder separates the ops repo from a split-portfolio private repo.
+  [ -d "$1/.claude/skills" ] || return 1
+  [ -e "$1/.apexyard-fork" ] || {
+    [ -e "$1/onboarding.yaml" ] && [ -e "$1/apexyard.projects.yaml" ]
+  }
+}
+
+ops_root_file() {
+  printf '%s/apexyard/ops-root' "${XDG_CONFIG_HOME:-$HOME/.config}"
+}
+
+saved_ops_root() {
+  local file
+  file=$(ops_root_file)
+  [ -f "$file" ] || return 1
+  cat "$file"
+}
+
+save_ops_root() (
+  umask 077
+  file=$(ops_root_file)
+  [ "$(saved_ops_root)" != "$1" ] || exit 0
+  mkdir -p "$(dirname "$file")" || exit 1
+  tmp=$(mktemp "$file.tmp.XXXXXX") || exit 1
+  trap 'rm -f "$tmp"' EXIT
+  printf '%s\n' "$1" > "$tmp" && mv -f "$tmp" "$file"
+)
+
+# Order: the folder you are in, then APEXYARD_OPS_ROOT, then the saved path.
+# Agent sessions export APEXYARD_OPS_ROOT, so it must never beat the folder.
+# Pass "skills" when the command runs a skill. A split-portfolio private repo
+# has the legacy anchor files but no skills, so it is never saved, and a skill
+# command falls through to the other sources from there.
+resolve_ops_root_any() {
+  local root need=${1:-}
+  if root=$(find_ops_root); then
+    if [ -d "$root/.claude/skills" ]; then
+      save_ops_root "$root" 2>/dev/null || true
+      printf '%s' "$root"
+      return 0
+    fi
+    if [ "$need" != skills ]; then
+      printf '%s' "$root"
+      return 0
+    fi
+  fi
+  if [ -n "${APEXYARD_OPS_ROOT:-}" ]; then
+    if ! is_ops_root "$APEXYARD_OPS_ROOT"; then
+      printf 'APEXYARD_OPS_ROOT is not an ApexYard ops repo: %s\n' "$APEXYARD_OPS_ROOT" >&2
+      return 2
+    fi
+    (cd "$APEXYARD_OPS_ROOT" && pwd -P)
+    return
+  fi
+  root=$(saved_ops_root) || return 1
+  if is_ops_root "$root"; then
+    printf '%s' "$root"
+    return 0
+  fi
+  printf 'apexyard: the saved ops repo %s is gone. Run apexyard use %s.\n' "$root" "$root" >&2
+  return 1
+}
+
 # Follow each symlink to the real script. Bash 3.2 has no readlink -f.
 resolve_cli_path() {
   local path="${BASH_SOURCE[0]}" hops=0 target dir
@@ -72,6 +137,102 @@ resolve_cli_path() {
   printf '%s' "$dir/$(basename "$path")"
 }
 
+# Require the same fork anchors as status, with the skill exit code.
+skill_root() {
+  resolve_ops_root_any skills || {
+    [ "$?" -ne 2 ] || return 2
+    echo "apexyard: not inside an apexyard fork (no .apexyard-fork marker, and no onboarding.yaml + apexyard.projects.yaml found above $PWD)" >&2
+    return 2
+  }
+}
+
+# Read only the frontmatter, never matching instructions in the body.
+skill_field() {
+  awk -v key="$2" '
+    NR == 1 { if ($0 != "---") exit; next }
+    /^---[[:space:]]*$/ { exit }
+    index($0, key ":") == 1 {
+      sub(/^[^:]*:[[:space:]]*/, "")
+      sub(/[[:space:]\r]+$/, "")
+      gsub(/^["\047]|["\047]$/, "")
+      print; exit
+    }
+  ' "$1"
+}
+
+launch_skill() {
+  local root=$1 skill=$2 prompt agent arg
+  shift 2
+  prompt="/$skill"
+  for arg in "$@"; do prompt="$prompt $arg"; done
+  agent=${APEXYARD_AGENT_CMD:-claude}
+  if ! command -v "$agent" >/dev/null 2>&1; then
+    printf 'Run this in your agent tool, from %s: %s\n' "$root" "$prompt"
+    return 0
+  fi
+  cd "$root" || return 2
+  exec "$agent" "$prompt"
+}
+
+ticket_skill() {
+  local root=$1 target=${2:-} repo number parsed name registered ws rest clone=""
+  local worktree="" line candidate="" title type slug branch base helper
+  [ "$#" -eq 2 ] && [[ "$target" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+$ ]] || {
+    echo 'Usage: apexyard ticket owner/repo#N' >&2; return 2;
+  }
+  repo=${target%#*}; number=${target##*#}
+  cd "$root" || return 2
+  # shellcheck source=/dev/null
+  source "$root/.claude/hooks/_lib-read-config.sh"
+  # shellcheck source=/dev/null
+  source "$root/.claude/hooks/_lib-portfolio-paths.sh"
+  # shellcheck source=/dev/null
+  source "$root/.claude/hooks/_lib-multi-repo-trace.sh"
+  parsed=$(_mrt_parse_registry) || return 2
+  while IFS='|' read -r name registered ws rest; do
+    [ "$registered" = "$repo" ] || continue
+    ws=${ws:-workspace/$name}
+    case "$ws" in
+      /*) clone=$ws ;;
+      *) clone="$(dirname "$(portfolio_registry)")/$ws" ;;
+    esac
+    break
+  done <<< "$parsed"
+  [ -n "$clone" ] || {
+    echo "$repo is not in the registry. Register it with /handover first." >&2; return 2;
+  }
+  [ -d "$clone" ] || {
+    printf 'apexyard: no clone of %s at %s. Clone it first:\n' "$repo" "$clone" >&2
+    printf 'gh repo clone %s %s\n' "$repo" "$clone" >&2; return 2;
+  }
+  parsed=$(git -C "$clone" worktree list --porcelain) || return 2
+  while IFS= read -r line; do
+    case "$line" in
+      'worktree '*) candidate=${line#worktree } ;;
+      branch\ refs/heads/*/GH-"$number"-*) worktree=$candidate; break ;;
+    esac
+  done <<< "$parsed"
+  if [ -z "$worktree" ]; then
+    title=$("${APEXYARD_GH:-gh}" issue view "$number" --repo "$repo" --json title -q .title) || return 2
+    case "$title" in
+      '[Feature]'*) type=feature ;; '[Bug]'*) type=fix ;;
+      '[Docs]'*) type=docs ;; '[Refactor]'*) type=refactor ;;
+      '[CI]'*) type=ci ;; '[Testing]'*) type="test" ;; *) type=chore ;;
+    esac
+    slug=$(printf '%s' "$title" | sed 's/^\[[^]]*\]//' | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C sed 's/[^a-z0-9]/-/g; s/-\{1,\}/-/g; s/^-//; s/-$//' | cut -c1-40 | sed 's/-$//')
+    slug=${slug:-ticket}
+    branch="$type/GH-$number-$slug"
+    worktree="$clone.worktrees/gh-$number-$slug"
+    git -C "$clone" fetch origin || return 2
+    base=$(git -C "$clone" symbolic-ref refs/remotes/origin/HEAD) || base=origin/main
+    git -C "$clone" worktree add -b "$branch" "$worktree" "$base" || return 2
+  fi
+  helper=${APEXYARD_START_TICKET:-$root/bin/apexyard-start-ticket}
+  cd "$worktree" || return 2
+  "$helper" "$target" || return 2
+  launch_skill "$worktree" start-ticket "$target"
+}
+
 usage() {
   cat <<'EOF'
 Usage: apexyard <command> [args]
@@ -86,10 +247,14 @@ Commands:
   status [-b|--briefing]   Compact "where am I" briefing -- workspace, ticket,
                            branch, role. Defaults to --briefing today (the
                            full /status report runs inside Claude Code).
+  use [<dir>]            Save or show the ops repository.
+  skills                 List framework skills.
+  <skill> [args]         Run a framework skill from the ops root.
+  ticket owner/repo#N    Open a ticket worktree and start its skill.
   migrate [opts]         Keep the CLI only, or move this fork to a new repo
                            (init layout). See: apexyard migrate --help.
 
-Run from inside an apexyard fork or any of its workspace/<name>/ clones.
+Run from any folder after selecting an ops repo with apexyard use <dir>.
 EOF
 }
 
@@ -123,7 +288,8 @@ case "$cmd" in
   init|update)
     cli_path=$(resolve_cli_path) || exit 2
     if [ "$cmd" = update ]; then
-      APEXYARD_UPDATE_ROOT=$(find_ops_root) || {
+      APEXYARD_UPDATE_ROOT=$(resolve_ops_root_any) || {
+        [ "$?" -ne 2 ] || exit 2
         echo "apexyard update: not inside an apexyard fork" >&2
         exit 2
       }
@@ -134,7 +300,10 @@ case "$cmd" in
   doctor)
     # Use the fork that contains the current directory.
     # Outside a fork, use the real script directory. A PATH symlink must not hide it.
-    ops_root=$(find_ops_root) || ops_root=""
+    ops_root=$(resolve_ops_root_any) || {
+      [ "$?" -ne 2 ] || exit 2
+      ops_root=""
+    }
     if [ -z "$ops_root" ]; then
       cli_path=$(resolve_cli_path) || cli_path="${BASH_SOURCE[0]}"
       ops_root=$(cd "$(dirname "$cli_path")/.." && pwd -P) || ops_root=""
@@ -155,7 +324,10 @@ case "$cmd" in
     exec "$BASH" "$helper" "$@"
     ;;
   status)
-    if ! ops_root=$(find_ops_root); then
+    if ops_root=$(resolve_ops_root_any); then
+      :
+    else
+      [ "$?" -ne 2 ] || exit 2
       echo "apexyard: not inside an apexyard fork (no .apexyard-fork marker, and no onboarding.yaml + apexyard.projects.yaml found above $PWD)" >&2
       exit 1
     fi
@@ -178,11 +350,16 @@ case "$cmd" in
         ;;
     esac
 
+    case "$PWD/" in
+      "$ops_root/"*) ;;
+      *) cd "$ops_root" || exit 2 ;;
+    esac
     exec bash "$helper"
     ;;
   migrate)
     # Resolve ops root the same way as doctor/status, then source the
     # migrate library next to this script (or under the fork's bin/).
+    # Migrate changes a repository, so it never uses the saved ops repo.
     ops_root=$(find_ops_root) || ops_root=""
     if [ -z "$ops_root" ]; then
       cli_path=$(resolve_cli_path) || cli_path="${BASH_SOURCE[0]}"
@@ -204,9 +381,54 @@ case "$cmd" in
     apexyard_migrate "$@"
     exit $?
     ;;
+  use)
+    if [ "$#" -eq 0 ]; then
+      saved_ops_root || echo 'No ops repo saved.'
+    else
+      [ "$#" -eq 1 ] || { echo 'Usage: apexyard use [<dir>]' >&2; exit 2; }
+      ops_root=$(cd "$1" 2>/dev/null && pwd -P) || ops_root=""
+      if ! is_ops_root "$ops_root"; then
+        printf 'apexyard use: not an ApexYard ops repo: %s\n' "$1" >&2
+        exit 2
+      fi
+      if save_ops_root "$ops_root"; then
+        printf 'Saved %s as your ops repo.\n' "$ops_root"
+      else
+        echo 'apexyard: could not save the ops repo.' >&2
+        exit 2
+      fi
+    fi
+    ;;
+  skills)
+    ops_root=$(skill_root) || exit 2
+    while IFS= read -r file; do
+      name=${file%/SKILL.md}; name=${name##*/}
+      description=$(skill_field "$file" description)
+      mark=""
+      [ "$(skill_field "$file" disable-model-invocation)" != true ] || mark=' (inside the agent only)'
+      printf '  %s  %s%s\n' "$name" "$description" "$mark"
+    done < <(find "$ops_root/.claude/skills" -mindepth 2 -maxdepth 2 -name SKILL.md | LC_ALL=C sort)
+    ;;
+  ticket)
+    ops_root=$(skill_root) || exit 2
+    ticket_skill "$ops_root" "$@"
+    exit $?
+    ;;
   *)
-    echo "apexyard: unknown command '$cmd'" >&2
-    usage >&2
+    ops_root=$(skill_root) || exit 2
+    case "$cmd" in
+      ''|*[!a-zA-Z0-9_-]*) file="" ;;
+      *) file="$ops_root/.claude/skills/$cmd/SKILL.md" ;;
+    esac
+    if [ -f "$file" ]; then
+      if [ "$(skill_field "$file" disable-model-invocation)" = true ]; then
+        echo "apexyard: /$cmd records a human approval. Run it inside your agent." >&2
+        exit 2
+      fi
+      launch_skill "$ops_root" "$cmd" "$@"
+      exit $?
+    fi
+    echo "apexyard: unknown command or skill '$cmd'. Run 'apexyard skills' to list them." >&2
     exit 2
     ;;
 esac
