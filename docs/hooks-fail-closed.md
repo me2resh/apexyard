@@ -149,6 +149,82 @@ The fallback knows only built-in types when the library is missing.
 **Warning:** A name shared with a build agent locks that build agent during an active review.
 `limit-reviewer-writes.sh` also limits the Edit, Write and MultiEdit tools of a listed type at all times, with no active review. That type may write only under `.claude/session/reviews/bodies/` (AgDR-0266).
 
+## Permission rules and hooks
+
+The hooks read command text. They catch honest mistakes, but they are not a security boundary (AgDR-0267).
+
+The tracked `.claude/settings.json` has these deny rules:
+
+| Rule | Effect |
+|------|--------|
+| `Read(//**/.env)` | The Read tool cannot read a `.env` file in any folder. |
+| `Read(//**/.env.*)` | The Read tool cannot read `.env.local`, `.env.production` and similar files in any folder. This also covers `.env.example`. |
+| `Bash(gh auth token)` | Block the bare token command. |
+| `Bash(gh auth token:*)` | Block the token command with arguments. |
+| `Bash(printenv)` | Block the bare environment print command. |
+| `Bash(printenv:*)` | Block the environment print command with arguments. |
+| `Bash(env)` | Block bare `env`. Permit `env FOO=bar cmd`. |
+| `Read(//**/*.private-key.pem)` | Block reads of the generic private key file pattern. |
+| `Read(//**/.config/apexyard/*.pem)` | Block reads of any key file in the folder that the setup guide uses for the reviewer key. |
+| `Read(//**/.mcp.json)` | Block reads of MCP config files that can contain client tokens. |
+
+The default `review_identity.private_key_path` is empty.
+The reviewer guide uses `$HOME/.config/apexyard/reviewer.pem`.
+
+With the Claude Code sandbox on, Read deny rules also join the sandbox read-deny list.
+On macOS, a sandboxed Bash command then cannot read a key that these rules cover.
+So a sandboxed review step on macOS cannot sign the reviewer GitHub App token.
+Keep the key outside the covered paths, or run the review step outside the sandbox.
+On Linux and WSL2, the sandbox can ignore glob paths such as `**/*.pem` in that list.
+There, do not rely on these rules to stop a sandboxed command from reading a key.
+The repository has no configured MCP file or documented user-level token config path.
+The MCP rule uses only the generic `.mcp.json` pattern.
+It does not cover `~/.claude.json`, where Claude Code keeps user-level MCP config.
+
+Use `bin/apexyard-gh-as <gh-user> <subcommand> [args...]` for one command as a named GitHub user.
+The subcommand must be one of `api`, `issue`, `label`, `pr`, `release`, `repo`, `run` or `workflow`.
+The wrapper refuses gh global flags before the subcommand.
+The wrapper reads the token inside the script.
+It sets `GH_TOKEN` for one `gh` process.
+It refuses any argument that is `auth`, `-t`, `--show-token`, `--jq` or `-q`, because gh can print the token for them.
+So `gh api -t` (the template flag) and `--jq` filters do not work through the wrapper.
+It sets the gh pager to `cat` and the gh browser and editor to no-ops.
+It removes `PAGER`, `BROWSER`, `EDITOR`, `VISUAL` and `GH_FORCE_TTY` before it runs gh.
+It exits 2 when the user has no login.
+The allowlist refuses gh extensions and aliases.
+
+The wrapper stops accidental prints of the token.
+It does not stop a caller who wants the token.
+The token is in the gh process environment, so a determined caller can still reach it.
+It supports `gh` commands only.
+The repository has no existing `gh` credential helper pattern for `git push`.
+
+Run `bash bin/secrets-selftest.sh` for the 13 Nov bypass self-test.
+It checks each deny rule, secret scan output, and the wrapper with a fake `gh`.
+It prints one PASS or FAIL line per check.
+Any failed check causes exit 1.
+The script states that the cockpit run environment check belongs in `apexyard-premium`.
+
+Deny rules match command text.
+A run can still read a file through another command.
+Known gaps include shell built-ins that list exported variables and `env` with an option and no command.
+They also include `gh` called by its absolute path, and the `gh` credential store itself.
+These rules catch honest mistakes.
+They are not a security boundary.
+They do not provide complete protection.
+
+A rule that starts with `//` matches from the filesystem root. A rule that starts with `**/` matches only under the folder the session runs in. It would miss the workspace clones and a split-portfolio sibling repo.
+
+What the rules cover:
+
+- The Read tool, in every folder.
+- Shell commands too, but only when the Claude Code Bash sandbox is on. The sandbox adds the deny rules to its own list.
+- Only sessions that load this settings file. A session started in a workspace clone loads that clone's settings, not these.
+
+Review markers have no permission rule. The approval skills and the reviewer write markers with shell helpers. With the sandbox on, an `Edit(...)` deny rule on the markers would block those helpers too. The hooks still protect the markers.
+
+`/permissions` shows the rules that a session loaded.
+
 ## Operator escape hatch
 
 If a gate blocks all work, for example after a bad hook edit, start Claude

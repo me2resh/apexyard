@@ -325,4 +325,41 @@ else
     esac
   fi
 fi
+# Read server names only. Never emit commands, environment, tokens, or headers.
+if [ "$jq_ready" -eq 0 ]; then
+  report INFO mcp 'Skipped: jq unavailable.'
+elif ! command -v claude >/dev/null 2>&1; then
+  report INFO mcp 'Skipped: claude CLI unavailable.'
+else
+  mcp_names=""
+  for mcp_config in .mcp.json .claude/settings.json .claude/settings.local.json \
+    "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json" \
+    "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/../.claude.json"; do
+    [ -f "$mcp_config" ] || continue
+    names=$(jq -r --arg root "$root" '
+      [((.mcpServers // {}) | keys[]),
+       ((.projects[$root].mcpServers // {}) | keys[])] | unique[]' \
+      "$mcp_config" 2>/dev/null) || {
+      report WARN mcp-config "Cannot read server names from $mcp_config." 'Correct the MCP configuration JSON.'
+      continue
+    }
+    mcp_names="$mcp_names
+$names"
+  done
+  mcp_health=$(claude mcp list 2>/dev/null) || true
+  while IFS= read -r server; do
+    [ -n "$server" ] || continue
+    # Health follows the final " - " separator in CLI output.
+    health=$(printf '%s\n' "$mcp_health" | awk -v name="$server" '
+      index($0, name ":") == 1 {
+        n = split($0, parts, " - ")
+        if (n > 1) print parts[n]
+      }')
+    case "$health" in
+      *"Connected"*) report OK "mcp:$server" 'Connected.' ;;
+      '') report WARN "mcp:$server" 'Connection health unavailable.' 'Check claude mcp list; disable unused MCP servers.' ;;
+      *) report WARN "mcp:$server" "$health" 'Disable unused MCP servers in Claude Code configuration, or repair this connection.' ;;
+    esac
+  done < <(printf '%s\n' "$mcp_names" | sort -u)
+fi
 exit "$result"

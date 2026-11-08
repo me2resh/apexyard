@@ -33,6 +33,7 @@ check() {
   fi
 }
 check 0 'headless declaration' /bin/bash bin/apexyard-start-ticket me2resh/apexyard#1928
+check 0 'progress note created' grep -qx 'Task: me2resh/apexyard#1928' .git/apexyard-progress.md
 check 0 'marker repo' grep -qx 'repo=me2resh/apexyard' .git/apexyard-ticket
 check 0 'branch suggestion' grep -qx 'suggested_branch=fix/GH-1928-headless-start' .git/apexyard-ticket
 check 0 'no pending file' test ! -e .claude/session/start-ticket-headless-1928.pending
@@ -132,6 +133,8 @@ for cmd in \
   'echo apexyard-start-ticket'; do
   check 0 "ordinary mention $cmd" run_protected "$cmd"
 done
+# Literal command text tests the parser without expanding fixture variables.
+# shellcheck disable=SC2016
 for cmd in \
   'bin/APEXYARD-START-TICKET me2resh/apexyard#1928' \
   './bin/apexyard-start-ticket me2resh/apexyard#1928' \

@@ -100,6 +100,14 @@ CLI install and `apexyard init` (including private ops repos):
 [`docs/getting-started.md`](docs/getting-started.md).
 Keep your ops repo current with [`docs/upgrading.md`](docs/upgrading.md).
 
+### Run a skill from the terminal
+
+Run `apexyard skills` to list skills. Run `apexyard inbox` to start `/inbox`.
+
+The CLI works from any folder and remembers the last ops repo you used. Run `apexyard use <dir>` to change it.
+Use `apexyard ticket owner/repo#N` to create or reuse a ticket worktree.
+Human approval skills must run inside your agent.
+
 ## Using another AI coding tool?
 
 Claude Code is the default driver. The same rules reach other tools through a
@@ -116,6 +124,7 @@ small adapter. Dated proof and limits live in
 
 ## Further reading
 
+- Agent authority and human gates: [Escalation pattern](docs/escalation-pattern.md)
 - Site move note: [`docs/whats-inside.md`](docs/whats-inside.md#marketing-site)
 - Roles, workflows, and templates: [`docs/whats-inside.md`](docs/whats-inside.md#roles)
 - Project badges: [`docs/badges.md`](docs/badges.md)

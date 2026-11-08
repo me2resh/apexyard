@@ -112,11 +112,13 @@ fi
 ops_root=$(resolve_ops_root)
 ```
 
-If `$ops_root` is still empty after sourcing (no pin, and `resolve_ops_root`'s own internal walk also found no anchor above cwd), tell the user and stop. Starting a ticket without the fork doesn't make sense.
+If `$ops_root` remains empty after sourcing, report the missing fork and stop.
 
 #### 4b. Look the tracker repo up in the registry
 
-Given the ticket's `owner/repo` (from step 1), resolve the registry path via `portfolio_registry` (see "Path resolution" above — do NOT hardcode `$ops_root/apexyard.projects.yaml`; in split-portfolio v2 the registry lives in the sibling repo, not the ops fork) and grep it for a project whose `repo:` field matches. `$ops_root` is already resolved and guaranteed to carry a `.claude/hooks/` tree (step 4a only succeeds when it does), so source directly from it — no second walk-up needed. One registry-safe way (uses `yq` when available, falls back to a greppy read):
+Resolve the registry with `portfolio_registry`, then find the project whose `repo:` matches the ticket's `owner/repo`.
+Source helpers from `$ops_root`, resolved in step 4a. Do not hardcode the registry path.
+Use `yq` when available, with the fallback below:
 
 ```bash
 source "$ops_root/.claude/hooks/_lib-read-config.sh"
@@ -249,6 +251,12 @@ bash -c '. "$1/.claude/hooks/_lib-active-ticket.sh" && active_ticket_init "$PWD"
 ```
 
 The command prints the marker (`repo=`, `number=`, `title=`, `url=`), or nothing when no marker covers the tree. It reads the marker in the tree's git dir first, then the old-layout marker.
+
+### Create the progress note and goal
+
+Call `progress_note_create "$tree"` after the marker write succeeds.
+Set `/goal`: acceptance criteria met, PR open, CI green on the current head SHA, Rex APPROVED at that head, progress note current; limit: 20 turns.
+Details: docs/progress-notes.md.
 
 ### 6. Move the board card to "In progress" (opt-in)
 

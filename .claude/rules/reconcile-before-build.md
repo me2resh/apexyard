@@ -52,3 +52,11 @@ The cost of running the four checks before spawning is a few tool calls. The cos
 ---
 
 *Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+
+## Build-agent done condition
+
+Copy the ticket acceptance criteria into each build-agent brief.
+Require this evidence: PR open, CI green on the current head SHA, Rex APPROVED at that head, progress note current.
+Set a limit of 20 turns. At that limit, stop and report the blocker with evidence.
+Build agents report results to the orchestrator, which obtains independent review and updates the note.
+See [Resume ticket work](../../docs/progress-notes.md).
