@@ -43,6 +43,10 @@ git -C "$PWD" remote add origin "$FAKE_REMOTE"
 git -C "$PWD" push -u origin main
 SH
 chmod +x "$APEXYARD_GH"
+# Never start a real agent from a test.
+export APEXYARD_AGENT_CMD="$sb/tools/agent" FAKE_AGENT_LOG="$sb/agent.log"
+printf '#!/usr/bin/env bash\nprintf "%%s %%s\\n" "$PWD" "$*" >> "$FAKE_AGENT_LOG"\n' > "$APEXYARD_AGENT_CMD"
+chmod +x "$APEXYARD_AGENT_CMD"
 export FAKE_ROOT="$sb"
 printf 'company:\n  name: "Your Company Name"\n' > "$sb/fixture/onboarding.example.yaml"
 echo 'projects: []' > "$sb/fixture/apexyard.projects.yaml.example"

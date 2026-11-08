@@ -8,7 +8,7 @@ check 'init succeeds' init_ops
 check upstream test "$(git -C "$sb/ops" remote get-url upstream)" = "$sb/fixture"
 check origin test "$(git -C "$sb/ops" remote get-url origin)" = "$FAKE_REMOTE"
 check version test "$(cat "$sb/ops/.claude/framework-version")" = v1.0.0
-check 'default org' grep -q 'name: "example-org"' "$sb/ops/onboarding.yaml"
+check 'company left for onboarding' grep -q 'name: "Your Company Name"' "$sb/ops/onboarding.yaml"
 check registry test -f "$sb/ops/apexyard.projects.yaml"
 check 'private create' grep -q 'repo create example-org/ops --private --source=. --remote=origin --push' "$FAKE_GH_LOG"
 check 'template flags absent' test "$(grep -Ec -- '--fork|--template' "$FAKE_GH_LOG")" = 0
@@ -20,9 +20,9 @@ export FAKE_REMOTE="$sb/public.git"
 check public /bin/bash "$CLI" init --org other --name public-ops --public --dir "$sb/public" > "$sb/public.out" 2>&1
 check 'public create' grep -q 'repo create other/public-ops --public' "$FAKE_GH_LOG"
 check 'next step doctor' grep -q "1. Run 'apexyard doctor'." "$sb/public.out"
-check 'next step open' grep -q "2. Open $sb/public in your coding agent." "$sb/public.out"
-check 'next step setup' grep -q '3. Run /setup.' "$sb/public.out"
-check 'next step windows' grep -q '4. On Windows, use Git Bash or WSL.' "$sb/public.out"
+check 'next step open' grep -Fq "2. Run: cd $sb/public && claude /onboard" "$sb/public.out"
+check 'next step windows' grep -q '3. On Windows, use Git Bash or WSL.' "$sb/public.out"
+check 'no agent start without wizard' test ! -e "$FAKE_AGENT_LOG"
 if /bin/bash "$CLI" init --dir "$sb/ops" > "$sb/refuse.out" 2>&1; then rc=0; else rc=$?; fi
 check 'refuse nonempty' test "$rc" = 2
 check 'refusal reason' grep -q 'not empty' "$sb/refuse.out"
@@ -150,5 +150,25 @@ if /bin/bash "$CLI" init --org acme --name fresh --dir "$sb/setup-fail" > "$sb/s
 check 'setup failure exit' test "$rc" -ne 0
 check 'setup failure keeps local repo' test -d "$sb/setup-fail/.git"
 check 'setup failure keeps remote' test -d "$FAKE_REMOTE"
-check 'setup failure recovery' grep -Fq "Init stopped at step 4. The GitHub repo acme/fresh exists. Finish with: cd $sb/setup-fail and run /setup." "$sb/setup-fail.out"
+check 'setup failure recovery' grep -Fq "Init stopped at step 4. The GitHub repo acme/fresh exists. Finish with: cd $sb/setup-fail and run /onboard." "$sb/setup-fail.out"
+unset FAKE_GH_FAIL_CREATE FAKE_GH_EXISTING
+# Restore the setup input that the failure row removed.
+printf 'company:\n  name: "Your Company Name"\nteam:\n  - name: "Your Name"\n' > "$sb/fixture/onboarding.example.yaml"
+git -C "$sb/fixture" add -- onboarding.example.yaml
+git -C "$sb/fixture" commit -m 'restore setup fixture' >/dev/null
+export FAKE_REMOTE="$sb/handoff.git"
+printf 'y\ny\n' | GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=user.name GIT_CONFIG_VALUE_0='Test Owner' \
+  /bin/bash "$CLI" init -i --org acme --name handoff --private --dir "$sb/handoff" --agent claude > "$sb/handoff.out" 2> "$sb/handoff.err" || true
+check 'handoff question' grep -Fq 'Open it in Claude now and start /onboard?' "$sb/handoff.err"
+check 'handoff starts onboard in repo' grep -Fxq "$sb/handoff /onboard" "$FAKE_AGENT_LOG"
+check 'owner name written' grep -q '  - name: "Test Owner"' "$sb/handoff/onboarding.yaml"
+check 'handoff company placeholder' grep -q 'name: "Your Company Name"' "$sb/handoff/onboarding.yaml"
+export FAKE_REMOTE="$sb/nohandoff.git"
+printf 'y\nn\n' | /bin/bash "$CLI" init -i --org acme --name nohandoff --private --dir "$sb/nohandoff" --agent claude > "$sb/nohandoff.out" 2> "$sb/nohandoff.err" || true
+check 'handoff declined' test "$(grep -c nohandoff "$FAKE_AGENT_LOG" || true)" = 0
+check 'handoff declined next steps' grep -Fq "Run: cd $sb/nohandoff && claude /onboard" "$sb/nohandoff.out"
+export FAKE_REMOTE="$sb/codexhand.git"
+printf 'y\n' | /bin/bash "$CLI" init -i --org acme --name codexhand --private --dir "$sb/codexhand" --agent codex > "$sb/codexhand.out" 2> "$sb/codexhand.err" || true
+check 'other agent no question' test "$(grep -c 'Open it in Claude now' "$sb/codexhand.err" || true)" = 0
+check 'other agent next step' grep -Fq "2. Open $sb/codexhand in codex and run /onboard." "$sb/codexhand.out"
 finish

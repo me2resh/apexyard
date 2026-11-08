@@ -75,23 +75,18 @@ directory layout and component list:
 
 ## Quick start
 
-Install the CLI, create your ops repo, open it in your agent tool, then
-configure and register a project:
+Install the CLI, then create your ops repo:
 
 ```bash
 curl -fsSL https://apexyard.ai/install | sh
 apexyard init
-cd ops   # or the folder you chose
-# In your agent tool:
-#   /setup
-#   /handover <repo>
-#   /inbox
 ```
 
 `apexyard init` asks for the account or organisation, the repo name, private or public, the folder and your coding agent. Then it shows the plan and asks before it creates anything. To skip the questions, pass them as options: `apexyard init --org your-org --name ops --private --yes`.
 
-`/setup` writes local config. `/handover` scores and registers a project.
-`/inbox` lists what needs your attention across the portfolio.
+The CLI does the fixed steps: it creates the repo, links it to the framework for updates, writes the local setup files and installs the git hooks. At the end it offers to open the repo in Claude Code with `/onboard`. `/onboard` asks the questions that need your answers: your company, your stack and your first project. With another agent, open the folder and run `/onboard` yourself.
+
+After that, `/inbox` lists what needs your attention across the portfolio.
 
 Prefer a fork? `gh repo fork me2resh/apexyard --clone` still works, and so does
 everything below. If the install URL returns an error, use the fork.

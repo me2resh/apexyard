@@ -161,7 +161,7 @@ cleanup() {
   local status=$?
   [ "$status" -ne 0 ] || return 0
   if [ "$repo_created" -eq 1 ]; then
-    printf 'Init stopped at step %s. The GitHub repo %s/%s exists. Finish with: cd %s and run /setup.\n' "$step" "$org" "$name" "$target" >&2
+    printf 'Init stopped at step %s. The GitHub repo %s/%s exists. Finish with: cd %s and run /onboard.\n' "$step" "$org" "$name" "$target" >&2
   elif [ "$target_existed" -eq 0 ]; then
     rm -rf -- "$target"
     printf 'Init stopped at step %s. It removed %s. Nothing was created on GitHub.\n' "$step" "$target" >&2
@@ -196,20 +196,46 @@ for pair in 'onboarding.example.yaml onboarding.yaml' 'apexyard.projects.yaml.ex
     cp "$target/$example" "$target/$local_file"
   fi
 done
-sed "s/name: \"Your Company Name\"/name: \"$org\"/" "$target/onboarding.yaml" > "$target/onboarding.yaml.tmp"
-mv "$target/onboarding.yaml.tmp" "$target/onboarding.yaml"
+# Write only facts that init knows. The company name stays a placeholder,
+# so the agent's first session still starts onboarding.
+owner_name=$(git -C "$target" config user.name 2>/dev/null || true)
+case "$owner_name" in
+  ''|*[\"\\/\&]*) ;;
+  *)
+    sed "s/^  - name: \"Your Name\"/  - name: \"$owner_name\"/" "$target/onboarding.yaml" > "$target/onboarding.yaml.tmp"
+    mv "$target/onboarding.yaml.tmp" "$target/onboarding.yaml" ;;
+esac
+# The setup skill installs these hooks too. Doing it here means it is never missed.
+if [ -f "$target/bin/install-git-hooks.sh" ]; then
+  (cd "$target" && bash bin/install-git-hooks.sh >/dev/null 2>&1) || true
+fi
 trap - EXIT
-cat <<NEXT
-Done. Your ops repo is $org/$name, in $target.
-Next:
-  1. Run 'apexyard doctor'. It checks jq and the GitHub CLI and offers to install a missing one.
-  2. Open $target in your coding agent.
-  3. Run /setup. It asks about your company and writes onboarding.yaml.
-  4. On Windows, use Git Bash or WSL.
-NEXT
 
 # Telemetry must not prevent repository creation.
 # shellcheck source=bin/_lib-telemetry.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_lib-telemetry.sh"
 telemetry_notice_once || true
 telemetry_send "$agent" || true
+
+case "$agent" in
+  claude) open_step="Run: cd $target && claude /onboard" ;;
+  *) open_step="Open $target in $agent and run /onboard." ;;
+esac
+cat <<NEXT
+
+Done. Your ops repo is $org/$name, in $target.
+The rest of setup needs your answers about your company, your stack and
+your first project. Your coding agent asks them in /onboard.
+Next:
+  1. Run 'apexyard doctor'. It checks jq and the GitHub CLI and offers to install a missing one.
+  2. $open_step
+  3. On Windows, use Git Bash or WSL.
+NEXT
+if [ "$interactive" -eq 1 ] && [ "$agent" = claude ] && command -v "${APEXYARD_AGENT_CMD:-claude}" >/dev/null 2>&1; then
+  printf 'Open it in Claude now and start /onboard? [Y/n] ' >&2
+  IFS= read -r answer || answer=n
+  answer=$(printf '%s' "$answer" | tr '[:upper:]' '[:lower:]')
+  case "$answer" in
+    y|yes|'') cd "$target" && exec "${APEXYARD_AGENT_CMD:-claude}" /onboard ;;
+  esac
+fi
