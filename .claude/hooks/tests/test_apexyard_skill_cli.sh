@@ -155,4 +155,15 @@ EOF
   check "$prefix branch" test "$(git -C "$clone.worktrees/gh-$number-small-change" branch --show-current)" = "$expected_type/GH-$number-small-change"
   number=$((number + 1))
 done
+# Split portfolio: the private repo has the legacy anchors but no skills.
+mkdir -p "$sb/private"
+touch "$sb/private/onboarding.yaml" "$sb/private/apexyard.projects.yaml"
+printf '%s\n' "$sb/ops" > "$saved"
+rc=0
+(cd "$sb/private" && /bin/bash "$CLI" inbox) > "$sb/out" 2>&1 || rc=$?
+check 'private repo uses saved ops' test "$(head -1 "$AGENT_LOG")" = "$sb/ops"
+check 'private repo not saved' test "$(cat "$saved")" = "$sb/ops"
+rc=0
+(cd "$sb" && /bin/bash "$CLI" use "$sb/private") > "$sb/out" 2>&1 || rc=$?
+check 'use refuses private repo' test "$rc" = 2
 finish

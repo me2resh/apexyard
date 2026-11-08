@@ -51,6 +51,8 @@ find_ops_root() {
 # Test the same anchors without walking to a parent directory.
 is_ops_root() {
   [ -n "$1" ] || return 1
+  # The skills folder separates the ops repo from a split-portfolio private repo.
+  [ -d "$1/.claude/skills" ] || return 1
   [ -e "$1/.apexyard-fork" ] || {
     [ -e "$1/onboarding.yaml" ] && [ -e "$1/apexyard.projects.yaml" ]
   }
@@ -79,12 +81,21 @@ save_ops_root() (
 
 # Order: the folder you are in, then APEXYARD_OPS_ROOT, then the saved path.
 # Agent sessions export APEXYARD_OPS_ROOT, so it must never beat the folder.
+# Pass "skills" when the command runs a skill. A split-portfolio private repo
+# has the legacy anchor files but no skills, so it is never saved, and a skill
+# command falls through to the other sources from there.
 resolve_ops_root_any() {
-  local root
+  local root need=${1:-}
   if root=$(find_ops_root); then
-    save_ops_root "$root" 2>/dev/null || true
-    printf '%s' "$root"
-    return 0
+    if [ -d "$root/.claude/skills" ]; then
+      save_ops_root "$root" 2>/dev/null || true
+      printf '%s' "$root"
+      return 0
+    fi
+    if [ "$need" != skills ]; then
+      printf '%s' "$root"
+      return 0
+    fi
   fi
   if [ -n "${APEXYARD_OPS_ROOT:-}" ]; then
     if ! is_ops_root "$APEXYARD_OPS_ROOT"; then
@@ -128,7 +139,7 @@ resolve_cli_path() {
 
 # Require the same fork anchors as status, with the skill exit code.
 skill_root() {
-  resolve_ops_root_any || {
+  resolve_ops_root_any skills || {
     [ "$?" -ne 2 ] || return 2
     echo "apexyard: not inside an apexyard fork (no .apexyard-fork marker, and no onboarding.yaml + apexyard.projects.yaml found above $PWD)" >&2
     return 2
