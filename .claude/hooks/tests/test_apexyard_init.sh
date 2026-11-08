@@ -19,7 +19,7 @@ check 'version commit' test "$(git -C "$sb/ops" log -1 --format=%s)" = 'chore: r
 export FAKE_REMOTE="$sb/public.git"
 check public /bin/bash "$CLI" init --org other --name public-ops --public --dir "$sb/public" > "$sb/public.out" 2>&1
 check 'public create' grep -q 'repo create other/public-ops --public' "$FAKE_GH_LOG"
-check 'next step doctor' grep -q '1. Run apexyard doctor.' "$sb/public.out"
+check 'next step doctor' grep -q "1. Run 'apexyard doctor'." "$sb/public.out"
 check 'next step open' grep -q "2. Open $sb/public in your coding agent." "$sb/public.out"
 check 'next step setup' grep -q '3. Run /setup.' "$sb/public.out"
 check 'next step windows' grep -q '4. On Windows, use Git Bash or WSL.' "$sb/public.out"
@@ -79,7 +79,7 @@ check 'invalid org reason' grep -q 'invalid organisation name' "$sb/validated.er
 check 'invalid visibility reason' grep -q 'enter private or public' "$sb/validated.err"
 check 'invalid folder reason' grep -q 'target directory is not empty' "$sb/validated.err"
 check 'invalid agent reason' grep -q 'invalid agent: invalid' "$sb/validated.err"
-check 'retried values in plan' grep -q 'Create acme/ops3 --private' "$sb/validated.out"
+check 'retried values in plan' grep -q 'Create the private GitHub repo acme/ops3' "$sb/validated.out"
 if /bin/bash "$CLI" init -i --org acme --name x --private --dir "$sb/confirm-eof" --agent codex < /dev/null > "$sb/confirm-eof.out" 2> "$sb/confirm-eof.err"; then rc=0; else rc=$?; fi
 check 'confirmation eof exit' test "$rc" = 2
 check 'confirmation eof reason' grep -q 'no answer for Create it?' "$sb/confirm-eof.err"
@@ -89,13 +89,66 @@ if printf '\n\n\n\nN\n' | /bin/bash "$CLI" init -i --dir "$sb/cancel-upper" > "$
 check 'capital N cancels' grep -q 'Nothing created.' "$sb/cancel-upper.out"
 check 'capital N no folder' test ! -e "$sb/cancel-upper"
 printf '\n\n\n~/tilde-ops\n\n' | /bin/bash "$CLI" init -i --dry-run > "$sb/tilde.out" 2> "$sb/tilde.err"
-check 'tilde folder expands' grep -Fq "into $HOME/tilde-ops with" "$sb/tilde.out"
+check 'tilde folder expands' grep -Fq "into $HOME/tilde-ops." "$sb/tilde.out"
 mkdir -p "$HOME/full"
 echo x > "$HOME/full/file"
 printf '\n\n\n~/full\n~/empty-ops\n\n' | /bin/bash "$CLI" init -i --dry-run > "$sb/tilde-retry.out" 2> "$sb/tilde-retry.err"
 check 'tilde non-empty asks again' grep -q 'target directory is not empty' "$sb/tilde-retry.err"
-check 'tilde retry in plan' grep -Fq "into $HOME/empty-ops with" "$sb/tilde-retry.out"
+check 'tilde retry in plan' grep -Fq "into $HOME/empty-ops." "$sb/tilde-retry.out"
 export FAKE_REMOTE="$sb/no-newline.git"
 printf '\n\n\n%s\n\ny' "$sb/no-newline" | /bin/bash "$CLI" init -i > "$sb/no-newline.out" 2> "$sb/no-newline.err" || true
 check 'last answer without newline' test -d "$sb/no-newline/.git"
+check 'intro in wizard' grep -Fq 'ApexYard init creates your ops repo.' "$sb/defaults.err"
+check 'intro not in non-wizard' test "$(grep -c 'ApexYard init creates your ops repo.' "$sb/init.out" || true)" = 0
+check 'plan download' grep -Fq "1. Download ApexYard (main) into $sb/skipped." "$sb/skipped.out"
+check 'plan history reason' grep -Fq 'You get the full framework history, so updates can merge cleanly.' "$sb/skipped.out"
+check 'plan link' grep -Fq "2. Link your copy to the framework repo as 'upstream'." "$sb/skipped.out"
+check 'plan update reason' grep -Fq "'apexyard update' uses this link to bring in new versions." "$sb/skipped.out"
+check 'plan create' grep -Fq '3. Create the private GitHub repo acme/x and upload your copy.' "$sb/skipped.out"
+check 'plan not fork' grep -Fq 'This repo is yours. It is not a fork.' "$sb/skipped.out"
+check 'plan local files' grep -Fq '4. Create two local setup files: onboarding.yaml and apexyard.projects.yaml.' "$sb/skipped.out"
+check 'plan local reason' grep -Fq 'They stay on this computer until you commit them.' "$sb/skipped.out"
+check 'plan no rename jargon' test "$(grep -c 'Rename origin' "$sb/skipped.out" || true)" = 0
+for n in 1 2 3 4; do
+  check "progress $n" grep -Fq "[$n/4]" "$sb/init.out"
+done
+check 'done message' grep -Fq "Done. Your ops repo is example-org/ops, in $sb/ops." "$sb/init.out"
+export FAKE_GH_EXISTING="$sb/existing"
+echo 'acme/taken' > "$FAKE_GH_EXISTING"
+export FAKE_GH_CHECK_TARGET="$sb/name-retry"
+printf 'taken\nfresh\n' | /bin/bash "$CLI" init -i --org acme --private --dir "$sb/name-retry" --agent codex --dry-run > "$sb/name-retry.out" 2> "$sb/name-retry.err"
+check 'taken wizard message' grep -Fq 'acme/taken already exists on GitHub. Choose a different name.' "$sb/name-retry.err"
+check 'fresh wizard plan' grep -Fq 'GitHub repo acme/fresh and upload your copy.' "$sb/name-retry.out"
+check 'retry checked before clone' test "$(grep -c 'view: target absent' "$FAKE_GH_LOG")" -ge 2
+check 'retry no early clone' test "$(grep -c 'view: target exists' "$FAKE_GH_LOG" || true)" = 0
+unset FAKE_GH_CHECK_TARGET
+creates=$(grep -c 'repo create' "$FAKE_GH_LOG")
+if /bin/bash "$CLI" init --org acme --name taken --dir "$sb/taken" > "$sb/taken.out" 2>&1; then rc=0; else rc=$?; fi
+check 'taken non-wizard exit' test "$rc" = 2
+check 'taken non-wizard message' grep -Fq 'acme/taken already exists on GitHub. Choose a different name.' "$sb/taken.out"
+check 'taken no folder' test ! -e "$sb/taken"
+check 'taken no create' test "$(grep -c 'repo create' "$FAKE_GH_LOG")" = "$creates"
+if /bin/bash "$CLI" init -i --org acme --name taken --private --dir "$sb/taken-flags" --agent codex --dry-run > "$sb/taken-flags.out" 2>&1; then rc=0; else rc=$?; fi
+check 'taken wizard flags exit' test "$rc" = 2
+check 'taken wizard flags no plan' test "$(grep -c 'This is what will happen:' "$sb/taken-flags.out" || true)" = 0
+unset FAKE_GH_EXISTING
+export FAKE_GH_FAIL_CREATE=1
+if /bin/bash "$CLI" init --org acme --name fresh --dir "$sb/create-fail" > "$sb/create-fail.out" 2>&1; then rc=0; else rc=$?; fi
+check 'create failure exit' test "$rc" -ne 0
+check 'create failure removes new folder' test ! -e "$sb/create-fail"
+check 'create failure message' grep -Fq "Init stopped at step 3. It removed $sb/create-fail. Nothing was created on GitHub." "$sb/create-fail.out"
+mkdir "$sb/existing-target"
+if /bin/bash "$CLI" init --org acme --name fresh --dir "$sb/existing-target" > "$sb/existing-target.out" 2>&1; then rc=0; else rc=$?; fi
+check 'existing target failure exit' test "$rc" -ne 0
+check 'existing target kept' test -d "$sb/existing-target/.git"
+unset FAKE_GH_FAIL_CREATE
+# Missing setup input fails only after the remote has been created.
+git -C "$sb/fixture" rm onboarding.example.yaml >/dev/null
+git -C "$sb/fixture" commit -m 'missing setup fixture' >/dev/null
+export FAKE_REMOTE="$sb/setup-fail.git"
+if /bin/bash "$CLI" init --org acme --name fresh --dir "$sb/setup-fail" > "$sb/setup-fail.out" 2>&1; then rc=0; else rc=$?; fi
+check 'setup failure exit' test "$rc" -ne 0
+check 'setup failure keeps local repo' test -d "$sb/setup-fail/.git"
+check 'setup failure keeps remote' test -d "$FAKE_REMOTE"
+check 'setup failure recovery' grep -Fq "Init stopped at step 4. The GitHub repo acme/fresh exists. Finish with: cd $sb/setup-fail and run /setup." "$sb/setup-fail.out"
 finish

@@ -25,7 +25,19 @@ if [ "$1" = api ]; then
   if [ "$2" = user/orgs ]; then printf 'acme\nbeta\n'; else echo example-org; fi
   exit 0
 fi
+if [ "$1" = repo ] && [ "$2" = view ]; then
+  if [ -n "${FAKE_GH_CHECK_TARGET:-}" ]; then
+    if [ -e "$FAKE_GH_CHECK_TARGET" ]; then
+      echo 'view: target exists' >> "$FAKE_GH_LOG"
+    else
+      echo 'view: target absent' >> "$FAKE_GH_LOG"
+    fi
+  fi
+  [ -n "${FAKE_GH_EXISTING:-}" ] && grep -Fxq -- "$3" "$FAKE_GH_EXISTING"
+  exit $?
+fi
 [ "$1" = repo ] && [ "$2" = create ] || exit 2
+[ "${FAKE_GH_FAIL_CREATE:-0}" != 1 ] || exit 1
 git -C "$FAKE_ROOT" init --bare "$FAKE_REMOTE" >/dev/null
 git -C "$PWD" remote add origin "$FAKE_REMOTE"
 git -C "$PWD" push -u origin main

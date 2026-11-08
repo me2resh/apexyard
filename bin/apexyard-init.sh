@@ -45,6 +45,9 @@ validate() {
       fi ;;
   esac
 }
+repo_exists() {
+  "$gh_cmd" repo view "$org/$1" --json name >/dev/null 2>&1
+}
 ask() {
   local kind=$1 question=$2 default=$3 reason
   while :; do
@@ -62,7 +65,11 @@ ask() {
       case "$answer" in private|public) return 0 ;; esac
       echo 'enter private or public' >&2
     elif reason=$(validate "$kind" "$answer"); then
-      return 0
+      if [ "$kind" = name ] && repo_exists "$answer"; then
+        printf '%s/%s already exists on GitHub. Choose a different name.\n' "$org" "$answer" >&2
+      else
+        return 0
+      fi
     else
       printf '%s\n' "$reason" >&2
     fi
@@ -73,6 +80,17 @@ for tool in git jq "$gh_cmd"; do
   command -v "$tool" >/dev/null 2>&1 || fail "required command not found: $tool"
 done
 if [ "$interactive" -eq 1 ]; then
+  cat >&2 <<'INTRO'
+ApexYard init creates your ops repo. The ops repo is your own copy of the
+ApexYard framework. It holds your settings and the list of projects that
+ApexYard manages for you. It is a new repo in your GitHub account, not a
+fork, so it can be private. Later, 'apexyard update' brings in new
+framework versions.
+
+Answer each question, or press Enter to use the value in brackets.
+Nothing is created until you confirm.
+
+INTRO
   if [ "$org_set" -eq 0 ]; then
     login=$("$gh_cmd" api user --jq .login)
     orgs=$("$gh_cmd" api user/orgs --jq '.[].login' 2>/dev/null) || orgs=''
@@ -105,12 +123,24 @@ fi
 [ -n "$org" ] || org=$("$gh_cmd" api user --jq .login)
 reason=$(validate org "$org") || fail "$reason"
 reason=$(validate name "$name") || fail "$reason"
+if repo_exists "$name"; then
+  fail "$org/$name already exists on GitHub. Choose a different name."
+fi
 [ -n "$target" ] || target=$name
 case "$target" in /*) ;; *) target="$PWD/${target#./}" ;; esac
 reason=$(validate target "$target") || fail "$reason"
-printf 'Plan:\n  Clone %s at %s into %s with full history.\n' "$framework" "$ref" "$target"
-printf '  Rename origin to upstream and create branch main.\n  Record the framework version.\n'
-printf '  Create %s/%s %s and push main.\n  Create local setup files.\n' "$org" "$name" "$visibility"
+cat <<PLAN
+
+This is what will happen:
+  1. Download ApexYard ($ref) into $target.
+     You get the full framework history, so updates can merge cleanly.
+  2. Link your copy to the framework repo as 'upstream'.
+     'apexyard update' uses this link to bring in new versions.
+  3. Create the ${visibility#--} GitHub repo $org/$name and upload your copy.
+     This repo is yours. It is not a fork.
+  4. Create two local setup files: onboarding.yaml and apexyard.projects.yaml.
+     They stay on this computer until you commit them.
+PLAN
 [ "$dry_run" -eq 0 ] || exit 0
 if [ "$interactive" -eq 1 ]; then
   while :; do
@@ -124,18 +154,42 @@ if [ "$interactive" -eq 1 ]; then
     esac
   done
 fi
-git clone --branch "$ref" -- "$framework" "$target"
+target_existed=0
+[ ! -e "$target" ] && [ ! -L "$target" ] || target_existed=1
+step=1 repo_created=0
+cleanup() {
+  local status=$?
+  [ "$status" -ne 0 ] || return 0
+  if [ "$repo_created" -eq 1 ]; then
+    printf 'Init stopped at step %s. The GitHub repo %s/%s exists. Finish with: cd %s and run /setup.\n' "$step" "$org" "$name" "$target" >&2
+  elif [ "$target_existed" -eq 0 ]; then
+    rm -rf -- "$target"
+    printf 'Init stopped at step %s. It removed %s. Nothing was created on GitHub.\n' "$step" "$target" >&2
+  else
+    printf 'Init stopped at step %s. It kept %s. Nothing was created on GitHub.\n' "$step" "$target" >&2
+  fi
+}
+trap cleanup EXIT
+echo '[1/4] Downloading ApexYard...'
+git clone -q --branch "$ref" -- "$framework" "$target"
+step=2
+echo '[2/4] Linking to the framework repo...'
 git -C "$target" remote rename origin upstream
 # Reset the cloned branch name without removing its history.
-git -C "$target" checkout -B main
+git -C "$target" checkout -q -B main
 version=$(git -C "$target" describe --tags --exact-match "$ref" 2>/dev/null || git -C "$target" describe --tags --always)
 mkdir -p "$target/.claude"
 printf '%s\n' "$version" > "$target/.claude/framework-version"
 git -C "$target" add -- .claude/framework-version
 if ! git -C "$target" diff --cached --quiet; then
-  git -C "$target" -c user.name='ApexYard' -c user.email='apexyard@users.noreply.github.com' commit -m 'chore: record framework version'
+  git -C "$target" -c user.name='ApexYard' -c user.email='apexyard@users.noreply.github.com' commit -q -m 'chore: record framework version'
 fi
+step=3
+printf '[3/4] Creating %s/%s on GitHub...\n' "$org" "$name"
 (cd "$target" && "$gh_cmd" repo create "$org/$name" "$visibility" --source=. --remote=origin --push)
+repo_created=1
+step=4
+echo '[4/4] Creating local setup files...'
 for pair in 'onboarding.example.yaml onboarding.yaml' 'apexyard.projects.yaml.example apexyard.projects.yaml'; do
   read -r example local_file <<< "$pair"
   if [ ! -e "$target/$local_file" ]; then
@@ -144,11 +198,15 @@ for pair in 'onboarding.example.yaml onboarding.yaml' 'apexyard.projects.yaml.ex
 done
 sed "s/name: \"Your Company Name\"/name: \"$org\"/" "$target/onboarding.yaml" > "$target/onboarding.yaml.tmp"
 mv "$target/onboarding.yaml.tmp" "$target/onboarding.yaml"
-printf 'Next steps:\n'
-printf '  1. Run apexyard doctor. It checks jq and the GitHub CLI (gh) and offers to install a missing one, with your consent.\n'
-printf '  2. Open %s in your coding agent.\n' "$target"
-printf '  3. Run /setup.\n'
-printf '  4. On Windows, use Git Bash or WSL.\n'
+trap - EXIT
+cat <<NEXT
+Done. Your ops repo is $org/$name, in $target.
+Next:
+  1. Run 'apexyard doctor'. It checks jq and the GitHub CLI and offers to install a missing one.
+  2. Open $target in your coding agent.
+  3. Run /setup. It asks about your company and writes onboarding.yaml.
+  4. On Windows, use Git Bash or WSL.
+NEXT
 
 # Telemetry must not prevent repository creation.
 # shellcheck source=bin/_lib-telemetry.sh
