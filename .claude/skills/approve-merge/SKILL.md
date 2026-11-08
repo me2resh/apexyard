@@ -10,17 +10,21 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 
 # /approve-merge — Record CEO Approval and Merge
 
-Write per-PR approval, then merge through the tracker adapter.
-Rationale: read docs/skills/approve-merge-rationale.md for gate history and AgDR references.
+Record approval, then merge through the tracker adapter.
+Rationale: docs/skills/approve-merge-rationale.md.
+
+
+Call `progress_note_update "$tree" Completed 'Merge: <evidence and head SHA>'` after the observed result.
+Details: docs/progress-notes.md.
 
 ## The one rule you must not break
 
-Invoke only on explicit user approval for this PR. A plan-level "go" is not merge approval.
+Require explicit user approval for this PR. A plan-level "go" cannot authorize merge.
 Stop and ask when the PR or intent is unclear. Only the human can invoke this skill (#1042).
 
 ## Menu path
 
-The operator can also approve from one `AskUserQuestion` menu. Ask exactly `Approve and merge <owner>/<repo>#<N> at <40-hex-sha>?` with options `Approve and merge` and `Not yet` only. A hook writes the record; never write it yourself. See AgDR-0234.
+Ask exactly `Approve and merge <owner>/<repo>#<N> at <40-hex-sha>?` with options `Approve and merge` and `Not yet` only. Only the hook writes the record (AgDR-0234).
 
 ## Process
 
