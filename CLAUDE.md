@@ -96,6 +96,7 @@ Read the named file when the work matches. Do not auto-import these files. Claud
 |------|-----------|
 | `.claude/rules/git-conventions.md` | Branching, committing, or opening a PR |
 | `.claude/rules/ticket-vocabulary.md` | Naming work items that might become tracker issues |
+| `.claude/rules/external-write-retry.md` | Retrying or cleaning up an external write |
 | `.claude/rules/evidence-grounding.md` | Stating facts, measurements, or completion |
 | `.claude/rules/workflow-gates.md` | Crossing a phase gate |
 | `.claude/rules/pr-workflow.md` | Pushing or merging |
@@ -166,7 +167,7 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Layer | Path | Purpose |
 |-------|------|---------|
 | Hooks | `.claude/hooks/` | 55 shell scripts that mechanically enforce SDLC rules — ticket-first (Edit/Write/Bash), ORBIT slice before Feature/Task issues, migration-ticket-first, auto code review, merge gates (Rex + CEO + design review + architecture review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, onboarding-config guard, upstream-drift banner, leak protection, bootstrap-skill exemption, skill-intent detection, gate-invisible review-marker detection |
-| Rules | `.claude/rules/` | 22 modular rule files (AgDR triggers, agent role selection, build-handbook discovery, code standards, evidence grounding, git conventions, glossary lookup, isolated builds, leak protection, loop mode, parallel work, plan mode, PR quality, PR workflow, reconcile before build, reporting style, right-size ceremony, role triggers, skill first, ticket vocabulary, workflow gates, writing standard) |
+| Rules | `.claude/rules/` | 23 modular rule files (AgDR triggers, agent role selection, build-handbook discovery, code standards, evidence grounding, external-write retry, git conventions, glossary lookup, isolated builds, leak protection, loop mode, parallel work, plan mode, PR quality, PR workflow, reconcile before build, reporting style, right-size ceremony, role triggers, skill first, ticket vocabulary, workflow gates, writing standard) |
 | Handbooks | `handbooks/` | Adopter-authored coding standards consumed by Rex during code review. Discovery by path-convention (`architecture/` + `general/` always-load; `language/<lang>/` loads on diff-match). Advisory by default; opt in to blocking via `ENFORCEMENT: blocking` marker. See [`handbooks/README.md`](handbooks/README.md). |
 | Agents | `.claude/agents/` | 23 sub-agents (4 utility incl. Hakim post-consolidation + Naqid the Contrarian + 7 engineering + 1 architecture (Tariq) + 6 product-design + 5 security-data). Per AgDR-0050 + the #347 PR 3 Hatim→Hakim consolidation decision + AgDR-0054 (Solution Architect) + AgDR-0078 (The Contrarian) + AgDR-0105 (retiring the pr-manager + ticket-manager lifecycle agents). |
 | Skills | `.claude/skills/` | 70 slash commands — see the full list below |

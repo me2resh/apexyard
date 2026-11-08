@@ -133,6 +133,81 @@ assert_eq "tracker_create gh failure → non-zero exit (stderr case)" "1" "$rc"
 assert_eq "tracker_create gh failure → stdout stays empty"          ""  "$out"
 assert_eq "tracker_create gh failure → gh error reaches stderr" "1" "$(grep -c "could not add label: 'chore' not found" "$SB/err")"
 
+# Safe recovery uses exact title, current author, and a ten-minute window.
+cat > "$SB/bin/gh" <<'EOF'
+#!/bin/bash
+printf '%s\n' "$*" >> "$GH_LOG"
+case "$1 $2" in
+  "api user") echo owner ;;
+  "issue create")
+    if [ "${GH_CREATE_OK:-0}" = 1 ]; then
+      echo https://github.com/o/r/issues/44
+    else
+      echo 'write response lost' >&2; exit 1
+    fi ;;
+  "issue list") cat "$GH_CANDIDATES" ;;
+  "label list") printf '%s\n' "${GH_LABELS:-[]}" ;;
+  "label create") exit "${GH_LABEL_CREATE_RC:-0}" ;;
+  *) exit 1 ;;
+esac
+EOF
+chmod +x "$SB/bin/gh"
+export GH_LOG="$SB/log" GH_CANDIDATES="$SB/candidates"
+now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+jq -nc --arg now "$now" '[
+  {number:40,title:"Add login extra",url:"https://github.com/o/r/issues/40",createdAt:$now,author:{login:"owner"}},
+  {number:41,title:"Add login",url:"https://github.com/o/r/issues/41",createdAt:$now,author:{login:"other"}},
+  {number:42,title:"Add login",url:"https://github.com/o/r/issues/42",createdAt:"2000-01-01T00:00:00Z",author:{login:"owner"}},
+  {number:43,title:"Add login",url:"https://github.com/o/r/issues/43",createdAt:$now,author:{login:"owner"}}
+]' > "$GH_CANDIDATES"
+: > "$GH_LOG"
+out=$(PATH="$SB/bin:$PATH" tracker_create "o/r" "Add login" "$BODY" 2>"$SB/recovery.err"); rc=$?
+assert_eq "completed write recovered" 0 "$rc"
+assert_eq "exact recent current-user issue returned" 43 "$(printf '%s' "$out" | jq -r .ref)"
+assert_eq "no duplicate create" 1 "$(grep -c '^issue create ' "$GH_LOG")"
+assert_eq "search includes current author" 1 "$(grep -c -- '--author owner' "$GH_LOG")"
+assert_eq "recovery reported on stderr" 1 "$(grep -c 'recovered existing issue' "$SB/recovery.err")"
+jq 'map(select(.number != 43))' "$GH_CANDIDATES" > "$SB/filtered"
+mv "$SB/filtered" "$GH_CANDIDATES"
+out=$(PATH="$SB/bin:$PATH" tracker_create "o/r" "Add login" "$BODY" 2>/dev/null); rc=$?
+assert_eq "near title, other author, and old issue rejected" 1 "$rc"
+assert_eq "failed recovery keeps stdout empty" "" "$out"
+
+# A custom priority scheme creates only its missing priority label first.
+printf '{"tracker":{"kind":"gh"},"ticket":{"label_priority_scheme":"urgent,normal"}}\n' > "$SB/.claude/project-config.defaults.json"
+tracker_clear_cache
+export GH_CREATE_OK=1
+: > "$GH_LOG"
+out=$(PATH="$SB/bin:$PATH" tracker_create "o/r" "Priority issue" "$BODY" "chore,urgent" 2>"$SB/label.err"); rc=$?
+assert_eq "missing priority create succeeds" 0 "$rc"
+assert_eq "priority label created before issue" "label create urgent --repo o/r
+issue create --repo o/r --title Priority issue --body-file $BODY --label chore --label urgent" "$(grep -E '^(label create|issue create)' "$GH_LOG")"
+assert_eq "nonpriority label not created" 0 "$(grep -c '^label create chore' "$GH_LOG")"
+assert_eq "priority label action reported" 1 "$(grep -c 'created missing priority label urgent' "$SB/label.err")"
+
+# A label that exists in another case is not created again (names are case-insensitive).
+: > "$GH_LOG"
+out=$(GH_LABELS='[{"name":"URGENT"}]' PATH="$SB/bin:$PATH" tracker_create "o/r" "Case issue" "$BODY" "urgent" 2>/dev/null); rc=$?
+assert_eq "other-case label create succeeds" 0 "$rc"
+assert_eq "other-case label not created again" 0 "$(grep -c '^label create' "$GH_LOG")"
+
+# A failed label create warns and never stops the issue create.
+: > "$GH_LOG"
+out=$(GH_LABEL_CREATE_RC=1 PATH="$SB/bin:$PATH" tracker_create "o/r" "Label fail issue" "$BODY" "urgent" 2>"$SB/labelfail.err"); rc=$?
+assert_eq "label create failure does not stop create" 0 "$rc"
+assert_eq "issue still created after label failure" 1 "$(grep -c '^issue create ' "$GH_LOG")"
+assert_eq "label failure warned" 1 "$(grep -c 'could not create priority label urgent' "$SB/labelfail.err")"
+
+# zsh does not split an unquoted variable on IFS. Two labels must still be
+# checked. Under zsh the library reads only the default scheme (P0 to P3).
+if command -v zsh >/dev/null 2>&1; then
+  : > "$GH_LOG"
+  # Run from the repo root, so the library reads the shipped default scheme.
+  (cd "$HOOK_DIR" && PATH="$SB/bin:$PATH" GH_LOG="$GH_LOG" zsh -c '. "$1"; tracker_create o/r "Zsh issue" "$2" "chore,P1"' _ "$TRACKER_LIB" "$BODY" >/dev/null 2>&1)
+  assert_eq "zsh checks the priority label in a two-label list" 1 "$(grep -c '^label list --repo o/r --search P1' "$GH_LOG")"
+fi
+unset GH_LOG GH_CANDIDATES GH_CREATE_OK
+
 rm -rf "$SB"
 
 # #1327 — same stderr contract for the glab and custom adapters. Both kinds
@@ -362,8 +437,8 @@ assert_eq "tracker_create milestone → no shell injection (no PWNED files)" "no
 # without the milestone, no follow-up edit).
 cat > "$SBM/bin/gh" <<'EOF'
 #!/bin/bash
-echo "x" >> "$GH_CALLS"
 if [ "$1" = "issue" ] && [ "$2" = "create" ]; then
+  echo "x" >> "$GH_CALLS"
   while [ $# -gt 0 ]; do
     if [ "$1" = "--milestone" ]; then
       echo "could not add to milestone '$2': '$2' not found" >&2
