@@ -2,7 +2,7 @@
 name: approve-merge
 description: Record per-PR CEO approval and merge in one turn. ONLY on an explicit per-PR "approved", never on umbrella "go".
 disable-model-invocation: true
-argument-hint: "<pr-number> [--no-merge]"
+argument-hint: "<pr-number> [--no-merge] [--quiz]"
 effort: low
 ---
 
@@ -49,6 +49,7 @@ Resolve `REPO` from `owner/repo#N` or an explicit `owner/repo` argument.
 Otherwise, parse the current checkout's `git remote get-url origin`. Do not use ambient gh resolution or `headRepository` (#887).
 Scope each host query to `REPO`, then `PR_HOST_REPO` after step 4.
 Recognise `--no-merge`. It writes approval without merging.
+Recognise `--quiz`. It turns on the opt-in comprehension check for this run (see step 4b). Without `--quiz`, the check runs only when `merge.approval_quiz` is `true`. The quiz does not run and never blocks a merge in any other mode.
 
 ### 2. Sanity-check the user's intent
 
@@ -128,6 +129,36 @@ Accept only squash, merge, rebase as strategy values.
   Use `rm` to delete the gate-invisible file named in stderr. Re-run `/code-review <pr>` without a marker path.
 - Exit 13: the release PR title or body is unreadable. Fix the read failure and retry. Never use a bare squash fallback.
 - Other exit: show the error and stop.
+
+### 4b. Optional comprehension quiz
+
+Run this step only when the quiz is on. Otherwise skip to step 5. The quiz does not run and never blocks a merge in any other mode.
+
+```bash
+QUIZ_FLAG=""
+case " $ARGUMENTS " in *" --quiz "*) QUIZ_FLAG="--quiz" ;; esac
+QUIZ_ON=$(bash "$MARKER_HOME/.claude/skills/approve-merge/scripts/approval-quiz.sh" should-run "$MARKER_HOME" $QUIZ_FLAG) || exit 1
+```
+
+When `QUIZ_ON` is `no`, skip the rest of this step.
+
+When `QUIZ_ON` is `yes`:
+
+1. Fetch the PR diff and body for `$PR_HOST_REPO` / `<pr>`. Write them to temp files. Do not invent facts outside those files.
+2. Build the evidence pack (file:line anchors from the unified diff, plus the PR body):
+
+```bash
+DIFF_FILE=$(mktemp) || exit 1
+BODY_FILE=$(mktemp) || exit 1
+gh pr diff <pr> --repo "$PR_HOST_REPO" > "$DIFF_FILE" || exit 1
+gh pr view <pr> --repo "$PR_HOST_REPO" --json body -q '.body' > "$BODY_FILE" || exit 1
+PACK_FILE=$(mktemp) || exit 1
+bash "$MARKER_HOME/.claude/skills/approve-merge/scripts/approval-quiz.sh" pack "$DIFF_FILE" "$BODY_FILE" > "$PACK_FILE" || exit 1
+```
+
+3. Ask exactly three comprehension-check questions with `AskUserQuestion`. Each question must name a file and a line from the pack. Ground every option in the pack or the PR body. Never ask about a fact that is not in the diff or the ticket body. Prefer `approval-quiz.sh sample-questions` as the question source when it returns three items.
+4. On a wrong answer, run `approval-quiz.sh show-lines` for that file and line, show those lines to the user, and ask the same question again. Do not write the CEO marker until all three answers are correct.
+5. Full procedure: `docs/skills/approval-quiz.md`. Config key: `merge.approval_quiz` (default off).
 
 ### 5. Write the structured CEO marker
 

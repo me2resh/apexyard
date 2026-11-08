@@ -118,6 +118,7 @@ tracks closing this gap for those seven keys.
 | `review_identity` | `tracker_review_submit` in `_lib-tracker.sh` | Opt-in GitHub App identity for `gh` reviews. Default `kind` is `operator`. See [Reviewer GitHub App](#reviewer-github-app-review_identity) and [AgDR-0235](agdr/AgDR-0235-reviewer-github-app.md). |
 | `review_markers.extra_review_agents` | `_lib-review-markers.sh` (`review_caller_class`), `block-reviewer-repo-mutation.sh`, `block-reviewer-ci-wait.sh`, `warn-review-marker-write.sh`, `require-active-ticket.sh`, `auto-code-review.sh`, `limit-reviewer-writes.sh` | Adds exact review types. See [Add your own review agent types](hooks-fail-closed.md#add-your-own-review-agent-types). |
 | `qa.pre_merge_offer` | `/code-review` | Controls the advisory pre-merge QA offer after Rex approves. Default: `ask`. |
+| `merge.approval_quiz` | `/approve-merge` | When `true`, runs the opt-in comprehension check before the CEO marker write. Default: `false`. Pass `--quiz` for one run. See [Approval quiz](#approval-quiz-mergeapproval_quiz). |
 | `leak_protection.public_framework_repos` | `check-private-refs-*.sh`, `block-private-refs-in-public-repos.sh` | Known-public `owner/repo` slugs. Origin identity is exempt when origin matches an entry. |
 | `leak_protection.origin_verified_public` | `check-private-refs-staged.sh`, `check-private-refs-runtime.sh` | Exact origin `owner/repo` slug recorded by `/setup` or `/update` after `gh` confirms visibility is PUBLIC. Hooks stay offline and fail closed when this key is missing or does not match origin. See AgDR-0190. |
 
@@ -169,6 +170,15 @@ A Rex re-review after a branch update offers QA again according to this setting.
 
 The offer does not grant merge approval or create a merge gate. Only the human-invoked `/approve-merge` records approval and merges.
 Salim posts a SHA-stamped result on the PR with evidence for every acceptance criterion.
+
+### Approval quiz (`merge.approval_quiz`)
+
+Set `merge.approval_quiz` to `true` to run a three-question comprehension check before `/approve-merge` writes the CEO marker.
+
+Default is `false`. Pass `--quiz` on one `/approve-merge` run to turn the check on without changing config.
+The quiz uses `AskUserQuestion`. Questions name files and lines from the PR diff and stay inside the diff and PR body.
+A wrong answer shows the packed lines and asks again. The marker format and merge gates stay unchanged.
+See [docs/skills/approval-quiz.md](skills/approval-quiz.md) and `/explain-pr` for a read-only walkthrough that can end with the same quiz.
 
 Reuse a complete pre-merge QA PASS only when its stamped SHA matches the merged PR's final head SHA.
 This is the PR head commit when it merged (the MR head SHA on GitLab).
