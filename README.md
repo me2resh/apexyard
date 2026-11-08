@@ -84,7 +84,7 @@ apexyard init
 
 `apexyard init` asks for the account or organisation, the repo name, private or public, the folder and your coding agent. Then it shows the plan and asks before it creates anything. To skip the questions, pass them as options: `apexyard init --org your-org --name ops --private --yes`.
 
-The CLI does the fixed steps: it creates the repo, links it to the framework for updates, writes the local setup files and installs the git hooks. At the end it offers to open the repo in Claude Code with `/onboard`. `/onboard` asks the questions that need your answers: your company, your stack and your first project. With another agent, open the folder and run `/onboard` yourself.
+The CLI does the fixed steps. It creates the repo and links it to the framework for updates. It also writes the local setup files and installs the git hooks. At the end it offers to open the repo in Claude Code with `/onboard`. `/onboard` asks the questions that need your answers: your company, your stack and your first project. With another agent, open the folder and run `/onboard` yourself.
 
 After that, `/inbox` lists what needs your attention across the portfolio.
 
