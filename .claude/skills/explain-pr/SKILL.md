@@ -1,6 +1,6 @@
 ---
 name: explain-pr
-description: Walk through a PR — what changed, why, risks, and agent decisions. Read-only; never writes markers or merges. Optional comprehension quiz.
+description: "Walk through a PR: what changed, why, risks, and agent decisions. Read-only; never writes markers or merges. Optional comprehension quiz."
 argument-hint: "<pr-number> [--quiz]"
 allowed-tools: Bash, Read, Grep, Glob, AskUserQuestion
 ---
