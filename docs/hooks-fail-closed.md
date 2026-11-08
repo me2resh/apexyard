@@ -172,6 +172,17 @@ Review markers have no permission rule. The approval skills and the reviewer wri
 
 `/permissions` shows the rules that a session loaded.
 
+### Pending secret-access controls
+
+The additional deny rules, wrapper, and self-test apply when the step 2 PR and the Cockpit PR have merged.
+They are not available in this dev checkout.
+The planned settings cover command text for `gh auth token`, `printenv`, and bare `env`.
+They also cover direct reads of the reviewer key folder and `.mcp.json`.
+The wrapper path is `bin/apexyard-gh-as`.
+The self-test path is `bin/secrets-selftest.sh`.
+Command-text rules cannot stop every command that reads the same file.
+See [Secrets and the agent](secrets-and-the-agent.md) for current controls, pending controls, and residual gaps.
+
 ## Operator escape hatch
 
 If a gate blocks all work, for example after a bad hook edit, start Claude

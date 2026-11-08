@@ -142,6 +142,23 @@ git -C "$(dirname "$HOME/.config/apexyard/reviewer.pem")" \
 The command must not print `true`.
 Restrict the file to your user with `chmod 600`.
 
+## Agent access and key storage
+
+Keep the private key outside paths that the agent reads.
+A path outside git prevents a commit, but does not prevent an agent read.
+Prefer the OS keychain when the credential integration supports it.
+The keychain can restrict credential access without exposing a plain key file to routine file reads.
+The current reviewer library requires `review_identity.private_key_path`.
+It does not provide a keychain setting.
+See [the default configuration](../../.claude/project-config.defaults.json).
+
+With the sandbox on, macOS blocks a sandboxed read of a key under `~/.config/apexyard` when the deny rule applies.
+This block can also prevent a sandboxed reviewer helper from reading that key.
+The reviewer-folder deny rule applies when the step 2 PR and the Cockpit PR have merged.
+It is not available in the current dev settings.
+Do not treat the example path alone as access protection.
+See [Secrets and the agent](../secrets-and-the-agent.md) for command-text limits and sandbox gaps.
+
 ## Set the config
 
 Add `review_identity` to `.claude/project-config.json`.
