@@ -61,6 +61,30 @@ check() {
 }
 fixture
 run; check all-good 0 'OK dispatcher-timing'
+check mcp-cli-missing 0 'INFO mcp: Skipped: claude CLI unavailable.'
+cat > "$TMP/tools/claude" <<'STUB'
+#!/bin/bash
+[ "$*" = 'mcp list' ] || exit 99
+cat "$MCP_HEALTH"
+STUB
+chmod +x "$TMP/tools/claude"
+export MCP_HEALTH="$TMP/mcp-health"
+printf '{"mcpServers":{"broken":{"headers":{"Authorization":"SECRET_TOKEN"}},"working":{}}}\n' > "$TMP/fork/.mcp.json"
+printf 'broken: https://example.invalid - Failed to connect: connection refused\nworking: local - Connected\n' > "$MCP_HEALTH"
+run
+check mcp-failure 1 'WARN mcp:broken: Failed to connect: connection refused'
+check mcp-connected 1 'OK mcp:working: Connected.'
+check mcp-disable-suggestion 1 'Disable unused MCP servers'
+if printf '%s' "$OUT" | grep -q SECRET_TOKEN; then
+  echo 'FAIL MCP config secret leaked'; FAIL=$((FAIL + 1))
+else
+  echo 'PASS MCP config secret hidden'; PASS=$((PASS + 1))
+fi
+printf '{"mcpServers":{"auth":{}}}\n' > "$TMP/home/.claude/settings.json"
+printf 'auth: local - Needs authentication\nbroken: local - Failed to connect: timeout\nworking: local - Connected\n' > "$MCP_HEALTH"
+run; check mcp-user-config 1 'WARN mcp:auth: Needs authentication'
+rm "$TMP/tools/claude" "$TMP/fork/.mcp.json" "$TMP/home/.claude/settings.json"
+unset MCP_HEALTH
 rm "$TMP/tools/jq"
 run; check missing-jq 2 'FAIL jq: missing'
 check jq-skips 2 'Skipped: jq unavailable'

@@ -57,7 +57,7 @@ apexyard/
 ├── .claude/               # Claude Code primitives (the runnable layer)
 │   ├── settings.json      # Hook wiring (PreToolUse, PostToolUse, SessionStart)
 │   ├── hooks/             # 55 shell scripts — ticket-first, ORBIT slice gate, migration gate, two-marker merge gate, red-CI block, secrets scan, branch/PR validation, leak protection, upstream-drift banner
-│   ├── rules/             # 22 modular rule files. CLAUDE.md indexes them by name.
+│   ├── rules/             # 23 modular rule files. CLAUDE.md indexes them by name.
 │   ├── agents/            # 23 sub-agents — Rex (Code Reviewer), Hakim (Security Auditor), Tariq (Solution Architect), the engineering / product / design / data / security personas, plus utility agents (dependency auditor, The Contrarian)
 │   └── skills/            # 68 slash commands — see CLAUDE.md for the full list
 │
@@ -183,7 +183,7 @@ Code loads it when it is at the repository root.
 | Layer | Path | What it is |
 |-------|------|------------|
 | **Hooks** | `.claude/hooks/` | 55 shell scripts that mechanically enforce SDLC rules. These cover ticket-first edits (Edit/Write/Bash), ORBIT slice before Feature/Task issues, migration-ticket-first, auto code review, merge gates (Rex + CEO + design + architecture review). They also cover red-CI block, commit-format, AgDR-for-arch-changes, branch/PR-title validation, secrets scanning, private-ref leak protection, upstream-drift banner |
-| **Rules** | `.claude/rules/` | 22 modular rule files. CLAUDE.md indexes them by name. |
+| **Rules** | `.claude/rules/` | 23 modular rule files. CLAUDE.md indexes them by name. |
 | **Agents** | `.claude/agents/` | 23 sub-agents: the department personas plus utility agents |
 | **Skills** | `.claude/skills/` | 68 slash commands |
 | **Settings** | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
