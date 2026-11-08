@@ -800,11 +800,11 @@ _tracker_priority_labels_gh() {
 
 # Recover a completed write without issuing another create command.
 _tracker_recover_create_gh() {
-  local repo="$1" title="$2" login now since candidates
+  local repo="$1" title="$2" login now since candidates recovery_window=600
   login=$(gh api user --jq .login 2>/dev/null) || return 1
   [ -n "$login" ] || return 1
   now=$(date -u +%s) || return 1
-  since=$((now - 600))
+  since=$((now - recovery_window))
   candidates=$(gh issue list --repo "$repo" --state all --author "$login" \
     --search "created:>=$(date -u -r "$since" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "@$since" +%Y-%m-%dT%H:%M:%SZ)" \
     --limit 100 --json number,title,url,createdAt,author) || return 1
