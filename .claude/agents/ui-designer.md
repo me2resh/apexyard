@@ -2,6 +2,7 @@
 name: ui-designer
 description: Defines the visual language and component specifications that guide UI implementation. Activates on visual design, component specifications, design tokens, or pixel-level work.
 model: sonnet
+effort: medium
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 persona_name: Nour
 ---
