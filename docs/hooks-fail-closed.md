@@ -149,6 +149,22 @@ The fallback knows only built-in types when the library is missing.
 **Warning:** A name shared with a build agent locks that build agent during an active review.
 `limit-reviewer-writes.sh` also limits the Edit, Write and MultiEdit tools of a listed type at all times, with no active review. That type may write only under `.claude/session/reviews/bodies/` (AgDR-0266).
 
+## Permission rules and hooks
+
+The hooks read command text. They catch honest mistakes, but they are not a security boundary (AgDR-0267).
+
+Claude Code permission rules work at the tool boundary, with no text parsing. The tracked `.claude/settings.json` has three deny rules:
+
+| Rule | Effect |
+|------|--------|
+| `Read(**/.env)` | The Read tool cannot read a `.env` file. |
+| `Read(**/.env.*)` | The Read tool cannot read `.env.local`, `.env.production` and similar files. This also covers `.env.example`. |
+| `Edit(**/.claude/session/reviews/*.approved)` | No built-in edit tool can write a review marker by hand. |
+
+These rules apply only to the built-in file tools. They do not cover a shell command or a script. The approval skills write markers through shell helpers, so they still work. Review bodies live in `reviews/bodies/`, which the marker rule does not match, so Rex and Hakim can still write them.
+
+`/permissions` shows the rules that a session loaded.
+
 ## Operator escape hatch
 
 If a gate blocks all work, for example after a bad hook edit, start Claude
