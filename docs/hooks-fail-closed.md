@@ -196,7 +196,8 @@ The script states that the cockpit run environment check belongs in `apexyard-pr
 
 Deny rules match command text.
 A run can still read a file through another command.
-Known gaps include shell built-ins that list exported variables, `env` with an option and no command, `gh` called by its absolute path, and the `gh` credential store itself.
+Known gaps include shell built-ins that list exported variables and `env` with an option and no command.
+They also include `gh` called by its absolute path, and the `gh` credential store itself.
 These rules catch honest mistakes.
 They are not a security boundary.
 They do not provide complete protection.
