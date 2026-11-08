@@ -42,17 +42,38 @@ fi
 # Check staged files for secret patterns. macOS-compatible regex.
 # -C selects the index git will commit, not the hook process directory.
 if command -v git_target >/dev/null 2>&1; then
-  SECRETS_FOUND=$(git_target diff --cached --diff-filter=ACMR -U0 2>/dev/null | grep -iE "(api[_-]?key|api[_-]?secret|password|passwd|secret[_-]?key|access[_-]?token|private[_-]?key|client[_-]?secret)[[:space:]]*[:=][[:space:]]*[\"'][^\"']{8,}" | grep -v '^\-' | head -5)
+  STAGED_DIFF=$(git_target diff --cached --diff-filter=ACMR -U0 2>/dev/null)
 else
-  SECRETS_FOUND=$(git diff --cached --diff-filter=ACMR -U0 2>/dev/null | grep -iE "(api[_-]?key|api[_-]?secret|password|passwd|secret[_-]?key|access[_-]?token|private[_-]?key|client[_-]?secret)[[:space:]]*[:=][[:space:]]*[\"'][^\"']{8,}" | grep -v '^\-' | head -5)
+  STAGED_DIFF=$(git diff --cached --diff-filter=ACMR -U0 2>/dev/null)
 fi
 
+# Keep the original matching and exclusion rules. Retain only diff row numbers.
+SECRET_PATTERN="(api[_-]?key|api[_-]?secret|password|passwd|secret[_-]?key|access[_-]?token|private[_-]?key|client[_-]?secret)[[:space:]]*[:=][[:space:]]*[\"'][^\"']{8,}"
+SECRETS_FOUND=$(printf '%s\n' "$STAGED_DIFF" | grep -niE "$SECRET_PATTERN" | grep -v '^[0-9][0-9]*:-' | head -5 | cut -d: -f1)
+
 if [ -n "$SECRETS_FOUND" ]; then
+  # Map diff rows to new-file locations without printing source content.
+  SECRET_LOCATIONS=$(printf '%s\n' "$STAGED_DIFF" | awk -v rows="$(printf '%s\n' "$SECRETS_FOUND" | tr '\n' ',')" '
+    BEGIN { split(rows, selected, ","); for (i in selected) wanted[selected[i]] = 1 }
+    /^diff --git / { file = "(diff header)"; line = 0 }
+    /^\+\+\+ / { file = substr($0, 5); sub(/\t$/, "", file); sub(/^b\//, "", file) }
+    /^@@ / {
+      range = $3
+      sub(/^\+/, "", range)
+      sub(/,.*/, "", range)
+      line = range + 0
+    }
+    wanted[NR] { printf "%s:%d: hardcoded-secret-assignment\n", file, line }
+    /^\+/ && !/^\+\+\+ / { line++ }
+    /^ / { line++ }
+  ')
   cat >&2 <<MSG
 BLOCKED: Potential hardcoded secrets detected in staged files.
 
 Matches (max 5 shown):
-$SECRETS_FOUND
+$SECRET_LOCATIONS
+
+Open each file at the listed line to inspect the match.
 
 ApexYard's no-hardcoded-secrets rule (.claude/rules/git-conventions.md
 § "No Hardcoded Secrets"). Secrets in commits are forever — even after
