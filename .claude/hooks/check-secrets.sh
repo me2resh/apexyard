@@ -49,24 +49,34 @@ fi
 
 # Keep the original matching and exclusion rules. Retain only diff row numbers.
 SECRET_PATTERN="(api[_-]?key|api[_-]?secret|password|passwd|secret[_-]?key|access[_-]?token|private[_-]?key|client[_-]?secret)[[:space:]]*[:=][[:space:]]*[\"'][^\"']{8,}"
-SECRETS_FOUND=$(printf '%s\n' "$STAGED_DIFF" | grep -niE "$SECRET_PATTERN" | grep -v '^[0-9][0-9]*:-' | head -5 | cut -d: -f1)
+# LC_ALL=C: BSD cut stops at a byte that is not valid UTF-8, which would
+# empty SECRETS_FOUND and let the commit through. grep -a: GNU grep treats a
+# diff with such a byte as binary and prints no row numbers. Neither flag
+# changes which rows match.
+SECRETS_FOUND=$(printf '%s\n' "$STAGED_DIFF" | grep -naiE "$SECRET_PATTERN" | grep -av '^[0-9][0-9]*:-' | head -5 | LC_ALL=C cut -d: -f1)
 
 if [ -n "$SECRETS_FOUND" ]; then
   # Map diff rows to new-file locations without printing source content.
-  SECRET_LOCATIONS=$(printf '%s\n' "$STAGED_DIFF" | awk -v rows="$(printf '%s\n' "$SECRETS_FOUND" | tr '\n' ',')" '
+  # A "+++ " row is a file header only before the file's first hunk; inside a
+  # hunk it is an added line that starts with "++ ". LC_ALL=C and the stderr
+  # redirect stop awk from echoing row text in an encoding error.
+  SECRET_LOCATIONS=$(printf '%s\n' "$STAGED_DIFF" | LC_ALL=C awk -v rows="$(printf '%s\n' "$SECRETS_FOUND" | tr '\n' ',')" '
     BEGIN { split(rows, selected, ","); for (i in selected) wanted[selected[i]] = 1 }
-    /^diff --git / { file = "(diff header)"; line = 0 }
-    /^\+\+\+ / { file = substr($0, 5); sub(/\t$/, "", file); sub(/^b\//, "", file) }
+    /^diff --git / { file = "(diff header)"; line = 0; header = 1 }
+    header && /^\+\+\+ / { file = substr($0, 5); sub(/\t$/, "", file); sub(/^b\//, "", file); next }
     /^@@ / {
+      header = 0
       range = $3
       sub(/^\+/, "", range)
       sub(/,.*/, "", range)
       line = range + 0
+      next
     }
+    header { next }
     wanted[NR] { printf "%s:%d: hardcoded-secret-assignment\n", file, line }
-    /^\+/ && !/^\+\+\+ / { line++ }
+    /^\+/ { line++ }
     /^ / { line++ }
-  ')
+  ' 2>/dev/null)
   cat >&2 <<MSG
 BLOCKED: Potential hardcoded secrets detected in staged files.
 
