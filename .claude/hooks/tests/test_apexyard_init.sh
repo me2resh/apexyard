@@ -179,4 +179,76 @@ export FAKE_REMOTE="$sb/codexhand.git"
 printf 'y\n' | /bin/bash "$CLI" init -i --org acme --name codexhand --private --dir "$sb/codexhand" --agent codex > "$sb/codexhand.out" 2> "$sb/codexhand.err" || true
 check 'other agent no question' test "$(grep -c 'Open it in Claude now' "$sb/codexhand.err" || true)" = 0
 check 'other agent next step' grep -Fq "2. Open $sb/codexhand in codex and run /onboard." "$sb/codexhand.out"
+# Optional install commands are always sandbox fakes.
+ln -s "$(command -v jq)" "$sb/tools/jq"
+export PATH="$sb/tools:/usr/bin:/bin" FAKE_COCKPIT_LOG="$sb/cockpit.log"
+cat > "$sb/tools/pipx" <<'SH'
+#!/usr/bin/env bash
+printf 'pipx %s\n' "$*" >> "$FAKE_COCKPIT_LOG"
+echo fake-secret-must-stay-hidden
+exit "${FAKE_PIPX_STATUS:-0}"
+SH
+cat > "$sb/tools/apexyard-premium" <<'SH'
+#!/usr/bin/env bash
+printf 'premium %s\n' "$*" >> "$FAKE_COCKPIT_LOG"
+echo fake-secret-must-stay-hidden
+exit "${FAKE_SETUP_STATUS:-0}"
+SH
+chmod +x "$sb/tools/pipx" "$sb/tools/apexyard-premium"
+check 'flag off output silent' test "$(grep -ic cockpit "$sb/init.out" || true)" = 0
+/bin/bash "$CLI" init --help > "$sb/help.out"
+check 'flag off help silent' test "$(grep -ic cockpit "$sb/help.out" || true)" = 0
+if /bin/bash "$CLI" init --cockpit > "$sb/disabled.out" 2>&1; then rc=0; else rc=$?; fi
+check 'disabled option exit' test "$rc" = 2
+check 'disabled option message' grep -Fq 'unknown option: --cockpit' "$sb/disabled.out"
+export APEXYARD_COCKPIT=1
+for mode in yes no default direct install-fail setup-fail missing override; do
+  export FAKE_REMOTE="$sb/cockpit-$mode.git"
+  target="$sb/cockpit-$mode"
+  : > "$FAKE_COCKPIT_LOG"
+  case "$mode" in
+    yes) printf 'y\ny\ny\n' | /bin/bash "$CLI" init -i --org acme --name "$mode" --private --dir "$target" --agent claude > "$target.out" 2>&1 ;;
+    no|default)
+      answer=n
+      [ "$mode" != default ] || answer=''
+      printf 'y\n%s\n' "$answer" | /bin/bash "$CLI" init -i --org acme --name "$mode" --private --dir "$target" --agent codex > "$target.out" 2>&1 ;;
+    *)
+      export FAKE_PIPX_STATUS=0 FAKE_SETUP_STATUS=0
+      [ "$mode" != install-fail ] || export FAKE_PIPX_STATUS=1
+      [ "$mode" != setup-fail ] || export FAKE_SETUP_STATUS=1
+      [ "$mode" != missing ] || mv "$sb/tools/pipx" "$sb/pipx.saved"
+      if [ "$mode" = override ]; then
+        export APEXYARD_COCKPIT_SOURCE=git+file:///sandbox/premium APEXYARD_COCKPIT_TAG=test-tag
+      fi
+      check "$mode exits zero" /bin/bash "$CLI" init --yes --cockpit --org acme --name "$mode" --dir "$target" > "$target.out" 2>&1
+      [ "$mode" != missing ] || mv "$sb/pipx.saved" "$sb/tools/pipx"
+      unset APEXYARD_COCKPIT_SOURCE APEXYARD_COCKPIT_TAG ;;
+  esac
+  check "$mode keeps setup" test -f "$target/onboarding.yaml"
+  check "$mode next steps" grep -q 'Next:' "$target.out"
+  check "$mode output hides child secrets" test "$(grep -c fake-secret "$target.out" || true)" = 0
+  case "$mode" in
+    no|default|missing) check "$mode skips commands" test ! -s "$FAKE_COCKPIT_LOG" ;;
+    override) check 'source and tag overrides' grep -Fxq 'pipx install git+file:///sandbox/premium@test-tag' "$FAKE_COCKPIT_LOG" ;;
+    *) check "$mode pinned source" grep -Fxq 'pipx install git+https://github.com/me2resh/apexyard-premium.git@v0.15.2' "$FAKE_COCKPIT_LOG" ;;
+  esac
+  case "$mode" in
+    yes|direct|setup-fail|override) check "$mode setup folders" grep -Fxq "premium setup --ops $target --portfolio $target" "$FAKE_COCKPIT_LOG" ;;
+  esac
+  case "$mode" in
+    missing) check 'missing pipx guidance' grep -q 'pipx is missing. Install pipx' "$target.out" ;;
+    install-fail) check 'access guidance' grep -q 'Request access to apexyard-premium' "$target.out"
+      check 'failed install skips setup' test "$(grep -c '^premium' "$FAKE_COCKPIT_LOG" || true)" = 0 ;;
+    setup-fail) check 'setup guidance' grep -q 'Cockpit setup failed.' "$target.out" ;;
+    yes) check 'handoff after install' grep -Fxq "$target /onboard" "$FAKE_AGENT_LOG"
+      check 'exact install question' grep -Fq 'Install the Cockpit too? [y/N]' "$target.out" ;;
+  esac
+  check "$mode argv has no secret" test "$(grep -c fake-secret "$FAKE_COCKPIT_LOG" || true)" = 0
+done
+unset APEXYARD_COCKPIT FAKE_PIPX_STATUS FAKE_SETUP_STATUS
+if FAKE_GH_OFFLINE=1 FAKE_GH_ORIGIN_FAIL=1 /bin/bash "$CLI" init --org acme --name offline --dir "$sb/offline" > "$sb/offline.out" 2>&1; then rc=0; else rc=$?; fi
+check 'offline push failure exit' test "$rc" -ne 0
+check 'offline origin keeps clone' test -d "$sb/offline/.git"
+check 'offline recovery guidance' grep -Fq 'git push -u origin main' "$sb/offline.out"
+
 finish

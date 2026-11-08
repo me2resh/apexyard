@@ -26,6 +26,7 @@ if [ "$1" = api ]; then
   exit 0
 fi
 if [ "$1" = repo ] && [ "$2" = view ]; then
+  [ "${FAKE_GH_OFFLINE:-0}" != 1 ] || exit 1
   if [ -n "${FAKE_GH_CHECK_TARGET:-}" ]; then
     if [ -e "$FAKE_GH_CHECK_TARGET" ]; then
       echo 'view: target exists' >> "$FAKE_GH_LOG"
@@ -39,6 +40,10 @@ if [ "$1" = repo ] && [ "$2" = view ]; then
 fi
 [ "$1" = repo ] && [ "$2" = create ] || exit 2
 [ "${FAKE_GH_FAIL_CREATE:-0}" != 1 ] || exit 1
+if [ "${FAKE_GH_ORIGIN_FAIL:-0}" = 1 ]; then
+  git remote add origin "https://github.com/$3.git"
+  exit 1
+fi
 # Create the repo, then fail the push, as gh does without a loaded ssh key.
 if [ "${FAKE_GH_FAIL_PUSH:-0}" = 1 ]; then printf '%s\n' "$3" >> "$FAKE_ROOT/gh-created"; exit 1; fi
 git -C "$FAKE_ROOT" init --bare "$FAKE_REMOTE" >/dev/null
@@ -48,6 +53,8 @@ SH
 chmod +x "$APEXYARD_GH"
 # Never start a real agent from a test.
 export APEXYARD_AGENT_CMD="$sb/tools/agent" FAKE_AGENT_LOG="$sb/agent.log"
+# The stub expands these variables when it runs.
+# shellcheck disable=SC2016
 printf '#!/usr/bin/env bash\nprintf "%%s %%s\\n" "$PWD" "$*" >> "$FAKE_AGENT_LOG"\n' > "$APEXYARD_AGENT_CMD"
 chmod +x "$APEXYARD_AGENT_CMD"
 export FAKE_ROOT="$sb"
