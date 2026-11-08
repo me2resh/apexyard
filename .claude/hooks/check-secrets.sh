@@ -50,8 +50,10 @@ fi
 # Keep the original matching and exclusion rules. Retain only diff row numbers.
 SECRET_PATTERN="(api[_-]?key|api[_-]?secret|password|passwd|secret[_-]?key|access[_-]?token|private[_-]?key|client[_-]?secret)[[:space:]]*[:=][[:space:]]*[\"'][^\"']{8,}"
 # LC_ALL=C: BSD cut stops at a byte that is not valid UTF-8, which would
-# empty SECRETS_FOUND and let the commit through.
-SECRETS_FOUND=$(printf '%s\n' "$STAGED_DIFF" | grep -niE "$SECRET_PATTERN" | grep -v '^[0-9][0-9]*:-' | head -5 | LC_ALL=C cut -d: -f1)
+# empty SECRETS_FOUND and let the commit through. grep -a: GNU grep treats a
+# diff with such a byte as binary and prints no row numbers. Neither flag
+# changes which rows match.
+SECRETS_FOUND=$(printf '%s\n' "$STAGED_DIFF" | grep -naiE "$SECRET_PATTERN" | grep -av '^[0-9][0-9]*:-' | head -5 | LC_ALL=C cut -d: -f1)
 
 if [ -n "$SECRETS_FOUND" ]; then
   # Map diff rows to new-file locations without printing source content.
