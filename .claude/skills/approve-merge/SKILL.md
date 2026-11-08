@@ -132,9 +132,13 @@ Accept only squash, merge, rebase as strategy values.
 
 ### 4b. Optional comprehension quiz
 
-Run only with `--quiz` or when `merge.approval_quiz` is `true`.
-Run before step 5 writes the CEO marker.
-Otherwise, the quiz does not run and never blocks a merge in any other mode.
+Off unless `--quiz` is passed or `merge.approval_quiz` is `true`. Runs before step 5. It never blocks a merge otherwise.
+Read the flag here; only this file gets `$ARGUMENTS`:
+
+```bash
+QUIZ_FLAG=""; case " $ARGUMENTS " in *" --quiz "*) QUIZ_FLAG="--quiz" ;; esac
+```
+
 Follow docs/skills/approval-quiz.md.
 
 ### 5. Write the structured CEO marker

@@ -171,6 +171,13 @@ A Rex re-review after a branch update offers QA again according to this setting.
 The offer does not grant merge approval or create a merge gate. Only the human-invoked `/approve-merge` records approval and merges.
 Salim posts a SHA-stamped result on the PR with evidence for every acceptance criterion.
 
+Reuse a complete pre-merge QA PASS only when its stamped SHA matches the merged PR's final head SHA.
+This is the PR head commit when it merged (the MR head SHA on GitLab).
+A PASS stamped with an earlier head does not count.
+Accept reports only from the repository owner, a member or a collaborator, or the account that posted the Rex review.
+On GitHub, verify `author_association` of `OWNER`, `MEMBER` or `COLLABORATOR`, or the Rex account match.
+Otherwise, run post-merge QA as usual.
+
 ### Approval quiz (`merge.approval_quiz`)
 
 Set `merge.approval_quiz` to `true` to run a three-question comprehension check before `/approve-merge` writes the CEO marker.
@@ -179,13 +186,6 @@ Default is `false`. Pass `--quiz` on one `/approve-merge` run to turn the check 
 The quiz uses `AskUserQuestion`. Questions name files and lines from the PR diff and stay inside the diff and PR body.
 A wrong answer shows the packed lines and asks again. The marker format and merge gates stay unchanged.
 See [docs/skills/approval-quiz.md](skills/approval-quiz.md) and `/explain-pr` for a read-only walkthrough that can end with the same quiz.
-
-Reuse a complete pre-merge QA PASS only when its stamped SHA matches the merged PR's final head SHA.
-This is the PR head commit when it merged (the MR head SHA on GitLab).
-A PASS stamped with an earlier head does not count.
-Accept reports only from the repository owner, a member or a collaborator, or the account that posted the Rex review.
-On GitHub, verify `author_association` of `OWNER`, `MEMBER` or `COLLABORATOR`, or the Rex account match.
-Otherwise, run post-merge QA as usual.
 
 ## Build isolation (`build.isolation`)
 

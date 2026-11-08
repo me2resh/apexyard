@@ -187,6 +187,21 @@ fi
 
 rm -f "$PACK" "$QS"
 
+# Claude Code fills in $ARGUMENTS only in SKILL.md. The --quiz flag must be
+# read there; the procedure doc must reuse QUIZ_FLAG and never read $ARGUMENTS.
+# shellcheck disable=SC2016  # $ARGUMENTS is literal text to find, not to expand.
+if grep -Fq 'case " $ARGUMENTS " in *" --quiz "*) QUIZ_FLAG="--quiz"' "$SKILL_MD"; then
+  mark_pass "SKILL.md reads the --quiz flag from \$ARGUMENTS"
+else
+  mark_fail "SKILL.md reads the --quiz flag from \$ARGUMENTS" "flag read missing from SKILL.md"
+fi
+# shellcheck disable=SC2016  # literal text, as above.
+if grep -v 'must not read it' "$QUIZ_DOC" | grep -Fq '$ARGUMENTS'; then
+  mark_fail "procedure doc does not read \$ARGUMENTS" "docs/skills/approval-quiz.md reads \$ARGUMENTS"
+else
+  mark_pass "procedure doc does not read \$ARGUMENTS"
+fi
+
 echo
 echo "===== test_approval_quiz.sh ====="
 printf "Passed: %s\n" "$PASS"

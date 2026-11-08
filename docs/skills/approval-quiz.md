@@ -16,11 +16,9 @@ Opt-in check that the operator understood a PR before `/approve-merge` writes th
 
 ## Procedure for /approve-merge step 4b
 
-Run before step 5 writes the CEO marker. Reuse `MARKER_HOME` and `PR_HOST_REPO` from step 4.
+Run before step 5 writes the CEO marker. Reuse `MARKER_HOME` and `PR_HOST_REPO` from step 4. Reuse `QUIZ_FLAG` from SKILL.md step 4b. Only SKILL.md receives `$ARGUMENTS`, so this file must not read it.
 
 ```bash
-QUIZ_FLAG=""
-case " $ARGUMENTS " in *" --quiz "*) QUIZ_FLAG="--quiz" ;; esac
 QUIZ_ON=$(bash "$MARKER_HOME/.claude/skills/approve-merge/scripts/approval-quiz.sh" should-run "$MARKER_HOME" $QUIZ_FLAG) || exit 1
 ```
 
