@@ -2,7 +2,8 @@
 # Per-worktree progress notes. Bash 3.2. No gate decisions.
 progress_note_path() {
   local dir
-  dir=$(git -C "$1" rev-parse --absolute-git-dir) || return 1
+  # Outside a git tree there is no note; say nothing at SessionStart.
+  dir=$(git -C "$1" rev-parse --absolute-git-dir 2>/dev/null) || return 1
   [ -f "$dir/apexyard-ticket" ] && [ ! -L "$dir/apexyard-ticket" ] || return 1
   REPLY="$dir/apexyard-progress.md"
 }
