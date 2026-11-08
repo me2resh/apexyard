@@ -10,29 +10,21 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 
 # /approve-merge — Record CEO Approval and Merge
 
-Write per-PR approval, then merge through the tracker adapter.
-Rationale: read docs/skills/approve-merge-rationale.md for gate history and AgDR references.
+Record approval, then merge through the tracker adapter.
+Rationale: docs/skills/approve-merge-rationale.md.
 
 
-## Ticket progress note
-
-The orchestrator updates the progress note at PR opened, CI result, review verdict, fix pushed, and merge.
-Source `.claude/hooks/_lib-progress-note.sh` from the framework checkout.
-Set `$tree` to the ticket worktree, including when the orchestrator runs elsewhere.
-Call `progress_note_update "$tree" Completed '<stage>: <evidence and head SHA>'` after each observed result.
-Record failures and requested changes too. Update Outputs and Next action with separate calls.
-Do not call the helper from gate hooks.
-See [Resume ticket work](../../../docs/progress-notes.md) for examples and recovery steps.
-
+Call `progress_note_update "$tree" Completed 'Merge: <evidence and head SHA>'` after the observed result.
+Details: docs/progress-notes.md.
 
 ## The one rule you must not break
 
-Invoke only on explicit user approval for this PR. A plan-level "go" is not merge approval.
+Require explicit user approval for this PR. A plan-level "go" cannot authorize merge.
 Stop and ask when the PR or intent is unclear. Only the human can invoke this skill (#1042).
 
 ## Menu path
 
-The operator can also approve from one `AskUserQuestion` menu. Ask exactly `Approve and merge <owner>/<repo>#<N> at <40-hex-sha>?` with options `Approve and merge` and `Not yet` only. A hook writes the record; never write it yourself. See AgDR-0234.
+Ask exactly `Approve and merge <owner>/<repo>#<N> at <40-hex-sha>?` with options `Approve and merge` and `Not yet` only. Only the hook writes the record (AgDR-0234).
 
 ## Process
 

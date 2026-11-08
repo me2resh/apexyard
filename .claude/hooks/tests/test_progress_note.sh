@@ -89,14 +89,17 @@ progress_note_create "$TMP/linked"
 grep -qx 'Task: owner/repo#44' "$dir/apexyard-progress.md"
 grep -qx 'Task: owner/repo#43' "$note"
 # Skill and brief wiring must retain the shared evidence condition.
-for file in .claude/skills/start-ticket/SKILL.md .claude/skills/fan-out/SKILL.md .claude/rules/reconcile-before-build.md; do
+for file in docs/progress-notes.md .claude/skills/fan-out/SKILL.md .claude/rules/reconcile-before-build.md; do
   grep -q 'acceptance criteria' "$ROOT/$file"
   grep -q 'CI green on the current head SHA, Rex APPROVED at that head, progress note current' "$ROOT/$file"
   grep -q '20 turns' "$ROOT/$file"
   grep -q 'report the blocker with evidence' "$ROOT/$file"
 done
-for file in .claude/skills/code-review/SKILL.md .claude/skills/approve-merge/SKILL.md .claude/rules/pr-workflow.md; do
+for file in docs/progress-notes.md .claude/rules/pr-workflow.md; do
   grep -q 'PR opened, CI result, review verdict, fix pushed, and merge' "$ROOT/$file"
   grep -q 'progress_note_update' "$ROOT/$file"
+done
+for skill in start-ticket code-review approve-merge; do
+  grep -q 'Details: docs/progress-notes.md.' "$ROOT/.claude/skills/$skill/SKILL.md"
 done
 printf 'PASS: progress note lifecycle, SessionStart, and workflow wiring\n'

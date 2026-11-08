@@ -112,11 +112,13 @@ fi
 ops_root=$(resolve_ops_root)
 ```
 
-If `$ops_root` is still empty after sourcing (no pin, and `resolve_ops_root`'s own internal walk also found no anchor above cwd), tell the user and stop. Starting a ticket without the fork doesn't make sense.
+If `$ops_root` remains empty after sourcing, report the missing fork and stop.
 
 #### 4b. Look the tracker repo up in the registry
 
-Given the ticket's `owner/repo` (from step 1), resolve the registry path via `portfolio_registry` (see "Path resolution" above — do NOT hardcode `$ops_root/apexyard.projects.yaml`; in split-portfolio v2 the registry lives in the sibling repo, not the ops fork) and grep it for a project whose `repo:` field matches. `$ops_root` is already resolved and guaranteed to carry a `.claude/hooks/` tree (step 4a only succeeds when it does), so source directly from it — no second walk-up needed. One registry-safe way (uses `yq` when available, falls back to a greppy read):
+Resolve the registry with `portfolio_registry`, then find the project whose `repo:` matches the ticket's `owner/repo`.
+Source helpers from `$ops_root`, resolved in step 4a. Do not hardcode the registry path.
+Use `yq` when available, with the fallback below:
 
 ```bash
 source "$ops_root/.claude/hooks/_lib-read-config.sh"
@@ -252,18 +254,9 @@ The command prints the marker (`repo=`, `number=`, `title=`, `url=`), or nothing
 
 ### Create the progress note and goal
 
-The helper creates `apexyard-progress.md` beside the worktree's active-ticket marker.
-For the interactive fallback, source `.claude/hooks/_lib-progress-note.sh` from the ops root.
 Call `progress_note_create "$tree"` after the marker write succeeds.
-Report any failure and stop. Preserve the note when resuming the same ticket.
-
-Set Claude Code's `/goal` before building. Copy the ticket's acceptance criteria into its done condition.
-Add this evidence requirement: PR open, CI green on the current head SHA, Rex APPROVED at that head, progress note current.
-Set a limit of 20 turns. At that limit, stop and report the blocker with evidence.
-Include the same done condition and turn limit in every build-agent brief.
-Build agents hand results to the orchestrator for independent review.
-This goal does not authorize a merge.
-See [Resume ticket work](../../../docs/progress-notes.md) for updates and recovery steps.
+Set `/goal`: acceptance criteria met, PR open, CI green on the current head SHA, Rex APPROVED at that head, progress note current; limit: 20 turns.
+Details: docs/progress-notes.md.
 
 ### 6. Move the board card to "In progress" (opt-in)
 

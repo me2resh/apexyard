@@ -9,7 +9,20 @@ The fixed fields are Task, Outputs, Completed, Decisions, Open issues, and Next 
 Outputs names the branch, PR, and files. Completed records stages, checks, and evidence.
 Next action states one concrete step.
 
+## Create the note
+
+For the interactive fallback, source `.claude/hooks/_lib-progress-note.sh` from the ops root.
+Call `progress_note_create "$tree"` after the marker write succeeds.
+Report any failure and stop. Preserve the note when resuming the same ticket.
+
 ## Update the note
+
+The orchestrator updates the progress note at PR opened, CI result, review verdict, fix pushed, and merge.
+Source `.claude/hooks/_lib-progress-note.sh` from the framework checkout.
+Set `$tree` to the ticket worktree, including when the orchestrator runs elsewhere.
+Call `progress_note_update "$tree" Completed '<stage>: <evidence and head SHA>'` after each observed result.
+Record failures and requested changes too. Update Outputs and Next action with separate calls.
+Do not call the helper from gate hooks.
 
 The orchestrator sources the library from the framework checkout:
 
@@ -47,7 +60,8 @@ Run `/start-ticket` there and reconstruct evidence before continuing.
 ## Set the done condition
 
 A done condition states the evidence that ends a run.
-Use Claude Code's `/goal` with the ticket acceptance criteria and these required facts:
+Set Claude Code's `/goal` before building with the ticket acceptance criteria and these required facts.
+The shared condition is: PR open, CI green on the current head SHA, Rex APPROVED at that head, progress note current.
 
 - A PR is open.
 - CI is green on the current head SHA.
