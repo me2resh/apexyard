@@ -24,9 +24,9 @@ The operator can also approve from one `AskUserQuestion` menu. Ask exactly `Appr
 
 ## Process
 
-### 0. Resolve the configured approver display title (SOFT, prose-only)
+### 0. Resolve the approver display title
 
-Before addressing the user in any confirmation question or report, read the configured display title for the human per-PR merge approver:
+Read the human approver display title before addressing the user:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -43,7 +43,7 @@ Extract the PR number from `$ARGUMENTS`. If no number is given, try to infer fro
 - The current branch's open PR via `gh pr view --json number --jq '.number'`
 - The user's most recent message, if it named a PR explicitly
 
-If the PR number is ambiguous (multiple PRs on the branch, unclear which was approved), STOP and ask the user which PR.
+If the PR number is ambiguous, STOP and ask which PR.
 
 Resolve `REPO` from `owner/repo#N` or an explicit `owner/repo` argument.
 Otherwise, parse the current checkout's `git remote get-url origin`. Do not use ambient gh resolution or `headRepository` (#887).
@@ -61,7 +61,7 @@ Proceed only after an unambiguous per-PR approval.
 
 ### 3. Resolve the ops root
 
-Keep this bootstrap inline. It locates the script from workspace clones and split-portfolio forks (#229, #230, #559).
+Keep this bootstrap inline for workspace clones and split-portfolio forks (#229, #230, #559).
 
 ```bash
 OPS_ROOT=""
@@ -132,33 +132,10 @@ Accept only squash, merge, rebase as strategy values.
 
 ### 4b. Optional comprehension quiz
 
-Run this step only when the quiz is on. Otherwise skip to step 5. The quiz does not run and never blocks a merge in any other mode.
-
-```bash
-QUIZ_FLAG=""
-case " $ARGUMENTS " in *" --quiz "*) QUIZ_FLAG="--quiz" ;; esac
-QUIZ_ON=$(bash "$MARKER_HOME/.claude/skills/approve-merge/scripts/approval-quiz.sh" should-run "$MARKER_HOME" $QUIZ_FLAG) || exit 1
-```
-
-When `QUIZ_ON` is `no`, skip the rest of this step.
-
-When `QUIZ_ON` is `yes`:
-
-1. Fetch the PR diff and body for `$PR_HOST_REPO` / `<pr>`. Write them to temp files. Do not invent facts outside those files.
-2. Build the evidence pack (file:line anchors from the unified diff, plus the PR body):
-
-```bash
-DIFF_FILE=$(mktemp) || exit 1
-BODY_FILE=$(mktemp) || exit 1
-gh pr diff <pr> --repo "$PR_HOST_REPO" > "$DIFF_FILE" || exit 1
-gh pr view <pr> --repo "$PR_HOST_REPO" --json body -q '.body' > "$BODY_FILE" || exit 1
-PACK_FILE=$(mktemp) || exit 1
-bash "$MARKER_HOME/.claude/skills/approve-merge/scripts/approval-quiz.sh" pack "$DIFF_FILE" "$BODY_FILE" > "$PACK_FILE" || exit 1
-```
-
-3. Ask exactly three comprehension-check questions with `AskUserQuestion`. Each question must name a file and a line from the pack. Ground every option in the pack or the PR body. Never ask about a fact that is not in the diff or the ticket body. Prefer `approval-quiz.sh sample-questions` as the question source when it returns three items.
-4. On a wrong answer, run `approval-quiz.sh show-lines` for that file and line, show those lines to the user, and ask the same question again. Do not write the CEO marker until all three answers are correct.
-5. Full procedure: `docs/skills/approval-quiz.md`. Config key: `merge.approval_quiz` (default off).
+Run only with `--quiz` or when `merge.approval_quiz` is `true`.
+Run before step 5 writes the CEO marker.
+Otherwise, the quiz does not run and never blocks a merge in any other mode.
+Follow docs/skills/approval-quiz.md.
 
 ### 5. Write the structured CEO marker
 
@@ -198,7 +175,7 @@ EOF
 ### 6. Merge with the checked strategy
 
 Skip this step for `--no-merge`. Run this entire block in one shell.
-Shell variables from step 4 do not carry over. The block re-runs the script and stops on a missing or invalid strategy or release_class (#1196). Fill in `<marker_home>`, `<repo>` and `<pr>` with literal values.
+Shell variables from step 4 do not carry over. The block checks strategy and release_class again (#1196). Fill in `<marker_home>`, `<repo>` and `<pr>` with literal values.
 Pass those same `<repo>` and `<pr>` literals to tracker_pr_merge. The merge gate reads the command text before the shell expands variables (#1758).
 The block stops when the checked host repo is not `<repo>`.
 The tracker_pr_merge call MUST be invoked as a bare top-level statement, never inside `$(...)` or backticks. The merge-gate matcher reads the raw command text and may not fire on a wrapped call. Redirect stdout to a file, then read the result in a separate step.
@@ -304,14 +281,9 @@ Do this only when the user explicitly asks. Do not auto-close a child issue. Con
 
 ## --no-merge opt-out
 
-`/approve-merge <pr> --no-merge` writes the marker and stops. Useful when:
+`/approve-merge <pr> --no-merge` writes the marker and stops.
 
-- CI is still running and you want to record approval first
-- You want to defer the merge for a batch
-- A teammate will do the merge
-- A regulated environment separates approval from execution
-
-The skill never writes the marker AND defers the merge in any other case. The default IS auto-merge.
+Otherwise, merge immediately after writing the marker.
 
 ## Notes
 

@@ -14,6 +14,36 @@ Opt-in check that the operator understood a PR before `/approve-merge` writes th
 - On a wrong answer, show the packed lines for that file and line, then ask again.
 - Write no marker and run no merge from this procedure alone.
 
+## Procedure for /approve-merge step 4b
+
+Run before step 5 writes the CEO marker. Reuse `MARKER_HOME` and `PR_HOST_REPO` from step 4.
+
+```bash
+QUIZ_FLAG=""
+case " $ARGUMENTS " in *" --quiz "*) QUIZ_FLAG="--quiz" ;; esac
+QUIZ_ON=$(bash "$MARKER_HOME/.claude/skills/approve-merge/scripts/approval-quiz.sh" should-run "$MARKER_HOME" $QUIZ_FLAG) || exit 1
+```
+
+When `QUIZ_ON` is `no`, skip the rest of this step.
+
+When `QUIZ_ON` is `yes`:
+
+1. Fetch the PR diff and body for `$PR_HOST_REPO` / `<pr>`.
+   Write them to temp files. Do not invent facts outside those files.
+2. Build the evidence pack (file:line anchors from the unified diff, plus the PR body):
+
+```bash
+DIFF_FILE=$(mktemp) || exit 1
+BODY_FILE=$(mktemp) || exit 1
+gh pr diff <pr> --repo "$PR_HOST_REPO" > "$DIFF_FILE" || exit 1
+gh pr view <pr> --repo "$PR_HOST_REPO" --json body -q '.body' > "$BODY_FILE" || exit 1
+PACK_FILE=$(mktemp) || exit 1
+bash "$MARKER_HOME/.claude/skills/approve-merge/scripts/approval-quiz.sh" pack "$DIFF_FILE" "$BODY_FILE" > "$PACK_FILE" || exit 1
+```
+
+3. Ask exactly three comprehension-check questions with `AskUserQuestion`. Each question must name a file and a line from the pack. Ground every option in the pack or the PR body. Never ask about a fact that is not in the diff or the ticket body. Prefer `approval-quiz.sh sample-questions` as the question source when it returns three items.
+4. On a wrong answer, run `approval-quiz.sh show-lines` for that file and line, show those lines to the user, and ask the same question again. Do not write the CEO marker until all three answers are correct.
+
 ## Helper
 
 ```bash

@@ -22,6 +22,7 @@ set -u
 SRC_ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 SCRIPT="$SRC_ROOT/.claude/skills/approve-merge/scripts/approval-quiz.sh"
 SKILL_MD="$SRC_ROOT/.claude/skills/approve-merge/SKILL.md"
+QUIZ_DOC="$SRC_ROOT/docs/skills/approval-quiz.md"
 FIXTURE="$SRC_ROOT/.claude/skills/approve-merge/tests/fixtures/sample-pr"
 DEFAULTS="$SRC_ROOT/.claude/project-config.defaults.json"
 
@@ -156,10 +157,11 @@ else
 fi
 
 if grep -qE '\-\-quiz' "$SKILL_MD" \
-  && grep -qF 'approval-quiz.sh' "$SKILL_MD" \
-  && grep -qF 'AskUserQuestion' "$SKILL_MD" \
+  && grep -qF 'Follow docs/skills/approval-quiz.md.' "$SKILL_MD" \
+  && grep -qF 'approval-quiz.sh' "$QUIZ_DOC" \
+  && grep -qF 'AskUserQuestion' "$QUIZ_DOC" \
   && grep -qF 'merge.approval_quiz' "$SKILL_MD"; then
-  mark_pass "SKILL.md documents --quiz, script, AskUserQuestion, config key"
+  mark_pass "SKILL.md links quiz procedure; doc pins script and AskUserQuestion"
 else
   mark_fail "SKILL.md quiz docs" "missing quiz contract markers"
 fi

@@ -21,28 +21,11 @@ Recognise `--quiz` for an optional comprehension check at the end.
 
 ### 2. Resolve the ops root
 
-Use the same ops-root walk as `/approve-merge` step 3 so the quiz helper loads from the fork.
+Use the shared pin-first resolver in `docs/skills/shared/ops-root.md`.
 
 ```bash
-OPS_ROOT=""
-PIN_FILE="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID:-}"
-if [ -z "${APEXYARD_OPS_DISABLE_PIN:-}" ] && [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] && [ -f "$PIN_FILE" ]; then
-  IFS= read -r OPS_ROOT < "$PIN_FILE" || OPS_ROOT=""
-fi
-if [ -n "$OPS_ROOT" ] && [ ! -f "$OPS_ROOT/.apexyard-fork" ] && \
-   { [ ! -f "$OPS_ROOT/onboarding.yaml" ] || [ ! -f "$OPS_ROOT/apexyard.projects.yaml" ]; }; then
-  OPS_ROOT=""
-fi
-if [ -z "$OPS_ROOT" ]; then
-  r=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-  while [ -n "$r" ] && [ "$r" != "/" ]; do
-    if [ -f "$r/.apexyard-fork" ] || { [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; }; then
-      OPS_ROOT="$r"; break
-    fi
-    r=$(dirname "$r")
-  done
-fi
-MARKER_HOME="${OPS_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+ops_root=$(p="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID:-}"; r=""; [ -z "${APEXYARD_OPS_DISABLE_PIN:-}" ] && [ -f "$p" ] && IFS= read -r r < "$p"; [ -f "$r/.claude/hooks/_lib-ops-root.sh" ] || { r="$PWD"; while [ -n "$r" ] && [ ! -f "$r/.claude/hooks/_lib-ops-root.sh" ]; do r=${r%/*}; done; }; [ -f "$r/.claude/hooks/_lib-ops-root.sh" ] && . "$r/.claude/hooks/_lib-ops-root.sh" && resolve_ops_root) || ops_root=$(git rev-parse --show-toplevel)
+MARKER_HOME="$ops_root"
 ```
 
 ### 3. Load the PR
