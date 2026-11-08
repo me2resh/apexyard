@@ -211,6 +211,43 @@ while [ "$fragment_start" -le "$((${#fake_secret} - 8))" ]; do
 done
 check secrets-eight-character-fragments-absent no "$fragment_leaked"
 
+# A byte that is not valid UTF-8, and an added line that starts with "++ ",
+# must neither unblock the commit nor print the value (Hakim H1-H3 on #2009).
+edge_repo="$test_tmp/redaction-edge"
+mkdir -p "$edge_repo"
+git -C "$edge_repo" init -q
+{
+  printf '# heading\n'
+  printf '%s = "%s" # caf\351\n' "$key_name" "$fake_secret"
+  printf '%s = "%s"\n' "$key_name" "$fake_secret"
+} > "$edge_repo/latin1.txt"
+{
+  printf '# heading\n'
+  printf '++ %s = "%s"\n' "$key_name" "$fake_secret"
+  printf '%s = "%s"\n' "$key_name" "$fake_secret"
+} > "$edge_repo/plusplus.txt"
+git -C "$edge_repo" add latin1.txt plusplus.txt
+edge_payload=$(jq -nc --arg command "git -C '$edge_repo' commit -m 'fix: edge'" \
+  '{tool_input:{command:$command}}')
+if printf '%s' "$edge_payload" | LC_ALL=en_US.UTF-8 bash "$HOOKS/check-secrets.sh" >"$test_tmp/edge.out" 2>&1; then
+  edge_rc=0
+else
+  edge_rc=$?
+fi
+check secrets-edge-exit 2 "$edge_rc"
+for location in latin1.txt:2 latin1.txt:3 plusplus.txt:2 plusplus.txt:3; do
+  check "secrets-edge-location-$location" yes "$(if grep -qF "$location: hardcoded-secret-assignment" "$test_tmp/edge.out"; then printf yes; else printf no; fi)"
+done
+fragment_leaked=no
+fragment_start=0
+while [ "$fragment_start" -le "$((${#fake_secret} - 8))" ]; do
+  if grep -qF "${fake_secret:$fragment_start:8}" "$test_tmp/edge.out"; then
+    fragment_leaked=yes
+  fi
+  fragment_start=$((fragment_start + 1))
+done
+check secrets-edge-fragments-absent no "$fragment_leaked"
+
 # A callback must not consume the remaining invocation prefixes.
 read_stdin_callback() {
   cat >/dev/null
