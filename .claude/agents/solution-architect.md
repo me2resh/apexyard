@@ -5,6 +5,7 @@ description: Solution Architect — independent design reviewer. Reviews technic
 tools: Read, Grep, Glob, Bash, WebSearch, WebFetch
 disallowedTools: Write, Edit
 model: opus
+effort: high
 omitClaudeMd: true
 ---
 
