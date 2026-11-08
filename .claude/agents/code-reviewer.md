@@ -6,6 +6,7 @@ description: Expert code review specialist. Reviews PRs for quality, security, a
 tools: Read, Grep, Glob, Bash, Write
 disallowedTools: Edit
 model: opus
+effort: high
 omitClaudeMd: true
 ---
 

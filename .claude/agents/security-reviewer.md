@@ -6,6 +6,7 @@ description: Security Auditor — runs OWASP / threat-model / SAST analysis on P
 tools: Read, Grep, Glob, Bash, Write
 disallowedTools: Edit
 model: opus
+effort: high
 ---
 
 # Hakim — Security Auditor

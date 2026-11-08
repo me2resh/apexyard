@@ -140,6 +140,42 @@ get_frontmatter_value() {
   ' "$file"
 }
 
+# Optional effort accepts the supported values without changing model routing.
+valid_effort() {
+  case "$1" in low|medium|high|xhigh|max) return 0 ;; *) return 1 ;; esac
+}
+for value in low medium high xhigh max; do
+  if ! valid_effort "$value"; then
+    red "FAIL: supported effort rejected: $value"
+    FAIL=$((FAIL + 1))
+  fi
+done
+for value in '' inherit extreme HIGH; do
+  if valid_effort "$value"; then
+    red "FAIL: invalid effort accepted: $value"
+    FAIL=$((FAIL + 1))
+  fi
+done
+for agent_file in "$AGENTS_DIR"/*.md; do
+  slug=$(basename "$agent_file" .md)
+  actual_effort=$(get_frontmatter_value "$agent_file" effort)
+  expected_effort=
+  case "$slug" in
+    code-reviewer|security-reviewer|solution-architect|contrarian)
+      expected_effort=high ;;
+    backend-engineer|frontend-engineer|platform-engineer|tech-lead|data-engineer|sre|ui-designer|ux-designer|product-manager)
+      expected_effort=medium ;;
+  esac
+  if [ -n "$actual_effort" ] && ! valid_effort "$actual_effort"; then
+    red "FAIL: $slug has invalid effort: $actual_effort"
+    FAIL=$((FAIL + 1))
+  fi
+  if [ "$actual_effort" != "$expected_effort" ]; then
+    red "FAIL: $slug effort=$actual_effort (expected $expected_effort)"
+    FAIL=$((FAIL + 1))
+  fi
+done
+
 # -----------------------------------------------------------------------------
 # Invariant 1 + 2 + 3 + 4 — role-derived agent files: existence, frontmatter,
 # model value in matrix, role-file reference present (per-dept path).
