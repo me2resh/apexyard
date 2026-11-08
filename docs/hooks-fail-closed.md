@@ -159,26 +159,32 @@ The tracked `.claude/settings.json` has these deny rules:
 |------|--------|
 | `Read(//**/.env)` | The Read tool cannot read a `.env` file in any folder. |
 | `Read(//**/.env.*)` | The Read tool cannot read `.env.local`, `.env.production` and similar files in any folder. This also covers `.env.example`. |
-
 | `Bash(gh auth token)` | Block the bare token command. |
 | `Bash(gh auth token:*)` | Block the token command with arguments. |
 | `Bash(printenv)` | Block the bare environment print command. |
 | `Bash(printenv:*)` | Block the environment print command with arguments. |
 | `Bash(env)` | Block bare `env`. Permit `env FOO=bar cmd`. |
 | `Read(//**/*.private-key.pem)` | Block reads of the generic private key file pattern. |
-| `Read(//**/.config/apexyard/reviewer.pem)` | Block reads of the reviewer key path from the setup guide. |
+| `Read(//**/.config/apexyard/*.pem)` | Block reads of any key file in the folder that the setup guide uses for the reviewer key. |
 | `Read(//**/.mcp.json)` | Block reads of MCP config files that can contain client tokens. |
 
 The default `review_identity.private_key_path` is empty.
 The reviewer guide uses `$HOME/.config/apexyard/reviewer.pem`.
+
+With the Claude Code sandbox on, Read deny rules also join the sandbox file restrictions.
+A sandboxed Bash command then cannot read a key that these rules cover.
+If you use the reviewer GitHub App with the sandbox on, the review step cannot sign its token.
+Keep the key outside the covered paths, or run the review step outside the sandbox.
 The repository has no configured MCP file or documented user-level token config path.
 The MCP rule uses only the generic `.mcp.json` pattern.
+It does not cover `~/.claude.json`, where Claude Code keeps user-level MCP config.
 
 Use `bin/apexyard-gh-as <gh-user> <gh args...>` for one command as a named GitHub user.
 The wrapper reads the token inside the script.
 It sets `GH_TOKEN` for one `gh` process.
-It prints no token.
+It refuses `gh auth` commands and the `--show-token` flag, because they print the token.
 It exits 2 when the user has no login.
+A `gh` extension or a shell alias that the command starts inherits `GH_TOKEN`.
 It supports `gh` commands only.
 The repository has no existing `gh` credential helper pattern for `git push`.
 
@@ -186,12 +192,11 @@ Run `bash bin/secrets-selftest.sh` for the 13 Nov bypass self-test.
 It checks each deny rule, secret scan output, and the wrapper with a fake `gh`.
 It prints one PASS or FAIL line per check.
 Any failed check causes exit 1.
-The current secret scan prints matched values.
-The self-test reports this failure until the separate scan fix is present.
 The script states that the cockpit run environment check belongs in `apexyard-premium`.
 
 Deny rules match command text.
 A run can still read a file through another command.
+Known gaps include shell built-ins that list exported variables, `env` with an option and no command, `gh` called by its absolute path, and the `gh` credential store itself.
 These rules catch honest mistakes.
 They are not a security boundary.
 They do not provide complete protection.

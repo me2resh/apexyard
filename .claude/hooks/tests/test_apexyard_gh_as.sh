@@ -42,6 +42,15 @@ for user in missing empty; do
 done
 "$ROOT/bin/apexyard-gh-as" owner > "$tmp/out" 2>&1
 check test "$?" -eq 2
+# Commands that make gh print GH_TOKEN are refused before any token read.
+for refused in 'auth token' 'auth status --show-token' 'api user --show-token' 'auth status --show-token=true'; do
+  rm -f "$RECORD.env"
+  # shellcheck disable=SC2086
+  "$ROOT/bin/apexyard-gh-as" owner $refused > "$tmp/out" 2>&1
+  check test "$?" -eq 2
+  check test ! -e "$RECORD.env"
+  if grep -Fq "$FAKE_TOKEN" "$tmp/out"; then check false; else check true; fi
+done
 FAKE_STATUS=7 "$ROOT/bin/apexyard-gh-as" owner api > "$tmp/out" 2>&1
 check test "$?" -eq 7
 bash "$ROOT/bin/secrets-selftest.sh" > "$tmp/selftest" 2>&1

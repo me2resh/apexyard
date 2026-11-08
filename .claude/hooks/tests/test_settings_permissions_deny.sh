@@ -26,7 +26,7 @@ if jq -e . "$SETTINGS" >/dev/null 2>&1; then ok "settings is valid JSON"; else b
 has_deny() {
   jq -e --arg rule "$1" '(.permissions.deny // []) | index($rule) != null' "$SETTINGS" >/dev/null 2>&1
 }
-for rule in 'Read(//**/.env)' 'Read(//**/.env.*)' 'Bash(gh auth token)' 'Bash(gh auth token:*)' 'Bash(printenv)' 'Bash(printenv:*)' 'Bash(env)' 'Read(//**/*.private-key.pem)' 'Read(//**/.config/apexyard/reviewer.pem)' 'Read(//**/.mcp.json)'; do
+for rule in 'Read(//**/.env)' 'Read(//**/.env.*)' 'Bash(gh auth token)' 'Bash(gh auth token:*)' 'Bash(printenv)' 'Bash(printenv:*)' 'Bash(env)' 'Read(//**/*.private-key.pem)' 'Read(//**/.config/apexyard/*.pem)' 'Read(//**/.mcp.json)'; do
   if has_deny "$rule"; then ok "deny $rule"; else bad "deny $rule" "rule missing from permissions.deny"; fi
 done
 

@@ -1,15 +1,29 @@
 #!/bin/bash
 # Run one gh command with the named user's token. Do not print the token.
+# gh auth commands and --show-token would print it, so they are refused.
 set +x
 if [ "$#" -lt 2 ]; then
   echo 'Usage: apexyard-gh-as <gh-user> <gh args...>' >&2
   exit 2
 fi
-if ! token=$(gh auth token --user "$1" 2>/dev/null) || [ -z "$token" ]; then
+user=$1
+shift
+if [ "$1" = auth ]; then
+  echo 'apexyard-gh-as: gh auth commands are refused. They can print the token.' >&2
+  exit 2
+fi
+for arg in "$@"; do
+  case "$arg" in
+    --show-token|--show-token=*)
+      echo 'apexyard-gh-as: --show-token is refused.' >&2
+      exit 2
+      ;;
+  esac
+done
+if ! token=$(gh auth token --user "$user" 2>/dev/null) || [ -z "$token" ]; then
   echo 'apexyard-gh-as: no login for the requested user.' >&2
   exit 2
 fi
-shift
 export GH_TOKEN="$token"
 unset token
 exec gh "$@"

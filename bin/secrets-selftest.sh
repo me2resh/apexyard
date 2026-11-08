@@ -9,7 +9,7 @@ result() {
 for rule in 'Read(//**/.env)' 'Read(//**/.env.*)' \
   'Bash(gh auth token)' 'Bash(gh auth token:*)' 'Bash(printenv)' \
   'Bash(printenv:*)' 'Bash(env)' 'Read(//**/*.private-key.pem)' \
-  'Read(//**/.config/apexyard/reviewer.pem)' 'Read(//**/.mcp.json)'; do
+  'Read(//**/.config/apexyard/*.pem)' 'Read(//**/.mcp.json)'; do
   jq -e --arg rule "$rule" '.permissions.deny | index($rule) != null' "$ROOT/.claude/settings.json" >/dev/null 2>&1
   result "$?" "deny $rule"
 done
@@ -51,6 +51,12 @@ if [ -x "$ROOT/bin/apexyard-gh-as" ]; then
   PATH="$tmp/bin:$PATH" "$ROOT/bin/apexyard-gh-as" probe api user > "$tmp/wrapper" 2>&1 || wrapper_ok=1
   [ -f "$tmp/record" ] && [ "$(cat "$tmp/record")" = "$secret" ] || wrapper_ok=1
   grep -Fq "$secret" "$tmp/wrapper" && wrapper_ok=1
+  # gh prints GH_TOKEN for these commands, so the wrapper must refuse them.
+  for refused in 'auth token' 'auth status --show-token'; do
+    # shellcheck disable=SC2086
+    PATH="$tmp/bin:$PATH" "$ROOT/bin/apexyard-gh-as" probe $refused > "$tmp/wrapper" 2>&1 && wrapper_ok=1
+    grep -Fq "$secret" "$tmp/wrapper" && wrapper_ok=1
+  done
 else
   wrapper_ok=1
 fi

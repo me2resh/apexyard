@@ -10,7 +10,7 @@
       "Bash(printenv:*)",
       "Bash(env)",
       "Read(//**/*.private-key.pem)",
-      "Read(//**/.config/apexyard/reviewer.pem)",
+      "Read(//**/.config/apexyard/*.pem)",
       "Read(//**/.mcp.json)"
     ]
   },
