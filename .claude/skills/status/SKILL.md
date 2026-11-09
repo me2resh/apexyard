@@ -272,7 +272,7 @@ Behaviour:
 | Active workspace | cwd: `<ops_root>/workspace/<name>/...` → `<name>`; `<ops_root>` exactly → `(ops)`; anywhere else → `(unknown)` |
 | Active ticket | The marker of the working tree the cwd is in (`apexyard-ticket` in its git dir, resolved by `.claude/hooks/_lib-active-ticket.sh`). A cwd outside the ops fork and its registered clones has no marker. Format: `#<number> — <title>`. No marker → `(none)` |
 | Branch | `git branch --show-current`, run inside the inferred workspace dir (or cwd if no workspace). Detached HEAD or no git repo → `(no branch)` |
-| Role set | Active ticket's labels - first match against the canonical list (`backend`, `frontend`, `qa`, `security`, `platform`, `sre`, `data`, `ux`, `ui`, `product`, `tech-lead`, plus the `-engineer` / `-auditor` / `-designer` / `-manager` / `-lead` long forms). No match (or no ticket) -> `<none - inferred per task>`. Followed by ` ; Waiting on you: N PRs, the oldest X hours` from `_lib-review-queue.sh`. |
+| Role set | Active ticket's labels - first match against the canonical list (`backend`, `frontend`, `qa`, `security`, `platform`, `sre`, `data`, `ux`, `ui`, `product`, `tech-lead`, plus the `-engineer` / `-auditor` / `-designer` / `-manager` / `-lead` long forms). No match (or no ticket) -> `<none - inferred per task>`. Followed by `; Waiting on you: N PRs, the oldest X hours` from `_lib-review-queue.sh`. |
 
 Implementation: the logic lives in `.claude/skills/status/briefing.sh` so it's testable in isolation and runnable from a plain shell (no Claude Code dependency). Smoke tests at `.claude/hooks/tests/test_status_briefing.sh`.
 
