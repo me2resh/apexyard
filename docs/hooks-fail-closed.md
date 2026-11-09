@@ -165,7 +165,7 @@ The tracked `.claude/settings.json` has these deny rules:
 | `Bash(printenv:*)` | Block the environment print command with arguments. |
 | `Bash(env)` | Block bare `env`. Permit `env FOO=bar cmd`. |
 | `Read(//**/*.private-key.pem)` | Block reads of the generic private key file pattern. |
-| `Read(//**/.config/apexyard/*.pem)` | Block reads of any key file in the folder that the setup guide uses for the reviewer key. |
+| `Read(//**/.config/apexyard/*.pem)` | Block reads of `.pem` files in `~/.config/apexyard`. |
 | `Read(//**/.mcp.json)` | Block reads of MCP config files that can contain client tokens. |
 
 The default `review_identity.private_key_path` is empty.
@@ -203,7 +203,7 @@ Run `bash bin/secrets-selftest.sh` for the 13 Nov bypass self-test.
 It checks each deny rule, secret scan output, and the wrapper with a fake `gh`.
 It prints one PASS or FAIL line per check.
 Any failed check causes exit 1.
-The script states that the cockpit run environment check belongs in `apexyard-premium`.
+The script prints a note that the premium Cockpit owns its run environment check.
 
 Deny rules match command text.
 A run can still read a file through another command.
@@ -224,6 +224,8 @@ What the rules cover:
 Review markers have no permission rule. The approval skills and the reviewer write markers with shell helpers. With the sandbox on, an `Edit(...)` deny rule on the markers would block those helpers too. The hooks still protect the markers.
 
 `/permissions` shows the rules that a session loaded.
+
+See [Secrets and the agent](secrets-and-the-agent.md) for live controls and their limits.
 
 ## Operator escape hatch
 

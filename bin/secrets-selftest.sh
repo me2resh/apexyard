@@ -61,5 +61,5 @@ else
   wrapper_ok=1
 fi
 result "$wrapper_ok" 'wrapper keeps its token private'
-echo 'Cockpit run environment: checked in apexyard-premium, not here.'
+echo 'Cockpit run environment: checked in the premium Cockpit, not here.'
 exit "$fail"
