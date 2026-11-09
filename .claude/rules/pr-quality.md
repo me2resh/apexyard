@@ -37,6 +37,23 @@ the `## Testing` section instead of leaving it empty.
 
 The PR body needs `## Summary`, `## Testing`, and a `Closes #N` or `Refs #N` line. The PR creation hook checks these requirements for a supplied body.
 
+## Decisions made for you (MANDATORY)
+
+Every PR body must include `## Decisions made for you`.
+List defaults chosen, scope cut, and conflicting requirements with their resolutions.
+Explain each choice and its reason. Use "None" only with a one-line reason.
+The orchestrator copies build-agent decision lists into this section without dropping reasons or unresolved conflicts.
+Rex checks that the section exists and contains specific choices and reasons.
+A missing, empty, or vague section is an advisory finding. It does not change the verdict alone.
+The PR creation hook warns when this section is missing. This section adds no blocking validation.
+
+## Review limits (MANDATORY)
+
+Every Rex and Hakim verdict must include a line beginning `Not covered by the checks:`.
+Name what CI and tests do not prove for this diff.
+Include skipped checks and unverified behavior. Avoid generic claims such as "everything else".
+This applies to full reviews, reduced-scope reviews, and delta re-reviews.
+
 ## Glossary (MANDATORY)
 
 Every PR description **must** include a Glossary section:

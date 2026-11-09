@@ -162,6 +162,7 @@ Each agent's prompt must be **self-contained** — sub-agents do not inherit the
 - The task description verbatim
 - Any reference paths the agent needs to read
 - The expected output format (what to return to the parent)
+- For build tasks: use [the build-agent format](../../../docs/skills/build-agent-hand-back.md), including `## Decisions made for you`
 - The isolation mode selected by the orchestrator at spawn time
 - Constraints inherited from the parent (e.g. "don't push", "use specific git add")
 - For a writer: the worktree path and branch from step 6, and the instruction to edit only under that path
@@ -185,6 +186,9 @@ For each returned result, capture:
 - Branch name for every writer
 - Summary of what the agent did
 - Any follow-ups the agent flagged
+
+For build results, require the decision list and its reasons in every hand-back.
+Copy these lists into `## Decisions made for you` in the PR body before requesting review.
 
 ### 9. Worktree merge-back
 
