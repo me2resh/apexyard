@@ -37,6 +37,10 @@ Defaults match single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./
 
 ## Process
 
+### Review queue check (#1995)
+
+`bin/apexyard-start-ticket` calls `review_queue_check` before writing the marker. At `review_queue.limit` (default 4) it warns; `mode=refuse` stops with an error. Unknown tracker never blocks.
+
 ### 1. Parse Arguments
 
 Expected forms:

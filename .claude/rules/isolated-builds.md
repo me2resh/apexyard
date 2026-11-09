@@ -138,6 +138,10 @@ Override the default in `.claude/project-config.json`:
 
 See `docs/project-config.md` and AgDR-0210.
 
+## Review queue before build-agent spawn (#1995)
+
+Before spawning a build agent, run `review_queue_check` from `_lib-review-queue.sh`. When `review_queue.mode` is `refuse` and the queue is at or above `review_queue.limit` (default 4), do not spawn. When mode is `warn` (default), print the warning and proceed. Unknown tracker never blocks a spawn.
+
 ## Standard for spawned build agents
 
 The orchestrator reads `build.isolation` and checks concurrency before each spawn.

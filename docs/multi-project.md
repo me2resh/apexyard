@@ -899,7 +899,7 @@ The prompt also offers a custom-path slot and a "keep next to source" slot for o
 A typical morning as a CTO / Chief of Staff using apexyard:
 
 1. **`cd ~/apexyard`**: into your fork
-2. **`apexyard status`** (or `/status --briefing` inside Claude Code): 4-line "where am I" briefing: active workspace, active ticket, branch, role. Covers the orient-yourself question in one paragraph.
+2. **`apexyard status`** (or `/status --briefing` inside Claude Code): 4-line "where am I" briefing: active workspace, active ticket, branch, role. The Role set line also shows PRs waiting for your approval. Covers the orient-yourself question in one paragraph.
 3. **`/inbox`**: see everything waiting on you across every managed project
 4. **`/status`**: full snapshot of git + CI health for each project (verbose form when you want the per-project breakdown)
 5. Pick a ticket, **`cd workspace/<project>/`**, pick up the ticket as the appropriate role (see [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md))
@@ -923,10 +923,10 @@ $ apexyard status
 Active workspace:  example-app
 Active ticket:     #42 — Add CSV export
 Branch:            feature/GH-42-csv-export
-Role set:          backend
+Role set:          backend ; Waiting on you: 2 PRs, the oldest 5 hours
 ```
 
-The same output appears when you run `/status --briefing` (or `/status -b`) inside Claude Code. The four fields all infer themselves. The workspace comes from cwd, and the ticket from the marker of the working tree you are in (`apexyard-ticket` in its git dir). The branch comes from `git branch --show-current`, and the role from the active ticket's labels. Where any of those is unknown, the briefing prints an explicit `(none)` / `(unknown)` / `<none — inferred per task>` placeholder so the four-line shape is constant regardless of state.
+The same output appears when you run `/status --briefing` (or `/status -b`) inside Claude Code. The four fields all infer themselves. The workspace comes from cwd, and the ticket from the marker of the working tree you are in (`apexyard-ticket` in its git dir). The branch comes from `git branch --show-current`, and the role from the active ticket's labels. The Role set line also appends the human review queue count. Where any of those is unknown, the briefing prints an explicit `(none)` / `(unknown)` / `<none - inferred per task>` placeholder so the four-line shape is constant regardless of state.
 
 Default `/status` (no flags) still produces the long per-project breakdown: `--briefing` only opts into the compact form.
 
