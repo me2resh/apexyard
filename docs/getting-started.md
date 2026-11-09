@@ -41,6 +41,8 @@ apexyard init
 
 `apexyard init` asks for the account or organisation, the repo name, private or public, the folder and your coding agent. Then it shows the plan and asks before it creates anything. To skip the questions, pass them as options: `apexyard init --org your-org --name ops --private --yes`.
 
+Before launch, testers with Cockpit access can set `APEXYARD_COCKPIT=1` to enable an optional install after repository setup. The wizard asks first and defaults to no. With `--yes` or no terminal, add `--cockpit` to install. This requires pipx and existing GitHub access to the premium repo. If installation fails, init continues to `/onboard`.
+
 At the end, `apexyard init` offers to open the new repo in Claude Code with `/onboard`. `/onboard` asks about your company, your stack and your first project. With another agent, open the folder and run `/onboard` yourself.
 
 A piped install cannot ask questions, so it installs no tools. Run `apexyard doctor` in a terminal to install a missing jq or gh, with your consent.
