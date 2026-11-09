@@ -241,8 +241,8 @@ An unknown tracker count (non-gh tracker kind, CLI failure) always degrades to
 no-op - it never refuses.
 
 The queue count appears on the Role set line of `apexyard status` and at the
-top of `/inbox`. The same `review_queue_check` runs in `bin/apexyard-start-ticket`
-and is documented in `/fan-out` and `isolated-builds.md` for build-agent spawns.
+top of `/inbox`. The same `review_queue_check` runs in `bin/apexyard-start-ticket`.
+`/fan-out` and `isolated-builds.md` tell build-agent spawns to run it.
 
 Override example (opt-in refuse mode with a tighter limit):
 
