@@ -96,6 +96,7 @@ Read the named file when the work matches. Do not auto-import these files. Claud
 |------|-----------|
 | `.claude/rules/git-conventions.md` | Branching, committing, or opening a PR |
 | `.claude/rules/ticket-vocabulary.md` | Naming work items that might become tracker issues |
+| `.claude/rules/external-write-retry.md` | Retrying or cleaning up an external write |
 | `.claude/rules/evidence-grounding.md` | Stating facts, measurements, or completion |
 | `.claude/rules/workflow-gates.md` | Crossing a phase gate |
 | `.claude/rules/pr-workflow.md` | Pushing or merging |
@@ -166,13 +167,13 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Layer | Path | Purpose |
 |-------|------|---------|
 | Hooks | `.claude/hooks/` | 55 shell scripts that mechanically enforce SDLC rules — ticket-first (Edit/Write/Bash), ORBIT slice before Feature/Task issues, migration-ticket-first, auto code review, merge gates (Rex + CEO + design review + architecture review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, onboarding-config guard, upstream-drift banner, leak protection, bootstrap-skill exemption, skill-intent detection, gate-invisible review-marker detection |
-| Rules | `.claude/rules/` | 22 modular rule files (AgDR triggers, agent role selection, build-handbook discovery, code standards, evidence grounding, git conventions, glossary lookup, isolated builds, leak protection, loop mode, parallel work, plan mode, PR quality, PR workflow, reconcile before build, reporting style, right-size ceremony, role triggers, skill first, ticket vocabulary, workflow gates, writing standard) |
+| Rules | `.claude/rules/` | 23 modular rule files (AgDR triggers, agent role selection, build-handbook discovery, code standards, evidence grounding, external-write retry, git conventions, glossary lookup, isolated builds, leak protection, loop mode, parallel work, plan mode, PR quality, PR workflow, reconcile before build, reporting style, right-size ceremony, role triggers, skill first, ticket vocabulary, workflow gates, writing standard) |
 | Handbooks | `handbooks/` | Adopter-authored coding standards consumed by Rex during code review. Discovery by path-convention (`architecture/` + `general/` always-load; `language/<lang>/` loads on diff-match). Advisory by default; opt in to blocking via `ENFORCEMENT: blocking` marker. See [`handbooks/README.md`](handbooks/README.md). |
 | Agents | `.claude/agents/` | 23 sub-agents (4 utility incl. Hakim post-consolidation + Naqid the Contrarian + 7 engineering + 1 architecture (Tariq) + 6 product-design + 5 security-data). Per AgDR-0050 + the #347 PR 3 Hatim→Hakim consolidation decision + AgDR-0054 (Solution Architect) + AgDR-0078 (The Contrarian) + AgDR-0105 (retiring the pr-manager + ticket-manager lifecycle agents). |
-| Skills | `.claude/skills/` | 69 slash commands — see the full list below |
+| Skills | `.claude/skills/` | 71 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### Available skills (69)
+### Available skills (71)
 
 One-line summary per skill; canonical details live in each `.claude/skills/<name>/SKILL.md`.
 
@@ -194,9 +195,11 @@ One-line summary per skill; canonical details live in each `.claude/skills/<name
 | `/eval-agents` | Score a review agent (Rex/Hakim/Tariq) against a labeled PR corpus — frozen ground-truth defect sets, approve-precision headline metric, never a prose rubric |
 | `/start-ticket` | Declare an active ticket for this session (required before code edits) |
 | `/approve-merge` | Record per-PR CEO approval and merge (required by merge gate) |
+| `/explain-pr` | Read-only PR walkthrough (what / why / risks / decisions); optional comprehension quiz; never writes markers or merges |
 | `/approve-design` | Record per-PR design-review approval for UI PRs (required by design gate) |
 | `/decide` | Make a technical decision and create an Agent Decision Record (AgDR) |
 | `/agdr` | Browse / search / show / stats across the portfolio's AgDR library |
+| `/drive-to-green` | Drive one PR through CI, review, fixes, and delta review. Stop before human approval. |
 | `/code-review` | Invoke the Code Reviewer agent (Rex) on a PR |
 | `/security-review` | Invoke the Security Reviewer agent (Hakim) on a PR |
 | `/design-review` | Invoke the Solution Architect agent (Tariq) on a technical design / migration AgDR / feature spec (the non-code analog of `/code-review`) |
@@ -284,7 +287,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Rules (modular, framework-wide) | `.claude/rules/` |
 | **Adopter handbooks** (consumed by Rex during code review) | `handbooks/` — see [`handbooks/README.md`](handbooks/README.md) for the discovery + advisory/blocking conventions |
 | Agents | `.claude/agents/` |
-| Skills (69 slash commands) | `.claude/skills/` |
+| Skills (71 slash commands) | `.claude/skills/` |
 | Hook wiring | `.claude/settings.json` |
 | **Per-project docs** | `projects/<name>/` |
 | **Live working copies** (gitignored) | `workspace/<name>/` |

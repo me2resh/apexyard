@@ -36,21 +36,32 @@ Install the CLI. Then create your ops repo with one command:
 
 ```bash
 curl -fsSL https://apexyard.ai/install | sh   # checks the release checksum; lists missing jq or gh
-apexyard init --org your-org --name ops --private
+apexyard init
 ```
+
+`apexyard init` asks for the account or organisation, the repo name, private or public, the folder and your coding agent. Then it shows the plan and asks before it creates anything. To skip the questions, pass them as options: `apexyard init --org your-org --name ops --private --yes`.
+
+Before launch, testers with Cockpit access can set `APEXYARD_COCKPIT=1` to enable an optional install after repository setup. The wizard asks first and defaults to no. With `--yes` or no terminal, add `--cockpit` to install. This requires pipx and existing GitHub access to the premium repo. If installation fails, init continues to `/onboard`.
+
+At the end, `apexyard init` offers to open the new repo in Claude Code with `/onboard`. `/onboard` asks about your company, your stack and your first project. With another agent, open the folder and run `/onboard` yourself.
 
 A piped install cannot ask questions, so it installs no tools. Run `apexyard doctor` in a terminal to install a missing jq or gh, with your consent.
 
-You can also install the CLI with `brew install me2resh/tap/apexyard`. Homebrew installs jq and gh too.
+The install URL works from the first release that ships the installer. If it
+returns an error, use the fork method below. `apexyard init` needs `git`, `jq`
+and `gh`.
 
-Or run `npx create-apexyard --org your-org --name ops --private`. It installs
-the CLI when the CLI is absent, then runs `apexyard init` with these options.
-Do not run `apexyard init` again after it, because the target directory is no
-longer empty.
+Coming soon:
 
-The project has not yet published the install URL, the Homebrew tap, or the npm package.
-Until the project publishes them, use the fork method below. `apexyard init` needs `git`,
-`jq` and `gh`.
+- A Homebrew tap: `brew install me2resh/tap/apexyard`. Homebrew will install jq
+  and gh too.
+- An npm package: `npx create-apexyard --org your-org --name ops --private`. It
+  will install the CLI when the CLI is absent, then run `apexyard init` with
+  these options. Do not run `apexyard init` again after it, because the target
+  directory is no longer empty.
+
+Until the project publishes the tap and the npm package, use the install URL or
+the fork method below.
 
 `apexyard init` creates a new repo from the framework, so it can be private.
 It clones the repo, adds the framework as the remote `upstream`, and writes
@@ -165,6 +176,21 @@ Claude Code reads it automatically when you start a session inside the fork. You
 ---
 
 ## Step 4: Start Using It
+
+### Start a skill from the terminal
+
+The CLI works from any folder and remembers the last ops repo you used. Run `apexyard use <dir>` to change it.
+
+Every framework skill also runs from the terminal. The CLI opens Claude Code in your ops repo with the skill already started:
+
+```bash
+apexyard skills                 # list the skills
+apexyard inbox                  # starts /inbox
+apexyard code-review 42         # starts /code-review 42
+apexyard ticket owner/repo#N    # makes or reuses the ticket worktree, then starts the ticket
+```
+
+Approval skills, such as `/approve-merge`, run only inside your agent. If `claude` is not on your PATH, the CLI prints the command to run in your agent tool.
 
 ### Ask Claude Code to act as a role
 

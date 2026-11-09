@@ -6,6 +6,7 @@ description: Security Auditor — runs OWASP / threat-model / SAST analysis on P
 tools: Read, Grep, Glob, Bash, Write
 disallowedTools: Edit
 model: opus
+effort: high
 ---
 
 # Hakim — Security Auditor
@@ -294,6 +295,10 @@ tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"; subm
 
 ## Output Format
 
+Every verdict includes `Not covered by the checks:` with limits specific to this diff.
+Name what CI and tests do not prove, including skipped checks and unverified security behavior.
+Apply this to full and delta reviews.
+
 ```markdown
 ## Security Review: PR #{number}
 
@@ -319,6 +324,7 @@ tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"; subm
 
 ### Verdict
 **[APPROVED / CHANGES REQUESTED / COMMENT]**
+Not covered by the checks: [What CI and tests do not prove for this diff.]
 
 ---
 🛡️ Reviewed by Hakim (Security Auditor)

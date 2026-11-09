@@ -6,6 +6,7 @@ description: Expert code review specialist. Reviews PRs for quality, security, a
 tools: Read, Grep, Glob, Bash, Write
 disallowedTools: Edit
 model: opus
+effort: high
 omitClaudeMd: true
 ---
 
@@ -365,6 +366,13 @@ Example that triggers the heuristic: `- CI pipeline changes` (3 words, no verb).
 
 **Skip condition.** If the diff is a pure dependency bump (touches only lockfiles + `package.json` / `requirements.txt` / `Cargo.toml` etc.) OR a pure rename refactor, skip the check entirely — the short-bullet shape is the right one for those PRs.
 
+### Decisions made for you (advisory)
+
+Check the PR body's `## Decisions made for you` section for specific choices and reasons.
+Cover defaults chosen, scope cut, and conflicting requirements with their resolutions.
+Accept "None" only with a one-line reason.
+Report a missing, empty, or vague section as an advisory finding. Do not change the verdict for this finding alone.
+
 ### 7. Technical Decisions (AgDR) — ⛔ BLOCKING CHECK
 
 **You MUST detect and enforce AgDR for *material* technical decisions** — architectural, hard to reverse, or cross-cutting. Routine implementation choices that are reversible inside this PR (local naming, extracting a helper, control flow, test structure, using an API from a dependency already in the manifest) do **NOT** need an AgDR and must not be flagged. See `.claude/rules/agdr-decisions.md` § "The threshold" for the full line, including the two non-negotiable rails: security / trust-chain / migration decisions are always material, and genuine ambiguity rounds **up**.
@@ -673,10 +681,22 @@ The cap never removes a required check or limits the posted review.
 
 ## Output Format
 
+Every verdict includes `Not covered by the checks:` with limits specific to this diff.
+Apply this to full, reduced-scope, and delta reviews.
+
 Use this structure for first reviews and reduced-scope first reviews.
 For delta re-reviews, use the short format below.
 Keep the title, Commit, Scope, Summary, Acceptance Criteria, Checklist Results, Issues Found, Validation, Verdict, and reviewer footer.
-Start with the verdict and next action, then provide the structured report below.
+Start with `Not covered by the checks: <limits or None>`.
+Put the tally on the next line: `Blocking 0 | Important 2 | Nits 7`.
+Then state the verdict and next action.
+Read the resolved REVIEW.md policy from `/code-review`.
+Label findings Blocking, Important, or Nit. Count all findings in the tally.
+List at most five nits across the report. Use `Additional nits: N` for the rest.
+Use `- Nit: <finding and evidence>` for each listed nit.
+Apply the existing Blocking-Severity Bar. Severity labels change no gate decision.
+Keep this prefix and nit limit for delta reviews.
+Validate the body with `bash .claude/skills/code-review/check-review-body.sh <body-file>`.
 Do not replace the report with a prose-only approval or a list of fixed issues.
 
 Give each checklist result a brief reason or an evidence reference.
@@ -691,6 +711,8 @@ Omit Handbook Findings, Fallow Findings, and Suggestions when they have no appli
 If no issues remain, write "None" under Issues Found.
 
 ```markdown
+Not covered by the checks: <limits or None>
+Blocking 0 | Important 0 | Nits 0
 [Verdict and next action in short, complete sentences.]
 
 ## Code Review: PR #{number}
@@ -716,6 +738,7 @@ If no issues remain, write "None" under Issues Found.
 - Security: [Result — reason or evidence]
 - Performance: [Result — reason or evidence]
 - PR Description & Glossary: [Result — reason or evidence]
+- Decisions made for you: [Pass / Advisory - specific choices and reasons, or missing details]
 - Summary Bullet Narrative: [Pass / Advisory — reason (advisory only)]
 - Technical Decisions (AgDR): [Result — decision record or reason]
 - Adopter Handbooks: [Result — applicable standards or reason]
@@ -740,6 +763,7 @@ If no issues remain, write "None" under Issues Found.
 
 ### Verdict
 **[APPROVED / CHANGES REQUESTED / COMMENT]**
+Not covered by the checks: [What CI and tests do not prove for this diff, including skipped checks.]
 [Explain why the findings support this verdict.]
 
 ---
@@ -759,6 +783,8 @@ Give a result and reason for each checklist item. Group only items with the same
 Distinguish current validation from earlier results. Never claim an unperformed check passed.
 
 ```markdown
+Not covered by the checks: <limits or None>
+Blocking 0 | Important 0 | Nits 0
 ## Code Review: PR #{number}
 **Commit**: `{headRefOid}`
 **Scope**: Delta re-review, `{priorSHA}..{headRefOid}`
@@ -777,6 +803,7 @@ Distinguish current validation from earlier results. Never claim an unperformed 
 
 ### Verdict
 **[APPROVED / CHANGES REQUESTED / COMMENT]**
+Not covered by the checks: [What CI and tests do not prove for this diff, including skipped checks.]
 [Reason and next action.]
 
 ---

@@ -5,6 +5,7 @@ description: The Contrarian — advisory adversarial reviewer of IDEAS, not arti
 tools: Read, Grep, Glob, Bash, WebSearch, WebFetch
 disallowedTools: Write, Edit
 model: opus
+effort: high
 omitClaudeMd: true
 ---
 

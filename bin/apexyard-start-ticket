@@ -17,6 +17,13 @@ lib=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.claude/hooks" && pwd -P)
 . "$lib/_lib-tracker.sh"
 ops=$(resolve_ops_root "$PWD")
 [ -n "$ops" ] || fail 'no ops root'
+# Review queue check (me2resh/apexyard#1995 / AgDR-0292).
+# Warn or refuse before writing the ticket marker.
+if [ -f "$lib/_lib-review-queue.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$lib/_lib-review-queue.sh"
+  review_queue_check "$ops" || fail 'review queue full - run /approve-merge to clear waiting PRs'
+fi
 tree=$(git rev-parse --show-toplevel) || fail 'no working tree'
 # Never inherit interactive take-over permission.
 unset APEXYARD_START_TICKET_TAKEOVER
@@ -75,4 +82,8 @@ printf 'repo=%s\nnumber=%s\ntitle=%s\nurl=%s\nsuggested_branch=%s\n' "$repo" "$n
 exec 3>&-
 active_ticket_write_from_file "$tree" "$pending" 1 || fail 'ticket write failed'
 [ -f "$marker" ] && [ ! -L "$marker" ] || fail 'working tree marker missing'
+# shellcheck source=/dev/null
+. "$lib/_lib-progress-note.sh"
+# The ticket is set at this point. A missing note must not undo that.
+progress_note_create "$tree" || printf '%s\n' 'apexyard: progress note not created; the ticket is set.' >&2
 printf '%s\n' "$marker"

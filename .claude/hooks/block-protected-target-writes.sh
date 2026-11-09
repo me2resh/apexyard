@@ -378,6 +378,8 @@ pt_start_ticket_command() {
 }
 pt_simple() {
   local segment="$1" word verb i start=0 savecwd="$PT_CWD" arg name val expanded sandbox_pin=""
+  local created_dir="${PT_MKDIR_NEXT:-}"
+  PT_MKDIR_NEXT=""; PT_MKDIR_CANDIDATE=""
   local -a words=() filtered=() redirect_slots=()
   local record kind operator skip=0 here_string="" capture_string=0 redirect_input="" capture_input=0
   local here_refs="${2:-}" ref body_id body_fd wanted_fd=0 selected_body=""
@@ -488,7 +490,15 @@ pt_simple() {
       # Keep the old directory. It stays in effect if the cd fails.
       PT_PENDING[${#PT_PENDING[@]}]="$PT_CWD"
       case "$arg" in -|*'$'*|*'`'*) PT_CWD="$PT_FALLBACK" ;; /*) PT_CWD=$(pt_physical "$arg") ;; *) PT_CWD=$(pt_physical "$PT_CWD/$arg") ;; esac
-      { [ -d "$PT_CWD" ] && [ -x "$PT_CWD" ]; } || PT_CWD="$PT_FALLBACK"
+      if ! { [ -d "$PT_CWD" ] && [ -x "$PT_CWD" ]; }; then
+        # Only the immediately preceding successful mkdir -p can supply a
+        # directory that does not exist yet during command inspection.
+        if [ "$verb" != cd ] || [ -z "$created_dir" ] ||
+           [ "${words[$i]:-}" != "$created_dir" ] ||
+           pt_dir_is_sensitive "$PT_CWD" || pt_protected "$PT_CWD" 1; then
+          PT_CWD="$PT_FALLBACK"
+        fi
+      fi
       return 0 ;;
     popd)
       PT_PENDING[${#PT_PENDING[@]}]="$PT_CWD"
@@ -625,7 +635,17 @@ pt_simple() {
       return 0 ;;
 
     cp|mv|install|dd|ln|link|rsync|ditto|rm|rmdir|unlink|shred|chmod|chown|chgrp|chflags|chattr|xattr|setfacl|touch|mkdir|truncate|tar|unzip|cpio|pax|perl|ruby|gsed|sed|ed|ex|vi|vim|sponge|tee|base64|openssl|iconv|plutil|uudecode|gzip|gunzip|bzip2|bunzip2|xz|unxz)
-      pt_operands "$verb"; ;;
+      pt_operands "$verb"
+      if [ "$start" = 0 ] && [ "${words[0]}" = mkdir ] &&
+         [ "${#words[@]}" = 3 ] && [ "${words[1]}" = -p ]; then
+        case "${words[2]}" in
+          # No `..` part and no leading `~`: those can resolve differently at
+          # run time (symlink parents, home lookup), so they keep the fallback.
+          ''|-*|'~'*|*'$'*|*'`'*|..|../*|*/..|*/../*) ;;
+          *) PT_MKDIR_CANDIDATE=${words[2]} ;;
+        esac
+      fi
+      ;;
     cut|cat|grep|rg|jq|ls|diff|cmp|head|tail|wc|stat|file|readlink|realpath|shasum|sha256sum|du|md5|md5sum|shellcheck|test|'['|printf|echo|true|false|exit|return|pwd) ;;
     *)
       for word in "${words[@]:1}"; do
@@ -709,6 +729,7 @@ pt_list_end() {
 }
 pt_walk_tokens() {
   local first="$1" last="$2" i j k depth token kind segment="" pipeline=0 here_refs="" list_start=1
+  local PT_MKDIR_NEXT="" PT_MKDIR_CANDIDATE=""
   for ((i=first;i<=last;i++)); do
     if [ "$list_start" = 1 ]; then
       list_start=0
@@ -757,26 +778,27 @@ pt_walk_tokens() {
         done
         [ "$depth" = 0 ] || pt_block 'unclosed shell scope.'
         ( pt_walk_tokens "$((i+1))" "$((j-1))" ) || exit 2
-        i="$j" ;;
+        i="$j"; PT_MKDIR_NEXT=""; PT_MKDIR_CANDIDATE="" ;;
       ')') pt_block 'unmatched shell scope.' ;;
       '|')
         [ -z "$segment" ] || { ( pt_simple "$segment" "$here_refs" ) || exit 2; }
-        segment=""; here_refs=""; pipeline=1 ;;
+        segment=""; here_refs=""; pipeline=1; PT_MKDIR_NEXT=""; PT_MKDIR_CANDIDATE="" ;;
       '&')
         [ -z "$segment" ] || { ( pt_simple "$segment" "$here_refs" ) || exit 2; }
-        segment=""; here_refs=""; pipeline=0; pt_list_end; list_start=1 ;;
+        segment=""; here_refs=""; pipeline=0; PT_MKDIR_NEXT=""; PT_MKDIR_CANDIDATE=""; pt_list_end; list_start=1 ;;
       ';'|';;'|';&'|';;&'|'&&'|'||')
         if [ -n "$segment" ]; then
           if [ "$pipeline" = 1 ]; then ( pt_simple "$segment" "$here_refs" ) || exit 2; else pt_simple "$segment" "$here_refs"; fi
         fi
         segment=""; here_refs=""; pipeline=0
         case "$token" in
-          '&&') ;;
+          '&&') PT_MKDIR_NEXT="$PT_MKDIR_CANDIDATE" ;;
           '||')
+            PT_MKDIR_NEXT=""
             # "cd x || exit" stops on a failed cd. Any other right side can
             # run in the old directory.
             case "${tokens[$((i+1))]:-}" in Wexit|Wreturn) PT_PENDING=() ;; *) PT_OR_ACTIVE=1 ;; esac ;;
-          *) pt_list_end; list_start=1 ;;
+          *) PT_MKDIR_NEXT=""; pt_list_end; list_start=1 ;;
         esac ;;
       *) segment="$segment $token" ;;
     esac

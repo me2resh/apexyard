@@ -47,6 +47,14 @@ Before emitting an `Agent` tool call (or a `/fan-out` task list), scan the task 
 
 If the first box is checked and the second isn't, fix `subagent_type` before spawning — not after the sub-agent reports back with role-less output.
 
+## Build briefs and hand-back
+
+Use [the build-agent format](../../docs/skills/build-agent-hand-back.md) for every build spawn.
+The brief requires `## Decisions made for you` in the returned hand-back.
+Include known defaults, scope cuts, and requirement conflicts in the brief.
+The agent records additional choices and reasons in the same list.
+The orchestrator copies the returned list into the PR body before requesting review.
+
 ## Backstop
 
 This rule is **primarily self-discipline** — the same shape as [`parallel-work.md`](parallel-work.md) and [`plan-mode.md`](plan-mode.md). Mechanical enforcement at the spawn boundary is not currently shipped: unlike `Edit`/`Write`/`Bash`, the `Agent`/`Task` tool call has no existing `PreToolUse` matcher anywhere in this framework's 40+ hooks, and [AgDR-0056](../../docs/agdr/AgDR-0056-subagent-mcp-first.md) already documents a closely related finding — the current hook plumbing cannot reliably see into a sub-agent boundary. An advisory guard was evaluated for this rule and deferred rather than shipped speculatively; see the tracking issue for the spawn-payload investigation before attempting one.

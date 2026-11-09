@@ -65,7 +65,9 @@ If a task obviously needs editing (verbs like *implement*, *add*, *fix*, *refact
 
 **Spawn mode** — default a fresh spawn with a written brief. Fork the parent only when the facts the agent needs are not yet in a file.
 
-**Isolation** — fan-out writers always use a `worktree`, regardless of the ops-fork setting `build.isolation`. Step 6 creates each writer worktree from the task's source tree, so a managed-project task never gets a worktree of the ops fork.
+**Isolation** - fan-out writers always use a `worktree`, regardless of the ops-fork setting `build.isolation`.
+Step 7 creates each writer worktree from the task's source tree.
+A managed-project task never gets a worktree of the ops fork.
 Use `shared` only when all agents are read-only research.
 Infer from the task verb.
 Ask only when ambiguous.
@@ -80,7 +82,11 @@ See `.claude/rules/isolated-builds.md` and AgDR-0210.
 
 **Mode** — default `foreground` (≤ 2-minute estimated runtime); `background` if estimated > 2 minutes. Estimate from task scope (single-file edit ≈ short; cross-cutting refactor ≈ long; full audit ≈ long). Ask only when ambiguous.
 
-### 3. Active-ticket safety check
+### 3. Review queue check (#1995)
+
+Before spawning any build agent, run `review_queue_check` from `_lib-review-queue.sh` against the ops root. When `review_queue.mode` is `refuse` and the queue is at or above `review_queue.limit` (default 4), stop the fan-out and tell the user to run `/approve-merge` first. When mode is `warn` (default), print the warning and continue. Unknown tracker never stops the fan-out.
+
+### 4. Active-ticket safety check
 
 Do this for every task that involves code edits, not pure research. Find the working tree the task belongs to, and verify that the tree has a ticket marker:
 
@@ -98,7 +104,7 @@ Cannot fan out — task "<task>" needs an active ticket in <source tree>. Run, f
 
 The `require-active-ticket.sh` hook would block edits anyway. Failing fast at fan-out time is kinder UX than letting 3 of 5 agents start, then 2 fail mid-run.
 
-### 4. File-collision guard
+### 5. File-collision guard
 
 Heuristically detect tasks that target the same file paths. Compare file paths mentioned in each task description (literal paths, glob patterns, or implied file scope).
 
@@ -114,7 +120,7 @@ Run them serially, or split task boundaries so each owns distinct files.
 
 The alternative is `git` worktree merge conflicts on merge-back — recoverable but always painful.
 
-### 5. Show the plan and confirm
+### 6. Show the plan and confirm
 
 Print a table:
 
@@ -128,7 +134,7 @@ Print a table:
 
 Wait for the user's `yes` / `confirm` / `go` before spawning. Edits to the plan in this step are fine — re-print the table and re-ask.
 
-### 6. Prepare the writer worktrees, then spawn
+### 7. Prepare the writer worktrees, then spawn
 
 For every task with `isolation: worktree`, create the worktree and its marker **before** the spawn, with the helper `.claude/skills/fan-out/prepare-worktree.sh`:
 
@@ -145,7 +151,7 @@ For every task with `isolation: worktree`, create the worktree and its marker **
 - Do not pass `isolation: worktree` to the `Agent` call for these tasks. The worktree exists already. Tell the agent to work only under the worktree path and to run `git` and every edit there.
 - If the spawn itself fails, remove each worktree this step created with `git -C <source-tree> worktree remove <path>` (no `--force`).
 
-### 7. Spawn — ALL CALLS IN A SINGLE ASSISTANT MESSAGE
+### 8. Spawn - ALL CALLS IN A SINGLE ASSISTANT MESSAGE
 
 This is the only step where parallelism actually happens. Emit a SINGLE assistant message containing N `Agent` tool calls (one per task). Looping `Agent` invocations across multiple messages serialises them — the second agent will not start until the first returns.
 
@@ -162,13 +168,22 @@ Each agent's prompt must be **self-contained** — sub-agents do not inherit the
 - The task description verbatim
 - Any reference paths the agent needs to read
 - The expected output format (what to return to the parent)
+- For build tasks: use [the build-agent format](../../../docs/skills/build-agent-hand-back.md), including `## Decisions made for you`
 - The isolation mode selected by the orchestrator at spawn time
 - Constraints inherited from the parent (e.g. "don't push", "use specific git add")
-- For a writer: the worktree path and branch from step 6, and the instruction to edit only under that path
+- For a writer: include the worktree path and branch from step 7. Instruct the writer to edit only under that path.
 
-For tasks with `isolation: worktree`, put the prepared worktree path in the prompt and leave `isolation` unset, because step 6 created the worktree. For long-running tasks with `mode: background`, pass `run_in_background: true`.
+For each build agent, include the ticket acceptance criteria and this done condition:
+PR open, CI green on the current head SHA, Rex APPROVED at that head, progress note current.
+Set a limit of 20 turns. At that limit, stop and report the blocker with evidence.
+Build agents hand results to the orchestrator for independent review.
+See [Resume ticket work](../../../docs/progress-notes.md) for the note update procedure.
 
-### 8. Collect results
+For tasks with `isolation: worktree`, put the prepared worktree path in the prompt.
+Leave `isolation` unset because step 7 created the worktree.
+For long-running tasks with `mode: background`, pass `run_in_background: true`.
+
+### 9. Collect results
 
 Foreground tasks return inline — wait for all of them. Background tasks return asynchronously — note their IDs and tell the user how to check on them later.
 
@@ -180,7 +195,10 @@ For each returned result, capture:
 - Summary of what the agent did
 - Any follow-ups the agent flagged
 
-### 9. Worktree merge-back
+For build results, require the decision list and its reasons in every hand-back.
+Copy these lists into `## Decisions made for you` in the PR body before requesting review.
+
+### 10. Worktree merge-back
 
 If any agents used `worktree` isolation, list the branches they created. Then offer to sequence the merge-back:
 
@@ -202,7 +220,7 @@ For each branch in turn:
 
 Each project owns one merge-back attempt. If the user wants to skip a branch (e.g. open as its own PR instead), record that and continue.
 
-### 10. Final report
+### 11. Final report
 
 ```
 Fan-out complete (N tasks, M succeeded, K background still running).
@@ -225,7 +243,7 @@ Background tasks running: <ids>. They'll surface results when done.
 6. **Each agent's prompt must be self-contained** — sub-agents do not see the parent conversation. Include task description, reference paths, expected output format, and any inherited constraints inline.
 7. **Background mode only for >2-minute estimated work.** For short tasks, foreground is faster end-to-end (no async overhead).
 8. **Refuse a read-only agent type for an editing task. Default to a fresh role-appropriate spawn with a written brief.** `Explore`, `code-reviewer`, `security-reviewer`, and `Plan` cannot write. If the task verb says "implement" / "fix" / "add" / "refactor", suggest a role-appropriate editing agent (for example `backend-engineer`, `frontend-engineer`, or `platform-engineer`). Fork the parent only when the facts the agent needs are not yet in a file.
-9. **Active-ticket check happens at step 3, not step 7.** Failing at plan-time is kinder than failing mid-spawn.
+9. **Active-ticket check happens at step 4, before step 8.** Failing at plan-time is kinder than failing mid-spawn.
 10. **Pause on merge-back conflict — never auto-resolve.** The user owns the merge.
 
 ---

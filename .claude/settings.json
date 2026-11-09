@@ -1,5 +1,19 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(//**/.env)",
+      "Read(//**/.env.*)",
+      "Bash(gh auth token)",
+      "Bash(gh auth token:*)",
+      "Bash(printenv)",
+      "Bash(printenv:*)",
+      "Bash(env)",
+      "Read(//**/*.private-key.pem)",
+      "Read(//**/.config/apexyard/*.pem)",
+      "Read(//**/.mcp.json)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {
