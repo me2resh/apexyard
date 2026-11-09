@@ -6,7 +6,7 @@ Agent context means the input and tool output that the agent can read.
 
 ## What the controls exclude from agent context, and how
 
-### Secrets hook: available on dev
+### Secrets hook
 
 The [secrets hook](../.claude/hooks/check-secrets.sh) scans staged changes before a commit.
 It blocks assignments that match its secret pattern.
@@ -15,25 +15,28 @@ It does not print the matched source or secret value.
 It reports at most five matches.
 It does not scan every secret format or redact other tool output.
 
-### Deny rules, wrapper, and Cockpit: pending merges
+### Deny rules, wrapper, and Cockpit
 
-The following controls apply **when the step 2 PR and the Cockpit PR have merged**.
-They are not all available on dev today.
+The deny rules, wrapper, and self-test are available on dev.
+The Cockpit controls are live in the premium Cockpit.
 See [Permission rules and hooks](hooks-fail-closed.md#permission-rules-and-hooks) for the current settings and these limits.
 
-| Control | Intended effect after merge | File reference |
+| Control | Effect | File reference |
 | --- | --- | --- |
-| Env-file deny rules | Deny direct reads of `.env` and `.env.*` files. The two Read rules already exist on dev. | `.claude/settings.json` |
+| Env-file deny rules | Deny direct reads of `.env` and `.env.*` files. | `.claude/settings.json` |
 | Command deny rules | Deny matching command text for `gh auth token`, `printenv`, and bare `env`. | `.claude/settings.json` |
-| Reviewer key deny rules | Deny direct reads of the reviewer key folder, `~/.config/apexyard`. | `.claude/settings.json` |
+| Private key deny rules | Deny direct reads of `.pem` files in `~/.config/apexyard` and files matching `*.private-key.pem`. | `Read(//**/.config/apexyard/*.pem)` and `Read(//**/*.private-key.pem)` in `.claude/settings.json` |
 | Connection config deny rules | Deny direct reads of `.mcp.json`. This file can contain credentials. | `.claude/settings.json` |
 | GitHub identity wrapper | Keep token retrieval inside the wrapper process instead of returning the token as agent tool output. | `bin/apexyard-gh-as` |
-| Cockpit run environment | Pass only allowlisted environment variables to an agent run. | The Cockpit PR's run-environment implementation. Its file path is unavailable in this checkout. |
-| Cockpit Keychain items | Limit new or rewritten credential items to app-only access. | The Cockpit PR's Keychain implementation. Its file path is unavailable in this checkout. |
+| Cockpit run environment | Pass only allowlisted environment variables to an agent run. | The premium Cockpit. Its implementation is outside this checkout. |
+| Cockpit Keychain items | Trust only the Cockpit app for new credential items. Rewritten items receive the new access list. | The premium Cockpit. Its implementation is outside this checkout. |
 
 The wrapper does not remove a token from the process that needs it.
 The Cockpit controls do not apply to other launch paths.
-The pending wrapper and self-test files are absent from this checkout.
+The wrapper permits only `api`, `issue`, `label`, `pr`, `release`, `repo`, `run`, or `workflow` as its first command argument.
+It refuses `auth`, `-t`, `--show-token`, `--jq`, and `-q` arguments.
+It fixes the `gh` pager, browser, and editor.
+It stops accidental token prints, but cannot stop a caller who wants the token.
 
 ## What the controls do NOT exclude
 
@@ -49,23 +52,39 @@ No control here removes secrets from existing logs or conversation history.
 
 ## How to check
 
-Run this command when the step 2 PR and the Cockpit PR have merged:
+Run this command:
 
 ```bash
 bash bin/secrets-selftest.sh
 ```
 
-The self-test is not available on dev in this checkout.
-This checkout cannot establish its exact output lines.
-Use the following meanings to assess its checks after merge.
+The self-test prints `PASS` or `FAIL` before each check name below.
+Any failed check causes exit 1.
 
-| Check subject | Meaning and limit |
+| Exact check name | Meaning and limit |
 | --- | --- |
-| Settings or deny rules | A configuration check confirms rule text. It does not prove that another command cannot read the same file. |
-| Wrapper | A wrapper check tests its stated token-handling path. It does not prove that process credentials are unreachable. |
-| Sandbox | A read check establishes behavior only for that path and sandbox. Glob handling can differ on Linux and WSL2. |
-| Cockpit environment or Keychain | A framework-only check cannot establish Cockpit behavior. Existing items can retain old access lists. |
-| Failure or skipped check | A failure needs investigation. A skipped check gives no evidence of protection. |
+| `deny Read(//**/.env)` | Confirms that the deny rule exists. It does not test all possible read commands. |
+| `deny Read(//**/.env.*)` | Confirms that the deny rule exists. It does not test all possible read commands. |
+| `deny Bash(gh auth token)` | Confirms that the deny rule exists. It does not test all possible read commands. |
+| `deny Bash(gh auth token:*)` | Confirms that the deny rule exists. It does not test all possible read commands. |
+| `deny Bash(printenv)` | Confirms that the deny rule exists. It does not test all possible read commands. |
+| `deny Bash(printenv:*)` | Confirms that the deny rule exists. It does not test all possible read commands. |
+| `deny Bash(env)` | Confirms that the deny rule exists. It does not test all possible read commands. |
+| `deny Read(//**/*.private-key.pem)` | Confirms that the deny rule exists. It does not test all possible read commands. |
+| `deny Read(//**/.config/apexyard/*.pem)` | Confirms that the deny rule exists. It does not test all possible read commands. |
+| `deny Read(//**/.mcp.json)` | Confirms that the deny rule exists. It does not test all possible read commands. |
+| `env arguments stay allowed` | Confirms that `Bash(env:*)` is absent. |
+| `secret scan hides the value` | Tests that the scanner blocks a staged sample without printing value fragments. |
+| `wrapper keeps its token private` | Tests token delivery and refused commands with a fake `gh`. Process credentials remain reachable. |
+
+The script then prints this note:
+
+```text
+Cockpit run environment: checked in the premium Cockpit, not here.
+```
+
+This note is not a check result.
+The self-test does not verify the Cockpit environment or Keychain access lists.
 
 Do not paste credential values into a report.
 Record the check name and result only.

@@ -76,7 +76,7 @@ bash "$ROOT/bin/secrets-selftest.sh" > "$tmp/selftest" 2>&1
 check test "$?" -eq 0
 check grep -Fxq 'PASS secret scan hides the value' "$tmp/selftest"
 check test "$(grep -c '^PASS ' "$tmp/selftest")" -eq 13
-check grep -Fxq 'Cockpit run environment: checked in apexyard-premium, not here.' "$tmp/selftest"
+check grep -Fxq 'Cockpit run environment: checked in the premium Cockpit, not here.' "$tmp/selftest"
 # Use a copy to verify a missing rule and a leaking wrapper each fail.
 mkdir -p "$tmp/tree/bin" "$tmp/tree/.claude/hooks"
 cp "$ROOT/bin/secrets-selftest.sh" "$tmp/tree/bin/"

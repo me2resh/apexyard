@@ -152,10 +152,11 @@ The current reviewer library requires `review_identity.private_key_path`.
 It does not provide a keychain setting.
 See [the default configuration](../../.claude/project-config.defaults.json).
 
-With the sandbox on, macOS blocks a sandboxed read of a key under `~/.config/apexyard` when the deny rule applies.
+With the sandbox on, macOS blocks a sandboxed read of a `.pem` key under `~/.config/apexyard`.
 This block can also prevent a sandboxed reviewer helper from reading that key.
-The reviewer-folder deny rule applies when the step 2 PR and the Cockpit PR have merged.
-It is not available in the current dev settings.
+The current dev settings include `Read(//**/.config/apexyard/*.pem)`.
+This rule covers `.pem` files only, not the whole folder.
+The settings also include `Read(//**/*.private-key.pem)`.
 Do not treat the example path alone as access protection.
 See [Secrets and the agent](../secrets-and-the-agent.md) for command-text limits and sandbox gaps.
 

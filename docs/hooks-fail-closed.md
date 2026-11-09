@@ -165,7 +165,7 @@ The tracked `.claude/settings.json` has these deny rules:
 | `Bash(printenv:*)` | Block the environment print command with arguments. |
 | `Bash(env)` | Block bare `env`. Permit `env FOO=bar cmd`. |
 | `Read(//**/*.private-key.pem)` | Block reads of the generic private key file pattern. |
-| `Read(//**/.config/apexyard/*.pem)` | Block reads of any key file in the folder that the setup guide uses for the reviewer key. |
+| `Read(//**/.config/apexyard/*.pem)` | Block reads of `.pem` files in `~/.config/apexyard`. |
 | `Read(//**/.mcp.json)` | Block reads of MCP config files that can contain client tokens. |
 
 The default `review_identity.private_key_path` is empty.
@@ -203,7 +203,7 @@ Run `bash bin/secrets-selftest.sh` for the 13 Nov bypass self-test.
 It checks each deny rule, secret scan output, and the wrapper with a fake `gh`.
 It prints one PASS or FAIL line per check.
 Any failed check causes exit 1.
-The script states that the cockpit run environment check belongs in `apexyard-premium`.
+The script prints a note that the premium Cockpit owns its run environment check.
 
 Deny rules match command text.
 A run can still read a file through another command.
@@ -225,16 +225,7 @@ Review markers have no permission rule. The approval skills and the reviewer wri
 
 `/permissions` shows the rules that a session loaded.
 
-### Pending secret-access controls
-
-The additional deny rules, wrapper, and self-test apply when the step 2 PR and the Cockpit PR have merged.
-They are not available in this dev checkout.
-The planned settings cover command text for `gh auth token`, `printenv`, and bare `env`.
-They also cover direct reads of the reviewer key folder and `.mcp.json`.
-The wrapper path is `bin/apexyard-gh-as`.
-The self-test path is `bin/secrets-selftest.sh`.
-Command-text rules cannot stop every command that reads the same file.
-See [Secrets and the agent](secrets-and-the-agent.md) for current controls, pending controls, and residual gaps.
+See [Secrets and the agent](secrets-and-the-agent.md) for live controls and their limits.
 
 ## Operator escape hatch
 
