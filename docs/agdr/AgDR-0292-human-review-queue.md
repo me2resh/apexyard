@@ -40,7 +40,9 @@ Implement Option B:
 
 1. **Count algorithm.** A PR counts when a `*-rex.approved` marker exists whose
    first-line SHA equals the open PR head (prefix match for short SHAs) and no
-   `*-ceo.approved` marker exists for the same PR. Count reads the tracker only
+   `*-ceo.approved` marker records a `sha=` that matches that head. A missing,
+   stale, legacy, or unreadable CEO marker does not remove the PR from the
+   count. Count reads the tracker only
    through `tracker_open_pr_heads` in `_lib-tracker.sh`. Non-gh tracker kinds
    return 1; the queue degrades to unknown and never refuses.
 
