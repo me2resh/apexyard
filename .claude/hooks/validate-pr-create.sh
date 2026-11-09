@@ -937,6 +937,12 @@ if echo "$COMMAND" | grep -qE '\-\-body(-file)?\b|[[:space:]]-F[[:space:]]'; the
       ERRORS="${ERRORS}  The required-section check was NOT run, so these are UNVERIFIED, not missing: ${_unchecked}; Closes or Refs line.\n"
       ERRORS="${ERRORS}  Fix the path (check for a typo, or make it absolute) and retry.\n"
     else
+      # Decision disclosure is advisory only. Keep it out of ERRORS and
+      # REQUIRED_SECTIONS so it cannot change the gate result.
+      if ! printf '%s\n' "$BODY_CONTENT" | grep -qE '^##[[:space:]]+Decisions made for you[[:space:]]*$' &&
+         ! printf '%s\n' "$HAYSTACK" | grep -qF '## Decisions made for you'; then
+        echo "WARN: PR body missing advisory '## Decisions made for you' section. List choices and reasons, or None with a one-line reason." >&2
+      fi
       if [ -n "$BODY_FILE" ]; then
         review_validate_body pr "$BODY_FILE" "$REQUIRED_SECTIONS" "${ORBIT_BODY_INITIATIVE:-}" 2>/dev/null
       else
