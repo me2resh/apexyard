@@ -45,6 +45,9 @@ Another command can still read a file.
 A determined caller can reach a token that a `gh` process holds.
 An allowlisted environment does not prevent other file reads.
 Older Cockpit Keychain items keep their old access list until the Cockpit rewrites them.
+A governed Cockpit run can still call `gh` with the operator's GitHub login, and that login can merge PRs.
+The premium Cockpit tracks a fix for this gap.
+Until that fix ships, do not assume that a Cockpit run cannot reach GitHub credentials.
 The rules do not cover `~/.claude.json`.
 On Linux and WSL2, the sandbox can ignore glob paths.
 Do not assume that a glob rule blocks every shell read on those systems.
