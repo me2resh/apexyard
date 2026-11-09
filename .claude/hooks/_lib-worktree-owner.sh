@@ -418,6 +418,17 @@ worktree_owner_acquire() { _wto_update "${1:-}" acquire; }
 worktree_owner_renew() { _wto_update "${1:-}" renew || return 1; }
 worktree_owner_release() { _wto_update "${1:-}" release || return 1; }
 
+# True only for an active record held by this exact process identity.
+# A session-only identity has no process evidence, so it never matches.
+worktree_owner_is_self() {
+  local gitdir record self
+  gitdir=$(_wto_gitdir "${1:-}") || return 1
+  record=$(_wto_read_record "$gitdir/apexyard-owner") || return 1
+  self=$(worktree_owner_identity) || return 1
+  printf '%s\n' "$record" | jq -e --argjson self "$self" \
+    '.status == "active" and .owner == $self and .owner.pid != null' >/dev/null
+}
+
 # The operator approves the generation shown in an unknown-owner refusal.
 # Re-read it under the lock so a newer owner cannot lose its record.
 _wto_force_release_locked() {
@@ -443,7 +454,7 @@ worktree_owner_force_release() {
     '$generation > 0 and $generation <= 9007199254740991' >/dev/null 2>&1 || return 1
   gitdir=$(_wto_gitdir "${1:-}") || return 1
   actor=$(worktree_owner_identity) || return 1
-  _wto_with_lock "$gitdir" _wto_force_release_locked "$gitdir" "$generation" "$actor"
+  _wto_with_lock "$gitdir" _wto_force_release_locked "$gitdir" "$generation" "$actor" || return 1
 }
 
 worktree_owner_status() {

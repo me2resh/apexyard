@@ -24,6 +24,9 @@
 #         Without it, all commits must exist on remote-tracking refs.
 #         The skill verifies the merge itself. It runs `git worktree remove`
 #         with no --force, so a dirty worktree stops the step and is reported.
+#         A worktree that the calling session owns stays eligible. Its owner
+#         record is released just before git removes the worktree, and
+#         acquired again if git refuses.
 #
 # Candidates come only from `git worktree list --porcelain -z`, which needs
 # git 2.36 or later. An older git rejects -z. The list is then empty, so the
@@ -170,7 +173,8 @@ refusal_for() {
   [ "$OWNER_CHECK_AVAILABLE" = 1 ] || { echo "owner check unavailable"; return; }
   owner=$(worktree_owner_status "$p") || owner_rc=$?
   case "$owner:$owner_rc" in
-    alive:0) echo "owner alive"; return ;;
+    # /fan-out records its calling session as owner, so that session may clean up.
+    alive:0) worktree_owner_is_self "$p" || { echo "owner alive"; return; } ;;
     unknown:2)
       echo "owner unknown: inspect the owner record before any release"
       return ;;
@@ -227,9 +231,21 @@ case "$MODE" in
         echo "remove-worktree: refused, $why: $ARG" >&2
         exit 1
       fi
+      # The release re-checks the owner under the record lock.
+      released_own=0
+      if worktree_owner_is_self "$ARG"; then
+        if ! worktree_owner_release "$ARG"; then
+          echo "remove-worktree: refused, cannot release this session's owner record: $ARG" >&2
+          exit 1
+        fi
+        released_own=1
+      fi
       if git -C "$COMMON" worktree remove "$ARG"; then
         echo "removed $ARG"
         exit 0
+      fi
+      if [ "$released_own" = 1 ] && ! worktree_owner_acquire "$ARG"; then
+        echo "remove-worktree: could not acquire this session's owner record again, so it stays released: $ARG" >&2
       fi
       echo "remove-worktree: git did not remove $ARG. It may hold changes. Review it, then remove it yourself." >&2
       exit 1

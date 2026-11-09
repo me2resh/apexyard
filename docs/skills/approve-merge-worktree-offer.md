@@ -32,9 +32,14 @@ A merged PR often leaves a linked worktree on disk. Removing it also removes its
    - The worktree must not be locked.
    - The path must not be the session's own tree.
    - The path must not equal or contain the ops root.
-   - The owner must be `dead`, `none`, or `released`.
+   - The owner must be `dead`, `none`, or `released`, or be the calling session.
    - The worktree must have no uncommitted changes.
    - Remote-tracking refs must preserve every commit, unless the merged-head rule applies.
+
+   The calling session owns a worktree when the owner record matches its full identity.
+   That identity is the session id, harness, process id, process start, and boot identity.
+   `/fan-out` records its calling session this way.
+   Another live session's worktree stays refused.
 
    A remote-tracking ref is a local record of a remote branch.
    The merged-head rule accepts an unpushed `HEAD` equal to, or an ancestor of, `HEAD_SHA`.
@@ -51,7 +56,12 @@ A merged PR often leaves a linked worktree on disk. Removing it also removes its
    ```
 
    The helper rechecks the branch and every refusal rule.
-   It runs `git worktree remove` with no `--force`.
+   When the calling session owns the worktree, the helper releases that record with `worktree_owner_release`.
+   If the release fails, the helper refuses.
+
+   The helper runs `git worktree remove` with no `--force`.
+   If Git refuses, the helper acquires the record again.
+   If that also fails, the helper warns and the record stays released.
    A dirty worktree stops the step.
    Report the helper's message.
    Leave a refused worktree for the user.
@@ -66,7 +76,7 @@ A force release can release an owner that is still running.
 The operator should check the shown process first.
 Lease expiry alone does not permit release or removal.
 Never offer this release for an `alive` owner.
-Never release an owner automatically.
+Never release another session's owner automatically.
 
 1. Read one snapshot of the refused worktree's owner record:
 

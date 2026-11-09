@@ -181,6 +181,10 @@ mkdir "$SB/bin"
 cat > "$SB/bin/ps" <<'SCRIPT'
 #!/bin/sh
 if [ "${2:-}" = lstart= ]; then printf 'Sat Oct 31 10:00:00 2026\n'; exit 0; fi
+if [ "${2:-}" = ppid=,comm= ] && [ -n "${CLEANUP_HARNESS_PID:-}" ]; then
+  if [ "$4" = "$CLEANUP_HARNESS_PID" ]; then printf ' 1 claude\n'; else printf ' %s bash\n' "$CLEANUP_HARNESS_PID"; fi
+  exit 0
+fi
 exec /bin/ps "$@"
 SCRIPT
 cat > "$SB/bin/sysctl" <<'SCRIPT'
@@ -303,6 +307,7 @@ CLEANUP_REAL_GIT=$(command -v git)
 cat > "$SB/bin/git" <<'SCRIPT'
 #!/bin/sh
 for argument in "$@"; do
+  if [ "$argument" = remove ] && [ -n "${CLEANUP_RECORD_COPY:-}" ]; then cp "$CLEANUP_RECORD" "$CLEANUP_RECORD_COPY"; fi
   if [ "$argument" = "${CLEANUP_GIT_FAIL:-}" ]; then exit 1; fi
   if [ "$argument" = rev-list ] && [ "${CLEANUP_BAD_COUNT:-}" = 1 ]; then printf 'invalid\n'; exit 0; fi
 done
@@ -312,6 +317,70 @@ chmod +x "$SB/bin/git"
 CLEANUP_GIT_FAIL=status expect_refused failed_status_refuses 'preservation unknown:checkout unknown'
 CLEANUP_GIT_FAIL=rev-list expect_refused failed_commit_inspection_refuses 'preservation unknown:commits unknown'
 CLEANUP_BAD_COUNT=1 expect_refused invalid_commit_count_refuses 'preservation unknown:commits unknown'
+
+# --- the calling session may clean up a worktree that it owns -----------------
+# The ps stub makes this test shell the helper's harness ancestor, so the real
+# identity lookup runs. `owner_record alive` then names the calling session.
+as_owner() { CLEANUP_HARNESS_PID=$$ CLAUDE_CODE_SESSION_ID=cleanup-session "$@"; }
+expect_own_refused() {
+  local label=$1 reason=$2
+  run "$SB" list "$P1" feature/own
+  if printf '%s' "$OUT" | grep -Fq "refused ($reason"; then ok "$label"; else bad "$label" "$OUT"; fi
+}
+git -C "$P1" worktree add -q "$SB/wt-own" -b feature/own
+OWNER_RECORD="$(git -C "$SB/wt-own" rev-parse --absolute-git-dir)/apexyard-owner"
+owner_record alive
+as_owner run "$SB" list "$P1" feature/own
+case "$OUT" in ok$'\t'"$SB/wt-own"*) ok own_live_owner_is_offered ;; *) bad own_live_owner_is_offered "$OUT" ;; esac
+CLEANUP_HARNESS_PID=$$ CLAUDE_CODE_SESSION_ID=other-session expect_own_refused other_session_id_refuses 'owner alive'
+CLEANUP_HARNESS_PID=$PPID CLAUDE_CODE_SESSION_ID=cleanup-session expect_own_refused other_live_process_refuses 'owner alive'
+cp "$OWNER_RECORD" "$SB/own-before"
+CLEANUP_HARNESS_PID=$PPID CLAUDE_CODE_SESSION_ID=cleanup-session run "$SB" remove "$P1" "$SB/wt-own" feature/own
+if [ "$RC" != 0 ] && [ -d "$SB/wt-own" ] && cmp -s "$SB/own-before" "$OWNER_RECORD" && printf '%s' "$OUT" | grep -q 'owner alive'; then
+  ok other_live_process_cannot_remove
+else bad other_live_process_cannot_remove "rc=$RC $OUT"; fi
+printf 'work\n' > "$SB/wt-own/dirty"
+as_owner expect_own_refused own_dirty_worktree_refuses 'uncommitted changes'
+as_owner run "$SB" remove "$P1" "$SB/wt-own" feature/own
+if [ "$RC" != 0 ] && [ -d "$SB/wt-own" ] && cmp -s "$SB/own-before" "$OWNER_RECORD" && printf '%s' "$OUT" | grep -q 'uncommitted changes'; then
+  ok own_dirty_removal_keeps_the_record
+else bad own_dirty_removal_keeps_the_record "rc=$RC $OUT"; fi
+rm -f "$SB/wt-own/dirty"
+git -C "$SB/wt-own" commit -q --allow-empty -m unpushed
+as_owner expect_own_refused own_unpushed_commits_refuse unpushed
+git -C "$SB/wt-own" reset -q --hard HEAD~1
+printf '%s\n' 'worktree_owner_release() { return 1; }' >> "$SB/.claude/hooks/_lib-worktree-owner.sh"
+as_owner run "$SB" remove "$P1" "$SB/wt-own" feature/own
+if [ "$RC" != 0 ] && [ -d "$SB/wt-own" ] && cmp -s "$SB/own-before" "$OWNER_RECORD" && printf '%s' "$OUT" | grep -q 'cannot release'; then
+  ok failed_release_keeps_the_worktree
+else bad failed_release_keeps_the_worktree "rc=$RC $OUT"; fi
+cp "$HOOKS/_lib-worktree-owner.sh" "$SB/.claude/hooks/_lib-worktree-owner.sh"
+export CLEANUP_RECORD="$OWNER_RECORD"
+CLEANUP_GIT_FAIL=remove CLEANUP_RECORD_COPY="$SB/own-at-removal" as_owner run "$SB" remove "$P1" "$SB/wt-own" feature/own
+if [ "$RC" != 0 ] && [ -d "$SB/wt-own" ] && printf '%s' "$OUT" | grep -q 'git did not remove' &&
+  jq -e '.status == "released" and .owner == null and .released_by.session_id == "cleanup-session"' "$SB/own-at-removal" >/dev/null &&
+  jq -e --argjson pid "$$" '.status == "active" and .generation == 9 and .owner.pid == $pid and .owner.session_id == "cleanup-session"' "$OWNER_RECORD" >/dev/null; then
+  ok git_refusal_restores_the_own_record
+else bad git_refusal_restores_the_own_record "rc=$RC $OUT"; fi
+printf '%s\n' 'worktree_owner_acquire() { return 1; }' >> "$SB/.claude/hooks/_lib-worktree-owner.sh"
+CLEANUP_GIT_FAIL=remove as_owner run "$SB" remove "$P1" "$SB/wt-own" feature/own
+if [ "$RC" != 0 ] && [ -d "$SB/wt-own" ] && printf '%s' "$OUT" | grep -q 'stays released' &&
+  jq -e '.status == "released"' "$OWNER_RECORD" >/dev/null; then
+  ok failed_reacquire_warns_and_stays_released
+else bad failed_reacquire_warns_and_stays_released "rc=$RC $OUT"; fi
+cp "$HOOKS/_lib-worktree-owner.sh" "$SB/.claude/hooks/_lib-worktree-owner.sh"
+rm -f "$OWNER_RECORD"
+CLEANUP_GIT_FAIL=remove run "$SB" remove "$P1" "$SB/wt-own" feature/own
+if [ "$RC" != 0 ] && [ -d "$SB/wt-own" ] && [ ! -e "$OWNER_RECORD" ] && printf '%s' "$OUT" | grep -q 'git did not remove'; then
+  ok git_refusal_is_reported
+else bad git_refusal_is_reported "rc=$RC $OUT"; fi
+owner_record alive
+rm -f "$SB/own-at-removal"
+CLEANUP_RECORD_COPY="$SB/own-at-removal" as_owner run "$SB" remove "$P1" "$SB/wt-own" feature/own
+if [ "$RC" = 0 ] && [ ! -e "$SB/wt-own" ] &&
+  jq -e '.status == "released" and .owner == null and .generation == 8' "$SB/own-at-removal" >/dev/null; then
+  ok own_worktree_is_released_then_removed
+else bad own_worktree_is_released_then_removed "rc=$RC $OUT"; fi
 
 # Omit jq from a minimal command path while retaining the real resolver.
 mkdir "$SB/no-jq"

@@ -26,11 +26,30 @@ It checks path availability, resolved session and ops paths, main worktree, lock
 It then checks ownership before preservation.
 
 The helper uses `worktree_owner_status` from the public owner API.
-An `alive` owner refuses cleanup.
+An `alive` owner refuses cleanup, unless that owner is the calling session, as defined below.
 An `unknown` owner refuses cleanup and tells the operator to inspect the owner record before any release.
-Only `dead`, `none`, and `released` continue.
+`dead`, `none`, and `released` continue.
 Missing owner code or `jq` refuses every otherwise eligible candidate with `owner check unavailable`.
 Unexpected status output or return codes also refuse cleanup.
+
+`/fan-out` records its calling session as the owner of each writer worktree.
+Without an exception, that session could not clean up its own merged worktree while it runs.
+The calling session owns a worktree when the active record's owner equals its full identity from `worktree_owner_identity`.
+That identity is the session id, harness, process id, process start, and boot identity.
+
+A session-only identity has no process evidence and never matches.
+Another live session never matches.
+The uncommitted-change and unpushed-commit checks still apply.
+
+After the operator's yes, the helper releases the record with `worktree_owner_release`, which re-checks the owner under the record lock.
+If the release fails, the helper refuses.
+If Git then refuses the removal, the helper acquires the record again.
+If that also fails, the helper warns and the record stays released.
+
+`none` continues, as it does without this change.
+A worktree with no owner record gets no owner protection.
+That covers worktrees created before owner records existed and worktrees created by the harness.
+This change records no owners for harness-created worktrees.
 
 Preservation checks inspect Git status without refreshing the index or invoking FSMonitor.
 Changes reported by Git status refuse cleanup, including an untracked `owner.json`.
@@ -76,6 +95,9 @@ The helper trusts the skill to supply the verified merged PR head.
 It does not query the remote host to prove a merge.
 Local remote-tracking refs can be stale.
 This change adds no owner registry, automatic release, or lease-expiry takeover.
+The helper releases only the calling session's own record.
+The skill runs `remove` only after the operator's yes, and the helper cannot check that.
+A session whose id changed after it took ownership no longer matches, so its worktree stays refused while that process runs.
 
 ## Artifacts
 

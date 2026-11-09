@@ -104,8 +104,11 @@ unavailable_identity() (
     [ "$rc" -eq "$expected" ] && [ ! -e "$RECORD" ] && [ ! -e "$GITDIR/apexyard-owner.lock" ] || return 1
     expected=1
   done
+  rc=0
+  worktree_owner_force_release "$WORKTREE" 1 || rc=$?
+  [ "$rc" -eq 1 ] && [ ! -e "$RECORD" ] && [ ! -e "$GITDIR/apexyard-owner.lock" ]
 )
-for mode in ps empty-start no-boot empty-boot; do check "identity unavailable: $mode acquire=2 renew=1 release=1 without state" unavailable_identity "$mode"; done
+for mode in ps empty-start no-boot empty-boot; do check "identity unavailable: $mode acquire=2 renew=1 release=1 force=1 without state" unavailable_identity "$mode"; done
 check 'acquire: invalid session returns 1 without state' unavailable_identity invalid-session
 pid_temp_failure() (
   local mode=$1 rc=0 candidate directory="$TMP/pid-$1"
@@ -366,6 +369,26 @@ session_case() (
   else mutate '.owner = {session_id:"foreign",harness:null,pid:null,pid_start:null,boot_id:null} | .lease_expires_at = 0'; refused_record unknown 2; fi
 )
 for mode in own foreign; do check "record: session-only $mode" session_case "$mode"; done
+self_case() (
+  local mode=$1
+  case "$mode" in
+    own) mutate '.' ;;
+    pid) mutate '.owner.pid = $pid' ;;
+    pid_start) mutate '.owner.pid_start = $start' ;;
+    session_id|harness|boot_id) mutate ".owner.$mode = \"different-$mode\"" ;;
+    released) mutate '.status = "released" | .released_by = .owner | .owner = null' ;;
+    missing) rm -f "$RECORD" ;;
+    malformed) printf '{broken\n' > "$RECORD" ;;
+    session-only)
+      _wto_harness_ancestor() { return 1; }
+      mutate '.owner = {session_id:"owner-session",harness:null,pid:null,pid_start:null,boot_id:null}' ;;
+  esac
+  if [ "$mode" = missing ]; then ! worktree_owner_is_self "$WORKTREE" && [ ! -e "$RECORD" ]; return; fi
+  cp "$RECORD" "$TMP/before" || return 1
+  if [ "$mode" = own ]; then worktree_owner_is_self "$WORKTREE" && preserved; return; fi
+  ! worktree_owner_is_self "$WORKTREE" && preserved
+)
+for mode in own pid pid_start session_id harness boot_id released missing malformed session-only; do check "record: is_self $mode" self_case "$mode"; done
 force_match() (
   local before_heartbeat before_expires
   mutate '.owner = {session_id:"foreign-session",harness:null,pid:null,pid_start:null,boot_id:null}' &&
