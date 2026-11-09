@@ -1,6 +1,9 @@
 #!/bin/bash
 # Offline progress-note lifecycle and SessionStart fixtures. Bash 3.2.
-set -euo pipefail
+set -Eeuo pipefail
+# The assertions are bare commands. Name the failing line, so a CI failure is readable.
+# -E carries the trap into the library functions, where a silent failure can start.
+trap 'printf "FAIL line %s: %s\n" "$LINENO" "$BASH_COMMAND" >&2' ERR
 # shellcheck source=/dev/null
 . "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd -P)
