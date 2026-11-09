@@ -17,6 +17,7 @@
 #   tracker_review_kind [<owner/repo>] echoes the code-review host adapter kind
 #   tracker_kind [<owner/repo>]        compatibility alias for tracker_issue_kind
 #   tracker_id_pattern [<owner/repo>]  echoes the configured ID regex
+#   tracker_open_pr_heads <owner/repo> echo [{number,head},...] of open PR heads (gh only; others return 1)
 #   tracker_owner_repo_param <slug>    formats the owner/repo parameter (gh: "owner/repo"; others: empty)
 #   tracker_view <id> [<owner_repo>]   dispatches the view command and emits normalised JSON on stdout
 #                                      Exit 0 = ticket exists; non-zero = doesn't, or CLI errored.
@@ -344,6 +345,37 @@ tracker_kind() {
   value=$(tracker_issue_kind "$repo") || return $?
   [ -z "$repo" ] && _TRACKER_KIND_CACHE="$value"
   echo "$value"
+}
+
+# ------------------------------------------------------------------------------
+# Public: tracker_open_pr_heads <owner/repo>
+#   Echo a JSON array [{number, head},...] of open PR numbers with their
+#   head commit SHA (lowercase). Used by _lib-review-queue.sh to match
+#   rex-approved PRs against live open PR heads.
+#
+#   Returns 0 and writes JSON on success (gh adapter only).
+#   Returns 1 for non-gh trackers; the queue degrades to unknown.
+#   Returns 1 on CLI failure; the queue degrades to unknown.
+#   me2resh/apexyard#1995 / AgDR-0292
+# ------------------------------------------------------------------------------
+tracker_open_pr_heads() {
+  local repo="${1:-}"
+  local kind out
+  [ -n "$repo" ] || return 1
+  kind=$(tracker_review_kind "$repo") || kind="gh"
+  case "$kind" in
+    gh)
+      out=$(apexyard_gh pr list --repo "$repo" \
+        --state open --json number,headRefOid --limit 200 2>/dev/null) || return 1
+      printf '%s' "$out" | \
+        jq '[.[] | {number: .number, head: (.headRefOid | ascii_downcase)}]' \
+        2>/dev/null || return 1
+      ;;
+    *)
+      # Non-gh tracker: degrade gracefully.
+      return 1
+      ;;
+  esac
 }
 
 # ------------------------------------------------------------------------------

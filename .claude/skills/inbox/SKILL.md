@@ -83,6 +83,21 @@ page at 100, so a `glab` project stays `TRUNCATED` there.
 
 `/inbox` iterates every project in `apexyard.projects.yaml` at the root of your ops repo (your fork of apexyard). If the registry doesn't exist, print a clear error pointing at `docs/multi-project.md`.
 
+## Review queue header (me2resh/apexyard#1995)
+
+Always print the human review queue line before any section. Source
+`_lib-review-queue.sh` and call `review_queue_line`:
+
+```bash
+ops=$(git rev-parse --show-toplevel)
+# shellcheck source=/dev/null
+. "$ops/.claude/hooks/_lib-review-queue.sh"
+review_queue_line "$ops"
+```
+
+This outputs one line such as `Waiting on you: 2 PRs, the oldest 3 hours`.
+Print it at the top of the inbox output even when all other sections are empty.
+
 ## What goes in the inbox
 
 The inbox is grouped by section. Empty sections are omitted.
@@ -206,6 +221,7 @@ Group everything under headings, project-prefixed:
 ```
 INBOX — 2026-04-06 09:14
 =========================
+Waiting on you: 2 PRs, the oldest 3 hours
 
 🔴 PRs awaiting your review (3)
   · example-app#42  Add export to CSV         updated 1h ago   https://…

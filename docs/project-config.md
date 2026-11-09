@@ -227,6 +227,36 @@ Create the app, store the key, and set the override with the how-to:
 [Use a GitHub App for agent reviews](how-to/reviewer-github-app.md).
 The decision record is [AgDR-0235](agdr/AgDR-0235-reviewer-github-app.md).
 
+## Human review queue (`review_queue`)
+
+`review_queue` controls when spawn points warn or refuse because too many
+Rex-approved PRs are waiting for human (`/approve-merge`) sign-off.
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `limit` | `4` | Queue depth that triggers the warn or refuse action. |
+| `mode` | `"warn"` | `"warn"` prints a message and continues. `"refuse"` stops the spawn. |
+
+An unknown tracker count (non-gh tracker kind, CLI failure) always degrades to
+no-op - it never refuses.
+
+The queue count appears on the Role set line of `apexyard status` and at the
+top of `/inbox`. The same `review_queue_check` runs in `bin/apexyard-start-ticket`
+and is documented in `/fan-out` and `isolated-builds.md` for build-agent spawns.
+
+Override example (opt-in refuse mode with a tighter limit):
+
+```json
+{
+  "review_queue": {
+    "limit": 2,
+    "mode": "refuse"
+  }
+}
+```
+
+Decision record: [AgDR-0292](agdr/AgDR-0292-human-review-queue.md).
+
 ## Extending the defaults
 
 ### Add a new ticket prefix (e.g. `[Security]`)
