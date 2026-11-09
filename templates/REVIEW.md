@@ -1,6 +1,7 @@
 # Review severity
 
 Use severity to order findings. Keep all current gate rules.
+Write each finding in the controlled technical writing profile.
 
 ## Blocking
 

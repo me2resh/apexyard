@@ -8,6 +8,8 @@ allowed-tools: Bash, Read, Grep, Glob, Agent
 
 # /drive-to-green
 
+Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
+
 Drive one PR to the existing approval boundary.
 Read [the procedure](../../../docs/skills/drive-to-green.md) before execution.
 
