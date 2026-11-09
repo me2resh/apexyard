@@ -166,6 +166,12 @@ Each agent's prompt must be **self-contained** — sub-agents do not inherit the
 - Constraints inherited from the parent (e.g. "don't push", "use specific git add")
 - For a writer: the worktree path and branch from step 6, and the instruction to edit only under that path
 
+For each build agent, include the ticket acceptance criteria and this done condition:
+PR open, CI green on the current head SHA, Rex APPROVED at that head, progress note current.
+Set a limit of 20 turns. At that limit, stop and report the blocker with evidence.
+Build agents hand results to the orchestrator for independent review.
+See [Resume ticket work](../../../docs/progress-notes.md) for the note update procedure.
+
 For tasks with `isolation: worktree`, put the prepared worktree path in the prompt and leave `isolation` unset, because step 6 created the worktree. For long-running tasks with `mode: background`, pass `run_in_background: true`.
 
 ### 8. Collect results
