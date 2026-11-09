@@ -84,7 +84,7 @@ Pi does not auto-import rule files. `Read` a named file under `.claude/rules/` w
 
 ### Skills, without the slash-command runner
 
-`.claude/skills/<name>/SKILL.md` contains 68 skill prompts.
+`.claude/skills/<name>/SKILL.md` contains 70 skill prompts.
 Use `/scaffold` for an owner interview, a validated spec, and project floor generation.
 Other skills file tickets, run audits, and cut releases.
 Claude Code exposes these skills as slash commands.
@@ -120,7 +120,7 @@ The rest of this file is for an agent extending **apexyard itself** — its hook
 
 - `.claude/` — framework hooks, agents, rules, skills, settings.json
   - `.claude/hooks/` — 54 shell scripts (PreToolUse / PostToolUse / SessionStart)
-  - `.claude/skills/` — 68 slash commands (one dir per skill, each with `SKILL.md`)
+  - `.claude/skills/` — 70 slash commands (one dir per skill, each with `SKILL.md`)
   - `.claude/agents/` — 23 sub-agents: 3 utility (Rex code-reviewer, Hakim security-reviewer/auditor, Munir dep-auditor) + 20 dept-aligned agents across engineering / product / design / security / data (the pr-manager + ticket-manager lifecycle agents were retired — AgDR-0105; their lifecycles are owned by the merge gates / `/approve-merge` and the structured ticket skills)
   - `.claude/rules/` — 23 modular rule files. CLAUDE.md indexes them by name. Load a file when the work needs it. Claude Code excludes this tree from auto-load via per-clone `claudeMdExcludes` in `.claude/settings.local.json` (AgDR-0233).
   - `.claude/settings.json` — hook wiring. `/setup` and SessionStart write per-clone `claudeMdExcludes` into gitignored `.claude/settings.local.json`.
@@ -187,7 +187,7 @@ If you're an AI agent landing in this repo for the first time:
 
 1. If you're operating an ops fork on an adopter's behalf (not Claude Code), read "Operator governance bridge" above first. Otherwise, read `CLAUDE.md` (framework spec — even if you're not Claude Code, the rules transfer)
 2. Skim `docs/multi-project.md` (full setup guide, directory layout, daily workflow)
-3. Browse `.claude/skills/` for the 68 slash commands (each `SKILL.md` is one capability)
+3. Browse `.claude/skills/` for the 70 slash commands (each `SKILL.md` is one capability)
 4. Browse `roles/` to understand the role-activation model
 5. Browse `templates/` for the standard document shapes
 6. Check `.claude/rules/` for the mechanical rules (ticket vocabulary, PR workflow, plan mode, parallel work, leak protection, etc.)
