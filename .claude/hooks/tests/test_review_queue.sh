@@ -58,8 +58,8 @@ ceo_path() {
 # write_rex <ops> <repo> <pr> <sha>
 write_rex() { printf '%s\n' "$4" > "$(rex_path "$1" "$2" "$3")"; }
 
-# write_ceo <ops> <repo> <pr>
-write_ceo() { printf 'approved\n' > "$(ceo_path "$1" "$2" "$3")"; }
+# write_ceo <ops> <repo> <pr> <sha>
+write_ceo() { printf 'sha=%s\n' "$4" > "$(ceo_path "$1" "$2" "$3")"; }
 
 # run_queue_line <ops> -> sets $line and $REVIEW_QUEUE_COUNT in this shell.
 # Calls review_queue_line in the current shell to preserve REVIEW_QUEUE_COUNT.
@@ -129,7 +129,7 @@ fi
 # ---------------------------------------------------------------------------
 sb=$(make_ops)
 write_rex "$sb" "owner/repo" "42" "$SHA"
-write_ceo "$sb" "owner/repo" "42"
+write_ceo "$sb" "owner/repo" "42" "${SHA:0:7}"
 # shellcheck disable=SC2329
 tracker_open_pr_heads() {
   printf '[{"number":42,"head":"%s"}]\n' "$SHA"
@@ -283,9 +283,53 @@ hours=$(printf '%s' "$line" | grep -o 'oldest [0-9]* hours' | grep -o '[0-9]*' |
 if [ -n "$hours" ] && [ "$hours" -ge 1 ] 2>/dev/null; then
   ok "oldest_hours_nonzero"
 else
-  printf 'PASS [oldest_hours_nonzero] (mtime set skipped - hours=%s)\n' "${hours:-?}"
-  PASS=$((PASS+1))
+  bad "oldest_hours_nonzero" "hours='${hours:-?}' (expected at least 1)"
 fi
+
+# Stale and legacy CEO markers must not hide waiting PRs.
+sb=$(make_ops)
+for pr in 42 43 44; do write_rex "$sb" "owner/repo" "$pr" "$SHA"; done
+write_ceo "$sb" "owner/repo" "42" "ffffeeee"
+write_ceo "$sb" "owner/repo" "44" "${SHA:0:7}"
+# shellcheck disable=SC2329
+tracker_open_pr_heads() {
+  printf '[{"number":42,"head":"%s"},{"number":43,"head":"%s"},{"number":44,"head":"%s"}]\n' "$SHA" "$SHA" "$SHA"
+}
+run_queue_line "$sb"
+if [ "$REVIEW_QUEUE_COUNT" = 2 ]; then
+  ok "stale_ceo_and_missing_ceo_counted"
+else
+  bad "stale_ceo_and_missing_ceo_counted" "count=$REVIEW_QUEUE_COUNT"
+fi
+printf 'approved\n' > "$(ceo_path "$sb" "owner/repo" 42)"
+run_queue_line "$sb"
+if [ "$REVIEW_QUEUE_COUNT" = 2 ]; then
+  ok "legacy_ceo_counted"
+else
+  bad "legacy_ceo_counted" "count=$REVIEW_QUEUE_COUNT"
+fi
+rm -rf "$sb"
+
+# Counts at the status limit retain their real value.
+sb=$(make_ops)
+# shellcheck disable=SC2329
+tracker_open_pr_heads() {
+  jq -n --arg sha "$SHA" '[range(1; 257) | {number: ., head: $sha}]'
+}
+for total in 254 255 256; do
+  write_rex "$sb" "owner/repo" "$total" "$SHA"
+  if [ "$total" = 254 ]; then
+    for ((pr=1; pr<254; pr++)); do write_rex "$sb" "owner/repo" "$pr" "$SHA"; done
+  fi
+  review_queue_line "$sb" > /dev/null
+  queue_rc=$?
+  if [ "$queue_rc" = 254 ] && [ "$REVIEW_QUEUE_COUNT" = "$total" ]; then
+    ok "count_${total}_status_capped"
+  else
+    bad "count_${total}_status_capped" "rc=$queue_rc count=$REVIEW_QUEUE_COUNT"
+  fi
+done
+rm -rf "$sb"
 
 # ---------------------------------------------------------------------------
 # Summary

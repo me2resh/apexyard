@@ -92,7 +92,7 @@ Always print the human review queue line before any section. Source
 ops=$(git rev-parse --show-toplevel)
 # shellcheck source=/dev/null
 . "$ops/.claude/hooks/_lib-review-queue.sh"
-review_queue_line "$ops"
+review_queue_line "$ops" || true
 ```
 
 This outputs one line such as `Waiting on you: 2 PRs, the oldest 3 hours`.

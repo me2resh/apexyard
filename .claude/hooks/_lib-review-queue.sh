@@ -3,13 +3,13 @@
 # me2resh/apexyard#1995 / AgDR-0292
 #
 # A PR counts when: a Rex marker exists whose recorded SHA equals the open PR
-# head (prefix match) and no CEO approval marker exists for that PR.
+# head (prefix match) and no current CEO approval exists for that head.
 #
 # Public functions:
 #   review_queue_line [ops_root]
 #       Print the waiting line to stdout.
 #       Set REVIEW_QUEUE_COUNT (empty string if unknown).
-#       Return the count, or 255 if unknown.
+#       Return the count capped at 254, or 255 if unknown.
 #
 #   review_queue_check [ops_root]
 #       If the queue count is at or above review_queue.limit, print a
@@ -58,7 +58,7 @@ REVIEW_QUEUE_COUNT=""
 #   Sets REVIEW_QUEUE_COUNT to the integer count, or empty string if unknown.
 #
 # Return value:
-#   The count (0-254) on success, or 255 on unknown.
+#   The count capped at 254 on success, or 255 on unknown.
 #
 # A count of zero is returned without any tracker network call.
 review_queue_line() {
@@ -66,7 +66,7 @@ review_queue_line() {
   local reviews_dir sha repo pr mtime core base safe_repo
   local tmpdir candidate_file repos_file pr_heads_file
   local match_count min_mtime oldest_hours now repo_safe head
-  local tracker_ok rex_file
+  local tracker_ok rex_file ceo_file ceo_sha
 
   REVIEW_QUEUE_COUNT=""
 
@@ -100,7 +100,7 @@ review_queue_line() {
   }
   candidate_file="$tmpdir/candidates"
 
-  # Collect rex markers that have no matching CEO marker.
+  # Collect Rex markers for comparison with open PR heads.
   if [ -d "$reviews_dir" ]; then
     for rex_file in "$reviews_dir"/*-rex.approved; do
       [ -f "$rex_file" ] || continue
@@ -120,9 +120,6 @@ review_queue_line() {
       # Reconstruct the original owner/repo.
       repo=$(printf '%s' "$safe_repo" | sed 's/__/\//g')
       [ -n "$repo" ] || continue
-
-      # Skip when the CEO approval already exists.
-      [ -f "$reviews_dir/${core}-ceo.approved" ] && continue
 
       # Read the recorded SHA from the first line of the rex marker.
       sha=$(head -n 1 "$rex_file" 2>/dev/null | tr -d '\r\n ' | tr '[:upper:]' '[:lower:]')
@@ -194,6 +191,14 @@ review_queue_line() {
       *) continue ;;
     esac
 
+    # Only a CEO approval for the current head removes this PR.
+    ceo_file=$(review_marker_path "$repo" "$pr" ceo "$ops")
+    ceo_sha=$(awk -F= '$1 == "sha" { print $2; exit }' "$ceo_file" 2>/dev/null \
+      | tr -d '\r\n ' | tr '[:upper:]' '[:lower:]')
+    if [ -n "$ceo_sha" ]; then
+      case "$head" in "${ceo_sha}"*) continue ;; esac
+    fi
+
     match_count=$((match_count + 1))
     if [ "$min_mtime" = 0 ] || [ "$mtime" -lt "$min_mtime" ]; then
       min_mtime="$mtime"
@@ -210,6 +215,7 @@ review_queue_line() {
 
   REVIEW_QUEUE_COUNT="$match_count"
   printf 'Waiting on you: %s PRs, the oldest %s hours\n' "$match_count" "$oldest_hours"
+  [ "$match_count" -lt 254 ] || return 254
   return "$match_count"
 }
 

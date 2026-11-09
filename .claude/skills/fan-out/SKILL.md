@@ -65,7 +65,9 @@ If a task obviously needs editing (verbs like *implement*, *add*, *fix*, *refact
 
 **Spawn mode** — default a fresh spawn with a written brief. Fork the parent only when the facts the agent needs are not yet in a file.
 
-**Isolation** — fan-out writers always use a `worktree`, regardless of the ops-fork setting `build.isolation`. Step 6 creates each writer worktree from the task's source tree, so a managed-project task never gets a worktree of the ops fork.
+**Isolation** - fan-out writers always use a `worktree`, regardless of the ops-fork setting `build.isolation`.
+Step 7 creates each writer worktree from the task's source tree.
+A managed-project task never gets a worktree of the ops fork.
 Use `shared` only when all agents are read-only research.
 Infer from the task verb.
 Ask only when ambiguous.
@@ -84,7 +86,7 @@ See `.claude/rules/isolated-builds.md` and AgDR-0210.
 
 Before spawning any build agent, run `review_queue_check` from `_lib-review-queue.sh` against the ops root. When `review_queue.mode` is `refuse` and the queue is at or above `review_queue.limit` (default 4), stop the fan-out and tell the user to run `/approve-merge` first. When mode is `warn` (default), print the warning and continue. Unknown tracker never stops the fan-out.
 
-### 5. Active-ticket safety check
+### 4. Active-ticket safety check
 
 Do this for every task that involves code edits, not pure research. Find the working tree the task belongs to, and verify that the tree has a ticket marker:
 
@@ -102,7 +104,7 @@ Cannot fan out — task "<task>" needs an active ticket in <source tree>. Run, f
 
 The `require-active-ticket.sh` hook would block edits anyway. Failing fast at fan-out time is kinder UX than letting 3 of 5 agents start, then 2 fail mid-run.
 
-### 4. File-collision guard
+### 5. File-collision guard
 
 Heuristically detect tasks that target the same file paths. Compare file paths mentioned in each task description (literal paths, glob patterns, or implied file scope).
 
@@ -169,7 +171,7 @@ Each agent's prompt must be **self-contained** — sub-agents do not inherit the
 - For build tasks: use [the build-agent format](../../../docs/skills/build-agent-hand-back.md), including `## Decisions made for you`
 - The isolation mode selected by the orchestrator at spawn time
 - Constraints inherited from the parent (e.g. "don't push", "use specific git add")
-- For a writer: the worktree path and branch from step 6, and the instruction to edit only under that path
+- For a writer: include the worktree path and branch from step 7. Instruct the writer to edit only under that path.
 
 For each build agent, include the ticket acceptance criteria and this done condition:
 PR open, CI green on the current head SHA, Rex APPROVED at that head, progress note current.
@@ -177,7 +179,9 @@ Set a limit of 20 turns. At that limit, stop and report the blocker with evidenc
 Build agents hand results to the orchestrator for independent review.
 See [Resume ticket work](../../../docs/progress-notes.md) for the note update procedure.
 
-For tasks with `isolation: worktree`, put the prepared worktree path in the prompt and leave `isolation` unset, because step 6 created the worktree. For long-running tasks with `mode: background`, pass `run_in_background: true`.
+For tasks with `isolation: worktree`, put the prepared worktree path in the prompt.
+Leave `isolation` unset because step 7 created the worktree.
+For long-running tasks with `mode: background`, pass `run_in_background: true`.
 
 ### 9. Collect results
 
@@ -239,7 +243,7 @@ Background tasks running: <ids>. They'll surface results when done.
 6. **Each agent's prompt must be self-contained** — sub-agents do not see the parent conversation. Include task description, reference paths, expected output format, and any inherited constraints inline.
 7. **Background mode only for >2-minute estimated work.** For short tasks, foreground is faster end-to-end (no async overhead).
 8. **Refuse a read-only agent type for an editing task. Default to a fresh role-appropriate spawn with a written brief.** `Explore`, `code-reviewer`, `security-reviewer`, and `Plan` cannot write. If the task verb says "implement" / "fix" / "add" / "refactor", suggest a role-appropriate editing agent (for example `backend-engineer`, `frontend-engineer`, or `platform-engineer`). Fork the parent only when the facts the agent needs are not yet in a file.
-9. **Active-ticket check happens at step 3, not step 7.** Failing at plan-time is kinder than failing mid-spawn.
+9. **Active-ticket check happens at step 4, before step 8.** Failing at plan-time is kinder than failing mid-spawn.
 10. **Pause on merge-back conflict — never auto-resolve.** The user owns the merge.
 
 ---
