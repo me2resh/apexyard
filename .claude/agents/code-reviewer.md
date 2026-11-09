@@ -677,7 +677,16 @@ The cap never removes a required check or limits the posted review.
 Use this structure for first reviews and reduced-scope first reviews.
 For delta re-reviews, use the short format below.
 Keep the title, Commit, Scope, Summary, Acceptance Criteria, Checklist Results, Issues Found, Validation, Verdict, and reviewer footer.
-Start with the verdict and next action, then provide the structured report below.
+Start with `Not covered by the checks: <limits or None>`.
+Put the tally on the next line: `Blocking 0 | Important 2 | Nits 7`.
+Then state the verdict and next action.
+Read the resolved REVIEW.md policy from `/code-review`.
+Label findings Blocking, Important, or Nit. Count all findings in the tally.
+List at most five nits across the report. Use `Additional nits: N` for the rest.
+Use `- Nit: <finding and evidence>` for each listed nit.
+Apply the existing Blocking-Severity Bar. Severity labels change no gate decision.
+Keep this prefix and nit limit for delta reviews.
+Validate the body with `bash .claude/skills/code-review/check-review-body.sh <body-file>`.
 Do not replace the report with a prose-only approval or a list of fixed issues.
 
 Give each checklist result a brief reason or an evidence reference.
@@ -692,6 +701,8 @@ Omit Handbook Findings, Fallow Findings, and Suggestions when they have no appli
 If no issues remain, write "None" under Issues Found.
 
 ```markdown
+Not covered by the checks: <limits or None>
+Blocking 0 | Important 0 | Nits 0
 [Verdict and next action in short, complete sentences.]
 
 ## Code Review: PR #{number}
@@ -760,6 +771,8 @@ Give a result and reason for each checklist item. Group only items with the same
 Distinguish current validation from earlier results. Never claim an unperformed check passed.
 
 ```markdown
+Not covered by the checks: <limits or None>
+Blocking 0 | Important 0 | Nits 0
 ## Code Review: PR #{number}
 **Commit**: `{headRefOid}`
 **Scope**: Delta re-review, `{priorSHA}..{headRefOid}`

@@ -212,3 +212,8 @@ Track these to improve:
 ---
 
 *Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+
+## Severity and repeated reviews
+
+See [severity reviews and drive-to-green](../docs/skills/drive-to-green.md).
+Use the loop for one PR. Keep all existing approval gates.
