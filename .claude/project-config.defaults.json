@@ -88,7 +88,9 @@
       "bin/run-pre-push-checks.sh",
       ".githooks/*",
       ".github/workflows/*"
-    ]
+    ],
+    "_comment_approval_quiz": "me2resh/apexyard#1997, opt-in. When true, /approve-merge asks three questions about the change (AskUserQuestion) before it writes the CEO marker. Pass --quiz on one run to turn the check on without changing config. Default false: the quiz does not run. The marker format, the approval record and the merge-gate hooks do not change.",
+    "approval_quiz": false
   },
 
   "qa": {
