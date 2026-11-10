@@ -58,7 +58,9 @@ Full reference: [`docs/opencode-adapter.md`](../opencode-adapter.md).
 The opencode plugin does not run `.claude/hooks/dispatch-bash.sh`.
 It builds one gate per hook from the routing comments in that file and the entries in `.claude/settings.json`.
 It matches the command text by its prefix, with the same matcher as the pi adapter.
-Claude Code scans the whole command. The plugin does not.
+Claude Code scans the whole command only for push, commit and merge commands (`.claude/hooks/dispatch-bash.sh:541-676`).
+Its other Bash routes also match by prefix (`dispatch-bash.sh:479-515`).
+The plugin has no whole-command scan at all.
 
 - Some command shapes skip a gate in opencode. For example, `cd repo && gh pr merge 5` and `cd repo && git push` start with `cd`, so no merge gate and no push gate runs for them.
 - A gate that crashes lets the call run. When a hook exits with a number other than 2, such as 1 or 127, the plugin allows the call. Only exit 2 blocks. A spawn error, a timeout or a kill signal does block.

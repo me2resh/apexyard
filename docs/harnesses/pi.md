@@ -44,8 +44,10 @@ The pi adapter does not run `.claude/hooks/dispatch-bash.sh`.
 It reads the routing comments in that file and the entries in `.claude/settings.json`, and it builds one gate per hook.
 Each Bash gate matches the command text by its prefix.
 A gate for `gh pr merge *` runs only when the command starts with the words `gh pr merge`.
-Claude Code scans the whole command, so it also catches a command that follows `cd` or `;`.
-The pi adapter does not scan the whole command.
+Claude Code scans the whole command only for push, commit and merge commands (`.claude/hooks/dispatch-bash.sh:541-676`).
+Its other Bash routes also match by prefix (`dispatch-bash.sh:479-515`).
+The pi adapter has no whole-command scan at all.
+The hooks that the dispatcher runs on every Bash call run in pi too.
 
 - Some command shapes skip a gate in pi. For example, `cd repo && gh pr merge 5` and `cd repo && git push` start with `cd`. No merge gate and no push gate runs for them.
 - A gate that crashes lets the call run. When a hook exits with a number other than 2, such as 1 or 127, the adapter allows the call. Only exit 2 blocks. A spawn error, a timeout or a kill signal does block.
