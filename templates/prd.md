@@ -89,13 +89,15 @@ Rule: .claude/rules/writing-standard.md. Use the controlled technical writing pr
 
 ### Functional Requirements
 
-| ID | Requirement | Priority | Notes |
-|----|-------------|----------|-------|
-| FR-1 | [Requirement description] | Must | |
-| FR-2 | [Requirement description] | Should | |
-| FR-3 | [Requirement description] | Could | |
+| ID | Requirement | Serves | Priority | Notes |
+|----|-------------|--------|----------|-------|
+| FR-1 | [Requirement description] | US-1 | Must | |
+| FR-2 | [Requirement description] | US-1 | Should | |
+| FR-3 | [Requirement description] | US-2 | Could | |
 
 **Priority Key**: Must (required for launch) | Should (important) | Could (nice to have)
+
+**Serves**: List the user stories (`US-n`) that each requirement delivers. Every user story needs at least one requirement. `bin/check-traceability.sh` checks both rules.
 
 ### Non-Functional Requirements
 
@@ -104,6 +106,15 @@ Rule: .claude/rules/writing-standard.md. Use the controlled technical writing pr
 | Performance | [e.g., Page load time] | [e.g., < 2 seconds] |
 | Security | [e.g., Authentication] | [e.g., OAuth 2.0] |
 | Accessibility | [e.g., WCAG compliance] | [e.g., Level AA] |
+
+### Traceability
+
+Use this table only when the project plans its work with ORBIT. Map each user story to the ORBIT acceptance criteria (`acN-M`) that deliver it. `bin/check-traceability.sh --orbit` checks that each listed criterion is in an ORBIT slice.
+
+| Story | ORBIT criteria |
+|-------|----------------|
+| US-1 | ac1-1, ac1-2 |
+| US-2 | ac2-1 |
 
 ---
 
