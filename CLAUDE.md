@@ -170,10 +170,10 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Rules | `.claude/rules/` | 23 modular rule files (AgDR triggers, agent role selection, build-handbook discovery, code standards, evidence grounding, external-write retry, git conventions, glossary lookup, isolated builds, leak protection, loop mode, parallel work, plan mode, PR quality, PR workflow, reconcile before build, reporting style, right-size ceremony, role triggers, skill first, ticket vocabulary, workflow gates, writing standard) |
 | Handbooks | `handbooks/` | Adopter-authored coding standards consumed by Rex during code review. Discovery by path-convention (`architecture/` + `general/` always-load; `language/<lang>/` loads on diff-match). Advisory by default; opt in to blocking via `ENFORCEMENT: blocking` marker. See [`handbooks/README.md`](handbooks/README.md). |
 | Agents | `.claude/agents/` | 23 sub-agents (4 utility incl. Hakim post-consolidation + Naqid the Contrarian + 7 engineering + 1 architecture (Tariq) + 6 product-design + 5 security-data). Per AgDR-0050 + the #347 PR 3 Hatim→Hakim consolidation decision + AgDR-0054 (Solution Architect) + AgDR-0078 (The Contrarian) + AgDR-0105 (retiring the pr-manager + ticket-manager lifecycle agents). |
-| Skills | `.claude/skills/` | 71 slash commands — see the full list below |
+| Skills | `.claude/skills/` | 72 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### Available skills (71)
+### Available skills (72)
 
 One-line summary per skill; canonical details live in each `.claude/skills/<name>/SKILL.md`.
 
@@ -196,6 +196,7 @@ One-line summary per skill; canonical details live in each `.claude/skills/<name
 | `/start-ticket` | Declare an active ticket for this session (required before code edits) |
 | `/approve-merge` | Record per-PR CEO approval and merge (required by merge gate) |
 | `/explain-pr` | Read-only PR walkthrough (what / why / risks / decisions); optional comprehension quiz; never writes markers or merges |
+| `/pr-status` | Read-only PR gate state: approval records, forge checks and rules, QA evidence, next missing action |
 | `/approve-design` | Record per-PR design-review approval for UI PRs (required by design gate) |
 | `/decide` | Make a technical decision and create an Agent Decision Record (AgDR) |
 | `/agdr` | Browse / search / show / stats across the portfolio's AgDR library |
@@ -287,7 +288,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Rules (modular, framework-wide) | `.claude/rules/` |
 | **Adopter handbooks** (consumed by Rex during code review) | `handbooks/` — see [`handbooks/README.md`](handbooks/README.md) for the discovery + advisory/blocking conventions |
 | Agents | `.claude/agents/` |
-| Skills (71 slash commands) | `.claude/skills/` |
+| Skills (72 slash commands) | `.claude/skills/` |
 | Hook wiring | `.claude/settings.json` |
 | **Per-project docs** | `projects/<name>/` |
 | **Live working copies** (gitignored) | `workspace/<name>/` |
