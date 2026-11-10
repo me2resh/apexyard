@@ -263,7 +263,6 @@ Read `checks.*` only from the ops root's git-ignored `.claude/project-config.jso
 Ignore managed-project config, including in ticket worktrees.
 
 Call `baseline_check "$tree"` after the fallback marker write.
-See docs/progress-notes.md for libraries.
 Stop on refusal.
 Set `/goal`: acceptance criteria met, PR open, CI green at head SHA, Rex APPROVED at that head, progress note current; limit: 20 turns.
 Details: docs/progress-notes.md.
