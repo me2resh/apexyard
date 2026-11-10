@@ -84,7 +84,7 @@ else
   else
     pass "qa-engineer.md has a tools: key"
   fi
-  for t in mcp__playwright__browser_file_upload mcp__playwright__browser_run_code; do
+  for t in mcp__playwright__browser_file_upload mcp__playwright__browser_run_code_unsafe mcp__playwright__browser_run_code; do
     if list_has "$qa_deny" "$t"; then
       pass "qa-engineer.md disallows $t"
     else
