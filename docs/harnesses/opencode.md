@@ -53,6 +53,20 @@ Full reference: [`docs/opencode-adapter.md`](../opencode-adapter.md).
 - **Run with `--auto`** (e.g. `opencode run --auto`). Without it, opencode resolves the shell action through its own approval flow and the tool call may never reach `tool.execute.before`. So the gate never fires. `--auto` is what let the live proof exercise the real hook.
 - Loaded from inside an apexyard ops fork (the plugin's ops-root anchor-walk no-ops cleanly outside one).
 
+## Limits of the Bash gates in opencode
+
+The opencode plugin does not run `.claude/hooks/dispatch-bash.sh`.
+It builds one gate per hook from the routing comments in that file and the entries in `.claude/settings.json`.
+It matches the command text by its prefix, with the same matcher as the pi adapter.
+Claude Code scans the whole command. The plugin does not.
+
+- Some command shapes skip a gate in opencode. For example, `cd repo && gh pr merge 5` and `cd repo && git push` start with `cd`, so no merge gate and no push gate runs for them.
+- A gate that crashes lets the call run. When a hook exits with a number other than 2, such as 1 or 127, the plugin allows the call. Only exit 2 blocks. A spawn error, a timeout or a kill signal does block.
+- When `.claude/settings.json` does not parse, the plugin enforces no gates in that session. It prints a warning to stderr.
+
+The text above that says fail-closed is real covers only an execution failure with no exit status.
+See the [pi page](pi.md#limits-of-the-bash-gates-in-pi) for the same limits.
+
 ## Gaps + tracking
 
 - Family hardening (bounded exec timeout, stdin for read-class tools, loud parse-failure warning): **#840**.

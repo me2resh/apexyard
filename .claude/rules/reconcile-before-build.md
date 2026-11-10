@@ -56,7 +56,9 @@ The cost of running the four checks before spawning is a few tool calls. The cos
 ## Build-agent done condition
 
 Copy the ticket acceptance criteria into each build-agent brief.
-Require this evidence: PR open, CI green on the current head SHA, Rex APPROVED at that head, progress note current.
+Require this evidence: PR open, CI green at the head SHA, progress note current.
+Report the PR URL, the head SHA and the CI result.
+A build agent cannot run Rex, so its done condition has no Rex approval. The orchestrator runs Rex after CI is green at that head.
 Set a limit of 20 turns. At that limit, stop and report the blocker with evidence.
 Build agents report results to the orchestrator, which obtains independent review and updates the note.
 See [Resume ticket work](../../docs/progress-notes.md).

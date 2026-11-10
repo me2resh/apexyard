@@ -27,14 +27,7 @@ If you're operating inside an apexyard ops fork, you're running a portfolio of p
 Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 ```
 
-Four hard gates — full detail in `.claude/rules/workflow-gates.md`:
-
-| Gate | Before | Verify |
-|------|--------|--------|
-| 1 | Design → Build | PRD approved, tickets exist |
-| 2 | Build → Review | Tests pass, checks pass, >80% coverage |
-| 3 | Review → Merge | Code review approved, CI green |
-| 4 | Merge → Done | QA verified all acceptance criteria |
+The gate table is in `.claude/rules/workflow-gates.md`. It is the one source for gate numbers.
 
 **If a gate fails, stop.** Complete the missing step first — there's no hook here to stop you, so this is on you.
 
@@ -119,9 +112,9 @@ The rest of this file is for an agent extending **apexyard itself** — its hook
 ### Project structure
 
 - `.claude/` — framework hooks, agents, rules, skills, settings.json
-  - `.claude/hooks/` — 54 shell scripts (PreToolUse / PostToolUse / SessionStart)
-  - `.claude/skills/` — 70 slash commands (one dir per skill, each with `SKILL.md`)
-  - `.claude/agents/` — 23 sub-agents: 3 utility (Rex code-reviewer, Hakim security-reviewer/auditor, Munir dep-auditor) + 20 dept-aligned agents across engineering / product / design / security / data (the pr-manager + ticket-manager lifecycle agents were retired — AgDR-0105; their lifecycles are owned by the merge gates / `/approve-merge` and the structured ticket skills)
+  - `.claude/hooks/` — shell scripts and shared libraries (wired in `.claude/settings.json` to the PreToolUse, PostToolUse, SessionStart, UserPromptSubmit and ConfigChange events)
+  - `.claude/skills/` — slash commands (one dir per skill, each with `SKILL.md`)
+  - `.claude/agents/` — 23 sub-agents: 4 utility (Rex code-reviewer, Hakim security-reviewer/auditor, Munir dep-auditor, Naqid contrarian) + 19 dept-aligned agents across engineering / product / design / security / data (the pr-manager + ticket-manager lifecycle agents were retired — AgDR-0105; their lifecycles are owned by the merge gates / `/approve-merge` and the structured ticket skills)
   - `.claude/rules/` — 23 modular rule files. CLAUDE.md indexes them by name. Load a file when the work needs it. Claude Code excludes this tree from auto-load via per-clone `claudeMdExcludes` in `.claude/settings.local.json` (AgDR-0233).
   - `.claude/settings.json` — hook wiring. `/setup` and SessionStart write per-clone `claudeMdExcludes` into gitignored `.claude/settings.local.json`.
 - `roles/` — 20 role definitions across Engineering, Product, Design, Security, Data, Architecture
@@ -148,7 +141,7 @@ The rest of this file is for an agent extending **apexyard itself** — its hook
 
 ### Sandbox & test environments
 
-- `.claude/hooks/tests/` — hook test suite (~30+ bash test files; run via `bash .claude/hooks/tests/test_<name>.sh`)
+- `.claude/hooks/tests/` — hook test suite (bash test files; run via `bash .claude/hooks/tests/test_<name>.sh`)
 - `.claude/skills/<name>/tests/` — per-skill smoke tests where applicable
 - Test runner: plain bash test scripts. No JS / npm dependency required to run the hook tests.
 - No CI/CD smoke env in this repo — the framework itself ships CI templates under `golden-paths/pipelines/` for adopter projects, but the framework's own CI is light (markdownlint, link-check, shellcheck where available)
@@ -187,7 +180,7 @@ If you're an AI agent landing in this repo for the first time:
 
 1. If you're operating an ops fork on an adopter's behalf (not Claude Code), read "Operator governance bridge" above first. Otherwise, read `CLAUDE.md` (framework spec — even if you're not Claude Code, the rules transfer)
 2. Skim `docs/multi-project.md` (full setup guide, directory layout, daily workflow)
-3. Browse `.claude/skills/` for the 70 slash commands (each `SKILL.md` is one capability)
+3. Browse `.claude/skills/` for the slash commands (each `SKILL.md` is one capability)
 4. Browse `roles/` to understand the role-activation model
 5. Browse `templates/` for the standard document shapes
 6. Check `.claude/rules/` for the mechanical rules (ticket vocabulary, PR workflow, plan mode, parallel work, leak protection, etc.)

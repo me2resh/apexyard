@@ -13,6 +13,9 @@
 
 **If a gate fails → STOP. Complete the missing step first.**
 
+This table is the one source for gate numbers. `CLAUDE.md` and `AGENTS.md` link here.
+The records that the gates read and write are listed in [Gate state contract](../../docs/gate-state-contract.md).
+
 ## One Ticket at a Time
 
 Work on **one** ticket at a time. Complete it fully before starting the next. Each PR = one ticket only.

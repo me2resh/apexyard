@@ -105,7 +105,7 @@ Columns:
 | Commit SHA matches Rex + CEO approvals at merge time | `.claude/rules/pr-quality.md § Commit SHA Verification` | `block-unreviewed-merge.sh` | yes | mechanized |
 | PR description MUST contain Summary, Testing, Glossary, and a Closes or Refs line | `.claude/rules/pr-quality.md § Glossary`, `workflows/code-review.md § PR Description Format` | `validate-pr-create.sh` (blocker) + `code-reviewer` agent | yes | the shared artifact validator enforces fixed requirements; `.pr.required_sections` can add headings [^pr-sections-113] |
 | Design review required when PR touches UI | `.claude/rules/pr-quality.md § Design Review`, `workflows/code-review.md` | `require-design-review-for-ui.sh` | yes | mechanized (AgDR-0001) |
-| `/approve-design` skill for writing the design marker | - | - | deferred | [#21][21]: today's convention is a manual `git rev-parse HEAD > marker` |
+| `/approve-design` skill for writing the design marker | `.claude/skills/approve-design/SKILL.md` | `/approve-design` (writes the marker) + `require-design-review-for-ui.sh` (reads it at merge) | yes | mechanized: the skill exists and writes the repo-qualified design marker at the PR head |
 | Never merge with red CI: even pre-existing failures must receive fixes first | `.claude/rules/pr-quality.md § No Red CI`, `CLAUDE.md` | `block-merge-on-red-ci.sh` | yes | mechanized (AgDR-0001) |
 | No merge on pending / in-progress CI (pending is not green) | `.claude/rules/pr-quality.md § No Red CI` | `block-merge-on-red-ci.sh` | yes | mechanized |
 | Before `git push`: lint, typecheck, test, build must pass locally | `.claude/rules/pr-workflow.md § Before git push`, `CLAUDE.md § Quality Rules` | `bin/run-configured-pre-push-checks.sh` via `.githooks/pre-push` (blocking runner, opt-in via `core.hooksPath`) | partial | per-fork commands from `.pre_push.commands` execute against the pushed repository on each push once installed. First red blocks with exit 1. Skip marker in HEAD commit provides audited bypass. A clone without `core.hooksPath` installed relies on CI as the backstop [^pre-push-111] |
@@ -225,14 +225,14 @@ Columns:
 
 | bucket | count |
 |--------|-------|
-| mechanized (`yes`: hook / agent enforces it fully) | 29 |
+| mechanized (`yes`: hook / agent enforces it fully) | 30 |
 | partially mechanized (`partial`: hook + prose combination) | 6 |
 | advisory (`no`: stays prose by design) | 40 |
-| deferred to a follow-up ticket (`deferred`) | 5 |
+| deferred to a follow-up ticket (`deferred`) | 4 |
 | **total rows** | **80** |
-| deferred tickets referenced | 6 ([#15][15], [#20][20], [#21][21], [#22][22], [#23][23], [#25][25]) |
+| deferred tickets referenced | 5 ([#15][15], [#20][20], [#22][22], [#23][23], [#25][25]) |
 
-The count of deferred *rows* (5) and deferred *tickets* (6) differ. This is because [#15][15] is a meta-chore (resolve `.claude/` duplication between ops-repo and apexyard upstream) that gets one row in the onboarding section. In contrast, the commit-related tickets [#20][20] and [#22][22] share a row via `validate-branch-name.sh` + `validate-pr-create.sh`.
+The count of deferred *rows* (4) and deferred *tickets* (5) differ. This is because [#15][15] is a meta-chore (resolve `.claude/` duplication between ops-repo and apexyard upstream) that gets one row in the onboarding section. In contrast, the commit-related tickets [#20][20] and [#22][22] share a row via `validate-branch-name.sh` + `validate-pr-create.sh`.
 
 The spread confirms what AgDR-0001 set out to make true. The **high-blast-radius rules** (git add, main push, secrets, merge gate, ticket-first, commit format, arch-change AgDR, red-CI, UI design review) are hooks. The **per-project concerns** (coverage, type strictness, import-graph purity, testing pyramid) stay advisory because a framework-level shell harness cannot reach them without false-positive spam. The **self-discipline rules** (`/decide` trigger phrases, `Ticket N` vocabulary in chat, role adoption) stay advisory by design. The rule files are primary and the hooks catch only the durable-artefact symptoms.
 
@@ -260,7 +260,6 @@ The spread confirms what AgDR-0001 set out to make true. The **high-blast-radius
 
 [20]: https://github.com/me2resh/apexyard/issues/20
 
-[21]: https://github.com/me2resh/apexyard/issues/21
 
 [22]: https://github.com/me2resh/apexyard/issues/22
 
