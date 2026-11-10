@@ -183,10 +183,21 @@ snapshot() {
 
 echo "== 1. all satisfied; no write"
 base_data "$F1"; approve_at "$F1"
-before=$(snapshot "$OPS"; snapshot "$SB/home"; snapshot "$SB/wt")
-TXT=$(run_cli "$OPS")
-J=$(run_cli "$OPS" --json)
-after=$(snapshot "$OPS"; snapshot "$SB/home"; snapshot "$SB/wt")
+# A live session: a session id, a valid ops-root pin, and the resolution
+# cache ON. The snapshot covers the ops root (with .claude/session/), the
+# worktree, HOME, the pin directory and the dedicated TMPDIR.
+mkdir -p "$SB/pins"
+printf '%s\n' "$OPS" > "$SB/pins/ops-root-pr-status-test"
+live_run() {
+  ( unset APEXYARD_DISABLE_RESOLUTION_CACHE APEXYARD_OPS_DISABLE_PIN
+    export CLAUDE_CODE_SESSION_ID=pr-status-test APEXYARD_OPS_PIN_DIR="$SB/pins"
+    run_cli "$@" )
+}
+all_dirs() { snapshot "$OPS"; snapshot "$SB/home"; snapshot "$SB/wt"; snapshot "$SB/pins"; snapshot "$SB/tmp"; }
+before=$(all_dirs)
+TXT=$(live_run "$OPS")
+J=$(live_run "$OPS" --json)
+after=$(all_dirs)
 for n in rex ceo "required checks" "CI green" "changes requested" "branch rules" "merge state" "pre-merge QA" "review gate" "CI gate"; do
   check "1: $n is satisfied" test "$(status_of "$J" "$n")" = satisfied
 done
@@ -196,7 +207,10 @@ done
 check "1: head and base SHA" test "$(printf '%s' "$J" | jq -r '.head.sha + " " + .base.sha')" = "$F1 $B1"
 check "1: linked ticket" test "$(printf '%s' "$J" | jq -r '.ticket.from_body')" = "acme/widget#12"
 check "1: last line is the next action" test "$(printf '%s\n' "$TXT" | tail -n 1)" = "Next: Ready to merge at ${F1:0:12}. The merge gates check again at merge time."
-check "1: no file changed under the ops root, the worktree or HOME" test "$before" = "$after"
+check "1: no file changed under the ops root, worktree, HOME, pin dir or TMPDIR" test "$before" = "$after"
+if [ "$before" != "$after" ]; then
+  diff <(printf '%s\n' "$before") <(printf '%s\n' "$after") | sed 's/^/    /' >&2
+fi
 check "1: no write verb reached gh" test -z "$(grep -E '^(pr (merge|review|comment|edit|close|reopen|ready|update-branch|create)|issue |label |repo (edit|delete))|(-X|--method) (POST|PATCH|PUT|DELETE)|mutation' "$GHLOG")"
 check "1: no gh api call with fields except GraphQL queries" test -z "$(grep '^api ' "$GHLOG" | grep -v '^api graphql' | grep -E ' (-f|-F|--field|--raw-field) ')"
 check "1: gh was called" test -s "$GHLOG"
@@ -272,6 +286,8 @@ check "7: nothing changed" test "$before" = "$after"
 
 echo "== usage"
 check "usage: a bad target exits 2" exits_2 "$CLI" not-a-target
+check "usage: '..' as owner exits 2" exits_2 "$CLI" '../widget#7'
+check "usage: '..' as repo exits 2" exits_2 "$CLI" 'acme/..#7'
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -35,8 +35,10 @@
 #     verbs that write (fetch, commit, merge, reset and others). The
 #     carry-over check then reports "not verified" when an object is
 #     missing locally, instead of fetching it.
-#   - temporary files that the libraries create under TMPDIR are removed
-#     by those libraries.
+#   - the resolution cache is off (APEXYARD_DISABLE_RESOLUTION_CACHE=1),
+#     so no resolve-cache file goes into the ops-root pin directory
+#   - temporary files of the libraries and hooks go to a private TMPDIR
+#     that the command deletes on exit
 # tests: .claude/hooks/tests/test_apexyard_pr_status.sh
 
 set -u
@@ -75,6 +77,9 @@ if [ -z "$TARGET" ] || [ "$REPO" = "$TARGET" ] \
   usage >&2
   exit 2
 fi
+case "/${REPO}/" in
+  */./*|*/../*) usage >&2; exit 2 ;;
+esac
 if ! command -v jq >/dev/null 2>&1; then
   echo "apexyard-pr-status: jq is required" >&2
   exit 2
@@ -96,6 +101,22 @@ if [ -z "$HOOK_DIR" ] || [ ! -f "$HOOK_DIR/_lib-review-markers.sh" ]; then
 fi
 
 # --- Read-only guards. ---------------------------------------------------
+# No cache files: the resolution cache writes resolve-cache-<sid>-* files
+# into the ops-root pin directory when a session id is set. Turn it off for
+# this process and every hook it runs. Stop gh from writing its update-check
+# state.
+export APEXYARD_DISABLE_RESOLUTION_CACHE=1 GH_NO_UPDATE_NOTIFIER=1 GH_PROMPT_DISABLED=1
+# Temporary files that the libraries and hooks create (gh watchdog output,
+# the isolated merge-tree git dir) go to a private directory. The EXIT trap
+# deletes it, so the run leaves nothing in the caller's TMPDIR.
+PRS_TMP=$(mktemp -d "${TMPDIR:-/tmp}/apexyard-pr-status.XXXXXX") || {
+  echo "apexyard-pr-status: cannot create a temporary directory" >&2
+  exit 2
+}
+trap 'rm -rf "$PRS_TMP"' EXIT
+trap 'exit 130' INT TERM
+export TMPDIR="$PRS_TMP"
+
 # Refuse git verbs that write. Exported, so the hook processes use it too.
 git() {
   local a sub="" skip=0
@@ -135,7 +156,9 @@ prs_gh() {
         case "$a" in query=*) query="${a#query=}" ;; esac ;;
     esac
     case "$a" in
-      --input) printf 'apexyard-pr-status: read-only, refused gh api --input\n' >&2; return 1 ;;
+      --input|--input=*) printf 'apexyard-pr-status: read-only, refused gh api --input\n' >&2; return 1 ;;
+      --method=GET|-XGET) : ;;
+      --method=*|-X?*) printf 'apexyard-pr-status: read-only, refused gh api %s\n' "$a" >&2; return 1 ;;
       graphql) [ -z "$path" ] && path=graphql && is_gql=1 ;;
     esac
     prev="$a"
