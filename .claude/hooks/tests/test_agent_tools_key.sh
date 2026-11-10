@@ -13,6 +13,8 @@
 set -u
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=/dev/null
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
 ROOT="$(cd "$TEST_DIR/../../.." && pwd)"
 AGENTS_DIR="$ROOT/.claude/agents"
 
