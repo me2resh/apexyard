@@ -77,7 +77,7 @@ Pi does not auto-import rule files. `Read` a named file under `.claude/rules/` w
 
 ### Skills, without the slash-command runner
 
-`.claude/skills/<name>/SKILL.md` contains 70 skill prompts.
+`.claude/skills/<name>/SKILL.md` contains one skill prompt for each skill.
 Use `/scaffold` for an owner interview, a validated spec, and project floor generation.
 Other skills file tickets, run audits, and cut releases.
 Claude Code exposes these skills as slash commands.

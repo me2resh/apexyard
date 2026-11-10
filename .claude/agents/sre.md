@@ -3,7 +3,7 @@ name: sre
 description: Ensures systems are reliable, observable, and resilient — applies engineering to operational problems. Activates on production incidents, SLO breaches, monitoring / alerting work, or on-call rotation.
 model: opus
 effort: medium
-allowed-tools: Bash, Read, Edit, Write, Grep, Glob
+tools: Bash, Read, Edit, Write, Grep, Glob
 persona_name: Saif
 ---
 

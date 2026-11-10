@@ -98,8 +98,8 @@ The review agent does not write it.
 
 **Readers.**
 
-- `block-reviewer-repo-mutation.sh` locks `git clone`, `git fetch` and `git checkout` for a review agent. The hook locks a typed review agent with or without the file. It locks an untyped sub-agent only while a file exists for the session (`block-reviewer-repo-mutation.sh:254-308`).
-- `block-reviewer-ci-wait.sh` and `limit-reviewer-writes.sh` use the same rule to decide who is a review agent.
+- `block-reviewer-repo-mutation.sh` blocks the git commands that change the repository for a review agent. The list is `MUTATING` at `block-reviewer-repo-mutation.sh:335`. It includes `commit`, `push`, `checkout`, `fetch` and `clone`. The lock applies only while this session has an active-reviewer file. A typed review agent counts as a review agent by its type, and an untyped sub-agent counts too. Without a file for the session, the hook allows the command, even for a typed review agent (`block-reviewer-repo-mutation.sh:254-308`, `:357`). The hook never locks the main thread or a build agent. The hook locks a typed review agent without a file only when the shared library is missing (`:293-296`).
+- `block-reviewer-ci-wait.sh` and `limit-reviewer-writes.sh` use a different rule. They treat a typed review agent as a review agent with or without a file. They treat an untyped sub-agent as one only while a file exists (`block-reviewer-ci-wait.sh:18-27`, `limit-reviewer-writes.sh:18-25`, `:72-83`).
 - `warn-review-marker-write.sh` reads it to tell a sanctioned approval write from a forged one. It only warns.
 - `require-active-ticket.sh` lets a reviewer write under the session scratchpad without a ticket while the file exists (`require-active-ticket.sh:61-70`).
 
@@ -111,6 +111,7 @@ Another session never sees the file.
 **Expiry.**
 The skill removes its own file after it posts the review (`.claude/skills/code-review/SKILL.md:95-103`).
 At the start of a session, `clear-active-reviewer-marker.sh` removes the files of the same session id (`:75-98`).
+When the session has an id, it also removes the legacy shared file `.claude/session/active-reviewer` (`:105-110`).
 Ending a session does not remove the file by itself.
 A file left by a crashed session stays until a session with the same id starts again.
 
@@ -133,7 +134,9 @@ No gate reads a bare number path (`<pr>-rex.approved`).
 
 **Reader.**
 `block-unreviewed-merge.sh` compares the SHA in the file with the head (`:449-493`).
-`/approve-design` and `/approve-architecture` also require the SHA to equal the head (`.claude/skills/approve-design/SKILL.md:95-129`, `.claude/skills/approve-architecture/SKILL.md:93-127`).
+`/approve-design` and `/approve-architecture` also require the SHA to equal the head.
+`/approve-design` compares it with the local `git rev-parse HEAD` (`.claude/skills/approve-design/SKILL.md:126`).
+`/approve-architecture` compares it with the forge `headRefOid` (`.claude/skills/approve-architecture/SKILL.md:124`).
 
 **Scope.**
 One PR, keyed on the base repository.

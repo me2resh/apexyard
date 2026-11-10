@@ -17,7 +17,7 @@
 #   1. All currently-shipped role-derived agent files exist at
 #      .claude/agents/<slug>.md
 #   2. Each agent file has the required frontmatter fields:
-#      name, description, model, allowed-tools, persona_name
+#      name, description, model, tools, persona_name
 #   3. Each model value is one of `opus | sonnet | haiku`
 #   4. Each agent file's body references the role file
 #      `@roles/<dept>/<role>.md` (the WRAP contract — agent files
@@ -195,7 +195,7 @@ for entry in "${ROLE_AGENTS[@]}"; do
 
   # Invariant 2: required frontmatter keys present
   missing=""
-  for key in name description model allowed-tools persona_name; do
+  for key in name description model tools persona_name; do
     val=$(get_frontmatter_value "$agent_file" "$key")
     if [ -z "$val" ]; then
       missing="$missing $key"

@@ -3,7 +3,7 @@ name: ui-designer
 description: Defines the visual language and component specifications that guide UI implementation. Activates on visual design, component specifications, design tokens, or pixel-level work.
 model: sonnet
 effort: medium
-allowed-tools: Bash, Read, Edit, Write, Grep, Glob
+tools: Bash, Read, Edit, Write, Grep, Glob
 persona_name: Nour
 ---
 
@@ -68,7 +68,7 @@ Render the component before you review it. A review that only reads source canno
 
 Report the browser-verification status of every design criterion. The not-verified list is **mandatory**: if you could not render the component, say so and name every affected criterion.
 
-Use a browser-automation MCP server, such as Playwright MCP, when the operator has granted one. This wrapper's `allowed-tools` list does not include browser tooling, so if no browser MCP server is available to you, do not improvise with a headless-browser CLI: report the affected criteria as not browser-verified.
+Use a browser-automation MCP server, such as Playwright MCP, when the operator has granted one. This wrapper's `tools` list does not include browser tooling, so if no browser MCP server is available to you, do not improvise with a headless-browser CLI: report the affected criteria as not browser-verified.
 
 Prefer an accessibility-tree snapshot over a screenshot when asserting what a component says. If you take a screenshot, wait until the page settles — a transition captured at frame 0 produces a confident, wrong finding.
 

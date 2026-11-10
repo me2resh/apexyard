@@ -27,7 +27,7 @@ The per-clone `claudeMdExcludes` setting in `.claude/settings.local.json` keeps 
 
 See `docs/getting-started.md` for the integration model and for how to install the `.claude/` layer.
 
-### Available skills (71)
+### Available skills (72)
 
 Each row gives one line for a skill. The full text for each skill is in `.claude/skills/<name>/SKILL.md`.
 
@@ -50,6 +50,7 @@ Each row gives one line for a skill. The full text for each skill is in `.claude
 | `/start-ticket` | Declares the active ticket for this session. Code edits need it. |
 | `/approve-merge` | Records per-PR CEO approval and merges. The merge gate needs it. |
 | `/explain-pr` | Read-only PR walkthrough: what, why, risks, and decisions. Optional comprehension quiz. Never writes markers or merges. |
+| `/pr-status` | Read-only PR gate state: approval records, forge checks and rules, QA evidence, and the next missing action. Never writes markers or merges. |
 | `/approve-design` | Records per-PR design-review approval for UI PRs. The design gate needs it. |
 | `/decide` | Makes a technical decision and creates an Agent Decision Record (AgDR). |
 | `/agdr` | Browses, searches, shows, and counts the AgDRs across the portfolio. |

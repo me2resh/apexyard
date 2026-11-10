@@ -225,14 +225,14 @@ Columns:
 
 | bucket | count |
 |--------|-------|
-| mechanized (`yes`: hook / agent enforces it fully) | 30 |
-| partially mechanized (`partial`: hook + prose combination) | 6 |
-| advisory (`no`: stays prose by design) | 40 |
+| mechanized (`yes`: hook / agent enforces it fully) | 32 |
+| partially mechanized (`partial`: hook + prose combination) | 9 |
+| advisory (`no`: stays prose by design) | 39 |
 | deferred to a follow-up ticket (`deferred`) | 4 |
-| **total rows** | **80** |
-| deferred tickets referenced | 5 ([#15][15], [#20][20], [#22][22], [#23][23], [#25][25]) |
+| **total rows** | **84** |
+| deferred tickets referenced | 4 ([#15][15], [#22][22], [#23][23], [#25][25]) |
 
-The count of deferred *rows* (4) and deferred *tickets* (5) differ. This is because [#15][15] is a meta-chore (resolve `.claude/` duplication between ops-repo and apexyard upstream) that gets one row in the onboarding section. In contrast, the commit-related tickets [#20][20] and [#22][22] share a row via `validate-branch-name.sh` + `validate-pr-create.sh`.
+Each deferred row cites one ticket, so the row count and the ticket count match.
 
 The spread confirms what AgDR-0001 set out to make true. The **high-blast-radius rules** (git add, main push, secrets, merge gate, ticket-first, commit format, arch-change AgDR, red-CI, UI design review) are hooks. The **per-project concerns** (coverage, type strictness, import-graph purity, testing pyramid) stay advisory because a framework-level shell harness cannot reach them without false-positive spam. The **self-discipline rules** (`/decide` trigger phrases, `Ticket N` vocabulary in chat, role adoption) stay advisory by design. The rule files are primary and the hooks catch only the durable-artefact symptoms.
 
