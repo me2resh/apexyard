@@ -94,11 +94,21 @@ The PRD should include:
 
 The list above is illustrative. Use the resolved template's Required and Conditional guidance. Do not add an empty conditional section only because it appears in this example.
 
-### 5. Review and Iterate
+### 5. Check Traceability
+
+Run the PRD-only traceability check after you save the draft. Run it from the ApexYard root:
+
+```bash
+bin/check-traceability.sh --prd <prd-path>
+```
+
+The check confirms that every user story has a requirement and that every requirement serves a user story. Report each `BLOCK` line to the author as a gap to fix. Report each `WARN` line as advice. The check is advisory. Continue the skill when it exits non-zero. See me2resh/apexyard#1749.
+
+### 6. Review and Iterate
 
 After generating the draft: ask if sections need adjustment, offer follow-ups.
 
-### 6. Create the Tracking Ticket
+### 7. Create the Tracking Ticket
 
 Offer to create an epic / feature ticket in the team's tracker with the PRD content.
 

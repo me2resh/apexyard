@@ -99,7 +99,15 @@ refusal message — but the cheap fix is upstream of both: don't pass a path.
 
 1. Resolve the target — a PR number (preferred: gives a diff + a place to post the verdict + a marker key) or a path to a design artifact. **Also resolve the repo**: the optional second arg (`/design-review 42 owner/repo`), or the `owner/repo#N` form. In split-portfolio v2 the PR lives in a sibling repo, so a bare `gh pr view 42` resolved against the ops-fork cwd hits the WRONG repo — pass the resolved repo as `--repo` to **every** `gh pr view` / `gh pr diff` call, and thread it into Tariq's spawn so it becomes BOTH his `$PR_HOST_REPO` (the base repo `tracker_review_submit` posts the review to — #763) AND the key for his `<owner>__<repo>__<pr>-architecture.approved` marker (and the active-reviewer marker from step 0). This is the slug the `require-architecture-review.sh` gate derives from the merge command's cd-target (me2resh/apexyard#687). If only a bare number is given and `gh pr view <N>` can't resolve the PR from the current cwd, STOP and ask for the `owner/repo#N` form — never write the marker under a guessed qualifier.
 2. Fetch PR details and the latest commit SHA (when reviewing a PR).
-3. Read the design artifact(s).
+3. Read the design artifact(s). Read the PRD that the design covers from the PR's base branch, not from the PR head. A design branch can hold an old copy of the PRD, and git shows no conflict when the base branch adds a user story (me2resh/apexyard#1749).
+   - Run the traceability check and give its output to Tariq. Fetch the base branch before step 0 arms the marker, because the mutation lock blocks `git fetch`:
+
+     ```bash
+     bin/check-traceability.sh --prd <prd-path> --design <design-path> --base "origin/<base-branch>"
+     ```
+
+   - Add `--orbit <project>/docs/orbit` when the PRD has the optional Traceability table.
+   - Each `BLOCK` line is a Requirements traceability finding. Each `WARN` line is a concern. The check is advisory. It does not gate the merge.
 4. Review against the architecture review lens (below) plus discovered handbooks.
 5. Submit the review through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host — #763), not a hardcoded `gh pr review` (when reviewing a PR).
 6. On APPROVED only: write the sign-off marker so the Design→Build gate passes (see `/approve-architecture` — Tariq writes the marker himself on an APPROVED verdict; `/approve-architecture` is the human/operator path to record the same marker). Clear the active-reviewer marker from step 0 after the review is posted.
@@ -135,6 +143,7 @@ refusal message — but the cheap fix is upstream of both: don't pass a path.
 ### Requirements traceability
 
 - Design satisfies the PRD / acceptance criteria; no scope creep, no uncovered requirement.
+- Each `BLOCK` line from `bin/check-traceability.sh` is a finding here. Compare against the PRD on the base branch.
 
 ### Migration safety (migration AgDRs)
 
