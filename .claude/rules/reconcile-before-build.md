@@ -60,3 +60,11 @@ Require this evidence: PR open, CI green on the current head SHA, Rex APPROVED a
 Set a limit of 20 turns. At that limit, stop and report the blocker with evidence.
 Build agents report results to the orchestrator, which obtains independent review and updates the note.
 See [Resume ticket work](../../docs/progress-notes.md).
+
+## Base check evidence
+
+Read `<tree git dir>/apexyard-progress.md` before you report a check failure as your own.
+Compare the check name with the recorded base result and base SHA.
+Report missing evidence as unknown.
+Run the full project check command before you push.
+Do not run only the new tests.

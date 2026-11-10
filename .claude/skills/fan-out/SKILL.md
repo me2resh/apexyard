@@ -249,3 +249,11 @@ Background tasks running: <ids>. They'll surface results when done.
 ---
 
 *Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+
+## Base check evidence
+
+Read `<tree git dir>/apexyard-progress.md` before you report a check failure as your own.
+Compare the check name with the recorded base result and base SHA.
+Report missing evidence as unknown.
+Run the full project check command before you push.
+Do not run only the new tests.

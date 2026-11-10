@@ -258,7 +258,9 @@ The command prints the marker (`repo=`, `number=`, `title=`, `url=`), or nothing
 
 ### Create the progress note and goal
 
-Call `progress_note_create "$tree"` after the marker write succeeds.
+Call `baseline_check "$tree"` after the fallback marker write.
+Load its libraries as shown in docs/progress-notes.md.
+Stop on error.
 Set `/goal`: acceptance criteria met, PR open, CI green on the current head SHA, Rex APPROVED at that head, progress note current; limit: 20 turns.
 Details: docs/progress-notes.md.
 

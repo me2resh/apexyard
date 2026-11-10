@@ -22,6 +22,14 @@ git checkout -b feature/GH-<issue>-short-slug upstream/dev
 gh pr create --base dev --fill
 ```
 
+To record the health of `dev` when you start a ticket, set the base check in your local `.claude/project-config.json` (git ignores this file):
+
+```json
+{ "checks": { "baseline_command": "bash bin/run-hook-tests.sh" } }
+```
+
+`/start-ticket` then runs the hook test suite once on the unchanged base and records the result. A red result tells you that a failure existed before your change. The shipped defaults leave this command unset, so adopters' projects never run the framework's suite.
+
 A maintainer + the Code Reviewer agent (Rex) review every PR before merge.
 
 ---
