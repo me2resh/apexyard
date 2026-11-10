@@ -1,0 +1,651 @@
+#!/usr/bin/env bash
+# apexyard-pr-status -- show one pull request's gate state. Read-only.
+#
+# Usage:
+#   apexyard-pr-status <owner>/<repo>#<N> [--json]
+#
+# The command prints, for one pull request (me2resh/apexyard#2030):
+#   - repository, PR number, head and base SHA, linked ticket, worktree,
+#     active review
+#   - each approval record (rex, security, design, architecture, ceo):
+#     the stored SHA and one status
+#   - forge state: required checks, CI rollup, formal "changes requested"
+#     reviews still in force, branch-rule requirements, merge state
+#   - QA evidence for the head (the pre-merge QA PASS stamp)
+#   - on the last line, the next missing action
+#
+# Every item has one status: satisfied, stale, missing, not required or
+# not verified. An item that cannot be checked is "not verified", never
+# "satisfied". "CI gate" (the merge hook result) and "CI green" (the forge
+# check result) are separate rows.
+#
+# SAME EVALUATOR AS THE MERGE GATE
+# The command sources the hook libraries (review_marker_path,
+# rex_approval_carries_over, resolve_pr_head, resolve_pr_base_ref, the
+# ops-root and active-ticket resolvers). It also runs the four merge-gate
+# hooks with a synthetic `gh pr merge` payload and reads their verdicts.
+# A hook only checks. It never merges. When this command and a gate do not
+# agree, the item is "not verified" and shows the gate's message.
+#
+# READ-ONLY
+# It writes no file, marker or label and makes no write API call:
+#   - every forge call of this command goes through prs_gh, which allows
+#     only `gh pr view`, `gh pr checks`, GET `gh api` and GraphQL queries
+#   - a `git` shell function, exported to the hook processes, refuses git
+#     verbs that write (fetch, commit, merge, reset and others). The
+#     carry-over check then reports "not verified" when an object is
+#     missing locally, instead of fetching it.
+#   - temporary files that the libraries create under TMPDIR are removed
+#     by those libraries.
+# tests: .claude/hooks/tests/test_apexyard_pr_status.sh
+
+set -u
+
+usage() {
+  cat <<'USAGE'
+Usage: apexyard-pr-status <owner>/<repo>#<N> [--json]
+
+Show one pull request's gate state. Read-only: no file, marker, label or
+write API call. Run it from a clone of the repository (or a worktree of
+it) so that the carry-over check can read the commits.
+USAGE
+}
+
+JSON=0
+TARGET=""
+for arg in "$@"; do
+  case "$arg" in
+    --json) JSON=1 ;;
+    -h|--help) usage; exit 0 ;;
+    -*) printf 'apexyard-pr-status: unknown option: %s\n' "$arg" >&2; usage >&2; exit 2 ;;
+    *)
+      if [ -n "$TARGET" ]; then
+        printf 'apexyard-pr-status: give one <owner>/<repo>#<N>\n' >&2
+        exit 2
+      fi
+      TARGET="$arg"
+      ;;
+  esac
+done
+REPO="${TARGET%%#*}"
+PR="${TARGET#*#}"
+if [ -z "$TARGET" ] || [ "$REPO" = "$TARGET" ] \
+   || ! printf '%s' "$REPO" | grep -qE '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$' \
+   || ! printf '%s' "$PR" | grep -qE '^[0-9]+$'; then
+  usage >&2
+  exit 2
+fi
+if ! command -v jq >/dev/null 2>&1; then
+  echo "apexyard-pr-status: jq is required" >&2
+  exit 2
+fi
+
+# --- Locate the hook libraries next to this script (follow symlinks). ----
+self="$0"
+while [ -L "$self" ]; do
+  link=$(readlink "$self")
+  case "$link" in
+    /*) self="$link" ;;
+    *) self="$(dirname "$self")/$link" ;;
+  esac
+done
+HOOK_DIR=$(cd "$(dirname "$self")/../.claude/hooks" 2>/dev/null && pwd) || HOOK_DIR=""
+if [ -z "$HOOK_DIR" ] || [ ! -f "$HOOK_DIR/_lib-review-markers.sh" ]; then
+  echo "apexyard-pr-status: cannot find .claude/hooks next to this script" >&2
+  exit 2
+fi
+
+# --- Read-only guards. ---------------------------------------------------
+# Refuse git verbs that write. Exported, so the hook processes use it too.
+git() {
+  local a sub="" skip=0
+  for a in "$@"; do
+    if [ "$skip" = 1 ]; then skip=0; continue; fi
+    case "$a" in
+      -c|-C|--git-dir|--work-tree|--namespace|--exec-path) skip=1 ;;
+      -*) ;;
+      *) sub="$a"; break ;;
+    esac
+  done
+  case "$sub" in
+    fetch|pull|push|commit|merge|rebase|reset|checkout|switch|gc|repack|prune|update-ref|update-index|stash|clean|am|apply|cherry-pick|revert|init|clone)
+      printf 'apexyard-pr-status: read-only, refused git %s\n' "$sub" >&2
+      return 1
+      ;;
+  esac
+  command git "$@"
+}
+export -f git
+
+# Allow only read calls to the forge.
+prs_gh() {
+  local a prev="" path="" is_gql=0 query=""
+  case "${1:-} ${2:-}" in
+    "pr view"|"pr checks") apexyard_gh "$@"; return ;;
+  esac
+  if [ "${1:-}" != api ]; then
+    printf 'apexyard-pr-status: read-only, refused gh %s\n' "$*" >&2
+    return 1
+  fi
+  for a in "$@"; do
+    case "$prev" in
+      -X|--method)
+        [ "$a" = GET ] || { printf 'apexyard-pr-status: read-only, refused gh api %s\n' "$a" >&2; return 1; } ;;
+      -f|-F|--field|--raw-field)
+        case "$a" in query=*) query="${a#query=}" ;; esac ;;
+    esac
+    case "$a" in
+      --input) printf 'apexyard-pr-status: read-only, refused gh api --input\n' >&2; return 1 ;;
+      graphql) [ -z "$path" ] && path=graphql && is_gql=1 ;;
+    esac
+    prev="$a"
+  done
+  if [ "$is_gql" = 1 ]; then
+    case "$query" in
+      query*) : ;;
+      *) printf 'apexyard-pr-status: read-only, refused a GraphQL call that is not a query\n' >&2; return 1 ;;
+    esac
+  else
+    for a in "$@"; do
+      case "$a" in
+        -f|-F|--field|--raw-field|-f*|-F*)
+          printf 'apexyard-pr-status: read-only, refused gh api with fields\n' >&2
+          return 1 ;;
+      esac
+    done
+  fi
+  apexyard_gh "$@"
+}
+
+# A gate must not reuse a merge snapshot from a parent process.
+unset APEXYARD_PRMETA_OWNER_PID APEXYARD_PRMETA_REPO APEXYARD_PRMETA_PR \
+  APEXYARD_PRMETA_HEAD APEXYARD_PRMETA_BRANCH APEXYARD_PRMETA_BASE \
+  APEXYARD_PRMETA_COUNT APEXYARD_PRMETA_DIR APEXYARD_PRMETA_FILES_SHA256
+
+# --- Shared libraries (the same code the merge gate uses). ---------------
+for lib in _lib-gh-timeout.sh _lib-ops-root.sh _lib-review-markers.sh \
+           _lib-tracker.sh _lib-extract-pr.sh _lib-merge-behind.sh \
+           _lib-active-ticket.sh; do
+  if [ ! -r "$HOOK_DIR/$lib" ]; then
+    printf 'apexyard-pr-status: missing library %s\n' "$HOOK_DIR/$lib" >&2
+    exit 2
+  fi
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/$lib" >/dev/null 2>&1
+done
+for fn in apexyard_gh resolve_ops_root review_marker_path unqualified_marker_path \
+          active_reviewer_marker_path resolve_pr_head resolve_pr_base_ref \
+          rex_approval_carries_over tracker_review_kind active_ticket_init \
+          active_ticket_lookup active_ticket_read_field; do
+  if ! declare -F "$fn" >/dev/null 2>&1; then
+    printf 'apexyard-pr-status: library function %s is missing\n' "$fn" >&2
+    exit 2
+  fi
+done
+
+# Marker home: resolved the same way as block-unreviewed-merge.sh.
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+OPS_ROOT=$(resolve_ops_root "$REPO_ROOT" 2>/dev/null)
+MARKER_HOME="${OPS_ROOT:-${REPO_ROOT:-.}}"
+
+S_OK="satisfied"; S_STALE="stale"; S_MISS="missing"; S_NR="not required"; S_NV="not verified"
+is_sha40() { printf '%s' "${1:-}" | grep -qE '^[0-9a-f]{40}$'; }
+short() { printf '%s' "${1:-}" | cut -c1-12; }
+
+ITEMS=""
+# add_item <section> <name> <status> <stored_sha> <detail>
+add_item() {
+  ITEMS="${ITEMS}$(jq -nc --arg s "$1" --arg n "$2" --arg st "$3" --arg sha "$4" --arg d "$5" \
+    '{section:$s,name:$n,status:$st,stored_sha:(if $sha == "" then null else $sha end),detail:$d}')
+"
+}
+# status_of <name> -> status of the first item with that name.
+status_of() {
+  printf '%s' "$ITEMS" | jq -rs --arg n "$1" '[.[] | select(.name == $n)][0].status // ""'
+}
+detail_of() {
+  printf '%s' "$ITEMS" | jq -rs --arg n "$1" '[.[] | select(.name == $n)][0].detail // ""'
+}
+
+FORGE_KIND=$(tracker_review_kind "$REPO" 2>/dev/null)
+[ -n "$FORGE_KIND" ] || FORGE_KIND=gh
+
+# --- PR metadata. ---------------------------------------------------------
+META=""
+if [ "$FORGE_KIND" = gh ]; then
+  META=$(prs_gh pr view "$PR" --repo "$REPO" \
+    --json number,state,isDraft,headRefOid,headRefName,baseRefName,baseRefOid,body,url,reviewDecision,mergeStateStatus 2>/dev/null) || META=""
+  printf '%s' "$META" | jq -e 'type == "object"' >/dev/null 2>&1 || META=""
+fi
+mfield() { [ -n "$META" ] && printf '%s' "$META" | jq -r "$1 // empty" 2>/dev/null; }
+PR_STATE=$(mfield .state)
+PR_DRAFT=$(mfield .isDraft)
+PR_URL=$(mfield .url)
+HEAD_REF=$(mfield .headRefName)
+BASE_SHA=$(mfield .baseRefOid)
+REVIEW_DECISION=$(mfield .reviewDecision)
+MERGE_STATE=$(mfield .mergeStateStatus)
+PR_BODY=$(mfield .body)
+
+# Head and base through the gate's own resolvers.
+HEAD=$(resolve_pr_head "$PR" "$REPO" 2>/dev/null)
+is_sha40 "$HEAD" || HEAD=""
+BASE_REF=$(resolve_pr_base_ref "$PR" "$REPO" 2>/dev/null)
+
+# --- Linked ticket and worktree. -----------------------------------------
+TICKET_BODY=$(printf '%s\n' "$PR_BODY" | grep -oiE '(closes|fixes|resolves|refs)[[:space:]]+([A-Za-z0-9._-]+/[A-Za-z0-9._-]+)?#[0-9]+' \
+  | head -1 | sed -E 's/^[A-Za-z]+[[:space:]]+//')
+case "$TICKET_BODY" in "#"*) TICKET_BODY="${REPO}${TICKET_BODY}" ;; esac
+TICKET_BRANCH=""
+if printf '%s' "$HEAD_REF" | grep -qE 'GH-[0-9]+'; then
+  TICKET_BRANCH="${REPO}#$(printf '%s' "$HEAD_REF" | grep -oE 'GH-[0-9]+' | head -1 | cut -d- -f2)"
+fi
+
+WORKTREE=""
+WT_TICKET=""
+if [ -n "$HEAD_REF" ] && [ -n "$REPO_ROOT" ] \
+   && git config --get-regexp '^remote\..*\.url$' 2>/dev/null | grep -qiE "[:/]${REPO}(\\.git)?/?\$"; then
+  WORKTREE=$(git worktree list --porcelain 2>/dev/null | awk -v b="branch refs/heads/${HEAD_REF}" '
+    /^worktree / { p = substr($0, 10) }
+    $0 == b { print p; exit }')
+fi
+if [ -n "$WORKTREE" ]; then
+  if active_ticket_init "$WORKTREE" >/dev/null 2>&1 && active_ticket_lookup "$WORKTREE" >/dev/null 2>&1 && [ -n "${REPLY:-}" ]; then
+    _wt_marker="$REPLY"
+    active_ticket_read_field "$_wt_marker" repo >/dev/null 2>&1 && _wt_repo="$REPLY" || _wt_repo=""
+    active_ticket_read_field "$_wt_marker" number >/dev/null 2>&1 && _wt_num="$REPLY" || _wt_num=""
+    [ -n "$_wt_num" ] && WT_TICKET="${_wt_repo}#${_wt_num}"
+    [ -n "$WT_TICKET" ] && [ "${AT_SOURCE:-}" = legacy ] && WT_TICKET="${WT_TICKET}, legacy marker"
+  fi
+fi
+
+# --- Active review markers (every session, this PR only). ----------------
+ACTIVE_REVIEWS=""
+_probe=$(active_reviewer_marker_path "$MARKER_HOME" probe "$REPO" "$PR" KIND)
+_prefix=$(basename "$_probe")
+_prefix="${_prefix%KIND}"
+for f in "$MARKER_HOME"/.claude/session/active-reviewers/*/"${_prefix}"*; do
+  [ -f "$f" ] || continue
+  ACTIVE_REVIEWS="${ACTIVE_REVIEWS}${ACTIVE_REVIEWS:+, }${f##*/"$_prefix"} (session $(basename "$(dirname "$f")"))"
+done
+
+# --- Run the four merge-gate hooks. --------------------------------------
+PAYLOAD=$(jq -nc --arg c "gh pr merge ${PR} --repo ${REPO}" '{tool_name:"Bash",tool_input:{command:$c}}')
+# run_gate <hook> -> GATE_RC, GATE_MSG (first BLOCKED or NOTE line)
+run_gate() {
+  local err
+  err=$(printf '%s' "$PAYLOAD" | "$BASH" "$HOOK_DIR/$1" 2>&1 >/dev/null)
+  GATE_RC=$?
+  GATE_MSG=$(printf '%s\n' "$err" | grep -m1 -E '^(BLOCKED|NOTE|WARN)' || true)
+  [ -n "$GATE_MSG" ] || GATE_MSG=$(printf '%s\n' "$err" | grep -m1 -v '^[[:space:]]*$' || true)
+}
+run_gate block-unreviewed-merge.sh;      G_REV_RC=$GATE_RC; G_REV_MSG=$GATE_MSG
+run_gate require-design-review-for-ui.sh; G_UI_RC=$GATE_RC;  G_UI_MSG=$GATE_MSG
+run_gate block-merge-on-red-ci.sh;       G_CI_RC=$GATE_RC;  G_CI_MSG=$GATE_MSG
+run_gate require-architecture-review.sh; G_ARC_RC=$GATE_RC; G_ARC_MSG=$GATE_MSG
+
+# carry <stored_sha> -> echoes true|false|unknown|timeout (shared memo).
+carry() {
+  rex_approval_carries_over "$REPO" "$1" "$HEAD" "$BASE_REF" >/dev/null 2>&1
+  printf '%s' "${_REX_CARRY_LAST:-unknown}"
+}
+marker_sha() {
+  if grep -q '^sha=' "$1" 2>/dev/null; then
+    grep -m1 '^sha=' "$1" | sed -E 's/^sha=//; s/^"(.*)"$/\1/' | tr -d '[:space:]'
+  else
+    tr -d '[:space:]' < "$1" 2>/dev/null
+  fi
+}
+
+# --- Rex. ------------------------------------------------------------------
+REX_FILE=$(review_marker_path "$REPO" "$PR" rex "$MARKER_HOME")
+REX_SHA=""
+if [ ! -f "$REX_FILE" ]; then
+  REX_ST=$S_MISS; REX_D="no record at ${REX_FILE}"
+  if [ -f "$(unqualified_marker_path "$MARKER_HOME" "$PR" rex 2>/dev/null)" ]; then
+    REX_D="${REX_D}; a bare-number file exists that no gate reads"
+  fi
+else
+  REX_SHA=$(tr -d '[:space:]' < "$REX_FILE")
+  if [ -z "$HEAD" ]; then
+    REX_ST=$S_NV; REX_D="the PR head could not be read from the forge"
+  elif [ "$REX_SHA" = "$HEAD" ]; then
+    REX_ST=$S_OK; REX_D="matches the head"
+  elif ! is_sha40 "$REX_SHA"; then
+    REX_ST=$S_NV; REX_D="the record does not hold a 40-character SHA"
+  else
+    case "$(carry "$REX_SHA")" in
+      true) REX_ST=$S_OK; REX_D="carried over through verified base merges" ;;
+      false) REX_ST=$S_STALE; REX_D="approved $(short "$REX_SHA"), head is $(short "$HEAD")" ;;
+      *) REX_ST=$S_NV; REX_D="carry-over could not be checked (run from a clone that has the commits)" ;;
+    esac
+  fi
+fi
+# Cross-check with the gate: a disagreement is never shown as satisfied.
+case "$G_REV_MSG" in
+  *"no recorded code-reviewer"*|*"Code-reviewer approved commit"*)
+    if [ "$REX_ST" = "$S_OK" ]; then REX_ST=$S_NV; REX_D="the merge gate disagrees: ${G_REV_MSG}"; fi ;;
+esac
+if [ "$G_REV_RC" = 0 ] && [ "$REX_ST" != "$S_OK" ] && [ "$REX_ST" != "$S_NV" ]; then
+  REX_D="the merge gate passes, but the record reads as ${REX_ST}"; REX_ST=$S_NV
+fi
+add_item records rex "$REX_ST" "$REX_SHA" "$REX_D"
+
+# --- Security: no merge-gate record exists. ------------------------------
+SEC_FILE=$(review_marker_path "$REPO" "$PR" security "$MARKER_HOME")
+SEC_SHA=""
+SEC_D="no merge gate reads a security record; the security review is a posted review"
+if [ -f "$SEC_FILE" ]; then
+  SEC_SHA=$(marker_sha "$SEC_FILE")
+  if [ -n "$HEAD" ] && [ "$SEC_SHA" = "$HEAD" ]; then
+    SEC_D="${SEC_D}; a local record matches the head"
+  else
+    SEC_D="${SEC_D}; a local record names another commit"
+  fi
+fi
+add_item records security "$S_NR" "$SEC_SHA" "$SEC_D"
+
+# --- Design and architecture: verdict from the gate hook. ----------------
+# exact_record <role> <gate_rc> <gate_msg> <missing_text> <stale_text> <invalid_text> <nr_text>
+exact_record() {
+  local role="$1" rc="$2" msg="$3" miss="$4" stale="$5" invalid="$6" nrtext="$7" file sha="" st d
+  file=$(review_marker_path "$REPO" "$PR" "$role" "$MARKER_HOME")
+  [ -f "$file" ] && sha=$(marker_sha "$file")
+  if [ "$rc" = 0 ]; then
+    if [ ! -f "$file" ]; then
+      st=$S_NR; d="$nrtext"
+    elif [ -n "$HEAD" ] && [ "$sha" = "$HEAD" ]; then
+      st=$S_OK; d="matches the head"
+    else
+      st=$S_NR; d="${nrtext}; the record at $(short "$sha") is not used"
+    fi
+  else
+    case "$msg" in
+      *"$miss"*) st=$S_MISS; d="no record at ${file}" ;;
+      *"$stale"*) st=$S_STALE; d="approved $(short "$sha"), head is $(short "$HEAD")" ;;
+      *"$invalid"*) st=$S_MISS; d="the record is not valid: ${msg}" ;;
+      *) st=$S_NV; d="gate result: ${msg:-exit $rc}" ;;
+    esac
+  fi
+  add_item records "$role" "$st" "$sha" "$d"
+}
+exact_record design "$G_UI_RC" "$G_UI_MSG" "no design-review approval marker" \
+  "Design review approved commit" "menu record is invalid" "the diff has no UI files"
+exact_record architecture "$G_ARC_RC" "$G_ARC_MSG" "no architecture-review approval marker" \
+  "Architecture review approved commit" "menu record is invalid" "the diff has no design artifact"
+
+# --- Human approval (ceo). Field validation is inline in the gate, so the
+# gate result decides. -------------------------------------------------------
+CEO_FILE=$(review_marker_path "$REPO" "$PR" ceo "$MARKER_HOME")
+CEO_SHA=""
+if [ ! -f "$CEO_FILE" ]; then
+  CEO_ST=$S_MISS; CEO_D="no record at ${CEO_FILE}"
+else
+  CEO_SHA=$(marker_sha "$CEO_FILE")
+  if [ "$G_REV_RC" = 0 ]; then
+    CEO_ST=$S_OK
+    if [ "$CEO_SHA" = "$HEAD" ]; then CEO_D="matches the head"; else CEO_D="carried over through verified base merges"; fi
+  else
+    case "$G_REV_MSG" in
+      *"Code-reviewer approved commit"*|*"no recorded code-reviewer"*) CEO_ST="" ;;
+      *"approved commit"*"but HEAD is now"*) CEO_ST=$S_STALE; CEO_D="approved $(short "$CEO_SHA"), head is $(short "$HEAD")" ;;
+      *"stale or unrecognised format"*|*"approved_by=user"*|*"skill_version="*|*"marker has approval_channel"*|*"menu approval record is invalid"*)
+        CEO_ST=$S_MISS; CEO_D="the record is not valid: ${G_REV_MSG}" ;;
+      *) CEO_ST="" ;;
+    esac
+    if [ -z "$CEO_ST" ]; then
+      # The gate stopped before it read this record.
+      if [ -n "$HEAD" ] && is_sha40 "$CEO_SHA" && [ "$CEO_SHA" != "$HEAD" ] && [ "$(carry "$CEO_SHA")" = false ]; then
+        CEO_ST=$S_STALE; CEO_D="approved $(short "$CEO_SHA"), head is $(short "$HEAD")"
+      else
+        CEO_ST=$S_NV; CEO_D="the merge gate stops before it reads this record: ${G_REV_MSG:-exit $G_REV_RC}"
+      fi
+    fi
+  fi
+fi
+add_item records ceo "$CEO_ST" "$CEO_SHA" "$CEO_D"
+
+# --- Local merge gates (the hooks' own result). --------------------------
+gate_item() {
+  local name="$1" rc="$2" msg="$3"
+  if [ "$rc" = 0 ]; then
+    case "$msg" in
+      NOTE:*|WARN:*) add_item gates "$name" "$S_NV" "" "passed without a verified result: ${msg}" ;;
+      *) add_item gates "$name" "$S_OK" "" "passed" ;;
+    esac
+  else
+    case "$msg" in
+      *"could not"*|*"cannot"*|*"timed out"*|*"unavailable"*|*"invalid"*|*"failed"*|*"Could not"*)
+        add_item gates "$name" "$S_NV" "" "blocked: ${msg:-exit $rc}" ;;
+      *) add_item gates "$name" "$S_MISS" "" "blocked: ${msg:-exit $rc}" ;;
+    esac
+  fi
+}
+gate_item "review gate" "$G_REV_RC" "$G_REV_MSG"
+gate_item "design gate" "$G_UI_RC" "$G_UI_MSG"
+gate_item "CI gate" "$G_CI_RC" "$G_CI_MSG"
+gate_item "architecture gate" "$G_ARC_RC" "$G_ARC_MSG"
+
+# --- Forge: checks, reviews, branch rules, merge state. ------------------
+OWNER="${REPO%%/*}"; NAME="${REPO#*/}"
+if [ "$FORGE_KIND" != gh ]; then
+  for n in "required checks" "CI green" "changes requested" "branch rules" "merge state"; do
+    add_item forge "$n" "$S_NV" "" "only GitHub is supported (review kind: ${FORGE_KIND})"
+  done
+else
+  # shellcheck disable=SC2016  # GraphQL variables, not shell expansions
+  ROLLUP_Q='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){commits(last:1){nodes{commit{oid statusCheckRollup{state contexts(first:100){pageInfo{hasNextPage} nodes{__typename ... on CheckRun{name status conclusion isRequired(pullRequestNumber:$number)} ... on StatusContext{context state isRequired(pullRequestNumber:$number)}}}}}}}}}}'
+  ROLLUP=$(prs_gh api graphql -f "query=$ROLLUP_Q" -f "owner=$OWNER" -f "name=$NAME" -F "number=$PR" 2>/dev/null) || ROLLUP=""
+  RCOMMIT=$(printf '%s' "$ROLLUP" | jq -r '.data.repository.pullRequest.commits.nodes[0].commit.oid // empty' 2>/dev/null)
+  if [ -z "$ROLLUP" ] || [ -z "$RCOMMIT" ] || [ -z "$HEAD" ]; then
+    add_item forge "required checks" "$S_NV" "" "the checks API did not answer"
+    add_item forge "CI green" "$S_NV" "" "the checks API did not answer"
+  elif [ "$RCOMMIT" != "$HEAD" ]; then
+    add_item forge "required checks" "$S_NV" "" "the forge reported checks for $(short "$RCOMMIT"), not the head"
+    add_item forge "CI green" "$S_NV" "" "the forge reported checks for $(short "$RCOMMIT"), not the head"
+  else
+    REQ=$(printf '%s' "$ROLLUP" | jq -r '
+      .data.repository.pullRequest.commits.nodes[0].commit.statusCheckRollup as $r
+      | if $r == null then "none" else
+        ([$r.contexts.nodes[] | select(.isRequired == true)
+          | {n: (.name // .context),
+             r: (if .__typename == "CheckRun"
+                 then (if .status != "COMPLETED" then "pending"
+                       elif (.conclusion == "SUCCESS" or .conclusion == "NEUTRAL" or .conclusion == "SKIPPED") then "pass"
+                       else "fail" end)
+                 else (if .state == "SUCCESS" then "pass" elif (.state == "PENDING" or .state == "EXPECTED") then "pending" else "fail" end) end)}]) as $req
+        | (if $r.contexts.pageInfo.hasNextPage then "truncated" elif ($req | length) == 0 then "none"
+           elif all($req[]; .r == "pass") then "pass" else "fail" end)
+          + "\t" + ([$req[] | "\(.n)=\(.r)"] | join(", "))
+        end' 2>/dev/null)
+    REQ_V="${REQ%%	*}"; REQ_L=""
+    case "$REQ" in *"	"*) REQ_L="${REQ#*	}" ;; esac
+    case "$REQ_V" in
+      pass) add_item forge "required checks" "$S_OK" "" "$REQ_L" ;;
+      fail) add_item forge "required checks" "$S_MISS" "" "not all pass: $REQ_L" ;;
+      none) add_item forge "required checks" "$S_NR" "" "the branch rules require no check" ;;
+      *) add_item forge "required checks" "$S_NV" "" "more than 100 checks, or an unreadable answer" ;;
+    esac
+    RSTATE=$(printf '%s' "$ROLLUP" | jq -r '.data.repository.pullRequest.commits.nodes[0].commit.statusCheckRollup.state // "NONE"' 2>/dev/null)
+    case "$RSTATE" in
+      SUCCESS) add_item forge "CI green" "$S_OK" "" "every check at the head passed" ;;
+      NONE) add_item forge "CI green" "$S_MISS" "" "no check reported a result for the head" ;;
+      *) add_item forge "CI green" "$S_MISS" "" "check rollup is ${RSTATE}" ;;
+    esac
+  fi
+
+  REVIEWS=$(prs_gh api "repos/${REPO}/pulls/${PR}/reviews?per_page=100" --paginate 2>/dev/null) || REVIEWS=""
+  REVIEWS=$(printf '%s' "$REVIEWS" | jq -cs 'if all(.[]; type == "array") then add // [] else error end' 2>/dev/null) || REVIEWS=""
+  if [ -z "$REVIEWS" ]; then
+    add_item forge "changes requested" "$S_NV" "" "the reviews API did not answer"
+  else
+    CR=$(printf '%s' "$REVIEWS" | jq -r '
+      [.[] | select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or .state == "DISMISSED")]
+      | group_by(.user.login) | map(max_by(.submitted_at // ""))
+      | map(select(.state == "CHANGES_REQUESTED") | "\(.user.login) at \((.commit_id // "")[0:12])")
+      | join(", ")' 2>/dev/null)
+    if [ -n "$CR" ]; then
+      add_item forge "changes requested" "$S_MISS" "" "a formal changes-requested review is in force: ${CR}"
+    else
+      add_item forge "changes requested" "$S_OK" "" "no formal changes-requested review is in force"
+    fi
+  fi
+
+  # Branch rules: rulesets (readable without admin), then classic protection.
+  ENC_BASE=$(printf '%s' "$BASE_REF" | sed 's#/#%2F#g')
+  RULES=""; RULES_OK=0
+  if [ -n "$BASE_REF" ] && RULES=$(prs_gh api "repos/${REPO}/rules/branches/${ENC_BASE}" 2>/dev/null) \
+     && printf '%s' "$RULES" | jq -e 'type == "array"' >/dev/null 2>&1; then
+    RULES_OK=1
+  fi
+  CLASSIC="unknown"; CLASSIC_K=0
+  if [ -n "$BASE_REF" ] && BR=$(prs_gh api "repos/${REPO}/branches/${ENC_BASE}" 2>/dev/null); then
+    case "$(printf '%s' "$BR" | jq -r '.protected // empty' 2>/dev/null)" in
+      false) CLASSIC="none" ;;
+      true)
+        if PROT=$(prs_gh api "repos/${REPO}/branches/${ENC_BASE}/protection" 2>/dev/null) \
+           && printf '%s' "$PROT" | jq -e 'type == "object"' >/dev/null 2>&1; then
+          CLASSIC="read"
+          CLASSIC_K=$(printf '%s' "$PROT" | jq -r '.required_pull_request_reviews.required_approving_review_count // 0' 2>/dev/null)
+        fi ;;
+    esac
+  fi
+  if [ "$RULES_OK" = 0 ]; then
+    add_item forge "branch rules" "$S_NV" "" "the rules API did not answer for base ${BASE_REF:-unknown}"
+  else
+    RULE_K=$(printf '%s' "$RULES" | jq -r '[.[] | select(.type == "pull_request") | .parameters.required_approving_review_count // 0] | max // 0' 2>/dev/null)
+    RULE_TXT=$(printf '%s' "$RULES" | jq -r '[.[] | .type] | unique | join(", ")' 2>/dev/null)
+    K=$RULE_K
+    [ "${CLASSIC_K:-0}" -gt "${K:-0}" ] 2>/dev/null && K=$CLASSIC_K
+    RD="requires ${K:-0} approving review(s); rules: ${RULE_TXT:-none}; review decision: ${REVIEW_DECISION:-none}"
+    if [ "${K:-0}" -gt 0 ] 2>/dev/null; then
+      case "$REVIEW_DECISION" in
+        APPROVED) add_item forge "branch rules" "$S_OK" "" "$RD" ;;
+        REVIEW_REQUIRED|CHANGES_REQUESTED) add_item forge "branch rules" "$S_MISS" "" "$RD" ;;
+        *) add_item forge "branch rules" "$S_NV" "" "$RD" ;;
+      esac
+    elif [ "$CLASSIC" = unknown ]; then
+      add_item forge "branch rules" "$S_NV" "" "classic branch protection needs admin access to read; ${RD}"
+    else
+      add_item forge "branch rules" "$S_NR" "" "$RD"
+    fi
+  fi
+
+  if [ "$PR_DRAFT" = true ]; then
+    add_item forge "merge state" "$S_MISS" "" "the PR is a draft"
+  else
+    case "$MERGE_STATE" in
+      CLEAN|HAS_HOOKS|UNSTABLE) add_item forge "merge state" "$S_OK" "" "forge merge state ${MERGE_STATE}" ;;
+      BEHIND|BLOCKED|DIRTY) add_item forge "merge state" "$S_MISS" "" "forge merge state ${MERGE_STATE}" ;;
+      *) add_item forge "merge state" "$S_NV" "" "forge merge state ${MERGE_STATE:-unknown}" ;;
+    esac
+  fi
+fi
+
+# --- QA evidence for the head. -------------------------------------------
+if [ "$FORGE_KIND" != gh ]; then
+  add_item qa "pre-merge QA" "$S_NV" "" "only GitHub is supported"
+else
+  COMMENTS=$(prs_gh api "repos/${REPO}/issues/${PR}/comments?per_page=100" --paginate 2>/dev/null) || COMMENTS=""
+  COMMENTS=$(printf '%s' "$COMMENTS" | jq -cs 'if all(.[]; type == "array") then add // [] else error end' 2>/dev/null) || COMMENTS=""
+  if [ -z "$COMMENTS" ] || [ -z "$REVIEWS" ]; then
+    add_item qa "pre-merge QA" "$S_NV" "" "the comments or reviews API did not answer"
+  else
+    QA=$(jq -rn --argjson c "$COMMENTS" --argjson r "$REVIEWS" --arg head "$HEAD" '
+      [($c + $r)[]
+       | select((.author_association // "") as $a | ["OWNER","MEMBER","COLLABORATOR"] | index($a))
+       | (.body // "") | capture("<!-- apexyard-pre-merge-qa: sha=(?<sha>[0-9a-f]{40}) status=(?<st>PASS|FAIL|INCOMPLETE) -->"; "g")]
+      as $s
+      | ([$s[] | select(.sha == $head)] | last) as $h
+      | if $h != null then "\($h.st)\t\($h.sha)"
+        elif ($s | length) > 0 then "OTHER\t\($s | last | .sha)"
+        else "NONE\t" end' 2>/dev/null)
+    QA_V="${QA%%	*}"; QA_SHA="${QA#*	}"
+    case "$QA_V" in
+      PASS) add_item qa "pre-merge QA" "$S_OK" "$QA_SHA" "PASS stamped at the head (advisory; QA has no merge gate)" ;;
+      FAIL|INCOMPLETE) add_item qa "pre-merge QA" "$S_MISS" "$QA_SHA" "${QA_V} stamped at the head" ;;
+      OTHER) add_item qa "pre-merge QA" "$S_STALE" "$QA_SHA" "the latest stamp names another commit" ;;
+      NONE) add_item qa "pre-merge QA" "$S_MISS" "" "no pre-merge QA stamp from an owner, member or collaborator" ;;
+      *) add_item qa "pre-merge QA" "$S_NV" "" "the QA stamps could not be read" ;;
+    esac
+  fi
+fi
+
+# --- Next missing action. -------------------------------------------------
+H12=$(short "$HEAD")
+is_open() { case "$(status_of "$1")" in "$S_MISS"|"$S_STALE") return 0 ;; esac; return 1; }
+NEXT=""
+if [ -z "$HEAD" ]; then
+  NEXT="Fix forge access: the PR head could not be read from the forge."
+elif [ -n "$PR_STATE" ] && [ "$PR_STATE" != OPEN ]; then
+  NEXT="Nothing to merge: the PR is ${PR_STATE}."
+elif is_open "required checks"; then
+  NEXT="Required checks must pass at ${H12}: $(detail_of "required checks")."
+elif is_open "CI green"; then
+  NEXT="CI must be green at ${H12}: $(detail_of "CI green")."
+elif is_open rex; then
+  NEXT="Rex review needed at ${H12} (/code-review ${PR})."
+elif is_open "changes requested"; then
+  NEXT="Dismiss or replace the formal changes-requested review: $(detail_of "changes requested" | sed 's/^a formal changes-requested review is in force: //')."
+elif is_open design; then
+  NEXT="Design approval needed at ${H12} (/approve-design ${PR})."
+elif is_open architecture; then
+  NEXT="Architecture review needed at ${H12} (/design-review ${PR})."
+elif is_open "branch rules"; then
+  NEXT="An approving review is required by the branch rule."
+elif is_open ceo; then
+  NEXT="Human approval needed at ${H12}: the human approver runs /approve-merge ${PR}."
+else
+  for n in "review gate" "design gate" "CI gate" "architecture gate" "merge state"; do
+    if is_open "$n"; then NEXT="Resolve the ${n}: $(detail_of "$n")."; break; fi
+  done
+fi
+if [ -z "$NEXT" ]; then
+  NV=$(printf '%s' "$ITEMS" | jq -rs '[.[] | select(.status == "not verified" and .section != "qa")][0] | if . == null then "" else "\(.name): \(.detail)" end')
+  if [ -n "$NV" ]; then
+    NEXT="Verify ${NV}"
+  else
+    NEXT="Ready to merge at ${H12}. The merge gates check again at merge time."
+  fi
+fi
+
+# --- Output. --------------------------------------------------------------
+if [ "$JSON" = 1 ]; then
+  printf '%s' "$ITEMS" | jq -s \
+    --arg repo "$REPO" --argjson pr "$PR" --arg url "$PR_URL" --arg state "$PR_STATE" \
+    --arg head "$HEAD" --arg head_ref "$HEAD_REF" --arg base_ref "$BASE_REF" --arg base_sha "$BASE_SHA" \
+    --arg tb "$TICKET_BODY" --arg tbr "$TICKET_BRANCH" --arg wt "$WORKTREE" --arg wtt "$WT_TICKET" \
+    --arg ar "$ACTIVE_REVIEWS" --arg home "$MARKER_HOME" --arg next "$NEXT" '
+    def n: if . == "" then null else . end;
+    {repo: $repo, pr: $pr, url: ($url | n), state: ($state | n),
+     head: {sha: ($head | n), ref: ($head_ref | n)},
+     base: {ref: ($base_ref | n), sha: ($base_sha | n)},
+     ticket: {from_body: ($tb | n), from_branch: ($tbr | n)},
+     worktree: {path: ($wt | n), ticket_marker: ($wtt | n)},
+     active_reviews: ($ar | n), marker_home: $home,
+     items: ., next_action: $next}'
+  exit 0
+fi
+
+printf 'PR %s#%s  %s%s\n' "$REPO" "$PR" "${PR_STATE:-state unknown}" "${PR_URL:+  $PR_URL}"
+printf '  head      %s  %s\n' "${HEAD:-unknown}" "$HEAD_REF"
+printf '  base      %s  %s\n' "${BASE_SHA:-unknown}" "${BASE_REF:-unknown}"
+printf '  ticket    %s\n' "${TICKET_BODY:-${TICKET_BRANCH:-none found in the PR body or branch}}"
+if [ -n "$WORKTREE" ]; then
+  printf '  worktree  %s (ticket marker: %s)\n' "$WORKTREE" "${WT_TICKET:-none}"
+else
+  printf '  worktree  not found from this directory\n'
+fi
+printf '  review    %s\n' "${ACTIVE_REVIEWS:-no active review}"
+printf '  records   %s\n' "$(review_markers_dir "$MARKER_HOME")"
+printf '%s' "$ITEMS" | jq -rs '
+  def title: {records: "Approval records", gates: "Local merge gates (run read-only)",
+              forge: "Forge", qa: "QA evidence"}[.];
+  def pad($w): . + (" " * ([($w - length), 0] | max));
+  group_by(.section) as $g
+  | ["records", "gates", "forge", "qa"][] as $s
+  | ($g[] | select(.[0].section == $s)) as $items
+  | "\n" + ($s | title) + "\n"
+    + ([$items[] | "  " + (.name | pad(18)) + (.status | pad(14))
+         + ((.stored_sha // "-")[0:12] | pad(14)) + .detail] | join("\n"))'
+printf '\nNext: %s\n' "$NEXT"
