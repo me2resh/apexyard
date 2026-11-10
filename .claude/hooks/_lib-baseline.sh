@@ -5,11 +5,11 @@ baseline_check() (
   dir=$(git -C "$tree" rev-parse --absolute-git-dir) || { printf 'WARN: Base check could not run. The ticket is set.\n' >&2; return 0; }
   note="$dir/apexyard-progress.md"
   sha=$(git -C "$tree" rev-parse --verify HEAD 2>/dev/null) || sha=unborn
-  # Resolve operator configuration independently of the ticket tree.
-  # shellcheck source=/dev/null
-  . "$(dirname "${BASH_SOURCE[0]}")/_lib-ops-root.sh"
-  local ops_root
-  ops_root=$(resolve_ops_root "$tree")
+  # The ops root is the checkout that holds this library. Never walk up from
+  # the ticket tree: a managed repo could then pose as the ops root.
+  local lib_dir ops_root=''
+  lib_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P) || lib_dir=''
+  case "$lib_dir" in */.claude/hooks) ops_root=${lib_dir%/.claude/hooks} ;; esac
   # Never reuse a managed tree's config or the shared config cache.
   # shellcheck disable=SC2034
   local _CONFIG_ROOT_CACHE="$ops_root" _CONFIG_ROOT_CACHE_SET=1 _CONFIG_CACHE='{}' APEXYARD_DISABLE_RESOLUTION_CACHE=1

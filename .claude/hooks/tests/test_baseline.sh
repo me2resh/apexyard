@@ -66,33 +66,52 @@ if run_case; then exit 1; fi
 grep -q 'base_result=timed out' "$note"
 [ "$(git -C "$TMP/tree" worktree list --porcelain | grep -c '^worktree ')" = 1 ]
 [ "$(cat "$TMP/tree/input")" = edited ]
-# A managed project's committed config must never supply executable settings.
+# A managed project's committed config must never supply executable settings,
+# even when the project poses as an ops root and no session pin exists.
 (
-  # shellcheck source=/dev/null
-  . "$ROOT/.claude/hooks/_lib-read-config.sh"
-  mkdir -p "$TMP/ops/.claude" "$TMP/tree/.claude"
+  export APEXYARD_OPS_DISABLE_PIN=1
+  unset CLAUDE_CODE_SESSION_ID
+  mkdir -p "$TMP/ops/.claude/hooks"
   touch "$TMP/ops/.apexyard-fork"
   cp "$ROOT/.claude/project-config.defaults.json" "$TMP/ops/.claude/"
+  cp "$ROOT"/.claude/hooks/_lib-*.sh "$TMP/ops/.claude/hooks/"
+  # The library runs from the ops root's own copy, as the start helper loads it.
+  unset -f config_get_or
+  # shellcheck source=/dev/null
+  . "$TMP/ops/.claude/hooks/_lib-read-config.sh"
+  # shellcheck source=/dev/null
+  . "$TMP/ops/.claude/hooks/_lib-progress-note.sh"
+  # shellcheck source=/dev/null
+  . "$TMP/ops/.claude/hooks/_lib-baseline.sh"
+  # The managed repo commits its own fork anchor, defaults and command.
+  mkdir -p "$TMP/tree/.claude"
+  touch "$TMP/tree/.apexyard-fork"
+  cp "$ROOT/.claude/project-config.defaults.json" "$TMP/tree/.claude/"
   jq -n --arg cmd "touch '$TMP/hostile-ran'" '{checks:{baseline_command:$cmd,baseline_mode:"refuse"}}' > "$TMP/tree/.claude/project-config.json"
-  git -C "$TMP/tree" add .claude/project-config.json
+  git -C "$TMP/tree" add -f .apexyard-fork .claude/project-config.defaults.json .claude/project-config.json
   git -C "$TMP/tree" -c user.name=Test -c user.email=test@example.test commit -qm config
-  mv "$TMP/tree" "$TMP/ops/project"
-  tree="$TMP/ops/project"
-  note="$tree/.git/apexyard-progress.md"
-  # Start from the managed tree, with a stale project config cache too.
-  cd "$tree"
-  _CONFIG_ROOT_CACHE="$tree"
-  _CONFIG_CACHE=$(cat .claude/project-config.json)
-  printf 'repo=owner/repo\nnumber=8\n' > .git/apexyard-ticket
-  baseline_check "$tree" > "$TMP/out" 2>&1
-  grep -q 'base_result=not configured' "$note"
-  [ ! -e "$TMP/hostile-ran" ]
-  jq -n --arg cmd "touch '$TMP/operator-ran'" '{checks:{baseline_command:$cmd}}' > "$TMP/ops/.claude/project-config.json"
-  printf 'repo=owner/repo\nnumber=9\n' > .git/apexyard-ticket
-  baseline_check "$tree" > "$TMP/out" 2>&1
-  grep -q 'base_result=pass' "$note"
-  [ -f "$TMP/operator-ran" ]
-  [ ! -e "$TMP/hostile-ran" ]
+  number=7
+  for place in outside inside; do
+    if [ "$place" = inside ]; then mv "$TMP/tree" "$TMP/ops/project"; tree="$TMP/ops/project"; else tree="$TMP/tree"; fi
+    note="$tree/.git/apexyard-progress.md"
+    rm -f "$TMP/ops/.claude/project-config.json"
+    # Start from the managed tree, with a stale project config cache too.
+    cd "$tree"
+    _CONFIG_ROOT_CACHE="$tree"
+    _CONFIG_CACHE=$(cat .claude/project-config.json)
+    number=$((number + 1))
+    printf 'repo=owner/repo\nnumber=%s\n' "$number" > .git/apexyard-ticket
+    baseline_check "$tree" > "$TMP/out" 2>&1
+    grep -q 'base_result=not configured' "$note"
+    [ ! -e "$TMP/hostile-ran" ]
+    jq -n --arg cmd "touch '$TMP/operator-ran-$place'" '{checks:{baseline_command:$cmd}}' > "$TMP/ops/.claude/project-config.json"
+    number=$((number + 1))
+    printf 'repo=owner/repo\nnumber=%s\n' "$number" > .git/apexyard-ticket
+    baseline_check "$tree" > "$TMP/out" 2>&1
+    grep -q 'base_result=pass' "$note"
+    [ -f "$TMP/operator-ran-$place" ]
+    [ ! -e "$TMP/hostile-ran" ]
+  done
 )
 # Missing python3 is setup evidence, even in refuse mode.
 (
