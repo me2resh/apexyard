@@ -24,6 +24,10 @@ Stop if the function returns a nonzero status.
 The function records the base SHA and result in `<tree git dir>/apexyard-progress.md`.
 It reuses the result when the same ticket starts again.
 
+Read `checks.*` only from the ops root's git-ignored `.claude/project-config.json` and shipped defaults.
+Managed-project clones and worktrees cannot supply these settings.
+Linked ticket worktrees use the ops root's settings.
+
 Set `checks.baseline_command` in `.claude/project-config.json` to the full check command.
 The command runs in a clean detached worktree at the starting commit.
 Print `FAIL <check name>` or `FAIL: <check name>` for each failed check.
@@ -35,6 +39,8 @@ The default is 600 seconds.
 An unset command records `not configured` and prints one line.
 A failure or timeout prints one warning.
 The default `checks.baseline_mode` is `warn`.
+Setup or evidence-write errors print one warning and allow the ticket start.
+A missing `python3` records `not run` with the reason when the note is writable.
 Set this key to `refuse` to stop on failure or timeout.
 
 ## Update the note

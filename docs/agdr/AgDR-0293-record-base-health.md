@@ -25,6 +25,10 @@ Apply `refuse` only when the operator configures it.
 
 ## Consequences
 
+Read `checks.*` only from the ops root's git-ignored `.claude/project-config.json` and shipped defaults.
+Managed-project clones and worktrees cannot supply these settings.
+Linked ticket worktrees use the ops root's settings.
+
 Each check starts from committed files.
 The command must prepare any dependencies it needs.
 The runner removes its worktree when it exits.

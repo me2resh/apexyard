@@ -40,15 +40,15 @@ fake_mode=warn
 fake_command='test "$(cat input)" = unchanged'
 run_case
 grep -q "base_sha=$sha; base_result=pass" "$note"
-fake_command='echo FAIL: first-check; echo FAIL: second-check; exit 1'
+fake_command="echo run >> '$TMP/counter'; echo FAIL: first-check; echo FAIL: second-check; exit 1"
 run_case
 grep -q 'base_result=fail; first_failing_check=first-check' "$note"
 [ "$(grep -c WARN "$TMP/out")" = 1 ]
 grep -q pre-existing "$TMP/out"
 # Repeating a start must not execute the check again.
-fake_command='exit 0'
 baseline_check "$TMP/tree"
 grep -q 'base_result=fail' "$note"
+[ "$(wc -l < "$TMP/counter" | tr -d ' ')" = 1 ]
 fake_command=''
 run_case
 grep -q 'base_result=not configured' "$note"
@@ -66,16 +66,73 @@ if run_case; then exit 1; fi
 grep -q 'base_result=timed out' "$note"
 [ "$(git -C "$TMP/tree" worktree list --porcelain | grep -c '^worktree ')" = 1 ]
 [ "$(cat "$TMP/tree/input")" = edited ]
-# The real reader must use this tree's override, even without a defaults file.
+# A managed project's committed config must never supply executable settings.
 (
   # shellcheck source=/dev/null
   . "$ROOT/.claude/hooks/_lib-read-config.sh"
-  mkdir -p "$TMP/tree/.claude"
-  # shellcheck disable=SC2016
-  printf '%s\n' '{"checks":{"baseline_command":"test \"$(cat input)\" = unchanged"}}' > "$TMP/tree/.claude/project-config.json"
-  printf 'repo=owner/repo\nnumber=8\n' > "$TMP/tree/.git/apexyard-ticket"
-  baseline_check "$TMP/tree" > "$TMP/out" 2>&1
+  mkdir -p "$TMP/ops/.claude" "$TMP/tree/.claude"
+  touch "$TMP/ops/.apexyard-fork"
+  cp "$ROOT/.claude/project-config.defaults.json" "$TMP/ops/.claude/"
+  jq -n --arg cmd "touch '$TMP/hostile-ran'" '{checks:{baseline_command:$cmd,baseline_mode:"refuse"}}' > "$TMP/tree/.claude/project-config.json"
+  git -C "$TMP/tree" add .claude/project-config.json
+  git -C "$TMP/tree" -c user.name=Test -c user.email=test@example.test commit -qm config
+  mv "$TMP/tree" "$TMP/ops/project"
+  tree="$TMP/ops/project"
+  note="$tree/.git/apexyard-progress.md"
+  # Start from the managed tree, with a stale project config cache too.
+  cd "$tree"
+  _CONFIG_ROOT_CACHE="$tree"
+  _CONFIG_CACHE=$(cat .claude/project-config.json)
+  printf 'repo=owner/repo\nnumber=8\n' > .git/apexyard-ticket
+  baseline_check "$tree" > "$TMP/out" 2>&1
+  grep -q 'base_result=not configured' "$note"
+  [ ! -e "$TMP/hostile-ran" ]
+  jq -n --arg cmd "touch '$TMP/operator-ran'" '{checks:{baseline_command:$cmd}}' > "$TMP/ops/.claude/project-config.json"
+  printf 'repo=owner/repo\nnumber=9\n' > .git/apexyard-ticket
+  baseline_check "$tree" > "$TMP/out" 2>&1
   grep -q 'base_result=pass' "$note"
+  [ -f "$TMP/operator-ran" ]
+  [ ! -e "$TMP/hostile-ran" ]
+)
+# Missing python3 is setup evidence, even in refuse mode.
+(
+  fake_mode=refuse
+  fake_command='exit 1'
+  # shellcheck disable=SC2329
+  command() {
+    if [ "$*" = '-v python3' ]; then return 1; fi
+    builtin command "$@"
+  }
+  printf 'repo=owner/repo\nnumber=10\n' > "$TMP/ops/project/.git/apexyard-ticket"
+  baseline_check "$TMP/ops/project" > "$TMP/out" 2>&1
+  grep -q 'base_result=not run; first_failing_check=python3 unavailable' "$TMP/ops/project/.git/apexyard-progress.md"
+  [ "$(grep -c WARN "$TMP/out")" = 1 ]
+)
+# A note update failure allows a warn-mode start after the command ran.
+(
+  fake_mode=warn
+  fake_command="touch '$TMP/check-ran'"
+  # shellcheck disable=SC2329
+  progress_note_update() { return 1; }
+  printf 'repo=owner/repo\nnumber=11\n' > "$TMP/ops/project/.git/apexyard-ticket"
+  baseline_check "$TMP/ops/project" > "$TMP/out" 2>&1
+  [ -f "$TMP/check-ran" ]
+  [ "$(grep -c WARN "$TMP/out")" = 1 ]
+  grep -q 'evidence not recorded' "$TMP/out"
+)
+# A setup failure allows a warn-mode start too.
+(
+  fake_mode=warn
+  fake_command='exit 0'
+  # shellcheck disable=SC2329
+  mkdir() {
+    case "$*" in *worktrees*) return 1 ;; esac
+    builtin command mkdir "$@"
+  }
+  printf 'repo=owner/repo\nnumber=12\n' > "$TMP/ops/project/.git/apexyard-ticket"
+  baseline_check "$TMP/ops/project" > "$TMP/out" 2>&1
+  [ "$(grep -c WARN "$TMP/out")" = 1 ]
+  grep -q 'could not run' "$TMP/out"
 )
 # Both ticket-start routes and builder instructions use the shared evidence.
 # shellcheck disable=SC2016
@@ -88,4 +145,4 @@ for file in .claude/skills/fan-out/SKILL.md .claude/rules/reconcile-before-build
   grep -q 'Run the full project check command before you push' "$ROOT/$file"
 done
 grep -q 'State whether the same failure was already on the base' "$ROOT/.claude/agents/code-reviewer.md"
-printf 'PASS: 8 base check cases\n'
+printf 'PASS: 12 base check cases\n'

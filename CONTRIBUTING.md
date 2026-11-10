@@ -22,6 +22,10 @@ git checkout -b feature/GH-<issue>-short-slug upstream/dev
 gh pr create --base dev --fill
 ```
 
+Read `checks.*` only from the ops root's git-ignored `.claude/project-config.json` and shipped defaults.
+Managed-project clones and worktrees cannot supply these settings.
+Linked ticket worktrees use the ops root's settings.
+
 To record the health of `dev` when you start a ticket, set the base check in your local `.claude/project-config.json` (git ignores this file):
 
 ```json
