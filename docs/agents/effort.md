@@ -1,38 +1,96 @@
-# Agent effort
+# Agent model and effort
 
-Effort controls reasoning depth for an agent turn. Explicit values keep these agents independent of the parent session's effort.
-Model fields remain unchanged. An unset effort inherits the session setting.
+The tier map sets the model and the effort for each agent.
+The map also sets the effort for each skill that declares effort.
+The map is [`.claude/harness-models.json`](../../.claude/harness-models.json).
+[AgDR-0294](../agdr/AgDR-0294-model-and-effort-tier-map.md) records the design.
 
-## Settings and reasons
+Effort controls reasoning depth for an agent turn.
+An explicit value keeps an agent independent of the parent session's effort.
+An unset effort inherits the session setting.
 
-| Agent | Effort | Reason |
+## Terms
+
+| Term | Meaning |
+| --- | --- |
+| Tier | A class of work: `reason`, `build`, or `light`. A tier sets a model and an effort for each harness. |
+| Tier map | The file `.claude/harness-models.json`. It holds the tiers, the agent tiers, the stages, and the skill stages. |
+| Stage | A kind of skill work, for example planning or review. A stage sets one effort. |
+| `inherit` | An agent effort value that removes the `effort:` line. The agent then uses the session effort. |
+
+## Tiers
+
+| Tier | Rank | Claude Code | Codex |
+| --- | --- | --- | --- |
+| `reason` | 3 | `opus`, effort `high` | `gpt-5.5`, effort `high` |
+| `build` | 2 | `sonnet`, effort `medium` | `gpt-5.4`, effort `medium` |
+| `light` | 1 | `haiku`, effort `low` | `gpt-5.4-mini`, effort `low` |
+
+Reviewers stay on a higher rank than builders.
+Per AgDR-0087, keep the `reason` tier on the strongest model of each harness.
+
+## Agents
+
+An agent uses the effort of its tier unless the map gives an agent effort.
+
+| Agent | Tier | Effort | Reason |
+| --- | --- | --- | --- |
+| Code Reviewer (Rex) | reason | high | Checks correctness and review evidence. |
+| Security Reviewer (Hakim) | reason | high | Examines threats and security boundaries. |
+| Solution Architect (Tariq) | reason | high | Tests design assumptions and trade-offs. |
+| Contrarian (Naqid) | reason | high | Challenges premises and finds counterarguments. |
+| Head of Engineering | reason | high | Makes cross-project engineering decisions. |
+| Penetration Tester | reason | unset | Specialized testing needs separate measurement before tuning. |
+| Tech Lead | reason | medium | Authors designs and coordinates implementation. |
+| SRE | reason | medium | Implements reliability and observability changes. |
+| Backend Engineer | build | medium | Implements scoped application changes. |
+| Frontend Engineer | build | medium | Implements scoped interface changes. |
+| Platform Engineer | build | medium | Builds infrastructure and tooling. |
+| Data Engineer | build | medium | Builds data pipelines and models. |
+| UI Designer | build | medium | Authors component and visual specifications. |
+| UX Designer | build | medium | Authors flows and interaction specifications. |
+| Product Manager | build | medium | Authors requirements and acceptance criteria. |
+| QA Engineer | build | medium | Runs exact-commit checks before merge. |
+| Head of Product | build | high | Makes roadmap and feasibility decisions. |
+| Head of Design | build | high | Makes design-system and visual-standard decisions. |
+| Head of Security | build | high | Makes security strategy and compliance decisions. |
+| Head of Data | build | high | Makes data governance and reporting decisions. |
+| Dependency Auditor | build | unset | Retains inherited effort for utility checks. |
+| Product Analyst | build | unset | Research needs vary by assignment. |
+| Data Analyst | light | unset | Analysis needs vary by assignment. |
+
+## Skill stages
+
+The map sets effort only for a skill that already declares effort.
+
+| Stage | Effort | Skills |
 | --- | --- | --- |
-| Code Reviewer (Rex) | high | Checks correctness and review evidence. |
-| Security Reviewer (Hakim) | high | Examines threats and security boundaries. |
-| Solution Architect (Tariq) | high | Tests design assumptions and trade-offs. |
-| Contrarian (Naqid) | high | Challenges premises and finds counterarguments. |
-| Backend Engineer | medium | Implements scoped application changes. |
-| Frontend Engineer | medium | Implements scoped interface changes. |
-| Platform Engineer | medium | Builds infrastructure and tooling. |
-| Tech Lead | medium | Authors designs and coordinates implementation. |
-| Data Engineer | medium | Builds data pipelines and models. |
-| SRE | medium | Implements reliability and observability changes. |
-| UI Designer | medium | Authors component and visual specifications. |
-| UX Designer | medium | Authors flows and interaction specifications. |
-| Product Manager | medium | Authors requirements and acceptance criteria. |
-| Dependency Auditor | unset | Retains inherited effort for utility checks. |
-| QA Engineer | unset | Verifies acceptance criteria without building changes. |
-| Penetration Tester | unset | Specialized testing needs separate measurement before tuning. |
-| Data Analyst | unset | Analysis needs vary by assignment. |
-| Product Analyst | unset | Research needs vary by assignment. |
-| Head of Engineering | unset | Strategic work needs vary by assignment. |
-| Head of Product | unset | Strategic work needs vary by assignment. |
-| Head of Design | unset | Strategic work needs vary by assignment. |
-| Head of Security | unset | Strategic work needs vary by assignment. |
-| Head of Data | unset | Strategic work needs vary by assignment. |
+| planning | high | `split-portfolio` |
+| review | high | `accessibility-audit`, `compliance-check`, `launch-check`, `threat-model` |
+| build | medium | `debug`, `fan-out`, `journey`, `onboard`, `setup` |
+| scan | medium | `analytics-audit`, `docs-audit`, `geo-audit`, `monitoring-audit`, `performance-audit`, `seo-audit` |
+| status | low | `approve-architecture`, `approve-design`, `approve-merge`, `start-ticket`, `tutorial` |
 
-The frontmatter check accepts `low`, `medium`, `high`, `xhigh`, and `max`.
-Run `bash .claude/agents/tests/test_agent_wrap_shape.sh` to check the settings.
+## Change a model or an effort
+
+1. Edit one line in `.claude/harness-models.json`.
+2. Run `bash bin/sync-agent-tiers.sh` to write the agent and skill files.
+3. Run `bash bin/sync-agent-tiers.sh --check` to confirm that no drift remains.
+4. Commit the map and the changed files together.
+
+A changed `model:` line also needs the escape-hatch comment in that agent file.
+The routing drift guard compares each committed model with the `dev` model.
+Add `# routing-config:override <reason>` to the agent frontmatter.
+
+The pre-push checks run `--check`. CI runs it in the `agent tier map` workflow and in `.claude/agents/tests/test_agent_tier_map.sh`.
+
+## Routing overrides
+
+An adopter can still route one agent to another model with `agent-routing.yaml`.
+The SessionStart routing hook rewrites the `model:` line in the working tree.
+The hook records each rewritten agent in `.claude/agents/.framework-defaults.json`.
+The sync script reads that file and leaves a routed `model:` line unchanged.
+The script still checks and writes `effort:` on a routed agent.
 
 ## How to measure
 

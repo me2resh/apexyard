@@ -146,14 +146,34 @@ rewrite_skill_paths() {
   ' "$@"
 }
 
-# Map a Claude model-tier label to a harness-native model via the shared
-# .claude/harness-models.json matrix — the single source of truth every harness
-# adapter reads (pi/opencode add their own column instead of a second mapping).
-# Falls back to the label unchanged when the file, tier, or 'codex' column is
-# absent (jq treats a missing key as null, so `// $l` yields the label).
+# Map a Claude model to a Codex model through the tier map in
+# .claude/harness-models.json, the one source that every harness adapter reads
+# (AgDR-0294). Schema 2: find the tier whose claude.model equals the label and
+# print its codex.model. A schema 1 file ({"<label>": {"codex": ...}}) still
+# works. A model with no tier, such as a routing override, prints unchanged.
+# A missing file, tier, or 'codex' column also prints the label unchanged.
 map_codex_model() {
-  jq -r --arg l "$1" '.[$l].codex // $l' "$CLAUDE_DIR/harness-models.json" 2>/dev/null \
+  jq -r --arg l "$1" '
+    ([(.tiers // {})[] | select(.claude.model == $l) | .codex.model // empty] | first)
+    // (if (.[$l] | type) == "object" then .[$l].codex else null end)
+    // $l
+  ' "$CLAUDE_DIR/harness-models.json" 2>/dev/null \
     || printf '%s\n' "$1"
+}
+
+# Codex reasoning effort for one agent from the tier map: the agent's own
+# effort, else its tier's codex.effort. Codex has no "max", so "max" becomes
+# "xhigh". "inherit", a missing entry, or a schema 1 file print nothing.
+map_codex_effort() {
+  jq -r --arg a "$1" '
+    ((.agents // {})[$a]) as $e
+    | if ($e | type) != "object" then empty
+      elif $e.effort == "inherit" then empty
+      elif $e.effort == "max" then "xhigh"
+      elif $e.effort != null then $e.effort
+      else (.tiers[$e.tier].codex.effort // empty)
+      end
+  ' "$CLAUDE_DIR/harness-models.json" 2>/dev/null || true
 }
 
 copy_tree() {
@@ -233,13 +253,14 @@ done < <(find "$OUT_AGENTS" -type f -print0)
 
 generate_agent_toml() {
   local src="$1"
-  local name description model body dst
+  local name description model effort body dst
   dst="$OUT_CODEX/agents/$(basename "${src%.md}").toml"
 
   name=$(awk -F': ' '/^name: / { print $2; exit }' "$src")
   description=$(awk -F': ' '/^description: / { sub(/^description: /, ""); print; exit }' "$src")
   model=$(awk -F': ' '/^model: / { print $2; exit }' "$src")
   [ -n "$model" ] && model=$(map_codex_model "$model")
+  effort=$(map_codex_effort "$(basename "${src%.md}")")
   body=$(awk 'BEGIN { front=0; body=0 } /^---$/ { front++; if (front == 2) { body=1; next } } body { print }' "$src")
   body=$(printf '%s\n' "$body" | perl -0pe '
     s/\.claude\/skills/.agents\/skills/g;
@@ -249,6 +270,7 @@ generate_agent_toml() {
     printf 'name = %s\n' "$(printf '%s' "$name" | jq -Rs .)"
     printf 'description = %s\n' "$(printf '%s' "$description" | jq -Rs .)"
     [ -n "$model" ] && printf 'model = %s\n' "$(printf '%s' "$model" | jq -Rs .)"
+    [ -n "$effort" ] && printf 'model_reasoning_effort = %s\n' "$(printf '%s' "$effort" | jq -Rs .)"
     printf 'developer_instructions = %s\n' "$(printf '%s' "$body" | jq -Rs .)"
   } > "$dst"
 }
