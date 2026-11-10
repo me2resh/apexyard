@@ -1,9 +1,10 @@
 # Gate state contract
 
 This page lists each record that the framework gates read or write.
-For each record it says the path, who writes it, who reads it, its scope, when it goes stale, and how it is revoked today.
+For each record it says the path, who writes it, who reads it, and its scope.
+It also says when the record goes stale and how an operator or a hook revokes it today.
 It describes the code at the time of writing. It changes no behavior.
-Where a record is not revoked, the page says so.
+Where nothing revokes a record, the page says so.
 
 There is no single "ready to merge" record.
 A merge needs several independent records plus live forge state.
@@ -16,10 +17,10 @@ The merge gates in `.claude/hooks/dispatch-bash.sh:427-445` check them one by on
 - Key `K` is `<owner>__<repo>__<pr>`. Owner and repo are those of the base repository of the PR (`.claude/hooks/_lib-review-markers.sh:85-110`).
 - Head is the head commit of the PR, as the forge reports it.
 - Carry-over means a record made at an older commit still counts after the PR branch took a verified base merge.
-- Scope says what the record is tied to: a worktree, a session, or a PR.
+- Scope says what the record belongs to: a worktree, a session, or a PR.
 
 All records under `.claude/session/` are local files.
-The folder is ignored by git (`.gitignore:3`).
+Git ignores the folder (`.gitignore:3`).
 A record is not a security boundary: anyone who can write the file can forge it.
 The gates are process checks.
 
@@ -53,7 +54,7 @@ Key and value lines: `repo`, `number`, `title`, `url`, `suggested_branch`, `sess
 `bin/apexyard-start-ticket` and `/start-ticket` call `active_ticket_write` (`_lib-active-ticket.sh:1382`).
 `/fan-out` writes it for its worktrees.
 The writer also writes the legacy record during the transition (`_lib-active-ticket.sh:1699-1703`).
-A write that would replace a different ticket held by another session is refused unless the operator chooses take over (`_lib-active-ticket.sh:1187`, `:1676-1683`).
+The writer refuses a write that would replace a different ticket held by another session, unless the operator chooses take over (`_lib-active-ticket.sh:1187`, `:1676-1683`).
 
 **Readers.**
 `require-active-ticket.sh` (`:995-1003`) and `require-migration-ticket.sh` call `active_ticket_lookup` (`_lib-active-ticket.sh:907`).
@@ -62,7 +63,7 @@ A write that would replace a different ticket held by another session is refused
 **Scope.**
 One working tree.
 A marker in the main clone does not govern a linked worktree (`.claude/skills/start-ticket/SKILL.md:302`).
-The marker is per machine and is never committed.
+The marker belongs to one machine. Nobody commits it.
 
 **Expiry.**
 It does not expire.
@@ -88,7 +89,7 @@ The start-ticket skill says a breaking release will stop reading and writing the
 
 **Path.**
 `<ops root>/.claude/session/active-reviewers/<session>/<K>-<kind>`, where kind is `rex`, `security` or `architecture` (`_lib-review-markers.sh:173-210`).
-The older single file `<ops root>/.claude/session/active-reviewer.<session>` is still read.
+The hooks still read the older single file `<ops root>/.claude/session/active-reviewer.<session>`.
 The file holds `<owner/repo>#<pr>:<kind>`.
 
 **Writer.**
@@ -97,7 +98,7 @@ The review agent does not write it.
 
 **Readers.**
 
-- `block-reviewer-repo-mutation.sh` locks `git clone`, `git fetch` and `git checkout` for a review agent. A typed review agent is locked with or without the file. An untyped sub-agent is locked only while a file exists for the session (`block-reviewer-repo-mutation.sh:254-308`).
+- `block-reviewer-repo-mutation.sh` locks `git clone`, `git fetch` and `git checkout` for a review agent. The hook locks a typed review agent with or without the file. It locks an untyped sub-agent only while a file exists for the session (`block-reviewer-repo-mutation.sh:254-308`).
 - `block-reviewer-ci-wait.sh` and `limit-reviewer-writes.sh` use the same rule to decide who is a review agent.
 - `warn-review-marker-write.sh` reads it to tell a sanctioned approval write from a forged one. It only warns.
 - `require-active-ticket.sh` lets a reviewer write under the session scratchpad without a ticket while the file exists (`require-active-ticket.sh:61-70`).
@@ -108,7 +109,7 @@ Two reviews in one session use two files.
 Another session never sees the file.
 
 **Expiry.**
-The skill removes its own file after the review is posted (`.claude/skills/code-review/SKILL.md:95-103`).
+The skill removes its own file after it posts the review (`.claude/skills/code-review/SKILL.md:95-103`).
 At the start of a session, `clear-active-reviewer-marker.sh` removes the files of the same session id (`:75-98`).
 Ending a session does not remove the file by itself.
 A file left by a crashed session stays until a session with the same id starts again.
@@ -128,7 +129,7 @@ The review body is a separate file in `.claude/session/reviews/bodies/<K>-rex.md
 Rex calls `review_write_rex_approved` (`_lib-review-markers.sh:677-711`).
 The function checks the body, the reviewed-commit footer, and an exact `**APPROVED**` verdict.
 It then writes the SHA.
-A bare number path (`<pr>-rex.approved`) is not read by any gate.
+No gate reads a bare number path (`<pr>-rex.approved`).
 
 **Reader.**
 `block-unreviewed-merge.sh` compares the SHA in the file with the head (`:449-493`).
@@ -151,7 +152,7 @@ The file keeps its old SHA.
 **Revocation.**
 There is none.
 
-- A later review that is not approved writes no file. It does not delete the earlier file either. The writer refuses the write and leaves the old file in place (`_lib-review-markers.sh:698-711`, `.claude/agents/code-reviewer.md:673-675`). An approval at the same head therefore stays in force after a later `CHANGES REQUESTED` review.
+- A later review with a verdict other than approved writes no file. It does not delete the earlier file either. The writer refuses the write and leaves the old file in place (`_lib-review-markers.sh:698-711`, `.claude/agents/code-reviewer.md:673-675`). An approval at the same head therefore stays in force after a later `CHANGES REQUESTED` review.
 - No hook or skill removes the file when the PR merges or closes.
 - The push-time check `warn-stale-review-markers.sh` compares the SHA with the head by simple equality. By default it only warns. It deletes files only when `review_markers.on_stale` is `delete` (`:231-246`, `.claude/project-config.defaults.json:190`). That check has no carry-over rule, so it can warn about or delete a file that the merge gate would accept. It also takes the repository from the head repository of the PR (`warn-stale-review-markers.sh:150-163`), while the key uses the base repository.
 
@@ -218,7 +219,7 @@ A non-approved review writes no file and deletes none.
 Key and value lines.
 The typed form has `sha`, `approved_by=user`, `approved_at`, `skill_version=2` and `approval_summary` (`.claude/skills/approve-merge/SKILL.md:148-180`).
 The gate rejects a file without `sha`, without `approved_by=user`, or with a `skill_version` below 2 (`block-unreviewed-merge.sh:686-757`).
-The menu form is described in the next section.
+The next section describes the menu form.
 
 **Writer.**
 `/approve-merge` writes it after an explicit approval of this PR.
@@ -234,7 +235,7 @@ One PR.
 **Stale when.**
 The head differs from `sha`.
 Carry-over applies, with the same proof as for Rex (`block-unreviewed-merge.sh:794-824`).
-The decision to allow carry-over for the human record is recorded in AgDR-0178.
+AgDR-0178 records the decision to allow carry-over for the human record.
 
 **Revocation.**
 There is none.
@@ -307,7 +308,7 @@ Treat it as a reminder that a review is due, not as a gate record.
 
 Read these before you rely on a record.
 
-1. **Worktree scope differs by record.** A ticket belongs to one working tree. A review or approval record sits in the ops root and is shared by all worktrees of the fork. A session record belongs to one session.
+1. **Worktree scope differs by record.** A ticket belongs to one working tree. A review or approval record sits in the ops root. All worktrees of the fork share it. A session record belongs to one session.
 2. **A later non-approved review does not revoke an earlier approval.** See the Rex section.
 3. **Carry-over is not uniform.** The merge gate carries over the Rex and human records. The design and architecture gates do not. The approval skills for design and architecture also need the Rex file to equal the head exactly.
    The merge gate would accept a carry-over there.

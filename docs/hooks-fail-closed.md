@@ -1,8 +1,8 @@
 # Fail-closed gates and the escape hatch
 
-This page describes how the Bash dispatcher and the ticket-first gate fail,
-which hooks fail open today, what Claude Code version you need, and how an
-operator turns hooks off.
+This page describes how the Bash dispatcher and the ticket-first gate fail.
+It also names the hooks that fail open today, the Claude Code version you
+need, and the way an operator turns hooks off.
 It covers me2resh/apexyard#1623.
 For the records that the gates read and write, see [Gate state contract](gate-state-contract.md).
 
@@ -70,7 +70,7 @@ Any other exit code, such as exit 1, exit 127 or a kill signal, prints `WARN` an
 The call then runs, and the check did not happen.
 
 This is the state today.
-No change is planned in this page.
+This page plans no change.
 Do not rely on these hooks to block when they crash.
 
 The table lists every hook that `run_hook` calls.
@@ -98,7 +98,7 @@ The safety gates in that list are:
 - `block-main-push.sh`, `validate-branch-name.sh`, `pre-push-gate.sh`, `validate-commit-format.sh` and `require-agdr-for-arch-changes.sh` (push and commit checks).
 
 One more case: `block-privileged-escalation.sh` reads the command with `jq`.
-When `jq` is not installed, the command text is empty and the hook exits 0.
+When `jq` is missing, the command text is empty and the hook exits 0.
 So it allows every command until `jq` is back.
 
 The Edit, Write and MultiEdit entries in `.claude/settings.json` that have no `onFailure` field also fail open.
