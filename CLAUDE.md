@@ -168,7 +168,7 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Skills | `.claude/skills/` | Slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to the Claude Code hook events (`PreToolUse`, `PostToolUse`, `SessionStart`, `UserPromptSubmit`, `ConfigChange`) |
 
-### Available skills
+### Available skills (71)
 
 One-line summary per skill; canonical details live in each `.claude/skills/<name>/SKILL.md`.
 
