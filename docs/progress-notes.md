@@ -15,6 +15,34 @@ For the interactive fallback, source `.claude/hooks/_lib-progress-note.sh` from 
 Call `progress_note_create "$tree"` after the marker write succeeds.
 Report any failure and stop. Preserve the note when resuming the same ticket.
 
+## Check the unchanged base
+
+The helper runs `baseline_check "$tree"` before it returns.
+For the interactive fallback, source `_lib-progress-note.sh`, `_lib-read-config.sh`, and `_lib-baseline.sh` from the ops root.
+Call `baseline_check "$tree"` before any edit.
+Stop if the function returns a nonzero status.
+The function records the base SHA and result in `<tree git dir>/apexyard-progress.md`.
+It reuses the result when the same ticket starts again.
+
+Read `checks.*` only from the ops root's git-ignored `.claude/project-config.json` and shipped defaults.
+Managed-project clones and worktrees cannot supply these settings.
+Linked ticket worktrees use the ops root's settings.
+
+Set `checks.baseline_command` in `.claude/project-config.json` to the full check command.
+The command runs in a clean detached worktree at the starting commit.
+Print `FAIL <check name>` or `FAIL: <check name>` for each failed check.
+The function records the first such name.
+It uses the command as the name if no check name is available.
+The time limit needs `python3`.
+Set `checks.baseline_timeout_seconds` to a positive integer.
+The default is 600 seconds.
+An unset command records `not configured` and prints one line.
+A failure or timeout prints one warning.
+The default `checks.baseline_mode` is `warn`.
+Setup or evidence-write errors print one warning and allow the ticket start.
+A missing `python3` records `not run` with the reason when the note is writable.
+Set this key to `refuse` to stop on failure or timeout.
+
 ## Update the note
 
 The orchestrator updates the progress note at PR opened, CI result, review verdict, fix pushed, and merge.
