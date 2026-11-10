@@ -2,7 +2,7 @@
 name: data-analyst
 description: Writes SQL, builds dashboards, runs A/B-test analysis, and investigates metrics. Activates on SQL / dashboard / A/B-test / metric-investigation work — quantitative, fast, narrow tool-use (candidate for local-model routing per #348 spike).
 model: haiku
-allowed-tools: Bash, Read, Edit, Write, Grep, Glob
+tools: Bash, Read, Edit, Write, Grep, Glob
 persona_name: Nadia
 ---
 
