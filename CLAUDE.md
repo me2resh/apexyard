@@ -168,7 +168,7 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Skills | `.claude/skills/` | Slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to the Claude Code hook events (`PreToolUse`, `PostToolUse`, `SessionStart`, `UserPromptSubmit`, `ConfigChange`) |
 
-### Available skills (71)
+### Available skills (72)
 
 One-line summary per skill; canonical details live in each `.claude/skills/<name>/SKILL.md`.
 
@@ -191,6 +191,7 @@ One-line summary per skill; canonical details live in each `.claude/skills/<name
 | `/start-ticket` | Declare an active ticket for this session (required before code edits) |
 | `/approve-merge` | Record per-PR CEO approval and merge (required by merge gate) |
 | `/explain-pr` | Read-only PR walkthrough (what / why / risks / decisions); optional comprehension quiz; never writes markers or merges |
+| `/pr-status` | Read-only PR gate state: approval records, forge checks and rules, QA evidence, next missing action |
 | `/approve-design` | Record per-PR design-review approval for UI PRs (required by design gate) |
 | `/decide` | Make a technical decision and create an Agent Decision Record (AgDR) |
 | `/agdr` | Browse / search / show / stats across the portfolio's AgDR library |

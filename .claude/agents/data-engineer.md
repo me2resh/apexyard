@@ -3,7 +3,7 @@ name: data-engineer
 description: Builds ETL pipelines, designs data models, owns data-quality work, and manages warehouse schema changes. Activates on ETL / data-modelling / warehouse-schema / data-quality work — pipeline implementation, often in-flow with Backend Engineer handoff.
 model: sonnet
 effort: medium
-allowed-tools: Bash, Read, Edit, Write, Grep, Glob
+tools: Bash, Read, Edit, Write, Grep, Glob
 persona_name: Anwar
 ---
 
