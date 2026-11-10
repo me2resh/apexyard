@@ -595,7 +595,7 @@ The pattern lives in `agent-routing.yaml.example` Example C as a commented-out t
 
 Adopters who want to validate specific models against their machine before committing can use the operator-prep doc at `projects/apexyard/spike-348-prep.md` as a starting checklist. It covers hardware checks, fixture pack for the 3 candidate sub-agents, scoring matrix.
 
-> Early drafts of this schema advertised the `allowed_tools_override` field, but it never had parser wiring. Dropped in #358 for v1; the per-agent allowed-tools list in each `.claude/agents/<name>.md` frontmatter is the source of truth. To override on a specific fork, edit the agent file directly with a `# routing-config:override <reason>` comment in the YAML frontmatter. This uses the same escape-hatch pattern that handles framework-default `model:` overrides.
+> Early drafts of this schema advertised the `allowed_tools_override` field, but it never had parser wiring. Dropped in #358 for v1; the per-agent `tools` list in each `.claude/agents/<name>.md` frontmatter is the source of truth. To override on a specific fork, edit the agent file directly with a `# routing-config:override <reason>` comment in the YAML frontmatter. This uses the same escape-hatch pattern that handles framework-default `model:` overrides.
 
 #### Config-block wiring (split-portfolio v2)
 
