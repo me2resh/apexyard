@@ -5,6 +5,8 @@ argument-hint: "<owner>/<repo>#<N> [--json]"
 allowed-tools: Bash
 ---
 
+Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
+
 # /pr-status — Show a pull request's gate state
 
 Read-only. This skill runs `bin/apexyard-pr-status` and shows its output.
