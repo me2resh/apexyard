@@ -5,7 +5,8 @@ set -u
 SRC_ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 SKILL_MD="$SRC_ROOT/.claude/skills/explain-pr/SKILL.md"
 QUIZ_DOC="$SRC_ROOT/docs/skills/approval-quiz.md"
-CLAUDE_MD="$SRC_ROOT/CLAUDE.md"
+# The skill table and quick reference moved from CLAUDE.md to this page (#2035).
+SKILL_CATALOG="$SRC_ROOT/docs/claude-md-reference.md"
 
 PASS=0
 FAIL=0
@@ -41,10 +42,10 @@ else
   mark_fail "missing docs/skills/approval-quiz.md"
 fi
 
-if grep -qF '| `/explain-pr` |' "$CLAUDE_MD"; then
-  mark_pass "CLAUDE.md lists /explain-pr"
+if grep -qF '| `/explain-pr` |' "$SKILL_CATALOG"; then
+  mark_pass "skill table lists /explain-pr"
 else
-  mark_fail "CLAUDE.md missing /explain-pr row"
+  mark_fail "skill table missing /explain-pr row"
 fi
 
 echo

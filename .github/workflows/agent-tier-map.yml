@@ -1,0 +1,38 @@
+name: agent tier map
+
+# Fail when an agent or skill file differs from the tier map in
+# .claude/harness-models.json (me2resh/apexyard#2033, AgDR-0294).
+# The hook test suite runs the same check through
+# .claude/agents/tests/test_agent_tier_map.sh. This job gives a fast,
+# named result on the paths that can drift.
+on:
+  pull_request:
+    paths:
+      - ".claude/harness-models.json"
+      - ".claude/agents/*.md"
+      - ".claude/skills/*/SKILL.md"
+      - "bin/sync-agent-tiers.sh"
+      - ".github/workflows/agent-tier-map.yml"
+  push:
+    branches: [dev, main]
+    paths:
+      - ".claude/harness-models.json"
+      - ".claude/agents/*.md"
+      - ".claude/skills/*/SKILL.md"
+      - "bin/sync-agent-tiers.sh"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-tier-map-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check agent and skill files against the tier map
+        run: bash bin/sync-agent-tiers.sh --check

@@ -20,7 +20,7 @@ Heuristic: before starting audit, diagram, spec, or ticket-shaped work, ask whet
 | "plan this initiative", "plan the quarter" | `/plan-initiative` | An in-chat milestone list with no topo-sorted ticket filing |
 | "decide between X and Y", "let's decide" | `/decide` | Picking a library/approach with no AgDR recorded |
 
-This list is illustrative, not exhaustive — the authoritative, extensible map lives at `.claude/project-config.defaults.json` → `skill_intent.map` (see "Backstop" below). If a request matches a skill not listed here, the same heuristic applies: check `/help` or the skill table in `CLAUDE.md` before reasoning it through by hand.
+This list is illustrative, not exhaustive — the authoritative, extensible map lives at `.claude/project-config.defaults.json` → `skill_intent.map` (see "Backstop" below). If a request matches a skill not listed here, the same heuristic applies: check `/help` or the skill table in `docs/claude-md-reference.md` before reasoning it through by hand.
 
 ## When NOT to reach for a skill
 
