@@ -89,4 +89,4 @@ bash .claude/hooks/tests/test_gate_plugin_off.sh
 - **Rex marker**: the file that the code reviewer writes after an approval, `<owner>__<repo>__<pr>-rex.approved`.
 - **Menu hook**: the PostToolUse hook that records the answer to the question menu (AgDR-0234).
 
-See AgDR-0295 for the split between the hooks, this plugin and the Cockpit.
+See AgDR-0296 for the split between the hooks, this plugin and the Cockpit.

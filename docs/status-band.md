@@ -37,4 +37,4 @@ claude plugin install apexyard-gate@apexyard --scope local
 
 Without the pane, every gate behaves as before. Full behaviour:
 [`plugins/apexyard-gate/README.md`](../plugins/apexyard-gate/README.md).
-AgDR-0295 records the split between the hooks, the plugins and the Cockpit.
+AgDR-0296 records the split between the hooks, the plugins and the Cockpit.

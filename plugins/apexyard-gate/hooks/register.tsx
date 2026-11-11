@@ -1,4 +1,4 @@
-// ApexYard approval pane (AgDR-0295). Opt-in. It sits behind the hooks.
+// ApexYard approval pane (AgDR-0296). Opt-in. It sits behind the hooks.
 //
 // The pane lists the PRs that Rex approved and that wait for a human merge
 // approval. Each row shows the repo, the PR, the head SHA, the CI state and

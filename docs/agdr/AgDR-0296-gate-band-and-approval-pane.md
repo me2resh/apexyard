@@ -1,5 +1,5 @@
 ---
-id: AgDR-0295
+id: AgDR-0296
 timestamp: 2026-11-11T08:00:00Z
 agent: platform-engineer
 model: claude-opus-5-5
@@ -11,7 +11,7 @@ category: architecture
 
 <!-- When this template creates an artifact, use the controlled technical writing profile in .claude/rules/writing-standard.md. -->
 
-# AgDR-0295: Split gate work between the hooks, the Claude Code mod, and the Cockpit
+# AgDR-0296: Split gate work between the hooks, the Claude Code mod, and the Cockpit
 
 > In the context of ORBIT outcome o8, facing a need to show gate state and collect approvals inside Claude Code, I decided that the bash hooks enforce, an opt-in mod shows state and asks for approval through the AgDR-0234 menu hook, and the Cockpit keeps the views outside one session. This keeps one enforcement core, accepting a second key press for each approval.
 

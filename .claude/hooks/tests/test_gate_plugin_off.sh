@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests for the opt-in gate plugins (me2resh/apexyard#1922, AgDR-0295).
+# Tests for the opt-in gate plugins (me2resh/apexyard#1922, AgDR-0296).
 #
 # 1. Mod off: the committed settings enable neither plugin, and no hook
 #    names either plugin. So with the plugins off or missing, every gate
