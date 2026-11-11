@@ -145,8 +145,10 @@ For every task with `isolation: worktree`, create the worktree and its marker **
 - The ticket gates check source writes under `<ops_root>/.claude/worktrees/` (AgDR-0219). A writer there needs the markers that the helper writes.
 - The helper runs `git -C <source-tree> worktree add <path> -b <branch>`. A managed-project task therefore gets a worktree of its own clone, not of the ops fork.
 - The helper writes `apexyard-ticket` into the git dir of the new worktree, with the ticket of the source tree. The ticket's repo must belong to that clone's registry entry. Otherwise only the old-layout marker is written. It also writes the old-layout per-worktree marker, so the hooks from before the move see the ticket. When the new worktree fails validation, it writes only the old marker and prints a note. Pass the ticket fields as extra arguments to give a task its own ticket (`--from-tickets`).
-- The helper also records the worktree's owner and lease in the worktree's git dir (AgDR-0284). This change adds no release step, so the record stays active.
+- The helper also records the worktree's owner and lease in the worktree's git dir (AgDR-0284).
 - Preparation can succeed with the "has no owner record" note, and the orchestrator then spawns the task as usual.
+- Keep the orchestrating session identity for release in step 10.
+- The default lease lasts one hour, and expiry never permits takeover, so long tasks need no renewal step.
 - The helper never uses `--force`. If it writes no marker at all, it removes the worktree and branch it created. Stop the whole fan-out and report its message.
 - Do not pass `isolation: worktree` to the `Agent` call for these tasks. The worktree exists already. Tell the agent to work only under the worktree path and to run `git` and every edit there.
 - If the spawn itself fails, remove each worktree this step created with `git -C <source-tree> worktree remove <path>` (no `--force`).
@@ -227,6 +229,29 @@ For each branch in turn:
 
 Each project owns one merge-back attempt. If the user wants to skip a branch (e.g. open as its own PR instead), record that and continue.
 
+After collecting results and resolving merge-back decisions, release each successful writer's owner record.
+Run the helper once per eligible writer worktree prepared in step 7:
+
+```bash
+.claude/skills/fan-out/release-worktree-owner.sh "<absolute-worktree-path>"
+```
+
+Use absolute worktree paths.
+Use the same orchestrating session identity that ran step 7.
+Identity matching includes any recorded harness, PID, process-start time, and boot ID.
+Do not release writers whose tasks failed, returned partial results, or still run.
+An unresolved merge conflict also postpones release.
+
+When a background writer later returns success, run the helper for that writer worktree.
+Capture each helper output line.
+
+Include all `refused` lines in the step 11 report.
+The helper exits zero for `released`, `already released`, and `no owner record`.
+It exits one for `refused` and reports the owner library's current status.
+Malformed records report `unknown` through the owner library.
+
+A released worktree remains on disk. `/approve-merge` offers to remove the worktree when its branch merges as a PR head branch. Otherwise the user removes it.
+
 ### 11. Final report
 
 ```
@@ -238,6 +263,10 @@ Fan-out complete (N tasks, M succeeded, K background still running).
 …
 
 Background tasks running: <ids>. They'll surface results when done.
+
+Owner release refusals: <each refused line, or none>.
+
+Owners kept active: <path and reason, or none>.
 ```
 
 ## Rules
