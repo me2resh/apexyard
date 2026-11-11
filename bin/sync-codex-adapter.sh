@@ -147,8 +147,8 @@ rewrite_skill_paths() {
 }
 
 # Map a Claude model to a Codex model through the tier map in
-# .claude/harness-models.json, the one source that every harness adapter reads
-# (AgDR-0294). Schema 2: find the tier whose claude.model equals the label and
+# .claude/harness-models.json (AgDR-0294). Today only this adapter and
+# bin/sync-agent-tiers.sh read that file. Schema 2: find the tier whose claude.model equals the label and
 # print its codex.model. A schema 1 file ({"<label>": {"codex": ...}}) still
 # works. A model with no tier, such as a routing override, prints unchanged.
 # A missing file, tier, or 'codex' column also prints the label unchanged.
