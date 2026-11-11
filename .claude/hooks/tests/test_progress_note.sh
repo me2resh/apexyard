@@ -94,7 +94,16 @@ grep -qx 'Task: owner/repo#43' "$note"
 # Skill and brief wiring must retain the shared evidence condition.
 for file in docs/progress-notes.md .claude/skills/fan-out/SKILL.md .claude/rules/reconcile-before-build.md; do
   grep -q 'acceptance criteria' "$ROOT/$file"
-  grep -q 'CI green on the current head SHA, Rex APPROVED at that head, progress note current' "$ROOT/$file"
+  case "$file" in
+    docs/progress-notes.md)
+      grep -q 'CI green on the current head SHA, Rex APPROVED at that head, progress note current' "$ROOT/$file"
+      ;;
+    *)
+      # A build agent cannot run Rex (me2resh/apexyard#2032).
+      grep -q 'PR open, CI green at the head SHA, progress note current' "$ROOT/$file"
+      grep -q 'cannot run Rex' "$ROOT/$file"
+      ;;
+  esac
   grep -q '20 turns' "$ROOT/$file"
   grep -q 'report the blocker with evidence' "$ROOT/$file"
 done

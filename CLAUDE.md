@@ -75,12 +75,7 @@ Full process: `workflows/sdlc.md`
 Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 ```
 
-| Gate | Before | Verify |
-|------|--------|--------|
-| 1 | Design --> Build | PRD approved, tickets exist |
-| 2 | Build --> Review | Tests pass, checks pass, >80% coverage |
-| 3 | Review --> Merge | Code review approved, CI green |
-| 4 | Merge --> Done | QA verified all acceptance criteria |
+The gate table is in `.claude/rules/workflow-gates.md`. It is the one source for gate numbers.
 
 **If a gate fails, STOP. Complete the missing step first.**
 
@@ -166,12 +161,12 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| Hooks | `.claude/hooks/` | 55 shell scripts that mechanically enforce SDLC rules — ticket-first (Edit/Write/Bash), ORBIT slice before Feature/Task issues, migration-ticket-first, auto code review, merge gates (Rex + CEO + design review + architecture review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, onboarding-config guard, upstream-drift banner, leak protection, bootstrap-skill exemption, skill-intent detection, gate-invisible review-marker detection |
+| Hooks | `.claude/hooks/` | Shell scripts that mechanically enforce SDLC rules — ticket-first (Edit/Write/Bash), ORBIT slice before Feature/Task issues, migration-ticket-first, auto code review, merge gates (Rex + CEO + design review + architecture review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, onboarding-config guard, upstream-drift banner, leak protection, bootstrap-skill exemption, skill-intent detection, gate-invisible review-marker detection |
 | Rules | `.claude/rules/` | 23 modular rule files (AgDR triggers, agent role selection, build-handbook discovery, code standards, evidence grounding, external-write retry, git conventions, glossary lookup, isolated builds, leak protection, loop mode, parallel work, plan mode, PR quality, PR workflow, reconcile before build, reporting style, right-size ceremony, role triggers, skill first, ticket vocabulary, workflow gates, writing standard) |
 | Handbooks | `handbooks/` | Adopter-authored coding standards consumed by Rex during code review. Discovery by path-convention (`architecture/` + `general/` always-load; `language/<lang>/` loads on diff-match). Advisory by default; opt in to blocking via `ENFORCEMENT: blocking` marker. See [`handbooks/README.md`](handbooks/README.md). |
 | Agents | `.claude/agents/` | 23 sub-agents (4 utility incl. Hakim post-consolidation + Naqid the Contrarian + 7 engineering + 1 architecture (Tariq) + 6 product-design + 5 security-data). Per AgDR-0050 + the #347 PR 3 Hatim→Hakim consolidation decision + AgDR-0054 (Solution Architect) + AgDR-0078 (The Contrarian) + AgDR-0105 (retiring the pr-manager + ticket-manager lifecycle agents). |
-| Skills | `.claude/skills/` | 72 slash commands — see the full list below |
-| Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
+| Skills | `.claude/skills/` | Slash commands — see the full list below |
+| Settings | `.claude/settings.json` | Wires hooks to the Claude Code hook events (`PreToolUse`, `PostToolUse`, `SessionStart`, `UserPromptSubmit`, `ConfigChange`) |
 
 ### Available skills (72)
 
@@ -288,7 +283,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Rules (modular, framework-wide) | `.claude/rules/` |
 | **Adopter handbooks** (consumed by Rex during code review) | `handbooks/` — see [`handbooks/README.md`](handbooks/README.md) for the discovery + advisory/blocking conventions |
 | Agents | `.claude/agents/` |
-| Skills (72 slash commands) | `.claude/skills/` |
+| Skills (slash commands) | `.claude/skills/` |
 | Hook wiring | `.claude/settings.json` |
 | **Per-project docs** | `projects/<name>/` |
 | **Live working copies** (gitignored) | `workspace/<name>/` |

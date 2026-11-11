@@ -97,7 +97,9 @@ The shared condition is: PR open, CI green on the current head SHA, Rex APPROVED
 - The progress note reflects the current evidence and next action.
 
 Set a limit of 20 turns. Stop at that limit and report the blocker with evidence.
-Give build agents the same condition and limit in their brief.
+Give build agents the build-agent done condition in `.claude/rules/reconcile-before-build.md` and the same limit in their brief.
+That condition is: PR open, CI green at the head SHA, progress note current.
+A build agent cannot run Rex. The orchestrator runs Rex.
 Build agents report results to the orchestrator for independent review.
 The goal does not authorize a merge.
 
