@@ -38,6 +38,26 @@ This doc is the honest today-vs-not-yet breakdown for running apexyard-governed 
 | **Plan mode, background bash, permission popups** | Deliberately absent from pi's design, not apexyard-specific gaps | N/A: approximate with an explicit "here is my plan, confirming before I execute" pause where `.claude/rules/plan-mode.md` would otherwise apply |
 | **Claude Code's session-pin protection against wrong-ops-root resolution** (apexyard#381) | pi has no `CLAUDE_CODE_SESSION_ID` / SessionStart-hook equivalent to write the pin | Use the `APEXYARD_OPS_ROOT` env var override documented in `harness-adapters/pi/README.md` when running pi outside the ops fork's own working tree |
 
+## Limits of the Bash gates in pi
+
+The pi adapter does not run `.claude/hooks/dispatch-bash.sh`.
+It reads the routing comments in that file and the entries in `.claude/settings.json`, and it builds one gate per hook.
+Each Bash gate matches the command text by its prefix.
+A gate for `gh pr merge *` runs only when the command starts with the words `gh pr merge`.
+Claude Code scans the whole command only for push, commit and merge commands (`.claude/hooks/dispatch-bash.sh:541-676`).
+Its other Bash routes also match by prefix (`dispatch-bash.sh:479-515`).
+The pi adapter has no whole-command scan at all.
+The hooks that the dispatcher runs on every Bash call run in pi too.
+
+- Some command shapes skip a gate in pi. For example, `cd repo && gh pr merge 5` and `cd repo && git push` start with `cd`. No merge gate and no push gate runs for them.
+- A gate that crashes lets the call run. When a hook exits with a number other than 2, such as 1 or 127, the adapter allows the call. Only exit 2 blocks. A spawn error, a timeout or a kill signal does block.
+- When `.claude/settings.json` does not parse, the adapter enforces no gates in that session. It prints a warning to stderr.
+
+Do not treat the pi gates as a full copy of the Claude Code gates.
+The opencode adapter has the same limits.
+These limits are the state today.
+The pi adapter has no fix planned in this page.
+
 ## The honest summary
 
 A pi user gets both halves of apexyard's governance: the **instructions** (via `AGENTS.md`/`SYSTEM.md`, unchanged since #805). As of #815, the user also gets the same **mechanical gates** Claude Code enforces. The real bash hook running underneath pi refuses an ungated action, rather than only discouraging it in prose. As of 2026-07-09 that enforcement is **live-proven**. The "does pi's live internal dispatch call the handler this way" step was this doc's one remaining uncertainty. That step now has observed evidence inside a credentialed `pi -p -a` session, beyond proof by construction. The only thing between an adopter and enforcement is the `-a` precondition above.

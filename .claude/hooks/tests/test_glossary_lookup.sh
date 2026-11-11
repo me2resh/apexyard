@@ -14,7 +14,7 @@
 #   1. .claude/rules/glossary-lookup.md exists and carries the ApexYard
 #      footer.
 #   2. CLAUDE.md indexes it by name at .claude/rules/glossary-lookup.md.
-#   3. CLAUDE.md's rules-count line reads >= 18 and names "glossary lookup".
+#   3. docs/claude-md-reference.md's rules-count line reads >= 18 and names "glossary lookup".
 #   4. The rule points at the shared glossary asset it reads from
 #      (docs/onboarding/glossary.md), so it can't drift onto a stale path.
 #
@@ -31,6 +31,8 @@ set -u
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 RULE="$SRC_ROOT/.claude/rules/glossary-lookup.md"
 CLAUDE_MD="$SRC_ROOT/CLAUDE.md"
+# The rules-count line moved from CLAUDE.md to the reference page (#2035).
+REFERENCE_MD="$SRC_ROOT/docs/claude-md-reference.md"
 GLOSSARY="$SRC_ROOT/docs/onboarding/glossary.md"
 
 fail=0
@@ -57,20 +59,20 @@ else
   die "CLAUDE.md does not index .claude/rules/glossary-lookup.md without an @ import"
 fi
 
-# 3. CLAUDE.md rules-count line is present and at least 18 (>= the count as
+# 3. The reference page rules-count line is present and at least 18 (>= the count as
 # of this rule's own PR, #915). Checked as a lower bound, not an exact match,
 # so a later rule addition doesn't spuriously fail this test — same pattern
 # test_reporting_style.sh / test_agent_role_selection.sh established.
-RULES_COUNT=$(grep -oE '[0-9]+ modular rule files' "$CLAUDE_MD" 2>/dev/null | grep -oE '^[0-9]+' | head -n 1)
+RULES_COUNT=$(grep -oE '[0-9]+ modular rule files' "$REFERENCE_MD" 2>/dev/null | grep -oE '^[0-9]+' | head -n 1)
 if [ -n "$RULES_COUNT" ] && [ "$RULES_COUNT" -ge 18 ]; then
-  pass "CLAUDE.md rules count present and >= 18 (found: $RULES_COUNT)"
+  pass "docs/claude-md-reference.md rules count present and >= 18 (found: $RULES_COUNT)"
 else
-  die "CLAUDE.md rules-count line missing or below 18 (found: ${RULES_COUNT:-none})"
+  die "docs/claude-md-reference.md rules-count line missing or below 18 (found: ${RULES_COUNT:-none})"
 fi
-if grep -qi 'glossary lookup' "$CLAUDE_MD" 2>/dev/null; then
-  pass "CLAUDE.md rules list names 'glossary lookup'"
+if grep -qi 'glossary lookup' "$REFERENCE_MD" 2>/dev/null; then
+  pass "docs/claude-md-reference.md rules list names 'glossary lookup'"
 else
-  die "CLAUDE.md rules list does not name 'glossary lookup'"
+  die "docs/claude-md-reference.md rules list does not name 'glossary lookup'"
 fi
 
 # 4. The rule references the shared glossary asset it reads from, and that

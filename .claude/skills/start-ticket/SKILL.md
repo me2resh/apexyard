@@ -248,18 +248,23 @@ Do NOT write the marker with the Edit or Write tool. `.git` is a protected path 
 
 ### Read the active ticket
 
-Other skills read the active ticket of the working tree through the same resolver. Run this from the tree you are in:
+From the current tree, read the active ticket:
 
 ```bash
 bash -c '. "$1/.claude/hooks/_lib-active-ticket.sh" && active_ticket_init "$PWD" && active_ticket_lookup "$PWD" && cat "$REPLY"' _ "$ops_root"
 ```
 
-The command prints the marker (`repo=`, `number=`, `title=`, `url=`), or nothing when no marker covers the tree. It reads the marker in the tree's git dir first, then the old-layout marker.
+This prints `repo=`, `number=`, `title=`, and `url=`, or nothing without markers.
+It reads the tree's git-dir marker before the old-layout marker.
 
 ### Create the progress note and goal
 
-Call `progress_note_create "$tree"` after the marker write succeeds.
-Set `/goal`: acceptance criteria met, PR open, CI green on the current head SHA, Rex APPROVED at that head, progress note current; limit: 20 turns.
+Read `checks.*` only from the ops root's git-ignored `.claude/project-config.json` and shipped defaults.
+Ignore managed-project config, including in ticket worktrees.
+
+Call `baseline_check "$tree"` after the fallback marker write.
+Stop on refusal.
+Set `/goal`: acceptance criteria met, PR open, CI green at head SHA, Rex APPROVED at that head, progress note current; limit: 20 turns.
 Details: docs/progress-notes.md.
 
 ### 6. Move the board card to "In progress" (opt-in)

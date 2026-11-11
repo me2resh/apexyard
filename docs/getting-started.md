@@ -544,7 +544,7 @@ Edit files in `workflows/` to match your team's process. For example, if you do 
 
 ### Adding a Template
 
-Add new markdown templates to `templates/`. Reference them in `CLAUDE.md`.
+Add new markdown templates to `templates/`. Add each template to the templates table in `docs/claude-md-reference.md`.
 
 ---
 

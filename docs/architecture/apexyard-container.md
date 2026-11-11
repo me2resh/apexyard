@@ -70,7 +70,7 @@ The diagram captures which "container" does what *when interpreted by the right 
 ## What this diagram does NOT show
 
 - Specific hook-to-rule mapping (which hook enforces which rule) — see `docs/rule-audit.md` for that.
-- The full list of 66 skills — see CLAUDE.md § "Available skills".
+- The full list of 66 skills — see `docs/claude-md-reference.md` § "Available skills".
 - The full list of 20 roles — see `.claude/rules/role-triggers.md`.
 - The user's local `workspace/<name>/` clones of managed projects — they're gitignored and sit outside the ApexYard boundary (they belong to the managed project, not to ApexYard).
 

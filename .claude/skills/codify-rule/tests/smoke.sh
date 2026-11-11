@@ -86,7 +86,8 @@ fi
 
 skill_md="$ops_root/.claude/skills/codify-rule/SKILL.md"
 agdr_md="$ops_root/docs/agdr/AgDR-0040-codify-rule-skill.md"
-claude_md="$ops_root/CLAUDE.md"
+# The skill table moved from CLAUDE.md to this page (#2035).
+claude_md="$ops_root/docs/claude-md-reference.md"
 multi_md="$ops_root/docs/multi-project.md"
 
 echo "Smoke test: /codify-rule contract checks (ops_root=$ops_root)"

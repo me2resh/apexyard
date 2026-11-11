@@ -296,7 +296,7 @@ Delete the "Not Browser-Verified" section when every rendered criterion was brow
 
 **Class**: isolated-work-class
 
-**Sub-agent file**: `.claude/agents/qa-engineer.md` (uses model `haiku` + restricted tools per AgDR-0050 Axis 2: read-only by design, no Edit/Write)
+**Sub-agent file**: `.claude/agents/qa-engineer.md`. It uses the `build` tier from the tier map in `.claude/harness-models.json` (me2resh/apexyard#2033). It has restricted tools per AgDR-0050 Axis 2: read-only by design, no Edit/Write.
 
 **On trigger**: the `detect-role-trigger.sh` hook spawns the sub-agent at `.claude/agents/qa-engineer.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return.
 
