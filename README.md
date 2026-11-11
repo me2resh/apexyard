@@ -42,6 +42,11 @@ flowchart LR
   rule -.-> ticket
 ```
 
+## At a glance
+
+ApexYard connects seven delivery stages with agent roles and human checkpoints.
+The [SDLC at a glance](docs/sdlc-at-a-glance.md) shows the work, skills, gates, and approval points for each stage.
+
 ## Contents
 
 - [What makes it different](#what-makes-it-different)

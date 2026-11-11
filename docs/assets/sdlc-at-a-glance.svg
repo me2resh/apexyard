@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="758" viewBox="0 0 960 758" role="img" aria-labelledby="t d">
+<title id="t">ApexYard SDLC at a glance</title><desc id="d">Seven stages from Plan to Operate. For each stage: the agent that does the work, and the human checkpoint with its enforcement level.</desc>
+<style>
+.bg{fill:#ffffff}.ink{fill:#0f172a}.sub{fill:#475569}.mute{fill:#64748b}
+.rule{stroke:#e2e8f0;stroke-width:1}.spine{stroke:#0f172a;stroke-width:1.5}
+.box{fill:#ffffff;stroke:#0f172a;stroke-width:1.5}.loop{stroke:#64748b;stroke-width:1.25;stroke-dasharray:4 4;fill:none}
+.enf{fill:#1d4ed8}.enft{fill:#ffffff}.wri{fill:none;stroke:#6d28d9;stroke-width:1.25;stroke-dasharray:3 2}.writ{fill:#6d28d9}
+.arrow{fill:#0f172a}.larrow{fill:#64748b}
+text{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif}
+.h{font-size:11px;font-weight:600;letter-spacing:.08em}.stage{font-size:15px;font-weight:600}
+.role{font-size:14px;font-weight:600}.per{font-size:12.5px}.cp{font-size:14px;font-weight:500}.note{font-size:12.5px}
+.chip{font-size:10.5px;font-weight:700;letter-spacing:.07em}
+@media (prefers-color-scheme:dark){
+.bg{fill:#0d1117}.ink{fill:#e6edf3}.sub{fill:#9da7b3}.mute{fill:#8b949e}
+.rule{stroke:#21262d}.spine{stroke:#c9d1d9}.box{fill:#0d1117;stroke:#c9d1d9}.loop{stroke:#8b949e}
+.enf{fill:#2f6feb}.wri{stroke:#a78bfa}.writ{fill:#a78bfa}.arrow{fill:#c9d1d9}.larrow{fill:#8b949e}}
+</style>
+<rect class="bg" width="960" height="758"/>
+<text class="h mute" x="316" y="36" text-anchor="end">AGENT</text>
+<text class="h mute" x="448" y="36" text-anchor="middle">STAGE</text>
+<text class="h mute" x="604" y="36">HUMAN CHECKPOINT</text>
+<line class="rule" x1="24" y1="52" x2="936" y2="52"/>
+<line class="spine" x1="448" y1="123.0" x2="448" y2="159.0"/>
+<path class="arrow" d="M444 158.0 L452 158.0 L448 165.0 Z"/>
+<rect class="box" x="372" y="79.0" width="152" height="44" rx="2"/>
+<text class="stage ink" x="448" y="106.0" text-anchor="middle">Plan</text>
+<text class="role ink" x="316" y="98.0" text-anchor="end">Product</text>
+<text class="per sub" x="316" y="116.0" text-anchor="end">Omar, Mariam, Hanan</text>
+<rect class="enf" x="604" y="78" width="142" height="18" rx="2"/><text class="chip enft" x="675" y="90.5" text-anchor="middle">ENFORCED BY A HOOK</text>
+<text class="cp ink" x="604" y="114">Owner approves the ORBIT slice</text>
+<text class="note sub" x="604" y="132">PRD approval (Gate 1) is written only</text>
+<line class="rule" x1="24" y1="138" x2="936" y2="138"/>
+<line class="spine" x1="448" y1="209.0" x2="448" y2="245.0"/>
+<path class="arrow" d="M444 244.0 L452 244.0 L448 251.0 Z"/>
+<rect class="box" x="372" y="165.0" width="152" height="44" rx="2"/>
+<text class="stage ink" x="448" y="192.0" text-anchor="middle">Design</text>
+<text class="role ink" x="316" y="184.0" text-anchor="end">Architect and designers</text>
+<text class="per sub" x="316" y="202.0" text-anchor="end">Tariq, Nour, Iman</text>
+<rect class="enf" x="604" y="164" width="142" height="18" rx="2"/><text class="chip enft" x="675" y="176.5" text-anchor="middle">ENFORCED BY A HOOK</text>
+<text class="cp ink" x="604" y="200">Architecture and UI approval before merge</text>
+<line class="rule" x1="24" y1="224" x2="936" y2="224"/>
+<line class="spine" x1="448" y1="295.0" x2="448" y2="331.0"/>
+<path class="arrow" d="M444 330.0 L452 330.0 L448 337.0 Z"/>
+<rect class="box" x="372" y="251.0" width="152" height="44" rx="2"/>
+<text class="stage ink" x="448" y="278.0" text-anchor="middle">Build</text>
+<text class="role ink" x="316" y="270.0" text-anchor="end">Builder agent, any harness</text>
+<text class="per sub" x="316" y="288.0" text-anchor="end">Karim, Yasmin, Adel</text>
+<rect class="enf" x="604" y="250" width="142" height="18" rx="2"/><text class="chip enft" x="675" y="262.5" text-anchor="middle">ENFORCED BY A HOOK</text>
+<text class="cp ink" x="604" y="286">Ticket first; AgDR for architecture changes</text>
+<text class="note sub" x="604" y="304">No separate human checkpoint at Build</text>
+<line class="rule" x1="24" y1="310" x2="936" y2="310"/>
+<line class="spine" x1="448" y1="381.0" x2="448" y2="417.0"/>
+<path class="arrow" d="M444 416.0 L452 416.0 L448 423.0 Z"/>
+<rect class="box" x="372" y="337.0" width="152" height="44" rx="2"/>
+<text class="stage ink" x="448" y="364.0" text-anchor="middle">Test</text>
+<text class="role ink" x="316" y="356.0" text-anchor="end">QA and CI</text>
+<text class="per sub" x="316" y="374.0" text-anchor="end">Salim</text>
+<rect class="enf" x="604" y="336" width="142" height="18" rx="2"/><text class="chip enft" x="675" y="348.5" text-anchor="middle">ENFORCED BY A HOOK</text>
+<text class="cp ink" x="604" y="372">No merge while CI is red</text>
+<text class="note sub" x="604" y="390">Coverage rule is written only; drive-to-green in progress</text>
+<line class="rule" x1="24" y1="396" x2="936" y2="396"/>
+<line class="spine" x1="448" y1="467.0" x2="448" y2="503.0"/>
+<path class="arrow" d="M444 502.0 L452 502.0 L448 509.0 Z"/>
+<rect class="box" x="372" y="423.0" width="152" height="44" rx="2"/>
+<text class="stage ink" x="448" y="450.0" text-anchor="middle">Review</text>
+<text class="role ink" x="316" y="442.0" text-anchor="end">Code and security review</text>
+<text class="per sub" x="316" y="460.0" text-anchor="end">Rex (required); Hakim, Naqid (advisory)</text>
+<rect class="enf" x="604" y="422" width="142" height="18" rx="2"/><text class="chip enft" x="675" y="434.5" text-anchor="middle">ENFORCED BY A HOOK</text>
+<text class="cp ink" x="604" y="458">Rex approval and your per-PR approval</text>
+<text class="note sub" x="604" y="476">Hakim's review is not a merge gate</text>
+<line class="rule" x1="24" y1="482" x2="936" y2="482"/>
+<line class="spine" x1="448" y1="553.0" x2="448" y2="589.0"/>
+<path class="arrow" d="M444 588.0 L452 588.0 L448 595.0 Z"/>
+<rect class="box" x="372" y="509.0" width="152" height="44" rx="2"/>
+<text class="stage ink" x="448" y="536.0" text-anchor="middle">Deploy</text>
+<text class="role ink" x="316" y="528.0" text-anchor="end">Platform</text>
+<text class="per sub" x="316" y="546.0" text-anchor="end">Adel</text>
+<rect class="wri" x="604" y="508" width="104" height="18" rx="2"/><text class="chip writ" x="656" y="520.5" text-anchor="middle">WRITTEN ONLY</text>
+<text class="cp ink" x="604" y="544">Production promotion sign-off</text>
+<text class="note sub" x="604" y="562">No promotion gate; rollback only in a deploy add-on</text>
+<line class="rule" x1="24" y1="568" x2="936" y2="568"/>
+<rect class="box" x="372" y="595.0" width="152" height="44" rx="2"/>
+<text class="stage ink" x="448" y="622.0" text-anchor="middle">Operate</text>
+<text class="role ink" x="316" y="614.0" text-anchor="end">SRE</text>
+<text class="per sub" x="316" y="632.0" text-anchor="end">Saif</text>
+<rect class="wri" x="604" y="594" width="104" height="18" rx="2"/><text class="chip writ" x="656" y="606.5" text-anchor="middle">WRITTEN ONLY</text>
+<text class="cp ink" x="604" y="630">On-call person owns the incident</text>
+<text class="note sub" x="604" y="648">No incident tooling or live SLO watcher</text>
+<line class="rule" x1="24" y1="654" x2="936" y2="654"/>
+<path class="loop" d="M524 617.0 H550 V101.0 H531"/>
+<path class="larrow" d="M532 97.0 L532 105.0 L524 101.0 Z"/>
+<text class="note mute" x="568.0" y="359.0" transform="rotate(-90 568.0 359.0)" text-anchor="middle">Faults return to Plan: /investigation, /bug</text>
+<rect class="enf" x="24" y="684" width="142" height="18" rx="2"/><text class="chip enft" x="95.0" y="696.5" text-anchor="middle">ENFORCED BY A HOOK</text>
+<text class="note sub" x="176" y="697">A hook blocks the action until the checkpoint passes.</text>
+<rect class="wri" x="24" y="714" width="104" height="18" rx="2"/><text class="chip writ" x="76.0" y="726.5" text-anchor="middle">WRITTEN ONLY</text>
+<text class="note sub" x="138" y="727">A rule or role file describes it. No hook checks it.</text>
+</svg>
