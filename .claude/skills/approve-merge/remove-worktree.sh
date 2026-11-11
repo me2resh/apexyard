@@ -2,8 +2,8 @@
 # Offer and perform the removal of a merged PR's linked worktree.
 #
 # Usage:
-#   remove-worktree.sh list   <source-tree> <merged-head-branch>
-#   remove-worktree.sh remove <source-tree> <worktree-path> <merged-head-branch>
+#   remove-worktree.sh list   <source-tree> <merged-head-branch> [--merged-head <sha>]
+#   remove-worktree.sh remove <source-tree> <worktree-path> <merged-head-branch> [--merged-head <sha>]
 #
 #   <source-tree>  The local clone of the PR's repo: workspace/<name>/ for a
 #                  managed project, or the ops root for an ops fork PR. The
@@ -19,9 +19,14 @@
 #         git still lists the path, that the worktree still holds the merged
 #         head branch, and every refusal rule below. A detached worktree is
 #         refused. The skill passes the head branch of the PR it just merged.
-#         The helper does not check the merge itself, because a squash merge
-#         leaves no ancestry that git can see. It runs `git worktree remove`
+#         --merged-head identifies the verified merged PR head. Its ancestors
+#         count as preserved after a squash merge and remote branch deletion.
+#         Without it, all commits must exist on remote-tracking refs.
+#         The skill verifies the merge itself. It runs `git worktree remove`
 #         with no --force, so a dirty worktree stops the step and is reported.
+#         A worktree that the calling session owns stays eligible. Its owner
+#         record is released just before git removes the worktree, and
+#         acquired again if git refuses.
 #
 # Candidates come only from `git worktree list --porcelain -z`, which needs
 # git 2.36 or later. An older git rejects -z. The list is then empty, so the
@@ -49,10 +54,25 @@ MODE="${1:-}"
 SOURCE="${2:-}"
 ARG="${3:-}"
 MERGED_BRANCH="${4:-}"
+MERGED_HEAD=""
+usage() {
+  echo "usage: remove-worktree.sh list <source-tree> <branch> [--merged-head <sha>] | remove <source-tree> <path> <branch> [--merged-head <sha>]" >&2
+}
 if [ -z "$MODE" ] || [ -z "$SOURCE" ] || [ -z "$ARG" ] \
   || { [ "$MODE" = remove ] && [ -z "$MERGED_BRANCH" ]; }; then
-  echo "usage: remove-worktree.sh list <source-tree> <branch> | remove <source-tree> <path> <branch>" >&2
+  usage
   exit 2
+fi
+case "$MODE" in
+  list) shift 3 ;;
+  remove) shift 4 ;;
+  *) echo "remove-worktree: unknown mode $MODE" >&2; exit 2 ;;
+esac
+if [ "$#" -ne 0 ]; then
+  [ "$#" -eq 2 ] && [ "$1" = --merged-head ] || { usage; exit 2; }
+  MERGED_HEAD=$2
+  case "$MERGED_HEAD" in ''|*[!a-fA-F0-9]*) usage; exit 2 ;; esac
+  case "${#MERGED_HEAD}" in 40|64) ;; *) usage; exit 2 ;; esac
 fi
 
 HOOK_DIR="$(cd "$(dirname "$0")/../../hooks" && pwd)"
@@ -62,6 +82,15 @@ if [ ! -f "$HOOK_DIR/_lib-active-ticket.sh" ]; then
 fi
 # shellcheck source=/dev/null
 . "$HOOK_DIR/_lib-active-ticket.sh"
+
+# Keep the original refusals first, even when owner checks are unavailable.
+OWNER_CHECK_AVAILABLE=0
+if command -v jq >/dev/null 2>&1 && [ -r "$HOOK_DIR/_lib-worktree-owner.sh" ]; then
+  # shellcheck source=/dev/null
+  if . "$HOOK_DIR/_lib-worktree-owner.sh" && declare -F worktree_owner_status >/dev/null; then
+    OWNER_CHECK_AVAILABLE=1
+  fi
+fi
 
 active_ticket_init "$SOURCE" || { echo "remove-worktree: cannot resolve the ops root for $SOURCE" >&2; exit 1; }
 if ! active_ticket_gitdir "$SOURCE"; then
@@ -109,9 +138,26 @@ if [ "${#WT_PATHS[@]}" -eq 0 ]; then
   exit 1
 fi
 
+# Inspect without refreshing the index, starting FSMonitor or hiding work.
+preservation_state() {
+  local path="$1" status ahead
+  if ! status=$(GIT_OPTIONAL_LOCKS=0 git -c core.fsmonitor=false -C "$path" status --porcelain --untracked-files=normal 2>/dev/null); then
+    printf 'unknown:checkout unknown\n'
+    return
+  fi
+  if [ -n "$status" ]; then printf 'dirty\n'; return; fi
+  # Any remote-tracking ref preserves HEAD, even without a branch upstream.
+  if ! ahead=$(GIT_OPTIONAL_LOCKS=0 git -c core.fsmonitor=false -C "$path" rev-list --count HEAD --not --remotes 2>/dev/null); then
+    printf 'unknown:commits unknown\n'
+    return
+  fi
+  case "$ahead" in ''|*[!0-9]*) printf 'unknown:commits unknown\n'; return ;; esac
+  if [ "$ahead" != 0 ]; then printf 'unpushed\n'; else printf 'preserved\n'; fi
+}
+
 # refusal_for <index>: prints the reason to refuse, or nothing
 refusal_for() {
-  local i="$1" p real
+  local i="$1" p real owner owner_rc=0 preservation
   p="${WT_PATHS[$i]}"
   real=$(cd -P "$p" 2>/dev/null && pwd)
   [ -n "$real" ] || { echo "path is missing"; return; }
@@ -123,6 +169,29 @@ refusal_for() {
   [ -z "$SESSION_TREE" ] || [ "$real" != "$SESSION_TREE" ] || { echo "the session's own tree"; return; }
   case "$OPS_REAL/" in
     "$real"/*) echo "equals or contains the ops root"; return ;;
+  esac
+  [ "$OWNER_CHECK_AVAILABLE" = 1 ] || { echo "owner check unavailable"; return; }
+  owner=$(worktree_owner_status "$p") || owner_rc=$?
+  case "$owner:$owner_rc" in
+    # /fan-out records its calling session as owner, so that session may clean up.
+    alive:0) worktree_owner_is_self "$p" || { echo "owner alive"; return; } ;;
+    unknown:2)
+      echo "owner unknown: inspect the owner record before any release"
+      return ;;
+    dead:1|none:3|released:4) ;;
+    *) echo "owner check unavailable"; return ;;
+  esac
+  preservation=$(preservation_state "$p")
+  case "$preservation" in
+    dirty) echo "uncommitted changes" ;;
+    unknown:*) echo "preservation $preservation" ;;
+    unpushed)
+      if [ -n "$MERGED_HEAD" ] && git -C "$p" merge-base --is-ancestor HEAD "$MERGED_HEAD" 2>/dev/null; then
+        return
+      fi
+      echo "unpushed commits" ;;
+    preserved) ;;
+    *) echo "preservation unknown: check unavailable" ;;
   esac
 }
 
@@ -162,9 +231,21 @@ case "$MODE" in
         echo "remove-worktree: refused, $why: $ARG" >&2
         exit 1
       fi
+      # The release re-checks the owner under the record lock.
+      released_own=0
+      if worktree_owner_is_self "$ARG"; then
+        if ! worktree_owner_release "$ARG"; then
+          echo "remove-worktree: refused, cannot release this session's owner record: $ARG" >&2
+          exit 1
+        fi
+        released_own=1
+      fi
       if git -C "$COMMON" worktree remove "$ARG"; then
         echo "removed $ARG"
         exit 0
+      fi
+      if [ "$released_own" = 1 ] && ! worktree_owner_acquire "$ARG"; then
+        echo "remove-worktree: could not acquire this session's owner record again, so it stays released: $ARG" >&2
       fi
       echo "remove-worktree: git did not remove $ARG. It may hold changes. Review it, then remove it yourself." >&2
       exit 1

@@ -394,7 +394,7 @@ _wto_update_locked() {
     --argjson generation "$generation" --argjson now "$now" --argjson ttl "$ttl" '
       select($generation < 9007199254740991 and $now >= 0 and $now == ($now | floor)) |
       select($ttl > 0 and ($now + $ttl) <= 9007199254740991) |
-      .version = 1 | .generation = ($generation + 1) |
+      .version = 1 | .generation = ($generation + 1) | del(.forced) |
       if $action == "release" then .status = "released" | .owner = null | .released_by = $owner
       else .status = "active" | .owner = $owner | del(.released_by) |
         .lease_heartbeat_at = $now | .lease_expires_at = ($now + $ttl) end
@@ -417,6 +417,45 @@ _wto_update() {
 worktree_owner_acquire() { _wto_update "${1:-}" acquire; }
 worktree_owner_renew() { _wto_update "${1:-}" renew || return 1; }
 worktree_owner_release() { _wto_update "${1:-}" release || return 1; }
+
+# True only for an active record held by this exact process identity.
+# A session-only identity has no process evidence, so it never matches.
+worktree_owner_is_self() {
+  local gitdir record self
+  gitdir=$(_wto_gitdir "${1:-}") || return 1
+  record=$(_wto_read_record "$gitdir/apexyard-owner") || return 1
+  self=$(worktree_owner_identity) || return 1
+  printf '%s\n' "$record" | jq -e --argjson self "$self" \
+    '.status == "active" and .owner == $self and .owner.pid != null' >/dev/null
+}
+
+# The operator approves the generation shown in an unknown-owner refusal.
+# Re-read it under the lock so a newer owner cannot lose its record.
+_wto_force_release_locked() {
+  local gitdir="$1" generation="$2" actor="$3" record owner state rc=0 updated
+  _wto_safe_gitdir "$gitdir" || return 1
+  record=$(_wto_read_record "$gitdir/apexyard-owner") || return 1
+  printf '%s\n' "$record" | jq -e --argjson generation "$generation" \
+    '.status == "active" and .generation == $generation and .generation < 9007199254740991' >/dev/null || return 1
+  owner=$(printf '%s\n' "$record" | jq -c '.owner') || return 1
+  state=$(_wto_record_state "$owner") || rc=$?
+  # An owner that became alive after the prompt is still protected.
+  case "$state:$rc" in unknown:2|dead:1) ;; *) return 1 ;; esac
+  updated=$(printf '%s\n' "$record" | jq -ce --argjson actor "$actor" \
+    '.status = "released" | .owner = null | .released_by = $actor | .forced = true | .generation += 1') || return 1
+  _wto_write_json "$gitdir/apexyard-owner" "$updated"
+}
+
+worktree_owner_force_release() {
+  local gitdir actor generation="${2:-}"
+  [ "$#" -eq 2 ] || return 1
+  case "$generation" in ''|0*|*[!0-9]*) return 1 ;; esac
+  jq -en --argjson generation "$generation" \
+    '$generation > 0 and $generation <= 9007199254740991' >/dev/null 2>&1 || return 1
+  gitdir=$(_wto_gitdir "${1:-}") || return 1
+  actor=$(worktree_owner_identity) || return 1
+  _wto_with_lock "$gitdir" _wto_force_release_locked "$gitdir" "$generation" "$actor" || return 1
+}
 
 worktree_owner_status() {
   local gitdir file record
