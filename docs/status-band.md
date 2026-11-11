@@ -18,3 +18,23 @@ The band is on only for you, on this machine. After `/update`, run
 `/reload-plugins` to load the new version.
 
 Full settings and behaviour: [`plugins/apexyard-status/README.md`](../plugins/apexyard-status/README.md).
+
+The band also shows the CI state of the PR for the current branch. Each waiting PR shows its CI state.
+
+## Approval pane
+
+The optional `apexyard-gate` plugin adds an approval pane. Run `/gate-approve`
+to open it. Each row shows the repo, the PR, the head SHA, the CI state and the
+Rex verdict. **Approve** opens the Claude Code question menu for that exact
+head SHA. Your choice in the menu records the approval through the menu hook
+(AgDR-0234). The pane never writes a record and never merges.
+
+Install it from the ops-fork root:
+
+```bash
+claude plugin install apexyard-gate@apexyard --scope local
+```
+
+Without the pane, every gate behaves as before. Full behaviour:
+[`plugins/apexyard-gate/README.md`](../plugins/apexyard-gate/README.md).
+AgDR-0295 records the split between the hooks, the plugins and the Cockpit.

@@ -12,7 +12,13 @@ export type Band = {
   reviewLock: string | null
   // Number of running build processes, or null when the build count is off.
   builds: number | null
+  // CI word per waiting PR reference. Absent when not looked up.
+  ci?: Record<string, CiState>
+  // CI of the PR for the current branch, or null when the branch has none.
+  branchCi?: { number: number; ci: CiState } | null
 }
+
+export type CiState = 'pass' | 'fail' | 'pending' | 'none' | 'unknown'
 
 export type OrbitCriterion = { id: string; status: string; statement: string; shownBy: string }
 
