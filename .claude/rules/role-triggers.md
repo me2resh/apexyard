@@ -73,6 +73,13 @@ When you activate, hand off, or exit a role, print a single-line marker at the t
 ▸ Salim (QA Engineer) task complete — returning to ambient mode
 ```
 
+**Main thread route** — Hadi prints a marker only when it routes work to a role. Hadi does not print a marker for ordinary work.
+
+```
+▸ Hadi routes #42 to Rex (code review)
+▸ Hadi routes #42 to Salim (QA Engineer) (trigger: ticket labeled qa)
+```
+
 The persona name comes from the `persona_name` field added in [#204](https://github.com/me2resh/apexyard/issues/204). If a future role doesn't have a persona name (custom adopter role), drop the name and use just the title (e.g. `▸ Activating QA Engineer for #42 …`). The triangle prefix (`▸`) makes the marker visually scannable.
 
 This is a **prose convention**, not a mechanically-enforced format. The sibling hook (`detect-role-trigger.sh`, from [#206](https://github.com/me2resh/apexyard/issues/206)) already injects an advisory reminder banner when a trigger fires; this convention adds the agent's response side so operators can see the transition in the conversation.

@@ -31,6 +31,9 @@ Skills like `/projects`, `/inbox`, `/status`, `/tasks`, and `/stakeholder-update
 
 Role definitions live in `roles/`. Each role defines identity, CAN / CANNOT boundaries, interfaces, and handoffs.
 
+**Main thread**: **Hadi**. Hadi has no role file. Hadi routes work to the roles and returns results.
+To rename Hadi, edit this persona line (and the role-trigger examples if wanted). Renaming is cosmetic. No skill or hook reads the name.
+
 ### Departments
 
 Each role has a **persona name** — a short identifier used in conversation, PR comments, and demo scripts. The persona name lives as a bold line at the top of the role file (e.g. `**Persona name**: Khalid`). Agents carry the same identifier as a `persona_name` YAML frontmatter field. Rationale + full mapping table: [AgDR-0018](docs/agdr/AgDR-0018-persona-naming-convention.md).
