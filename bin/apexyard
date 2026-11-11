@@ -284,9 +284,10 @@ Commands:
     --agent <name>      Use claude, codex, cursor-agent, opencode, or pi.
     --dry-run           Print the plan without changes.
     --json              Print repo, ticket, branch, worktree, and clone as JSON.
-  why <PR> [--json]      Show the next action and all gate items.
+  why <PR> [--repo <name|owner/name>] [--json]
+                         Show the next action and all gate items.
   queue [--json]         Show PRs that need only owner approval.
-  status --json         Print the briefing fields as JSON.
+  status --json          Print the briefing fields as JSON.
   ticket owner/repo#N    Alias for start.
   migrate [opts]         Keep the CLI only, or move this fork to a new repo
                            (init layout). See: apexyard migrate --help.

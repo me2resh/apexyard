@@ -612,6 +612,9 @@ The first line gives the next action. The full gate item table follows.
 
 Run `apexyard queue` to list open PRs that need only owner approval.
 The command reads each registered repository. It uses the existing PR gate evaluator.
+The evaluator reports `awaiting_owner_only` in its JSON. The value is `true` when the owner record is the only open item.
+The pre-merge QA stamp counts as an item. A PR with no QA stamp does not appear in the list.
+The command skips drafts and PRs with a failed check, and it checks up to six PRs at the same time.
 Unverified PRs appear separately. These commands do not write approval records or change git refs.
 
 Use `--json` for these JSON shapes:
@@ -620,7 +623,9 @@ Use `--json` for these JSON shapes:
   `items` contains the evaluator objects, including `section`, `name`, `status`, and `detail`.
   If the evaluator cannot run, the command exits 1 and emits `{repo, pr, next_action:null, verified:false, reason}`.
 - `queue`: `{ready:[{repo,pr,url,title,next_action}], not_verified:[{repo,pr,reason}], blocked_count:N}`.
-  A failed repository listing uses `pr:null`. `blocked_count` excludes unverified PRs.
+  A failed repository listing uses `pr:null`.
+  `blocked_count` counts the PRs that do not wait only for the owner, including drafts and PRs with a failed check.
+  It excludes unverified PRs.
 - `status`: `{workspace, ticket, branch, role_set}`.
   Values match the briefing text, including placeholders and the role queue suffix.
 

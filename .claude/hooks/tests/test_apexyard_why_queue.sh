@@ -17,25 +17,29 @@ git -C "$clone" remote set-url origin https://github.com/org/app.git
 git -C "$clone" worktree add -b feature/GH-1-test "$sb/tree" >/dev/null 2>&1
 export APEXYARD_OPS_ROOT="$sb/ops" APEXYARD_PR_STATUS="$sb/tools/pr-status"
 export EXPECT_CLONE="$clone"
+# The fake evaluator serves recorded output of the real apexyard-pr-status.
+export FX="$root/.claude/hooks/tests/fixtures/pr-status" STATUS_LOG="$sb/status.log"
 cat > "$APEXYARD_GH" <<'FAKE'
 #!/bin/bash
 printf '%s\n' "$*" >> "$FAKE_GH_LOG"
 [ "$1 $2" = 'pr list' ] || exit 2
-printf '[{"number":1,"url":"url","title":"Ready"},{"number":2,"url":"url","title":"Blocked"},{"number":3,"url":"url","title":"Failed"},{"number":4,"url":"url","title":"Unknown"},{"number":5,"url":"url","title":"Bad JSON"},{"number":6,"url":"url","title":"No head"}]\n'
+printf '%s\n' '[{"number":1,"url":"url","title":"Waits for owner"},{"number":2,"url":"url","title":"Already approved"},{"number":3,"url":"url","title":"Failed"},{"number":4,"url":"url","title":"Unknown"},{"number":5,"url":"url","title":"Bad JSON"},{"number":6,"url":"url","title":"No head"},{"number":7,"url":"url","title":"No Rex"},{"number":8,"url":"url","isDraft":true,"title":"Draft"},{"number":9,"url":"url","title":"Red CI","statusCheckRollup":[{"conclusion":"FAILURE"}]},{"number":10,"url":"url","title":"Old helper"}]'
 FAKE
 cat > "$APEXYARD_PR_STATUS" <<'FAKE'
 #!/bin/bash
 [ "$PWD" = "$EXPECT_CLONE" ] && [ "$APEXYARD_DISABLE_RESOLUTION_CACHE" = 1 ] || exit 9
-status=satisfied
-head=abc
+printf '%s\n' "$1" >> "$STATUS_LOG"
 case "$1" in
-  *#2) status=missing ;;
+  *#1) cat "$FX/owner-missing.json" ;;
+  *#2) cat "$FX/owner-approved.json" ;;
   *#3) exit 1 ;;
-  *#4) status='not verified' ;;
-  *#5) echo invalid; exit ;;
-  *#6) head='' ;;
+  *#4) jq '(.items[] | select(.name == "CI green") | .status) = "not verified" | .awaiting_owner_only = false' "$FX/owner-missing.json" ;;
+  *#5) echo invalid ;;
+  *#6) jq '.head.sha = ""' "$FX/owner-missing.json" ;;
+  *#7) cat "$FX/rex-missing.json" ;;
+  *#10) jq 'del(.awaiting_owner_only)' "$FX/owner-missing.json" ;;
+  *) cat "$FX/owner-missing.json" ;;
 esac
-jq -n --arg status "$status" --arg head "$head" '{head:{sha:$head},next_action:"Approve the PR.",items:[{section:"records",name:"rex",status:$status,detail:"review"},{section:"records",name:"ceo",status:"missing",detail:"approval"}]}'
 FAKE
 chmod +x "$APEXYARD_GH" "$APEXYARD_PR_STATUS"
 run_at() {
@@ -54,7 +58,7 @@ for dir in "$clone" "$sb/tree" "$sb/ops"; do
 done
 for target in 1 app#1 org/app#1; do
   run_at "$clone" why "$target" --json
-  check 'why JSON' python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["verified"] and d["repo"]=="org/app" and d["pr"]==1 and len(d["items"])==2' "$sb/out"
+  check 'why JSON' python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["verified"] and d["repo"]=="org/app" and d["pr"]==1 and len(d["items"])==15' "$sb/out"
 done
 run_at "$sb/ops" why 1
 check 'ops prompt' test "$rc" = 2
@@ -67,9 +71,12 @@ check 'bad JSON failure' test "$rc" = 1
 check 'failure plain line' grep -Fxq 'not verified: invalid PR status JSON' "$sb/out"
 run_at "$sb/ops" queue --json
 check 'queue succeeds' test "$rc" = 0
-check 'queue JSON' python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert [r["pr"] for r in d["ready"]]==[1]; assert [r["pr"] for r in d["not_verified"]]==[3,4,5,6]; assert d["blocked_count"]==1' "$sb/out"
+check 'queue JSON' python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert [r["pr"] for r in d["ready"]]==[1]; assert [r["pr"] for r in d["not_verified"]]==[3,4,5,6,10]; assert d["blocked_count"]==4' "$sb/out"
 run_at "$sb/ops" queue
-check 'ready line' grep -Fxq 'org/app#1 Ready' "$sb/out"
+check 'ready line' grep -Fxq 'org/app#1 Waits for owner' "$sb/out"
+check 'approved PR is not listed' test -z "$(grep -F 'org/app#2' "$sb/out")"
+check 'draft and red CI skip the evaluator' test -z "$(grep -E '#(8|9)$' "$STATUS_LOG")"
+check 'one listing call per repo' test "$(grep -c '^pr list' "$FAKE_GH_LOG")" = 2
 check 'unknown line' grep -q '^not verified: org/app#4 ' "$sb/out"
 run_at "$sb/ops" status --json
 check 'status JSON' python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert set(d)=={"workspace","ticket","branch","role_set"}; assert d["workspace"]=="(ops)"' "$sb/out"
