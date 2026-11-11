@@ -96,10 +96,10 @@ The list above is illustrative. Use the resolved template's Required and Conditi
 
 ### 5. Check Traceability
 
-Run the PRD-only traceability check after you save the draft. Run it from the ApexYard root:
+Run the PRD-only traceability check after you save the draft. Call the script by its path in the ApexYard ops fork, the same root that step 4 uses:
 
 ```bash
-bin/check-traceability.sh --prd <prd-path>
+"$(git rev-parse --show-toplevel)/bin/check-traceability.sh" --prd <prd-path>
 ```
 
 The check confirms that every user story has a requirement and that every requirement serves a user story. Report each `BLOCK` line to the author as a gap to fix. Report each `WARN` line as advice. The check is advisory. Continue the skill when it exits non-zero. See me2resh/apexyard#1749.

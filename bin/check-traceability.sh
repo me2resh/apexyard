@@ -64,6 +64,11 @@ pass()  { echo "PASS:  $*"; }
 warn()  { echo "WARN:  $*"; WARNS=$((WARNS + 1)); }
 block() { echo "BLOCK: $*"; BLOCKS=$((BLOCKS + 1)); }
 
+# A PR can add a PRD or design as a symbolic link to a file outside the
+# repository. The check still reads it, but says so.
+[ ! -L "$PRD" ] || warn "the PRD path is a symbolic link, so check that it points inside the repository"
+[ -z "$DESIGN" ] || [ ! -L "$DESIGN" ] || warn "the design path is a symbolic link, so check that it points inside the repository"
+
 # in_list ITEM LIST — true when ITEM is a whole line of LIST.
 in_list() { printf '%s\n' "$2" | grep -qxF -- "$1"; }
 
@@ -76,7 +81,8 @@ ids() { grep -oE -- "$1" | awk '!seen[$0]++'; }
 # table_rows KEY_ERE — read Markdown from stdin. For each table row whose
 # first cell matches KEY_ERE, print: key, has_serves, serves_cell and
 # rest_of_row, separated by the unit separator (octal 037). A tab would not
-# work: read merges two tabs in a row, so an empty cell would shift fields. The Serves column comes from the most recent header row.
+# work: read merges two tabs in a row, so an empty cell would shift fields.
+# The Serves column comes from the most recent header row.
 table_rows() {
   awk -v keyre="$1" '
     function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
@@ -99,7 +105,7 @@ table_rows() {
 # ---------------------------------------------------------------------------
 # Read the PRD.
 # ---------------------------------------------------------------------------
-PRD_TEXT="" PRD_REL="" GIT_TOP="" PRD_SOURCE="working copy"
+PRD_TEXT="" PRD_REL="" GIT_TOP="" PRD_SOURCE="working copy" VERSION_REF=""
 if [ -n "$BASE" ]; then
   prd_dir=$(cd "$(dirname "$PRD")" 2>/dev/null && pwd) || die "PRD directory not found: $PRD"
   GIT_TOP=$(git -C "$prd_dir" rev-parse --show-toplevel 2>/dev/null) || die "--base needs the PRD inside a git repository"
@@ -117,7 +123,10 @@ if [ -n "$BASE" ]; then
 
   if [ "$branch_changes_prd" -eq 1 ]; then
     PRD_TEXT=$(tr -d '\r' < "$PRD")
+    VERSION_REF="HEAD"
     warn "this branch changes the PRD, so the check reads the working copy, not $BASE"
+    git -C "$GIT_TOP" diff --quiet --no-ext-diff "$mb" "$BASE" -- "$PRD_REL" 2>/dev/null \
+      || warn "the PRD also changed on $BASE since this branch started, so rebase to check against both changes"
   elif PRD_TEXT=$(git -C "$GIT_TOP" show "$BASE:$PRD_REL" 2>/dev/null | tr -d '\r') && [ -n "$PRD_TEXT" ]; then
     PRD_SOURCE="$BASE"
   elif [ -f "$PRD" ]; then
@@ -264,11 +273,11 @@ EOF
       PRD_REL=$(cd "$prd_dir" && git ls-files --full-name -- "$(basename "$PRD")" 2>/dev/null | head -1)
     fi
   fi
-  ref="${BASE:-HEAD}"
+  ref="${VERSION_REF:-${BASE:-HEAD}}"
   if [ -z "$version" ]; then
     warn "the design has no PRD version field, so the PRD change check is skipped"
   elif ! printf '%s' "$version" | grep -qE '^[0-9a-fA-F]+$' || [ "${#version}" -lt 7 ]; then
-    warn "the design PRD version is not a commit SHA: $version"
+    warn "the design PRD version is not a commit SHA, so the PRD change check is skipped"
   elif [ -z "$GIT_TOP" ] || [ -z "$PRD_REL" ]; then
     warn "the PRD is not tracked by git, so the PRD change check is skipped"
   else

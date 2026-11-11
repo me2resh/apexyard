@@ -21,6 +21,12 @@
 #   (14) ORBIT: a mapped criterion in no slice is a BLOCK, all in slices
 #        passes, and no traceability table skips the ORBIT checks
 #   (15) a PRD with CRLF line endings parses
+#   (16) a PRD path that is a symbolic link is a WARN
+#   (17) a PRD version that is not a commit SHA is a WARN that does not
+#        print the design's token
+#   (18) a branch that changes the PRD and the design together compares
+#        the PRD version with HEAD, not the base, and warns when the base
+#        also changed the PRD
 #
 # Usage: bash .claude/hooks/tests/test_check_traceability.sh
 # Exit 0 on pass, 1 on any failure.
@@ -64,12 +70,13 @@ assert_exit() {
 }
 
 TMP=$(mktemp -d 2>/dev/null || mktemp -d -t trace)
+[ -n "$TMP" ] && [ -d "$TMP" ] || { echo "cannot create a temp directory"; exit 1; }
 trap 'rm -rf "$TMP"' EXIT
 
 OUT="" RC=0
 run() { OUT=$(bash "$SCRIPT" "$@" 2>&1); RC=$?; }
 
-git_q() { git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false "$@" >/dev/null 2>&1; }
+git_q() { git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false -c core.hooksPath=/dev/null "$@" >/dev/null 2>&1; }
 
 # write_prd FILE STORIES FR_ROWS [HEADER]
 # STORIES: space-separated numbers. FR_ROWS: lines "FR-n|US-n".
@@ -293,6 +300,34 @@ awk '{ printf "%s\r\n", $0 }' "$TMP/prd.md" > "$TMP/prd-crlf.md"
 run --prd "$TMP/prd-crlf.md"
 assert_exit "$RC" 0 "CRLF PRD exits 0"
 assert_contains "$OUT" "(3/3)" "CRLF stories counted"
+
+echo "Test 16: symbolic link PRD"
+write_prd "$TMP/prd.md" "1 2 3" "$FR3"
+ln -s "$TMP/prd.md" "$TMP/prd-link.md"
+run --prd "$TMP/prd-link.md"
+assert_exit "$RC" 0 "symbolic link PRD exits 0"
+assert_contains "$OUT" "WARN:  the PRD path is a symbolic link" "symbolic link reported"
+
+echo "Test 17: PRD version is not a commit SHA"
+write_design "$TMP/design.md" "$TASKS3" "NOT-A-SHA-TOKEN"
+run --prd "$TMP/prd.md" --design "$TMP/design.md"
+assert_contains "$OUT" "WARN:  the design PRD version is not a commit SHA" "non-SHA version reported"
+assert_not_contains "$OUT" "NOT-A-SHA-TOKEN" "the design token is not printed"
+
+echo "Test 18: branch changes the PRD and the design together"
+git_q -C "$R" checkout -q feature/design
+write_prd "$R/prds/invoices.md" "1 2 3 5" "$FR3
+FR-5|US-5"
+git_q -C "$R" commit -q -am "docs: add US-5 on the branch"
+v5=$(git -C "$R" log -1 --format=%h HEAD -- prds/invoices.md)
+write_design "$R/designs/invoices-design.md" "$TASKS3
+5|US-5, FR-5" "$v5"
+run --prd "$R/prds/invoices.md" --design "$R/designs/invoices-design.md" --base dev
+assert_contains "$OUT" "this branch changes the PRD, so the check reads the working copy" "branch copy used"
+assert_contains "$OUT" "WARN:  the PRD also changed on dev since this branch started" "base change reported"
+assert_contains "$OUT" "PASS:  the design PRD version matches the PRD on HEAD" "version compared with HEAD"
+assert_not_contains "$OUT" "the PRD changed since this design was written" "no false drift WARN"
+assert_not_contains "$OUT" "BLOCK: task 5 serves US-5" "branch story is known"
 
 echo
 if [ "$FAIL" -eq 0 ]; then

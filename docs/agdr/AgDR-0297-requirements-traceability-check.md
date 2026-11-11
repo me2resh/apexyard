@@ -1,5 +1,5 @@
 ---
-id: AgDR-0293
+id: AgDR-0297
 timestamp: 2026-11-09T12:00:00Z
 agent: claude
 model: claude-opus-5-5
@@ -52,6 +52,7 @@ How this relates to the existing parts:
 
 - `/write-spec` runs the PRD-only check after it saves a draft. It reports gaps to the author and continues.
 - `/design-review` reads the PRD from the base branch and runs the full check. Each BLOCK line is a Requirements traceability finding. The reviewer still judges meaning.
+- `/design-review` runs the check from the trusted ops fork, never from the PR checkout or a managed-project clone. A PR under review can contain its own `bin/check-traceability.sh`, and the review session holds tracker credentials. The PR's files are only arguments to the check.
 - `/orbit` is unchanged. Large work still goes to ORBIT slices, one ticket and one PR each. The check reads slice records and writes nothing.
 
 ## Consequences
