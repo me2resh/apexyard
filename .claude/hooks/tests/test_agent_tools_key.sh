@@ -40,7 +40,21 @@ fm_value() {
 
 # Succeed when a comma-separated list contains an exact tool name.
 list_has() {
-  printf '%s' "$1" | tr ',' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -qx "$2"
+  printf '%s' "$1" | tr ',' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -Fqx -- "$2"
+}
+
+# Assert that an agent's tools: list contains an exact tool name.
+assert_tool() {
+  agent_file="$AGENTS_DIR/$1.md"
+  if [ ! -f "$agent_file" ]; then
+    fail "$1.md is missing"
+    return
+  fi
+  if list_has "$(fm_value "$agent_file" tools)" "$2"; then
+    pass "$1.md grants $2"
+  else
+    fail "$1.md does not grant $2 in tools"
+  fi
 }
 
 count=0
@@ -70,6 +84,13 @@ else
   else
     pass "qa-engineer.md has a tools: key"
   fi
+  for t in mcp__playwright__browser_file_upload mcp__playwright__browser_run_code_unsafe mcp__playwright__browser_run_code; do
+    if list_has "$qa_deny" "$t"; then
+      pass "qa-engineer.md disallows $t"
+    else
+      fail "qa-engineer.md does not list $t in disallowedTools"
+    fi
+  done
   for t in Edit Write; do
     if list_has "$qa_deny" "$t"; then
       pass "qa-engineer.md disallows $t"
@@ -83,6 +104,20 @@ else
     fi
   done
 fi
+
+# me2resh/apexyard#2039: tools the role files need.
+# Browser tools: server-level entry for the Playwright MCP server.
+assert_tool qa-engineer 'mcp__playwright__*'
+assert_tool ui-designer 'mcp__playwright__*'
+assert_tool head-of-design 'mcp__playwright__*'
+# Skill: QA runs /bug; the UI designer runs /design-sync.
+assert_tool qa-engineer Skill
+assert_tool ui-designer Skill
+# DesignSync: the tool that /design-sync drives.
+assert_tool ui-designer DesignSync
+# Web research: product manager.
+assert_tool product-manager WebSearch
+assert_tool product-manager WebFetch
 
 printf '\n%s passed, %s failed (%s agent files)\n' "$PASS" "$FAIL" "$count"
 [ "$FAIL" -eq 0 ]
