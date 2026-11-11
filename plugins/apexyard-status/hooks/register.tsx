@@ -3,7 +3,8 @@ import { bar, clip, mergeRecords, pickPlan, shortLabel, pickReconciliation, stat
 import { GH_CACHE_MS } from './band'
 // ApexYard status band. Display only: it reads files under the ops fork,
 // runs read-only commands (the ticket resolver, one cached open-PR list per
-// repo, and ps when a build pattern is set) and draws one line above the
+// repo, cached CI reads for the branch PR and the waiting PRs, and ps when a
+// build pattern is set) and draws one line above the
 // prompt. It never writes a file and never replaces a shell hook. All gates
 // stay in .claude/hooks/.
 import { atom, read, update } from 'claude-code'
@@ -21,13 +22,17 @@ import {
   findOpsRoot,
   lockLabels,
   markerRef,
+  ciArgv,
+  ciWord,
+  parseCi,
   newMarkers,
   rexMarkers,
   safeSessionId,
   ticketLabel,
+  validRepo,
   waitingText,
 } from './band'
-import type { GhCache, OpenPrs } from './band'
+import type { CiState, GhCache, OpenPrs } from './band'
 
 export function processPool(limit: number) {
   let active = 0
@@ -274,6 +279,21 @@ const seen: Seen = { rex: null, builds: null }
 // once every GH_CACHE_MS.
 const ghCache: GhCache = new Map()
 let settings: Settings = readSettings(undefined)
+// CI lookups, in memory only, at most one per key every GH_CACHE_MS.
+const ciCache = new Map<string, { at: number; value: { number: number; ci: CiState } | null }>()
+
+async function ciFor($: EngineInterface, key: string, argv: string[], cwd?: string) {
+  const now = await $.clock.now()
+  const hit = ciCache.get(key)
+  if (hit && now - hit.at < GH_CACHE_MS) return hit.value
+  let value: { number: number; ci: CiState } | null = null
+  try {
+    const r = await runProcess($, argv, GH_TIMEOUT_MS, cwd)
+    value = r.exitCode === 0 ? parseCi(r.stdout) : null
+  } catch { /* gh missing, failed or slow: no CI word. */ }
+  ciCache.set(key, { at: now, value })
+  return value
+}
 let busy = false
 
 async function refresh($: EngineInterface) {
@@ -329,6 +349,17 @@ async function refreshOnce($: EngineInterface) {
     offline = q.offline
   } catch {}
 
+  const ci: Record<string, CiState> = {}
+  if (!offline) {
+    for (const ref of waiting) {
+      const m = ref.match(/^(.+)#(\d+)$/)
+      if (!m?.[1] || !m[2] || !validRepo(m[1])) continue
+      const got = await ciFor($, ref, ciArgv(m[1], Number(m[2])))
+      if (got) ci[ref] = got.ci
+    }
+  }
+  const branchCi = await ciFor($, `branch:${cwd}`, ciArgv(null, null), cwd)
+
   // One marker file per review (me2resh/apexyard#1649), plus the legacy single
   // file that is still read during the transition.
   const safeSid = safeSessionId(sid)
@@ -358,7 +389,7 @@ async function refreshOnce($: EngineInterface) {
   seen.rex = rexNow
   seen.builds = builds
 
-  const next: Band = { ticket, waiting, reReview, offline, reviewLock, builds }
+  const next: Band = { ticket, waiting, reReview, offline, reviewLock, builds, ci, branchCi }
   await update($, band, () => next)
   await refreshOrbit($, root, markerRepo(marker))
 }
@@ -545,9 +576,15 @@ export const register: Register = (on, options) => {
       <Box flexDirection="row" flexWrap="wrap">
         <Text key="brand" color="cyan">ApexYard </Text>
         <Text key="ticket">{b.ticket ?? 'no active ticket'}</Text>
+        {b.branchCi ? <Text key="sep0" dimColor> · </Text> : null}
+        {b.branchCi ? (
+          <Text key="branchci" color={b.branchCi.ci === 'pass' ? 'green' : b.branchCi.ci === 'fail' ? 'red' : 'yellow'}>
+            CI {ciWord(b.branchCi.ci)} on #{b.branchCi.number}
+          </Text>
+        ) : null}
         <Text key="sep1" dimColor> · </Text>
         <Text key="waiting" color={b.waiting.length ? 'yellow' : undefined} dimColor={b.waiting.length === 0}>
-          {waitingText(b.waiting, b.offline)}
+          {waitingText(b.waiting, b.offline, b.ci ?? {})}
         </Text>
         {b.reReview.length ? <Text key="sep4" dimColor> · </Text> : null}
         {b.reReview.length ? <Text key="rereview" color="magenta">{reReviewText(b.reReview)}</Text> : null}

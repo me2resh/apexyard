@@ -36,13 +36,16 @@ make_sb() {
   : > "$sb/onboarding.yaml"
   printf 'projects:\n  - name: p1\n    repo: org/p1\n' > "$sb/apexyard.projects.yaml"
   mkdir -p "$sb/.claude/hooks" "$sb/.claude/skills/approve-merge" "$sb/workspace"
-  for f in _lib-active-ticket.sh _lib-read-config.sh _lib-portfolio-paths.sh _lib-ops-root.sh _lib-resolution-cache.sh _lib-path-resolve.sh; do
+  for f in _lib-active-ticket.sh _lib-read-config.sh _lib-portfolio-paths.sh _lib-ops-root.sh _lib-resolution-cache.sh _lib-path-resolve.sh _lib-worktree-owner.sh; do
     cp "$HOOKS/$f" "$sb/.claude/hooks/$f"
   done
   cp "$SRC_ROOT/.claude/project-config.defaults.json" "$sb/.claude/project-config.defaults.json"
   cp "$SKILL/remove-worktree.sh" "$sb/.claude/skills/approve-merge/remove-worktree.sh"
   chmod +x "$sb/.claude/skills/approve-merge/remove-worktree.sh"
   mkrepo "$sb/workspace/p1"
+  git init -q --bare "$sb/remote.git"
+  git -C "$sb/workspace/p1" remote add origin "$sb/remote.git"
+  git -C "$sb/workspace/p1" push -q origin HEAD:refs/heads/main
   echo "$sb"
 }
 
@@ -50,7 +53,7 @@ make_sb() {
 run() {
   local cwd="$1"
   shift
-  OUT=$(cd "$cwd" && "$SB/.claude/skills/approve-merge/remove-worktree.sh" "$@" 2>&1)
+  OUT=$(cd "$cwd" && "$BASH" "$SB/.claude/skills/approve-merge/remove-worktree.sh" "$@" 2>&1)
   RC=$?
 }
 
@@ -60,6 +63,7 @@ git -C "$P1" worktree add -q "$SB/wt-x" -b feature/x
 printf 'cache\n' > "$SB/wt-x/.gitignore"
 git -C "$SB/wt-x" add .gitignore
 git -C "$SB/wt-x" commit -q -m ignore
+git -C "$SB/wt-x" push -q origin HEAD:refs/heads/feature/x
 mkdir -p "$SB/wt-x/cache"
 printf 'big\n' > "$SB/wt-x/cache/blob.bin"
 
@@ -72,7 +76,7 @@ esac
 # A git environment from the caller must not redirect the listing.
 mkrepo "$SB/elsewhere-repo"
 OUT=$(cd "$SB" && GIT_DIR="$SB/elsewhere-repo/.git" GIT_WORK_TREE="$SB/elsewhere-repo" \
-  "$SB/.claude/skills/approve-merge/remove-worktree.sh" list "$P1" feature/x 2>&1)
+  "$BASH" "$SB/.claude/skills/approve-merge/remove-worktree.sh" list "$P1" feature/x 2>&1)
 case "$OUT" in
   ok$'\t'"$SB/wt-x"*) ok "list_ignores_the_callers_git_environment" ;;
   *) bad "list_ignores_the_callers_git_environment" "$OUT" ;;
@@ -80,20 +84,29 @@ esac
 # Variables outside the four that pick the repository are scrubbed too, from
 # git's own list.
 OUT=$(cd "$SB" && GIT_OBJECT_DIRECTORY="$SB/no-such-objects" GIT_CONFIG_PARAMETERS="'core.bare'='true'" \
-  "$SB/.claude/skills/approve-merge/remove-worktree.sh" list "$P1" feature/x 2>&1)
+  "$BASH" "$SB/.claude/skills/approve-merge/remove-worktree.sh" list "$P1" feature/x 2>&1)
 case "$OUT" in
   ok$'\t'"$SB/wt-x"*"cache/blob.bin"*) ok "list_scrubs_gits_local_env_vars" ;;
   *) bad "list_scrubs_gits_local_env_vars" "$OUT" ;;
 esac
-# A worktree path with a newline in it stays one candidate.
+# A worktree path with a newline in it stays one candidate. On dev the
+# owner check reports unknown for a newline path, so the row is a refusal.
 NLWT="$SB/wt-nl"$'\n'"x"
 git -C "$P1" worktree add -q "$NLWT" -b feature/nl
 run "$SB" list "$P1" feature/nl
 case "$OUT" in
-  ok$'\t'"$NLWT"*) ok "list_keeps_a_path_with_a_newline_whole" ;;
-  *) bad "list_keeps_a_path_with_a_newline_whole" "$OUT" ;;
+  "refused (owner unknown:"*")"$'\t'"$NLWT"*) ok "list_refuses_a_path_with_a_newline_whole" ;;
+  *) bad "list_refuses_a_path_with_a_newline_whole" "$OUT" ;;
 esac
 git -C "$P1" worktree remove "$NLWT"
+TABWT="$SB/wt-tab"$'\t'"x"
+git -C "$P1" worktree add -q "$TABWT" -b feature/tab
+run "$SB" list "$P1" feature/tab
+case "$OUT" in
+  "refused (owner unknown:"*")"$'\t'"$TABWT"*) ok "list_refuses_a_path_with_a_tab_whole" ;;
+  *) bad "list_refuses_a_path_with_a_tab_whole" "$OUT" ;;
+esac
+git -C "$P1" worktree remove "$TABWT"
 run "$SB" list "$P1" feature/unknown
 case "$OUT" in none:*) ok "list_has_no_candidate_for_an_unknown_branch" ;; *) bad "list_has_no_candidate_for_an_unknown_branch" "$OUT" ;; esac
 mkdir -p "$SB/not-a-worktree"
@@ -157,11 +170,255 @@ if [ "$RC" = 2 ] && [ -d "$SB/wt-other" ]; then ok "remove_requires_the_merged_b
 # --- a dirty worktree stops the step ----------------------------------------
 printf 'work\n' > "$SB/wt-x/new-file.txt"
 run "$SB" remove "$P1" "$SB/wt-x" feature/x
-if [ "$RC" != 0 ] && [ -d "$SB/wt-x" ] && printf '%s' "$OUT" | grep -q "Review it"; then ok "dirty_worktree_stops_the_step"; else bad "dirty_worktree_stops_the_step" "rc=$RC $OUT"; fi
+if [ "$RC" != 0 ] && [ -d "$SB/wt-x" ] && printf '%s' "$OUT" | grep -q "uncommitted changes"; then ok "dirty_worktree_stops_the_step"; else bad "dirty_worktree_stops_the_step" "rc=$RC $OUT"; fi
 
 # --- a clean worktree is removed without --force ----------------------------
 rm -f "$SB/wt-x/new-file.txt"
 rm -rf "$SB/wt-x/cache"
+
+# --- owner checks use the public API with deterministic process fixtures ---
+mkdir "$SB/bin"
+cat > "$SB/bin/ps" <<'SCRIPT'
+#!/bin/sh
+if [ "${2:-}" = lstart= ]; then printf 'Sat Oct 31 10:00:00 2026\n'; exit 0; fi
+if [ "${2:-}" = ppid=,comm= ] && [ -n "${CLEANUP_HARNESS_PID:-}" ]; then
+  if [ "$4" = "$CLEANUP_HARNESS_PID" ]; then printf ' 1 claude\n'; else printf ' %s bash\n' "$CLEANUP_HARNESS_PID"; fi
+  exit 0
+fi
+exec /bin/ps "$@"
+SCRIPT
+cat > "$SB/bin/sysctl" <<'SCRIPT'
+#!/bin/sh
+printf '{ sec = 123, usec = 456 }\n'
+SCRIPT
+chmod +x "$SB/bin/ps" "$SB/bin/sysctl"
+CLEANUP_BASE_PATH=$PATH
+export PATH="$SB/bin:$PATH"
+# shellcheck source=/dev/null
+. "$HOOKS/_lib-worktree-owner.sh"
+OWNER_RECORD="$(git -C "$SB/wt-x" rev-parse --absolute-git-dir)/apexyard-owner"
+BOOT=$(_wto_host_boot_id)
+START=$(_wto_pid_start "$$")
+owner_record() {
+  local mode=$1 boot="$BOOT"
+  [ "$mode" != dead ] || boot=older-boot
+  jq -cn --arg mode "$mode" --arg boot "$boot" --arg start "$START" --argjson pid "$$" '
+    {version:1,generation:7,status:"active",lease_heartbeat_at:1,lease_expires_at:2,
+     owner:{session_id:"cleanup-session",harness:"claude-code",pid:$pid,
+       pid_start:$start,boot_id:$boot}} |
+    if $mode == "unknown" then
+      .owner = {session_id:"other-session",harness:null,pid:null,pid_start:null,boot_id:null}
+    elif $mode == "released" then .released_by = .owner | .owner = null | .status = "released"
+    else . end' > "$OWNER_RECORD"
+}
+expect_refused() {
+  local label=$1 reason=$2
+  shift 2
+  run "$SB" list "$P1" feature/x "$@"
+  if printf '%s' "$OUT" | grep -Fq "refused ($reason"; then ok "$label"; else bad "$label" "$OUT"; fi
+}
+expect_ok() {
+  local label=$1
+  shift
+  run "$SB" list "$P1" feature/x "$@"
+  case "$OUT" in ok$'\t'"$SB/wt-x"*) ok "$label" ;; *) bad "$label" "$OUT" ;; esac
+}
+owner_record alive
+expect_refused alive_owner_refuses owner\ alive
+printf 'dirty\n' > "$SB/wt-x/owner.json"
+expect_refused owner_refusal_precedes_dirty owner\ alive
+rm -f "$SB/wt-x/owner.json"
+owner_record unknown
+expect_refused session_only_owner_refuses 'owner unknown: inspect the owner record before any release'
+: > "$SB/wt-x/removal-guard"
+run "$SB" remove "$P1" "$SB/wt-x" feature/x
+if [ "$RC" != 0 ] && [ -d "$SB/wt-x" ] && printf '%s' "$OUT" | grep -q 'owner unknown: inspect the owner record before any release'; then
+  ok remove_rechecks_unknown_owner
+else bad remove_rechecks_unknown_owner "rc=$RC $OUT"; fi
+rm -f "$SB/wt-x/removal-guard"
+for state in dead released; do
+  owner_record "$state"
+  expect_ok "${state}_owner_continues"
+done
+rm -f "$OWNER_RECORD"
+expect_ok no_owner_continues
+printf '{broken\n' > "$OWNER_RECORD"
+expect_refused malformed_owner_refuses 'owner unknown: inspect the owner record before any release'
+owner_record alive
+printf '%s\n' '_wto_record_state() { return 2; }' >> "$SB/.claude/hooks/_lib-worktree-owner.sh"
+run "$SB" list "$P1" feature/x
+case "$OUT" in
+  'refused (owner check unavailable)'$'\t'"$SB/wt-x") ok "empty_owner_status_output_refuses" ;;
+  *) bad "empty_owner_status_output_refuses" "$OUT" ;;
+esac
+: > "$SB/wt-x/removal-guard"
+run "$SB" remove "$P1" "$SB/wt-x" feature/x
+if [ "$RC" != 0 ] && [ -d "$SB/wt-x" ] && printf '%s' "$OUT" | grep -q 'owner check unavailable'; then
+  ok remove_refuses_empty_owner_status_output
+else bad remove_refuses_empty_owner_status_output "rc=$RC $OUT"; fi
+rm -f "$SB/wt-x/removal-guard"
+cp "$HOOKS/_lib-worktree-owner.sh" "$SB/.claude/hooks/_lib-worktree-owner.sh"
+owner_record unknown
+if worktree_owner_force_release "$SB/wt-x" 7 &&
+  jq -e '.forced == true and .generation == 8 and .status == "released" and .owner == null' "$OWNER_RECORD" >/dev/null; then
+  ok generation_matched_force_release
+else bad generation_matched_force_release 'record was not force released'; fi
+expect_ok forced_release_allows_new_offer
+owner_record unknown
+cp "$OWNER_RECORD" "$SB/owner-before"
+if ! worktree_owner_force_release "$SB/wt-x" 6 && cmp -s "$SB/owner-before" "$OWNER_RECORD"; then
+  ok stale_force_release_preserves_bytes
+else bad stale_force_release_preserves_bytes 'stale generation changed the record'; fi
+rm -f "$OWNER_RECORD"
+
+# --- preservation includes every untracked file, including owner.json -------
+printf 'work\n' > "$SB/wt-x/owner.json"
+expect_refused untracked_owner_json_is_dirty 'uncommitted changes'
+rm -f "$SB/wt-x/owner.json"
+git -C "$SB/wt-x" commit -q --allow-empty -m unpushed
+UNPUSHED_HEAD=$(git -C "$SB/wt-x" rev-parse HEAD)
+expect_refused unpushed_head_refuses unpushed
+git -C "$P1" worktree add -q "$SB/unpushed-removal" -b feature/unpushed "$UNPUSHED_HEAD"
+run "$SB" remove "$P1" "$SB/unpushed-removal" feature/unpushed
+if [ "$RC" != 0 ] && [ -d "$SB/unpushed-removal" ] && printf '%s' "$OUT" | grep -Fq 'remove-worktree: refused, unpushed commits:'; then
+  ok remove_rechecks_unpushed_head
+else bad remove_rechecks_unpushed_head "rc=$RC $OUT"; fi
+expect_ok merged_head_equal_preserves --merged-head "$UNPUSHED_HEAD"
+git -C "$P1" worktree add -q "$SB/merged-descendant" -b feature/descendant "$UNPUSHED_HEAD"
+git -C "$SB/merged-descendant" commit -q --allow-empty -m descendant
+MERGED_DESCENDANT=$(git -C "$SB/merged-descendant" rev-parse HEAD)
+expect_ok merged_head_descendant_preserves --merged-head "$MERGED_DESCENDANT"
+NON_ANCESTOR=$(git -C "$P1" rev-parse HEAD)
+expect_refused merged_head_nonancestor_refuses unpushed --merged-head "$NON_ANCESTOR"
+expect_refused unavailable_merged_head_refuses unpushed --merged-head 0000000000000000000000000000000000000000
+run "$SB" remove "$P1" "$SB/unpushed-removal" feature/unpushed --merged-head "$MERGED_DESCENDANT"
+if [ "$RC" = 0 ] && [ ! -e "$SB/unpushed-removal" ]; then
+  ok merged_head_allows_removal_after_recheck
+else bad merged_head_allows_removal_after_recheck "rc=$RC $OUT"; fi
+printf 'work\n' > "$SB/wt-x/dirty"
+expect_refused merged_head_does_not_allow_dirty 'uncommitted changes' --merged-head "$UNPUSHED_HEAD"
+rm -f "$SB/wt-x/dirty"
+git -C "$SB/wt-x" push -q origin HEAD:refs/heads/preserved-elsewhere
+expect_ok any_remote_ref_preserves
+
+# Failed Git inspection must not look like a clean or preserved checkout.
+export CLEANUP_REAL_GIT
+CLEANUP_REAL_GIT=$(command -v git)
+cat > "$SB/bin/git" <<'SCRIPT'
+#!/bin/sh
+for argument in "$@"; do
+  if [ "$argument" = remove ] && [ -n "${CLEANUP_RECORD_COPY:-}" ]; then cp "$CLEANUP_RECORD" "$CLEANUP_RECORD_COPY"; fi
+  if [ "$argument" = "${CLEANUP_GIT_FAIL:-}" ]; then exit 1; fi
+  if [ "$argument" = rev-list ] && [ "${CLEANUP_BAD_COUNT:-}" = 1 ]; then printf 'invalid\n'; exit 0; fi
+done
+exec "$CLEANUP_REAL_GIT" "$@"
+SCRIPT
+chmod +x "$SB/bin/git"
+CLEANUP_GIT_FAIL=status expect_refused failed_status_refuses 'preservation unknown:checkout unknown'
+CLEANUP_GIT_FAIL=rev-list expect_refused failed_commit_inspection_refuses 'preservation unknown:commits unknown'
+CLEANUP_BAD_COUNT=1 expect_refused invalid_commit_count_refuses 'preservation unknown:commits unknown'
+
+# --- the calling session may clean up a worktree that it owns -----------------
+# The ps stub makes this test shell the helper's harness ancestor, so the real
+# identity lookup runs. `owner_record alive` then names the calling session.
+as_owner() { CLEANUP_HARNESS_PID=$$ CLAUDE_CODE_SESSION_ID=cleanup-session "$@"; }
+expect_own_refused() {
+  local label=$1 reason=$2
+  run "$SB" list "$P1" feature/own
+  if printf '%s' "$OUT" | grep -Fq "refused ($reason"; then ok "$label"; else bad "$label" "$OUT"; fi
+}
+git -C "$P1" worktree add -q "$SB/wt-own" -b feature/own
+OWNER_RECORD="$(git -C "$SB/wt-own" rev-parse --absolute-git-dir)/apexyard-owner"
+owner_record alive
+as_owner run "$SB" list "$P1" feature/own
+case "$OUT" in ok$'\t'"$SB/wt-own"*) ok own_live_owner_is_offered ;; *) bad own_live_owner_is_offered "$OUT" ;; esac
+CLEANUP_HARNESS_PID=$$ CLAUDE_CODE_SESSION_ID=other-session expect_own_refused other_session_id_refuses 'owner alive'
+CLEANUP_HARNESS_PID=$PPID CLAUDE_CODE_SESSION_ID=cleanup-session expect_own_refused other_live_process_refuses 'owner alive'
+cp "$OWNER_RECORD" "$SB/own-before"
+CLEANUP_HARNESS_PID=$PPID CLAUDE_CODE_SESSION_ID=cleanup-session run "$SB" remove "$P1" "$SB/wt-own" feature/own
+if [ "$RC" != 0 ] && [ -d "$SB/wt-own" ] && cmp -s "$SB/own-before" "$OWNER_RECORD" && printf '%s' "$OUT" | grep -q 'owner alive'; then
+  ok other_live_process_cannot_remove
+else bad other_live_process_cannot_remove "rc=$RC $OUT"; fi
+printf 'work\n' > "$SB/wt-own/dirty"
+as_owner expect_own_refused own_dirty_worktree_refuses 'uncommitted changes'
+as_owner run "$SB" remove "$P1" "$SB/wt-own" feature/own
+if [ "$RC" != 0 ] && [ -d "$SB/wt-own" ] && cmp -s "$SB/own-before" "$OWNER_RECORD" && printf '%s' "$OUT" | grep -q 'uncommitted changes'; then
+  ok own_dirty_removal_keeps_the_record
+else bad own_dirty_removal_keeps_the_record "rc=$RC $OUT"; fi
+rm -f "$SB/wt-own/dirty"
+git -C "$SB/wt-own" commit -q --allow-empty -m unpushed
+as_owner expect_own_refused own_unpushed_commits_refuse unpushed
+git -C "$SB/wt-own" reset -q --hard HEAD~1
+printf '%s\n' 'worktree_owner_release() { return 1; }' >> "$SB/.claude/hooks/_lib-worktree-owner.sh"
+as_owner run "$SB" remove "$P1" "$SB/wt-own" feature/own
+if [ "$RC" != 0 ] && [ -d "$SB/wt-own" ] && cmp -s "$SB/own-before" "$OWNER_RECORD" && printf '%s' "$OUT" | grep -q 'cannot release'; then
+  ok failed_release_keeps_the_worktree
+else bad failed_release_keeps_the_worktree "rc=$RC $OUT"; fi
+cp "$HOOKS/_lib-worktree-owner.sh" "$SB/.claude/hooks/_lib-worktree-owner.sh"
+export CLEANUP_RECORD="$OWNER_RECORD"
+CLEANUP_GIT_FAIL=remove CLEANUP_RECORD_COPY="$SB/own-at-removal" as_owner run "$SB" remove "$P1" "$SB/wt-own" feature/own
+if [ "$RC" != 0 ] && [ -d "$SB/wt-own" ] && printf '%s' "$OUT" | grep -q 'git did not remove' &&
+  jq -e '.status == "released" and .owner == null and .released_by.session_id == "cleanup-session"' "$SB/own-at-removal" >/dev/null &&
+  jq -e --argjson pid "$$" '.status == "active" and .generation == 9 and .owner.pid == $pid and .owner.session_id == "cleanup-session"' "$OWNER_RECORD" >/dev/null; then
+  ok git_refusal_restores_the_own_record
+else bad git_refusal_restores_the_own_record "rc=$RC $OUT"; fi
+printf '%s\n' 'worktree_owner_acquire() { return 1; }' >> "$SB/.claude/hooks/_lib-worktree-owner.sh"
+CLEANUP_GIT_FAIL=remove as_owner run "$SB" remove "$P1" "$SB/wt-own" feature/own
+if [ "$RC" != 0 ] && [ -d "$SB/wt-own" ] && printf '%s' "$OUT" | grep -q 'stays released' &&
+  jq -e '.status == "released"' "$OWNER_RECORD" >/dev/null; then
+  ok failed_reacquire_warns_and_stays_released
+else bad failed_reacquire_warns_and_stays_released "rc=$RC $OUT"; fi
+cp "$HOOKS/_lib-worktree-owner.sh" "$SB/.claude/hooks/_lib-worktree-owner.sh"
+rm -f "$OWNER_RECORD"
+CLEANUP_GIT_FAIL=remove run "$SB" remove "$P1" "$SB/wt-own" feature/own
+if [ "$RC" != 0 ] && [ -d "$SB/wt-own" ] && [ ! -e "$OWNER_RECORD" ] && printf '%s' "$OUT" | grep -q 'git did not remove'; then
+  ok git_refusal_is_reported
+else bad git_refusal_is_reported "rc=$RC $OUT"; fi
+owner_record alive
+rm -f "$SB/own-at-removal"
+CLEANUP_RECORD_COPY="$SB/own-at-removal" as_owner run "$SB" remove "$P1" "$SB/wt-own" feature/own
+if [ "$RC" = 0 ] && [ ! -e "$SB/wt-own" ] &&
+  jq -e '.status == "released" and .owner == null and .generation == 8' "$SB/own-at-removal" >/dev/null; then
+  ok own_worktree_is_released_then_removed
+else bad own_worktree_is_released_then_removed "rc=$RC $OUT"; fi
+
+# Omit jq from a minimal command path while retaining the real resolver.
+mkdir "$SB/no-jq"
+for utility in git dirname sed awk cat sort head tr cut tail basename readlink realpath stat date mktemp wc sleep grep uname; do
+  utility_path=$(command -v "$utility") || continue
+  ln -s "$utility_path" "$SB/no-jq/$utility"
+done
+PATH="$SB/no-jq" expect_refused missing_jq_refuses 'owner check unavailable'
+
+# --- unavailable owner checks fail closed after all original checks ---------
+mv "$SB/.claude/hooks/_lib-worktree-owner.sh" "$SB/owner-library"
+expect_refused missing_library_refuses 'owner check unavailable'
+run "$SB" list "$P1" feature/descendant
+if printf '%s' "$OUT" | grep -q 'refused (owner check unavailable)'; then
+  ok missing_library_refuses_another_candidate
+else bad missing_library_refuses_another_candidate "$OUT"; fi
+: > "$SB/wt-x/removal-guard"
+run "$SB" remove "$P1" "$SB/wt-x" feature/x
+if [ "$RC" != 0 ] && [ -d "$SB/wt-x" ] && printf '%s' "$OUT" | grep -q 'owner check unavailable'; then
+  ok missing_library_refuses_removal
+else bad missing_library_refuses_removal "rc=$RC $OUT"; fi
+rm -f "$SB/wt-x/removal-guard"
+for state in main locked own missing; do
+  case "$state" in
+    main) run "$SB" list "$P1" "$(git -C "$P1" branch --show-current)"; reason='main worktree' ;;
+    locked) run "$SB" list "$P1" feature/lock; reason=locked ;;
+    own) run "$SB/wt-x" list "$P1" feature/x; reason="the session's own tree" ;;
+    missing)
+      git -C "$P1" worktree add -q "$SB/missing" -b feature/missing
+      rm -rf "$SB/missing"
+      run "$SB" list "$P1" feature/missing; reason='path is missing' ;;
+  esac
+  if printf '%s' "$OUT" | grep -Fq "refused ($reason)"; then
+    ok "${state}_check_precedes_owner"
+  else bad "${state}_check_precedes_owner" "$OUT"; fi
+done
+mv "$SB/owner-library" "$SB/.claude/hooks/_lib-worktree-owner.sh"
+
 run "$SB" remove "$P1" "$SB/wt-x" feature/x
 if [ "$RC" = 0 ] && [ ! -e "$SB/wt-x" ] && [ -z "$(git -C "$P1" worktree list --porcelain | grep "$SB/wt-x")" ]; then ok "clean_worktree_is_removed"; else bad "clean_worktree_is_removed" "rc=$RC $OUT"; fi
 
@@ -169,6 +426,7 @@ if [ "$RC" = 0 ] && [ ! -e "$SB/wt-x" ] && [ -z "$(git -C "$P1" worktree list --
 mkrepo "$SB/workspace/rogue"
 run "$SB" list "$SB/workspace/rogue" main
 if [ "$RC" != 0 ] && printf '%s' "$OUT" | grep -q "not a valid working tree"; then ok "refuses_an_unregistered_source_tree"; else bad "refuses_an_unregistered_source_tree" "rc=$RC $OUT"; fi
+export PATH="$CLEANUP_BASE_PATH"
 rm -rf "$SB"
 
 # --- a worktree that contains the ops root is refused -------------------------
@@ -191,9 +449,9 @@ cp "$SRC_ROOT/.claude/project-config.defaults.json" "$OPS2/.claude/project-confi
 printf '{"portfolio":{"workspace_dir":"%s/ws"}}\n' "$SPLIT" > "$OPS2/.claude/project-config.json"
 cp "$SKILL/remove-worktree.sh" "$OPS2/.claude/skills/approve-merge/remove-worktree.sh"
 chmod +x "$OPS2/.claude/skills/approve-merge/remove-worktree.sh"
-OUT=$(cd "$OPS2" && "$OPS2/.claude/skills/approve-merge/remove-worktree.sh" list "$SPLIT/ws/p1" feature/outer 2>&1)
+OUT=$(cd "$OPS2" && "$BASH" "$OPS2/.claude/skills/approve-merge/remove-worktree.sh" list "$SPLIT/ws/p1" feature/outer 2>&1)
 if printf '%s' "$OUT" | grep -q 'refused (equals or contains the ops root)'; then ok "refuses_a_worktree_that_contains_the_ops_root"; else bad "refuses_a_worktree_that_contains_the_ops_root" "$OUT"; fi
-OUT=$(cd "$OPS2" && "$OPS2/.claude/skills/approve-merge/remove-worktree.sh" remove "$SPLIT/ws/p1" "$SPLIT/outer" feature/outer 2>&1)
+OUT=$(cd "$OPS2" && "$BASH" "$OPS2/.claude/skills/approve-merge/remove-worktree.sh" remove "$SPLIT/ws/p1" "$SPLIT/outer" feature/outer 2>&1)
 if [ -d "$SPLIT/outer" ] && printf '%s' "$OUT" | grep -q 'refused'; then ok "remove_refuses_a_worktree_that_contains_the_ops_root"; else bad "remove_refuses_a_worktree_that_contains_the_ops_root" "$OUT"; fi
 rm -rf "$SPLIT"
 
@@ -208,6 +466,15 @@ bad_calls=$(grep -nE 'git (worktree|rev-parse --git-common)' "$SKILL/remove-work
 if [ -z "$bad_calls" ]; then ok "every_worktree_git_call_uses_C"; else bad "every_worktree_git_call_uses_C" "$bad_calls"; fi
 if grep -q 'git -C "\$COMMON" worktree' "$SKILL/remove-worktree.sh"; then ok "git_calls_use_the_validated_common_dir"; else bad "git_calls_use_the_validated_common_dir" "no -C COMMON call"; fi
 if grep -q 'remove-worktree.sh' "$SKILL/SKILL.md" && grep -q 'AskUserQuestion' "$SKILL/SKILL.md"; then ok "skill_asks_before_removing"; else bad "skill_asks_before_removing" "the skill does not name the helper and the prompt"; fi
+OFFER="$SRC_ROOT/docs/skills/approve-merge-worktree-offer.md"
+if grep -q 'Never offer.*alive' "$OFFER" && grep -q 'worktree_owner_force_release' "$OFFER" &&
+  grep -q 'generation' "$OFFER" && grep -q 'explicit yes' "$OFFER" && grep -q 'AskUserQuestion' "$OFFER"; then
+  ok unknown_release_requires_explicit_yes_and_never_alive
+else bad unknown_release_requires_explicit_yes_and_never_alive 'release instructions missing'; fi
+if grep -q -- '--merged-head "<merged-head-sha>"' "$SKILL/SKILL.md" &&
+  grep -q -- '--merged-head "<merged-head-sha>"' "$OFFER"; then
+  ok skill_passes_verified_merged_head
+else bad skill_passes_verified_merged_head 'merged head argument missing'; fi
 
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" = 0 ]

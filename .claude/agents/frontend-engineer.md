@@ -3,7 +3,7 @@ name: frontend-engineer
 description: Builds user interfaces following the design system — accessible, performant, and delightful. Activates during the Build phase on UI code, component work, design-system integration, or accessibility review.
 model: sonnet
 effort: medium
-allowed-tools: Bash, Read, Edit, Write, Grep, Glob
+tools: Bash, Read, Edit, Write, Grep, Glob
 persona_name: Yasmin
 ---
 

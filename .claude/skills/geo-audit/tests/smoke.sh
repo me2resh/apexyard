@@ -96,7 +96,8 @@ REGISTRY="$ops_root/.claude/registries/ai-crawlers.json"
 TEMPLATE="$ops_root/templates/audits/geo-audit.md"
 SEO_SKILL="$ops_root/.claude/skills/seo-audit/SKILL.md"
 LAUNCH_SKILL="$ops_root/.claude/skills/launch-check/SKILL.md"
-CLAUDEMD="$ops_root/CLAUDE.md"
+# The skill table moved from CLAUDE.md to this page (#2035).
+CLAUDEMD="$ops_root/docs/claude-md-reference.md"
 MULTIPROJECT="$ops_root/docs/multi-project.md"
 
 # ---------------------------------------------------------------------------

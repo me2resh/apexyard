@@ -42,6 +42,12 @@ flowchart LR
   rule -.-> ticket
 ```
 
+## At a glance
+
+The [SDLC at a glance](docs/sdlc-at-a-glance.md) page shows the seven stages from Plan to Operate in one diagram.
+For each stage, it names the agent, the skill or gate, and the human checkpoint.
+It marks each part as built, in progress or not built.
+
 ## Contents
 
 - [What makes it different](#what-makes-it-different)

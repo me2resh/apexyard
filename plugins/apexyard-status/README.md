@@ -9,7 +9,8 @@ ApexYard apexyard#1541 Optional status band · 1 waiting for your /approve-merge
 The line shows:
 
 - The active ticket of the working tree, as `repo#N` and a short title.
-- The open PRs that Rex approved at their current head and that have no human-approval marker.
+- The CI state of the PR for the current branch, as `CI pass on #N`. The band hides it when the branch has no PR.
+- The open PRs that Rex approved at their current head and that have no human-approval marker. Each PR shows its CI state, for example `(CI pass)`.
 - The open PRs whose head moved after the Rex review ("needs re-review").
 - The reviewer lock of this session, when it is set.
 - The number of running build processes, when you set a build-process pattern.
@@ -57,6 +58,7 @@ Relative workspace paths resolve from the registry directory.
 
 - Display only. The plugin reads files. It runs read-only commands only: the ticket resolver, cached GitHub queries, Git record reads, and `ps` when you set a pattern. It never writes a file. It never replaces a shell hook. All gates stay in `.claude/hooks/`.
 - Band network call, read only: `gh pr list --repo <owner/repo> --state open --json number,headRefOid --limit 200`. The plugin runs it only for a repo that has a candidate PR, at most once every 120 seconds for each repo, with a 5-second time limit. It keeps the result in memory only. It never calls a write endpoint.
+- Band CI calls, read only: `gh pr view --json number,statusCheckRollup` in the working directory, and the same call with `<N> --repo <owner/repo>` for each waiting PR. The plugin caches each result in memory for 120 seconds. Each call has a 5-second time limit. The CI words are `pass`, `fail`, `pending` and `no checks`. They are for display only. The merge-on-red-CI hook makes its own decision.
 - If `gh` is missing, is not signed in, fails or is too slow, the band counts from the markers only and shows `(offline)` next to the count.
 - Pane network calls use `gh issue list` and `gh pr list`. Each query is cached in memory for 120 seconds, including failures. Each call has a 5-second timeout and a 100-result limit. Counts describe those returned results. Batched and single-slice queries use different cache keys. Expanding a slice can run another query.
 - Fork only. Outside an ops fork, the plugin draws nothing.
@@ -95,6 +97,7 @@ Set these in `/plugin configure apexyard-status@apexyard`, or with `--config KEY
 | Active ticket | The framework ticket-marker resolver, `.claude/hooks/_lib-active-ticket.sh` (AgDR-0222). The plugin runs `active_ticket_lookup` for the working directory and shows the marker that the resolver returns. The resolver applies the location rules, so the band shows the same ticket that the hooks use. |
 | Waiting PRs | Candidates: `.claude/session/reviews/<owner>__<repo>__<pr>-rex.approved` (AgDR-0060 names) with no matching `-ceo.approved` file, inside the waiting window. A candidate waits for `/approve-merge` only if the PR is open and its head is the SHA in the Rex marker. An open PR with another head needs re-review. A merged or closed PR is dropped. A marker stays after a PR merges outside `/approve-merge`, so the markers alone show stale requests. |
 | Reviewer lock | One file per review in `.claude/session/active-reviewers/<session>/` (`active_reviewer_marker_path`). The band lists every review. The plugin also reads the legacy `.claude/session/active-reviewer.<session>` file during the transition. |
+| CI state | `statusCheckRollup` from `gh pr view`, reduced to one word. A failed, cancelled or timed-out check is `fail`. A queued or running check is `pending`. |
 | Build count | `ps -axo command=`, only when `build_process_pattern` is set. |
 
 ## Tests

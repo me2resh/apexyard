@@ -172,9 +172,16 @@ Each agent's prompt must be **self-contained** — sub-agents do not inherit the
 - The isolation mode selected by the orchestrator at spawn time
 - Constraints inherited from the parent (e.g. "don't push", "use specific git add")
 - For a writer: include the worktree path and branch from step 7. Instruct the writer to edit only under that path.
+- Base check instructions for each builder:
+  Read `<tree git dir>/apexyard-progress.md` before you report a check failure as your own.
+  Compare the check name with the recorded base result and base SHA.
+  Report missing evidence as unknown.
+  Run the full project check command before you push.
+  Do not run only the new tests.
 
 For each build agent, include the ticket acceptance criteria and this done condition:
-PR open, CI green on the current head SHA, Rex APPROVED at that head, progress note current.
+PR open, CI green at the head SHA, progress note current.
+A build agent cannot run Rex. The orchestrator runs Rex after CI is green at that head.
 Set a limit of 20 turns. At that limit, stop and report the blocker with evidence.
 Build agents hand results to the orchestrator for independent review.
 See [Resume ticket work](../../../docs/progress-notes.md) for the note update procedure.

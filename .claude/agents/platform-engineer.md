@@ -3,7 +3,7 @@ name: platform-engineer
 description: Builds and maintains infrastructure, CI/CD pipelines, and developer tooling — the platform that lets engineers ship fast and safely. Activates on CI/CD pipeline changes, developer tooling, infrastructure-as-code work, or golden-path templates.
 model: sonnet
 effort: medium
-allowed-tools: Bash, Read, Edit, Write, Grep, Glob
+tools: Bash, Read, Edit, Write, Grep, Glob
 persona_name: Adel
 ---
 
