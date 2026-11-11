@@ -54,6 +54,9 @@ check 'JSON values' python3 -c 'import json,sys; d=json.load(open(sys.argv[1]));
 run_at "$sb/ops" start 12 --dry-run
 check 'ops requires choice' test "$rc" = 2
 check 'ops lists projects' grep -Fq '1) app (org/app)' "$sb/out"
+ln -s "$sb/ops" "$sb/opslink"
+run_at "$sb/opslink" start 12 --dry-run
+check 'symlinked ops lists projects' grep -Fq '1) app (org/app)' "$sb/out"
 run_at "$sb/ops" start 12 --json
 check 'JSON requires choice' test "$rc" = 2
 check 'JSON lists second' grep -Fq '2) second (org/second)' "$sb/out"

@@ -25,7 +25,9 @@ repo_resolve() {
   fi
   if [ -z "$selector" ]; then
     top=$(git -C "$current" rev-parse --show-toplevel 2>/dev/null) || top=""
-    if [ "$top" = "$root" ]; then
+    # Compare physical paths. The ops root may come from a symlinked path.
+    [ -z "$top" ] || top=$(cd "$top" && pwd -P)
+    if [ -n "$top" ] && [ "$top" = "$(cd "$root" && pwd -P)" ]; then
       echo 'Select a registered project:' >&2
       while IFS='|' read -r name repo ws rest; do
         [ -n "$repo" ] || continue

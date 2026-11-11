@@ -244,6 +244,8 @@ ticket_skill() {
     base=$(git -C "$clone" symbolic-ref refs/remotes/origin/HEAD) || base=origin/main
     git -C "$clone" worktree add -b "$branch" "$worktree" "$base" || return 2
   fi
+  # The launched agent must keep the resolution cache.
+  unset APEXYARD_DISABLE_RESOLUTION_CACHE
   helper=${APEXYARD_START_TICKET:-$root/bin/apexyard-start-ticket}
   cd "$worktree" || return 2
   "$helper" "$target" || return 2
