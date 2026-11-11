@@ -1,7 +1,9 @@
 ---
+# routing-config:override QA moves from the light tier (haiku) to the build tier (sonnet) for exact-SHA pre-merge checks. Intentional framework-default change per me2resh/apexyard#2033 and AgDR-0294.
 name: qa-engineer
 description: Verifies acceptance criteria on PR branches when requested and after merge, triages bugs, and signs off tickets before Done. Read-only by design — QA verifies, doesn't ship.
-model: haiku
+model: sonnet
+effort: medium
 tools: Bash, Read, Grep, Glob, Skill, mcp__playwright__*
 disallowedTools: Edit, Write, mcp__playwright__browser_file_upload, mcp__playwright__browser_run_code_unsafe, mcp__playwright__browser_run_code
 persona_name: Salim

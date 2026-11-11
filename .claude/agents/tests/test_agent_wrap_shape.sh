@@ -56,7 +56,7 @@ ROLE_AGENTS=(
   "tech-lead:opus:Hisham:engineering"
   "backend-engineer:sonnet:Karim:engineering"
   "frontend-engineer:sonnet:Yasmin:engineering"
-  "qa-engineer:haiku:Salim:engineering"
+  "qa-engineer:sonnet:Salim:engineering"
   "platform-engineer:sonnet:Adel:engineering"
   "sre:opus:Saif:engineering"
   # PR 2 — product dept
@@ -161,9 +161,13 @@ for agent_file in "$AGENTS_DIR"/*.md; do
   actual_effort=$(get_frontmatter_value "$agent_file" effort)
   expected_effort=
   case "$slug" in
+    # The tier map in .claude/harness-models.json sets these values
+    # (me2resh/apexyard#2033). This list pins the decisions a second time.
     code-reviewer|security-reviewer|solution-architect|contrarian)
       expected_effort=high ;;
-    backend-engineer|frontend-engineer|platform-engineer|tech-lead|data-engineer|sre|ui-designer|ux-designer|product-manager)
+    head-of-engineering|head-of-product|head-of-design|head-of-security|head-of-data)
+      expected_effort=high ;;
+    backend-engineer|frontend-engineer|platform-engineer|tech-lead|data-engineer|sre|ui-designer|ux-designer|product-manager|qa-engineer)
       expected_effort=medium ;;
   esac
   if [ -n "$actual_effort" ] && ! valid_effort "$actual_effort"; then

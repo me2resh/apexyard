@@ -1,6 +1,64 @@
 {
-  "_comment": "Single source of truth mapping a framework model-tier label (the Claude Code model aliases used in agent frontmatter) to the concrete model each harness runs. Only the Codex adapter (bin/sync-codex-adapter.sh) reads this file today, through the 'codex' column. The pi and opencode adapters do not read it. A harness adapter that needs a model mapping adds its own column here (e.g. 'pi', 'opencode') rather than hardcoding a second mapping. Per AgDR-0087 (reasoning agents require a frontier-tier model), keep each harness's 'opus' row on that harness's strongest available model — never downgrade the reasoning tier when adding a harness. Absent tier or column falls back to the label unchanged.",
-  "opus":   { "codex": "gpt-5.5" },
-  "sonnet": { "codex": "gpt-5.4" },
-  "haiku":  { "codex": "gpt-5.4-mini" }
+  "_comment": "Tier map: the one source for agent models and effort, and for skill effort (me2resh/apexyard#2033, AgDR-0294). 'tiers' maps each tier to a model and an effort for each harness. 'agents' maps each .claude/agents/<name>.md file to a tier, with an optional per-agent effort ('inherit' omits the effort line). 'stages' maps a work stage to an effort, and 'skills' maps each skill that declares effort to a stage. To change a model, edit one tier line, then run bin/sync-agent-tiers.sh. 'bin/sync-agent-tiers.sh --check' fails on drift. bin/sync-agent-tiers.sh reads the 'claude' column, and the Codex adapter (bin/sync-codex-adapter.sh) reads the 'codex' column. No other adapter reads this file today. Add a column for a new harness here, not a second map. Per AgDR-0087, keep the 'reason' tier on each harness's strongest model. Keep 'rank' order reason > build > light: reviewers stay above builders.",
+  "schema": 2,
+  "tiers": {
+    "reason": { "rank": 3, "claude": { "model": "opus",   "effort": "high"   }, "codex": { "model": "gpt-5.5",      "effort": "high"   } },
+    "build":  { "rank": 2, "claude": { "model": "sonnet", "effort": "medium" }, "codex": { "model": "gpt-5.4",      "effort": "medium" } },
+    "light":  { "rank": 1, "claude": { "model": "haiku",  "effort": "low"    }, "codex": { "model": "gpt-5.4-mini", "effort": "low"    } }
+  },
+  "agents": {
+    "code-reviewer":       { "tier": "reason" },
+    "security-reviewer":   { "tier": "reason" },
+    "solution-architect":  { "tier": "reason" },
+    "contrarian":          { "tier": "reason" },
+    "penetration-tester":  { "tier": "reason", "effort": "inherit" },
+    "head-of-engineering": { "tier": "reason" },
+    "tech-lead":           { "tier": "reason", "effort": "medium" },
+    "sre":                 { "tier": "reason", "effort": "medium" },
+    "backend-engineer":    { "tier": "build" },
+    "frontend-engineer":   { "tier": "build" },
+    "platform-engineer":   { "tier": "build" },
+    "data-engineer":       { "tier": "build" },
+    "ui-designer":         { "tier": "build" },
+    "ux-designer":         { "tier": "build" },
+    "product-manager":     { "tier": "build" },
+    "qa-engineer":         { "tier": "build" },
+    "dependency-auditor":  { "tier": "build", "effort": "inherit" },
+    "product-analyst":     { "tier": "build", "effort": "inherit" },
+    "head-of-product":     { "tier": "build", "effort": "high" },
+    "head-of-design":      { "tier": "build", "effort": "high" },
+    "head-of-security":    { "tier": "build", "effort": "high" },
+    "head-of-data":        { "tier": "build", "effort": "high" },
+    "data-analyst":        { "tier": "light", "effort": "inherit" }
+  },
+  "stages": {
+    "planning": "high",
+    "review":   "high",
+    "build":    "medium",
+    "scan":     "medium",
+    "status":   "low"
+  },
+  "skills": {
+    "split-portfolio":      "planning",
+    "accessibility-audit":  "review",
+    "compliance-check":     "review",
+    "launch-check":         "review",
+    "threat-model":         "review",
+    "debug":                "build",
+    "fan-out":              "build",
+    "journey":              "build",
+    "onboard":              "build",
+    "setup":                "build",
+    "analytics-audit":      "scan",
+    "docs-audit":           "scan",
+    "geo-audit":            "scan",
+    "monitoring-audit":     "scan",
+    "performance-audit":    "scan",
+    "seo-audit":            "scan",
+    "approve-architecture": "status",
+    "approve-design":       "status",
+    "approve-merge":        "status",
+    "start-ticket":         "status",
+    "tutorial":             "status"
+  }
 }

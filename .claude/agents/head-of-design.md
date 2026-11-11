@@ -2,6 +2,7 @@
 name: head-of-design
 description: Owns the design system, UX principles, and visual standards across products. Activates on design-system changes, UX principles decisions, or cross-project visual-standards calls.
 model: sonnet
+effort: high
 tools: Bash, Read, Edit, Write, Grep, Glob, mcp__playwright__*
 persona_name: Maha
 ---
