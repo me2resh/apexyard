@@ -23,7 +23,7 @@ The band also shows the CI state of the PR for the current branch. Each waiting 
 
 ## Approval pane
 
-The optional `apexyard-gate` plugin adds an approval pane. Run `/gate-approve`
+The optional `apexyard-approve` plugin adds an approval pane. Run `/gate-approve`
 to open it. Each row shows the repo, the PR, the head SHA, the CI state and the
 Rex verdict. **Approve** opens the Claude Code question menu for that exact
 head SHA. Your choice in the menu records the approval through the menu hook
@@ -32,9 +32,9 @@ head SHA. Your choice in the menu records the approval through the menu hook
 Install it from the ops-fork root:
 
 ```bash
-claude plugin install apexyard-gate@apexyard --scope local
+claude plugin install apexyard-approve@apexyard --scope local
 ```
 
 Without the pane, every gate behaves as before. Full behaviour:
-[`plugins/apexyard-gate/README.md`](../plugins/apexyard-gate/README.md).
+[`plugins/apexyard-approve/README.md`](../plugins/apexyard-approve/README.md).
 AgDR-0296 records the split between the hooks, the plugins and the Cockpit.

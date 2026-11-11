@@ -15,7 +15,7 @@ set -u
 . "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
 
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-PLUGIN="$SRC_ROOT/plugins/apexyard-gate"
+PLUGIN="$SRC_ROOT/plugins/apexyard-approve"
 HOOK="$SRC_ROOT/.claude/hooks/record-menu-approval.sh"
 # shellcheck source=/dev/null
 . "$SRC_ROOT/.claude/hooks/_lib-review-markers.sh"
@@ -40,10 +40,10 @@ check() {
 absent() { ! "$@"; }
 
 # --- 1. Mod off ---------------------------------------------------------
-check "settings.json does not enable apexyard-gate" absent grep -q 'apexyard-gate' "$SRC_ROOT/.claude/settings.json"
+check "settings.json does not enable apexyard-approve" absent grep -q 'apexyard-approve' "$SRC_ROOT/.claude/settings.json"
 check "settings.json does not enable apexyard-status" absent grep -q 'apexyard-status' "$SRC_ROOT/.claude/settings.json"
-check "no hook names apexyard-gate" absent grep -rlq --exclude-dir=tests 'apexyard-gate' "$SRC_ROOT/.claude/hooks"
-check "marketplace lists apexyard-gate" grep -q '"./plugins/apexyard-gate"' "$SRC_ROOT/.claude-plugin/marketplace.json"
+check "no hook names apexyard-approve" absent grep -rlq --exclude-dir=tests 'apexyard-approve' "$SRC_ROOT/.claude/hooks"
+check "marketplace lists apexyard-approve" grep -q '"./plugins/apexyard-approve"' "$SRC_ROOT/.claude-plugin/marketplace.json"
 
 # --- 2. Behind the hooks ------------------------------------------------
 check "hooks.json names only a module" test "$(jq -c 'keys' "$PLUGIN/hooks/hooks.json")" = '["modules"]'

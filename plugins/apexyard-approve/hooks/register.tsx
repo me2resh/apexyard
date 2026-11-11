@@ -27,7 +27,7 @@ export const PANE = 'gate-approvals'
 export const COMMAND = 'gate-approve'
 const GH_TIMEOUT_MS = 5000
 
-const view = atom({ plugin: 'apexyard-gate', key: 'view' } as const, null)
+const view = atom({ plugin: 'apexyard-approve', key: 'view' } as const, null)
 
 async function readText($: EngineInterface, path: string): Promise<string | null> {
   try {

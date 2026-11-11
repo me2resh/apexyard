@@ -51,7 +51,7 @@ The split is as follows:
 |------|------|--------------|
 | Bash hooks in `.claude/hooks/` | Every gate decision. The merge, design and architecture gates. The head-SHA match. The red-CI block. The only writer of a menu record (`record-menu-approval.sh`) | Display |
 | `apexyard-status` plugin (the band) | One line above the prompt: the active ticket, CI state of the branch PR, the waiting PRs with their CI state, and the reviewer lock | Any write. Any gate decision |
-| `apexyard-gate` plugin (the pane) | A list of Rex-approved PRs with no CEO marker. Each row shows the repo, the PR, the head SHA, the CI state and the Rex verdict. Approve and Not yet buttons | Any write. Any merge. Any tool or settings hook |
+| `apexyard-approve` plugin (the pane) | A list of Rex-approved PRs with no CEO marker. Each row shows the repo, the PR, the head SHA, the CI state and the Rex verdict. Approve and Not yet buttons | Any write. Any merge. Any tool or settings hook |
 | The Cockpit (premium, outside Claude Code) | Views across sessions, repos and harnesses. History and trends. A token meter, if one is built | Gate decisions. Approval records |
 
 The approval flow has these steps:
@@ -87,5 +87,5 @@ The pane offers only the merge approval. Design and architecture approvals stay 
 - ORBIT slice: `slice-golden-path-o8-gate-mod`, plan `plan-apexyard-harness-golden-path` revision 4
 - Prior decisions: AgDR-0104, AgDR-0110, AgDR-0227, AgDR-0234
 - Band: `plugins/apexyard-status/`
-- Pane: `plugins/apexyard-gate/`
-- Tests: `plugins/apexyard-gate/hooks/*.test.ts*`, `plugins/apexyard-status/hooks/ci.test.ts`, `.claude/hooks/tests/test_gate_plugin_off.sh`
+- Pane: `plugins/apexyard-approve/`
+- Tests: `plugins/apexyard-approve/hooks/*.test.ts*`, `plugins/apexyard-status/hooks/ci.test.ts`, `.claude/hooks/tests/test_gate_plugin_off.sh`

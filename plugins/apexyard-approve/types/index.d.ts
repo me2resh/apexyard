@@ -27,6 +27,6 @@ export type GateView = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'apexyard-gate': { view: GateView | null }
+    'apexyard-approve': { view: GateView | null }
   }
 }

@@ -1,5 +1,5 @@
 {
-  "name": "apexyard-gate",
+  "name": "apexyard-approve",
   "version": "0.1.0",
   "description": "Opt-in approval pane for an ApexYard ops fork: shows repo, PR, head SHA, CI state and Rex verdict, and sends Approve through the AgDR-0234 menu hook. It never writes a marker and never merges.",
   "author": { "name": "ApexYard" },

@@ -9,7 +9,7 @@ const ROOT = '/ops'
 const SURFACES = ['terminal', 'desktop'] as const
 
 const PANE = {
-  plugin: 'apexyard-gate',
+  plugin: 'apexyard-approve',
   component: 'Pane',
   requestId: 'gate-approvals',
   props: {
@@ -35,7 +35,7 @@ const VIEW: GateView = {
 async function engine(on: On, view: GateView, answer: string | null) {
   const seen = { asks: [] as string[], writes: 0, merges: 0 }
   // The kit keeps $.state. Until the plugin writes, answer with the seed.
-  on('state.get', { plugin: 'apexyard-gate', key: 'view' }, async (_$, e, next) => {
+  on('state.get', { plugin: 'apexyard-approve', key: 'view' }, async (_$, e, next) => {
     const r = (await next(e)) as { value?: { version?: number }; version?: number }
     const written = (r.value?.version ?? r.version ?? 0) > 0
     return (written ? r : { value: { value: view, version: 0 }, version: 0 }) as never

@@ -20,8 +20,8 @@
       "description": "Fork-only, display-only status band above the prompt: active ticket, CI state, PRs waiting for /approve-merge, reviewer lock"
     },
     {
-      "name": "apexyard-gate",
-      "source": "./plugins/apexyard-gate",
+      "name": "apexyard-approve",
+      "source": "./plugins/apexyard-approve",
       "description": "Fork-only, opt-in approval pane: Approve or Not yet for a Rex-approved PR, recorded only by the AgDR-0234 menu hook for the exact head SHA"
     },
     {

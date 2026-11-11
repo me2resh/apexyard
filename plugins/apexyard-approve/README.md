@@ -1,4 +1,4 @@
-# apexyard-gate
+# apexyard-approve
 
 An optional Claude Code plugin for an ApexYard ops fork. It adds an approval pane. The pane lists the PRs that wait for your merge approval. You approve one PR at a time with your own key presses.
 
@@ -49,12 +49,12 @@ Run these two commands from the ops-fork root:
 
 ```bash
 claude plugin marketplace add ./ --scope local
-claude plugin install apexyard-gate@apexyard --scope local
+claude plugin install apexyard-approve@apexyard --scope local
 ```
 
 `local` scope writes only to `.claude/settings.local.json`, which git ignores. The pane is on only for you, on this machine.
 
-To remove the pane, run `claude plugin uninstall apexyard-gate@apexyard --scope local`.
+To remove the pane, run `claude plugin uninstall apexyard-approve@apexyard --scope local`.
 
 Install `apexyard-status` too if you want the band above the prompt. The band shows the active ticket, the CI state, the reviewer lock and the waiting PRs.
 
@@ -78,8 +78,8 @@ If the pane says "The menu hook wrote no record", use `/approve-merge`. Report t
 ## Tests
 
 ```bash
-claude plugin validate --strict plugins/apexyard-gate
-claude plugin test plugins/apexyard-gate
+claude plugin validate --strict plugins/apexyard-approve
+claude plugin test plugins/apexyard-approve
 bash .claude/hooks/tests/test_gate_plugin_off.sh
 ```
 
