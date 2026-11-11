@@ -1,35 +1,100 @@
 # SDLC at a glance
 
-For each stage of the software development lifecycle (SDLC), this page shows the agent that does the work and the human checkpoint that approves it. It also shows how strong each control is. The seven stages summarize the [full SDLC workflow](../workflows/sdlc.md).
+This page shows the seven stages of the ApexYard software development lifecycle (SDLC) in one place.
+For each stage, it shows the agent that does the work and the human checkpoint that approves it.
+The [full SDLC workflow](../workflows/sdlc.md) gives the details of each stage.
+The [workflow gates](../.claude/rules/workflow-gates.md) give the gate numbers.
 
-Each control has one of these levels:
+Each cell has one of these marks:
 
-- **Enforced:** a hook blocks the action until the control passes.
-- **Written:** a rule or role file describes it, but no hook checks it.
+- **Built:** the framework ships it. "Hook" means a hook blocks the action until the check passes. "Written" means a rule, role or workflow file states it, and no hook checks it.
+- **In progress:** a pull request (PR) for it is open. The mark names the issue.
 - **Not built:** nothing exists yet.
 
-![ApexYard SDLC at a glance: seven stages from Plan to Operate. For each stage, the agent on the left, the stage in the centre, and the human checkpoint with its enforcement level on the right. Faults return from Operate to Plan.](assets/sdlc-at-a-glance.svg)
+## Diagram
 
-Read each row from left to right. The agent does the work at the stage, and the checkpoint on the right approves it. A blue label means a hook enforces the checkpoint. A dashed purple label means it is written only.
+Each row is one stage. Read a row from left to right: the agent, the stage, and the human checkpoint.
+Faults in Operate return to Plan through `/investigation` and `/bug`.
+
+```mermaid
+flowchart TB
+  subgraph plan["1. Plan"]
+    direction LR
+    planA["Agent: Omar, Mariam, Hanan<br/>/orbit, /write-spec, /feature<br/>[built]<br/>Ticket readiness score [not built]"]
+    planS(["Plan"])
+    planH["Human: owner approves the PRD<br/>[built, written]<br/>Owner approves the ORBIT slice<br/>[built, hook]"]
+    planA --> planS --> planH
+  end
+  subgraph design["2. Design"]
+    direction LR
+    designA["Agent: Hisham writes, Tariq reviews<br/>Nour, Iman. /design-review, /c4<br/>[built]<br/>PRD-to-design trace check<br/>[in progress, issue 1749]"]
+    designS(["Design"])
+    designH["Human: architecture and UI design<br/>approval before merge<br/>[built, hook]"]
+    designA --> designS --> designH
+  end
+  subgraph build["3. Build"]
+    direction LR
+    buildA["Agent: builder agent (any harness)<br/>Karim, Yasmin, Adel. /start-ticket<br/>[built]"]
+    buildS(["Build"])
+    buildH["Human: no new approval<br/>Edits need the approved ticket<br/>[built, hook]"]
+    buildA --> buildS --> buildH
+  end
+  subgraph test["4. Test"]
+    direction LR
+    testA["Agent: CI and Salim (QA)<br/>[built]"]
+    testS(["Test"])
+    testH["Human: owner chooses pre-merge QA<br/>[built, written]<br/>Red CI blocks the merge<br/>[built, hook]"]
+    testA --> testS --> testH
+  end
+  subgraph review["5. Review"]
+    direction LR
+    reviewA["Agent: Rex, Hakim, Naqid<br/>/code-review, /drive-to-green<br/>[built]"]
+    reviewS(["Review"])
+    reviewH["Human: owner approves the exact<br/>commit with /approve-merge<br/>[built, hook]"]
+    reviewA --> reviewS --> reviewH
+  end
+  subgraph deploy["6. Deploy"]
+    direction LR
+    deployA["Agent: Adel<br/>golden-path pipelines<br/>[built]<br/>Automatic rollback [not built]"]
+    deployS(["Deploy"])
+    deployH["Human: QA sign-off, then manual<br/>promotion to production<br/>[built, written]"]
+    deployA --> deployS --> deployH
+  end
+  subgraph operate["7. Operate"]
+    direction LR
+    operateA["Agent: Saif<br/>/investigation, /monitoring-audit<br/>[built]<br/>Live SLO watching [not built]"]
+    operateS(["Operate"])
+    operateH["Human: incident response<br/>and post-mortem review<br/>[built, written]"]
+    operateA --> operateS --> operateH
+  end
+  plan --> design --> build --> test --> review --> deploy --> operate
+  operate -. "/investigation, /bug" .-> loop(["Fault returns to 1. Plan"])
+```
 
 ## Stage by stage
 
-| Stage | Agent | Enforced | Written only | Not built |
-| --- | --- | --- | --- | --- |
-| Plan | [Omar](../roles/product/head-of-product.md), [Mariam](../roles/product/product-manager.md), [Hanan](../roles/product/product-analyst.md). Skills: [/orbit](../.claude/skills/orbit/SKILL.md), [/validate-idea](../.claude/skills/validate-idea/SKILL.md), [/write-spec](../.claude/skills/write-spec/SKILL.md), [/plan-initiative](../.claude/skills/plan-initiative/SKILL.md). | With ORBIT on, a Feature or Task ticket needs a merged slice record ([hook](../.claude/hooks/require-orbit-slice-for-ticket.sh)). The owner approves the slice in its records PR. | Gate 1, "PRD approved", in [CLAUDE.md](../CLAUDE.md#workflows). No hook checks a PRD. | A score that says a ticket is ready to build. |
-| Design | [Tariq](../roles/architecture/solution-architect.md), [Nour](../roles/design/ui-designer.md), [Iman](../roles/design/ux-designer.md). Skills: [/design-review](../.claude/skills/design-review/SKILL.md), [/c4](../.claude/skills/c4/SKILL.md), [/dfd](../.claude/skills/dfd/SKILL.md), [/threat-model](../.claude/skills/threat-model/SKILL.md). | A PR with design artifacts cannot merge without [/approve-architecture](../.claude/skills/approve-architecture/SKILL.md) ([hook](../.claude/hooks/require-architecture-review.sh)). A PR with UI files cannot merge without [/approve-design](../.claude/skills/approve-design/SKILL.md) ([hook](../.claude/hooks/require-design-review-for-ui.sh)). | When to run a design review before Build. | None. |
-| Build | Builder agent through any harness: [Karim](../roles/engineering/backend-engineer.md), [Yasmin](../roles/engineering/frontend-engineer.md), [Adel](../roles/engineering/platform-engineer.md). | Code edits need an active ticket ([/start-ticket](../.claude/skills/start-ticket/SKILL.md), [hook](../.claude/hooks/require-active-ticket.sh)). Architecture changes need an Agent Decision Record ([/decide](../.claude/skills/decide/SKILL.md)). | One ticket per PR. | A human checkpoint at Build itself. The owner approves earlier, at Plan. |
-| Test | [QA Salim](../roles/engineering/qa-engineer.md) and CI. | A PR with red CI cannot merge ([hook](../.claude/hooks/block-merge-on-red-ci.sh)). | Coverage above 80% (Gate 2). The framework does not measure coverage; a project's own CI can. QA before merge is an optional offer. | An automatic loop that drives a PR to green CI and a clean review ([#1996](https://github.com/me2resh/apexyard/issues/1996), in progress). |
-| Review | [Rex](../.claude/agents/code-reviewer.md) (required), [Hakim](../.claude/agents/security-reviewer.md), [Naqid](../.claude/agents/contrarian.md). Skills: [/code-review](../.claude/skills/code-review/SKILL.md), [/security-review](../.claude/skills/security-review/SKILL.md), [/challenge](../.claude/skills/challenge/SKILL.md). | A PR cannot merge without Rex's approval at its head, and the human's per-PR approval through [/approve-merge](../.claude/skills/approve-merge/SKILL.md) ([hook](../.claude/hooks/block-unreviewed-merge.sh)). | Hakim reviews security-sensitive PRs by policy, but no merge gate requires his approval. Naqid is advisory. Gate 4, QA after merge, is written. | None. |
-| Deploy | [Adel](../roles/engineering/platform-engineer.md). | None. | The [deployment process](../workflows/deployment.md): a push to `main` deploys to staging; promotion to production is manual after QA, with sign-off. Projects copy the [golden-path pipelines](../golden-paths/pipelines/README.md). | A gate that enforces the production promotion. Rollback exists only in an optional premium deploy add-on. |
-| Operate | [Saif](../roles/engineering/sre.md). | None. | The [incident steps](../roles/engineering/sre.md#incident-response): detect, respond, mitigate, resolve and review, with a severity table and a post-mortem template. [/investigation](../.claude/skills/investigation/SKILL.md) runs the root-cause work. [/monitoring-audit](../.claude/skills/monitoring-audit/SKILL.md) and [/launch-check](../.claude/skills/launch-check/SKILL.md) check readiness before launch. | An incident skill, paging, and a live service-level objective (SLO) watcher. |
+This table gives the same content as the diagram, with links.
 
-The framework uses [/release](../.claude/skills/release/SKILL.md) for its own releases. See the [release process](release-process.md). That skill is for the ApexYard framework only, not for managed projects.
+| Stage | Agent, skill and gate | Human checkpoint | Not built or in progress |
+| --- | --- | --- | --- |
+| Plan | [Omar](../roles/product/head-of-product.md), [Mariam](../roles/product/product-manager.md) and [Hanan](../roles/product/product-analyst.md) use [/orbit](../.claude/skills/orbit/SKILL.md), [/validate-idea](../.claude/skills/validate-idea/SKILL.md), [/write-spec](../.claude/skills/write-spec/SKILL.md), [/plan-initiative](../.claude/skills/plan-initiative/SKILL.md) and [/feature](../.claude/skills/feature/SKILL.md). **Built.** | The owner approves the PRD (gate 1). **Built, written:** no hook checks a PRD. With ORBIT on, the owner approves each slice in its records PR. A Feature or Task ticket needs a merged slice record. **Built, hook:** [require-orbit-slice-for-ticket.sh](../.claude/hooks/require-orbit-slice-for-ticket.sh). | A score that says a ticket is ready to build. **Not built.** |
+| Design | [Hisham](../roles/engineering/tech-lead.md) writes the technical design. [Tariq](../roles/architecture/solution-architect.md) reviews it with [/design-review](../.claude/skills/design-review/SKILL.md). [Nour](../roles/design/ui-designer.md) and [Iman](../roles/design/ux-designer.md) own the UI and the user flows. Skills: [/c4](../.claude/skills/c4/SKILL.md), [/dfd](../.claude/skills/dfd/SKILL.md), [/threat-model](../.claude/skills/threat-model/SKILL.md). **Built.** | A PR with a design artifact needs an architecture approval before merge (gate 3b). Tariq writes it on approval, or a person runs [/approve-architecture](../.claude/skills/approve-architecture/SKILL.md). **Built, hook:** [require-architecture-review.sh](../.claude/hooks/require-architecture-review.sh). A PR with UI files needs [/approve-design](../.claude/skills/approve-design/SKILL.md) before merge. **Built, hook:** [require-design-review-for-ui.sh](../.claude/hooks/require-design-review-for-ui.sh). | A check that each PRD requirement maps to a design task. **In progress:** [#1749](https://github.com/me2resh/apexyard/issues/1749). |
+| Build | Builder agent (any harness): [Karim](../roles/engineering/backend-engineer.md), [Yasmin](../roles/engineering/frontend-engineer.md) or [Adel](../roles/engineering/platform-engineer.md). [/start-ticket](../.claude/skills/start-ticket/SKILL.md) records the ticket. It can also run a configured check on the base commit. Architecture changes need an Agent Decision Record from [/decide](../.claude/skills/decide/SKILL.md). **Built.** | No new human approval at this stage. The owner approved the ticket at Plan. Code edits need an active ticket (gate 3). **Built, hook:** [require-active-ticket.sh](../.claude/hooks/require-active-ticket.sh). A commit that changes architecture files needs an Agent Decision Record. **Built, hook:** [require-agdr-for-arch-changes.sh](../.claude/hooks/require-agdr-for-arch-changes.sh). | None. |
+| Test | The project's CI runs the tests. [Salim](../roles/engineering/qa-engineer.md) checks each acceptance criterion at the PR head. **Built.** | After Rex approves, [/code-review](../.claude/skills/code-review/SKILL.md) asks the owner whether Salim runs QA before merge. **Built, written:** pre-merge QA is not a merge gate. A PR with red CI cannot merge. **Built, hook:** [block-merge-on-red-ci.sh](../.claude/hooks/block-merge-on-red-ci.sh). Coverage above 80% (gate 4). **Built, written:** the framework does not measure coverage. A project's own CI can measure it. | None. |
+| Review | [Rex](../.claude/agents/code-reviewer.md) reviews every PR with [/code-review](../.claude/skills/code-review/SKILL.md). [Hakim](../.claude/agents/security-reviewer.md) reviews security-sensitive PRs with [/security-review](../.claude/skills/security-review/SKILL.md). [Naqid](../.claude/agents/contrarian.md) gives advice through [/challenge](../.claude/skills/challenge/SKILL.md). [/drive-to-green](../.claude/skills/drive-to-green/SKILL.md) drives one PR through CI, review and fixes, and stops before the human approval. [/pr-status](../.claude/skills/pr-status/SKILL.md) shows the gate state of one PR. **Built.** | A PR cannot merge without Rex's approval at its head and the owner's approval of that PR through [/approve-merge](../.claude/skills/approve-merge/SKILL.md) (gate 5). **Built, hook:** [block-unreviewed-merge.sh](../.claude/hooks/block-unreviewed-merge.sh). No merge gate checks a Hakim review. Naqid's advice never blocks a gate. | None. |
+| Deploy | [Adel](../roles/engineering/platform-engineer.md) owns the pipelines. Projects copy the [golden-path pipelines](../golden-paths/pipelines/README.md). **Built.** | Salim verifies the acceptance criteria and signs off before the ticket moves to Done (gate 6). A person then promotes the change from staging to production by hand. [Khalid](../roles/engineering/head-of-engineering.md) signs off risky changes. **Built, written:** the [deployment process](../workflows/deployment.md). No hook checks the sign-off or the promotion. | A gate that enforces the production promotion. **Not built.** Automatic rollback. **Not built.** |
+| Operate | [Saif](../roles/engineering/sre.md) runs the incident steps. [/investigation](../.claude/skills/investigation/SKILL.md) runs the root-cause work. [/monitoring-audit](../.claude/skills/monitoring-audit/SKILL.md) and [/launch-check](../.claude/skills/launch-check/SKILL.md) check readiness before launch. **Built.** | The team follows the [incident steps](../roles/engineering/sre.md#incident-response) and reviews a post-mortem within 48 hours. **Built, written:** no hook checks it. | Live service-level objective (SLO) watching. **Not built.** Paging. **Not built.** An incident skill. **Not built.** |
 
-The feedback loop uses [/investigation](../.claude/skills/investigation/SKILL.md) and [/bug](../.claude/skills/bug/SKILL.md) to return faults to Plan.
+The feedback loop returns faults from Operate to Plan.
+Use [/investigation](../.claude/skills/investigation/SKILL.md) for sustained root-cause work.
+Use [/bug](../.claude/skills/bug/SKILL.md) to file a fault as a ticket.
+
+The [/release](../.claude/skills/release/SKILL.md) skill releases the ApexYard framework itself. It does not deploy a managed project.
 
 ## Where ApexYard is strong and where it is thin
 
 - **Strong:** Design, Build and Review. Hooks block a merge without the required reviews and human approvals.
-- **Medium:** Plan and Test. The slice and CI checks are enforced. PRD approval and coverage are written only.
-- **Thin:** Deploy and Operate. They have written processes but no enforcement or tooling in the core framework.
+- **Medium:** Plan and Test. Hooks check the ORBIT slice and red CI. The PRD approval and the coverage rule have no hook.
+- **Thin:** Deploy and Operate. The framework has written processes for them. It has no hooks or tools that act on a live service.
+
+The [gate state contract](gate-state-contract.md) lists the records that each gate reads and writes.
