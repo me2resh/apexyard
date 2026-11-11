@@ -90,7 +90,7 @@ check cli-version test "$("$bundle/bin/apexyard" --version)" = 9.8.7
 check version-alias test "$("$bundle/bin/apexyard" version)" = 9.8.7
 check version test "$(cat "$bundle/VERSION")" = "$APEXYARD_VERSION"
 check stamp grep -Fq "APEXYARD_CLI_VERSION=\"${APEXYARD_VERSION#v}\"" "$bundle/bin/apexyard"
-for file in apexyard apexyard-init.sh apexyard-update.sh _lib-telemetry.sh _lib-repo-resolve.sh; do
+for file in apexyard apexyard-init.sh apexyard-update.sh _lib-telemetry.sh _lib-repo-resolve.sh _lib-why-queue.sh; do
   check "archive $file" test -f "$bundle/bin/$file"
 done
 if [ -f "$root/bin/_lib-ownership.sh" ]; then
@@ -102,7 +102,7 @@ fi
   for file in "$root/.claude/hooks/"_lib-*.sh; do
     printf './.claude/hooks/%s\n' "${file##*/}"
   done
-  for file in _lib-ownership.sh _lib-telemetry.sh _lib-repo-resolve.sh apexyard apexyard-init.sh apexyard-update.sh; do
+  for file in _lib-ownership.sh _lib-telemetry.sh _lib-repo-resolve.sh _lib-why-queue.sh apexyard apexyard-init.sh apexyard-update.sh; do
     [ -f "$root/bin/$file" ] && printf './bin/%s\n' "$file"
   done
 } | LC_ALL=C sort > "$sb/expected"

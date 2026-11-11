@@ -284,6 +284,9 @@ Commands:
     --agent <name>      Use claude, codex, cursor-agent, opencode, or pi.
     --dry-run           Print the plan without changes.
     --json              Print repo, ticket, branch, worktree, and clone as JSON.
+  why <PR> [--json]      Show the next action and all gate items.
+  queue [--json]         Show PRs that need only owner approval.
+  status --json         Print the briefing fields as JSON.
   ticket owner/repo#N    Alias for start.
   migrate [opts]         Keep the CLI only, or move this fork to a new repo
                            (init layout). See: apexyard migrate --help.
@@ -386,7 +389,7 @@ case "$cmd" in
     # We accept it explicitly for forward-compat with `apexyard status
     # --full` etc. Anything unknown gets a helpful error.
     case "${1:-}" in
-      ""|-b|--briefing) ;;
+      ""|-b|--briefing|--json) ;;
       *)
         echo "apexyard status: unknown flag '$1' (try --briefing)" >&2
         exit 2
@@ -397,7 +400,7 @@ case "$cmd" in
       "$ops_root/"*) ;;
       *) cd "$ops_root" || exit 2 ;;
     esac
-    exec bash "$helper"
+    exec bash "$helper" "$@"
     ;;
   migrate)
     # Resolve ops root the same way as doctor/status, then source the
@@ -451,6 +454,13 @@ case "$cmd" in
       [ "$(skill_field "$file" disable-model-invocation)" != true ] || mark=' (inside the agent only)'
       printf '  %s  %s%s\n' "$name" "$description" "$mark"
     done < <(find "$ops_root/.claude/skills" -mindepth 2 -maxdepth 2 -name SKILL.md | LC_ALL=C sort)
+    ;;
+  why|queue)
+    # shellcheck source=bin/_lib-why-queue.sh
+    source "$(dirname "$cli_path")/_lib-why-queue.sh"
+    ops_root=$(APEXYARD_RESOLVE_READ_ONLY=1 resolve_ops_root_any skills) || exit 2
+    why_queue "$ops_root" "$cmd" "$@"
+    exit $?
     ;;
   start|ticket)
     # shellcheck source=bin/_lib-repo-resolve.sh
