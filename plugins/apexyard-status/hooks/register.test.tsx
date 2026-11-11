@@ -55,6 +55,27 @@ describe('status band', () => {
     }
   })
 
+  test('draws the CI state of the branch PR and of each waiting PR', async ($, on) => {
+    holdBand(on, {
+      ticket: 'apexyard#1922 Gate band',
+      waiting: ['me2resh/apexyard#12'],
+      reReview: [],
+      offline: false,
+      reviewLock: 'me2resh/apexyard#13 (rex)',
+      builds: null,
+      ci: { 'me2resh/apexyard#12': 'pass' },
+      branchCi: { number: 30, ci: 'fail' },
+    })
+    for (const surface of SURFACES) {
+      const ui = await $.ui.mount({ ...BAND, surface })
+      expect(await ui.find({ type: 'Text', text: 'CI fail on #30' })).toBeDefined()
+      expect(
+        await ui.find({ type: 'Text', text: '1 waiting for your /approve-merge: me2resh/apexyard#12 (CI pass)' }),
+      ).toBeDefined()
+      await ui.unmount()
+    }
+  })
+
   test('shows the empty states and hides the lock and the build count', async ($, on) => {
     holdBand(on, { ticket: null, waiting: [], reReview: [], offline: false, reviewLock: null, builds: null })
     for (const surface of SURFACES) {
