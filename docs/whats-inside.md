@@ -198,7 +198,7 @@ Utility agents: **Rex** (`code-reviewer`), **Hakim** (`security-reviewer`), **Ta
 
 ### The 70 skills
 
-The full, one-line-per-skill list lives in [`CLAUDE.md`](../CLAUDE.md) under "Available skills". Highlights by category:
+The full skill list, with one line for each skill, is in [`docs/claude-md-reference.md`](claude-md-reference.md) under "Available skills". Highlights by category:
 
 - **Bootstrap & sync**: `/setup`, `/handover`, `/update`, `/split-portfolio`
 - **Planning & tickets**: `/scaffold`, `/write-spec`, `/plan-initiative`, `/feature`, `/bug`, `/task`, `/tickets-batch`, `/spike`, `/prototype`, `/walking-skeleton`, `/migration`, `/investigation`, `/idea`

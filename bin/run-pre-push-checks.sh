@@ -80,6 +80,7 @@ if [ "${1:-}" = "--list" ]; then
   echo "shellcheck"
   echo "subpacks"
   echo "writing-profile"
+  echo "agent-tiers"
   exit 0
 fi
 
@@ -214,6 +215,15 @@ if [ -f "$WRITING_PROFILE_SCRIPT" ]; then
 else
   echo "INFO: $WRITING_PROFILE_SCRIPT not found — writing-profile check skipped." >&2
 fi
+
+# 5. agent-tiers: agent and skill frontmatter match the tier map in
+# .claude/harness-models.json (me2resh/apexyard#2033, AgDR-0294).
+# The script accepts a model that the local routing hook rewrote, so an
+# active agent-routing.yaml does not block a push. CI checks every model
+# through .claude/agents/tests/test_agent_tier_map.sh.
+# A missing script or a missing jq skips with a note.
+AGENT_TIERS_CMD="[ -f bin/sync-agent-tiers.sh ] || { echo 'INFO: bin/sync-agent-tiers.sh not found — agent-tiers check skipped.'; exit 0; }; command -v jq >/dev/null 2>&1 || { echo 'INFO: jq not found — agent-tiers check skipped. Install jq to enable it.'; exit 0; }; bash bin/sync-agent-tiers.sh --check 2>&1"
+run_check "agent-tiers" "$AGENT_TIERS_CMD" || true
 
 # ---------------------------------------------------------------------------
 # Result

@@ -5,7 +5,7 @@
 # This file is the **adopter customisation surface** for ApexYard's 24
 # Claude Code sub-agents (19 role-derived personas + 5 utility agents).
 # It lets you override the framework's shipped per-agent model defaults
-# (e.g. switch the QA Engineer from Haiku to Sonnet, or route the Data
+# (e.g. switch the QA Engineer from Sonnet to Opus, or route the Data
 # Analyst through a local Ollama endpoint) in ONE central file kept in
 # your private portfolio repo.
 #
@@ -37,6 +37,12 @@
 #   fork ships with framework default models that work out-of-box.
 # - Omitted agents inherit the framework default from
 #   .claude/agents/<name>.md frontmatter.
+# - The framework defaults come from the tier map in
+#   .claude/harness-models.json (me2resh/apexyard#2033, AgDR-0294).
+#   bin/sync-agent-tiers.sh writes them into the agent files. This file
+#   overrides them for your sessions only. The sync script leaves a
+#   routed model: line unchanged, and its --check accepts it. To change
+#   a default for every adopter, edit the tier map instead.
 # - At SessionStart, the sync hook (`apply-agent-routing.sh`) rewrites
 #   the affected `.claude/agents/*.md` frontmatter in-place. Pre-commit
 #   and pre-push guards (`block-agent-routing-drift.sh`) catch accidental
@@ -101,7 +107,7 @@ version: 1
 #
 # (Note: `allowed_tools_override` was advertised in earlier drafts of
 # this schema but never wired into the parser / consumer. Dropped in
-# #358 for v1; the shipped per-agent allowed-tools list in each
+# #358 for v1; the shipped per-agent tools list in each
 # .claude/agents/<name>.md frontmatter is the source of truth. Edit
 # the agent file directly with a `# routing-config:override <reason>`
 # comment in the YAML frontmatter if you need a one-off override.)
@@ -116,8 +122,9 @@ agents: {}
 #
 #   agents:
 #     qa-engineer:
-#       model: sonnet            # framework default is haiku; override
-#                                # to sonnet for a higher-recall AC run
+#       model: opus              # framework default is sonnet (build
+#                                # tier); override to opus for a deeper
+#                                # AC run
 #
 # Example B — multiple model overrides:
 #

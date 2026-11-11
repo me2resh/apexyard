@@ -3,12 +3,13 @@
 # from AgDR-0044 so future Wave 2/3 work can verify it isn't regressing them.
 #
 # Invariants:
-#   1. CLAUDE.md skill-table compactness — every row stays terse
+#   1. Skill-table compactness in docs/claude-md-reference.md — every row stays terse
 #      (≤ 25 words in the description column)
 #   2. SKILL.md description: budget — every description ≤ 200 chars, with the
 #      majority ≤ 120 chars (the budget is "~120 chars"; we cap at 200 hard,
 #      flag overs above 120 as soft warnings)
-#   3. Every tracked framework skill is catalogued in the CLAUDE.md table
+#   3. Every tracked framework skill is catalogued in the skill table.
+#      The table moved from CLAUDE.md to docs/claude-md-reference.md (#2035).
 #   4. SessionStart happy-path char budget — banner output across the seven
 #      SessionStart hooks stays ≤ 600 chars (covers the unconfigured-fork
 #      worst-case fixture present in this worktree)
@@ -28,7 +29,8 @@ set -u
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="${TOKEN_EFFICIENCY_ROOT:-$(cd "$TEST_DIR/../../.." && pwd)}"
 
-CLAUDE_MD="$ROOT/CLAUDE.md"
+# The skill table moved from CLAUDE.md to this page (#2035).
+SKILL_CATALOG="$ROOT/docs/claude-md-reference.md"
 HOOKS_DIR="$ROOT/.claude/hooks"
 
 FAIL=0
@@ -37,10 +39,10 @@ red()    { printf '\033[31m%s\033[0m\n' "$*"; }
 green()  { printf '\033[32m%s\033[0m\n' "$*"; }
 
 # -----------------------------------------------------------------------------
-# Invariant 1 — CLAUDE.md skill-table rows are terse (≤ 25 words in description)
+# Invariant 1 — skill-table rows are terse (≤ 25 words in description)
 # -----------------------------------------------------------------------------
-echo "== Invariant 1: CLAUDE.md skill-table rows ≤ 25 words"
-table=$(awk '/^### Available skills/{flag=1; next} /^The hooks, agents, and skills/{flag=0} flag' "$CLAUDE_MD")
+echo "== Invariant 1: skill-table rows ≤ 25 words"
+table=$(awk '/^### Available skills/{flag=1; next} flag && /^#/{flag=0} flag' "$SKILL_CATALOG")
 while IFS= read -r line; do
   case "$line" in
     "| \`/"*"\` |"*)
@@ -49,7 +51,7 @@ while IFS= read -r line; do
       words=$(printf '%s' "$desc" | wc -w | tr -d ' ')
       if [ "$words" -gt 25 ]; then
         skill=$(printf '%s' "$line" | awk -F'|' '{print $2}' | tr -d ' `')
-        red "  FAIL: $skill — $words words in CLAUDE.md row (> 25)"
+        red "  FAIL: $skill — $words words in skill-table row (> 25)"
         FAIL=$((FAIL + 1))
       fi
       ;;
@@ -108,16 +110,16 @@ echo "  Soft warnings (121–200 chars): $overs120 (documented exception per AgD
 [ "$overs200" -eq 0 ] && green "  OK (hard cap)"
 
 # -----------------------------------------------------------------------------
-# Invariant 3 — every tracked framework skill catalogued in CLAUDE.md
+# Invariant 3 — every tracked framework skill catalogued in the skill table
 # -----------------------------------------------------------------------------
-echo "== Invariant 3: every tracked framework skill is catalogued in CLAUDE.md"
+echo "== Invariant 3: every tracked framework skill is catalogued in the skill table"
 missing=0
 while IFS= read -r relative_f; do
   [ -n "$relative_f" ] || continue
   name=$(basename "$(dirname "$relative_f")")
   case "$name" in _lib*) continue ;; esac
-  if ! grep -qE "^\| \`/$name\` \|" "$CLAUDE_MD"; then
-    red "  FAIL: /$name is in .claude/skills/ but not in CLAUDE.md skill table"
+  if ! grep -qE "^\| \`/$name\` \|" "$SKILL_CATALOG"; then
+    red "  FAIL: /$name is in .claude/skills/ but not in the skill table"
     missing=$((missing + 1))
     FAIL=$((FAIL + 1))
   fi
@@ -128,17 +130,18 @@ EOF
 
 # Regression fixture — a private sibling-repo skill symlink is out of scope
 # even when its description exceeds the framework cap and it is intentionally
-# absent from the public CLAUDE.md catalog.
+# absent from the public skill catalog.
 if [ "${TOKEN_EFFICIENCY_SKIP_SYMLINK_FIXTURE:-0}" != "1" ]; then
   echo "== Regression: private skill symlinks are ignored"
   fixture=$(mktemp -d)
   trap 'rm -rf "$fixture"' EXIT
   mkdir -p "$fixture/.claude/skills/framework-skill" \
+           "$fixture/docs" \
            "$fixture/.claude/hooks" \
            "$fixture/private/custom-skills/private-skill"
   cp "$0" "$fixture/.claude/hooks/test_token_efficiency_wave1.sh"
   cp "$TEST_DIR/_test-session-isolation.sh" "$fixture/.claude/hooks/"
-  cat > "$fixture/CLAUDE.md" <<'EOF'
+  cat > "$fixture/docs/claude-md-reference.md" <<'EOF'
 ### Available skills
 | Skill | Description |
 |---|---|
@@ -160,7 +163,7 @@ EOF
   ln -s "$fixture/private/custom-skills/private-skill" \
         "$fixture/.claude/skills/private-skill"
   git -C "$fixture" init -q
-  git -C "$fixture" add CLAUDE.md .claude/skills/framework-skill/SKILL.md
+  git -C "$fixture" add docs/claude-md-reference.md .claude/skills/framework-skill/SKILL.md
   if TOKEN_EFFICIENCY_ROOT="$fixture" \
      TOKEN_EFFICIENCY_SKIP_SYMLINK_FIXTURE=1 \
      bash "$fixture/.claude/hooks/test_token_efficiency_wave1.sh" >/dev/null; then
