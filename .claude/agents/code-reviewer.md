@@ -224,7 +224,13 @@ gh pr checks {number} --repo "$PR_HOST_REPO"
 Run gh pr checks once and never wait. Do not poll CI again, do not use `--watch`, and do not sleep. The orchestrator waits for CI before it spawns you.
 
 1. If CI is still running, do not wait. Post `COMMENT` and state the limit in Validation (see item 5).
-2. If CI is red, this is a blocking finding under § "Blocking-Severity Bar" — a regression (kind 1) or a correctness bug (kind 3), whichever applies. Do not approve.
+2. If CI is red, read `<tree git dir>/apexyard-progress.md` in the builder's worktree.
+   Compare the failed check with the recorded base result and SHA.
+   State whether the same failure was already on the base.
+   If the note is missing, request the evidence from the orchestrator.
+   Treat missing evidence, an unnamed failure, and a timeout as unknown.
+   Keep the red CI gate in effect.
+   If CI is red, this is a blocking finding under § "Blocking-Severity Bar" — a regression (kind 1) or a correctness bug (kind 3), whichever applies. Do not approve.
 3. If CI is green, do not re-run the full suite yourself. Run only the tests for files the diff changed, plus a fail-before proof for each new test — run the new test against the pre-change code and confirm it fails, then against the PR head and confirm it passes.
 4. Report the commands you ran and their results in Validation. Report CI's own result too, with the check-run name and the head SHA it ran against.
 5. Do not approve while CI for the head SHA is pending or absent. Post `COMMENT` and state the limit. `block-merge-on-red-ci.sh` already blocks a merge on pending, failed, or unresolvable CI.

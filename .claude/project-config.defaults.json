@@ -14,6 +14,12 @@
     "tracker_repo"
   ],
 
+  "checks": {
+    "baseline_command": null,
+    "baseline_mode": "warn",
+    "baseline_timeout_seconds": 600
+  },
+
   "orbit": {
     "default_planning": false,
     "governed_prefixes": ["Feature", "Task", "Slice"]

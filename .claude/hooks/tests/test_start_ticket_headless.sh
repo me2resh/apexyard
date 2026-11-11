@@ -37,6 +37,19 @@ check 0 'progress note created' grep -qx 'Task: me2resh/apexyard#1928' .git/apex
 check 0 'marker repo' grep -qx 'repo=me2resh/apexyard' .git/apexyard-ticket
 check 0 'branch suggestion' grep -qx 'suggested_branch=fix/GH-1928-headless-start' .git/apexyard-ticket
 check 0 'no pending file' test ! -e .claude/session/start-ticket-headless-1928.pending
+# A locked note must not fail a start, with or without a command.
+cp "$ROOT/.claude/project-config.defaults.json" .claude/
+for baseline_command in 'exit 0' ''; do
+  jq -n --arg cmd "$baseline_command" '{checks:{baseline_command:$cmd,baseline_mode:"warn"}}' > .claude/project-config.json
+  mkdir .git/apexyard-progress.md.lock
+  check 0 "locked note start: $baseline_command" /bin/bash bin/apexyard-start-ticket me2resh/apexyard#1928
+  cp "$TMP/out" "$TMP/locked-output"
+  check 0 'locked note warning count' test "$(grep -c WARN "$TMP/locked-output")" = 1
+  check 0 'locked note warning reason' grep -q 'evidence not recorded' "$TMP/locked-output"
+  check 0 'locked note marker written' grep -qx 'number=1928' .git/apexyard-ticket
+  rmdir .git/apexyard-progress.md.lock
+done
+rm .claude/project-config.json
 for ref in 'bad#1928' 'a/b/c#1928' '../b#1928' 'a/b#x' 'a/b#1;id'; do
   check 1 "bad input $ref" /bin/bash bin/apexyard-start-ticket "$ref"
 done

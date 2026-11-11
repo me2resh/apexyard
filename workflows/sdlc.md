@@ -2,6 +2,8 @@
 
 This guide explains how work moves from an idea to a monitored production release.
 
+See [SDLC at a glance](../docs/sdlc-at-a-glance.md) for agent roles and human checkpoints at each stage.
+
 ---
 
 ## Overview

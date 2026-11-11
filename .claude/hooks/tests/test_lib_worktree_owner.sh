@@ -29,6 +29,7 @@ mutate() { printf '%s\n' "$owned" | jq -c --arg start "$wrong_start" --argjson p
 writes_refused() { local action; for action in "$@"; do ! "worktree_owner_$action" "$WORKTREE" || return 1; done; }
 preserved() { cmp -s "$TMP/before" "$RECORD"; }
 refused_record() { cp "$RECORD" "$TMP/before" && status_result "$1" "$2" "$WORKTREE" && writes_refused acquire renew release && preserved; }
+malformed_record() { cp "$RECORD" "$TMP/before" && status_result unknown 2 "$WORKTREE" && writes_refused acquire renew release && ! worktree_owner_force_release "$WORKTREE" 3 && preserved; }
 make_worktree() {
   REPO=$(mktemp -d "$TMP/repository.XXXXXX") || return 1; WORKTREE="$REPO/linked tree"
   git -c init.defaultBranch=main init -q "$REPO/main" &&
@@ -103,8 +104,11 @@ unavailable_identity() (
     [ "$rc" -eq "$expected" ] && [ ! -e "$RECORD" ] && [ ! -e "$GITDIR/apexyard-owner.lock" ] || return 1
     expected=1
   done
+  rc=0
+  worktree_owner_force_release "$WORKTREE" 1 || rc=$?
+  [ "$rc" -eq 1 ] && [ ! -e "$RECORD" ] && [ ! -e "$GITDIR/apexyard-owner.lock" ]
 )
-for mode in ps empty-start no-boot empty-boot; do check "identity unavailable: $mode acquire=2 renew=1 release=1 without state" unavailable_identity "$mode"; done
+for mode in ps empty-start no-boot empty-boot; do check "identity unavailable: $mode acquire=2 renew=1 release=1 force=1 without state" unavailable_identity "$mode"; done
 check 'acquire: invalid session returns 1 without state' unavailable_identity invalid-session
 pid_temp_failure() (
   local mode=$1 rc=0 candidate directory="$TMP/pid-$1"
@@ -308,6 +312,8 @@ parent_death() (
 check 'callback: survives killed parent and excludes second writer' parent_death
 make_worktree || exit 1
 check 'record: initially none' status_result none 3 "$WORKTREE"
+missing_force() { local rc=0; worktree_owner_force_release "$WORKTREE" 1 || rc=$?; [ "$rc" -eq 1 ] && [ ! -e "$RECORD" ] && [ ! -e "$GITDIR/apexyard-owner.lock" ]; }
+check 'record: missing owner record cannot be force released' missing_force
 lease_step() {
   local action=$1 generation=$2 ttl=$3 before after; before=$(date +%s)
   APEXYARD_WORKTREE_LEASE_TTL_SECONDS=$ttl "worktree_owner_$action" "$WORKTREE" || return 1; after=$(date +%s)
@@ -363,11 +369,70 @@ session_case() (
   else mutate '.owner = {session_id:"foreign",harness:null,pid:null,pid_start:null,boot_id:null} | .lease_expires_at = 0'; refused_record unknown 2; fi
 )
 for mode in own foreign; do check "record: session-only $mode" session_case "$mode"; done
+self_case() (
+  local mode=$1
+  case "$mode" in
+    own) mutate '.' ;;
+    pid) mutate '.owner.pid = $pid' ;;
+    pid_start) mutate '.owner.pid_start = $start' ;;
+    session_id|harness|boot_id) mutate ".owner.$mode = \"different-$mode\"" ;;
+    released) mutate '.status = "released" | .released_by = .owner | .owner = null' ;;
+    missing) rm -f "$RECORD" ;;
+    malformed) printf '{broken\n' > "$RECORD" ;;
+    session-only)
+      _wto_harness_ancestor() { return 1; }
+      mutate '.owner = {session_id:"owner-session",harness:null,pid:null,pid_start:null,boot_id:null}' ;;
+  esac
+  if [ "$mode" = missing ]; then ! worktree_owner_is_self "$WORKTREE" && [ ! -e "$RECORD" ]; return; fi
+  cp "$RECORD" "$TMP/before" || return 1
+  if [ "$mode" = own ]; then worktree_owner_is_self "$WORKTREE" && preserved; return; fi
+  ! worktree_owner_is_self "$WORKTREE" && preserved
+)
+for mode in own pid pid_start session_id harness boot_id released missing malformed session-only; do check "record: is_self $mode" self_case "$mode"; done
+force_match() (
+  local before_heartbeat before_expires
+  mutate '.owner = {session_id:"foreign-session",harness:null,pid:null,pid_start:null,boot_id:null}' &&
+  before_heartbeat=$(jq -r '.lease_heartbeat_at' "$RECORD") &&
+  before_expires=$(jq -r '.lease_expires_at' "$RECORD") &&
+  worktree_owner_force_release "$WORKTREE" 3 &&
+  record_matches '.status == "released" and .owner == null and .forced == true and .generation == 4' &&
+  record_matches ".lease_heartbeat_at == $before_heartbeat and .lease_expires_at == $before_expires" &&
+  same_json "$(jq -c .released_by "$RECORD")" "$identity" &&
+  status_result released 4 "$WORKTREE" &&
+  worktree_owner_acquire "$WORKTREE" && record_matches '.generation == 5 and (has("forced") | not)'
+)
+check 'record: force release matches shown generation and actor' force_match
+force_refused() (
+  local mode=$1 generation=3
+  case "$mode" in stale) generation=2 ;; invalid) generation=invalid ;; missing) generation='' ;; overflow) generation=9007199254740991 ;; esac
+  mutate '.owner = {session_id:"foreign-session",harness:null,pid:null,pid_start:null,boot_id:null}'
+  case "$mode" in
+    released) jq -c --argjson actor "$identity" '.status = "released" | .owner = null | .released_by = $actor' "$RECORD" > "$TMP/force-released" && cp "$TMP/force-released" "$RECORD" ;;
+    alive) mutate '.' ;;
+    malformed) printf '{broken\n' > "$RECORD" ;;
+    overflow) mutate '.owner = {session_id:"foreign-session",harness:null,pid:null,pid_start:null,boot_id:null} | .generation = 9007199254740991' ;;
+  esac
+  cp "$RECORD" "$TMP/before" && ! worktree_owner_force_release "$WORKTREE" "$generation" && preserved
+)
+for scenario in stale invalid missing released alive malformed overflow; do check "record: force release refuses $scenario and preserves bytes" force_refused "$scenario"; done
+force_race() (
+  mutate '.owner = {session_id:"foreign-session",harness:null,pid:null,pid_start:null,boot_id:null}' &&
+  _wto_with_lock() { shift; jq -c '.generation += 1' "$RECORD" > "$TMP/force-raced" && cp "$TMP/force-raced" "$RECORD" && "$@"; } &&
+  ! worktree_owner_force_release "$WORKTREE" 3 && cmp -s "$TMP/force-raced" "$RECORD"
+)
+check 'record: force release checks generation inside lock' force_race
 for filter in 'broken' 'multiple' '[]' '.version = 2' '.generation = 0' '.generation = "three"' '.status = "unexpected"' 'del(.owner.session_id)' '.owner = null' '.lease_heartbeat_at = "yesterday"' '.lease_expires_at = null'; do
   case "$filter" in broken) printf '{broken\n' > "$RECORD" ;; multiple) printf '%s\n%s\n' "$owned" "$owned" > "$RECORD" ;; *) mutate "$filter" ;; esac
-  check "record: invalid schema $filter fails closed with bytes intact" refused_record unknown 2
+  check "record: invalid schema $filter fails closed with bytes intact" malformed_record
 done
-identity_failure() ( mutate '.'; cp "$RECORD" "$TMP/before"; worktree_owner_identity() { return 1; }; writes_refused acquire renew release && preserved; )
+identity_failure() (
+  local generation
+  mutate '.'; cp "$RECORD" "$TMP/before"; worktree_owner_identity() { return 1; }
+  writes_refused acquire renew release && preserved || return 1
+  mutate '.owner = {session_id:"foreign-session",harness:null,pid:null,pid_start:null,boot_id:null}'; cp "$RECORD" "$TMP/before"
+  generation=$(jq -r '.generation' "$RECORD") || return 1
+  ! worktree_owner_force_release "$WORKTREE" "$generation" && preserved
+)
 check 'record: failed identity refuses every write' identity_failure
 eval "$(declare -f _wto_read_record | sed '1s/_wto_read_record/_saved_read_record/')"
 snapshot_case() (
@@ -378,7 +443,7 @@ snapshot_case() (
     same_json "$(jq -c 'if .status == "released" then .released_by else .owner end' "$RECORD")" "$identity"
 )
 for action in acquire renew release; do check "record: $action reads once and writes checked snapshot" snapshot_case "$action"; done
-unsafe_writes() { local target=$1 action; for action in acquire renew release; do ! "worktree_owner_$action" "$target" || return 1; done; }
+unsafe_writes() { local target=$1 action; for action in acquire renew release; do ! "worktree_owner_$action" "$target" || return 1; done; ! worktree_owner_force_release "$target" 3; }
 check 'path: main checkout refuses writes' unsafe_writes "$REPO/main"; check 'path: main record absent' test ! -e "$REPO/main/.git/apexyard-owner"
 mkdir "$TMP/not a repository"; check 'path: nonrepository refuses writes' unsafe_writes "$TMP/not a repository"
 symlink_case() (
