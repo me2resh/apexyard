@@ -2,7 +2,7 @@
 name: approve-merge
 description: Record per-PR CEO approval and merge in one turn. ONLY on an explicit per-PR "approved", never on umbrella "go".
 disable-model-invocation: true
-argument-hint: "<pr-number> [--no-merge]"
+argument-hint: "<pr-number> [--no-merge] [--quiz]"
 effort: low
 ---
 
@@ -10,23 +10,27 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 
 # /approve-merge — Record CEO Approval and Merge
 
-Write per-PR approval, then merge through the tracker adapter.
-Rationale: read docs/skills/approve-merge-rationale.md for gate history and AgDR references.
+Record approval, then merge through the tracker adapter.
+Rationale: docs/skills/approve-merge-rationale.md.
+
+
+Call `progress_note_update "$tree" Completed 'Merge: <evidence and head SHA>'` after the observed result.
+Details: docs/progress-notes.md.
 
 ## The one rule you must not break
 
-Invoke only on explicit user approval for this PR. A plan-level "go" is not merge approval.
+Require explicit user approval for this PR. A plan-level "go" cannot authorize merge.
 Stop and ask when the PR or intent is unclear. Only the human can invoke this skill (#1042).
 
 ## Menu path
 
-The operator can also approve from one `AskUserQuestion` menu. Ask exactly `Approve and merge <owner>/<repo>#<N> at <40-hex-sha>?` with options `Approve and merge` and `Not yet` only. A hook writes the record; never write it yourself. See AgDR-0234.
+Ask exactly `Approve and merge <owner>/<repo>#<N> at <40-hex-sha>?` with options `Approve and merge` and `Not yet` only. Only the hook writes the record (AgDR-0234).
 
 ## Process
 
-### 0. Resolve the configured approver display title (SOFT, prose-only)
+### 0. Resolve the approver display title
 
-Before addressing the user in any confirmation question or report, read the configured display title for the human per-PR merge approver:
+Read the human approver display title before addressing the user:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -43,12 +47,13 @@ Extract the PR number from `$ARGUMENTS`. If no number is given, try to infer fro
 - The current branch's open PR via `gh pr view --json number --jq '.number'`
 - The user's most recent message, if it named a PR explicitly
 
-If the PR number is ambiguous (multiple PRs on the branch, unclear which was approved), STOP and ask the user which PR.
+If the PR number is ambiguous, STOP and ask which PR.
 
 Resolve `REPO` from `owner/repo#N` or an explicit `owner/repo` argument.
 Otherwise, parse the current checkout's `git remote get-url origin`. Do not use ambient gh resolution or `headRepository` (#887).
 Scope each host query to `REPO`, then `PR_HOST_REPO` after step 4.
 Recognise `--no-merge`. It writes approval without merging.
+Recognise `--quiz`. It turns on the opt-in comprehension check for this run (see step 4b). Without `--quiz`, the check runs only when `merge.approval_quiz` is `true`. The quiz does not run and never blocks a merge in any other mode.
 
 ### 2. Sanity-check the user's intent
 
@@ -60,7 +65,7 @@ Proceed only after an unambiguous per-PR approval.
 
 ### 3. Resolve the ops root
 
-Keep this bootstrap inline. It locates the script from workspace clones and split-portfolio forks (#229, #230, #559).
+Keep this bootstrap inline for workspace clones and split-portfolio forks (#229, #230, #559).
 
 ```bash
 OPS_ROOT=""
@@ -129,6 +134,17 @@ Accept only squash, merge, rebase as strategy values.
 - Exit 13: the release PR title or body is unreadable. Fix the read failure and retry. Never use a bare squash fallback.
 - Other exit: show the error and stop.
 
+### 4b. Optional comprehension quiz
+
+Off unless `--quiz` is passed or `merge.approval_quiz` is `true`. Runs before step 5. It never blocks a merge otherwise.
+Read the flag here; only this file gets `$ARGUMENTS`:
+
+```bash
+QUIZ_FLAG=""; case " $ARGUMENTS " in *" --quiz "*) QUIZ_FLAG="--quiz" ;; esac
+```
+
+Follow docs/skills/approval-quiz.md.
+
 ### 5. Write the structured CEO marker
 
 The marker is a key/value file with required fields. The format:
@@ -167,7 +183,7 @@ EOF
 ### 6. Merge with the checked strategy
 
 Skip this step for `--no-merge`. Run this entire block in one shell.
-Shell variables from step 4 do not carry over. The block re-runs the script and stops on a missing or invalid strategy or release_class (#1196). Fill in `<marker_home>`, `<repo>` and `<pr>` with literal values.
+Shell variables from step 4 do not carry over. The block checks strategy and release_class again (#1196). Fill in `<marker_home>`, `<repo>` and `<pr>` with literal values.
 Pass those same `<repo>` and `<pr>` literals to tracker_pr_merge. The merge gate reads the command text before the shell expands variables (#1758).
 The block stops when the checked host repo is not `<repo>`.
 The tracker_pr_merge call MUST be invoked as a bare top-level statement, never inside `$(...)` or backticks. The merge-gate matcher reads the raw command text and may not fire on a wrapped call. Redirect stdout to a file, then read the result in a separate step.
@@ -273,14 +289,9 @@ Do this only when the user explicitly asks. Do not auto-close a child issue. Con
 
 ## --no-merge opt-out
 
-`/approve-merge <pr> --no-merge` writes the marker and stops. Useful when:
+`/approve-merge <pr> --no-merge` writes the marker and stops.
 
-- CI is still running and you want to record approval first
-- You want to defer the merge for a batch
-- A teammate will do the merge
-- A regulated environment separates approval from execution
-
-The skill never writes the marker AND defers the merge in any other case. The default IS auto-merge.
+Otherwise, merge immediately after writing the marker.
 
 ## Notes
 

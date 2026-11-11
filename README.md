@@ -25,8 +25,8 @@ person approves the exact commit.
 - **When something slips through:** the miss becomes a rule. Next time the rule
   guides the agent and the gate checks for it.
 
-The framework runs in your repo as plain Markdown and shell. You fork it,
-register your projects in one registry, and work across the portfolio from that
+The framework runs in your repo as plain Markdown and shell. You create your own
+ops repo from it, register your projects in one registry, and work across the portfolio from that
 ops repo. Claude Code is the default driver. Other coding tools can use the same
 rules through a small adapter.
 
@@ -75,26 +75,38 @@ directory layout and component list:
 
 ## Quick start
 
-Fork the ops repo, open it in your agent tool, then configure and register a
-project:
+Install the CLI, then create your ops repo:
 
 ```bash
-gh repo fork me2resh/apexyard --clone
-cd apexyard
-# In your agent tool:
-#   /setup
-#   /handover <repo>
-#   /inbox
+curl -fsSL https://apexyard.ai/install | sh
+apexyard init
 ```
 
-`/setup` writes local config. `/handover` scores and registers a project.
-`/inbox` lists what needs your attention across the portfolio.
+`apexyard init` asks for the account or organisation, the repo name, private or public, the folder and your coding agent. Then it shows the plan and asks before it creates anything. To skip the questions, pass them as options: `apexyard init --org your-org --name ops --private --yes`.
+
+The CLI does the fixed steps. It creates the repo and links it to the framework for updates. It also writes the local setup files and installs the git hooks. At the end it offers to open the repo in Claude Code with `/onboard`. `/onboard` asks the questions that need your answers: your company, your stack and your first project. With another agent, open the folder and run `/onboard` yourself.
+
+After that, `/inbox` lists what needs your attention across the portfolio.
+
+Prefer a fork? `gh repo fork me2resh/apexyard --clone` still works, and so does
+everything below. If the install URL returns an error, use the fork.
+
+Already on a fork? You do not need to migrate. Keep running `/update` to take
+each release. If you install the CLI, `apexyard update` starts the same flow.
 
 Full setup guide (directory layout, daily workflow, FAQ):
 [`docs/multi-project.md`](docs/multi-project.md).
 CLI install and `apexyard init` (including private ops repos):
 [`docs/getting-started.md`](docs/getting-started.md).
-Keep a fork current with [`docs/upgrading.md`](docs/upgrading.md).
+Keep your ops repo current with [`docs/upgrading.md`](docs/upgrading.md).
+
+### Run a skill from the terminal
+
+Run `apexyard skills` to list skills. Run `apexyard inbox` to start `/inbox`.
+
+The CLI works from any folder and remembers the last ops repo you used. Run `apexyard use <dir>` to change it.
+Use `apexyard ticket owner/repo#N` to create or reuse a ticket worktree.
+Human approval skills must run inside your agent.
 
 ## Using another AI coding tool?
 
@@ -112,6 +124,7 @@ small adapter. Dated proof and limits live in
 
 ## Further reading
 
+- Agent authority and human gates: [Escalation pattern](docs/escalation-pattern.md)
 - Site move note: [`docs/whats-inside.md`](docs/whats-inside.md#marketing-site)
 - Roles, workflows, and templates: [`docs/whats-inside.md`](docs/whats-inside.md#roles)
 - Project badges: [`docs/badges.md`](docs/badges.md)

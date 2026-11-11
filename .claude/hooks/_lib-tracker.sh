@@ -17,6 +17,7 @@
 #   tracker_review_kind [<owner/repo>] echoes the code-review host adapter kind
 #   tracker_kind [<owner/repo>]        compatibility alias for tracker_issue_kind
 #   tracker_id_pattern [<owner/repo>]  echoes the configured ID regex
+#   tracker_open_pr_heads <owner/repo> echo [{number,head},...] of open PR heads (gh only; others return 1)
 #   tracker_owner_repo_param <slug>    formats the owner/repo parameter (gh: "owner/repo"; others: empty)
 #   tracker_view <id> [<owner_repo>]   dispatches the view command and emits normalised JSON on stdout
 #                                      Exit 0 = ticket exists; non-zero = doesn't, or CLI errored.
@@ -344,6 +345,37 @@ tracker_kind() {
   value=$(tracker_issue_kind "$repo") || return $?
   [ -z "$repo" ] && _TRACKER_KIND_CACHE="$value"
   echo "$value"
+}
+
+# ------------------------------------------------------------------------------
+# Public: tracker_open_pr_heads <owner/repo>
+#   Echo a JSON array [{number, head},...] of open PR numbers with their
+#   head commit SHA (lowercase). Used by _lib-review-queue.sh to match
+#   rex-approved PRs against live open PR heads.
+#
+#   Returns 0 and writes JSON on success (gh adapter only).
+#   Returns 1 for non-gh trackers; the queue degrades to unknown.
+#   Returns 1 on CLI failure; the queue degrades to unknown.
+#   me2resh/apexyard#1995 / AgDR-0292
+# ------------------------------------------------------------------------------
+tracker_open_pr_heads() {
+  local repo="${1:-}"
+  local kind out
+  [ -n "$repo" ] || return 1
+  kind=$(tracker_review_kind "$repo") || kind="gh"
+  case "$kind" in
+    gh)
+      out=$(apexyard_gh pr list --repo "$repo" \
+        --state open --json number,headRefOid --limit 200 2>/dev/null) || return 1
+      printf '%s' "$out" | \
+        jq '[.[] | {number: .number, head: (.headRefOid | ascii_downcase)}]' \
+        2>/dev/null || return 1
+      ;;
+    *)
+      # Non-gh tracker: degrade gracefully.
+      return 1
+      ;;
+  esac
 }
 
 # ------------------------------------------------------------------------------
@@ -778,9 +810,63 @@ _tracker_check_private_refs() {
   "$scanner" "$repo" "$title" "$body_file"
 }
 
+# Prepare only priority labels named by the configured scheme. This step only
+# helps: a failure warns and never stops the create. The loop splits by hand,
+# because zsh does not word-split an unquoted variable on IFS.
+_tracker_priority_labels_gh() {
+  local repo="$1" labels="$2" scheme label rest names exists
+  [ -n "$labels" ] || return 0
+  scheme=$(_tracker_config_get_or '.ticket.label_priority_scheme' 'P0,P1,P2,P3')
+  rest="$labels,"
+  while [ -n "$rest" ]; do
+    label=${rest%%,*}
+    rest=${rest#*,}
+    [ -n "$label" ] || continue
+    case ",$scheme," in
+      *,"$label",*) ;;
+      *) continue ;;
+    esac
+    # GitHub label names are unique without regard to case.
+    if ! names=$(gh label list --repo "$repo" --search "$label" --json name --limit 100) ||
+       ! exists=$(printf '%s' "$names" | jq -r --arg name "$label" \
+         'any(.[]; (.name | ascii_downcase) == ($name | ascii_downcase))'); then
+      printf 'tracker_create: could not check priority label %s; continuing.\n' "$label" >&2
+      continue
+    fi
+    if [ "$exists" = false ]; then
+      if gh label create "$label" --repo "$repo" >/dev/null 2>&1; then
+        printf 'tracker_create: created missing priority label %s.\n' "$label" >&2
+      else
+        printf 'tracker_create: could not create priority label %s; continuing.\n' "$label" >&2
+      fi
+    fi
+  done
+  return 0
+}
+
+# Recover a completed write without issuing another create command.
+_tracker_recover_create_gh() {
+  local repo="$1" title="$2" login now since candidates recovery_window=600
+  login=$(gh api user --jq .login 2>/dev/null) || return 1
+  [ -n "$login" ] || return 1
+  now=$(date -u +%s) || return 1
+  since=$((now - recovery_window))
+  candidates=$(gh issue list --repo "$repo" --state all --author "$login" \
+    --search "created:>=$(date -u -r "$since" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "@$since" +%Y-%m-%dT%H:%M:%SZ)" \
+    --limit 100 --json number,title,url,createdAt,author) || return 1
+  printf '%s' "$candidates" | jq -cer --arg title "$title" --arg login "$login" \
+    --argjson since "$since" --argjson now "$now" '
+    [.[] | select(.title == $title and .author.login == $login)
+      | select((.createdAt | fromdateiso8601) >= $since and
+               (.createdAt | fromdateiso8601) <= $now)]
+    | sort_by(.createdAt) | last | select(. != null)
+    | {ref:(.number | tostring), url:.url}'
+}
+
 # Internal adapter: gh → run `gh issue create` with safe arg passing.
 _tracker_create_gh() {
   local repo="$1" title="$2" body_file="$3" labels="$4" milestone="${5:-}"
+  _tracker_priority_labels_gh "$repo" "$labels" || return 1
   local -a args
   args=(issue create --repo "$repo" --title "$title")
   if [ -n "$body_file" ] && [ -f "$body_file" ]; then
@@ -915,14 +1001,19 @@ tracker_create() {
     custom) raw=$(_tracker_create_custom "$repo" "$title" "$body_file" "$labels" "$milestone"); rc=$? ;;
     *)      raw=$(_tracker_create_gh     "$repo" "$title" "$body_file" "$labels" "$milestone"); rc=$? ;;  # best-effort default
   esac
-  if [ $rc -ne 0 ] || [ -z "$raw" ]; then
-    return 1
+  local result=""
+  if [ "$rc" -eq 0 ] && [ -n "$raw" ]; then
+    result=$(_tracker_extract_ref_url "$raw") || result=""
   fi
-
-  local result
-  result=$(_tracker_extract_ref_url "$raw")
   if [ -z "$result" ] || [ "$result" = "null" ]; then
-    return 1
+    case "$kind" in
+      glab|custom) return 1 ;;
+      *)
+        printf 'tracker_create: create failed; checking for a completed issue.\n' >&2
+        result=$(_tracker_recover_create_gh "$repo" "$title") || return 1
+        printf 'tracker_create: recovered existing issue after create failure.\n' >&2
+        ;;
+    esac
   fi
   echo "$result"
 }

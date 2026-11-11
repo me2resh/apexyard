@@ -118,6 +118,7 @@ tracks closing this gap for those seven keys.
 | `review_identity` | `tracker_review_submit` in `_lib-tracker.sh` | Opt-in GitHub App identity for `gh` reviews. Default `kind` is `operator`. See [Reviewer GitHub App](#reviewer-github-app-review_identity) and [AgDR-0235](agdr/AgDR-0235-reviewer-github-app.md). |
 | `review_markers.extra_review_agents` | `_lib-review-markers.sh` (`review_caller_class`), `block-reviewer-repo-mutation.sh`, `block-reviewer-ci-wait.sh`, `warn-review-marker-write.sh`, `require-active-ticket.sh`, `auto-code-review.sh`, `limit-reviewer-writes.sh` | Adds exact review types. See [Add your own review agent types](hooks-fail-closed.md#add-your-own-review-agent-types). |
 | `qa.pre_merge_offer` | `/code-review` | Controls the advisory pre-merge QA offer after Rex approves. Default: `ask`. |
+| `merge.approval_quiz` | `/approve-merge` | When `true`, runs the opt-in comprehension check before the CEO marker write. Default: `false`. Pass `--quiz` for one run. See [Approval quiz](#approval-quiz-mergeapproval_quiz). |
 | `leak_protection.public_framework_repos` | `check-private-refs-*.sh`, `block-private-refs-in-public-repos.sh` | Known-public `owner/repo` slugs. Origin identity is exempt when origin matches an entry. |
 | `leak_protection.origin_verified_public` | `check-private-refs-staged.sh`, `check-private-refs-runtime.sh` | Exact origin `owner/repo` slug recorded by `/setup` or `/update` after `gh` confirms visibility is PUBLIC. Hooks stay offline and fail closed when this key is missing or does not match origin. See AgDR-0190. |
 
@@ -177,6 +178,15 @@ Accept reports only from the repository owner, a member or a collaborator, or th
 On GitHub, verify `author_association` of `OWNER`, `MEMBER` or `COLLABORATOR`, or the Rex account match.
 Otherwise, run post-merge QA as usual.
 
+### Approval quiz (`merge.approval_quiz`)
+
+Set `merge.approval_quiz` to `true` to run a three-question comprehension check before `/approve-merge` writes the CEO marker.
+
+Default is `false`. Pass `--quiz` on one `/approve-merge` run to turn the check on without changing config.
+The quiz uses `AskUserQuestion`. Questions name files and lines from the PR diff and stay inside the diff and PR body.
+A wrong answer shows the packed lines and asks again. The marker format and merge gates stay unchanged.
+See [docs/skills/approval-quiz.md](skills/approval-quiz.md) and `/explain-pr` for a read-only walkthrough that can end with the same quiz.
+
 ## Build isolation (`build.isolation`)
 
 The setting applies to the whole ops fork, not per project.
@@ -216,6 +226,36 @@ Any other value fails closed and posts nothing.
 Create the app, store the key, and set the override with the how-to:
 [Use a GitHub App for agent reviews](how-to/reviewer-github-app.md).
 The decision record is [AgDR-0235](agdr/AgDR-0235-reviewer-github-app.md).
+
+## Human review queue (`review_queue`)
+
+`review_queue` controls when spawn points warn or refuse because too many
+Rex-approved PRs are waiting for human (`/approve-merge`) sign-off.
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `limit` | `4` | Queue depth that triggers the warn or refuse action. |
+| `mode` | `"warn"` | `"warn"` prints a message and continues. `"refuse"` stops the spawn. |
+
+An unknown tracker count (non-gh tracker kind, CLI failure) always degrades to
+no-op - it never refuses.
+
+The queue count appears on the Role set line of `apexyard status` and at the
+top of `/inbox`. The same `review_queue_check` runs in `bin/apexyard-start-ticket`.
+`/fan-out` and `isolated-builds.md` tell build-agent spawns to run it.
+
+Override example (opt-in refuse mode with a tighter limit):
+
+```json
+{
+  "review_queue": {
+    "limit": 2,
+    "mode": "refuse"
+  }
+}
+```
+
+Decision record: [AgDR-0292](agdr/AgDR-0292-human-review-queue.md).
 
 ## Extending the defaults
 

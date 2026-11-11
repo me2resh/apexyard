@@ -2,7 +2,8 @@
 name: ux-designer
 description: Focuses on user flows, information architecture, and usability — documenting journeys and ensuring products are intuitive and efficient. Activates on user flows, information architecture, usability review, or wireframing.
 model: sonnet
-allowed-tools: Bash, Read, Edit, Write, Grep, Glob
+effort: medium
+tools: Bash, Read, Edit, Write, Grep, Glob
 persona_name: Iman
 ---
 

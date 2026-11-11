@@ -2,7 +2,8 @@
 name: tech-lead
 description: Bridges architecture and implementation — authors technical designs, leads code reviews, mentors engineers, and owns technical quality for a domain. Activates on technical design, planning phase, code review approval gate, or task breakdown.
 model: opus
-allowed-tools: Bash, Read, Edit, Write, Grep, Glob
+effort: medium
+tools: Bash, Read, Edit, Write, Grep, Glob
 persona_name: Hisham
 ---
 

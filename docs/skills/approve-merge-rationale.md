@@ -4,6 +4,8 @@ Historical rationale and gate details follow. The skill contains the current pro
 
 Writes a structured marker at `.claude/session/reviews/<owner>__<repo>__<pr>-ceo.approved` (repo-qualified path, see AgDR-0060), then runs the merge (`gh pr merge <pr> --squash --delete-branch`, or the `glab mr merge` equivalent on a GitLab-forge project) in the same turn via `tracker_pr_merge` — the tracker-agnostic merge adapter in `_lib-tracker.sh` (#759, mirrors `tracker_review_submit` from #758). The marker contains required key/value fields (not just a bare SHA) so a raw `echo SHA > file` from the model is mechanically rejected by `block-unreviewed-merge.sh`.
 
+Optional comprehension check (#1997, AgDR-0290): when `--quiz` is set or `merge.approval_quiz` is `true`, the skill asks three grounded questions before it writes the marker. Default is off. See `docs/skills/approval-quiz.md` and `/explain-pr`.
+
 This is the **mechanical enforcement** of the "plan-level 'go' is not merge approval" rule in `.claude/rules/pr-workflow.md`. The load-bearing semantic is "every merge needs an explicit per-PR approval", **not** "every merge needs two user messages."
 
 ## The one rule you must not break

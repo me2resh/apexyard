@@ -292,6 +292,26 @@ y
 | t | d |" \
   0 ""
 
+# Decision disclosure stays advisory: neither body shape changes gate decisions.
+run_case "#1998: body without decision disclosure remains allowed" \
+  "## Testing
+Passed existing tests.
+
+## Glossary
+| Term | Definition |
+| Check | Validation command. |" 0 "WARN: PR body missing advisory"
+
+run_case "#1998: body with decision disclosure remains allowed" \
+  "## Decisions made for you
+None: the ticket specified all behavior.
+
+## Testing
+Passed existing tests.
+
+## Glossary
+| Term | Definition |
+| Check | Validation command. |" 0 ""
+
 # ---- Summary ------------------------------------------------------------
 
 echo ""

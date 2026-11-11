@@ -545,7 +545,7 @@ Next code review, Rex globs both `handbooks/architecture/*.md` AND `<private>/cu
 
 ### Centralised agent routing: `agent-routing.yaml`
 
-ApexYard ships 23 Claude Code sub-agents (20 role-derived personas plus utility agents: Rex, Hakim, Munir, Tariq, Naqid). The framework picks sensible per-agent model defaults from the matrix in [AgDR-0050 § Axis 2](agdr/AgDR-0050-agent-runtime-overhaul.md). These use Opus for depth + reasoning, Sonnet for the majority + tool-use-heavy, Haiku for checklist-shaped repeatable work. Adopters override those defaults via a single YAML file kept in the private portfolio repo. Overrides include switching the QA Engineer to Sonnet for higher-recall AC runs or routing the Data Analyst through a local Ollama endpoint. They also include raising the Pen Tester's invocation timeout.
+ApexYard ships 23 Claude Code sub-agents (20 role-derived personas plus utility agents: Rex, Hakim, Munir, Tariq, Naqid). The framework picks sensible per-agent model defaults from the tier map in [`.claude/harness-models.json`](../.claude/harness-models.json). The map started from the matrix in [AgDR-0050 § Axis 2](agdr/AgDR-0050-agent-runtime-overhaul.md). See [Agent model and effort](agents/effort.md). These use Opus for depth + reasoning, Sonnet for the majority + tool-use-heavy, Haiku for checklist-shaped repeatable work. Adopters override those defaults via a single YAML file kept in the private portfolio repo. Overrides include switching the QA Engineer to Opus for deeper AC runs or routing the Data Analyst through a local Ollama endpoint. They also include raising the Pen Tester's invocation timeout.
 
 This pattern follows **Custom templates** (path-mirroring overrides, see AgDR-0023) and **Custom skills + handbooks** above. It puts every adopter-specific routing choice in one centrally-edited surface, source-controlled in the private repo, never leaking to the public fork.
 
@@ -595,7 +595,7 @@ The pattern lives in `agent-routing.yaml.example` Example C as a commented-out t
 
 Adopters who want to validate specific models against their machine before committing can use the operator-prep doc at `projects/apexyard/spike-348-prep.md` as a starting checklist. It covers hardware checks, fixture pack for the 3 candidate sub-agents, scoring matrix.
 
-> Early drafts of this schema advertised the `allowed_tools_override` field, but it never had parser wiring. Dropped in #358 for v1; the per-agent allowed-tools list in each `.claude/agents/<name>.md` frontmatter is the source of truth. To override on a specific fork, edit the agent file directly with a `# routing-config:override <reason>` comment in the YAML frontmatter. This uses the same escape-hatch pattern that handles framework-default `model:` overrides.
+> Early drafts of this schema advertised the `allowed_tools_override` field, but it never had parser wiring. Dropped in #358 for v1; the per-agent `tools` list in each `.claude/agents/<name>.md` frontmatter is the source of truth. To override on a specific fork, edit the agent file directly with a `# routing-config:override <reason>` comment in the YAML frontmatter. This uses the same escape-hatch pattern that handles framework-default `model:` overrides.
 
 #### Config-block wiring (split-portfolio v2)
 
@@ -899,7 +899,7 @@ The prompt also offers a custom-path slot and a "keep next to source" slot for o
 A typical morning as a CTO / Chief of Staff using apexyard:
 
 1. **`cd ~/apexyard`**: into your fork
-2. **`apexyard status`** (or `/status --briefing` inside Claude Code): 4-line "where am I" briefing: active workspace, active ticket, branch, role. Covers the orient-yourself question in one paragraph.
+2. **`apexyard status`** (or `/status --briefing` inside Claude Code): 4-line "where am I" briefing: active workspace, active ticket, branch, role. The Role set line also shows PRs waiting for your approval. Covers the orient-yourself question in one paragraph.
 3. **`/inbox`**: see everything waiting on you across every managed project
 4. **`/status`**: full snapshot of git + CI health for each project (verbose form when you want the per-project breakdown)
 5. Pick a ticket, **`cd workspace/<project>/`**, pick up the ticket as the appropriate role (see [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md))
@@ -923,10 +923,10 @@ $ apexyard status
 Active workspace:  example-app
 Active ticket:     #42 — Add CSV export
 Branch:            feature/GH-42-csv-export
-Role set:          backend
+Role set:          backend ; Waiting on you: 2 PRs, the oldest 5 hours
 ```
 
-The same output appears when you run `/status --briefing` (or `/status -b`) inside Claude Code. The four fields all infer themselves. The workspace comes from cwd, and the ticket from the marker of the working tree you are in (`apexyard-ticket` in its git dir). The branch comes from `git branch --show-current`, and the role from the active ticket's labels. Where any of those is unknown, the briefing prints an explicit `(none)` / `(unknown)` / `<none — inferred per task>` placeholder so the four-line shape is constant regardless of state.
+The same output appears when you run `/status --briefing` (or `/status -b`) inside Claude Code. The four fields all infer themselves. The workspace comes from cwd, and the ticket from the marker of the working tree you are in (`apexyard-ticket` in its git dir). The branch comes from `git branch --show-current`, and the role from the active ticket's labels. The Role set line also appends the human review queue count. Where any of those is unknown, the briefing prints an explicit `(none)` / `(unknown)` / `<none - inferred per task>` placeholder so the four-line shape is constant regardless of state.
 
 Default `/status` (no flags) still produces the long per-project breakdown: `--briefing` only opts into the compact form.
 

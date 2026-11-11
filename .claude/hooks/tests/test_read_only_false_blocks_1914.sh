@@ -42,6 +42,26 @@ for cmd in 'grep --anything x .claude/hooks/x.sh' 'sed -n 1p .claude/hooks/x.sh'
   protected 0 "read $cmd" "$cmd"
 done
 # Read-only additions for #1958. These commands are inspected, never run.
+protected 0 'ls hooks' 'ls .claude/hooks'
+protected 0 'ls hook tests' 'ls -la .claude/hooks/tests'
+protected 0 'literal bash test' 'bash .claude/hooks/tests/test_x.sh'
+protected 0 'literal bash test with piped stdin' 'cat input | bash .claude/hooks/tests/test_x.sh'
+protected 0 'literal bash test with redirected stdin' 'bash .claude/hooks/tests/test_x.sh < input'
+# A program supplied through stdin is invisible to the gate and stays blocked.
+protected 2 'piped bash program' 'cat .claude/hooks/tests/test_x.sh | bash'
+protected 2 'redirected bash program' 'bash < .claude/hooks/tests/test_x.sh'
+for verb in init 'add .' 'commit -m scratch'; do
+  protected 0 "mkdir and cd scratch git $verb" "ls .claude/hooks; mkdir -p '$TMP/fresh' && cd '$TMP/fresh' || exit 1; git $verb"
+done
+protected 0 'scratch git workflow' 'ls .claude/hooks; mkdir -p scratch && cd scratch || exit 1; git init; git add .; git commit -m scratch'
+protected 2 'fresh scratch escapes to protected root' 'ls .claude/hooks; mkdir -p scratch && cd scratch || exit 1; cd ../.claude/hooks; git add .'
+protected 0 'relative mkdir and cd scratch' 'ls .claude/hooks; mkdir -p scratch && cd scratch || exit 1; git add .'
+protected 2 'mkdir protected directory' 'ls .claude/hooks; mkdir -p .claude/hooks/scratch && cd .claude/hooks/scratch || exit 1; git add .'
+protected 2 'mkdir scratch then escape to protected directory' 'ls .claude/hooks; mkdir -p .claude/scratch && cd .claude/scratch || exit 1; cd ../hooks; git add .'
+protected 2 'mkdir mismatch keeps fallback' 'ls .claude/hooks; mkdir -p scratch && cd other || exit 1; git add .'
+protected 2 'mkdir without success condition keeps fallback' 'ls .claude/hooks; mkdir -p scratch; cd scratch || exit 1; git add .'
+protected 2 'mkdir without parents keeps fallback' 'ls .claude/hooks; mkdir scratch && cd scratch || exit 1; git add .'
+protected 2 'mkdir failed cd alternative keeps live cwd' 'ls .claude/hooks; mkdir -p scratch && cd scratch || echo failed; git add .'
 for verb in log show diff blame ls-files status ls-tree grep cat-file rev-parse rev-list for-each-ref show-ref merge-base describe name-rev shortlog range-diff check-ignore check-attr; do
   protected 0 "git read $verb" "git $verb HEAD .claude/hooks/tests"
 done
