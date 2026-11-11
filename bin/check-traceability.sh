@@ -118,16 +118,16 @@ if [ -n "$BASE" ]; then
   mb=$(git -C "$GIT_TOP" merge-base "$BASE" HEAD 2>/dev/null || true)
   branch_changes_prd=0
   if [ -n "$mb" ] && [ -f "$PRD" ]; then
-    git -C "$GIT_TOP" diff --quiet --no-ext-diff "$mb" -- "$PRD_REL" 2>/dev/null || branch_changes_prd=1
+    git -C "$GIT_TOP" diff --quiet --no-ext-diff --no-textconv "$mb" -- "$PRD_REL" 2>/dev/null || branch_changes_prd=1
   fi
 
   if [ "$branch_changes_prd" -eq 1 ]; then
     PRD_TEXT=$(tr -d '\r' < "$PRD")
     VERSION_REF="HEAD"
     warn "this branch changes the PRD, so the check reads the working copy, not $BASE"
-    git -C "$GIT_TOP" diff --quiet --no-ext-diff "$mb" "$BASE" -- "$PRD_REL" 2>/dev/null \
+    git -C "$GIT_TOP" diff --quiet --no-ext-diff --no-textconv "$mb" "$BASE" -- "$PRD_REL" 2>/dev/null \
       || warn "the PRD also changed on $BASE since this branch started, so rebase to check against both changes"
-  elif PRD_TEXT=$(git -C "$GIT_TOP" show "$BASE:$PRD_REL" 2>/dev/null | tr -d '\r') && [ -n "$PRD_TEXT" ]; then
+  elif PRD_TEXT=$(git -C "$GIT_TOP" show --no-textconv "$BASE:$PRD_REL" 2>/dev/null | tr -d '\r') && [ -n "$PRD_TEXT" ]; then
     PRD_SOURCE="$BASE"
   elif [ -f "$PRD" ]; then
     PRD_TEXT=$(tr -d '\r' < "$PRD")
@@ -222,6 +222,10 @@ if [ -n "$DESIGN" ]; then
 
   if [ -z "$TASK_ROWS" ]; then
     block "the design has no Implementation Plan task rows"
+  elif ! printf '%s\n' "$TASK_ROWS" | cut -d "$SEP" -f2 | grep -q '^1$' \
+    && ! printf '%s\n' "$TASK_ROWS" | cut -d "$SEP" -f4 | grep -qE '(US|FR)-[0-9]+'; then
+    # An old design: no Serves column and no ID in any task row.
+    warn "the design does not link tasks to the PRD, so coverage checks are skipped"
   else
     TASK_HAS_SERVES=$(printf '%s\n' "$TASK_ROWS" | cut -d "$SEP" -f2 | grep -c '^1$' || true)
     [ "$TASK_HAS_SERVES" -gt 0 ] \

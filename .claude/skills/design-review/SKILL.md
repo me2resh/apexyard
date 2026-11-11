@@ -48,7 +48,7 @@ The reviewer mutation lock blocks `git clone`, `git fetch`, and `git checkout` w
 
 ### 0. Write the active-reviewer marker (REQUIRED — me2resh/apexyard#843, when reviewing a PR)
 
-When the review will run the traceability check in step 3, fetch `origin/<base-branch>` into the scratch clone before you write this marker. The mutation lock blocks `git fetch` while the marker exists.
+When the review will run the traceability check in step 3, fetch the base branch into the scratch clone before you write this marker. Fetch it from the base repository, not from a contributor fork, and store it as `origin/<base-branch>`. The mutation lock blocks `git fetch` while the marker exists.
 
 Before spawning the Solution Architect agent (Tariq) for a PR review, write the active-reviewer session marker. It records that this review pass is the sanctioned one and suppresses `warn-review-marker-write.sh`'s advisory warning on the `*-architecture.approved` write (same convention as `/code-review`'s rex marker; that hook warns and never blocks since #1026 — AgDR-0111). The marker is scoped to THIS Claude Code session (me2resh/apexyard#1376) — resolve its path through `active_reviewer_marker_path`, never write the bare `.claude/session/active-reviewer` path directly. Use the SAME resolved `owner/repo` from step 1 (below) — the sibling-repo resolution in split-portfolio v2 matters here too. At skill entry:
 
@@ -102,11 +102,13 @@ refusal message — but the cheap fix is upstream of both: don't pass a path.
 1. Resolve the target — a PR number (preferred: gives a diff + a place to post the verdict + a marker key) or a path to a design artifact. **Also resolve the repo**: the optional second arg (`/design-review 42 owner/repo`), or the `owner/repo#N` form. In split-portfolio v2 the PR lives in a sibling repo, so a bare `gh pr view 42` resolved against the ops-fork cwd hits the WRONG repo — pass the resolved repo as `--repo` to **every** `gh pr view` / `gh pr diff` call, and thread it into Tariq's spawn so it becomes BOTH his `$PR_HOST_REPO` (the base repo `tracker_review_submit` posts the review to — #763) AND the key for his `<owner>__<repo>__<pr>-architecture.approved` marker (and the active-reviewer marker from step 0). This is the slug the `require-architecture-review.sh` gate derives from the merge command's cd-target (me2resh/apexyard#687). If only a bare number is given and `gh pr view <N>` can't resolve the PR from the current cwd, STOP and ask for the `owner/repo#N` form — never write the marker under a guessed qualifier.
 2. Fetch PR details and the latest commit SHA (when reviewing a PR).
 3. Read the design artifact(s). Read the PRD that the design covers from the PR's base branch, not from the PR head. A design branch can hold an old copy of the PRD, and git shows no conflict when the base branch adds a user story (me2resh/apexyard#1749).
-   - Run the traceability check and give its output to Tariq. Run it in a checkout of the PR head, such as the scratch clone, with `origin/<base-branch>` fetched there. Resolve `ops_root` as in step 0, and call the script by its ops-fork path:
+   - Run the traceability check and give its output to Tariq. The PRD and design files come from a checkout of the PR head, such as the scratch clone, with `origin/<base-branch>` fetched there. Resolve `ops_root` as in step 0, from the ops fork, before you change into the scratch clone. Call the script by its ops-fork path, and pass the clone's files as absolute paths in single quotes:
 
      ```bash
-     "$ops_root/bin/check-traceability.sh" --prd <prd-path> --design <design-path> --base "origin/<base-branch>"
+     "$ops_root/bin/check-traceability.sh" --prd '<prd-path>' --design '<design-path>' --base "origin/<base-branch>"
      ```
+
+   - Stop and report when a path has a character other than a letter, a digit, `.`, `_`, `-` or `/`.
 
    - Never run a `check-traceability.sh` from the PR checkout or from a managed-project clone. Pass the PR's files only as the `--prd` and `--design` arguments. When a framework PR changes `bin/check-traceability.sh`, still run the ops-fork copy.
    - Add `--orbit <project>/docs/orbit` when the PRD has the optional Traceability table.

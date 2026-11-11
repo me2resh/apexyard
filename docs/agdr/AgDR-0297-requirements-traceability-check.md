@@ -60,7 +60,9 @@ How this relates to the existing parts:
 - A user story that is missing from the design shows as a BLOCK line at design review, before any code exists.
 - A PRD change on the base branch after the design was written shows as a WARN line, through the PRD version field.
 - The check is advisory. No hook, required CI check or merge gate runs it. A human decides what to do with each finding.
-- Authors fill in two `Serves` columns and one PRD version field. A design without a `Serves` column still gets a check, from the IDs in each task row, with a WARN.
+- Authors fill in two `Serves` columns and one PRD version field.
+- Old PRDs and old designs give WARN lines, never BLOCK lines. A PRD without a `Serves` column skips the requirement checks. A design whose task rows name no `US-n` or `FR-n` skips the coverage checks.
+- A design without a `Serves` column that names IDs in some task rows still gets the coverage check, with a WARN.
 - The check sees links, not meaning. A task that names US-2 but does not deliver it passes the check. The review lens still covers that.
 
 ## Artifacts

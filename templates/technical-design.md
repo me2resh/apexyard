@@ -12,7 +12,7 @@ Rule: .claude/rules/writing-standard.md. Use the controlled technical writing pr
 **Author**: [Tech Lead / Engineer]
 **Date**: YYYY-MM-DD
 **PRD**: [Link to PRD]
-**PRD version**: [Short commit SHA of the PRD this design covers, from `git log -1 --format=%h -- <prd-path>`]
+**PRD version**: [Short commit SHA of the PRD on the base branch that this design covers, from `git log -1 --format=%h origin/<base-branch> -- <prd-path>`]
 
 ---
 

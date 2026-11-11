@@ -27,6 +27,8 @@
 #   (18) a branch that changes the PRD and the design together compares
 #        the PRD version with HEAD, not the base, and warns when the base
 #        also changed the PRD
+#   (19) an old design, with no Serves column and no ID in any task row,
+#        is one WARN and no BLOCK
 #
 # Usage: bash .claude/hooks/tests/test_check_traceability.sh
 # Exit 0 on pass, 1 on any failure.
@@ -328,6 +330,15 @@ assert_contains "$OUT" "WARN:  the PRD also changed on dev since this branch sta
 assert_contains "$OUT" "PASS:  the design PRD version matches the PRD on HEAD" "version compared with HEAD"
 assert_not_contains "$OUT" "the PRD changed since this design was written" "no false drift WARN"
 assert_not_contains "$OUT" "BLOCK: task 5 serves US-5" "branch story is known"
+
+echo "Test 19: old design with no links to the PRD"
+write_prd "$TMP/prd.md" "1 2 3" "$FR3"
+write_design "$TMP/design.md" '1|
+2|' "" "| # | Task | Estimate | Dependencies |"
+run --prd "$TMP/prd.md" --design "$TMP/design.md"
+assert_exit "$RC" 0 "old design exits 0"
+assert_contains "$OUT" "WARN:  the design does not link tasks to the PRD, so coverage checks are skipped" "one WARN explains the skip"
+assert_not_contains "$OUT" "BLOCK:" "no BLOCK for an old design"
 
 echo
 if [ "$FAIL" -eq 0 ]; then
