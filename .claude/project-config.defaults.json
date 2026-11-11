@@ -14,6 +14,12 @@
     "tracker_repo"
   ],
 
+  "checks": {
+    "baseline_command": null,
+    "baseline_mode": "warn",
+    "baseline_timeout_seconds": 600
+  },
+
   "orbit": {
     "default_planning": false,
     "governed_prefixes": ["Feature", "Task", "Slice"]
@@ -188,7 +194,13 @@
     "_comment_human_approver_title": "me2resh/apexyard#957 — DISPLAY-ONLY override for the prose word used for the human per-PR merge approver in hook messages and /approve-merge output (e.g. 'Maintainer', 'Dev Lead'). Default 'CEO' is a zero-behaviour-change no-op. Marker filenames stay '-ceo.approved', and the structured fields (sha=, approved_by=user, skill_version=) are UNCHANGED regardless of this value — this key only affects printed text, never gate logic. See docs/agdr/AgDR-0103-configurable-approver-display-title.md."
   },
 
-  "docs_index": {
+  "review_queue": {
+    "limit": 4,
+    "mode": "warn",
+    "_comment": "me2resh/apexyard#1995 / AgDR-0292 - human review queue. limit is how many Rex-approved PRs may wait for /approve-merge before spawn points warn (or refuse when mode is refuse). Default mode warn never blocks. Unknown tracker prints Waiting on you: unknown and never refuses."
+  },
+
+    "docs_index": {
     "_comment": "me2resh/apexyard#753 — the maintain-docs-index.sh PostToolUse hook. OFF by default: it writes a tracked docs/INDEX.md into projects/<name>/docs/ on doc edits, so adopters opt in. When enabled it (1) regenerates the per-project docs/INDEX.md (grouped, git-dated TOC) and (2) nudges when a *.md/*.html lands under projects/<name>/ outside docs/. Advisory only — never blocks.",
     "enabled": false,
     "index_filename": "INDEX.md"

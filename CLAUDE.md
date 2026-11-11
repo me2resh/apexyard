@@ -8,27 +8,22 @@ Load a named file under `.claude/rules/` when the work matches that rule. Do not
 
 ## SETUP
 
-1. Read `onboarding.yaml` for company-specific configuration. Resolve the path via the portfolio paths helper so split-portfolio v2 adopters read the sibling repo's copy instead of the (template-default) one in the fork:
+The SessionStart banner prints the portfolio summary. Do not read the configuration files at every session start. Read `onboarding.yaml` (company configuration) or `apexyard.projects.yaml` (portfolio registry) only when a task needs them. Resolve each path with the portfolio paths helper. In split-portfolio mode the files are in the sibling portfolio repo, not in the fork:
 
-   ```bash
-   source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
-   onboarding=$(portfolio_onboarding_path)
-   # Read "$onboarding" with the Read tool
-   ```
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+onboarding=$(portfolio_onboarding_path)
+registry=$(portfolio_registry)
+# Read "$onboarding" or "$registry" with the Read tool
+```
 
-   In single-fork mode this still resolves to `<ops-root>/onboarding.yaml` — same file you'd reach without the helper. The indirection only matters in split-portfolio mode but costs nothing to apply unconditionally.
-
-2. Read `apexyard.projects.yaml` — the portfolio registry listing every repo under management
-3. Understand the team structure and roles
-4. Apply the workflows and standards defined in this stack
+In single-fork mode the helper returns the files at the ops-repo root.
 
 ## PORTFOLIO MODEL
 
-ApexYard governs a portfolio of repos as one organisation. The repo this `CLAUDE.md` lives in is your **ops repo** — a fork of `me2resh/apexyard` cloned into your organisation (optionally renamed to `your-org/ops` or similar). The registry file `apexyard.projects.yaml` at the ops-repo root lists every project under management. Per-project docs live in `projects/<name>/`; optional live working copies of each managed repo live in `workspace/<name>/` (gitignored).
+ApexYard governs a portfolio of repos as one organisation. The repo this `CLAUDE.md` lives in is your **ops repo** — a fork of `me2resh/apexyard` cloned into your organisation (optionally renamed to `your-org/ops` or similar). The registry file `apexyard.projects.yaml` lists every project under management. Per-project docs live in `projects/<name>/`. Optional live working copies of each managed repo live in `workspace/<name>/` (gitignored).
 
-Skills like `/projects`, `/inbox`, `/status`, `/tasks`, and `/stakeholder-update` aggregate across the registry. Even if you only have one repo to govern, you still fork apexyard and register that single repo — the skills work the same way, and future projects plug into the same registry.
-
-Full setup guide: `docs/multi-project.md` (read on demand)
+Skills like `/projects`, `/inbox`, `/status`, `/tasks`, and `/stakeholder-update` aggregate across the registry. Full setup guide: `docs/multi-project.md` (read on demand).
 
 ---
 
@@ -75,12 +70,7 @@ Full process: `workflows/sdlc.md`
 Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 ```
 
-| Gate | Before | Verify |
-|------|--------|--------|
-| 1 | Design --> Build | PRD approved, tickets exist |
-| 2 | Build --> Review | Tests pass, checks pass, >80% coverage |
-| 3 | Review --> Merge | Code review approved, CI green |
-| 4 | Merge --> Done | QA verified all acceptance criteria |
+The gate table is in `.claude/rules/workflow-gates.md`. It is the one source for gate numbers.
 
 **If a gate fails, STOP. Complete the missing step first.**
 
@@ -130,25 +120,7 @@ These one-liners stay here because agents use them on almost every turn. The ful
 - No hardcoded secrets. Use environment variables.
 - Use `AskUserQuestion` for operator choices between options. See `.claude/rules/reporting-style.md`.
 - Code review process: `workflows/code-review.md`.
-- AgDR template: `templates/agdr.md`.
-
----
-
-## TEMPLATES
-
-| Template | When to Use | Path |
-|----------|-------------|------|
-| PRD | Defining a new feature or product | `templates/prd.md` |
-| Technical Design | Planning implementation | `templates/technical-design.md` |
-| ADR | Recording architecture decisions | `templates/adr.md` |
-| AgDR | Recording AI agent decisions | `templates/agdr.md` |
-| Migration AgDR | Recording migration decisions (rollback, downtime, consumers, observability) | `templates/agdr-migration.md` |
-| Investigation | Sustained root-cause work — incident retros, bug archaeology, regression hunts, performance mysteries. Hypothesis-tree methodology; live-doc workflow. Used by `/investigation`. | `templates/tickets/investigation.md` |
-| C4 Context (L1) | System + external actors (one per project) | `templates/architecture/c4-context.md` |
-| C4 Container (L2) | Deployable units inside the system | `templates/architecture/c4-container.md` |
-| Architecture Vision | Target-state architecture + multi-quarter migration path + explicit anti-scope. Author interactively via `/tech-vision <project>`. | `templates/architecture/vision.md` |
-| Data Flow Diagram (DFD) | Trust boundaries + data crossings (input to STRIDE threat model) | `templates/architecture/dfd.md` |
-| Sequence Diagram | Time-ordered request-flow walkthrough (auth handshake, payment flow, etc.) | `templates/architecture/sequence.md` |
+- AgDR template: `templates/agdr.md`. Other templates: `docs/claude-md-reference.md` § Templates.
 
 ---
 
@@ -160,143 +132,9 @@ Framework PRs merge to `dev`. Managed projects merge to `main`. See `docs/releas
 
 ---
 
-## CLAUDE CODE INTEGRATION
+## REFERENCE
 
-ApexYard ships with a `.claude/` directory containing the Claude Code primitives that turn the markdown content above into a runnable workflow:
-
-| Layer | Path | Purpose |
-|-------|------|---------|
-| Hooks | `.claude/hooks/` | 55 shell scripts that mechanically enforce SDLC rules — ticket-first (Edit/Write/Bash), ORBIT slice before Feature/Task issues, migration-ticket-first, auto code review, merge gates (Rex + CEO + design review + architecture review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, onboarding-config guard, upstream-drift banner, leak protection, bootstrap-skill exemption, skill-intent detection, gate-invisible review-marker detection |
-| Rules | `.claude/rules/` | 23 modular rule files (AgDR triggers, agent role selection, build-handbook discovery, code standards, evidence grounding, external-write retry, git conventions, glossary lookup, isolated builds, leak protection, loop mode, parallel work, plan mode, PR quality, PR workflow, reconcile before build, reporting style, right-size ceremony, role triggers, skill first, ticket vocabulary, workflow gates, writing standard) |
-| Handbooks | `handbooks/` | Adopter-authored coding standards consumed by Rex during code review. Discovery by path-convention (`architecture/` + `general/` always-load; `language/<lang>/` loads on diff-match). Advisory by default; opt in to blocking via `ENFORCEMENT: blocking` marker. See [`handbooks/README.md`](handbooks/README.md). |
-| Agents | `.claude/agents/` | 23 sub-agents (4 utility incl. Hakim post-consolidation + Naqid the Contrarian + 7 engineering + 1 architecture (Tariq) + 6 product-design + 5 security-data). Per AgDR-0050 + the #347 PR 3 Hatim→Hakim consolidation decision + AgDR-0054 (Solution Architect) + AgDR-0078 (The Contrarian) + AgDR-0105 (retiring the pr-manager + ticket-manager lifecycle agents). |
-| Skills | `.claude/skills/` | 70 slash commands — see the full list below |
-| Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
-
-### Available skills (70)
-
-One-line summary per skill; canonical details live in each `.claude/skills/<name>/SKILL.md`.
-
-| Skill | Purpose |
-|-------|---------|
-| `/preflight` | Read-only environment checks before setup; also available as `apexyard doctor` |
-| `/setup` | First-run bootstrap — configure `onboarding.yaml` in 3 exchanges |
-| `/launch-check` | Production readiness audit — 10-dimension go/no-go sweep at milestone boundaries (opt-in `--workflow` mode fans the dimensions out in parallel + adversarially verifies findings) |
-| `/threat-model` | STRIDE threat modelling — spoofing, tampering, repudiation, disclosure, DoS, EoP |
-| `/accessibility-audit` | WCAG 2.1 AA accessibility audit — perceivable, operable, understandable, robust |
-| `/compliance-check` | GDPR + ePrivacy compliance — consent, privacy policy, data handling, user rights |
-| `/analytics-audit` | Analytics event-taxonomy audit — SDK coverage, naming, funnel completeness |
-| `/seo-audit` | Technical SEO audit — meta tags, sitemap, robots.txt, OG, structured data |
-| `/geo-audit` | GEO/AEO audit — `llms.txt`, `AGENTS.md`, AI-crawler robots, JSON-LD citation grounding |
-| `/performance-audit` | Performance audit — bundle size, images, lazy load, code split, Core Web Vitals |
-| `/monitoring-audit` | Observability audit — error tracking, health endpoints, alerting, runbooks |
-| `/docs-audit` | Diataxis docs audit — tutorials, how-to, reference, explanation |
-| `/mutation-test` | Mutation-testing sensor — Stryker/MutPy/go-mutesting/mutant; milestone cadence, exit-3 graceful-degrade |
-| `/eval-agents` | Score a review agent (Rex/Hakim/Tariq) against a labeled PR corpus — frozen ground-truth defect sets, approve-precision headline metric, never a prose rubric |
-| `/start-ticket` | Declare an active ticket for this session (required before code edits) |
-| `/approve-merge` | Record per-PR CEO approval and merge (required by merge gate) |
-| `/explain-pr` | Read-only PR walkthrough (what / why / risks / decisions); optional comprehension quiz; never writes markers or merges |
-| `/approve-design` | Record per-PR design-review approval for UI PRs (required by design gate) |
-| `/decide` | Make a technical decision and create an Agent Decision Record (AgDR) |
-| `/agdr` | Browse / search / show / stats across the portfolio's AgDR library |
-| `/code-review` | Invoke the Code Reviewer agent (Rex) on a PR |
-| `/security-review` | Invoke the Security Reviewer agent (Hakim) on a PR |
-| `/design-review` | Invoke the Solution Architect agent (Tariq) on a technical design / migration AgDR / feature spec (the non-code analog of `/code-review`) |
-| `/design-sync` | Sync a local component library to a claude.ai/design design-system project incrementally (drives the DesignSync tool; on-demand) |
-| `/challenge` | Invoke The Contrarian (Naqid) to steelman-then-challenge an idea, feature, or decision — advisory, never blocks a gate (premise-level analog of `/code-review`) |
-| `/approve-architecture` | Record per-PR architecture-review approval for design-artifact PRs (required by the architecture gate) |
-| `/audit-deps` | Audit dependencies for vulnerabilities, outdated packages, licences |
-| `/write-spec` | Generate a PRD or feature spec from a problem statement |
-| `/validate-idea` | Lightweight 5-question pre-spec gate before `/write-spec` |
-| `/plan-initiative` | Initiative → milestones → tasks: Socratic interview, DAG, topo-sorted sequence, two-pass filing with `blocks`/`blocked by` cross-refs |
-| `/feature` | Create a structured feature ticket (user story + acceptance criteria) |
-| `/bug` | Create a structured bug ticket (Given/When/Then + repro + severity) |
-| `/report-apexyard-bug` | Report a bug in the apexyard **framework itself** upstream to `me2resh/apexyard` (leak-scrubbed) — distinct from `/bug` |
-| `/request-apexyard-feature` | Request a feature/enhancement for the apexyard **framework itself** upstream to `me2resh/apexyard` — distinct from `/feature` |
-| `/task` | Create a structured technical task ticket (driver + scope + ACs) |
-| `/tickets-batch` | Bulk-file 5–20 structured tickets in one shared-context flow |
-| `/migration` | Create a labelled migration ticket + migration AgDR (required by migration gate) |
-| `/spike` | Create a time-boxed, hypothesis-driven spike ticket — answers "will it technically work?" (throwaway; exempt from AgDR + coverage gates) |
-| `/scaffold` | Interview the owner and generate the project floor from a validated scaffold spec |
-| `/spike-close` | Disposition gate for spikes — `--promote` files a feature, `--discard` writes a memo |
-| `/prototype` | Create a throwaway UX/demo prototype ticket — answers "what should it look/feel like?" (throwaway; same AgDR + coverage exemptions as `/spike`) |
-| `/prototype-close` | Disposition gate for prototypes — `--promote` files a feature, `--discard` writes a memo (mirror of `/spike-close`) |
-| `/walking-skeleton` | Scaffold a `[Feature]`-class ticket for the thinnest end-to-end slice through every architectural layer — **kept** and grown into the product (full SDLC; NOT exempt) |
-| `/codify-rule` | Turn a review comment that caught a Rex-miss into a draft handbook entry |
-| `/investigation` | Create an investigation ticket + live-doc for sustained root-cause work |
-| `/idea` | Capture a new product idea to the shared backlog |
-| `/handover` | Onboard an external repo — harnessability scoring across 5 dimensions, checklist-pick which docs to generate, and offer to file Next Steps as tracker tickets |
-| `/onboard` | Guided first-run onboarding — capability tour, handover-vs-new-project branch, guided first win (front door for a brand-new fork) |
-| `/tutorial` | Standalone re-entry to the capability tour + full glossary — replays the roles/skills/gates walkthrough and all five terms any time, respecting depth mode |
-| `/extract-features` | Six-axis Feature Inventory (routes / models / jobs / tests / UI / docs) for rewrites |
-| `/feature-diagram` | Per-feature Mermaid flowchart of routes / models / jobs / screens involved |
-| `/process` | Extract a business process from registered repos and emit lint-clean BPMN 2.0 |
-| `/c4` | Generate C4 L1 + L2 Mermaid diagrams from a project's codebase |
-| `/dfd` | Extract a Data Flow Diagram (Mermaid + optional Threat Dragon JSON) with trust boundaries |
-| `/tech-vision` | Interactive author for the architecture vision template (target / gap / migration / anti-scope) |
-| `/journey` | Single self-contained user-journey HTML — boxes-and-arrows with per-page modals |
-| `/pdf` | Convert markdown / HTML / BPMN to PDF (destination-prompted) |
-| `/debug` | Structured hypothesis-driven debugging for issues that resisted naïve fixes |
-| `/update` | Sync the ops fork with upstream apexyard — preview, merge-or-rebase, sync branch |
-| `/orbit` | Run the opt-in ORBIT planning lifecycle for one managed project without replacing ApexYard governance |
-| `/split-portfolio` | Migrate a single-fork adopter to split-portfolio mode (public framework + private portfolio) |
-| `/release` | (Framework-only) Cut an apexyard release — diff, bump, CHANGELOG, release PR, tag |
-| `/release-sync` | (Framework-only) Sync `main` back to `dev` after a squash-merge release so the squash commit is an ancestor of `dev`, preventing recurring merge conflicts |
-| `/projects` | List all managed projects from the registry with status |
-| `/inbox` | Items needing your attention — PRs, issues, comments, blockers, stale-ticket reconcile flags |
-| `/status` | Current snapshot — git, CI, in-progress work (use `--briefing` for 4-line shape) |
-| `/tasks` | Actionable task list across the portfolio with direct URLs, prioritised |
-| `/roadmap` | Update or create the product roadmap |
-| `/stakeholder-update` | Generate weekly / monthly / launch stakeholder updates |
-| `/fan-out` | Spawn N parallel agents in one message (per-task agent type, worktree isolation) |
-
-The hooks, agents, and skills are picked up automatically by Claude Code when this directory lives at the project root. Rule bodies stay on disk and are excluded from auto-load via `claudeMdExcludes` in `.claude/settings.local.json`. CLAUDE.md indexes them by name. Load a rule file when the work needs it.
-
-See `docs/getting-started.md` for the integration model — including how to install the `.claude/` layer alongside the rest of the stack.
-
-## CI/CD PIPELINES
-
-Reusable GitHub Actions workflows live at `golden-paths/pipelines/`:
-
-| Pipeline | Purpose |
-|----------|---------|
-| `ci.yml` | Combined pipeline (code quality + security + dependencies) |
-| `code-quality.yml` | TypeScript, ESLint, tests, build |
-| `swift-ci.yml` | Swift Package Manager build + guarded test (macOS) |
-| `security.yml` | Semgrep SAST + npm audit + secrets detection |
-| `dependency-audit.yml` | Weekly vulnerability + license scan |
-| `pr-title-check.yml` | Enforce ticket ID in PR titles |
-| `review-check.yml` | Block merge if Code Reviewer hasn't reviewed the latest commit |
-| `seo-check.yml` | SEO analysis for content files |
-
-Copy whichever you need into your project's `.github/workflows/`. Full details in `golden-paths/pipelines/README.md`.
-
----
-
-## QUICK REFERENCE
-
-| What | Where |
-|------|-------|
-| Company Config | `onboarding.yaml` |
-| **Portfolio registry** | `apexyard.projects.yaml` |
-| Role Definitions | `roles/` |
-| Workflows | `workflows/` |
-| Templates | `templates/` |
-| Hooks | `.claude/hooks/` |
-| Rules (modular, framework-wide) | `.claude/rules/` |
-| **Adopter handbooks** (consumed by Rex during code review) | `handbooks/` — see [`handbooks/README.md`](handbooks/README.md) for the discovery + advisory/blocking conventions |
-| Agents | `.claude/agents/` |
-| Skills (70 slash commands) | `.claude/skills/` |
-| Hook wiring | `.claude/settings.json` |
-| **Per-project docs** | `projects/<name>/` |
-| **Live working copies** (gitignored) | `workspace/<name>/` |
-| **Cognitive memory layer** (optional, docs-only scaffold) | `.claude/memory/` — see [`.claude/memory/README.md`](.claude/memory/README.md) for what it is, what it isn't, and how it differs from AgDRs / Claude Code's native session memory |
-| **Topology bundles** (harness templates per service shape) | `topologies/<name>/` — see [`topologies/README.md`](topologies/README.md) |
-| CI pipelines | `golden-paths/pipelines/` |
-| Getting Started | `docs/getting-started.md` |
-| Full setup guide | `docs/multi-project.md` |
-| Rule audit (every MUST → hook / advisory / deferred) | `docs/rule-audit.md` |
-| LSP-aware navigation (optional) | Set `ENABLE_LSP_TOOL=1` + install per-language plugins. See `docs/getting-started.md` § "Optional: LSP-aware code navigation" |
+Read `docs/claude-md-reference.md` when you need one of these tables: the skill list, the templates, the `.claude/` layer, the reusable CI/CD pipelines, or the quick reference. The harness also lists the skills at session start. See `docs/getting-started.md` for the integration model.
 
 ---
 

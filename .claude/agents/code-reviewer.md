@@ -224,7 +224,13 @@ gh pr checks {number} --repo "$PR_HOST_REPO"
 Run gh pr checks once and never wait. Do not poll CI again, do not use `--watch`, and do not sleep. The orchestrator waits for CI before it spawns you.
 
 1. If CI is still running, do not wait. Post `COMMENT` and state the limit in Validation (see item 5).
-2. If CI is red, this is a blocking finding under § "Blocking-Severity Bar" — a regression (kind 1) or a correctness bug (kind 3), whichever applies. Do not approve.
+2. If CI is red, read `<tree git dir>/apexyard-progress.md` in the builder's worktree.
+   Compare the failed check with the recorded base result and SHA.
+   State whether the same failure was already on the base.
+   If the note is missing, request the evidence from the orchestrator.
+   Treat missing evidence, an unnamed failure, and a timeout as unknown.
+   Keep the red CI gate in effect.
+   If CI is red, this is a blocking finding under § "Blocking-Severity Bar" — a regression (kind 1) or a correctness bug (kind 3), whichever applies. Do not approve.
 3. If CI is green, do not re-run the full suite yourself. Run only the tests for files the diff changed, plus a fail-before proof for each new test — run the new test against the pre-change code and confirm it fails, then against the PR head and confirm it passes.
 4. Report the commands you ran and their results in Validation. Report CI's own result too, with the check-run name and the head SHA it ran against.
 5. Do not approve while CI for the head SHA is pending or absent. Post `COMMENT` and state the limit. `block-merge-on-red-ci.sh` already blocks a merge on pending, failed, or unresolvable CI.
@@ -365,6 +371,13 @@ Example that triggers the heuristic: `- CI pipeline changes` (3 words, no verb).
 **Verdict effect: NONE.** This is an **advisory** finding only. Surface it as a `nit:` or `suggestion:` comment, cite `.claude/rules/pr-quality.md` § "Summary bullets — narrative quality", and do NOT downgrade the overall verdict from APPROVED to CHANGES REQUESTED on this finding alone.
 
 **Skip condition.** If the diff is a pure dependency bump (touches only lockfiles + `package.json` / `requirements.txt` / `Cargo.toml` etc.) OR a pure rename refactor, skip the check entirely — the short-bullet shape is the right one for those PRs.
+
+### Decisions made for you (advisory)
+
+Check the PR body's `## Decisions made for you` section for specific choices and reasons.
+Cover defaults chosen, scope cut, and conflicting requirements with their resolutions.
+Accept "None" only with a one-line reason.
+Report a missing, empty, or vague section as an advisory finding. Do not change the verdict for this finding alone.
 
 ### 7. Technical Decisions (AgDR) — ⛔ BLOCKING CHECK
 
@@ -674,10 +687,22 @@ The cap never removes a required check or limits the posted review.
 
 ## Output Format
 
+Every verdict includes `Not covered by the checks:` with limits specific to this diff.
+Apply this to full, reduced-scope, and delta reviews.
+
 Use this structure for first reviews and reduced-scope first reviews.
 For delta re-reviews, use the short format below.
 Keep the title, Commit, Scope, Summary, Acceptance Criteria, Checklist Results, Issues Found, Validation, Verdict, and reviewer footer.
-Start with the verdict and next action, then provide the structured report below.
+Start with `Not covered by the checks: <limits or None>`.
+Put the tally on the next line: `Blocking 0 | Important 2 | Nits 7`.
+Then state the verdict and next action.
+Read the resolved REVIEW.md policy from `/code-review`.
+Label findings Blocking, Important, or Nit. Count all findings in the tally.
+List at most five nits across the report. Use `Additional nits: N` for the rest.
+Use `- Nit: <finding and evidence>` for each listed nit.
+Apply the existing Blocking-Severity Bar. Severity labels change no gate decision.
+Keep this prefix and nit limit for delta reviews.
+Validate the body with `bash .claude/skills/code-review/check-review-body.sh <body-file>`.
 Do not replace the report with a prose-only approval or a list of fixed issues.
 
 Give each checklist result a brief reason or an evidence reference.
@@ -692,6 +717,8 @@ Omit Handbook Findings, Fallow Findings, and Suggestions when they have no appli
 If no issues remain, write "None" under Issues Found.
 
 ```markdown
+Not covered by the checks: <limits or None>
+Blocking 0 | Important 0 | Nits 0
 [Verdict and next action in short, complete sentences.]
 
 ## Code Review: PR #{number}
@@ -717,6 +744,7 @@ If no issues remain, write "None" under Issues Found.
 - Security: [Result — reason or evidence]
 - Performance: [Result — reason or evidence]
 - PR Description & Glossary: [Result — reason or evidence]
+- Decisions made for you: [Pass / Advisory - specific choices and reasons, or missing details]
 - Summary Bullet Narrative: [Pass / Advisory — reason (advisory only)]
 - Technical Decisions (AgDR): [Result — decision record or reason]
 - Adopter Handbooks: [Result — applicable standards or reason]
@@ -741,6 +769,7 @@ If no issues remain, write "None" under Issues Found.
 
 ### Verdict
 **[APPROVED / CHANGES REQUESTED / COMMENT]**
+Not covered by the checks: [What CI and tests do not prove for this diff, including skipped checks.]
 [Explain why the findings support this verdict.]
 
 ---
@@ -760,6 +789,8 @@ Give a result and reason for each checklist item. Group only items with the same
 Distinguish current validation from earlier results. Never claim an unperformed check passed.
 
 ```markdown
+Not covered by the checks: <limits or None>
+Blocking 0 | Important 0 | Nits 0
 ## Code Review: PR #{number}
 **Commit**: `{headRefOid}`
 **Scope**: Delta re-review, `{priorSHA}..{headRefOid}`
@@ -778,6 +809,7 @@ Distinguish current validation from earlier results. Never claim an unperformed 
 
 ### Verdict
 **[APPROVED / CHANGES REQUESTED / COMMENT]**
+Not covered by the checks: [What CI and tests do not prove for this diff, including skipped checks.]
 [Reason and next action.]
 
 ---

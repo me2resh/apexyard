@@ -93,6 +93,11 @@ if [ -n "$ops_root" ] && [ -f "$ops_root/.claude/hooks/_lib-portfolio-paths.sh" 
   if command -v portfolio_workspace_dir >/dev/null 2>&1; then
     workspace_dir=$(portfolio_workspace_dir 2>/dev/null)
   fi
+  # Review queue lib - optional; absence is non-fatal.
+  if [ -f "$ops_root/.claude/hooks/_lib-review-queue.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$ops_root/.claude/hooks/_lib-review-queue.sh" 2>/dev/null
+  fi
 fi
 [ -z "$workspace_dir" ] && [ -n "$ops_root" ] && workspace_dir="$ops_root/workspace"
 
@@ -287,7 +292,19 @@ if [ -n "$ticket_number" ] && [ -n "$ticket_repo" ] && command -v "$gh_bin" >/de
 fi
 
 # ---------------------------------------------------------------------------
-# 6. Print.
+# 6. Review queue waiting line (me2resh/apexyard#1995).
+#
+# Appended to the Role set line so the briefing stays exactly 4 lines.
+# Runs only when the queue lib loaded successfully.
+# ---------------------------------------------------------------------------
+waiting_suffix=""
+if command -v review_queue_line >/dev/null 2>&1; then
+  _rq_line=$(APEXYARD_OPS_ROOT="$ops_root" review_queue_line "$ops_root" 2>/dev/null) || true
+  [ -n "$_rq_line" ] && waiting_suffix=" ; $_rq_line"
+fi
+
+# ---------------------------------------------------------------------------
+# 7. Print.
 #
 # Field width matches slide 6 (column alignment to 19 chars after the
 # label) so every briefing renders identically regardless of values.
@@ -295,4 +312,4 @@ fi
 printf '%-18s %s\n' "Active workspace:" "$workspace"
 printf '%-18s %s\n' "Active ticket:"    "$ticket"
 printf '%-18s %s\n' "Branch:"           "$branch"
-printf '%-18s %s\n' "Role set:"         "$role_set"
+printf '%-18s %s\n' "Role set:"         "${role_set}${waiting_suffix}"

@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 # Create an ops repository with the full framework history.
 set -euo pipefail
+# Testers opt in before launch. Keep release coordinates together.
+cockpit_enabled=${APEXYARD_COCKPIT:-0}
+COCKPIT_SOURCE=${APEXYARD_COCKPIT_SOURCE:-git+https://github.com/me2resh/apexyard-premium.git}
+COCKPIT_TAG=${APEXYARD_COCKPIT_TAG:-v0.15.2}
+cockpit=0
 usage() {
   echo 'Usage: apexyard init [--org X] [--name ops] [--private|--public] [--dir PATH] [--ref REF] [--agent NAME] [--dry-run] [-i|--interactive] [-y|--yes]'
+  if [ "$cockpit_enabled" = 1 ]; then
+    echo '  --cockpit  Install the Cockpit after repository setup.'
+  fi
 }
 fail() { echo "apexyard init: $*" >&2; exit 2; }
 org='' name=ops visibility=--private target='' dry_run=0 agent=claude
@@ -12,6 +20,7 @@ interactive=0 yes=0
 ref=${APEXYARD_FRAMEWORK_REF:-main}
 framework=${APEXYARD_FRAMEWORK_URL:-https://github.com/me2resh/apexyard.git}
 gh_cmd=${APEXYARD_GH:-gh}
+pipx_cmd=${APEXYARD_PIPX:-pipx}
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --org|--name|--dir|--ref|--agent)
@@ -24,6 +33,9 @@ while [ "$#" -gt 0 ]; do
     --private|--public) visibility=$1; visibility_set=1; shift ;;
     -i|--interactive) interactive=1; shift ;;
     -y|--yes) yes=1; shift ;;
+    --cockpit)
+      [ "$cockpit_enabled" = 1 ] || fail "unknown option: $1"
+      cockpit=1; shift ;;
     --dry-run) dry_run=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) fail "unknown option: $1" ;;
@@ -157,11 +169,21 @@ fi
 target_existed=0
 [ ! -e "$target" ] && [ ! -L "$target" ] || target_existed=1
 step=1 repo_created=0
+origin_is_new_repo() {
+  local origin
+  origin=$(git -C "$target" remote get-url origin 2>/dev/null) || return 1
+  case "$origin" in
+    "https://github.com/$org/$name"|"https://github.com/$org/$name.git"|\
+    "git@github.com:$org/$name"|"git@github.com:$org/$name.git"|\
+    "ssh://git@github.com/$org/$name"|"ssh://git@github.com/$org/$name.git") return 0 ;;
+  esac
+  return 1
+}
 cleanup() {
   local status=$?
   [ "$status" -ne 0 ] || return 0
   # gh can create the repo and then fail the push. Never delete the only copy.
-  if [ "$repo_created" -eq 0 ] && [ "$step" -eq 3 ] && repo_exists "$name"; then
+  if [ "$repo_created" -eq 0 ] && [ "$step" -eq 3 ] && { repo_exists "$name" || origin_is_new_repo; }; then
     printf 'Init stopped at step 3. The GitHub repo %s/%s exists, but the upload failed. It kept %s.\n' "$org" "$name" "$target" >&2
     printf 'Finish with: cd %s && git push -u origin main, then run /onboard.\n' "$target" >&2
   elif [ "$repo_created" -eq 1 ]; then
@@ -214,6 +236,28 @@ if [ -f "$target/bin/install-git-hooks.sh" ]; then
   (cd "$target" && bash bin/install-git-hooks.sh >/dev/null 2>&1) || true
 fi
 trap - EXIT
+
+install_cockpit() {
+  if ! command -v "$pipx_cmd" >/dev/null 2>&1; then
+    echo 'Cockpit skipped: pipx is missing. Install pipx with python3 -m pip install --user pipx, then run python3 -m pipx ensurepath. Install the premium CLI separately afterward.' >&2
+    return 0
+  fi
+  # Leave authentication to the existing git credential configuration.
+  # Suppress child output so credential diagnostics cannot expose secrets.
+  if ! GIT_TERMINAL_PROMPT=0 "$pipx_cmd" install "${COCKPIT_SOURCE}@${COCKPIT_TAG}" >/dev/null 2>&1; then
+    echo 'Cockpit install failed. Request access to apexyard-premium from the owner and check your existing GitHub login, then retry.' >&2
+  elif ! apexyard-premium setup --ops "$target" --portfolio "$target" >/dev/null 2>&1; then
+    echo 'Cockpit setup failed. Check your Cockpit access with the owner, then run apexyard-premium setup with --ops and --portfolio pointing to this repo.' >&2
+  fi
+}
+if [ "$cockpit_enabled" = 1 ]; then
+  if [ "$interactive" -eq 1 ] && [ "$cockpit" -eq 0 ]; then
+    printf 'Install the Cockpit too? [y/N] ' >&2
+    IFS= read -r answer || answer=n
+    case "$answer" in y|Y|yes|YES|Yes) cockpit=1 ;; esac
+  fi
+  [ "$cockpit" -eq 0 ] || install_cockpit
+fi
 
 # Telemetry must not prevent repository creation.
 # shellcheck source=bin/_lib-telemetry.sh

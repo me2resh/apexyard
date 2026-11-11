@@ -22,7 +22,7 @@ ApexYard **generates** Codex support from the canonical `.claude/` runtime rathe
 `bin/sync-codex-adapter.sh` emits:
 
 - `.claude/skills/` → `.agents/skills/` (rewriting only the skill path references)
-- `.claude/agents/*.md` → `.codex/agents/*.toml`, translating model-tier labels via the shared [`.claude/harness-models.json`](../../.claude/harness-models.json) matrix (`opus`→`gpt-5.5`, `sonnet`→`gpt-5.4`, `haiku`→`gpt-5.4-mini`)
+- `.claude/agents/*.md` → `.codex/agents/*.toml`. The generator reads the `codex` column of the tier map in [`.claude/harness-models.json`](../../.claude/harness-models.json) (`reason`→`gpt-5.5`, `build`→`gpt-5.4`, `light`→`gpt-5.4-mini`). It writes `model_reasoning_effort` from the agent effort or the tier effort. A routing-override model passes through unchanged.
 - `.claude/settings.json` → `.codex/hooks.json`, preserving the commands that exec `$r/.claude/hooks/*.sh`
 - `.codex/apexyard-adapter.json`, identifying ApexYard-owned generated output for safe update-time reconciliation
 

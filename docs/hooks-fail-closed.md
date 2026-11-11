@@ -1,8 +1,10 @@
 # Fail-closed gates and the escape hatch
 
-This page describes how the Bash dispatcher and the ticket-first gate fail,
-what Claude Code version you need, and how an operator turns hooks off.
+This page describes how the Bash dispatcher and the ticket-first gate fail.
+It also names the hooks that fail open today, the Claude Code version you
+need, and the way an operator turns hooks off.
 It covers me2resh/apexyard#1623.
+For the records that the gates read and write, see [Gate state contract](gate-state-contract.md).
 
 ## Terms
 
@@ -59,9 +61,59 @@ The Bash channel of `block-protected-target-writes.sh` runs inside the
 dispatcher entry and its 75 second timeout. A short command such as
 `git status && ls` measured p95 125 ms.
 
-### The fail-open exception
+### What fails open today
 
-`block-reviewer-ci-wait.sh` stays fail open.
+Most Bash hooks fail open.
+The dispatcher runs them with `run_hook` in `.claude/hooks/dispatch-bash.sh`.
+`run_hook` blocks only on exit 2.
+Any other exit code, such as exit 1, exit 127 or a kill signal, prints `WARN` and lets the dispatcher continue.
+The call then runs, and the check did not happen.
+
+This is the state today.
+This page plans no change.
+Do not rely on these hooks to block when they crash.
+
+The table lists every hook that `run_hook` calls.
+The route column shows which Bash commands run the hook.
+
+| Route | Hooks that fail open |
+|-------|----------------------|
+| Every Bash call | `block-ambient-tracker-repo.sh`, `block-privileged-escalation.sh`, `require-skill-for-issue-create.sh`, `require-orbit-slice-for-ticket.sh`, `require-migration-ticket.sh`, `warn-review-marker-write.sh`, `warn-isolated-build-risk.sh`, `block-reviewer-repo-mutation.sh`, `block-reviewer-ci-wait.sh` (a cost guard, see the next section) |
+| `git add` | `block-git-add-all.sh` |
+| `git push` | `block-main-push.sh`, `validate-branch-name.sh`, `pre-push-gate.sh`, `block-agent-routing-drift.sh` |
+| `git commit` | `check-secrets.sh`, `block-onboarding-in-git.sh`, `verify-commit-refs.sh`, `validate-commit-format.sh`, `require-agdr-for-arch-changes.sh`, `block-agent-routing-drift.sh`, `warn-bootstrap-scope.sh` |
+| `gh issue create` | `suggest-ticket-template.sh`, `validate-issue-structure.sh`, `block-private-refs-in-public-repos.sh` |
+| `gh pr create` | `validate-pr-create.sh`, `block-private-refs-in-public-repos.sh`, `require-agdr-for-arch-pr.sh`, `nudge-control-adversarial-test.sh` |
+| `gh issue comment`, `gh pr comment`, `gh pr review`, `gh api`, `gh pr merge` | `block-private-refs-in-public-repos.sh` |
+| `gh issue edit` | `detect-role-trigger.sh` |
+
+The safety gates in that list are:
+
+- `block-privileged-escalation.sh` (sudo, `--admin` merge, force push, `--no-verify`).
+- `check-secrets.sh` (the secrets scan on commit).
+- `block-private-refs-in-public-repos.sh` (the leak scan for public repos).
+- `require-migration-ticket.sh` (the migration gate).
+- `block-reviewer-repo-mutation.sh` (the reviewer mutation lock).
+- `block-git-add-all.sh` (the add-all guard).
+- `block-main-push.sh`, `validate-branch-name.sh`, `pre-push-gate.sh`, `validate-commit-format.sh` and `require-agdr-for-arch-changes.sh` (push and commit checks).
+
+One more case: `block-privileged-escalation.sh` reads the command with `jq`.
+When `jq` is missing, the command text is empty and the hook exits 0.
+So it allows every command until `jq` is back.
+
+The Edit, Write and MultiEdit entries in `.claude/settings.json` that have no `onFailure` field also fail open.
+Claude Code lets the call run when such a hook exits with a code other than 2.
+These entries are `require-migration-ticket.sh`, `detect-role-trigger.sh` and the Write entry of `warn-review-marker-write.sh`.
+The migration gate therefore has no fail-closed path on either route.
+
+The dispatcher entry itself is different.
+It has `onFailure` set to `block`, so a crash or timeout of the dispatcher script blocks the call.
+That does not help here.
+`run_hook` catches the crash of a single hook inside the dispatcher, so the dispatcher still exits 0.
+
+### The fail-open cost guard
+
+`block-reviewer-ci-wait.sh` fails open on purpose.
 It is a cost guard (me2resh/apexyard#1625). It stops a review agent from
 polling CI. If it crashes, the reviewer pays for a CI poll. The crash loses
 no safety property.
@@ -75,7 +127,7 @@ Do not move this hook to `run_fail_closed_hook`.
 
 ### What stays the same
 
-- No other hook entry sets `onFailure`. Six entries set it in all, including `limit-reviewer-writes.sh` (AgDR-0266).
+- No other hook entry sets `onFailure`. The entries that set it are the settings rows in the first table, including `limit-reviewer-writes.sh` (AgDR-0266), and the wildcard shell-alias entry of the dispatcher.
 - The `exit 0` in the settings wrapper stays.
   It runs when no `.claude/hooks` directory exists.
   That is deliberate for directories that are not ApexYard forks.
@@ -165,7 +217,7 @@ The tracked `.claude/settings.json` has these deny rules:
 | `Bash(printenv:*)` | Block the environment print command with arguments. |
 | `Bash(env)` | Block bare `env`. Permit `env FOO=bar cmd`. |
 | `Read(//**/*.private-key.pem)` | Block reads of the generic private key file pattern. |
-| `Read(//**/.config/apexyard/*.pem)` | Block reads of any key file in the folder that the setup guide uses for the reviewer key. |
+| `Read(//**/.config/apexyard/*.pem)` | Block reads of `.pem` files in `~/.config/apexyard`. |
 | `Read(//**/.mcp.json)` | Block reads of MCP config files that can contain client tokens. |
 
 The default `review_identity.private_key_path` is empty.
@@ -203,7 +255,7 @@ Run `bash bin/secrets-selftest.sh` for the 13 Nov bypass self-test.
 It checks each deny rule, secret scan output, and the wrapper with a fake `gh`.
 It prints one PASS or FAIL line per check.
 Any failed check causes exit 1.
-The script states that the cockpit run environment check belongs in `apexyard-premium`.
+The script prints a note that the premium Cockpit owns its run environment check.
 
 Deny rules match command text.
 A run can still read a file through another command.
@@ -224,6 +276,8 @@ What the rules cover:
 Review markers have no permission rule. The approval skills and the reviewer write markers with shell helpers. With the sandbox on, an `Edit(...)` deny rule on the markers would block those helpers too. The hooks still protect the markers.
 
 `/permissions` shows the rules that a session loaded.
+
+See [Secrets and the agent](secrets-and-the-agent.md) for live controls and their limits.
 
 ## Operator escape hatch
 

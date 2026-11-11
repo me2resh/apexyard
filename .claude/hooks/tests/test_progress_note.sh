@@ -1,6 +1,9 @@
 #!/bin/bash
 # Offline progress-note lifecycle and SessionStart fixtures. Bash 3.2.
-set -euo pipefail
+set -Eeuo pipefail
+# The assertions are bare commands. Name the failing line, so a CI failure is readable.
+# -E carries the trap into the library functions, where a silent failure can start.
+trap 'printf "FAIL line %s: %s\n" "$LINENO" "$BASH_COMMAND" >&2' ERR
 # shellcheck source=/dev/null
 . "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd -P)
@@ -91,7 +94,16 @@ grep -qx 'Task: owner/repo#43' "$note"
 # Skill and brief wiring must retain the shared evidence condition.
 for file in docs/progress-notes.md .claude/skills/fan-out/SKILL.md .claude/rules/reconcile-before-build.md; do
   grep -q 'acceptance criteria' "$ROOT/$file"
-  grep -q 'CI green on the current head SHA, Rex APPROVED at that head, progress note current' "$ROOT/$file"
+  case "$file" in
+    docs/progress-notes.md)
+      grep -q 'CI green on the current head SHA, Rex APPROVED at that head, progress note current' "$ROOT/$file"
+      ;;
+    *)
+      # A build agent cannot run Rex (me2resh/apexyard#2032).
+      grep -q 'PR open, CI green at the head SHA, progress note current' "$ROOT/$file"
+      grep -q 'cannot run Rex' "$ROOT/$file"
+      ;;
+  esac
   grep -q '20 turns' "$ROOT/$file"
   grep -q 'report the blocker with evidence' "$ROOT/$file"
 done

@@ -12,9 +12,11 @@ Full design rationale: [AgDR-0074](agdr/AgDR-0074-orchestrator-cost-model.md). U
 
 | Tier | Agents (examples) | Why |
 |------|-------------------|-----|
-| `opus` | Tech Lead, SRE, Pen Tester, **Security Auditor (Hakim)**, **Code Reviewer (Rex)** | Depth-bound reasoning |
-| `sonnet` | **Backend / Frontend Engineer**, Platform / Data Engineer, Product Manager, **UI Designer (Nour)**, UX Designer | Implementation + tool-use default |
-| `haiku` | QA Engineer, Data Analyst | Checklist-shaped, repeatable work |
+| `opus` (`reason` tier) | Tech Lead, SRE, Pen Tester, **Security Auditor (Hakim)**, **Code Reviewer (Rex)** | Depth-bound reasoning |
+| `sonnet` (`build` tier) | **Backend / Frontend Engineer**, Platform / Data Engineer, Product Manager, **UI Designer (Nour)**, UX Designer, QA Engineer | Implementation + tool-use default |
+| `haiku` (`light` tier) | Data Analyst | Checklist-shaped, repeatable work |
+
+The tier map in [`.claude/harness-models.json`](../.claude/harness-models.json) now holds this matrix. See [Agent model and effort](agents/effort.md).
 
 The matrix is real and correct: **but it only applies to *spawned* sub-agents.** A sub-agent's model comes from its frontmatter (`model:` in `.claude/agents/<name>.md`), which the harness reads when it *spawns* the agent.
 

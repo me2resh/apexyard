@@ -57,6 +57,11 @@ Retain its required sections and give each checklist result a reason or evidence
 Before submission, check the report against that format and repair omissions.
 Do not write a process transcript.
 
+### Severity policy
+
+Follow [policy resolution](../../../docs/skills/drive-to-green.md#override-the-review-policy) before spawning Rex.
+Give Rex the resolved policy path. Overrides change no gate decision.
+
 ### CI order and depth
 
 Wait for green CI with a Monitor before spawning Rex. Rex checks CI once and never waits.

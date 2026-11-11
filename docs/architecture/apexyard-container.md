@@ -70,7 +70,7 @@ The diagram captures which "container" does what *when interpreted by the right 
 ## What this diagram does NOT show
 
 - Specific hook-to-rule mapping (which hook enforces which rule) — see `docs/rule-audit.md` for that.
-- The full list of 66 skills — see CLAUDE.md § "Available skills".
+- The full list of 66 skills — see `docs/claude-md-reference.md` § "Available skills".
 - The full list of 20 roles — see `.claude/rules/role-triggers.md`.
 - The user's local `workspace/<name>/` clones of managed projects — they're gitignored and sit outside the ApexYard boundary (they belong to the managed project, not to ApexYard).
 
@@ -91,6 +91,8 @@ Updates when:
 Skill-count / hook-count / role-count drift goes in the relevant summary docs (CLAUDE.md, hooks/README.md), not here. This diagram stays at the "shape of the fork" level.
 
 ## Evolution
+
+**2026-11-09 - Human review queue surface (AgDR-0292, me2resh/apexyard#1995).** The hooks and skills containers gain a review queue counter. `_lib-review-queue.sh` scans Rex markers, compares each PR's recorded SHA against the live open PR head via `tracker_open_pr_heads` in `_lib-tracker.sh`, and counts PRs that need human approval. The briefing helper appends `; Waiting on you: N PRs, the oldest X hours` to the Role set line. `/inbox` prints the same line as a header. `bin/apexyard-start-ticket` calls `review_queue_check` before writing the ticket marker; `/fan-out` and `isolated-builds.md` instruct the orchestrator to run the same check before build-agent spawns. Config `review_queue.limit` (default 4) and `review_queue.mode` (`warn` | `refuse`, default `warn`) control the threshold and action. Unknown tracker degrades to no-op. No existing gate changes what it blocks (AgDR-0267 freeze). The C4 containers stay the same.
 
 **2026-11-08 — Opt-in approval quiz and /explain-pr (AgDR-0290, me2resh/apexyard#1997).** The skills container gains a read-only `/explain-pr` walkthrough and an opt-in comprehension check before `/approve-merge` writes the CEO marker. A shared helper packs file:line anchors from a PR diff and body. Config key `merge.approval_quiz` defaults to off. Reasoning: operators need a grounded self-check without changing merge-gate decision logic, marker format, or the approval record. The C4 containers stay the same. The change sits inside the skills container.
 
