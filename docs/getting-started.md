@@ -187,8 +187,28 @@ Every framework skill also runs from the terminal. The CLI opens Claude Code in 
 apexyard skills                 # list the skills
 apexyard inbox                  # starts /inbox
 apexyard code-review 42         # starts /code-review 42
-apexyard ticket owner/repo#N    # makes or reuses the ticket worktree, then starts the ticket
+apexyard start N --repo project # Create or reuse a ticket worktree.
 ```
+
+Use `apexyard start <ticket>` to open a ticket worktree and start an agent.
+Use `N`, `repo#N`, or `owner/repo#N` for the ticket.
+The `ticket` command remains an alias.
+
+The command resolves the repository in this order:
+
+1. Use `--repo <name|owner/name>` when specified. The name is a registry project name.
+2. Match the current folder's git origin to a registered project. This includes linked worktrees.
+3. Read the repository and clone path from `apexyard.projects.yaml`. Use the configured portfolio registry path.
+4. In the ops repository, select a registered project at the numbered prompt. With `--json` or no terminal, the command lists projects and exits with an error.
+5. If no repository matches, the command prints one line with a `--repo` hint and exits with an error.
+
+Use `--dry-run` to print the repository, ticket, and branch without changes.
+Use `--json` to print `repo`, `ticket`, `branch`, `worktree`, and `clone` as JSON.
+Without `--dry-run`, the command prints these values before it starts work.
+Use `--agent <name>` to select `claude`, `codex`, `cursor-agent`, `opencode`, or `pi`.
+The default agent is `claude`. Each agent starts in the ticket worktree.
+The agent reads the project rules through its framework adapter.
+The `cursor-agent` CLI reads instructions but does not enforce hooks.
 
 Approval skills, such as `/approve-merge`, run only inside your agent. If `claude` is not on your PATH, the CLI prints the command to run in your agent tool.
 

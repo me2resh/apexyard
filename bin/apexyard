@@ -88,7 +88,7 @@ resolve_ops_root_any() {
   local root need=${1:-}
   if root=$(find_ops_root); then
     if [ -d "$root/.claude/skills" ]; then
-      save_ops_root "$root" 2>/dev/null || true
+      [ "${APEXYARD_RESOLVE_READ_ONLY:-0}" = 1 ] || save_ops_root "$root" 2>/dev/null || true
       printf '%s' "$root"
       return 0
     fi
@@ -175,32 +175,38 @@ launch_skill() {
 }
 
 ticket_skill() {
-  local root=$1 target=${2:-} repo number parsed name registered ws rest clone=""
-  local worktree="" line candidate="" title type slug branch base helper
-  [ "$#" -eq 2 ] && [[ "$target" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+$ ]] || {
-    echo 'Usage: apexyard ticket owner/repo#N' >&2; return 2;
-  }
-  repo=${target%#*}; number=${target##*#}
-  cd "$root" || return 2
-  # shellcheck source=/dev/null
-  source "$root/.claude/hooks/_lib-read-config.sh"
-  # shellcheck source=/dev/null
-  source "$root/.claude/hooks/_lib-portfolio-paths.sh"
-  # shellcheck source=/dev/null
-  source "$root/.claude/hooks/_lib-multi-repo-trace.sh"
-  parsed=$(_mrt_parse_registry) || return 2
-  while IFS='|' read -r name registered ws rest; do
-    [ "$registered" = "$repo" ] || continue
-    ws=${ws:-workspace/$name}
-    case "$ws" in
-      /*) clone=$ws ;;
-      *) clone="$(dirname "$(portfolio_registry)")/$ws" ;;
+  local root=$1 target="" repo number parsed clone="" current=$PWD
+  local worktree="" line candidate="" title type slug branch="" base helper
+  local selector="" dry=0 json=0 agent=claude style arg resolved_repo resolved_clone
+  local APEXYARD_DISABLE_RESOLUTION_CACHE=1
+  export APEXYARD_DISABLE_RESOLUTION_CACHE
+  shift
+  while [ "$#" -gt 0 ]; do
+    arg=$1; shift
+    case "$arg" in
+      --repo|--agent)
+        [ "$#" -gt 0 ] && [ -n "$1" ] || { echo "$arg requires a value." >&2; return 2; }
+        if [ "$arg" = --repo ]; then selector=$1; else agent=$1; fi
+        shift ;;
+      --dry-run) dry=1 ;;
+      --json) json=1 ;;
+      -*) echo "Unknown option: $arg" >&2; return 2 ;;
+      *) [ -z "$target" ] || { echo 'Specify one ticket.' >&2; return 2; }; target=$arg ;;
     esac
-    break
-  done <<< "$parsed"
-  [ -n "$clone" ] || {
-    echo "$repo is not in the registry. Register it with /handover first." >&2; return 2;
-  }
+  done
+  style=$(repo_agent_style "$agent") || return 2
+  if [[ "$target" =~ ^([A-Za-z0-9_.-]+/)?[A-Za-z0-9_.-]+#[0-9]+$ ]]; then
+    [ -n "$selector" ] || selector=${target%#*}
+    number=${target##*#}
+  elif [[ "$target" =~ ^[0-9]+$ ]]; then
+    number=$target
+  else
+    echo 'Usage: apexyard ticket owner/repo#N (or apexyard start <ticket> [--repo <name|owner/name>])' >&2
+    return 2
+  fi
+  repo_resolve "$root" "$selector" "$current" "$json" || return 2
+  repo=$resolved_repo; clone=$resolved_clone
+  target="$repo#$number"
   [ -d "$clone" ] || {
     printf 'apexyard: no clone of %s at %s. Clone it first:\n' "$repo" "$clone" >&2
     printf 'gh repo clone %s %s\n' "$repo" "$clone" >&2; return 2;
@@ -209,7 +215,7 @@ ticket_skill() {
   while IFS= read -r line; do
     case "$line" in
       'worktree '*) candidate=${line#worktree } ;;
-      branch\ refs/heads/*/GH-"$number"-*) worktree=$candidate; break ;;
+      branch\ refs/heads/*/GH-"$number"-*) worktree=$candidate; branch=${line#branch refs/heads/}; break ;;
     esac
   done <<< "$parsed"
   if [ -z "$worktree" ]; then
@@ -223,14 +229,37 @@ ticket_skill() {
     slug=${slug:-ticket}
     branch="$type/GH-$number-$slug"
     worktree="$clone.worktrees/gh-$number-$slug"
+  fi
+  if [ "$json" = 1 ]; then
+    printf '{"repo":'; repo_json_string "$repo"
+    printf ',"ticket":%s,"branch":' "$((10#$number))"; repo_json_string "$branch"
+    printf ',"worktree":'; repo_json_string "$worktree"
+    printf ',"clone":'; repo_json_string "$clone"; printf '}\n'
+  else
+    printf 'Repo: %s\nTicket: %s\nBranch: %s\n' "$repo" "$target" "$branch"
+  fi
+  [ "$dry" = 0 ] || return 0
+  if [ ! -d "$worktree" ]; then
     git -C "$clone" fetch origin || return 2
     base=$(git -C "$clone" symbolic-ref refs/remotes/origin/HEAD) || base=origin/main
     git -C "$clone" worktree add -b "$branch" "$worktree" "$base" || return 2
   fi
+  # The launched agent must keep the resolution cache.
+  unset APEXYARD_DISABLE_RESOLUTION_CACHE
   helper=${APEXYARD_START_TICKET:-$root/bin/apexyard-start-ticket}
   cd "$worktree" || return 2
   "$helper" "$target" || return 2
-  launch_skill "$worktree" start-ticket "$target"
+  if [ -n "${APEXYARD_AGENT_CMD:-}" ] || [ "$style" = slash ]; then
+    launch_skill "$worktree" start-ticket "$target"
+  else
+    title="Run the start-ticket workflow for $target"
+    if ! command -v "$agent" >/dev/null 2>&1; then
+      printf 'Run this in your agent tool, from %s: %s\n' "$worktree" "$title"
+      return 0
+    fi
+    if [ "$style" = opencode ]; then exec "$agent" --prompt "$title"; fi
+    exec "$agent" "$title"
+  fi
 }
 
 usage() {
@@ -250,9 +279,19 @@ Commands:
   use [<dir>]            Save or show the ops repository.
   skills                 List framework skills.
   <skill> [args]         Run a framework skill from the ops root.
-  ticket owner/repo#N    Open a ticket worktree and start its skill.
+  start <ticket>        Resolve a repo and open its ticket worktree.
+    --repo <name|owner/name>  Select a registered project.
+    --agent <name>      Use claude, codex, cursor-agent, opencode, or pi.
+    --dry-run           Print the plan without changes.
+    --json              Print repo, ticket, branch, worktree, and clone as JSON.
+  ticket owner/repo#N    Alias for start.
   migrate [opts]         Keep the CLI only, or move this fork to a new repo
                            (init layout). See: apexyard migrate --help.
+
+Start resolution: --repo, then the current git origin, then the registry
+clone path. In the ops repo, select a project at the numbered prompt.
+With --json or no terminal, the prompt lists projects and exits.
+Ticket forms: N, repo#N, owner/repo#N.
 
 Run from any folder after selecting an ops repo with apexyard use <dir>.
 EOF
@@ -274,8 +313,12 @@ case "${1:-}" in
 esac
 # Read the notice helper from the real CLI directory.
 # shellcheck source=bin/_lib-telemetry.sh
+# shellcheck disable=SC1091
 source "$(dirname "$cli_path")/_lib-telemetry.sh"
-telemetry_notice_once || true
+dry_run=0
+for arg in "$@"; do [ "$arg" != --dry-run ] || dry_run=1; done
+# A dry run must not write configuration.
+[ "$dry_run" = 1 ] || telemetry_notice_once || true
 
 cmd="${1:-}"
 shift || true
@@ -409,8 +452,13 @@ case "$cmd" in
       printf '  %s  %s%s\n' "$name" "$description" "$mark"
     done < <(find "$ops_root/.claude/skills" -mindepth 2 -maxdepth 2 -name SKILL.md | LC_ALL=C sort)
     ;;
-  ticket)
-    ops_root=$(skill_root) || exit 2
+  start|ticket)
+    # shellcheck source=bin/_lib-repo-resolve.sh
+    source "$(dirname "$cli_path")/_lib-repo-resolve.sh"
+    ops_root=$(APEXYARD_RESOLVE_READ_ONLY=1 resolve_ops_root_any skills 2>/dev/null) || {
+      echo 'apexyard: no repo found. Use --repo <name|owner/name>.' >&2
+      exit 2
+    }
     ticket_skill "$ops_root" "$@"
     exit $?
     ;;
