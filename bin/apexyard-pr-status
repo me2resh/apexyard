@@ -597,6 +597,25 @@ fi
 # --- Next missing action. -------------------------------------------------
 H12=$(short "$HEAD")
 is_open() { case "$(status_of "$1")" in "$S_MISS"|"$S_STALE") return 0 ;; esac; return 1; }
+# awaiting_owner_only: true when the owner's approval is the only open item.
+# The review gate blocks a missing owner record with its own message. This code
+# reads that message and never re-derives the rule. Any other review-gate
+# block, or any other open item, keeps the value false.
+OWNER_ONLY=false
+case "$(status_of ceo)" in
+  "$S_MISS"|"$S_STALE")
+    case "$G_REV_MSG" in
+      *"has Rex approval but no "*" approval marker"*) OWNER_GATE=1 ;;
+      *"approved commit"*"but HEAD is now"*) OWNER_GATE=1 ;;
+      *) OWNER_GATE=0 ;;
+    esac
+    if [ "$OWNER_GATE" = 1 ] && [ -n "$HEAD" ] && { [ -z "$PR_STATE" ] || [ "$PR_STATE" = OPEN ]; } \
+       && printf '%s' "$ITEMS" | jq -se 'all(.[]; .name == "ceo" or .name == "review gate" or .status == "satisfied" or .status == "not required")' >/dev/null; then
+      OWNER_ONLY=true
+    fi
+    ;;
+esac
+
 NEXT=""
 if [ -z "$HEAD" ]; then
   NEXT="Fix forge access: the PR head could not be read from the forge."
@@ -638,7 +657,7 @@ if [ "$JSON" = 1 ]; then
     --arg repo "$REPO" --argjson pr "$PR" --arg url "$PR_URL" --arg state "$PR_STATE" \
     --arg head "$HEAD" --arg head_ref "$HEAD_REF" --arg base_ref "$BASE_REF" --arg base_sha "$BASE_SHA" \
     --arg tb "$TICKET_BODY" --arg tbr "$TICKET_BRANCH" --arg wt "$WORKTREE" --arg wtt "$WT_TICKET" \
-    --arg ar "$ACTIVE_REVIEWS" --arg home "$MARKER_HOME" --arg next "$NEXT" '
+    --arg ar "$ACTIVE_REVIEWS" --arg home "$MARKER_HOME" --arg next "$NEXT" --argjson owner_only "$OWNER_ONLY" '
     def n: if . == "" then null else . end;
     {repo: $repo, pr: $pr, url: ($url | n), state: ($state | n),
      head: {sha: ($head | n), ref: ($head_ref | n)},
@@ -646,7 +665,7 @@ if [ "$JSON" = 1 ]; then
      ticket: {from_body: ($tb | n), from_branch: ($tbr | n)},
      worktree: {path: ($wt | n), ticket_marker: ($wtt | n)},
      active_reviews: ($ar | n), marker_home: $home,
-     items: ., next_action: $next}'
+     items: ., next_action: $next, awaiting_owner_only: $owner_only}'
   exit 0
 fi
 
