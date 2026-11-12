@@ -129,6 +129,23 @@ case "$NAME" in
     exit 2
     ;;
 esac
+case "$NAME" in
+  *[!A-Za-z0-9._-]*)
+    echo "ERROR: --name may contain only letters, digits, '.', '_' and '-' (got: '$NAME')." >&2
+    exit 2
+    ;;
+esac
+
+# Refuse symlinks on the install path. The shim is written into $TARGET_DIR,
+# and a symlink there could redirect the write to a file outside the project
+# (for example a gate hook). The same holds for the parent .opencode dir.
+SHIM="$TARGET_DIR/$NAME.ts"
+for link_path in "$(dirname "$TARGET_DIR")" "$TARGET_DIR" "$SHIM"; do
+  if [ -L "$link_path" ]; then
+    echo "ERROR: refusing to install: $link_path is a symlink. Remove it or install into a real directory." >&2
+    exit 1
+  fi
+done
 
 for f in index.ts gate-dispatcher.ts derive-gates.ts resolve-ops-root.ts; do
   [ -f "$ADAPTER_SRC/$f" ] || { echo "ERROR: expected source file not found: $ADAPTER_SRC/$f" >&2; exit 1; }
@@ -163,6 +180,19 @@ if ! grep -Eq 'from ["'"'"']\./derive-gates-core\.ts["'"'"']' "$DEST/derive-gate
   exit 1
 fi
 
+# Write the shim LAST, after every check passed, so a failed install never
+# leaves a shim that points at a broken copy. opencode's local plugin glob is
+# `{plugin,plugins}/*.{ts,js}`: top-level files only, so a file inside a
+# subdirectory is never loaded. The shim re-exports the subdirectory entry;
+# its only export is the default plugin (the #844 crash cannot recur).
+# Write to a temp file in the same directory and rename it into place: mv
+# replaces the path itself and never follows a symlink. Re-running the
+# installer adds the shim to an older install.
+SHIM_TMP="$(mktemp "$TARGET_DIR/.apexyard-shim.XXXXXX")"
+printf 'export { default } from "./%s/index.ts";\n' "$NAME" > "$SHIM_TMP"
+chmod 644 "$SHIM_TMP"
+mv -f "$SHIM_TMP" "$SHIM"
+
 if [ "$(basename "$TARGET_DIR")" = "plugin" ]; then
   echo "WARNING: --target-dir ends in the singular 'plugin' — opencode's real, live-verified discovery dir is PLURAL ('plugins'). Continuing, but opencode will not find this install unless '$TARGET_DIR' is itself scanned." >&2
 fi
@@ -195,11 +225,12 @@ if command -v opencode >/dev/null 2>&1; then
 fi
 
 echo "Installed the apexyard opencode gate adapter:"
-echo "  $DEST/index.ts               <- opencode's ONLY discovered entry for this subdirectory"
+echo "  $TARGET_DIR/$NAME.ts          <- the file opencode loads (top-level shim)"
+echo "  $DEST/index.ts               <- the real entry, re-exported by the shim"
 echo "  $DEST/gate-dispatcher.ts"
 echo "  $DEST/resolve-ops-root.ts"
 echo "  $DEST/derive-gates.ts"
 echo "  $DEST/derive-gates-core.ts"
 echo ""
 echo "Next: (cd \"$ROOT/harness-adapters/opencode\" && npm install)"
-echo "Then run opencode from the project containing $TARGET_DIR — it auto-discovers $DEST/index.ts."
+echo "Then run opencode from the project containing $TARGET_DIR — it loads $SHIM (the top-level shim)."

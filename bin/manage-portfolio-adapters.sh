@@ -116,7 +116,7 @@ while IFS= read -r row; do
         script="$FRAMEWORK_ROOT/bin/install-pi-adapter.sh"; target="$project_root/.pi/extensions"; if [ "$MODE" = install ]; then bash "$script" --root "$FRAMEWORK_ROOT" --target-dir "$target" >/dev/null; result=installed; elif [ -f "$target/apexyard/index.ts" ]; then result=ok; else result=missing; fi;;
       opencode)
         [ ! -L "$project_root/.opencode" ] && [ ! -L "$project_root/.opencode/plugins" ] || { echo "DRIFT $name: opencode adapter path is a symlink"; drift=$((drift+1)); continue; }
-        script="$FRAMEWORK_ROOT/bin/install-opencode-adapter.sh"; target="$project_root/.opencode/plugins"; if [ "$MODE" = install ]; then bash "$script" --root "$FRAMEWORK_ROOT" --target-dir "$target" >/dev/null; result=installed; elif [ -f "$target/apexyard/index.ts" ]; then result=ok; else result=missing; fi;;
+        script="$FRAMEWORK_ROOT/bin/install-opencode-adapter.sh"; target="$project_root/.opencode/plugins"; if [ "$MODE" = install ]; then bash "$script" --root "$FRAMEWORK_ROOT" --target-dir "$target" >/dev/null; result=installed; elif [ -f "$target/apexyard/index.ts" ] && [ -f "$target/apexyard.ts" ] && [ ! -L "$target/apexyard.ts" ] && [ "$(cat "$target/apexyard.ts")" = 'export { default } from "./apexyard/index.ts";' ]; then result=ok; elif [ -f "$target/apexyard/index.ts" ]; then result="apexyard.ts shim missing or wrong, adapter not loaded"; else result=missing; fi;;
       cursor)
         if [ "$MODE" = install ]; then
           bash "$FRAMEWORK_ROOT/bin/install-cursor-adapter.sh" --root "$FRAMEWORK_ROOT" >/dev/null
