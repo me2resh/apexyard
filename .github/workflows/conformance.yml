@@ -4,7 +4,7 @@
 # credentialed agent turn under each live-proven third-party harness
 # (opencode, pi, Codex) — not a mock, not a by-construction unit test.
 # Only opencode runs, on every trigger. Pi and codex are out of the matrix
-# until their keys are funded (AgDR-0297).
+# until their keys are funded (AgDR-0298).
 # One matrix job per harness drives exactly one gated model turn
 # (instructing the agent to run `git add -A`) and asserts the delegated,
 # UNMODIFIED `.claude/hooks/block-git-add-all.sh` fired — via

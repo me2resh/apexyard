@@ -1,4 +1,4 @@
-# AgDR-0297: Conformance matrix runs opencode only
+# AgDR-0298: Conformance matrix runs opencode only
 
 > The owner chose to remove pi and codex from the Conformance matrix until their keys are funded, and to move the opencode pin to 1.18.35.
 

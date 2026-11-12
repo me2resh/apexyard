@@ -1,6 +1,6 @@
 # Conformance CI
 
-The scheduled GitHub Actions workflow (`.github/workflows/conformance.yml`) runs only opencode on its free model. It checks that apexyard's mechanical governance gates block a **real agent turn**. Pi and codex are out of the matrix until the owner funds their keys ([AgDR-0297](agdr/AgDR-0297-conformance-opencode-only-matrix.md)). Schedule decision: [AgDR-0278](agdr/AgDR-0278-conformance-zero-cost-schedule.md). Decision record: [AgDR-0095](agdr/AgDR-0095-conformance-ci-badge.md). Promoted from spike [me2resh/apexyard#848](https://github.com/me2resh/apexyard/issues/848). Feature: [me2resh/apexyard#871](https://github.com/me2resh/apexyard/issues/871).
+The scheduled GitHub Actions workflow (`.github/workflows/conformance.yml`) runs only opencode on its free model. It checks that apexyard's mechanical governance gates block a **real agent turn**. Pi and codex are out of the matrix until the owner funds their keys ([AgDR-0298](agdr/AgDR-0298-conformance-opencode-only-matrix.md)). Schedule decision: [AgDR-0278](agdr/AgDR-0278-conformance-zero-cost-schedule.md). Decision record: [AgDR-0095](agdr/AgDR-0095-conformance-ci-badge.md). Promoted from spike [me2resh/apexyard#848](https://github.com/me2resh/apexyard/issues/848). Feature: [me2resh/apexyard#871](https://github.com/me2resh/apexyard/issues/871).
 
 ## What this proves (and what it does not)
 
@@ -32,7 +32,7 @@ Pi and codex need these secrets only when you restore them to the matrix (see be
 
 Add both secrets at **Settings → Secrets and variables → Actions** on this repo. No secret sits in the workflow file itself. Every credential comes from `${{ secrets.* }}` at run time.
 
-Pi and codex are out of the matrix until the owner funds their keys (me2resh/apexyard#2057, AgDR-0297). Their install and drive steps stay in the workflow. To restore them:
+Pi and codex are out of the matrix until the owner funds their keys (me2resh/apexyard#2057, AgDR-0298). Their install and drive steps stay in the workflow. To restore them:
 
 1. Set the secret for each harness.
 2. Add `"pi"` or `"codex"` to the `harness` list in the `conform` job matrix in `.github/workflows/conformance.yml`.
@@ -72,7 +72,7 @@ Replace `<owner>/<repo>` with this repo's slug. shields.io fetches the raw JSON 
 ## How it works (transport)
 
 - **Schedule**: daily (`cron: "17 6 * * *"`) for opencode only, plus `workflow_dispatch` and `workflow_call`, which also run opencode only until the owner funds the pi and codex keys. The schedule runs only in the canonical repository, `me2resh/apexyard`: in a fork, a scheduled run skips every job ([AgDR-0289](agdr/AgDR-0289-gate-fork-schedules-to-canonical-repo.md)). An adopter who wants the schedule in a fork edits the guard on the `conform` and `badge` jobs.
-- **Matrix**: one job per selected harness, each capped at `timeout-minutes: 10`. Every trigger selects `opencode`. Pi and codex are not in the matrix (AgDR-0297).
+- **Matrix**: one job per selected harness, each capped at `timeout-minutes: 10`. Every trigger selects `opencode`. Pi and codex are not in the matrix (AgDR-0298).
 - **Per job**: Resolve credentials (fail-closed). Install the pinned harness CLI and apexyard adapter. Create a scratch git repo governed by the delegated hooks. Drive one gated turn. Assert nothing staged and that the hook's verbatim message appears in the transcript. Upload the transcript as a build artifact for inspection.
 - **Badge job**: The job runs after the matrix (`needs: conform`, with `always()` in its `if:`, which also carries the schedule guard). It queries each matrix job's real conclusion via the GitHub Actions API (`gh api repos/<repo>/actions/runs/<id>/jobs`). It updates the per-harness streak counters **on a `schedule` run only** (see "The green-continuous rule" above). A `workflow_dispatch` run is a streak/badge no-op (me2resh/apexyard#880). It commits updated badge JSON to the orphan `conformance-badge` branch using the workflow's own `GITHUB_TOKEN` (`contents: write`, scoped to that job only, with no new PAT).
 

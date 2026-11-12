@@ -1,4 +1,4 @@
-# AgDR-0298: opencode adapter loads through a top-level shim
+# AgDR-0299: opencode adapter loads through a top-level shim
 
 > opencode loads only top-level plugin files, so the installer writes a top-level shim beside the adapter subfolder. This supersedes part of AgDR-0092.
 
