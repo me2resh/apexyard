@@ -73,24 +73,31 @@ bash "$FRAMEWORK_ROOT/bin/install-opencode-adapter.sh" \
   --target-dir "$FIXTURE_PROJECT/.opencode/plugins"
 
 DISCOVERY_DIR="$FIXTURE_PROJECT/.opencode/plugins"
-ENTRY="$DISCOVERY_DIR/apexyard/index.ts"
+ENTRY="$DISCOVERY_DIR/apexyard.ts"
+SUB_ENTRY="$DISCOVERY_DIR/apexyard/index.ts"
 
 FAIL=0
 
 echo ""
-echo "== Check 1: no top-level .ts files directly under the discovery dir =="
-TOP_LEVEL_TS=$(find "$DISCOVERY_DIR" -maxdepth 1 -type f -name '*.ts')
-if [ -n "$TOP_LEVEL_TS" ]; then
-  echo "FAIL: found top-level .ts file(s) directly under $DISCOVERY_DIR — this is the exact shape that crashed opencode in #844:" >&2
+echo "== Check 1: exactly one top-level .ts file (the apexyard.ts shim) under the discovery dir =="
+# opencode loads only top-level files (glob {plugin,plugins}/*.{ts,js}); a
+# subdirectory-only install is never loaded (me2resh/apexyard bug: gates inert).
+TOP_LEVEL_TS=$(find "$DISCOVERY_DIR" -maxdepth 1 -type f -name '*.ts' | sort)
+EXPECTED_SHIM="$DISCOVERY_DIR/apexyard.ts"
+if [ "$TOP_LEVEL_TS" != "$EXPECTED_SHIM" ]; then
+  echo "FAIL: expected exactly $EXPECTED_SHIM as the only top-level .ts file, found:" >&2
   echo "$TOP_LEVEL_TS" >&2
   FAIL=1
+elif [ "$(cat "$EXPECTED_SHIM")" != 'export { default } from "./apexyard/index.ts";' ]; then
+  echo "FAIL: unexpected shim content in $EXPECTED_SHIM" >&2
+  FAIL=1
 else
-  echo "PASS: $DISCOVERY_DIR has no top-level .ts files — every adapter file lives inside apexyard/."
+  echo "PASS: apexyard.ts is the only top-level .ts file and re-exports apexyard/index.ts."
 fi
 
 echo ""
 echo "== Check 2: apexyard/index.ts exists =="
-[ -f "$ENTRY" ] || { echo "FAIL: expected entry not found: $ENTRY" >&2; FAIL=1; }
+[ -f "$SUB_ENTRY" ] || { echo "FAIL: expected entry not found: $SUB_ENTRY" >&2; FAIL=1; }
 
 RUNNER="$TMPDIR/run-load-assertion.mjs"
 cat > "$RUNNER" <<'RUNNER_EOF'

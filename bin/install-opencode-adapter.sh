@@ -139,6 +139,13 @@ DEST="$TARGET_DIR/$NAME"
 rm -rf "$DEST"
 mkdir -p "$DEST"
 
+# opencode's local plugin glob is `{plugin,plugins}/*.{ts,js}`: top-level
+# files only. A file inside a subdirectory is never loaded. So write a
+# one-line top-level shim that re-exports the subdirectory entry. Its only
+# export is the default plugin, so the #844 crash cannot recur. Rewritten on
+# every run, so re-running the installer on an older install adds it.
+printf 'export { default } from "./%s/index.ts";\n' "$NAME" > "$TARGET_DIR/$NAME.ts"
+
 cp "$ADAPTER_SRC/index.ts" "$DEST/index.ts"
 cp "$ADAPTER_SRC/gate-dispatcher.ts" "$DEST/gate-dispatcher.ts"
 cp "$ADAPTER_SRC/resolve-ops-root.ts" "$DEST/resolve-ops-root.ts"
@@ -195,7 +202,8 @@ if command -v opencode >/dev/null 2>&1; then
 fi
 
 echo "Installed the apexyard opencode gate adapter:"
-echo "  $DEST/index.ts               <- opencode's ONLY discovered entry for this subdirectory"
+echo "  $TARGET_DIR/$NAME.ts          <- opencode's discovered entry (top-level shim)"
+echo "  $DEST/index.ts"
 echo "  $DEST/gate-dispatcher.ts"
 echo "  $DEST/resolve-ops-root.ts"
 echo "  $DEST/derive-gates.ts"
