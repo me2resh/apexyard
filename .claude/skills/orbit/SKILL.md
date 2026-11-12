@@ -25,6 +25,8 @@ command -v "$ORBIT_BIN" >/dev/null 2>&1 || {
 }
 ```
 
+Spec 0.2 (optional `outcomeIds` on an execution slice, for a slice that contributes criteria from several outcomes) needs an ORBIT CLI built from orbit-spec with spec 0.2 support. That is any release after `v0.1.0` that lists `0.2` under "Spec versions" in its README. At the time of writing, no such release exists, so use a checkout of orbit-spec that includes the cross-outcome change. An older CLI rejects a `0.2` record. The helper scripts here accept both shapes: they read `outcomeIds` when present and `outcomeId` otherwise.
+
 The active ApexYard ticket remains required for source changes. ORBIT records are planning documents and belong under the managed project's `docs/orbit/` directory.
 
 ## Project resolution

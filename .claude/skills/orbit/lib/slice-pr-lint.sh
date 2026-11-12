@@ -164,11 +164,39 @@ slice_pr_lint() {
       .planId == $rec[0].planId and .basedOn.planRevision == $rec[0].planRevision
       and .basedOn.reconciliationId == $rec[0].id' "$root/$proposal" >/dev/null ||
       fail 17 scope "$proposal" "Proposal provenance differs from the PR Reconciliation."
+    local outcomes plan_record="" candidate_plan proposal_plan proposal_revision
+    outcomes=$(jq -c 'if has("outcomeIds") then .outcomeIds else [.outcomeId] end' "$root/$proposal")
+    if jq -e 'has("outcomeIds")' "$root/$proposal" >/dev/null; then
+      jq -e '.outcomeId as $primary | .outcomeIds |
+        type == "array" and length >= 2 and length == (unique | length)
+        and index($primary) != null' "$root/$proposal" >/dev/null ||
+        fail 17 scope "$proposal" "outcomeIds must contain the primary outcome and at least two unique outcomes."
+      proposal_plan=$(jq -r '.planId' "$root/$proposal")
+      proposal_revision=$(jq -c '.basedOn.planRevision' "$root/$proposal")
+      for candidate_plan in "$root"/docs/orbit/plans/*.json; do
+        [ -f "$candidate_plan" ] || continue
+        if jq -e --arg id "$proposal_plan" --argjson revision "$proposal_revision" '
+          .id == $id and .revision == $revision and (.acceptanceCriteria | type == "array")' \
+          "$candidate_plan" >/dev/null 2>&1; then
+          plan_record="$candidate_plan"
+          break
+        fi
+      done
+      if [ -n "$plan_record" ]; then
+        bad=$(jq -r --slurpfile plan "$plan_record" '
+          .contributesTo as $refs | .outcomeIds[] as $outcome |
+          select(any($plan[0].acceptanceCriteria[];
+            .outcomeId == $outcome and (.id as $id | $refs | index($id)) != null) | not) |
+          $outcome' "$root/$proposal")
+        [ -z "$bad" ] || fail 17 scope "$proposal" "Outcomes without a criterion in contributesTo: $bad"
+      else
+        echo "records-lint: WARN [scope] Cannot read Plan $proposal_plan revision $proposal_revision. Skip outcomeIds criterion coverage check." >&2
+      fi
+    fi
     if [ -z "${tickets:-}" ]; then
       echo 'records-lint: WARN [scope] No --tickets file. Skip the open slice check.' >&2
       continue
     fi
-    outcome=$(jq -r '.outcomeId' "$root/$proposal")
     notes=$(cat "$root/docs/orbit/plans/$plan.notes.md" 2>/dev/null) || notes=""
     withdrawn=0
     local withdrawn_ids=()
@@ -182,7 +210,10 @@ slice_pr_lint() {
     while IFS= read -r f; do
       base_slice=$(git -C "$root" show "$base:$f") || fail 17 scope "$f" "Cannot read the base slice."
       [ "$(printf '%s' "$base_slice" | jq -r '.planId')" = "$plan" ] || continue
-      [ "$(printf '%s' "$base_slice" | jq -r '.outcomeId')" = "$outcome" ] || continue
+      outcome=$(printf '%s' "$base_slice" | jq -r --argjson proposed "$outcomes" '
+        [(if has("outcomeIds") then .outcomeIds else [.outcomeId] end)[] |
+          select(. as $id | $proposed | index($id) != null)] | .[0] // empty')
+      [ -n "$outcome" ] || continue
       id=$(printf '%s' "$base_slice" | jq -r '.id')
       [ "$id" != "$slice_id" ] || continue
       grep -Fxq -- "$id" "$tickets" && continue
