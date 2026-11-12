@@ -3,7 +3,9 @@
 set -euo pipefail
 # Testers opt in before launch. Keep release coordinates together.
 cockpit_enabled=${APEXYARD_COCKPIT:-0}
-COCKPIT_SOURCE=${APEXYARD_COCKPIT_SOURCE:-git+https://github.com/me2resh/apexyard-premium.git}
+# The adopter sets the install source and the setup command. No default exists.
+COCKPIT_SOURCE=${APEXYARD_COCKPIT_SOURCE:-}
+COCKPIT_CMD=${APEXYARD_COCKPIT_CMD:-}
 COCKPIT_TAG=${APEXYARD_COCKPIT_TAG:-v0.15.2}
 cockpit=0
 usage() {
@@ -42,6 +44,13 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 [ "$yes" -eq 0 ] || interactive=0
+# No terminal and no --yes: never ask and never guess. Name each missing flag.
+if [ "$interactive" -eq 0 ] && [ "$yes" -eq 0 ]; then
+  missing=''
+  [ "$org_set" -eq 1 ] || missing="$missing --org"
+  [ "$name_set" -eq 1 ] || missing="$missing --name"
+  [ -z "$missing" ] || fail "no terminal, so it cannot ask. Missing flags:${missing}. Pass each flag, or add --yes to accept the defaults."
+fi
 validate() {
   case "$1" in
     org) case "$2" in ''|*[!a-zA-Z0-9_-]*) echo 'invalid organisation name'; return 1 ;; esac ;;
@@ -238,6 +247,10 @@ fi
 trap - EXIT
 
 install_cockpit() {
+  if [ -z "$COCKPIT_SOURCE" ] || [ -z "$COCKPIT_CMD" ]; then
+    echo 'Cockpit skipped: it is not configured. Set APEXYARD_COCKPIT_SOURCE and APEXYARD_COCKPIT_CMD, then run apexyard init again or install it by hand.' >&2
+    return 0
+  fi
   if ! command -v "$pipx_cmd" >/dev/null 2>&1; then
     echo 'Cockpit skipped: pipx is missing. Install pipx with python3 -m pip install --user pipx, then run python3 -m pipx ensurepath. Install the premium CLI separately afterward.' >&2
     return 0
@@ -245,9 +258,9 @@ install_cockpit() {
   # Leave authentication to the existing git credential configuration.
   # Suppress child output so credential diagnostics cannot expose secrets.
   if ! GIT_TERMINAL_PROMPT=0 "$pipx_cmd" install "${COCKPIT_SOURCE}@${COCKPIT_TAG}" >/dev/null 2>&1; then
-    echo 'Cockpit install failed. Request access to apexyard-premium from the owner and check your existing GitHub login, then retry.' >&2
-  elif ! apexyard-premium setup --ops "$target" --portfolio "$target" >/dev/null 2>&1; then
-    echo 'Cockpit setup failed. Check your Cockpit access with the owner, then run apexyard-premium setup with --ops and --portfolio pointing to this repo.' >&2
+    echo 'Cockpit install failed. Request access to the Cockpit package from your ApexYard contact and check your existing GitHub login, then retry.' >&2
+  elif ! "$COCKPIT_CMD" setup --ops "$target" --portfolio "$target" >/dev/null 2>&1; then
+    echo 'Cockpit setup failed. Check your Cockpit access with your ApexYard contact, then run the Cockpit setup command with --ops and --portfolio pointing to this repo.' >&2
   fi
 }
 if [ "$cockpit_enabled" = 1 ]; then

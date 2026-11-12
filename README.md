@@ -88,7 +88,9 @@ curl -fsSL https://apexyard.ai/install | sh
 apexyard init
 ```
 
-`apexyard init` asks for the account or organisation, the repo name, private or public, the folder and your coding agent. Then it shows the plan and asks before it creates anything. To skip the questions, pass them as options: `apexyard init --org your-org --name ops --private --yes`.
+`apexyard init` asks for the account or organisation, the repo name, private or public, the folder and your coding agent. Then it shows the plan and asks before it creates anything.
+
+**For scripts and CI.** With no terminal, `apexyard init` never asks. It needs `--org` and `--name`, and it exits with status 2 and names each missing flag if you leave one out. Pass the values as options, for example `apexyard init --org ACME --name ops --private --yes`. `--yes` accepts the defaults for the other questions.
 
 The CLI does the fixed steps. It creates the repo and links it to the framework for updates. It also writes the local setup files and installs the git hooks. At the end it offers to open the repo in Claude Code with `/onboard`. `/onboard` asks the questions that need your answers: your company, your stack and your first project. With another agent, open the folder and run `/onboard` yourself.
 
