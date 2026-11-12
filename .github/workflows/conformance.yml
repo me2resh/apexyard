@@ -3,8 +3,8 @@
 # Proves apexyard's mechanical governance gates still block a REAL,
 # credentialed agent turn under each live-proven third-party harness
 # (opencode, pi, Codex) — not a mock, not a by-construction unit test.
-# The schedule runs only opencode. Dispatch and workflow_call run all
-# three harnesses.
+# Only opencode runs, on every trigger. Pi and codex are out of the matrix
+# until their keys are funded (AgDR-0297).
 # One matrix job per harness drives exactly one gated model turn
 # (instructing the agent to run `git add -A`) and asserts the delegated,
 # UNMODIFIED `.claude/hooks/block-git-add-all.sh` fired — via
@@ -50,7 +50,7 @@ on:
   workflow_dispatch:
     inputs:
       harness:
-        description: "Run a single harness only (opencode|pi|codex), or leave blank for all three"
+        description: "Harness to run (opencode only until pi and codex are keyed), or leave blank"
         required: false
         type: string
 
@@ -87,6 +87,12 @@ jobs:
         #   fromJSON(github.event_name == 'schedule' && '["opencode"]' || '["opencode", "pi", "codex"]')
         harness: ["opencode"]
     steps:
+      - name: Reject a harness that is not in the matrix
+        if: github.event_name == 'workflow_dispatch' && inputs.harness != '' && inputs.harness != 'opencode'
+        run: |
+          echo "::error::Harness '${{ inputs.harness }}' is not in the matrix. Only opencode runs until pi and codex are keyed (see the comment on the matrix)."
+          exit 1
+
       - name: Skip non-selected harness (manual single-harness dispatch)
         if: github.event_name == 'workflow_dispatch' && inputs.harness != '' && inputs.harness != matrix.harness
         run: |

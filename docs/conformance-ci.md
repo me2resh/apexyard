@@ -1,6 +1,6 @@
 # Conformance CI
 
-The scheduled GitHub Actions workflow (`.github/workflows/conformance.yml`) runs only opencode on its free model. It checks that apexyard's mechanical governance gates block a **real agent turn**. Pi and codex run on manual dispatch and in the optional release tier. Schedule decision: [AgDR-0278](agdr/AgDR-0278-conformance-zero-cost-schedule.md). Decision record: [AgDR-0095](agdr/AgDR-0095-conformance-ci-badge.md). Promoted from spike [me2resh/apexyard#848](https://github.com/me2resh/apexyard/issues/848). Feature: [me2resh/apexyard#871](https://github.com/me2resh/apexyard/issues/871).
+The scheduled GitHub Actions workflow (`.github/workflows/conformance.yml`) runs only opencode on its free model. It checks that apexyard's mechanical governance gates block a **real agent turn**. Pi and codex are out of the matrix until their keys are funded ([AgDR-0297](agdr/AgDR-0297-conformance-opencode-only-matrix.md)). Schedule decision: [AgDR-0278](agdr/AgDR-0278-conformance-zero-cost-schedule.md). Decision record: [AgDR-0095](agdr/AgDR-0095-conformance-ci-badge.md). Promoted from spike [me2resh/apexyard#848](https://github.com/me2resh/apexyard/issues/848). Feature: [me2resh/apexyard#871](https://github.com/me2resh/apexyard/issues/871).
 
 ## What this proves (and what it does not)
 
@@ -21,7 +21,7 @@ A test on Cursor.app 3.10.20 (2026-09-16) observed native IDE exec of unmodified
 
 ## Secrets an operator must provision
 
-Pi and codex need these secrets only for a manual dispatch or an optional release-tier run.
+Pi and codex need these secrets only when they are restored to the matrix (see below).
 
 | Secret | Used by | Where to get it |
 |--------|---------|------------------|
@@ -32,10 +32,11 @@ Pi and codex need these secrets only for a manual dispatch or an optional releas
 
 Add both secrets at **Settings → Secrets and variables → Actions** on this repo. No secret sits in the workflow file itself. Every credential comes from `${{ secrets.* }}` at run time.
 
-Teams with keys can restore pi and codex to the schedule:
+Pi and codex are out of the matrix until the owner funds their keys (me2resh/apexyard#2057, AgDR-0297). Their install and drive steps stay in the workflow. To restore them:
 
-1. Add `pi` and `codex` to the schedule matrix expression in `.github/workflows/conformance.yml`.
-2. Add `pi` and `codex` to `SCHEDULED_HARNESSES` in `bin/conformance-publish-badge.sh`.
+1. Set the secret for each harness.
+2. Add `"pi"` or `"codex"` to the `harness` list in the `conform` job matrix in `.github/workflows/conformance.yml`.
+3. To put them on the schedule, also add them to `SCHEDULED_HARNESSES` in `bin/conformance-publish-badge.sh`.
 
 ### Fail-closed, not skip-green
 
@@ -70,8 +71,8 @@ Replace `<owner>/<repo>` with this repo's slug. shields.io fetches the raw JSON 
 
 ## How it works (transport)
 
-- **Schedule**: daily (`cron: "17 6 * * *"`) for opencode only, plus `workflow_dispatch` and `workflow_call` for all three. The dispatch may scope to a single harness via the `harness` input. An operator can re-run only the flaky one without re-billing the other two. The schedule runs only in the canonical repository, `me2resh/apexyard`: in a fork, a scheduled run skips every job ([AgDR-0289](agdr/AgDR-0289-gate-fork-schedules-to-canonical-repo.md)). An adopter who wants the schedule in a fork edits the guard on the `conform` and `badge` jobs.
-- **Matrix**: one job per selected harness, each capped at `timeout-minutes: 10`. A scheduled run selects `opencode`. A dispatch or call selects `opencode`, `pi` and `codex`.
+- **Schedule**: daily (`cron: "17 6 * * *"`) for opencode only, plus `workflow_dispatch` and `workflow_call`, which also run opencode only until pi and codex are keyed. The schedule runs only in the canonical repository, `me2resh/apexyard`: in a fork, a scheduled run skips every job ([AgDR-0289](agdr/AgDR-0289-gate-fork-schedules-to-canonical-repo.md)). An adopter who wants the schedule in a fork edits the guard on the `conform` and `badge` jobs.
+- **Matrix**: one job per selected harness, each capped at `timeout-minutes: 10`. Every trigger selects `opencode`. Pi and codex are not in the matrix (AgDR-0297).
 - **Per job**: Resolve credentials (fail-closed). Install the pinned harness CLI and apexyard adapter. Create a scratch git repo governed by the delegated hooks. Drive one gated turn. Assert nothing staged and that the hook's verbatim message appears in the transcript. Upload the transcript as a build artifact for inspection.
 - **Badge job**: The job runs after the matrix (`needs: conform`, with `always()` in its `if:`, which also carries the schedule guard). It queries each matrix job's real conclusion via the GitHub Actions API (`gh api repos/<repo>/actions/runs/<id>/jobs`). It updates the per-harness streak counters **on a `schedule` run only** (see "The green-continuous rule" above). A `workflow_dispatch` run is a streak/badge no-op (me2resh/apexyard#880). It commits updated badge JSON to the orphan `conformance-badge` branch using the workflow's own `GITHUB_TOKEN` (`contents: write`, scoped to that job only, with no new PAT).
 
@@ -80,9 +81,9 @@ Full design rationale, options considered, and trade-offs: [AgDR-0095](agdr/AgDR
 ## Known gaps
 
 - **Harness CLI package names are a best-effort inference.** The feature's build did not independently re-verify them against a live registry. The build environment had no network egress. The first scheduled or dispatched run will confirm or surface an install failure. Per the fail-closed design, that is the correct, visible outcome rather than a silently wrong assumption.
-- **Do not expect a dispatch or release-tier run of pi and codex to be green** until the operator provisions both secrets above. Treat this as normal, not as a defect.
+- **Pi and codex do not run** until the operator provisions both secrets above and re-adds them to the matrix.
 
-All three harness CLIs are now version-pinned (`opencode-ai@1.19.4`, `@earendil-works/pi-coding-agent@0.80.3`, `@openai/codex@0.144.5`). The Codex pin closed a gap previously tracked here (me2resh/apexyard#880).
+All three harness CLIs are version-pinned (`opencode-ai@1.18.35`, `@earendil-works/pi-coding-agent@0.80.3`, `@openai/codex@0.144.5`). The Codex pin closed a gap previously tracked here (me2resh/apexyard#880).
 
 ---
 

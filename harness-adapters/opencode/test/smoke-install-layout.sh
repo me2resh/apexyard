@@ -177,6 +177,52 @@ if ! echo "$OUTPUT" | grep -q '^HAS_EXECUTE_BEFORE:true$'; then
 fi
 
 echo ""
+echo "== Check 4: the installer refuses symlinks on the install path and never writes through them =="
+INSTALLER="$FRAMEWORK_ROOT/bin/install-opencode-adapter.sh"
+# 4a: apexyard.ts is a symlink to a file outside the project.
+P4A="$TMPDIR/sym-shim"
+mkdir -p "$P4A/.opencode/plugins"
+printf 'ORIGINAL\n' > "$TMPDIR/victim-4a"
+ln -s "$TMPDIR/victim-4a" "$P4A/.opencode/plugins/apexyard.ts"
+if bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P4A/.opencode/plugins" >/dev/null 2>&1; then
+  echo "FAIL: installer accepted a symlinked apexyard.ts" >&2; FAIL=1
+elif [ "$(cat "$TMPDIR/victim-4a")" != "ORIGINAL" ]; then
+  echo "FAIL: installer wrote through the apexyard.ts symlink" >&2; FAIL=1
+else
+  echo "PASS: symlinked apexyard.ts refused, target untouched."
+fi
+# 4b: .opencode/plugins is a symlink.
+P4B="$TMPDIR/sym-plugins"
+mkdir -p "$P4B/.opencode" "$TMPDIR/real-plugins"
+ln -s "$TMPDIR/real-plugins" "$P4B/.opencode/plugins"
+if bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P4B/.opencode/plugins" >/dev/null 2>&1 || [ -e "$TMPDIR/real-plugins/apexyard.ts" ]; then
+  echo "FAIL: installer wrote through a symlinked plugins dir" >&2; FAIL=1
+else
+  echo "PASS: symlinked plugins dir refused."
+fi
+# 4c: .opencode is a symlink.
+P4C="$TMPDIR/sym-opencode"
+mkdir -p "$P4C" "$TMPDIR/real-opencode/plugins"
+ln -s "$TMPDIR/real-opencode" "$P4C/.opencode"
+if bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P4C/.opencode/plugins" >/dev/null 2>&1 || [ -e "$TMPDIR/real-opencode/plugins/apexyard.ts" ]; then
+  echo "FAIL: installer wrote through a symlinked .opencode dir" >&2; FAIL=1
+else
+  echo "PASS: symlinked .opencode dir refused."
+fi
+
+echo ""
+echo "== Check 5: re-running the installer on an older install (no shim) adds the shim =="
+P5="$TMPDIR/upgrade"
+mkdir -p "$P5/.opencode/plugins/apexyard"
+: > "$P5/.opencode/plugins/apexyard/index.ts"
+bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P5/.opencode/plugins" >/dev/null
+if [ "$(cat "$P5/.opencode/plugins/apexyard.ts")" = 'export { default } from "./apexyard/index.ts";' ]; then
+  echo "PASS: upgrade run added the shim."
+else
+  echo "FAIL: upgrade run did not add the shim" >&2; FAIL=1
+fi
+
+echo ""
 if [ "$FAIL" -eq 0 ]; then
   echo "PASS: the real, shipped install layout (bin/install-opencode-adapter.sh's output) loads cleanly — no top-level helper files in the discovery dir, and apexyard/index.ts default-exports a V2 definition whose setup registers the execute.before gate hook."
   exit 0
