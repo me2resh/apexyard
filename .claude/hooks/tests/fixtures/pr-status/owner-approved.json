@@ -1,0 +1,121 @@
+{
+  "repo": "acme/widget",
+  "pr": 7,
+  "head": {
+    "sha": "20c4cd4cc30bc3360004e6d25b58f502aba9f0ae",
+    "ref": "feature/GH-12-thing"
+  },
+  "base": {
+    "ref": "main",
+    "sha": "7631fba35d34c24606178cfd72367c9c1b18774c"
+  },
+  "items": [
+    {
+      "section": "records",
+      "name": "rex",
+      "status": "satisfied",
+      "stored_sha": "20c4cd4cc30bc3360004e6d25b58f502aba9f0ae",
+      "detail": "matches the head"
+    },
+    {
+      "section": "records",
+      "name": "security",
+      "status": "not required",
+      "stored_sha": null,
+      "detail": "no merge gate reads a security record; the security review is a posted review"
+    },
+    {
+      "section": "records",
+      "name": "design",
+      "status": "not required",
+      "stored_sha": null,
+      "detail": "the diff has no UI files"
+    },
+    {
+      "section": "records",
+      "name": "architecture",
+      "status": "not required",
+      "stored_sha": null,
+      "detail": "the diff has no design artifact"
+    },
+    {
+      "section": "records",
+      "name": "ceo",
+      "status": "satisfied",
+      "stored_sha": "20c4cd4cc30bc3360004e6d25b58f502aba9f0ae",
+      "detail": "matches the head"
+    },
+    {
+      "section": "gates",
+      "name": "review gate",
+      "status": "satisfied",
+      "stored_sha": null,
+      "detail": "passed"
+    },
+    {
+      "section": "gates",
+      "name": "design gate",
+      "status": "satisfied",
+      "stored_sha": null,
+      "detail": "passed"
+    },
+    {
+      "section": "gates",
+      "name": "CI gate",
+      "status": "satisfied",
+      "stored_sha": null,
+      "detail": "passed"
+    },
+    {
+      "section": "gates",
+      "name": "architecture gate",
+      "status": "satisfied",
+      "stored_sha": null,
+      "detail": "passed"
+    },
+    {
+      "section": "forge",
+      "name": "required checks",
+      "status": "satisfied",
+      "stored_sha": null,
+      "detail": "build=pass"
+    },
+    {
+      "section": "forge",
+      "name": "CI green",
+      "status": "satisfied",
+      "stored_sha": null,
+      "detail": "every check at the head passed"
+    },
+    {
+      "section": "forge",
+      "name": "changes requested",
+      "status": "satisfied",
+      "stored_sha": null,
+      "detail": "no formal changes-requested review is in force"
+    },
+    {
+      "section": "forge",
+      "name": "branch rules",
+      "status": "satisfied",
+      "stored_sha": null,
+      "detail": "requires 1 approving review(s); rules: pull_request, required_status_checks; review decision: APPROVED"
+    },
+    {
+      "section": "forge",
+      "name": "merge state",
+      "status": "satisfied",
+      "stored_sha": null,
+      "detail": "forge merge state CLEAN"
+    },
+    {
+      "section": "qa",
+      "name": "pre-merge QA",
+      "status": "satisfied",
+      "stored_sha": "20c4cd4cc30bc3360004e6d25b58f502aba9f0ae",
+      "detail": "PASS stamped at the head (advisory; QA has no merge gate)"
+    }
+  ],
+  "next_action": "Ready to merge at 20c4cd4cc30b. The merge gates check again at merge time.",
+  "awaiting_owner_only": false
+}
