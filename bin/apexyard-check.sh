@@ -88,7 +88,13 @@ if [ -n "$current_top" ]; then
 fi
 clone=$(cd "$clone" && pwd -P)
 
-tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/apexyard-check.XXXXXX") || exit 2
+# The commit hooks read the message path from a command string, so the path
+# must hold no space or shell character. Use /tmp when TMPDIR is not safe.
+tmp_base=${TMPDIR:-/tmp}
+case "$tmp_base" in
+  *[!A-Za-z0-9/._-]*) tmp_base=/tmp ;;
+esac
+tmpdir=$(mktemp -d "${tmp_base%/}/apexyard-check.XXXXXX") || exit 2
 trap 'rm -rf "$tmpdir"' EXIT
 
 mkdir -p "$tmpdir/results"
@@ -119,7 +125,9 @@ run_script_check() {
   progress "checking $name"
   out=$tmpdir/$name.out
   (cd "$tree" && bash "bin/$script") >"$out" 2>&1 || rc=$?
-  if [ "$rc" -eq 0 ]; then
+  if [ "$rc" -eq 0 ] && grep -q 'bypassed by skip marker' "$out"; then
+    record "$name" not_verified 'skipped by skip marker in HEAD commit message'
+  elif [ "$rc" -eq 0 ]; then
     record "$name" pass ''
   elif [ "$rc" -eq 1 ]; then
     record "$name" fail "$(collapse_msg "$(tail -n 20 "$out")")"
@@ -229,6 +237,12 @@ aggregate_commit_hook() {
     [ -n "$sha" ] || continue
     # Pass the message by file. The hooks read -F, and a file needs no quoting.
     msg_file=$tmpdir/commit-message
+    case "$msg_file" in
+      *[!A-Za-z0-9/._-]*)
+        record "$name" not_verified 'temporary path is not safe'
+        return 0
+        ;;
+    esac
     git -C "$tree" log -1 --format=%B "$sha" > "$msg_file"
     cmd="git commit -F $msg_file"
     out=$tmpdir/$name-$sha.out
@@ -251,7 +265,7 @@ aggregate_commit_hook() {
       any_nv=1
       nv_reason="exit $rc"
     fi
-  done < <(git -C "$tree" rev-list --reverse "$base"..HEAD 2>/dev/null)
+  done < <(git -C "$tree" rev-list --no-merges --reverse "$base"..HEAD 2>/dev/null)
 
   if [ "$any_fail" -eq 1 ]; then
     record "$name" fail "$fail_msg"

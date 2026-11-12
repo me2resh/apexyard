@@ -16,6 +16,7 @@ export APEXYARD_OPS_ROOT="$sb/ops"
 mkdir -p "$sb/seed/bin"
 cat > "$sb/seed/bin/run-pre-push-checks.sh" <<'SH'
 #!/bin/bash
+[ -z "${FAKE_SKIP:-}" ] || echo "WARN: pre-push checks bypassed by skip marker in HEAD commit message." >&2
 echo "stub pre-push output"
 exit "${FAKE_PREPUSH_RC:-0}"
 SH
@@ -104,7 +105,20 @@ run_at "$clone"
 check 'bad commit exits one' test "$rc" = 1
 check 'bad commit line' grep -Eq '^FAIL +commit-format' "$sb/out"
 git -C "$clone" reset -q --soft HEAD~1
-# A bad branch name fails with the hook message.
+# A merge commit in the range is not checked as a commit subject.
+git -C "$clone" checkout -q -b feature/GH-8-side
+git -C "$clone" commit -q --allow-empty -m 'feat: side work'
+git -C "$clone" checkout -q -b feature/GH-9-merged feature/GH-5-good-name
+git -C "$clone" commit -q --allow-empty -m 'feat: main work'
+git -C "$clone" merge -q --no-ff -m "Merge branch 'feature/GH-8-side' into feature/GH-9-merged" feature/GH-8-side
+run_at "$clone"
+check 'merge commit exits zero' test "$rc" = 0
+check 'merge commit passes commit-format' grep -Eq '^pass +commit-format$' "$sb/out"
+git -C "$clone" checkout -q feature/GH-5-good-name
+git -C "$clone" branch -q -D feature/GH-8-side feature/GH-9-merged
+# A skip marker shows as not verified, never pass.
+FAKE_SKIP=1 run_at "$clone" --json
+check 'skip marker not verified' test "$(status_of pre-push)" = not_verified
 git -C "$clone" checkout -q -b badname
 run_at "$clone"
 check 'bad branch exits one' test "$rc" = 1

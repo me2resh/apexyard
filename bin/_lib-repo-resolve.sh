@@ -78,6 +78,9 @@ repo_agent_style() {
 
 repo_json_string() {
   local value=$1
+  # Drop control characters other than tab, newline and CR. JSON forbids them raw.
+  value=$(printf '%sx' "$value" | LC_ALL=C tr -d '\000-\010\013\014\016-\037')
+  value=${value%x}
   value=${value//\\/\\\\}
   value=${value//\"/\\\"}
   value=${value//$'\n'/\\n}
