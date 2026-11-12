@@ -187,7 +187,7 @@ jobs:
         env:
           SCRATCH_DIR: ${{ steps.scratch.outputs.dir }}
         run: |
-          npm install -g opencode-ai@1.19.5
+          npm install -g opencode-ai@1.18.35
           bash bin/install-opencode-adapter.sh --root "$(pwd)" --target-dir "$SCRATCH_DIR/.opencode/plugins"
           (cd harness-adapters/opencode && npm install)
 

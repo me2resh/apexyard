@@ -1,6 +1,6 @@
 # AgDR-0297: Conformance matrix runs opencode only
 
-> The owner chose to remove pi and codex from the Conformance matrix until their keys are funded, and to move the opencode pin to 1.19.5.
+> The owner chose to remove pi and codex from the Conformance matrix until their keys are funded, and to move the opencode pin to 1.18.35.
 
 ## Context
 
@@ -24,7 +24,7 @@ Chosen: **remove pi and codex from the matrix and keep their steps**.
 The matrix is `["opencode"]` for every trigger.
 A workflow comment lists how to re-add each harness and which secret it needs:
 `CONFORMANCE_ANTHROPIC_API_KEY` for pi and `CONFORMANCE_OPENAI_API_KEY` for codex.
-The opencode pin moves from `1.19.4` to `1.19.5`.
-Version 1.19.5 is published on npm and is newer than the 1.18.0 free-tier minimum.
+The opencode pin moves from `1.19.4` to `1.18.35`.
+Version 1.18.35 is published on npm and is newer than the 1.18.0 free-tier minimum.
 No assertion changes.
 The fail-closed credential check stays for any harness that is re-added.
