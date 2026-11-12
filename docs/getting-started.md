@@ -39,9 +39,11 @@ curl -fsSL https://apexyard.ai/install | sh   # checks the release checksum; lis
 apexyard init
 ```
 
-`apexyard init` asks for the account or organisation, the repo name, private or public, the folder and your coding agent. Then it shows the plan and asks before it creates anything. To skip the questions, pass them as options: `apexyard init --org your-org --name ops --private --yes`.
+`apexyard init` asks for the account or organisation, the repo name, private or public, the folder and your coding agent. Then it shows the plan and asks before it creates anything.
 
-Before launch, testers with Cockpit access can set `APEXYARD_COCKPIT=1` to enable an optional install after repository setup. The wizard asks first and defaults to no. With `--yes` or no terminal, add `--cockpit` to install. This requires pipx and existing GitHub access to the premium repo. If installation fails, init continues to `/onboard`.
+**For scripts and CI.** With no terminal, `apexyard init` never asks. It needs `--org` and `--name`, and it exits with status 2 and names each missing flag if you leave one out. Pass the values as options, for example `apexyard init --org ACME --name ops --private --yes`. `--yes` accepts the defaults for the other questions.
+
+Before launch, testers with Cockpit access can set `APEXYARD_COCKPIT=1` to enable an optional install after repository setup. The wizard asks first and defaults to no. With `--yes` or no terminal, add `--cockpit` to install. This requires pipx, access to the Cockpit package, and two settings from your ApexYard contact: `APEXYARD_COCKPIT_SOURCE` and `APEXYARD_COCKPIT_CMD`. With either one unset, init skips the Cockpit. If installation fails, init continues to `/onboard`.
 
 At the end, `apexyard init` offers to open the new repo in Claude Code with `/onboard`. `/onboard` asks about your company, your stack and your first project. With another agent, open the folder and run `/onboard` yourself.
 
@@ -55,7 +57,7 @@ Coming soon:
 
 - A Homebrew tap: `brew install me2resh/tap/apexyard`. Homebrew will install jq
   and gh too.
-- An npm package: `npx create-apexyard --org your-org --name ops --private`. It
+- An npm package: `npx create-apexyard --org ACME --name ops --private`. It
   will install the CLI when the CLI is absent, then run `apexyard init` with
   these options. Do not run `apexyard init` again after it, because the target
   directory is no longer empty.
