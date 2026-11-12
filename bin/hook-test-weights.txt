@@ -14,6 +14,7 @@
 1 .claude/hooks/tests/test_agdr_skill.sh
 1 .claude/hooks/tests/test_agent_role_selection.sh
 34 .claude/hooks/tests/test_agent_routing_sync_and_drift.sh
+40 .claude/hooks/tests/test_apexyard_check.sh
 230 .claude/hooks/tests/test_apexyard_pr_status.sh
 38 .claude/hooks/tests/test_approve_merge_worktree.sh
 45 .claude/hooks/tests/test_artifact_completeness.sh

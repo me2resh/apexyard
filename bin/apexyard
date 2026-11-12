@@ -289,6 +289,7 @@ Commands:
   queue [--json]         Show PRs that need only owner approval.
   status --json          Print the briefing fields as JSON.
   ticket owner/repo#N    Alias for start.
+  check [--repo <r>] [--json]  Run local advisory gate checks on the branch.
   migrate [opts]         Keep the CLI only, or move this fork to a new repo
                            (init layout). See: apexyard migrate --help.
 
@@ -472,6 +473,14 @@ case "$cmd" in
     }
     ticket_skill "$ops_root" "$@"
     exit $?
+    ;;
+  check)
+    ops_root=$(APEXYARD_RESOLVE_READ_ONLY=1 resolve_ops_root_any skills 2>/dev/null) || {
+      echo 'apexyard: no repo found. Use --repo <name|owner/name>.' >&2
+      exit 2
+    }
+    export APEXYARD_CHECK_OPS_ROOT="$ops_root"
+    exec "$BASH" "$(dirname "$cli_path")/apexyard-check.sh" "$@"
     ;;
   *)
     ops_root=$(skill_root) || exit 2

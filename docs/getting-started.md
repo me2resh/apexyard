@@ -188,6 +188,7 @@ apexyard skills                 # list the skills
 apexyard inbox                  # starts /inbox
 apexyard code-review 42         # starts /code-review 42
 apexyard start N --repo project # Create or reuse a ticket worktree.
+apexyard check --repo project   # Run local advisory gate checks on the branch.
 ```
 
 Use `apexyard start <ticket>` to open a ticket worktree and start an agent.
@@ -209,6 +210,19 @@ Use `--agent <name>` to select `claude`, `codex`, `cursor-agent`, `opencode`, or
 The default agent is `claude`. Each agent starts in the ticket worktree.
 The agent reads the project rules through its framework adapter.
 The `cursor-agent` CLI reads instructions but does not enforce hooks.
+
+Use `apexyard check` to run the same class of gate checks on the current branch before you push.
+The command runs `bin/run-pre-push-checks.sh` and `bin/run-configured-pre-push-checks.sh` when those scripts exist in the target tree.
+It also runs the branch-name, commit-format, commit-refs, and secrets hooks with a synthetic payload.
+It prints one line per check: `pass`, `FAIL`, or `not verified`.
+A missing script, missing `jq`, missing base ref, detached HEAD, or missing `gh` for commit-refs yields `not verified`, never `pass`.
+The command writes no file in the repository, no marker, and no git index change. It runs the scripts and hooks of the checked-out tree. Do not run it on a checkout you do not trust.
+The result is advisory. The required check on the pull request decides.
+Use `--repo <name|owner/name>` to select a registered project.
+Use `--json` to print one object with `repo`, `branch`, `base`, `advisory`, and `checks`.
+Each `checks` entry has `name`, `status` (`pass`, `fail`, or `not_verified`), and `message`.
+The secrets hook scans staged changes only.
+Exit `1` when any check fails. Exit `0` when no check fails. Exit `2` on resolution or usage errors.
 
 Approval skills, such as `/approve-merge`, run only inside your agent. If `claude` is not on your PATH, the CLI prints the command to run in your agent tool.
 

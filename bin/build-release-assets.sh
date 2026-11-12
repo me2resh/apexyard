@@ -11,7 +11,7 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 name="apexyard-$version"
 mkdir -p "$work/$name/bin"
-for file in apexyard apexyard-init.sh apexyard-update.sh _lib-telemetry.sh _lib-ownership.sh _lib-repo-resolve.sh _lib-why-queue.sh; do
+for file in apexyard apexyard-init.sh apexyard-update.sh apexyard-check.sh _lib-telemetry.sh _lib-ownership.sh _lib-repo-resolve.sh _lib-why-queue.sh; do
   if [ "$file" = _lib-ownership.sh ] && [ ! -f "$root/bin/$file" ]; then continue; fi
   cp "$root/bin/$file" "$work/$name/bin/$file"
 done
