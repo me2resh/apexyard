@@ -74,7 +74,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        harness: ${{ fromJSON(github.event_name == 'schedule' && '["opencode"]' || '["opencode", "pi", "codex"]') }}
+        # pi and codex are out of the matrix until the owner funds their keys
+        # (me2resh/apexyard#2057). Their install and drive steps below stay in
+        # place, so re-adding a harness is a one-line change here:
+        #   pi    -> add "pi" to the list; needs repo secret
+        #            CONFORMANCE_ANTHROPIC_API_KEY
+        #   codex -> add "codex" to the list; needs repo secret
+        #            CONFORMANCE_OPENAI_API_KEY
+        # Without its secret a re-added harness fails closed (see the
+        # credential step), so set the secret first. To run them on
+        # dispatch and workflow_call only, use the previous expression:
+        #   fromJSON(github.event_name == 'schedule' && '["opencode"]' || '["opencode", "pi", "codex"]')
+        harness: ["opencode"]
     steps:
       - name: Skip non-selected harness (manual single-harness dispatch)
         if: github.event_name == 'workflow_dispatch' && inputs.harness != '' && inputs.harness != matrix.harness
@@ -176,7 +187,7 @@ jobs:
         env:
           SCRATCH_DIR: ${{ steps.scratch.outputs.dir }}
         run: |
-          npm install -g opencode-ai@1.19.4
+          npm install -g opencode-ai@1.19.5
           bash bin/install-opencode-adapter.sh --root "$(pwd)" --target-dir "$SCRATCH_DIR/.opencode/plugins"
           (cd harness-adapters/opencode && npm install)
 
