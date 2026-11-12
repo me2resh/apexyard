@@ -211,7 +211,7 @@ if [ "${#sel[@]}" -eq 0 ]; then
 fi
 
 # Filter for both field readers: a text path, not an identifier or date.
-SKIP_RE='^(id|specVersion|status|basedOn|repositories|repositoryId|commit|branch|url|observedAt|reconciledAt|outcomeId|criterionId|planId|planRevision|projectSnapshotId|contributesTo)$|Id$'
+SKIP_RE='^(id|specVersion|status|basedOn|repositories|repositoryId|commit|branch|url|observedAt|reconciledAt|outcomeId|outcomeIds|criterionId|planId|planRevision|projectSnapshotId|contributesTo)$|Id$'
 
 # Text fields of a record: every string except identifiers, provenance and dates.
 text_fields() {
