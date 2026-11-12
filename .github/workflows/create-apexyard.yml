@@ -1,0 +1,48 @@
+# create-apexyard package check (AgDR-0300)
+#
+# Builds the CLI archive, stamps the npm package with a test tag, runs the
+# launcher help, and runs npm publish --dry-run. Nothing is published.
+# The release workflow (release-cli.yml) publishes the package.
+
+name: create-apexyard package
+
+on:
+  pull_request:
+    paths:
+      - "packaging/**"
+      - "install.sh"
+      - "bin/apexyard"
+      - "bin/apexyard-*.sh"
+      - "bin/_lib-*.sh"
+      - "bin/build-release-assets.sh"
+      - "bin/stamp-packaging.sh"
+      - ".claude/skills/preflight/preflight.sh"
+      - ".github/workflows/create-apexyard.yml"
+      - ".github/workflows/release-cli.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: create-apexyard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  dry-run:
+    name: npm publish dry run
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build and stamp the package
+        run: |
+          bash bin/build-release-assets.sh v0.0.0-ci dist
+          bash bin/stamp-packaging.sh v0.0.0-ci dist
+      - name: Run the launcher help
+        working-directory: ${{ runner.temp }}
+        run: node "$GITHUB_WORKSPACE/dist/create-apexyard/bin/create-apexyard.js" --help < /dev/null
+      - name: Dry-run the npm publish
+        working-directory: dist/create-apexyard
+        run: npm publish --dry-run --ignore-scripts --access public --tag ci
