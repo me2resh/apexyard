@@ -12,6 +12,7 @@ Rule: .claude/rules/writing-standard.md. Use the controlled technical writing pr
 **Author**: [Tech Lead / Engineer]
 **Date**: YYYY-MM-DD
 **PRD**: [Link to PRD]
+**PRD version**: [Short commit SHA of the PRD on the base branch that this design covers, from `git log -1 --format=%h origin/<base-branch> -- <prd-path>`]
 
 ---
 
@@ -155,17 +156,19 @@ Response:
 
 ### Tasks
 
-| # | Task | Estimate | Dependencies |
-|---|------|----------|--------------|
-| 1 | Create domain entities | 2h | - |
-| 2 | Implement use cases | 4h | 1 |
-| 3 | Create API handlers | 2h | 2 |
-| 4 | Set up database | 1h | - |
-| 5 | Implement repository | 2h | 1, 4 |
-| 6 | Write unit tests | 3h | 1, 2 |
-| 7 | Write integration tests | 2h | all |
+| # | Task | Serves | Estimate | Dependencies |
+|---|------|--------|----------|--------------|
+| 1 | Create domain entities | US-1, FR-1 | 2h | - |
+| 2 | Implement use cases | US-1, FR-1, FR-2 | 4h | 1 |
+| 3 | Create API handlers | US-2, FR-3 | 2h | 2 |
+| 4 | Set up database | FR-1 | 1h | - |
+| 5 | Implement repository | FR-1 | 2h | 1, 4 |
+| 6 | Write unit tests | US-1, US-2 | 3h | 1, 2 |
+| 7 | Write integration tests | US-1, US-2 | 2h | all |
 
 **Total Estimate**: X hours
+
+**Serves**: List the PRD user stories (`US-n`) and requirements (`FR-n`) that each task delivers. `/design-review` runs `bin/check-traceability.sh`, which reports each story or requirement that no task serves. It also compares **PRD version** with the PRD on the base branch.
 
 ---
 
