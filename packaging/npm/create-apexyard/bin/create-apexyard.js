@@ -41,12 +41,14 @@ function verifiedArchive() {
   }
   const actual = crypto.createHash('sha256').update(data).digest('hex');
   if (actual !== sha256) fail('checksum mismatch. The bundled archive does not match the stamped SHA-256.');
-  return { archive, tag };
+  return { data, tag };
 }
 
-// Extract into dir and return the path of the extracted release folder.
-function extract(archive, tag, dir) {
-  const result = spawnSync('tar', ['-xzf', archive, '-C', dir], { stdio: 'inherit' });
+// Extract the verified bytes into dir. tar reads them from stdin, so it
+// never reads the file again after the hash check.
+// Return the path of the extracted release folder.
+function extract(data, tag, dir) {
+  const result = spawnSync('tar', ['-xzf', '-', '-C', dir], { input: data, stdio: ['pipe', 'inherit', 'inherit'] });
   if (result.error || result.status !== 0) finish(result, 'archive extraction failed');
   const release = path.join(dir, `apexyard-${tag}`);
   if (!fs.existsSync(path.join(release, 'bin', 'apexyard'))) fail('the CLI is missing from the archive.');
@@ -58,11 +60,11 @@ const has = (...names) => args.some((arg) => names.includes(arg));
 if (has('-h', '--help')) {
   console.log('Usage: npx create-apexyard [options]');
   console.log('Installs the pinned apexyard CLI, then runs apexyard init with these options.\n');
-  const { archive, tag } = verifiedArchive();
+  const { data, tag } = verifiedArchive();
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'create-apexyard-'));
   let result;
   try {
-    const release = extract(archive, tag, work);
+    const release = extract(data, tag, work);
     result = spawnSync('bash', [path.join(release, 'bin', 'apexyard'), 'init', '--help'], { stdio: 'inherit' });
   } finally {
     fs.rmSync(work, { recursive: true, force: true });
@@ -78,7 +80,7 @@ if (!process.stdin.isTTY && !has('-y', '--yes', '-i', '--interactive')) {
   }
 }
 
-const { archive, tag } = verifiedArchive();
+const { data, tag } = verifiedArchive();
 const prefix = path.resolve(process.env.APEXYARD_PREFIX || path.join(os.homedir(), '.local'));
 const share = path.join(prefix, 'share', 'apexyard');
 const dest = path.join(share, tag);
@@ -88,7 +90,7 @@ if (!fs.existsSync(cli)) {
   fs.mkdirSync(share, { recursive: true });
   const work = fs.mkdtempSync(path.join(share, '.create-apexyard-'));
   try {
-    fs.renameSync(extract(archive, tag, work), dest);
+    fs.renameSync(extract(data, tag, work), dest);
   } finally {
     fs.rmSync(work, { recursive: true, force: true });
   }
@@ -115,7 +117,11 @@ if (current === null || current.isSymbolicLink()) {
 const check = spawnSync('bash', [path.join(dest, '.claude', 'skills', 'preflight', 'preflight.sh'), '--dependencies'], { stdio: 'inherit' });
 if (check.error || (check.status !== 0 && check.status !== 1)) finish(check, 'dependency check');
 
-const init = spawnSync('bash', [cli, 'init', ...args], { stdio: 'inherit' });
+// Clone the framework at the release tag of this package, not at main.
+// git clone fails when the tag is missing, and init then removes the folder.
+// An explicit --ref from the caller wins.
+const ref = args.includes('--ref') ? [] : ['--ref', tag];
+const init = spawnSync('bash', [cli, 'init', ...ref, ...args], { stdio: 'inherit' });
 const bin = path.join(prefix, 'bin');
 if (!(process.env.PATH || '').split(path.delimiter).includes(bin)) {
   console.error(`create-apexyard: add this directory to PATH to run apexyard later: ${bin}`);

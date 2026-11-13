@@ -14,6 +14,7 @@ Run `npx create-apexyard --help` to see every option.
 - The launcher checks the archive against the SHA-256 in `package.json` before it extracts a file.
 - The Homebrew formula for the same release uses the same archive and the same SHA-256.
 - The launcher downloads no code and runs no install script.
+- `apexyard init` clones the framework at the release tag of this package. Pass `--ref` to choose a different ref.
 
 The CLI goes to `~/.local/share/apexyard/<tag>`.
 The launcher links `~/.local/bin/apexyard` to it.

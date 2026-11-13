@@ -168,6 +168,8 @@ if command -v node >/dev/null 2>&1; then
   (cd "$work" && APEXYARD_GH="$sb/tools/gh-stub" node "$launcher" --org example --name ops --dry-run < /dev/null) > "$sb/npm-init.out" 2>&1 || status=$?
   check npm-init-status test "$status" -eq 0
   check npm-init-plan grep -Fq 'This is what will happen' "$sb/npm-init.out"
+  # init clones the framework at the package tag, not at main.
+  check npm-init-pinned-ref grep -Fq 'Download ApexYard (v9.8.7)' "$sb/npm-init.out"
   check npm-installed test -x "$APEXYARD_PREFIX/share/apexyard/v9.8.7/bin/apexyard"
   check npm-symlink test "$(readlink "$APEXYARD_PREFIX/bin/apexyard")" = "$APEXYARD_PREFIX/share/apexyard/v9.8.7/bin/apexyard"
   check npm-cli-version test "$("$APEXYARD_PREFIX/bin/apexyard" --version)" = 9.8.7
@@ -177,6 +179,17 @@ if command -v node >/dev/null 2>&1; then
   status=0
   (cd "$work" && APEXYARD_GH="$sb/tools/gh-stub" node "$launcher" --org example --name ops --dry-run < /dev/null) > "$sb/npm-init.out" 2>&1 || status=$?
   check npm-rerun-status test "$status" -eq 0
+  # A framework repo without the package tag stops init before GitHub (fail closed).
+  git init -q "$sb/framework"
+  git -C "$sb/framework" -c user.name=t -c user.email=t@example.com commit -q --allow-empty -m init
+  printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "$HOME/gh-calls"\n[ "$1 $2" != "repo view" ] || exit 1\necho example\n' > "$sb/tools/gh-log"
+  chmod +x "$sb/tools/gh-log"
+  status=0
+  (cd "$work" && APEXYARD_GH="$sb/tools/gh-log" APEXYARD_FRAMEWORK_URL="$sb/framework" node "$launcher" --org example --name ops --dir "$work/ops" < /dev/null) > "$sb/npm-notag.out" 2>&1 || status=$?
+  check npm-missing-tag-fails test "$status" -ne 0
+  check npm-missing-tag-clone grep -Fq 'v9.8.7 not found' "$sb/npm-notag.out"
+  check npm-missing-tag-no-dir test ! -e "$work/ops"
+  check npm-missing-tag-no-repo bash -c '! grep -q "^repo create" "$1"' _ "$HOME/gh-calls"
   # A changed archive stops the launcher before it extracts a file.
   cp -R "$pkg" "$sb/tampered"
   printf tampered >> "$sb/tampered/apexyard-v9.8.7.tar.gz"
