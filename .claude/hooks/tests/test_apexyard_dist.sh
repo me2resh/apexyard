@@ -33,8 +33,13 @@ cp "$archive" "$sb/original.tar.gz"
 # Stamp every packaging channel from the same framework release.
 stamped="$sb/stamped"
 mkdir -p "$stamped"
-cp "$archive.sha256" "$stamped/"
+cp "$archive" "$archive.sha256" "$stamped/"
 check stamp-packaging /bin/bash "$root/bin/stamp-packaging.sh" v9.8.7 "$stamped"
+# The npm package embeds the archive, so a changed archive must stop the stamp.
+mkdir -p "$sb/stamp-bad"
+cp "$archive" "$archive.sha256" "$sb/stamp-bad/"
+printf tampered >> "$sb/stamp-bad/apexyard-v9.8.7.tar.gz"
+check stamp-archive-mismatch refuses /bin/bash "$root/bin/stamp-packaging.sh" v9.8.7 "$sb/stamp-bad"
 hash=$(awk '{print $1}' "$archive.sha256")
 check formula-jq grep -Fq 'depends_on "jq"' "$stamped/apexyard.rb"
 check formula-gh grep -Fq 'depends_on "gh"' "$stamped/apexyard.rb"
@@ -118,50 +123,87 @@ check called-by-autotag grep -Fq 'uses: ./.github/workflows/release-cli.yml' "$r
 if command -v ruby >/dev/null 2>&1; then
   check formula ruby -c "$root/packaging/homebrew/apexyard.rb"
 else echo 'NOTE: ruby is not available.'; fi
-check installer-copy /bin/bash "$root/bin/check-bundled-installer.sh"
 if command -v npm >/dev/null 2>&1; then
   (cd "$stamped/create-apexyard" && npm_config_cache="$sb/cache" npm_config_offline=true npm pack --ignore-scripts --pack-destination "$sb") > "$sb/npm.out" 2>&1
   check npm-pack test -f "$sb/create-apexyard-9.8.7.tgz"
   tar -tzf "$sb/create-apexyard-9.8.7.tgz" | LC_ALL=C sort > "$sb/npm-files"
-  printf '%s\n' package/README.md package/bin/create-apexyard.js package/install.sh package/package.json | LC_ALL=C sort > "$sb/npm-expected"
+  printf '%s\n' package/README.md package/apexyard-v9.8.7.tar.gz package/bin/create-apexyard.js package/package.json | LC_ALL=C sort > "$sb/npm-expected"
   check npm-files cmp "$sb/npm-files" "$sb/npm-expected"
 else echo 'NOTE: npm is not available.'; fi
+# create-apexyard pins the formula tag and SHA-256 and has no install scripts (AgDR-0300).
+pkg="$stamped/create-apexyard"
+check npm-pinned-tag test "$(jq -r .apexyard.tag "$pkg/package.json")" = v9.8.7
+check npm-pinned-sha test "$(jq -r .apexyard.sha256 "$pkg/package.json")" = "$hash"
+check npm-same-archive cmp "$archive" "$pkg/apexyard-v9.8.7.tar.gz"
+check npm-no-scripts jq -e 'has("scripts") | not' "$pkg/package.json"
+check npm-no-dependencies jq -e '[has("dependencies"), has("optionalDependencies"), has("peerDependencies"), has("bundleDependencies")] | any | not' "$pkg/package.json"
+check npm-engines jq -e '.engines.node | test("^>=[0-9]+$")' "$pkg/package.json"
+check npm-repository jq -e '.repository.url == "git+https://github.com/me2resh/apexyard.git"' "$pkg/package.json"
 if command -v node >/dev/null 2>&1; then
-  launcher="$root/packaging/npm/create-apexyard/bin/create-apexyard.js"
-  printf '#!/bin/sh\nprintf "%%s\\n" "$@" > "$HOME/args"\nexit 7\n' > "$sb/tools/apexyard"
-  chmod +x "$sb/tools/apexyard"
-  status=0
-  node "$launcher" --org 'example org' > "$sb/launcher.out" 2>&1 || status=$?
-  check npm-exit-status test "$status" -eq 7
-  printf '%s\n' doctor --dependencies > "$sb/args-expected"
-  check npm-arguments cmp "$HOME/args" "$sb/args-expected"
-  printf '#!/bin/sh\nprintf "%%s\n" "$*" >> "$HOME/calls"\n[ "$1" != doctor ] || exit 0\nexit 7\n' > "$sb/tools/apexyard"
-  status=0
-  node "$launcher" --org example > "$sb/launcher.out" 2>&1 || status=$?
-  check npm-init-status test "$status" -eq 7
-  printf '%s\n' 'doctor --dependencies' 'init --org example' > "$sb/calls-expected"
-  check npm-check-before-init cmp "$HOME/calls" "$sb/calls-expected"
-  # A doctor warning (exit 1, for example gh missing) still runs init.
-  rm -f "$HOME/calls"
-  printf '#!/bin/sh\nprintf "%%s\n" "$*" >> "$HOME/calls"\n[ "$1" != doctor ] || exit 1\nexit 0\n' > "$sb/tools/apexyard"
-  status=0
-  node "$launcher" --org example > "$sb/launcher.out" 2>&1 || status=$?
-  check npm-warning-runs-init test "$status" -eq 0
-  check npm-warning-init-called cmp "$HOME/calls" "$sb/calls-expected"
-  # A doctor failure (exit 2, for example jq missing) stops before init.
-  rm -f "$HOME/calls"
-  printf '#!/bin/sh\nprintf "%%s\n" "$*" >> "$HOME/calls"\n[ "$1" != doctor ] || exit 2\nexit 0\n' > "$sb/tools/apexyard"
-  status=0
-  node "$launcher" --org example > "$sb/launcher.out" 2>&1 || status=$?
-  check npm-failure-status test "$status" -eq 2
-  printf '%s\n' 'doctor --dependencies' > "$sb/calls-fail-expected"
-  check npm-failure-skips-init cmp "$HOME/calls" "$sb/calls-fail-expected"
-  rm "$sb/tools/apexyard" "$sb/tools/curl"
-  mv "$sb/checksum" "$archive.sha256"
+  launcher="$pkg/bin/create-apexyard.js"
   export APEXYARD_PREFIX="$sb/npm-prefix"
-  check npm-fallback node "$launcher" --help > "$sb/fallback.out" 2>&1
-  check npm-installed test -L "$APEXYARD_PREFIX/bin/apexyard"
-  check npm-init-help grep -q 'Usage: apexyard init' "$sb/fallback.out"
+  work=$(mktemp -d "$sb/npx.XXXXXX")
+  # The curl stub above still fails. A download attempt cannot pass these checks.
+  status=0
+  (cd "$work" && node "$launcher" --help < /dev/null) > "$sb/npm-help.out" 2>&1 || status=$?
+  check npm-help-status test "$status" -eq 0
+  check npm-help-usage grep -q 'Usage: apexyard init' "$sb/npm-help.out"
+  check npm-help-no-install test ! -e "$APEXYARD_PREFIX"
+  check npm-help-clean-dir test -z "$(ls -A "$work")"
+  # No terminal and no flags: name each missing flag and create nothing.
+  status=0
+  (cd "$work" && node "$launcher" < /dev/null) > "$sb/npm-missing.out" 2>&1 || status=$?
+  check npm-missing-status test "$status" -eq 2
+  check npm-missing-flags grep -Fq 'Missing flags: --org --name.' "$sb/npm-missing.out"
+  status=0
+  (cd "$work" && node "$launcher" --org example < /dev/null) > "$sb/npm-missing.out" 2>&1 || status=$?
+  check npm-missing-name-status test "$status" -eq 2
+  check npm-missing-name grep -Fq 'Missing flags: --name.' "$sb/npm-missing.out"
+  check npm-missing-no-install test ! -e "$APEXYARD_PREFIX"
+  check npm-missing-clean-dir test -z "$(ls -A "$work")"
+  # With the flags, the launcher installs the pinned CLI and runs init.
+  printf '#!/bin/sh\n[ "$1 $2" != "repo view" ] || exit 1\necho example\n' > "$sb/tools/gh-stub"
+  chmod +x "$sb/tools/gh-stub"
+  status=0
+  (cd "$work" && APEXYARD_GH="$sb/tools/gh-stub" node "$launcher" --org example --name ops --dry-run < /dev/null) > "$sb/npm-init.out" 2>&1 || status=$?
+  check npm-init-status test "$status" -eq 0
+  check npm-init-plan grep -Fq 'This is what will happen' "$sb/npm-init.out"
+  # init clones the framework at the package tag, not at main.
+  check npm-init-pinned-ref grep -Fq 'Download ApexYard (v9.8.7)' "$sb/npm-init.out"
+  check npm-installed test -x "$APEXYARD_PREFIX/share/apexyard/v9.8.7/bin/apexyard"
+  check npm-symlink test "$(readlink "$APEXYARD_PREFIX/bin/apexyard")" = "$APEXYARD_PREFIX/share/apexyard/v9.8.7/bin/apexyard"
+  check npm-cli-version test "$("$APEXYARD_PREFIX/bin/apexyard" --version)" = 9.8.7
+  check npm-dry-run-clean-dir test -z "$(ls -A "$work")"
+  check npm-no-download test ! -e "$HOME/curl-called"
+  # A second run uses the installed CLI again.
+  status=0
+  (cd "$work" && APEXYARD_GH="$sb/tools/gh-stub" node "$launcher" --org example --name ops --dry-run < /dev/null) > "$sb/npm-init.out" 2>&1 || status=$?
+  check npm-rerun-status test "$status" -eq 0
+  # A framework repo without the package tag stops init before GitHub (fail closed).
+  git init -q "$sb/framework"
+  git -C "$sb/framework" -c user.name=t -c user.email=t@example.com commit -q --allow-empty -m init
+  printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "$HOME/gh-calls"\n[ "$1 $2" != "repo view" ] || exit 1\necho example\n' > "$sb/tools/gh-log"
+  chmod +x "$sb/tools/gh-log"
+  status=0
+  (cd "$work" && APEXYARD_GH="$sb/tools/gh-log" APEXYARD_FRAMEWORK_URL="$sb/framework" node "$launcher" --org example --name ops --dir "$work/ops" < /dev/null) > "$sb/npm-notag.out" 2>&1 || status=$?
+  check npm-missing-tag-fails test "$status" -ne 0
+  check npm-missing-tag-clone grep -Fq 'v9.8.7 not found' "$sb/npm-notag.out"
+  check npm-missing-tag-no-dir test ! -e "$work/ops"
+  check npm-missing-tag-no-repo bash -c '! grep -q "^repo create" "$1"' _ "$HOME/gh-calls"
+  # A changed archive stops the launcher before it extracts a file.
+  cp -R "$pkg" "$sb/tampered"
+  printf tampered >> "$sb/tampered/apexyard-v9.8.7.tar.gz"
+  export APEXYARD_PREFIX="$sb/npm-tampered"
+  status=0
+  (cd "$work" && node "$sb/tampered/bin/create-apexyard.js" --org example --name ops --dry-run < /dev/null) > "$sb/npm-tampered.out" 2>&1 || status=$?
+  check npm-tampered-status test "$status" -eq 1
+  check npm-tampered-message grep -Fq 'checksum mismatch' "$sb/npm-tampered.out"
+  check npm-tampered-no-install test ! -e "$APEXYARD_PREFIX"
+  # The unstamped source package refuses to run.
+  status=0
+  node "$root/packaging/npm/create-apexyard/bin/create-apexyard.js" --help > "$sb/npm-unstamped.out" 2>&1 || status=$?
+  check npm-unstamped-status test "$status" -eq 1
+  check npm-unstamped-message grep -Fq 'no stamped release' "$sb/npm-unstamped.out"
 else echo 'NOTE: node is not available.'; fi
 printf '%s passed, %s failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]
