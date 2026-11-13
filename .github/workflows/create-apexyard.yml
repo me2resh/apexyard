@@ -50,4 +50,5 @@ jobs:
           tar -xzf dist/create-apexyard-0.0.0-ci.tgz -C "$check"
           (cd "$RUNNER_TEMP" && node "$check/package/bin/create-apexyard.js" --help < /dev/null)
       - name: Dry-run the npm publish of the same tarball
-        run: npm publish dist/create-apexyard-0.0.0-ci.tgz --dry-run --ignore-scripts --access public --tag ci
+        # The ./ prefix stops npm from reading dist/x as a GitHub user/repo.
+        run: npm publish ./dist/create-apexyard-0.0.0-ci.tgz --dry-run --ignore-scripts --access public --tag ci
