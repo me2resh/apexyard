@@ -83,3 +83,10 @@ workspace/*
 # `git status` shows them as untracked symlinks — leave them alone.
 # If you absolutely want to suppress the untracked-symlink line, add the
 # specific name to .git/info/exclude on each clone.
+
+# opencode slash-command wrappers generated from .claude/skills/*/SKILL.md by
+# bin/sync-opencode-commands.sh (me2resh/apexyard#2064). Regenerated per
+# machine, per fork; the skill files stay the single source of truth. A fork
+# that prefers to commit the wrappers can drop this line — `--check` then
+# works as a CI drift guard.
+.opencode/commands/

@@ -180,6 +180,7 @@
 10 .claude/hooks/tests/test_sync_codex_adapter.sh
 6 .claude/hooks/tests/test_sync_cursor_adapter.sh
 1 .claude/hooks/tests/test_sync_cursor_adapter_hygiene.sh
+10 .claude/hooks/tests/test_sync_opencode_commands.sh
 4 .claude/hooks/tests/test_sync_type_whitelisted.sh
 28 .claude/hooks/tests/test_ticket_marker_readers.sh
 19 .claude/hooks/tests/test_ticket_template_resolution.sh
