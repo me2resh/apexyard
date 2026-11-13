@@ -12,6 +12,30 @@ The adapter (`harness-adapters/opencode/src/gate-dispatcher.ts`) derives its gat
 
 Concretely, the opencode adapter enforces the following non-exhaustive list. The list is whatever `.claude/settings.json` wires, not a fixed set. It includes the two-marker merge gate (`block-unreviewed-merge.sh`) and red-CI merge blocking (`block-merge-on-red-ci.sh`). It includes design and architecture review gates (`require-design-review-for-ui.sh`, `require-architecture-review.sh`), secrets scanning (`check-secrets.sh`), and leak protection (`block-private-refs-in-public-repos.sh`). It includes ticket-first and migration-ticket-first edit blocking (`require-active-ticket.sh`, `require-migration-ticket.sh`), and every other blocking `PreToolUse` hook the framework ships or an adopter adds. This happens automatically, with zero adapter changes required when the framework or an adopter wires a new gate.
 
+## Slash commands
+
+opencode discovers `.claude/skills` as a skill source. An agent can load a skill from it, but the tree never becomes operator-invocable slash commands: the `/` menu reads only `.opencode/commands/*.md` or a `commands` block in `opencode.json`. Under Claude Code the same files are both. `bin/sync-opencode-commands.sh` closes that half of the harness gap (me2resh/apexyard#2064):
+
+```bash
+bin/sync-opencode-commands.sh            # write or refresh, prune stale wrappers
+bin/sync-opencode-commands.sh --check    # write nothing; exit 1 when out of date
+```
+
+It writes one wrapper per `.claude/skills/<id>/SKILL.md`, at `.opencode/commands/<id>.md`:
+
+- The frontmatter `description:` is copied from the skill, with `argument-hint:` appended when the skill has one, so the `/` menu and the command palette show the same summary Claude Code shows.
+- The body instructs the agent to load `<id>` with the skill tool and to forward `$ARGUMENTS`. The skill body therefore stays the single source of truth: prose edits need no regeneration, and only a `description:` or `argument-hint:` change does.
+- Wrappers carry a generator marker, and only marked files are pruned. A hand-written `.opencode/commands/*.md` is never removed.
+- `_lib-*` helpers, directories without a `SKILL.md`, and names that are not valid command IDs are skipped.
+
+`.opencode/commands/` is gitignored. The wrappers are regenerable per machine and per fork, the same way the install script's `.opencode/plugins/apexyard/` is local. Run the generator once after installing the adapter, and again after any `/update` that changes skills. A fork that commits the wrappers instead can wire `--check` into CI.
+
+Command names come from skill IDs, so they shadow any opencode built-in with the same name: `/status` is apexyard's status skill, not opencode's.
+
+The `description:` frontmatter is emitted as a block scalar, so a skill description containing a colon, quotes, backticks, or an em dash needs no escaping.
+
+Tests: `bash .claude/hooks/tests/test_sync_opencode_commands.sh`.
+
 ## Install
 
 ```bash
@@ -19,6 +43,7 @@ cd harness-adapters/opencode
 npm install
 cd ../..
 bash bin/install-opencode-adapter.sh   # writes .opencode/plugins/apexyard/ in your CWD
+bash bin/sync-opencode-commands.sh     # writes .opencode/commands/ (slash commands)
 ```
 
 **The discovery directory is PLURAL: `.opencode/plugins/`, not `.opencode/plugin/`.** An earlier version of this doc claimed opencode's discovery glob accepted either form. That was wrong, confirmed live against opencode 1.17.16 in [me2resh/apexyard#844](https://github.com/me2resh/apexyard/issues/844). The singular form silently loads nothing.
