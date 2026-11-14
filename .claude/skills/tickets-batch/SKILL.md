@@ -10,7 +10,8 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 # /tickets-batch — Deprecated Alias for `/task --batch`
 
 `/tickets-batch` is deprecated (me2resh/apexyard#2028). Use `/task --batch`.
-The next release deprecates this alias, and the release after that removes it.
+This alias ships deprecated in v5.11.0. v5.12.0 removes it.
+Permissions follow the skill that runs. If your settings allow `Skill(tickets-batch)`, also allow `Skill(task)`.
 
 ## Usage
 
@@ -25,7 +26,7 @@ The next release deprecates this alias, and the release after that removes it.
 
    ```
    Note: /tickets-batch is deprecated. Use /task --batch [file-or-description].
-   The alias is removed in the release after the next one.
+   v5.12.0 removes the alias. A Skill(tickets-batch) permission now needs Skill(task).
    ```
 
 2. Read `../task/batch.md` from this skill's directory. Under the ops root, that file is `.claude/skills/task/batch.md`.

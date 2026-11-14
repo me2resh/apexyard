@@ -31,7 +31,7 @@ See `docs/getting-started.md` for the integration model and for how to install t
 
 Each row gives one line for a skill. The full text for each skill is in `.claude/skills/<name>/SKILL.md`.
 The count includes 3 deprecated aliases: `/spike-close`, `/prototype-close`, and `/tickets-batch` (me2resh/apexyard#2028).
-Each alias passes its arguments to the new mode. The next release deprecates the aliases, and the release after that removes them.
+Each alias passes its arguments to the new mode. The aliases ship deprecated in v5.11.0, and v5.12.0 removes them. A `Skill(<alias>)` permission now needs `Skill(spike)`, `Skill(prototype)`, or `Skill(task)`.
 
 | Skill | Purpose |
 |-------|---------|

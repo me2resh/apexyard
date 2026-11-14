@@ -100,10 +100,15 @@ stub_check() { # alias new-command mode-file flag
     *) bad "$1: description says deprecated alias" ;;
   esac
   has "$f" "Note: /$1 is deprecated. Use $2" "$1: prints a deprecation note"
+  has "$f" "v5.12.0 removes" "$1: names the removal release"
+  has "$f" "Skill($1) permission now needs Skill(${3%%/*})" "$1: notes the permission change"
   has "$f" "$4 \$ARGUMENTS" "$1: passes its arguments to the new mode"
   has "$f" "\`.claude/skills/$3\`" "$1: loads the same mode file"
   [ -f "$SK/$3" ] && ok "$1: mode file $3 exists" || bad "$1: mode file $3 exists"
 }
+agdr="$ROOT/docs/agdr/AgDR-0302-skill-modes-and-alias-stubs.md"
+has "$agdr" "v5.12.0, the release after that, removes them." "AgDR-0302 names the removal release"
+has "$agdr" "which needs \`Skill(task)\`" "AgDR-0302 notes the permission change"
 stub_check spike-close "/spike --close" spike/close.md --close
 stub_check prototype-close "/prototype --close" prototype/close.md --close
 stub_check tickets-batch "/task --batch" task/batch.md --batch

@@ -10,7 +10,8 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 # /prototype-close — Deprecated Alias for `/prototype --close`
 
 `/prototype-close` is deprecated (me2resh/apexyard#2028). Use `/prototype --close`.
-The next release deprecates this alias, and the release after that removes it.
+This alias ships deprecated in v5.11.0. v5.12.0 removes it.
+Permissions follow the skill that runs. If your settings allow `Skill(prototype-close)`, also allow `Skill(prototype)`.
 
 ## Usage
 
@@ -25,7 +26,7 @@ The next release deprecates this alias, and the release after that removes it.
 
    ```
    Note: /prototype-close is deprecated. Use /prototype --close --promote|--discard [ticket].
-   The alias is removed in the release after the next one.
+   v5.12.0 removes the alias. A Skill(prototype-close) permission now needs Skill(prototype).
    ```
 
 2. Read `../prototype/close.md` from this skill's directory. Under the ops root, that file is `.claude/skills/prototype/close.md`.

@@ -68,7 +68,20 @@ Run an audit only when the operator says yes. When you offer more than one audit
 | 9 Documentation | `/docs-audit` |
 | 10 Behaviour quality | `/mutation-test` |
 
-To find an open PR for row 1, run `gh pr view --repo <owner/repo> --json number,url` in the project directory, with the project's repository. If the command fails or `gh` is not installed, do not offer `/security-review`.
+To find an open PR for row 1, run this lookup. Replace `<project-path>` with the project directory and `<owner/repo>` with the project's repository:
+
+<!-- launch-check:pr-lookup (test_launch_check_pr_lookup_2028.sh runs this block) -->
+```bash
+branch=$(git -C "<project-path>" branch --show-current)
+if [ -n "$branch" ]; then
+  gh pr list --repo "<owner/repo>" --head "$branch" --state open --json number,url
+else
+  echo '[]'   # detached HEAD: no branch, so no PR to review
+fi
+```
+
+The lookup prints a JSON list. An empty list (`[]`) means that the branch has no open PR. Offer `/security-review <number>` only when the list has an entry.
+Do not offer `/security-review` when the list is empty, when the command fails, or when `gh` is not installed. Do not use `gh pr view` with `--repo` and no PR argument. That form always fails.
 A PASS row gets no offer. A row with more than one match gets every match, for example `/threat-model` and `/audit-deps`.
 
 ## Output format
