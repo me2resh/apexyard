@@ -208,7 +208,7 @@ Before shipping, ensure:
 
 Escalate to the human approver when:
 
-- PRD is unclear or incomplete
+- PRD is unclear or incomplete (ask the Product Manager first)
 - Design requires new patterns
 - Estimates exceed expectations significantly
 - Team cannot proceed

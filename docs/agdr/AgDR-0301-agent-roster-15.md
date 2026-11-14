@@ -1,7 +1,7 @@
 ---
 id: AgDR-0301
 timestamp: 2026-11-14T12:00:00Z
-agent: head-of-engineering
+agent: tech-lead
 model: claude-opus-5-5
 session: n/a
 trigger: user-prompt

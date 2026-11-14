@@ -112,6 +112,8 @@ agents:
       OLLAMA_KEEP_ALIVE: "30m"
 ```
 
+Caution: `data-engineer` is a build agent. It also runs schema migrations through the migration gate. Route it to a local model only for read-only SQL and analysis work, and validate the model first.
+
 Restart Claude Code. The `apply-agent-routing.sh` SessionStart hook will:
 
 1. Probe `http://localhost:4000/v1/models` with a 2s timeout. If the proxy is down → emit a warning, skip the endpoint override, fall through to the model rewrite only.

@@ -93,8 +93,14 @@ When a future release adds a migration, this table is the source of truth. The r
 ## Agent roster: 23 to 15
 
 The next release reduces the agent roster from 23 agents to 15 ([AgDR-0301](agdr/AgDR-0301-agent-roster-15.md), [#2027](https://github.com/me2resh/apexyard/issues/2027)).
-This release deprecates the eight removed agents. It does not remove them silently.
-No per-version migration script is necessary, because `/update` replaces the framework-owned agent and role files.
+This release does two different things to the eight removed agents:
+
+- It **removes** the eight agent files under `.claude/agents/`. There is no deprecation window for an agent file. A spawn of a removed slug fails from this release.
+- It **replaces** the eight role files under `roles/` with redirect stubs. Each stub names its receiver. The release after this one removes the stubs.
+
+No per-version migration script is necessary for an unedited fork. `/update` deletes the removed agent files and writes the stubs.
+A fork that edited one of these 16 files must act before `/update`. See § "If your fork edited a removed agent or role file".
+The roster map in [AgDR-0301](agdr/AgDR-0301-agent-roster-15.md) § "Roster map" shows where each removed agent went. Rows 16 to 23 name the receiver and the receiver section that holds the moved expertise.
 
 | Removed agent (persona) | Receiver agent (persona) |
 |-------------------------|--------------------------|
@@ -117,8 +123,35 @@ What changes for an adopter:
    Change any custom link to a removed role file before then.
 6. Rex, Hakim, and Tariq keep their review gates. Naqid stays advisory. Hakim keeps read-only tools.
 
-If your fork edited a removed agent file, check for a local copy after `/update`.
-Merge the edits into the receiver, and then delete the local copy.
+### If your fork edited a removed agent or role file
+
+`/update` stops on these files. Do the steps below before you run it.
+
+**What conflicts.** These 16 paths can conflict:
+
+- `.claude/agents/<slug>.md` for each of the 8 removed slugs. Upstream deletes the file. A local edit plus an upstream delete is a `conflict` in `bin/update-files.sh`.
+- `roles/<department>/<slug>.md` for each of the 8 removed roles. Upstream replaces the whole file with a stub. A three-way merge of your edit and the stub does not merge cleanly, so the status is `conflict`.
+
+**What `/update` does.** One conflict stops the whole update. `/update --plan` lists each conflict path. `/update` (and `bin/update-files.sh --apply`) exits 1 and writes nothing. You lose no local edit.
+The suggestion that the engine prints for these paths does not apply. It can tell you to set the model in `agent-routing.yaml`, but the routing hook skips a key for an agent file that does not exist. It can tell you to set an option in `.claude/project-config.json`, but no option replaces a role file.
+With `/update --git-merge`, the same paths show as modify/delete or content conflicts in the history merge.
+
+**How to resolve.** For each conflict path, choose one of two options:
+
+1. **Keep your edits.** Find the receiver in the table above, or in AgDR-0301 § "Roster map" (rows 16 to 23). Copy your edit into the receiver file. Role content goes into the receiver role file. A `tools`, `model` or wrapper change goes into the receiver agent file. Put role content under the receiver section that the roster map names, for example § "Security posture" in `roles/security/security-auditor.md`. Then do option 2 for the old file.
+2. **Accept the removal.** Restore the old file to the last-synced framework version, so that it has no local edit:
+
+   ```bash
+   base=$(cat .claude/framework-version)
+   git checkout "$base" -- .claude/agents/head-of-security.md   # one path at a time
+   ```
+
+   The tag in `.claude/framework-version` is the last-synced framework release. Fetch upstream tags first if the tag is not local. For a removed agent file only, you can delete the file instead. The engine then sees the same state as upstream. Do not delete a removed role file: a missing local file against the new stub is also a conflict.
+
+When no conflict path remains, commit the result and run `/update` again. Then check the receivers:
+
+- Move each `agent-routing.yaml` key for a removed slug to the receiver key. The routing hook does not warn on a removed slug.
+- Change each custom link to a removed role file to the receiver before the stubs go.
 
 ---
 
