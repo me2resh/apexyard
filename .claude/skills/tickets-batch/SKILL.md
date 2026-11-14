@@ -5,6 +5,8 @@ argument-hint: "<optional bulk description>"
 allowed-tools: Bash, Read, Write, AskUserQuestion
 ---
 
+Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
+
 # /tickets-batch — Deprecated Alias for `/task --batch`
 
 `/tickets-batch` is deprecated (me2resh/apexyard#2028). Use `/task --batch`.
