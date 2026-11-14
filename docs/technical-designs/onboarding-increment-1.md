@@ -107,7 +107,7 @@ FR-4 requires the tour content be "reusable across skills, not locked inside the
 
 **Chosen: shared content file** at `docs/onboarding/capability-tour.md`. Both `/onboard` (Phase 1) and `/tutorial` `Read` it and render it in the current depth mode. Rationale mirrors the framework's own `templates/audits/<dim>.md` precedent (author-once, consume-many). Increment 2 adds a sibling `docs/onboarding/glossary.md` consumed by the same two skills plus the on-demand lookup — the directory is the seam.
 
-Content shape (terse, scannable — *not* the full 64-skill table, per US-1 AC): three short sections — **what a role is**, **what a skill is**, **what a gate is** — one to two sentences each with one concrete example, and a one-line "how the loop works" closer (idea → ticket → PR → review → merge). Skippable in one word ("skip").
+Content shape (terse, scannable — *not* the full skill table, per US-1 AC): three short sections — **what a role is**, **what a skill is**, **what a gate is** — one to two sentences each with one concrete example, and a one-line "how the loop works" closer (idea → ticket → PR → review → merge). Skippable in one word ("skip").
 
 ### D4 — The standalone re-entry point is named `/tutorial`
 

@@ -1,7 +1,7 @@
 ---
 name: spike
-description: Create a hypothesis-driven, time-boxed spike ticket (Hypothesis/Budget/Kill Criteria/Disposition). Exempt from AgDR + coverage gates.
-argument-hint: "<short title of the spike>"
+description: Create a hypothesis-driven, time-boxed spike ticket, or close one with `--close --promote|--discard`. Exempt from AgDR + coverage gates.
+argument-hint: "<short title of the spike> | --close --promote|--discard [<spike-ticket-number>]"
 allowed-tools: Bash, Read, Write, AskUserQuestion
 ---
 
@@ -32,7 +32,20 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 /spike Will library X handle 10k events/sec
 /spike Does Postgres LISTEN/NOTIFY scale to N consumers
 /spike Can we replace Auth0 with Cognito
+/spike --close --promote 142     # close mode: hypothesis confirmed, file a [Feature]
+/spike --close --discard         # close mode: uses the active-ticket marker, writes a memo
 ```
+
+## Close mode — `/spike --close`
+
+Check `$ARGUMENTS` first, before any other step.
+If the first word is `--close`, read `close.md` in this skill's directory (`.claude/skills/spike/close.md`).
+Follow that file with the same `$ARGUMENTS`, then stop.
+In close mode, do not run the creation steps below. Do not write the active-issue-skill marker of step 0.
+The close mode keeps every behaviour of the old `/spike-close` skill: the PROMOTE and DISCARD paths, the follow-up `[Feature]`, the memo path, and the close comment.
+`/spike-close` still works as a deprecated alias that loads the same file.
+
+If `$ARGUMENTS` does not start with `--close`, run the creation process below.
 
 ## Process
 
@@ -289,9 +302,9 @@ When you start work:
 ### 9. Remind the operator about the disposition gate
 
 ```
-When the spike closes, run /spike-close to record the disposition:
-  /spike-close --promote   # hypothesis confirmed → file a [Feature]
-  /spike-close --discard   # hypothesis rejected → write a memo
+When the spike closes, run /spike --close to record the disposition:
+  /spike --close --promote   # hypothesis confirmed → file a [Feature]
+  /spike --close --discard   # hypothesis rejected → write a memo
 
 Closing the spike without running this gate is allowed (closure is the
 operator's call) but skips the memo / promotion artefact and leaves no
@@ -315,13 +328,13 @@ A spike PR is exempt from the production SDLC subset listed below; everything el
 | Gate | Production work | Spike work |
 |------|----------------|------------|
 | Pre-Build (parent epic, story tickets, ACs, design review) | Required | Skipped — the spike ticket IS the unit |
-| AgDR for technical decisions (`require-agdr-for-arch-pr.sh`, `require-agdr-for-arch-changes.sh`) | Required | Skipped — ship a memo on `/spike-close --discard` instead |
+| AgDR for technical decisions (`require-agdr-for-arch-pr.sh`, `require-agdr-for-arch-changes.sh`) | Required | Skipped — ship a memo on `/spike --close --discard` instead |
 | Test coverage > 80% | Required | Skipped — coverage is irrelevant for throw-away code |
 | Code Reviewer agent (Rex) | Required on every PR | Required — even throw-away code gets a sanity check |
 | Security Auditor (auth/crypto/secrets diff) | Required | Required — security gates fire regardless of intent |
 | Glossary in PR body | Required | Required — spike PRs explain WHAT WAS LEARNED, which is the artefact |
 | QA Engineer verification | Required (AC verification) | Required (Hypothesis verification: did we answer the question?) |
-| Disposition decision before close | N/A | Required — operator must declare PROMOTE or DISCARD via `/spike-close` |
+| Disposition decision before close | N/A | Required — operator must declare PROMOTE or DISCARD via `/spike --close` |
 
 See `.claude/rules/workflow-gates.md` § Spike work for the rule statement, and AgDR-NNNN-spike-skill-schema-and-exemptions.md for the rationale.
 

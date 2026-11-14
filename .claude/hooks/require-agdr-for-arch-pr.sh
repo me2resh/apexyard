@@ -321,7 +321,7 @@ spike_pr_exempt() {
 }
 
 if spike_pr_exempt; then
-  echo "WARN: spike/prototype PR detected — require-agdr-for-arch-pr bypassed. AgDRs not required for throw-away exploration; ship a memo on /spike-close or /prototype-close instead. See .claude/rules/workflow-gates.md § Spike work." >&2
+  echo "WARN: spike/prototype PR detected — require-agdr-for-arch-pr bypassed. AgDRs not required for throw-away exploration; ship a memo on /spike --close or /prototype --close instead. See .claude/rules/workflow-gates.md § Spike work." >&2
   exit 0
 fi
 

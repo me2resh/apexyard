@@ -15,6 +15,15 @@ Runs a 10-dimension sweep against a project and outputs a one-page verdict. Desi
 
 **Invoke from** the project's workspace directory (`cd workspace/<project>/`) or pass the path as an argument: `/launch-check workspace/my-app`.
 
+## Usage
+
+```
+/launch-check                          # quick sweep of the project in the current directory
+/launch-check workspace/my-app         # quick sweep of the project at this path
+/launch-check trend workspace/my-app   # trend report only, no new sweep
+/launch-check --workflow workspace/my-app
+```
+
 **Three modes:**
 
 - `/launch-check [project-path]` — full audit (default). Runs all 10 dimensions **serially**, persists results to the per-project history store, and renders a "Trend (last 5 runs)" section when ≥ 2 prior runs exist.
@@ -27,7 +36,7 @@ Each dimension has a dedicated expert skill for when you need to go deeper than 
 
 | Dimension | Quick check | Deep dive |
 |-----------|------------|-----------|
-| Security | `/launch-check` row 1 | **`/threat-model`** — full STRIDE threat modelling exercise |
+| Security | `/launch-check` row 1 | **`/threat-model`** — full STRIDE threat modelling exercise. Also **`/audit-deps`** for dependency findings, and **`/security-review`** when the project has an open PR |
 | Accessibility | `/launch-check` row 2 | **`/accessibility-audit`** — WCAG 2.1 AA compliance audit |
 | Compliance | `/launch-check` row 3 | **`/compliance-check`** — GDPR + ePrivacy analysis |
 | Analytics | `/launch-check` row 4 | **`/analytics-audit`** — event taxonomy and funnel coverage |
@@ -38,7 +47,42 @@ Each dimension has a dedicated expert skill for when you need to go deeper than 
 | Documentation | `/launch-check` row 9 | **`/docs-audit`** — Diataxis framework completeness |
 | Behaviour quality | `/launch-check` row 10 | **`/mutation-test`** — mutation-testing sensor; measures whether the test suite constrains behaviour, not just executes lines |
 
-When a dimension shows WARN or FAIL, tell the user: *"For a detailed analysis, run `/threat-model`"* (or the relevant expert skill).
+## Routing to full audits
+
+`/launch-check` stays a quick sweep. It does not run the full audits itself.
+After the table, for each WARN or FAIL row, name the matching full audit and offer to run it.
+Run an audit only when the operator says yes. When you offer more than one audit, use `AskUserQuestion` with multi-select. Recommend the audit for the most severe row first.
+
+| Row with WARN or FAIL | Full audit to name and offer |
+|-----------------------|------------------------------|
+| 1 Security, any finding | `/threat-model` |
+| 1 Security, a dependency finding (vulnerable, outdated, or licence-flagged package from `npm audit`, `pip audit`, or similar) | `/audit-deps` |
+| 1 Security, and an open PR exists for the project's current branch | `/security-review <PR>` |
+| 2 Accessibility | `/accessibility-audit` |
+| 3 Compliance | `/compliance-check` |
+| 4 Analytics | `/analytics-audit` |
+| 5 SEO | `/seo-audit` |
+| 6 Generative-engine | `/geo-audit` |
+| 7 Performance | `/performance-audit` |
+| 8 Monitoring | `/monitoring-audit` |
+| 9 Documentation | `/docs-audit` |
+| 10 Behaviour quality | `/mutation-test` |
+
+To find an open PR for row 1, run this lookup. Replace `<project-path>` with the project directory and `<owner/repo>` with the project's repository:
+
+<!-- launch-check:pr-lookup (test_launch_check_pr_lookup_2028.sh runs this block) -->
+```bash
+branch=$(git -C "<project-path>" branch --show-current)
+if [ -n "$branch" ]; then
+  gh pr list --repo "<owner/repo>" --head "$branch" --state open --json number,url
+else
+  echo '[]'   # detached HEAD: no branch, so no PR to review
+fi
+```
+
+The lookup prints a JSON list. An empty list (`[]`) means that the branch has no open PR. Offer `/security-review <number>` only when the list has an entry.
+Do not offer `/security-review` when the list is empty, when the command fails, or when `gh` is not installed. Do not use `gh pr view` with `--repo` and no PR argument. That form always fails.
+A PASS row gets no offer. A row with more than one match gets every match, for example `/threat-model` and `/audit-deps`.
 
 ## Output format
 
@@ -69,6 +113,14 @@ Blocking:
 Warnings (non-blocking, address before next launch):
   - [ ] Add alt text to 3 images (accessibility)
   - [ ] Add og:image to landing and pricing pages (SEO)
+
+Full audits for the WARN and FAIL rows (run one? yes / pick / no):
+  - /compliance-check    (row 3, FAIL)
+  - /monitoring-audit    (row 8, FAIL)
+  - /accessibility-audit (row 2, WARN)
+  - /seo-audit           (row 5, WARN)
+  - /geo-audit           (row 6, WARN)
+  - /mutation-test       (row 10, WARN)
 ```
 
 **Do NOT dump hundreds of lines.** Each dimension gets ONE row in the table. Details go in follow-up messages only if the user asks "tell me more about the security findings" — not upfront.
@@ -261,7 +313,7 @@ Count PASS/WARN/FAIL, apply the verdict logic, format the output table.
 
 ### Step 5: Output
 
-Print the table exactly as shown in the "Output format" section above. Then continue to Step 6 to persist the run and render the trend section.
+Print the table exactly as shown in the "Output format" section above. Add the full-audit offers from § "Routing to full audits". Then continue to Step 6 to persist the run and render the trend section.
 
 **Do NOT auto-create tickets for the findings.** Offer: "Want me to create tickets for the blocking items?" — but let the user decide. The launch check is advisory.
 
@@ -347,7 +399,7 @@ return { results: [...preResolved, ...evaluated.filter(Boolean)] }
 
 1. Take `results[]` (one row per dimension, each with `status` / `score` / `finding`).
 2. Count PASS/WARN/FAIL, apply the **same verdict logic** ("Verdict logic" table above) — go / go-with-warnings / conditional-go / no-go.
-3. Print the **same verdict table** as the serial path (Step 5 "Output format").
+3. Print the **same verdict table** as the serial path (Step 5 "Output format"), with the same full-audit offers (§ "Routing to full audits").
 4. **Persist via Step 6 unchanged** — build the same superset payload (`scores{}` from each row's `score`, `findings[]` from the WARN/FAIL rows), call `audit_run_persist`, then `audit_render_trend`. The history store, schema, and `render-trend.sh` chart are identical to a serial run, so trend continuity is preserved across serial↔workflow runs.
 
 ### Degrade gracefully

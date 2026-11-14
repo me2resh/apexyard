@@ -2383,7 +2383,7 @@ tracker_check_issues() {
   if [ "$verdict" = "disabled" ]; then
     {
       echo "⚠ GitHub Issues is DISABLED on $repo, but tracker.kind is \"$kind\"."
-      echo "  Issue-creating skills (/feature, /bug, /task, /tickets-batch, /idea, …) will fail."
+      echo "  Issue-creating skills (/feature, /bug, /task, /task --batch, /idea, …) will fail."
       echo "  Enable it (needs admin):  $(tracker_issues_enable_hint "$repo")"
       echo "  Or: Settings → General → Features → Issues."
       echo "  (Tracking elsewhere? Set tracker.kind to linear/jira/none in .claude/project-config.json.)"
