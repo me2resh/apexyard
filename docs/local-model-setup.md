@@ -1,6 +1,6 @@
 # Local model routing: agents via LiteLLM proxy + Ollama
 
-Route specific Claude Code sub-agents through a locally-running Ollama instance instead of the Claude API. Useful when you want to keep prompts off any cloud API for bounded sub-tasks (ticket triage, data-analyst sketches, exploratory rephrasing).
+Route specific Claude Code sub-agents through a locally-running Ollama instance instead of the Claude API. Useful when you want to keep prompts off any cloud API for bounded sub-tasks (ticket triage, data-engineer SQL sketches, exploratory rephrasing).
 
 This is **opt-in**. The default `agent-routing.yaml` shape is empty; absence of an `endpoint:` field keeps every agent on its framework default. Nothing in this setup changes the out-of-box experience.
 
@@ -42,7 +42,7 @@ ollama list   # empty after fresh install
 
 ## 2. Pull an agent-grade model
 
-Tool-call reliability is the load-bearing risk for routing agents through a local model. The `qwen2.5-coder` family ships with strong tool-call behaviour and is what we would start with for data-analyst-style structured-output work. Picking a model that fits *your* hardware matters more than picking the highest-MTEB one. The model must hold tools sanely on the workloads you will run, not only on benchmarks.
+Tool-call reliability is the load-bearing risk for routing agents through a local model. The `qwen2.5-coder` family ships with strong tool-call behaviour and is what we would start with for data-engineer SQL structured-output work. Picking a model that fits *your* hardware matters more than picking the highest-MTEB one. The model must hold tools sanely on the workloads you will run, not only on benchmarks.
 
 | Model | Disk | RAM at load (Q4) | Notes |
 |-------|------|------------------|-------|
@@ -105,7 +105,7 @@ In your portfolio's `agent-routing.yaml` (or the fork-local copy in single-fork 
 ```yaml
 version: 1
 agents:
-  data-analyst:
+  data-engineer:
     model: ollama/qwen2.5-coder:14b
     endpoint: http://localhost:4000
     env:
@@ -115,9 +115,9 @@ agents:
 Restart Claude Code. The `apply-agent-routing.sh` SessionStart hook will:
 
 1. Probe `http://localhost:4000/v1/models` with a 2s timeout. If the proxy is down → emit a warning, skip the endpoint override, fall through to the model rewrite only.
-2. Query `http://localhost:4000/api/tags` for `qwen2.5-coder:14b`. If the model is not in local Ollama → emit `⚠ agent-routing: data-analyst — model qwen2.5-coder:14b not in local Ollama; run: ollama pull qwen2.5-coder:14b`. The override still applies; Ollama may pull on first call with the cold-start cost.
-3. Rewrite `.claude/agents/data-analyst.md` frontmatter so `model: ollama/qwen2.5-coder:14b`.
-4. Write `.claude/session/agent-env/data-analyst.env` with `ANTHROPIC_BASE_URL=http://localhost:4000` (informational in v1: see constraints below).
+2. Query `http://localhost:4000/api/tags` for `qwen2.5-coder:14b`. If the model is not in local Ollama → emit `⚠ agent-routing: data-engineer — model qwen2.5-coder:14b not in local Ollama; run: ollama pull qwen2.5-coder:14b`. The override still applies; Ollama may pull on first call with the cold-start cost.
+3. Rewrite `.claude/agents/data-engineer.md` frontmatter so `model: ollama/qwen2.5-coder:14b`.
+4. Write `.claude/session/agent-env/data-engineer.env` with `ANTHROPIC_BASE_URL=http://localhost:4000` (informational in v1: see constraints below).
 5. Write `.claude/session/agent-env/__session__.env` with the same `ANTHROPIC_BASE_URL`. This is the session-wide variable Claude Code reads at startup.
 6. Emit a one-line banner: `ApexYard: applied 1 agent-routing override(s) from agent-routing.yaml [1 Ollama, 0 warning(s)]`.
 
@@ -125,18 +125,18 @@ The `block-agent-routing-drift.sh` pre-commit/pre-push hooks will refuse to let 
 
 ## 5. Verify that it routes
 
-Open a new Claude Code session in your apexyard fork. Trigger a data-analyst invocation (e.g. ask a metric or SQL question that activates the Data Analyst). Watch the LiteLLM proxy log. You should see an inbound POST to `/v1/messages` and a corresponding outbound call to Ollama's `/api/chat`.
+Open a new Claude Code session in your apexyard fork. Trigger a data-engineer invocation (e.g. ask a metric or SQL question that activates the Data Engineer). Watch the LiteLLM proxy log. You should see an inbound POST to `/v1/messages` and a corresponding outbound call to Ollama's `/api/chat`.
 
 If the routing did not take effect, check in this order:
 
 1. `cat .claude/session/agent-env/__session__.env`: does it contain `ANTHROPIC_BASE_URL=http://localhost:4000`?
 2. `echo $ANTHROPIC_BASE_URL`: did your shell profile source the env file? (You may need to add `. .claude/session/agent-env/__session__.env` to your `.zshrc`/`.bashrc`.)
 3. Was the LiteLLM proxy reachable when Claude Code started? (Check the SessionStart banner: `0 warning(s)` means the reachability check passed.)
-4. `grep model .claude/agents/data-analyst.md`: does the model frontmatter have the rewrite?
+4. `grep model .claude/agents/data-engineer.md`: does the model frontmatter have the rewrite?
 
 ## Constraints (read these before relying on local routing for anything important)
 
-- **Single endpoint per session.** v1 sets `ANTHROPIC_BASE_URL` once at SessionStart. All agents share it. You cannot have data-analyst route to local Ollama while code-reviewer stays on Claude. That is a v2 concern, dependent on Claude Code surfacing per-agent invocation env scoping (see [AgDR-0050 § Axis 5](agdr/AgDR-0050-agent-runtime-overhaul.md)). If you declare multiple distinct endpoints, the first wins and a warning appears.
+- **Single endpoint per session.** v1 sets `ANTHROPIC_BASE_URL` once at SessionStart. All agents share it. You cannot have data-engineer route to local Ollama while code-reviewer stays on Claude. That is a v2 concern, dependent on Claude Code surfacing per-agent invocation env scoping (see [AgDR-0050 § Axis 5](agdr/AgDR-0050-agent-runtime-overhaul.md)). If you declare multiple distinct endpoints, the first wins and a warning appears.
 
 - **Cold-start ~9–10s.** Measured in spike #195. The first call after `ollama serve` boot (or after `OLLAMA_KEEP_ALIVE` expires) pays full model-load cost. Subsequent calls within the keep-alive window are warm.
 

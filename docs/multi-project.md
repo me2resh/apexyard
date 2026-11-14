@@ -545,7 +545,7 @@ Next code review, Rex globs both `handbooks/architecture/*.md` AND `<private>/cu
 
 ### Centralised agent routing: `agent-routing.yaml`
 
-ApexYard ships 23 Claude Code sub-agents (20 role-derived personas plus utility agents: Rex, Hakim, Munir, Tariq, Naqid). The framework picks sensible per-agent model defaults from the tier map in [`.claude/harness-models.json`](../.claude/harness-models.json). The map started from the matrix in [AgDR-0050 § Axis 2](agdr/AgDR-0050-agent-runtime-overhaul.md). See [Agent model and effort](agents/effort.md). These use Opus for depth + reasoning, Sonnet for the majority + tool-use-heavy, Haiku for checklist-shaped repeatable work. Adopters override those defaults via a single YAML file kept in the private portfolio repo. Overrides include switching the QA Engineer to Opus for deeper AC runs or routing the Data Analyst through a local Ollama endpoint. They also include raising the Pen Tester's invocation timeout.
+ApexYard ships 15 Claude Code sub-agents (10 role-derived personas plus utility and review agents: Rex, Hakim, Munir, Tariq, Naqid, per AgDR-0301). The framework picks sensible per-agent model defaults from the tier map in [`.claude/harness-models.json`](../.claude/harness-models.json). The map started from the matrix in [AgDR-0050 § Axis 2](agdr/AgDR-0050-agent-runtime-overhaul.md). See [Agent model and effort](agents/effort.md). These use Opus for depth + reasoning, Sonnet for the majority + tool-use-heavy, Haiku for checklist-shaped repeatable work. Adopters override those defaults via a single YAML file kept in the private portfolio repo. Overrides include switching the QA Engineer to Opus for deeper AC runs or routing the Data Engineer through a local Ollama endpoint. They also include raising the Pen Tester's invocation timeout.
 
 This pattern follows **Custom templates** (path-mirroring overrides, see AgDR-0023) and **Custom skills + handbooks** above. It puts every adopter-specific routing choice in one centrally-edited surface, source-controlled in the private repo, never leaking to the public fork.
 
@@ -590,7 +590,7 @@ The pattern lives in `agent-routing.yaml.example` Example C as a commented-out t
 1. Pick a model that fits the machine. Ollama's `ollama run <model>` warm-load time is a good rough gauge. Anything > 10s suggests the model is too big.
 2. Uncomment the chosen entry in their `agent-routing.yaml` (private repo for split-portfolio mode, gitignored fork file for single-fork).
 3. Start LiteLLM proxy: `litellm --config ~/litellm-config.yaml --port 4000`. `agent-routing.yaml.example`'s Example C uses `http://localhost:4000` as the proxy endpoint by convention.
-4. Validate the chosen model against representative workloads BEFORE relying on it for production work. Workloads include ticket-creation via `/feature`, SQL via Nadia, AC verification via Salim. Tool-call reliability via LiteLLM's Anthropic-shape translator is the load-bearing risk; treat the first dozen invocations as a smoke test.
+4. Validate the chosen model against representative workloads BEFORE relying on it for production work. Workloads include ticket-creation via `/feature`, SQL via Anwar, AC verification via Salim. Tool-call reliability via LiteLLM's Anthropic-shape translator is the load-bearing risk; treat the first dozen invocations as a smoke test.
 5. v1 is **session-scoped**: when the `endpoint:` field has a value, ALL agents on that session share the configured `ANTHROPIC_BASE_URL`. Per-agent invocation-env scoping waits until v2 (depends on Claude Code surfacing per-invocation env, not on apexyard).
 
 Adopters who want to validate specific models against their machine before committing can use the operator-prep doc at `projects/apexyard/spike-348-prep.md` as a starting checklist. It covers hardware checks, fixture pack for the 3 candidate sub-agents, scoring matrix.
@@ -781,7 +781,7 @@ your-org/apexyard/                ← your fork, cloned locally (the "ops repo")
 │   ├── agents/
 │   └── settings.json
 │
-├── roles/                         ← 20 role definitions, upstream from apexyard
+├── roles/                         ← 12 role definitions, upstream from apexyard
 │   ├── engineering/
 │   ├── product/
 │   ├── design/

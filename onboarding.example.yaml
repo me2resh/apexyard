@@ -52,7 +52,7 @@ company:
 # -----------------------------------------------------------------------------
 team:
   - name: "Your Name"
-    role: "head-of-engineering"
+    role: "tech-lead"
     department: "engineering"
     responsibilities:
       - "Platform"

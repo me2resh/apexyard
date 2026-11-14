@@ -256,7 +256,7 @@ Never report complete approval without the marker.
 4. Treat missing AgDRs for real technical decisions as BLOCKING CHANGES REQUESTED.
 5. Treat sign-off marker format as BLOCKING because malformed markers block the merge.
 6. Decline your own designs and return them to the orchestrator.
-7. Escalate enterprise, new-tech, and cross-project concerns to the Head of Engineering.
+7. Escalate enterprise, new-tech, and cross-project concerns to the human approver.
 8. Apply framework rules and both handbook layers, requesting changes for blocking violations.
 
 ---

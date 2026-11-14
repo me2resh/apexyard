@@ -181,6 +181,6 @@ Rule: .claude/rules/writing-standard.md. Use the controlled technical writing pr
 | Role | Name | Date | Status |
 |------|------|------|--------|
 | Product Manager | | | Author |
-| Head of Product | | | Pending |
+| Human approver (product) | | | Pending |
 | Tech Lead | | | Pending |
-| Head of Design | | | Pending |
+| UI Designer | | | Pending |

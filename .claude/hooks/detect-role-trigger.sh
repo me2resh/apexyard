@@ -165,13 +165,12 @@ role_banner_already_fired() {
 #
 #   isolated-work-class → instructs the agent to SPAWN the sub-agent via
 #     the Agent tool with `subagent_type: <slug>`. Used for roles whose
-#     work benefits from isolated context + tool restriction (Head-of-X,
-#     Tech Lead, QA, SRE, Security Auditor, Pen Tester, Data Analyst,
-#     etc.).
+#     work benefits from isolated context + tool restriction (Tech Lead,
+#     QA, SRE, Security Auditor, Pen Tester).
 #
 #   in-flow-class → instructs the agent to ADOPT the persona in-thread.
 #     Used for roles that work tightly alongside the main thread
-#     (Backend / Frontend / Platform Engineer, Product Manager, UI / UX
+#     (Backend / Frontend / Platform Engineer, Product Manager, UI
 #     Designer, Data Engineer).
 #
 # Args:
@@ -379,6 +378,13 @@ detect_label_triggers() {
 # The known-roles table is hard-coded here (not config-driven) — the role
 # files themselves are upstream framework, and the table mirrors the
 # Activation Table in .claude/rules/role-triggers.md.
+#
+# Each row is `pattern|role file|display name`. The display name is
+# optional: without it the banner title-cases the pattern. AgDR-0301
+# merged eight roles into five receivers. The old titles stay in the
+# table as aliases, so "act as the Head of Product" still resolves. An
+# alias row points to the receiver role file and names the receiver.
+# Keep each alias after its receiver row: the de-dupe is per role file.
 # ---------------------------------------------------------------------------
 ROLES_TABLE='
 qa engineer|roles/engineering/qa-engineer.md
@@ -386,23 +392,23 @@ qa|roles/engineering/qa-engineer.md
 security auditor|roles/security/security-auditor.md
 penetration tester|roles/security/penetration-tester.md
 pen tester|roles/security/penetration-tester.md
-head of security|roles/security/head-of-security.md
 tech lead|roles/engineering/tech-lead.md
 solution architect|roles/architecture/solution-architect.md
-head of engineering|roles/engineering/head-of-engineering.md
 backend engineer|roles/engineering/backend-engineer.md
 frontend engineer|roles/engineering/frontend-engineer.md
 platform engineer|roles/engineering/platform-engineer.md
 sre|roles/engineering/sre.md
-head of product|roles/product/head-of-product.md
 product manager|roles/product/product-manager.md
-product analyst|roles/product/product-analyst.md
-head of design|roles/design/head-of-design.md
 ui designer|roles/design/ui-designer.md
-ux designer|roles/design/ux-designer.md
-head of data|roles/data/head-of-data.md
-data analyst|roles/data/data-analyst.md
 data engineer|roles/data/data-engineer.md
+head of security|roles/security/security-auditor.md|Security Auditor (holds the former Head of Security work)
+head of engineering|roles/engineering/tech-lead.md|Tech Lead (holds the former Head of Engineering work)
+head of product|roles/product/product-manager.md|Product Manager (holds the former Head of Product work)
+product analyst|roles/product/product-manager.md|Product Manager (holds the former Product Analyst work)
+head of design|roles/design/ui-designer.md|UI Designer (holds the former Head of Design work)
+ux designer|roles/design/ui-designer.md|UI Designer (holds the former UX Designer work)
+head of data|roles/data/data-engineer.md|Data Engineer (holds the former Head of Data work)
+data analyst|roles/data/data-engineer.md|Data Engineer (holds the former Data Analyst work)
 '
 
 detect_prompt_triggers() {
@@ -423,7 +429,7 @@ detect_prompt_triggers() {
   # mentions "QA Engineer" we'll fire on the longer phrase before the
   # bare "qa" form catches it.
   local fired=""
-  while IFS='|' read -r pattern file; do
+  while IFS='|' read -r pattern file alias_display; do
     [ -z "$pattern" ] && continue
 
     # Skip roles we've already fired for in this prompt (de-dupe).
@@ -445,8 +451,13 @@ detect_prompt_triggers() {
 
     if [ "$hit" = "1" ]; then
       # Capitalise the pattern for the display name (simple title-case).
+      # An alias row (AgDR-0301) carries the receiver's display name.
       local display
-      display=$(printf '%s' "$pattern" | awk '{for(i=1;i<=NF;i++)$i=toupper(substr($i,1,1)) substr($i,2);print}')
+      if [ -n "$alias_display" ]; then
+        display="$alias_display"
+      else
+        display=$(printf '%s' "$pattern" | awk '{for(i=1;i<=NF;i++)$i=toupper(substr($i,1,1)) substr($i,2);print}')
+      fi
       emit_banner \
         "$display" \
         "$file" \

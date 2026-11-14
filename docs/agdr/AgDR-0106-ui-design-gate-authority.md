@@ -4,7 +4,7 @@ timestamp: 2026-07-22T00:00:00Z
 agent: claude (Tech Lead — Hisham)
 model: claude-opus-4-8[1m]
 trigger: user-prompt
-status: executed
+status: superseded by AgDR-0301
 ---
 
 # UI design-gate authority: UI Designer owns the routine gate, Head of Design is the escalation

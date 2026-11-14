@@ -57,7 +57,7 @@ The following boundaries explain when to return that call:
 - **Choice between options:** The orchestrator asks the operator through `AskUserQuestion`.
   The [operator choices rule](../.claude/rules/reporting-style.md#operator-choices) specifies the menu and a numbered-list fallback.
 - **Scope change:** The [ceremony rule](../.claude/rules/right-size-ceremony.md) limits implementation to the acceptance criteria.
-  The [product role](../roles/product/product-manager.md) forbids roadmap changes without approval and reserves new ideas for the Head of Product.
+  The [product role](../roles/product/product-manager.md) forbids roadmap changes without approval and reserves new ideas for the human approver (AgDR-0301).
   These boundaries do not define a universal named human for every scope change. See Gaps.
 - **Merge approval:** The human approves a specific pull request (PR), at its exact head commit identifier (SHA).
   [/approve-merge](../.claude/skills/approve-merge/SKILL.md) rejects umbrella approval and records the checked SHA.

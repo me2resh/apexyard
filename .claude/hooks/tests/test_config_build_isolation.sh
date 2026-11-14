@@ -45,7 +45,7 @@ CONC_L3='Any build spawn while another writer is active on that checkout uses a 
 CONC_L4='Parallel means overlapping writers, including a build agent still working from an earlier spawn.'
 CONC_L5='The orchestrator decides the mode at spawn time and tells the agent which mode to use.'
 
-BUILD_AGENTS="backend-engineer frontend-engineer platform-engineer data-engineer product-manager ui-designer ux-designer"
+BUILD_AGENTS="backend-engineer frontend-engineer platform-engineer data-engineer product-manager ui-designer"
 
 has_concurrency_rule() {
   local f="$1"

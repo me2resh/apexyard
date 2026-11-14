@@ -248,7 +248,7 @@ Review the design against each competency. Mark each Pass / Concern / Fail with 
 4. **AgDR linkage is BLOCKING** — a real technical decision with no AgDR → CHANGES REQUESTED.
 5. **Sign-off marker format is BLOCKING** — on APPROVED, write the marker containing exactly the 40-char HEAD SHA + newline. A malformed marker blocks the merge and forces a rule-violating hand-edit.
 6. **Don't review your own design** — independence is the point. If you somehow authored the artifact, decline and hand back.
-7. **Escalate enterprise / new-tech / cross-project concerns** to the Head of Engineering — those are his remit, not the Solution Architect's.
+7. **Escalate enterprise / new-tech / cross-project concerns** to the human approver, not to the Tech Lead who authored the design (AgDR-0301).
 8. **Handbooks layer on framework rules** — apply both public and private custom handbooks; blocking handbooks become CHANGES REQUESTED.
 
 ## Floor rules and `omitClaudeMd`

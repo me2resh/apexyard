@@ -533,7 +533,7 @@ Non-JS/TS stacks need no action. The language check prevents analysis of non-JS/
 
 ## Optional: Local agent routing
 
-Agents can optionally route through a local Ollama instance with a LiteLLM proxy. This keeps prompts away from cloud APIs for specific tasks, such as ticket triage, data-analyst sketches, and exploratory rephrasing. See [`local-model-setup.md`](local-model-setup.md) for installation and configuration instructions.
+Agents can optionally route through a local Ollama instance with a LiteLLM proxy. This keeps prompts away from cloud APIs for specific tasks, such as ticket triage, data-engineer SQL sketches, and exploratory rephrasing. See [`local-model-setup.md`](local-model-setup.md) for installation and configuration instructions.
 
 You must enable local routing explicitly. If your `agent-routing.yaml` has no `endpoint:` field, every agent keeps its framework default. The default `/setup` output does not enable local routing.
 

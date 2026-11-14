@@ -90,6 +90,38 @@ When a future release adds a migration, this table is the source of truth. The r
 
 ---
 
+## Agent roster: 23 to 15
+
+The next release reduces the agent roster from 23 agents to 15 ([AgDR-0301](agdr/AgDR-0301-agent-roster-15.md), [#2027](https://github.com/me2resh/apexyard/issues/2027)).
+This release deprecates the eight removed agents. It does not remove them silently.
+No per-version migration script is necessary, because `/update` replaces the framework-owned agent and role files.
+
+| Removed agent (persona) | Receiver agent (persona) |
+|-------------------------|--------------------------|
+| `head-of-engineering` (Khalid) | `tech-lead` (Hisham) |
+| `head-of-product` (Omar) | `product-manager` (Mariam) |
+| `product-analyst` (Hanan) | `product-manager` (Mariam) |
+| `head-of-security` (Faisal) | `security-reviewer` (Hakim) |
+| `head-of-design` (Maha) | `ui-designer` (Nour) |
+| `ux-designer` (Iman) | `ui-designer` (Nour) |
+| `head-of-data` (Khalil) | `data-engineer` (Anwar) |
+| `data-analyst` (Nadia) | `data-engineer` (Anwar) |
+
+What changes for an adopter:
+
+1. A spawn with `subagent_type` set to a removed slug fails. Use the receiver slug.
+2. `agent-routing.yaml` ignores an entry for a removed agent. Move the entry to the receiver.
+3. A head-level approval goes to the human approver (`.review_markers.human_approver_title`, default `CEO`). No agent approves its own work.
+4. "Act as the Head of Product" and the other old titles still activate the receiver.
+5. Each removed role file is a redirect stub for one release. The release after it removes the stubs.
+   Change any custom link to a removed role file before then.
+6. Rex, Hakim, and Tariq keep their review gates. Naqid stays advisory. Hakim keeps read-only tools.
+
+If your fork edited a removed agent file, check for a local copy after `/update`.
+Merge the edits into the receiver, and then delete the local copy.
+
+---
+
 ## Common scenarios
 
 ### Multi-hop sync (the original motivation)
