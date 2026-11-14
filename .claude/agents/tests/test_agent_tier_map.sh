@@ -9,7 +9,7 @@
 #   3. Schema: three tiers, a claude and a codex column on each tier, and
 #      invalid maps exit 2.
 #   4. Reviewers sit on a stronger tier than builders. QA is on the build
-#      tier. Each department head declares an effort.
+#      tier. Each receiver of head-level work declares an effort.
 #   5. Sandbox: --check finds drift, the write fixes it, a second write
 #      changes nothing, and a one-line tier change moves every agent of
 #      that tier.
@@ -163,13 +163,14 @@ done
 [ "$(jq -r '.agents["qa-engineer"].tier' "$MAP")" = build ] \
   && mark_pass "QA is on the build tier" || mark_fail "QA is on the build tier" "$(jq -c '.agents["qa-engineer"]' "$MAP")"
 
+# AgDR-0301: the five receivers of the former head agents keep an effort.
 no_effort=""
-for h in head-of-engineering head-of-product head-of-design head-of-security head-of-data; do
+for h in tech-lead product-manager ui-designer security-reviewer data-engineer; do
   e=$(fm "$ROOT/.claude/agents/$h.md" effort)
   case "$e" in low|medium|high|xhigh|max) ;; *) no_effort="$no_effort $h" ;; esac
 done
-[ -z "$no_effort" ] && mark_pass "each department head declares an effort" \
-  || mark_fail "each department head declares an effort" "$no_effort"
+[ -z "$no_effort" ] && mark_pass "each receiver of head-level work declares an effort" \
+  || mark_fail "each receiver of head-level work declares an effort" "$no_effort"
 
 # ---------------------------------------------------------------------------
 echo "== 5. Sandbox write and --check"
@@ -186,7 +187,7 @@ cat > "$SB/.claude/harness-models.json" <<'JSON'
   "agents": {
     "code-reviewer": { "tier": "reason" },
     "qa-engineer":   { "tier": "build" },
-    "data-analyst":  { "tier": "light", "effort": "inherit" },
+    "light-helper":  { "tier": "light", "effort": "inherit" },
     "tech-lead":     { "tier": "reason", "effort": "medium" }
   },
   "stages": { "build": "medium" },
@@ -215,14 +216,14 @@ tools: Bash
 
 # Salim
 MD
-cat > "$SB/.claude/agents/data-analyst.md" <<'MD'
+cat > "$SB/.claude/agents/light-helper.md" <<'MD'
 ---
-name: data-analyst
+name: light-helper
 model: haiku
 effort: low
 ---
 
-# Nadia
+# Light helper
 MD
 cat > "$SB/.claude/agents/tech-lead.md" <<'MD'
 ---
@@ -259,7 +260,7 @@ out=$(bash "$SYNC" --root "$SB" --check 2>&1); rc=$?
 if [ "$rc" -eq 1 ] \
   && printf '%s' "$out" | grep -q "qa-engineer.md model: haiku (map: sonnet)" \
   && printf '%s' "$out" | grep -q "qa-engineer.md effort: (none) (map: medium)" \
-  && printf '%s' "$out" | grep -q "data-analyst.md effort: low (map: (none))" \
+  && printf '%s' "$out" | grep -q "light-helper.md effort: low (map: (none))" \
   && printf '%s' "$out" | grep -q "tech-lead.md model: (none) (map: opus)" \
   && printf '%s' "$out" | grep -q "debug/SKILL.md effort: high (map: medium)" \
   && printf '%s' "$out" | grep -q "custom.md is not in the tier map"; then
@@ -274,7 +275,7 @@ out=$(bash "$SYNC" --root "$SB" 2>&1); rc=$?
 if [ "$rc" -eq 0 ] \
   && [ "$(fm "$SB/.claude/agents/qa-engineer.md" model)" = sonnet ] \
   && [ "$(fm "$SB/.claude/agents/qa-engineer.md" effort)" = medium ] \
-  && [ -z "$(fm "$SB/.claude/agents/data-analyst.md" effort)" ] \
+  && [ -z "$(fm "$SB/.claude/agents/light-helper.md" effort)" ] \
   && [ "$(fm "$SB/.claude/agents/tech-lead.md" model)" = opus ] \
   && [ "$(fm "$SB/.claude/agents/tech-lead.md" effort)" = medium ] \
   && [ "$(fm "$SB/.claude/skills/debug/SKILL.md" effort)" = medium ]; then
@@ -341,7 +342,7 @@ mkdir -p "$FORK/.claude/hooks" "$FORK/.claude/agents" "$FORK/bin" "$FORK/project
   cp "$SB/.claude/harness-models.json" .claude/harness-models.json
   jq 'del(.agents.ghost) | del(.skills) | .stages = {}' .claude/harness-models.json > map.tmp
   mv map.tmp .claude/harness-models.json
-  for a in code-reviewer qa-engineer data-analyst tech-lead; do
+  for a in code-reviewer qa-engineer light-helper tech-lead; do
     printf -- '---\nname: %s\nmodel: haiku\n---\n\n# %s\n' "$a" "$a" > ".claude/agents/$a.md"
   done
   bash bin/sync-agent-tiers.sh >/dev/null 2>&1
@@ -397,18 +398,18 @@ CX="$TMP_ROOT/codex"
 mkdir -p "$CX/.claude/agents" "$CX/.claude/skills"
 printf '{ "hooks": {} }\n' > "$CX/.claude/settings.json"
 cp "$FORK/.claude/harness-models.json" "$CX/.claude/harness-models.json"
-cp "$FORK/.claude/agents/code-reviewer.md" "$FORK/.claude/agents/data-analyst.md" "$CX/.claude/agents/"
+cp "$FORK/.claude/agents/code-reviewer.md" "$FORK/.claude/agents/light-helper.md" "$CX/.claude/agents/"
 printf -- '---\nname: qa-engineer\ndescription: QA.\nmodel: ollama/qwen3\n---\n\n# QA\n' > "$CX/.claude/agents/qa-engineer.md"
 if bash "$CODEX_SYNC" --root "$CX" >"$TMP_ROOT/codex.out" 2>&1; then
   rex="$CX/.codex/agents/code-reviewer.toml"
-  nadia="$CX/.codex/agents/data-analyst.toml"
+  light="$CX/.codex/agents/light-helper.toml"
   qa="$CX/.codex/agents/qa-engineer.toml"
   grep -qx 'model = "gpt-5.5"' "$rex" && grep -qx 'model_reasoning_effort = "high"' "$rex" \
     && mark_pass "codex agent gets the tier codex model and effort" \
     || mark_fail "codex agent gets the tier codex model and effort" "$(grep '^model' "$rex")"
-  grep -qx 'model = "gpt-5.4-mini"' "$nadia" && ! grep -q '^model_reasoning_effort' "$nadia" \
+  grep -qx 'model = "gpt-5.4-mini"' "$light" && ! grep -q '^model_reasoning_effort' "$light" \
     && mark_pass "an inherit effort writes no codex effort line" \
-    || mark_fail "an inherit effort writes no codex effort line" "$(grep '^model' "$nadia")"
+    || mark_fail "an inherit effort writes no codex effort line" "$(grep '^model' "$light")"
   grep -qx 'model = "ollama/qwen3"' "$qa" \
     && mark_pass "a routing override model passes through to codex unchanged" \
     || mark_fail "a routing override model passes through" "$(grep '^model' "$qa")"

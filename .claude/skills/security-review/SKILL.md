@@ -24,7 +24,7 @@ When `/security-review` runs:
 
 1. **Primary reviewer**: the **Security Reviewer agent (Hakim)** at [`.claude/agents/security-reviewer.md`](../../agents/security-reviewer.md) — runs the automated security checklist.
 2. **Human approval gate**: the **[Security Auditor](../../../roles/security/security-auditor.md)** role — activates on any PR that touches auth / crypto / secrets / user data / PII, or when `/security-review` is explicitly invoked.
-3. **Escalation for strategic calls**: the **[Head of Security](../../../roles/security/head-of-security.md)** — threat modelling, compliance decisions, or novel attack surfaces.
+3. **Strategic calls**: **Hakim** owns threat modelling, compliance analysis, and novel attack surfaces (the [Security Auditor](../../../roles/security/security-auditor.md) § "Security posture", AgDR-0301). Risk acceptance and exceptions to security requirements go to the human approver.
 4. **For active testing**: the **[Penetration Tester](../../../roles/security/penetration-tester.md)** — exploit discovery, API security review, pre-release security sign-off.
 
 See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the full activation protocol.

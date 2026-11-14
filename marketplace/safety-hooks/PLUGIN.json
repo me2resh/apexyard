@@ -36,7 +36,7 @@
   "graduation_path": {
     "name": "apexyard (full framework)",
     "url": "https://github.com/me2resh/apexyard",
-    "what_you_get": "Two-marker merge gate (Rex + CEO), migration gate, active-ticket gate, leak protection, AgDR memory, 19 role definitions, portfolio registry",
+    "what_you_get": "Two-marker merge gate (Rex + CEO), migration gate, active-ticket gate, leak protection, AgDR memory, 12 role definitions, portfolio registry",
     "delivery": "fork-based ops repo (not a plugin)"
   }
 }

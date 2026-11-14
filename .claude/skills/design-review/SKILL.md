@@ -25,7 +25,7 @@ The Tech Lead *authors* the design; Tariq *reviews* it. Authoring and reviewing 
 When `/design-review` runs:
 
 1. **Primary reviewer**: the **Solution Architect agent (Tariq)** at [`.claude/agents/solution-architect.md`](../../agents/solution-architect.md) — reviews the design against the architecture review lens (NFRs, patterns, tech debt, AgDR linkage, risk, trade-offs, traceability, migration safety) and discovers + applies adopter handbooks exactly as Rex does.
-2. **Escalation**: the **[Head of Engineering](../../../roles/engineering/head-of-engineering.md)** — for enterprise / cross-project / new-tech-stack concerns that exceed the Solution Architect's remit.
+2. **Escalation**: the **human approver** (AgDR-0301) — for enterprise / cross-project / new-tech-stack concerns that exceed the Solution Architect's remit. The escalation does not go to the Tech Lead, who authored the design.
 3. **Conditional Security Auditor**: if the design touches auth / crypto / secrets / user data, chain `/security-review` for the deeper pass.
 
 See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the full activation protocol. Per the role's `isolated-work-class`, the reviewer runs as a spawned sub-agent.

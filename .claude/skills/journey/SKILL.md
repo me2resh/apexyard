@@ -26,7 +26,7 @@ Generate a single self-contained HTML file at `projects/<name>/journeys/<feature
 
 ## Activated role
 
-When `/journey` runs, activate the **[UX Designer](../../../roles/design/ux-designer.md)** role — they own user flows and information architecture. For PRD parsing in mode (a), the **[Product Manager](../../../roles/product/product-manager.md)** is the supporting role (they wrote the PRD). See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the full activation protocol.
+When `/journey` runs, activate the **[UI Designer](../../../roles/design/ui-designer.md)** role — they own user flows and information architecture (AgDR-0301). For PRD parsing in mode (a), the **[Product Manager](../../../roles/product/product-manager.md)** is the supporting role (they wrote the PRD). See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the full activation protocol.
 
 ## Path resolution
 

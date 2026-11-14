@@ -109,7 +109,6 @@ fi
 # Browser tools: server-level entry for the Playwright MCP server.
 assert_tool qa-engineer 'mcp__playwright__*'
 assert_tool ui-designer 'mcp__playwright__*'
-assert_tool head-of-design 'mcp__playwright__*'
 # Skill: QA runs /bug; the UI designer runs /design-sync.
 assert_tool qa-engineer Skill
 assert_tool ui-designer Skill
@@ -118,6 +117,19 @@ assert_tool ui-designer DesignSync
 # Web research: product manager.
 assert_tool product-manager WebSearch
 assert_tool product-manager WebFetch
+
+# AgDR-0301: Hakim took the Head of Security work and keeps read-only tools.
+hakim="$AGENTS_DIR/security-reviewer.md"
+if list_has "$(fm_value "$hakim" disallowedTools)" Edit; then
+  pass "security-reviewer.md disallows Edit"
+else
+  fail "security-reviewer.md does not list Edit in disallowedTools"
+fi
+if list_has "$(fm_value "$hakim" tools)" Edit; then
+  fail "security-reviewer.md lists Edit in tools"
+else
+  pass "security-reviewer.md does not grant Edit in tools"
+fi
 
 printf '\n%s passed, %s failed (%s agent files)\n' "$PASS" "$FAIL" "$count"
 [ "$FAIL" -eq 0 ]

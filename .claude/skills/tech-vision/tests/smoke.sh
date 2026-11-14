@@ -261,7 +261,7 @@ trap 'rm -rf "$TMPROOT" "$OUT"' EXIT
         echo "- **Custom auth provider** — *Rationale: identity is not a differentiator; vendor lock-in acceptable. Reconsider only on a vendor exit event.*"
         ;;
       "Review cadence")
-        echo "Reviewed **quarterly** by Tech Lead + Head of Engineering."
+        echo "Reviewed **quarterly** by Tech Lead + the human approver."
         ;;
     esac
     echo ""

@@ -13,16 +13,17 @@ When spawning substantive build/coding/design work via the `Agent` tool, pick `s
 | Backend / domain / application logic, APIs, database schema | `backend-engineer` |
 | UI components, design-system integration, accessibility | `frontend-engineer` |
 | CI/CD pipelines, hooks, IaC, developer tooling, golden-path templates | `platform-engineer` |
-| Technical design docs, architecture review, task breakdown | `tech-lead` (author) / `solution-architect` (independent reviewer) |
-| PRDs, user stories, acceptance criteria | `product-manager` |
-| ETL, data modelling, warehouse schema, data quality | `data-engineer` |
-| Visual design, component specs, design tokens | `ui-designer` |
-| User flows, information architecture, usability | `ux-designer` |
+| Technical design docs, architecture principles, stack standards, task breakdown | `tech-lead` (author) / `solution-architect` (independent reviewer) |
+| PRDs, user stories, acceptance criteria, roadmap, feasibility, market research | `product-manager` |
+| ETL, data modelling, warehouse schema, data quality, SQL analysis, dashboards, data governance | `data-engineer` |
+| Visual design, component specs, design tokens, design system, user flows, information architecture, usability | `ui-designer` |
 | Code review of a diff | `code-reviewer` |
-| Security / OWASP / SAST review | `security-reviewer` |
+| Security / OWASP / SAST review, threat models, security posture (read-only) | `security-reviewer` |
 | Genuine research or code search with no role home — "where is X defined", "how do libraries A/B/C compare" | `general-purpose` or `Explore` |
 
 The last row is the escape valve, not the default. `general-purpose` is for work that doesn't decompose into a role at all — open-ended investigation, multi-location search, a question with no single owning discipline. It is not a shortcut for "I don't want to look up which role fits."
+
+The roster holds 15 agents (AgDR-0301). There is no department-head agent. Spawn the receiver for strategy work: `tech-lead`, `product-manager`, `ui-designer`, `security-reviewer`, or `data-engineer`. A head-level approval goes to the human approver, not to an agent.
 
 ## When to apply this (proactively)
 

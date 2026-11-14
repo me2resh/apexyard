@@ -112,7 +112,7 @@ Columns:
 | Ticket must exist before `gh pr create` | `.claude/rules/pr-workflow.md § Before gh pr create` | `validate-pr-create.sh` (branch-ID + issue-exists checks) | yes | mechanized |
 | Ticket must have acceptance criteria before `gh pr create` | `.claude/rules/pr-workflow.md § Before gh pr create` | prose | no | AC-content detection needs issue-body parsing and scoring: not a shell-hook job [^advisory] |
 | Branch name has ticket ID before `gh pr create` | `.claude/rules/pr-workflow.md § Before gh pr create` | `validate-branch-name.sh` + `validate-pr-create.sh` | yes | mechanized |
-| Approval requirements by change type (infra +1 platform, security +1 auditor, arch → Head of Eng) | `workflows/code-review.md § Approval Requirements` | prose | no | change-type detection is ambiguous (what counts as "infra"?); role activation handles the soft version |
+| Approval requirements by change type (infra +1 platform, security +1 auditor, arch → Tariq + human approver) | `workflows/code-review.md § Approval Requirements` | prose | no | change-type detection is ambiguous (what counts as "infra"?); role activation handles the soft version |
 
 ### 4. Technical decisions (AgDR)
 

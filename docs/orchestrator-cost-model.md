@@ -13,8 +13,8 @@ Full design rationale: [AgDR-0074](agdr/AgDR-0074-orchestrator-cost-model.md). U
 | Tier | Agents (examples) | Why |
 |------|-------------------|-----|
 | `opus` (`reason` tier) | Tech Lead, SRE, Pen Tester, **Security Auditor (Hakim)**, **Code Reviewer (Rex)** | Depth-bound reasoning |
-| `sonnet` (`build` tier) | **Backend / Frontend Engineer**, Platform / Data Engineer, Product Manager, **UI Designer (Nour)**, UX Designer, QA Engineer | Implementation + tool-use default |
-| `haiku` (`light` tier) | Data Analyst | Checklist-shaped, repeatable work |
+| `sonnet` (`build` tier) | **Backend / Frontend Engineer**, Platform / Data Engineer, Product Manager, **UI Designer (Nour)**, QA Engineer | Implementation + tool-use default |
+| `haiku` (`light` tier) | No shipped agent since AgDR-0301. Adopters can route an agent here. | Checklist-shaped, repeatable work |
 
 The tier map in [`.claude/harness-models.json`](../.claude/harness-models.json) now holds this matrix. See [Agent model and effort](agents/effort.md).
 
@@ -22,8 +22,8 @@ The matrix is real and correct: **but it only applies to *spawned* sub-agents.**
 
 Per [AgDR-0050 § Axis 6](agdr/AgDR-0050-agent-runtime-overhaul.md), role activations split into two classes:
 
-- **Isolated-work-class** roles (QA, Pen Tester, Data Analyst, Heads-of-X, **Security Auditor, Code Reviewer**, Tech Lead reviews) → auto-triggers **spawn a sub-agent**. The matrix applies. ✅
-- **In-flow-class** roles (**Backend / Frontend Engineer**, Platform / Data Engineer, Product Manager, UI / UX Designer) → auto-triggers keep **in-thread persona adoption**. This is because spawning out-of-thread loses the shared context of recent events that ship-the-code flow needs.
+- **Isolated-work-class** roles (QA, Pen Tester, SRE, Solution Architect, **Security Auditor, Code Reviewer**, Tech Lead reviews) → auto-triggers **spawn a sub-agent**. The matrix applies. ✅
+- **In-flow-class** roles (**Backend / Frontend Engineer**, Platform / Data Engineer, Product Manager, UI Designer) → auto-triggers keep **in-thread persona adoption**. This is because spawning out-of-thread loses the shared context of recent events that ship-the-code flow needs.
 
 In-thread adoption **does not spawn anything**: it injects the role file into the main thread. The thread keeps running on whatever model is driving the conversation (typically your primary tier, usually **Opus**). So:
 
@@ -89,8 +89,8 @@ agents:
     model: sonnet          # framework default; explicit pin guards against drift
   frontend-engineer:
     model: sonnet          # framework default; explicit pin
-  data-analyst:
-    model: haiku           # framework default; or bump to sonnet for richer SQL
+  data-engineer:
+    model: sonnet          # framework default; or bump to opus for deeper SQL analysis
 ```
 
 At SessionStart the sync hook (`apply-agent-routing.sh`) rewrites the affected agent-file frontmatter in place; drift guards keep adopter routing choices out of the public fork. See [`agent-routing.yaml.example`](../agent-routing.yaml.example) for the full schema (model / endpoint / env / timeout) and [`docs/local-model-setup.md`](local-model-setup.md) for local Ollama endpoint routing. This routing provides a further cost / privacy lever for specific agents.

@@ -211,5 +211,6 @@ Response:
 | Role | Name | Date | Status |
 |------|------|------|--------|
 | Tech Lead | | | Author |
-| Head of Engineering | | | Pending |
+| Solution Architect (review) | | | Pending |
+| Human approver (major designs) | | | Pending |
 | Security (if needed) | | | Pending |

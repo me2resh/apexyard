@@ -53,7 +53,7 @@ Honest list of what stays in the full framework:
 
 - **Portfolio model** — `apexyard.projects.yaml`, multi-repo aggregation, `/projects` / `/inbox` / `/tasks` across an org
 - **`/handover`** — adopting an external repo, harnessability scoring across 5 codebase dimensions
-- **Role definitions** — 19 roles (Tech Lead / QA / Security Auditor / SRE / etc.) with auto-activation triggers, CAN / CANNOT boundaries, handoff artefacts
+- **Role definitions** — 12 roles (Tech Lead / QA / Security Auditor / SRE / etc.) with auto-activation triggers, CAN / CANNOT boundaries, handoff artefacts
 - **AgDR memory** — `/decide`, `/agdr`, portfolio-wide decision search
 - **Merge gate** — Rex (Code Reviewer) + the two-marker per-PR CEO approval pattern
 - **Migration gate** — labelled tracker issue + AgDR enforcement for schema changes
@@ -75,12 +75,11 @@ If your use case requires zero references to the full framework — e.g. you're 
 
 ## Graduation path: the full framework
 
-This sub-pack is one tooth of the ApexYard governance comb. The full framework includes everything above — 19 role definitions, a portfolio registry, AgDR memory, the two-marker merge gate, migration enforcement, and the rest — and is delivered by **forking** the upstream repo into your own ops repo (it's not a plugin; the framework IS the ops repo).
+This sub-pack is one tooth of the ApexYard governance comb. The full framework includes everything above — 12 role definitions, a portfolio registry, AgDR memory, the two-marker merge gate, migration enforcement, and the rest — and is delivered by **forking** the upstream repo into your own ops repo (it's not a plugin; the framework IS the ops repo).
 
 If your scope grows past "audit a project occasionally" into "govern a portfolio of repos with consistent SDLC, automated reviewers, and shared decision memory", graduate to the full framework:
 
 - **Upstream**: <https://github.com/me2resh/apexyard>
-- **Landing site**: <https://yard.apexscript.com>
 - **Setup guide**: `docs/multi-project.md` in the upstream repo (5 minutes from fork to first `/projects`)
 
 The funnel direction is one-way: the marketplace plugin points at the framework, the framework doesn't push back. Use this sub-pack as long as it fits your scope; graduate when it doesn't.
