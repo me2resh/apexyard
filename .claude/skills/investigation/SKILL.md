@@ -315,7 +315,7 @@ Suggested follow-up skills depending on what the investigation surfaces:
 5. **Live-doc is the working surface.** The GitHub issue tracks visibility + close state; the live-doc holds the evolving evidence + findings.
 6. **Close semantics are different from every other ticket type.** Investigations close when every Follow-up action is resolved or explicitly dropped — NOT on PR merge. The `investigation` label is the signal that downstream automation (if any) should treat the ticket as long-running.
 7. **Labels.** `investigation` always. Priority labels (P0 / P1 / etc.) are NOT applied by default — investigations are scoped by *the question*, not prioritised by P-class. If the investigation is incident-driven and the operator wants a P-label, they can add one manually.
-8. **No close gate (no `/investigation-close` skill).** The Follow-up actions section IS the close gate. Operators close the issue when actions land. Different from `/spike-close` because investigations have an open-ended action list, not a binary disposition. See AgDR-0027 for the rationale.
+8. **No close gate (no `/investigation-close` skill).** The Follow-up actions section IS the close gate. Operators close the issue when actions land. Different from `/spike --close` because investigations have an open-ended action list, not a binary disposition. See AgDR-0027 for the rationale.
 9. **Template override.** Adopters who prefer Five Whys / Fishbone over the default Hypothesis Tree drop a replacement at `<private_repo>/custom-templates/tickets/investigation.md`. The skill resolves via `portfolio_resolve_template tickets/investigation.md` — no skill changes needed.
 
 ## How investigations relate to other skills

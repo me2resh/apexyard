@@ -240,11 +240,13 @@ assert_grep "Template has H1"            "^# GEO Audit"     "$TEMPLATE"
 assert_grep "Template has Findings hdr"  "^## Findings"     "$TEMPLATE"
 
 # ---------------------------------------------------------------------------
-# 11. CLAUDE.md skill count + row
+# 11. Skill table count matches the tracked skills + /geo-audit row present
+#     (the count is computed, so it does not go stale; me2resh/apexyard#2028)
 # ---------------------------------------------------------------------------
 echo ""
-echo "11. CLAUDE.md skill count is 53 + /geo-audit row present:"
-assert_grep "Skill count is 53"   "^### Available skills \\(53\\)"     "$CLAUDEMD"
+skill_total=$(git -C "$ops_root" ls-files '.claude/skills/*/SKILL.md' | awk -F/ '$3 !~ /^_/' | wc -l | tr -d ' ')
+echo "11. Skill table count is $skill_total + /geo-audit row present:"
+assert_grep "Skill count is $skill_total"   "^### Available skills \\($skill_total\\)"     "$CLAUDEMD"
 assert_grep "Skill row present"   "^\\| \`/geo-audit\`"                 "$CLAUDEMD"
 
 # ---------------------------------------------------------------------------

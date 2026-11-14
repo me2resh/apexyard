@@ -57,6 +57,12 @@ for skill in compliance-check extract-features geo-audit split-portfolio tech-vi
   check test "$(head -n 1 "$file")" = '---'
   check test "$(awk '/^---$/{n++; if(n==2){print n;exit}}' "$file")" = 2
 done
+# The close bodies moved into mode files (me2resh/apexyard#2028). The alias
+# stubs above keep the line, and the mode files carry it too.
+for mode in spike/close.md prototype/close.md; do
+  count=$(grep -xc 'Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.' "$ROOT/.claude/skills/$mode" || true)
+  check test "$count" -eq 1
+done
 for skill in approve-merge approve-design code-review task start-ticket; do
   cap=16000; [ "$skill" != approve-merge ] || cap=14000
   check test "$(wc -c < "$ROOT/.claude/skills/$skill/SKILL.md")" -le "$cap"

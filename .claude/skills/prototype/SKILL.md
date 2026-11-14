@@ -1,7 +1,7 @@
 ---
 name: prototype
-description: Create a throwaway UX/demo prototype ticket (mockup / demo flow). Answers "what should it look and feel like?". DISCARD-by-default; same AgDR + coverage exemptions as /spike.
-argument-hint: "<short title of the prototype>"
+description: Create a throwaway UX/demo prototype ticket, or close one with `--close --promote|--discard`. DISCARD-by-default; same AgDR + coverage exemptions as /spike.
+argument-hint: "<short title of the prototype> | --close --promote|--discard [<prototype-ticket-number>]"
 allowed-tools: Bash, Read, Write, AskUserQuestion
 ---
 
@@ -16,8 +16,8 @@ Creates a structured GitHub Issue for a **prototype** — a disposable UX/demo a
 >
 > | Skill | Question it answers | Lifecycle |
 > |-------|---------------------|-----------|
-> | `/spike` | "Will this **technically** work?" | **THROWAWAY** — discarded after the technical answer is in (`/spike-close`). |
-> | **`/prototype`** | "What should this **look and feel** like?" | **THROWAWAY** — discarded after the UX/demo direction is chosen (`/prototype-close`). |
+> | `/spike` | "Will this **technically** work?" | **THROWAWAY** — discarded after the technical answer is in (`/spike --close`). |
+> | **`/prototype`** | "What should this **look and feel** like?" | **THROWAWAY** — discarded after the UX/demo direction is chosen (`/prototype --close`). |
 > | `/walking-skeleton` | "Is the **whole architecture** wired end-to-end?" | **KEPT** — the production spine you flesh out. Full SDLC. |
 >
 > `/prototype` and `/spike` are **both throwaway** — the difference is the *question*. A spike answers a **technical feasibility** question ("will library X scale?", "can we replace Auth0?"). A prototype answers a **UX/demo direction** question ("which onboarding flow feels right?", "what should the dashboard look like for the investor demo?"). If your question is "will it work?", file a `/spike` instead. If you need a minimal-but-**kept** end-to-end slice, you want `/walking-skeleton`. See `workflows/sdlc.md` § Phase 1.
@@ -40,7 +40,20 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 /prototype Which onboarding flow feels right
 /prototype Dashboard look-and-feel for the investor demo
 /prototype Clickable checkout mockup to test the 2-step vs 1-step
+/prototype --close --promote 142     # close mode: direction chosen, file a [Feature]
+/prototype --close --discard         # close mode: uses the active-ticket marker, writes a memo
 ```
+
+## Close mode — `/prototype --close`
+
+Check `$ARGUMENTS` first, before any other step.
+If the first word is `--close`, read `close.md` in this skill's directory (`.claude/skills/prototype/close.md`).
+Follow that file with the same `$ARGUMENTS`, then stop.
+In close mode, do not run the creation steps below. Do not write the active-issue-skill marker of step 0.
+The close mode keeps every behaviour of the old `/prototype-close` skill: the PROMOTE and DISCARD paths, the follow-up `[Feature]`, the memo path, and the close comment.
+`/prototype-close` still works as a deprecated alias that loads the same file.
+
+If `$ARGUMENTS` does not start with `--close`, run the creation process below.
 
 ## Process
 
@@ -296,9 +309,9 @@ When you start work:
 ### 9. Remind the operator about the disposition gate
 
 ```
-When the prototype closes, run /prototype-close to record the disposition:
-  /prototype-close --promote   # direction chosen → file a [Feature]
-  /prototype-close --discard   # direction rejected → write a memo
+When the prototype closes, run /prototype --close to record the disposition:
+  /prototype --close --promote   # direction chosen → file a [Feature]
+  /prototype --close --discard   # direction rejected → write a memo
 
 Closing the prototype without running this gate is allowed (closure is the
 operator's call) but skips the memo / promotion artefact and leaves no
@@ -323,13 +336,13 @@ A prototype PR is exempt from the production SDLC subset listed below — the **
 | Gate | Production work | Prototype work |
 |------|----------------|----------------|
 | Pre-Build (parent epic, story tickets, ACs, design review) | Required | Skipped — the prototype ticket IS the unit |
-| AgDR for technical decisions (`require-agdr-for-arch-pr.sh`, `require-agdr-for-arch-changes.sh`) | Required | Skipped — ship a memo on `/prototype-close --discard` instead |
+| AgDR for technical decisions (`require-agdr-for-arch-pr.sh`, `require-agdr-for-arch-changes.sh`) | Required | Skipped — ship a memo on `/prototype --close --discard` instead |
 | Test coverage > 80% | Required | Skipped — coverage is irrelevant for throw-away mockups |
 | Code Reviewer agent (Rex) | Required on every PR | **Required** — even throw-away code gets a sanity check |
 | Security Auditor (auth/crypto/secrets diff) | Required | **Required** — security gates fire regardless of intent |
 | Glossary in PR body | Required | **Required** — prototype PRs explain WHAT DIRECTION WAS LEARNED, which is the artefact |
 | QA Engineer verification | Required (AC verification) | **Required** (Direction verification: did we learn what to build?) |
-| Disposition decision before close | N/A | **Required** — operator must declare PROMOTE or DISCARD via `/prototype-close` |
+| Disposition decision before close | N/A | **Required** — operator must declare PROMOTE or DISCARD via `/prototype --close` |
 
 See `.claude/rules/workflow-gates.md` § Spike work for the rule statement (which covers prototype work under the same exemption set), `.claude/skills/spike/SKILL.md` (the throwaway technical sibling), and `.claude/skills/walking-skeleton/SKILL.md` (the kept end-to-end slice).
 

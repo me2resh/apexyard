@@ -71,7 +71,7 @@ A single onboarding surface has to solve both without making the technical adopt
 
 **Acceptance Criteria**:
 
-- [ ] On a genuinely fresh fork (no `onboarding.yaml`, no registered projects — the same detection `/setup` already uses), the first-run flow opens with a short, scannable capability tour: what a role is, what a skill is, what a gate is, framed in one or two sentences each with a concrete example (not the full 64-skill table).
+- [ ] On a genuinely fresh fork (no `onboarding.yaml`, no registered projects — the same detection `/setup` already uses), the first-run flow opens with a short, scannable capability tour: what a role is, what a skill is, what a gate is, framed in one or two sentences each with a concrete example (not the full skill table).
 - [ ] The tour is skippable in one word ("skip") for an adopter who already knows the framework (e.g. re-running on a second fork).
 - [ ] The tour does not require reading `docs/multi-project.md` or `CLAUDE.md` in full — it is self-contained.
 

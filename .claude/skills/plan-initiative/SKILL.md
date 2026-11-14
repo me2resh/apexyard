@@ -468,7 +468,7 @@ more URL-parsing). Record `milestone_name → ref` in an in-memory map for pass 
 (the map now holds tracker references, so a non-numeric tracker key like `LIN-42`
 works unchanged — do not do arithmetic on it).
 
-On non-zero exit, stop pass 1 immediately. Use the same failure-handling shape as `/tickets-batch` § "Failure handling" (4 options: Retry, Skip, Edit, Abort; don't roll back filed tickets on abort).
+On non-zero exit, stop pass 1 immediately. Use the same failure-handling shape as `/task --batch` § "Failure handling" (`.claude/skills/task/batch.md`) (4 options: Retry, Skip, Edit, Abort; don't roll back filed tickets on abort).
 
 #### Pass 2 — add cross-references to each filed ticket
 

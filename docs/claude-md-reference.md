@@ -30,12 +30,14 @@ See `docs/getting-started.md` for the integration model and for how to install t
 ### Available skills (72)
 
 Each row gives one line for a skill. The full text for each skill is in `.claude/skills/<name>/SKILL.md`.
+The count includes 3 deprecated aliases: `/spike-close`, `/prototype-close`, and `/tickets-batch` (me2resh/apexyard#2028).
+Each alias passes its arguments to the new mode. The next release deprecates the aliases, and the release after that removes them.
 
 | Skill | Purpose |
 |-------|---------|
 | `/preflight` | Read-only environment checks before setup. Also available as `apexyard doctor`. |
 | `/setup` | First-run bootstrap. Configures `onboarding.yaml` in 3 exchanges. |
-| `/launch-check` | Production readiness audit. Runs a 10-dimension go/no-go check at milestone boundaries. The opt-in `--workflow` mode runs the dimensions in parallel. |
+| `/launch-check` | Quick 10-dimension go/no-go check at milestones. On WARN or FAIL, it names and offers the matching full audit. `--workflow` runs in parallel. |
 | `/threat-model` | STRIDE threat model: spoofing, tampering, repudiation, disclosure, DoS, and EoP. |
 | `/accessibility-audit` | WCAG 2.1 AA accessibility audit: perceivable, operable, understandable, robust. |
 | `/compliance-check` | GDPR and ePrivacy compliance: consent, privacy policy, data handling, and user rights. |
@@ -69,14 +71,14 @@ Each row gives one line for a skill. The full text for each skill is in `.claude
 | `/bug` | Creates a structured bug ticket with Given/When/Then, repro steps, and severity. |
 | `/report-apexyard-bug` | Reports a bug in the apexyard framework itself to `me2resh/apexyard`, with leak scrubbing. Different from `/bug`. |
 | `/request-apexyard-feature` | Requests a feature for the apexyard framework itself from `me2resh/apexyard`. Different from `/feature`. |
-| `/task` | Creates a structured technical task ticket with a driver, scope, and acceptance criteria. |
-| `/tickets-batch` | Files 5 to 20 structured tickets in one shared-context flow. |
+| `/task` | Creates a structured technical task ticket. `--batch` files 2 to 20 mixed tickets in one shared-context flow. |
+| `/tickets-batch` | Deprecated alias for `/task --batch`. |
 | `/migration` | Creates a labelled migration ticket and a migration AgDR. The migration gate needs them. |
-| `/spike` | Creates a time-boxed spike ticket with a hypothesis. Answers "will it work?". Throwaway. Exempt from the AgDR and coverage gates. |
+| `/spike` | Creates a time-boxed spike ticket. `--close --promote` files a feature; `--close --discard` writes a memo. Exempt from the AgDR and coverage gates. |
 | `/scaffold` | Interviews the owner and generates the project floor from a validated scaffold spec. |
-| `/spike-close` | Disposition gate for spikes. `--promote` files a feature. `--discard` writes a memo. |
-| `/prototype` | Creates a throwaway UX or demo prototype ticket. Answers "how should it look and feel?". Same exemptions as `/spike`. |
-| `/prototype-close` | Disposition gate for prototypes. `--promote` files a feature. `--discard` writes a memo. |
+| `/spike-close` | Deprecated alias for `/spike --close`. |
+| `/prototype` | Creates a throwaway UX or demo prototype ticket. `--close --promote` or `--close --discard` records the disposition. Same exemptions as `/spike`. |
+| `/prototype-close` | Deprecated alias for `/prototype --close`. |
 | `/walking-skeleton` | Creates a feature ticket for the thinnest end-to-end slice through every layer. The team keeps and grows it. Full SDLC. |
 | `/codify-rule` | Turns a review comment that caught a Rex miss into a draft handbook entry. |
 | `/investigation` | Creates an investigation ticket and a live document for long root-cause work. |

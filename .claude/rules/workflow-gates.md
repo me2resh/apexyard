@@ -117,18 +117,18 @@ Default design-artifact patterns (configurable via `.claude/project-config.json`
 
 Spike tickets (prefix `[Spike]`, label `spike`) are hypothesis-driven, time-boxed, throw-away exploration. The full production SDLC is the wrong bar: author avoidance is the failure mode. The exemption set below is **surgical, not blanket**:
 
-> **Prototype work shares this exemption.** Prototype tickets (prefix `[Prototype]`, label `prototype`, branch `prototype/...`, PR type `prototype(...)`) are the throw-away **UX/demo** sibling of spikes. They have the same disposable lifecycle, but a different question ("what should it look/feel like?" vs "will it work?"). The AgDR + coverage exemptions in the table below apply to prototype work identically; substitute `/prototype` for `/spike` and `/prototype-close` for `/spike-close`. The **walking skeleton** (`/walking-skeleton`) is the deliberate opposite: a **kept** thin end-to-end slice held to the FULL SDLC with **no** exemptions. See `.claude/skills/{spike,prototype,walking-skeleton}/SKILL.md`.
+> **Prototype work shares this exemption.** Prototype tickets (prefix `[Prototype]`, label `prototype`, branch `prototype/...`, PR type `prototype(...)`) are the throw-away **UX/demo** sibling of spikes. They have the same disposable lifecycle, but a different question ("what should it look/feel like?" vs "will it work?"). The AgDR + coverage exemptions in the table below apply to prototype work identically; substitute `/prototype` for `/spike` and `/prototype --close` for `/spike --close`. The **walking skeleton** (`/walking-skeleton`) is the deliberate opposite: a **kept** thin end-to-end slice held to the FULL SDLC with **no** exemptions. See `.claude/skills/{spike,prototype,walking-skeleton}/SKILL.md`.
 
 | Gate | Production work | Spike work |
 |------|----------------|------------|
 | Pre-Build (parent epic, story tickets, ACs, design review) | Required | Skipped: the spike ticket IS the unit |
-| AgDR for technical decisions (`require-agdr-for-arch-pr.sh`, `require-agdr-for-arch-changes.sh`) | Required | Skipped: ship a memo on `/spike-close --discard` instead |
+| AgDR for technical decisions (`require-agdr-for-arch-pr.sh`, `require-agdr-for-arch-changes.sh`) | Required | Skipped: ship a memo on `/spike --close --discard` instead |
 | Test coverage > 80% | Required | Skipped: coverage is irrelevant for throw-away code |
 | Code Reviewer agent (Rex) | Required on every PR | **Required**: even throw-away code gets a sanity check |
 | Security Auditor (auth/crypto/secrets diff) | Required | **Required**: security gates fire regardless of intent |
 | Glossary in PR body | Required | **Required**: spike PRs explain WHAT THE SPIKE TAUGHT, which is the artefact |
 | QA Engineer verification | Required (AC verification) | **Required** (Hypothesis verification: did we answer the question?) |
-| Disposition decision before close | N/A | **Required**: operator must declare PROMOTE or DISCARD via `/spike-close` |
+| Disposition decision before close | N/A | **Required**: operator must declare PROMOTE or DISCARD via `/spike --close` |
 
 **Detection.** AgDR-required hooks detect a spike (or prototype) PR via:
 
@@ -136,7 +136,7 @@ Spike tickets (prefix `[Spike]`, label `spike`) are hypothesis-driven, time-boxe
 2. Active ticket marker references a `[Spike]`- or `[Prototype]`-prefixed ticket
 3. Branch name starts with `spike/` or `prototype/`
 
-Any one match exempts the gate; otherwise the production rule applies. See `.claude/skills/spike/SKILL.md`, `.claude/skills/spike-close/SKILL.md`, `.claude/skills/prototype/SKILL.md`, `.claude/skills/prototype-close/SKILL.md`, and `docs/agdr/AgDR-0017-spike-skill-schema-and-exemptions.md`.
+Any one match exempts the gate; otherwise the production rule applies. See `.claude/skills/spike/SKILL.md`, `.claude/skills/spike/close.md`, `.claude/skills/prototype/SKILL.md`, `.claude/skills/prototype/close.md`, and `docs/agdr/AgDR-0017-spike-skill-schema-and-exemptions.md`.
 
 ## QA State is Mandatory
 

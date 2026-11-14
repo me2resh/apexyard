@@ -1,8 +1,8 @@
 ---
 name: task
-description: Create a structured technical task ticket (driver, scope, ACs) for tech debt, infra, refactoring, or non-user-facing changes.
-argument-hint: "<short title of the task>"
-allowed-tools: Bash, Read, Write
+description: Create a structured technical task ticket (driver, scope, ACs) for tech debt, infra, refactoring, or non-user-facing changes. `--batch` files 2 to 20 tickets.
+argument-hint: "<short title of the task> | --batch [--project <repo>] [--priority <P>] [--parent <ref>] [--labels <a,b>] [<file-or-description>]"
+allowed-tools: Bash, Read, Write, AskUserQuestion
 ---
 
 # /task — Create a Technical Task Ticket
@@ -29,7 +29,20 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 /task Set up PR-triggered CI pipeline
 /task Extract shared LikeCount component
 /task Migrate from DiceBear to local avatars
+/task --batch ./backlog-batches/auth-refactor.md          # batch mode: 2 to 20 mixed tickets
+/task --batch --priority P1 --parent #42 File the auth refactor tickets
 ```
+
+## Batch mode — `/task --batch`
+
+Check `$ARGUMENTS` first, before any other step.
+If the first word is `--batch`, read `batch.md` in this skill's directory (`.claude/skills/task/batch.md`).
+Follow that file with the same `$ARGUMENTS`, then stop. Do not run the single-ticket steps below.
+Batch mode keeps every behaviour of the old `/tickets-batch` skill: mixed ticket types, the 2 to 20 limit, one batch confirmation, and partial-failure handling.
+The optional `--project`, `--priority`, `--parent`, and `--labels` flags prefill the shared questions.
+`/tickets-batch` still works as a deprecated alias that loads the same file.
+
+If `$ARGUMENTS` does not start with `--batch`, run the single-ticket process below. It is unchanged.
 
 ## Process
 
