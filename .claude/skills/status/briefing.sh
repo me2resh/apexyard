@@ -246,7 +246,7 @@ role_labels=(
   platform        platform-engineer
   sre
   data            data-engineer
-  ux              ux-designer
+  ux
   ui              ui-designer
   product         product-manager
   techlead        tech-lead

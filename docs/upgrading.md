@@ -117,7 +117,7 @@ What changes for an adopter:
 
 1. A spawn with `subagent_type` set to a removed slug fails. Use the receiver slug.
 2. `agent-routing.yaml` ignores an entry for a removed agent. Move the entry to the receiver.
-3. A head-level approval goes to the human approver (`.review_markers.human_approver_title`, default `CEO`). No agent approves its own work.
+3. A head-level approval goes to the human approver: the person who records the per-PR merge approval. `.review_markers.human_approver_title` only sets the printed title (default `CEO`). Record each head-level decision in an AgDR or a PR approval comment. No agent approves its own work.
 4. "Act as the Head of Product" and the other old titles still activate the receiver.
 5. Each removed role file is a redirect stub for one release. The release after it removes the stubs.
    Change any custom link to a removed role file before then.

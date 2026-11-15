@@ -53,8 +53,8 @@ The review gates must not change:
 ## Decision
 
 Chosen: **merge each removed agent into one receiver, and move head-level approvals to the human approver**.
-The human approver is the person that `.review_markers.human_approver_title` names (default `CEO`).
-The same person records each per-PR merge approval.
+The human approver is the person who records each per-PR merge approval.
+The config key `.review_markers.human_approver_title` only sets the title that hooks print (default `CEO`). No hook records a head-level decision. Record each one in an AgDR or in the PR approval comment.
 
 ### Roster map (23 agents)
 
@@ -107,6 +107,10 @@ An escalation now goes to the human approver, not to a Head of Design agent.
 - Hakim keeps `tools: Read, Grep, Glob, Bash, Write` and `disallowedTools: Edit`.
   `limit-reviewer-writes.sh` still limits Write to the review body file.
   Thus Hakim reports a threat model or a policy draft, and a builder or the main thread writes the file.
+- Hakim now writes threat models. Hamza (`penetration-tester`) reviews each one, so no agent reviews its own security work.
+  The owner chose Hamza on 15 Nov 2026.
+- A CRITICAL Hakim finding blocks the merge and the release. Only the human approver can lift a release block, as a recorded risk acceptance.
+  The release block stays fail-closed, as it was with the Head of Security.
 - Nour keeps the `mcp__playwright__*` entry.
   Gap: the entry works only when the operator runs a Playwright MCP server.
   With no browser server, Nour reports each affected criterion as not browser-verified.
@@ -138,6 +142,12 @@ An escalation now goes to the human approver, not to a Head of Design agent.
   The adopter must use the receiver slug.
 - Historical AgDRs, performance baselines, PRDs and technical designs keep the original names.
 - The public site quotes the roster counts. A separate site change updates them.
+- Five titles that spawned an isolated sub-agent now resolve to an in-flow receiver: Head of Product, Product Analyst, Head of Design, Head of Data, and Data Analyst.
+  Their research and analysis now run in the main thread by default. A caller can still spawn the receiver for isolated work.
+- Cost: `tech-lead` effort `high` applies to each Tech Lead task, not only to head-level work.
+  Former Data Analyst work moves from the `light` tier (`haiku`) to the `build` tier (`sonnet`).
+  The PR records before and after measurements for `tech-lead` and for Hakim.
+- The routing hook gives no warning for a routing key that names a removed agent. A separate change adds that warning.
 
 ## Artifacts
 

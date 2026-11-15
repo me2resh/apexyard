@@ -2,7 +2,7 @@
 
 ApexYard ships **12 role definitions** in `roles/{department}/`. They are not all loaded into every session (context efficiency — most of the files are idle during any given task). Instead, a role is **activated** when a specific condition is met: you read the role file, adopt its identity, responsibilities, and constraints for the duration of the task, then hand off to the next role in the chain.
 
-AgDR-0301 reduced the roster from 23 agents to 15. Eight roles merged into five receivers, and their role files are redirect stubs for one release. There is no department-head role. Head-level approvals go to the **human approver**: the person that `.review_markers.human_approver_title` names (default `CEO`), who also records each per-PR merge approval. No agent approves its own work.
+AgDR-0301 reduced the roster from 23 agents to 15. Eight roles merged into five receivers, and their role files are redirect stubs for one release. There is no department-head role. Head-level approvals go to the **human approver**: the person who records each per-PR merge approval. The config key `.review_markers.human_approver_title` only sets the title that hooks print (default `CEO`). No hook records a head-level decision, so record it in an AgDR or in the PR approval comment. No agent approves its own work.
 
 ## Activation Table
 
@@ -18,7 +18,7 @@ AgDR-0301 reduced the roster from 23 agents to 15. Eight roles merged into five 
 | **Product Manager** | `roles/product/product-manager.md` | PRD creation · user-story breakdown · acceptance-criteria authoring · sprint planning · roadmap prioritization · feasibility call · market research · competitive analysis |
 | **UI Designer** | `roles/design/ui-designer.md` | Visual design · component specifications · design tokens · pixel-level work · design-system change · UX principles · user flows · information architecture · usability review · wireframing |
 | **Security Auditor** | `roles/security/security-auditor.md` | **PR touches auth / crypto / user data / secrets** · **the security-critical trust chain (production `.claude/hooks/*.sh`, `.claude/settings.json`, `.githooks/*`, and delegated gate runner `bin/run-pre-push-checks.sh`) — #777/#1302** · SAST findings · OWASP review · dependency vulnerability · security strategy · threat model · compliance call |
-| **Penetration Tester** | `roles/security/penetration-tester.md` | Active testing · exploit discovery · API security review · pre-release security sign-off |
+| **Penetration Tester** | `roles/security/penetration-tester.md` | Active testing · exploit discovery · API security review · pre-release security sign-off · review of a threat model that the Security Auditor wrote |
 | **Data Engineer** | `roles/data/data-engineer.md` | ETL pipelines · data modelling · data-quality work · warehouse schema changes · SQL queries · dashboards · A/B-test analysis · metric investigation · analytics strategy · data governance |
 
 The old role titles still resolve. "Act as the Head of Product" activates the Product Manager, and each other old title activates its receiver:
@@ -150,7 +150,9 @@ Roles deliver concrete artefacts at each handoff point. These are the contracts 
 | Tech Lead → Backend / Frontend Engineer | Technical design + task breakdown |
 | Backend / Frontend Engineer → QA Engineer | Testable build + PR |
 | Security Auditor → Tech Lead | Security findings + required fixes (remediation is engineering work) |
-| Security Auditor → Human approver | Risk acceptance · exception to a security requirement · release block recommendation |
+| Security Auditor → Penetration Tester | Threat model for independent review (the author does not review it) |
+| Penetration Tester → Security Auditor / Tech Lead | Threat-model verdict: accept, or the missing threats |
+| Security Auditor → Human approver | Risk acceptance · exception to a security requirement · request to lift a release block |
 | QA Engineer → Product Manager | AC verification sign-off |
 | Platform Engineer → SRE | Production deployment + runbook |
 
@@ -159,7 +161,7 @@ Roles deliver concrete artefacts at each handoff point. These are the contracts 
 Two of the rows above encode a **practitioner-reviews / human-decides** split. AgDR-0301 supersedes the earlier head-escalates split of AgDR-0106:
 
 - **UI design gate.** The **UI Designer (Nour)** owns the routine per-PR design gate. She reviews the implementation diff, and a person records the verdict with `/approve-design` (gated by `require-design-review-for-ui.sh`). A design-system change, a brand change, a cross-product visual standard, or a design disagreement goes to the human approver.
-- **Security escalation.** A **Security Auditor's findings + required fixes go to the Tech Lead** — remediation is engineering work. Hakim also owns the security posture: strategy, threat models, and compliance. Risk acceptance and exceptions to security requirements go to the human approver. Hakim keeps read-only tools.
+- **Security escalation.** A **Security Auditor's findings + required fixes go to the Tech Lead** — remediation is engineering work. Hakim also owns the security posture: strategy, threat models, and compliance. The Penetration Tester (Hamza) reviews each threat model that Hakim writes, so no agent reviews its own security work. A CRITICAL finding blocks the release, and only the human approver can lift that block. Risk acceptance and exceptions to security requirements go to the human approver. Hakim keeps read-only tools.
 
 ## Aspirational → Real
 

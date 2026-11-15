@@ -206,7 +206,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Case 12: all seven build-class agents share config read + fallback sentence.
+# Case 12: all six build-class agents share config read + fallback sentence.
 # ---------------------------------------------------------------------------
 for agent in $BUILD_AGENTS; do
   f="$SRC_ROOT/.claude/agents/${agent}.md"
