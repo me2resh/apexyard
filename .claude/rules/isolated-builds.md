@@ -61,7 +61,7 @@ Each additional session uses its own worktree.
    ```
 
    Run `/start-ticket` for the ticket from that worktree.
-3. **Set up the worktree.** Install dependencies. Copy `.env` from the main clone. Use a dev-server port that differs from the main clone's.
+3. **Set up the worktree.** Install dependencies. Copy `.env` from the main clone. Use a dev-server port that differs from the main clone's. Run `eval "$(bin/apexyard-build-env)"` first, so all worktrees share one package cache and one build-output folder per repo. Opt out with `APEXYARD_BUILD_CACHE=off` or `build.cache.enabled: false`. See `docs/project-config.md`.
 4. **Warn before cleanup.** Read the warning below before you remove the worktree.
 5. **Clean up after merge.** Run the remove command without `--force`, then prune.
 6. **Limits.** Two goals on one project can still conflict at merge time. A worktree postpones that conflict. It does not remove it.

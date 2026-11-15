@@ -1,0 +1,98 @@
+#!/bin/bash
+# Print shell exports that point every worktree at one shared build cache.
+# me2resh/apexyard#2070 step 2, AgDR-0301.
+#
+# Usage:
+#   eval "$(bin/apexyard-build-env)"     # in the worktree, before a build
+#   bin/apexyard-build-env --show        # print the resolved settings
+#
+# The exports set package caches and one build-output folder per repo.
+# node_modules and similar installed folders stay in each worktree.
+#
+# Settings, first match wins:
+#   APEXYARD_BUILD_CACHE   "off" (opt out) or an absolute folder path
+#   build.cache.enabled    false opts out (project-config.json)
+#   build.cache.dir        absolute folder path
+#   default                ${XDG_CACHE_HOME:-$HOME/.cache}/apexyard/build
+#
+# When the cache is off, the script prints nothing and exits 0.
+# An existing value of a variable is kept, so a user choice always wins.
+# The script writes no file and makes no folder.
+export LC_ALL=C
+set -u
+
+mode=exports
+case "${1:-}" in
+  "") ;;
+  --show) mode=show ;;
+  *) echo "usage: apexyard-build-env [--show]" >&2; exit 2 ;;
+esac
+
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P) || exit 1
+enabled=true
+dir=""
+if [ -f "$here/../.claude/hooks/_lib-read-config.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$here/../.claude/hooks/_lib-read-config.sh" 2>/dev/null
+  if command -v config_get_or >/dev/null 2>&1; then
+    enabled=$(config_get_or '.build.cache.enabled' 'true' 2>/dev/null) || enabled=true
+    dir=$(config_get_or '.build.cache.dir' '' 2>/dev/null) || dir=""
+  fi
+fi
+[ "$enabled" = false ] && enabled=off
+[ "$enabled" = off ] || enabled=on
+
+env_choice=${APEXYARD_BUILD_CACHE-}
+case "$env_choice" in
+  "") ;;
+  off|false|0) enabled=off ;;
+  /*) dir=$env_choice; enabled=on ;;
+  *) echo "apexyard-build-env: APEXYARD_BUILD_CACHE must be off or an absolute path" >&2; exit 2 ;;
+esac
+
+if [ -z "$dir" ]; then
+  base=${XDG_CACHE_HOME:-${HOME:-}/.cache}
+  case "$base" in /*) ;; *) enabled=off ;; esac
+  dir=$base/apexyard/build
+fi
+# Refuse a path that is relative or holds a character that needs quoting.
+case "$dir" in
+  /*) ;;
+  *) echo "apexyard-build-env: cache folder must be an absolute path" >&2; exit 2 ;;
+esac
+case "$dir" in
+  *[!A-Za-z0-9_./+@%:,=-]*) echo "apexyard-build-env: cache folder holds an unsupported character" >&2; exit 2 ;;
+esac
+
+# One build-output folder per repo, shared by all worktrees of that repo.
+# The key is the name and a hash of the repo's common git dir.
+key=default
+common=$(git rev-parse --git-common-dir 2>/dev/null) && {
+  common=$(cd "$common" 2>/dev/null && pwd -P) || common=""
+  if [ -n "$common" ]; then
+    name=$(basename "$(dirname "$common")" | tr -d '\n' | tr -c 'A-Za-z0-9_.-' '_')
+    hash=$(printf '%s' "$common" | cksum | cut -d' ' -f1)
+    key="$name-$hash"
+  fi
+}
+
+if [ "$mode" = show ]; then
+  echo "enabled=$enabled"
+  echo "dir=$dir"
+  echo "repo_key=$key"
+  exit 0
+fi
+[ "$enabled" = on ] || exit 0
+
+emit() {
+  # Keep a value the user already set.
+  eval "cur=\${$1-}"
+  [ -n "$cur" ] || printf 'export %s=%s\n' "$1" "$2"
+}
+emit npm_config_cache "$dir/npm"
+emit npm_config_store_dir "$dir/pnpm-store"
+emit YARN_CACHE_FOLDER "$dir/yarn"
+emit PIP_CACHE_DIR "$dir/pip"
+emit GOMODCACHE "$dir/go-mod"
+emit GOCACHE "$dir/go-build"
+emit CARGO_TARGET_DIR "$dir/cargo-target/$key"

@@ -212,6 +212,42 @@ Stop if HEAD is no longer your ticket branch.
 After merge in `branch` mode, return to the base branch and delete the local ticket branch.
 Always tell the user the branch name.
 
+## Shared build cache (`build.cache`)
+
+Each worktree builds its own copy of the same dependencies. This uses much disk space.
+`bin/apexyard-build-env` prints shell exports that point all worktrees at one cache.
+Run it in the worktree before a build:
+
+```bash
+eval "$(bin/apexyard-build-env)"
+```
+
+| Variable | Shared folder |
+|----------|---------------|
+| `npm_config_cache` | `<dir>/npm` |
+| `npm_config_store_dir` | `<dir>/pnpm-store` (pnpm hard-links from it) |
+| `YARN_CACHE_FOLDER` | `<dir>/yarn` |
+| `PIP_CACHE_DIR` | `<dir>/pip` |
+| `GOMODCACHE`, `GOCACHE` | `<dir>/go-mod`, `<dir>/go-build` |
+| `CARGO_TARGET_DIR` | `<dir>/cargo-target/<repo-key>` |
+
+`<repo-key>` is the repo name and a hash of its git common dir. Worktrees of one repo share a folder. Repos never share one.
+Installed folders such as `node_modules` stay in each worktree. A package manager cannot share them safely.
+The script keeps a variable that you already set.
+It writes no file and makes no folder. The tools make the folders when they run.
+
+Settings (first match wins):
+
+- `APEXYARD_BUILD_CACHE`: `off` or an absolute path.
+- `build.cache.enabled`: `false` opts out.
+- `build.cache.dir`: an absolute path. Default `${XDG_CACHE_HOME:-$HOME/.cache}/apexyard/build`.
+
+Parallel writers: npm, pnpm, yarn, pip and Go caches are safe for concurrent use.
+Cargo locks the build folder, so two cargo builds of one repo run one after the other.
+Worktrees on different branches can make cargo rebuild some crates. The result stays correct.
+Isolated builds keep their own worktree, branch and ticket marker. Only the build cache is shared.
+See [AgDR-0301](agdr/AgDR-0301-shared-build-cache.md).
+
 ## Reviewer GitHub App (`review_identity`)
 
 `tracker_review_submit` posts GitHub reviews with the operator `gh` login by default.
