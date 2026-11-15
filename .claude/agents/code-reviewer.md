@@ -83,6 +83,8 @@ Some reviews need to run tests or attack probes against the PR head, outside thi
 
 While the active-reviewer marker exists, `block-reviewer-repo-mutation.sh` blocks `git clone`, `git fetch`, and `git checkout`. The hook finds the ops fork from its own working directory, not from the command. The orchestrator prepares the scratch clone before it arms the marker. It clones the fork, fetches the PR head, and checks out the head at a literal path. Then it gives that path to the reviewer. Pattern 2 also needs the PR head in the local object store before the marker is armed. During the review, `git worktree add <literal-path> <sha>` stays available as a literal, single-line `git [-C <dir>] worktree add <path> <commit>` when the path sits outside the ops fork and the managed workspace (me2resh/apexyard#1275, #1509). The rest of that command is still checked. The linked checkout does not receive the scratch-clone ticket exemption.
 
+The orchestrator makes the scratch clone light with `.claude/skills/code-review/review-copy.sh create`. The copy is shallow and single-commit. It sits under `<temp dir>/apexyard-review-copies/` and has a record of the PR, the session and the creation time (AgDR-0305). Use the path that the orchestrator gives you. Do not make a full clone.
+
 If a hook blocks a command in the scratch clone or export, stop that step. Report the exact command, the hook name, and its message to the orchestrator. Never rephrase, split, encode, or disguise a command to get past a hook — see `.claude/rules/pr-workflow.md`'s least-privilege rule.
 
 Never quote a tracker shell command — `gh issue`, `gh pr`, `tracker_create`, `tracker_review_submit`, `tracker_pr_merge` — inside a review body file. Describe the command in prose instead.
