@@ -257,6 +257,37 @@ Override example (opt-in refuse mode with a tighter limit):
 
 Decision record: [AgDR-0292](agdr/AgDR-0292-human-review-queue.md).
 
+## Disk budget (`disk_budget`)
+
+`disk_budget` sets the limits for the folders that ApexYard owns.
+At SessionStart, `check-disk-budget.sh` measures these folders and the free disk space.
+When a limit is exceeded, it proposes a sweep. It never removes anything.
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `enabled` | `true` | Set to `false` to turn the SessionStart check off. |
+| `max_owned_gb` | `10` | Propose a sweep when the owned folders use more than this size. |
+| `min_free_percent` | `10` | Propose a sweep when the disk has less free space than this. |
+| `sweep_min_age_days` | `7` | A sweep lists only copies of this age or older. |
+| `measure_timeout_seconds` | `3` | Time limit for the SessionStart measurement. A slower disk skips the size check. |
+| `review_copy_roots` | `[]` | More folders that hold review copies. The `review-copy.sh` root is always included. A sweep looks at their direct children. |
+| `extra_paths` | `[]` | More folders to measure, for example a shared build cache. A sweep never removes them. |
+
+Owned folders: `.claude/worktrees`, `<workspace>/*.worktrees`, `<workspace>/*/.claude/worktrees`, `.claude/session`, the `review-copy.sh` root (`$APEXYARD_REVIEW_COPY_ROOT`, else `<TMPDIR>/apexyard-review-copies`), `review_copy_roots` and `extra_paths`.
+A review-copy clone needs its record `.git/apexyard-review-copy.json` (AgDR-0305). A sweep keeps a copy with no record.
+
+Run the sweep from the ops root:
+
+1. Run `bin/apexyard-disk-sweep.sh` for a dry run. It lists what it removes and what it keeps, with the reason.
+2. Show the list to the user.
+3. After the user says yes, run `bin/apexyard-disk-sweep.sh --apply <plan-id>`.
+
+`--apply` checks each item again. It keeps an item that has changes, unpushed commits, an open PR or a live owner.
+It logs each result to `.claude/session/disk-sweep/removed.log`.
+`bin/apexyard-disk-sweep.sh --measure` prints the size of each owned folder with no time limit.
+
+Decision record: [AgDR-0306](agdr/AgDR-0306-disk-budget-at-session-start.md).
+
 ## Extending the defaults
 
 ### Add a new ticket prefix (e.g. `[Security]`)

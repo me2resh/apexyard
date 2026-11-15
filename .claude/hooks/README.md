@@ -125,6 +125,12 @@ Silent if: no `upstream` remote (upstream repo itself, or fork that has not conf
 
 **Companion skill:** `/update` performs the actual sync.
 
+### 4b. Disk budget: `check-disk-budget.sh`
+
+**Event:** `SessionStart`.
+
+**What it does:** measures the folders that ApexYard owns and the free disk space. When the owned folders use more than `disk_budget.max_owned_gb` (default 10), or the disk has less than `disk_budget.min_free_percent` free (default 10), it prints a proposal. The proposal tells the agent to run `bin/apexyard-disk-sweep.sh` for a dry-run list and to remove nothing until the user says yes. The hook is advisory. It never removes anything and always exits 0. The measurement has a time limit (`disk_budget.measure_timeout_seconds`, default 3) and a 6-hour cache. It does not run after compaction. See AgDR-0306 and `docs/project-config.md`.
+
 ## The Ticket-Vocabulary Backstops
 
 These two hooks are the mechanical backstop for the rule in `.claude/rules/ticket-vocabulary.md`: "`Ticket`, `#N`, and dependency notation refer ONLY to real GitHub issues". The rule itself is self-discipline; these hooks catch the downstream symptom (a fabricated `#N` that slipped into a durable artifact).
