@@ -110,7 +110,8 @@ An escalation now goes to the human approver, not to a Head of Design agent.
 - Hakim now writes threat models. Hamza (`penetration-tester`) reviews each one, so no agent reviews its own security work.
   The owner chose Hamza on 15 Nov 2026.
 - A CRITICAL Hakim finding blocks the merge and the release. Only the human approver can lift a release block, as a recorded risk acceptance.
-  The release block stays fail-closed, as it was with the Head of Security.
+- A HIGH Hakim finding blocks the merge. For a HIGH finding, or any other finding that Hakim judges release-blocking, Hakim recommends that the human approver block the release.
+  This keeps the Head of Security's discretion to stop a release for any security issue. The owner restored it on 15 Nov 2026.
 - Nour keeps the `mcp__playwright__*` entry.
   Gap: the entry works only when the operator runs a Playwright MCP server.
   With no browser server, Nour reports each affected criterion as not browser-verified.

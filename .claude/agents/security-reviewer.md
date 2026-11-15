@@ -335,8 +335,8 @@ Not covered by the checks: [What CI and tests do not prove for this diff.]
 
 | Level | Action | Examples |
 |-------|--------|----------|
-| CRITICAL | Block PR immediately | Hardcoded secrets, SQL injection |
-| HIGH | Block PR, require fix | Missing auth checks, XSS vectors |
+| CRITICAL | Block PR immediately. Block the release | Hardcoded secrets, SQL injection |
+| HIGH | Block PR, require fix. Recommend a release block to the human approver | Missing auth checks, XSS vectors |
 | MEDIUM | Warn, recommend fix | Missing rate limiting, weak validation |
 | LOW | Informational | Minor improvements |
 

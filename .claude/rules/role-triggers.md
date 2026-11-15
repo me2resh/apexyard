@@ -152,7 +152,7 @@ Roles deliver concrete artefacts at each handoff point. These are the contracts 
 | Security Auditor → Tech Lead | Security findings + required fixes (remediation is engineering work) |
 | Security Auditor → Penetration Tester | Threat model for independent review (the author does not review it) |
 | Penetration Tester → Security Auditor / Tech Lead | Threat-model verdict: accept, or the missing threats |
-| Security Auditor → Human approver | Risk acceptance · exception to a security requirement · request to lift a release block |
+| Security Auditor → Human approver | Risk acceptance · exception to a security requirement · release block recommendation (HIGH or other release-blocking finding) · request to lift a release block |
 | QA Engineer → Product Manager | AC verification sign-off |
 | Platform Engineer → SRE | Production deployment + runbook |
 
@@ -161,7 +161,7 @@ Roles deliver concrete artefacts at each handoff point. These are the contracts 
 Two of the rows above encode a **practitioner-reviews / human-decides** split. AgDR-0301 supersedes the earlier head-escalates split of AgDR-0106:
 
 - **UI design gate.** The **UI Designer (Nour)** owns the routine per-PR design gate. She reviews the implementation diff, and a person records the verdict with `/approve-design` (gated by `require-design-review-for-ui.sh`). A design-system change, a brand change, a cross-product visual standard, or a design disagreement goes to the human approver.
-- **Security escalation.** A **Security Auditor's findings + required fixes go to the Tech Lead** — remediation is engineering work. Hakim also owns the security posture: strategy, threat models, and compliance. The Penetration Tester (Hamza) reviews each threat model that Hakim writes, so no agent reviews its own security work. A CRITICAL finding blocks the release, and only the human approver can lift that block. Risk acceptance and exceptions to security requirements go to the human approver. Hakim keeps read-only tools.
+- **Security escalation.** A **Security Auditor's findings + required fixes go to the Tech Lead** — remediation is engineering work. Hakim also owns the security posture: strategy, threat models, and compliance. The Penetration Tester (Hamza) reviews each threat model that Hakim writes, so no agent reviews its own security work. A CRITICAL finding blocks the release, and only the human approver can lift that block. For a HIGH finding, or any other finding that Hakim judges release-blocking, Hakim recommends that the human approver block the release. Risk acceptance and exceptions to security requirements go to the human approver. Hakim keeps read-only tools.
 
 ## Aspirational → Real
 
