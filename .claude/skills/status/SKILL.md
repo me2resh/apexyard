@@ -185,10 +185,10 @@ bash "$ops_root/.claude/skills/status/disk-usage.sh"
 
 Example: `ApexYard is using 12.3 GB; 9.1 GB can be reclaimed`.
 The helper measures only folders that ApexYard owns: worktrees under `workspace/*.worktrees`, the review-copy folder, `.claude/session`, and build output in the project clones.
-Reclaimable means a worktree that is older than `disk_budget.age_days` (default 7), has no uncommitted or unpushed work, and has a merged or closed PR.
-When the helper cannot decide, the line says `reclaimable size unknown`.
-When the total is above `disk_budget.max_gb` (default 10), the line ends with `(over the N GB budget)`.
-The helper has a time box of 6 seconds. A timeout prints `ApexYard disk use is unknown`.
+Reclaimable means a worktree or review copy that is older than `disk_budget.sweep_min_age_days` (default 7), has no uncommitted, untracked or unpushed work, and has a merged or closed PR. Review copies come from `review-copy.sh` (`APEXYARD_REVIEW_COPY_ROOT` or `<temp dir>/apexyard-review-copies`); the age comes from the copy record.
+When a check is blocked (for example a detached HEAD), the line says `at least X can be reclaimed`.
+When the total is above `disk_budget.max_owned_gb` (default 10), the line ends with `(over the N GB budget)`. Step 4 owns the `disk_budget` keys; this helper reads them with built-in defaults.
+The helper has a time box of `disk_budget.measure_timeout_seconds` (default 6). A timeout prints `ApexYard disk use is unknown`. Briefing mode does not run it.
 This section is read-only. It never removes anything. Step 4 of me2resh/apexyard#2070 owns the sweep.
 
 ## Portfolio output
@@ -279,7 +279,7 @@ Branch:            feature/GH-42-csv-export
 Role set:          backend ; Waiting on you: 2 PRs, the oldest 3 hours
 ```
 
-The Role set line appends the human review queue status (me2resh/apexyard#1995). When the tracker is unavailable the suffix reads `; Waiting on you: unknown`. The briefing prints one more line, the disk use line from section H, when `disk-usage.sh` is present. The `--json` output does not change.
+The Role set line appends the human review queue status (me2resh/apexyard#1995). When the tracker is unavailable the suffix reads `; Waiting on you: unknown`. The briefing stays exactly 4 lines. It does not show the disk use line, because the measurement is too slow for the briefing.
 
 Behaviour:
 

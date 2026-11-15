@@ -9,12 +9,12 @@
 # Read-only. It never deletes, never fetches, never blocks for long.
 # Folders measured (only folders that ApexYard owns):
 #   - <workspace>/*.worktrees       (worktrees of managed projects)
-#   - the review-copy folder        (config disk_budget.review_copy_dir)
+#   - the review-copy folder        (review-copy.sh root; APEXYARD_REVIEW_COPY_ROOT)
 #   - <ops>/.claude/session         (session state)
 #   - build output in <workspace>/*/ (node_modules, target, build, dist, coverage)
 #
-# Reclaimable = worktree folders that are older than disk_budget.age_days, are
-# clean, and whose branch PR is merged or closed. Any doubt -> "unknown".
+# Reclaimable = worktrees and review copies older than sweep_min_age_days,
+# with no work at risk and a merged or closed PR. A blocked check gives "at least X".
 #
 # Inputs (env, all optional; tests use them):
 #   APEXYARD_OPS_ROOT      ops-fork root (default: walk up from this script)
@@ -35,17 +35,23 @@ case "$timebox" in ''|*[!0-9]*) timebox=6 ;; esac
 
 # The config library finds the repo from the working directory.
 cd "$ops_root" 2>/dev/null || { echo "ApexYard disk use is unknown (no ops root)"; exit 0; }
-max_gb=10; age_days=7; review_dir=""
+# Step 4 owns the disk_budget keys. Built-in defaults apply until they exist.
+max_gb=10; age_days=7
+review_roots=""; extra_paths=""
 workspace_dir=""
 if [ -f "$ops_root/.claude/hooks/_lib-read-config.sh" ]; then
   # shellcheck source=/dev/null
   . "$ops_root/.claude/hooks/_lib-read-config.sh" 2>/dev/null
   if command -v config_get_or >/dev/null 2>&1; then
-    max_gb=$(config_get_or '.disk_budget.max_gb' 10 2>/dev/null)
-    age_days=$(config_get_or '.disk_budget.age_days' 7 2>/dev/null)
-    review_dir=$(config_get_or '.disk_budget.review_copy_dir' '' 2>/dev/null)
+    max_gb=$(config_get_or '.disk_budget.max_owned_gb' 10 2>/dev/null)
+    age_days=$(config_get_or '.disk_budget.sweep_min_age_days' 7 2>/dev/null)
+    cfg_timeout=$(config_get_or '.disk_budget.measure_timeout_seconds' '' 2>/dev/null)
+    [ -n "${APEXYARD_DISK_TIMEBOX:-}" ] || timebox="$cfg_timeout"
+    review_roots=$(config_get '.disk_budget.review_copy_roots[]?' 2>/dev/null)
+    extra_paths=$(config_get '.disk_budget.extra_paths[]?' 2>/dev/null)
   fi
 fi
+case "$timebox" in ''|*[!0-9]*) timebox=6 ;; esac
 if [ -f "$ops_root/.claude/hooks/_lib-portfolio-paths.sh" ]; then
   # shellcheck source=/dev/null
   . "$ops_root/.claude/hooks/_lib-portfolio-paths.sh" 2>/dev/null
@@ -55,7 +61,14 @@ fi
 [ -n "$workspace_dir" ] || workspace_dir="$ops_root/workspace"
 case "$max_gb" in ''|*[!0-9]*) max_gb=10 ;; esac
 case "$age_days" in ''|*[!0-9]*) age_days=7 ;; esac
-[ -n "$review_dir" ] || review_dir="${TMPDIR:-/tmp}/apexyard-review"
+# Review-copy root: same rule as review-copy.sh (step 3).
+if [ -n "${APEXYARD_REVIEW_COPY_ROOT:-}" ]; then
+  default_root="${APEXYARD_REVIEW_COPY_ROOT%/}"
+else
+  tbase=$(CDPATH='' cd -- "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P) || tbase="${TMPDIR:-/tmp}"
+  default_root="${tbase%/}/apexyard-review-copies"
+fi
+[ -n "$review_roots" ] || review_roots="$default_root"
 
 start=$SECONDS
 deadline=$((start + timebox))
@@ -97,7 +110,16 @@ trap 'rm -rf "$tmp"' EXIT
 # --- 1. Collect the folders ApexYard owns (only those that exist).
 targets=()
 for d in "$workspace_dir"/*.worktrees; do [ -d "$d" ] && targets+=("$d"); done
-[ -d "$review_dir" ] && targets+=("$review_dir")
+while IFS= read -r r; do
+  [ -n "$r" ] && [ -d "$r" ] && targets+=("$r")
+done <<EOF_ROOTS
+$review_roots
+EOF_ROOTS
+while IFS= read -r r; do
+  [ -n "$r" ] && [ -d "$r" ] && targets+=("$r")
+done <<EOF_EXTRA
+$extra_paths
+EOF_EXTRA
 [ -d "$ops_root/.claude/session" ] && targets+=("$ops_root/.claude/session")
 for proj in "$workspace_dir"/*/; do
   [ -d "$proj" ] || continue
@@ -118,51 +140,96 @@ fi
 
 line="ApexYard is using $(fmt_kb "$total_kb")"
 
-# --- 2. Reclaimable: old, clean worktrees whose PR is merged or closed.
+# --- 2. Reclaimable: old copies with no work at risk and a merged or closed PR.
 reclaim_kb=0
-unknown=0
-candidates=0
+blocked=0   # 1 when at least one check could not finish: the figure is a lower bound
+
+# add_size <dir>: add the folder size to the reclaimable total.
+add_size() {
+  if run_timed "$(remaining)" "$tmp/sz" du -sk "$1"; then
+    reclaim_kb=$((reclaim_kb + $(awk '{print $1+0}' "$tmp/sz")))
+  else
+    blocked=1
+  fi
+}
+
+# pr_state <dir> <args...>: print the PR state, or fail when it cannot be read.
+pr_state() {
+  command -v "$gh_bin" >/dev/null 2>&1 || return 1
+  # shellcheck disable=SC2016
+  run_timed "$(remaining)" "$tmp/pr" bash -c 'cd "$1" && shift && exec "$@"' _ "$@" || return 1
+  tr -d '[:space:]' <"$tmp/pr"
+}
+
+# iso_epoch <UTC time like 2026-01-02T03:04:05Z>: print epoch seconds.
+iso_epoch() {
+  date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$1" +%s 2>/dev/null || date -u -d "$1" +%s 2>/dev/null
+}
+
+now_epoch=$(date +%s)
+min_age=$((age_days * 86400))
+
+# 2a. Worktrees (age = folder mtime).
 for wt_root in "$workspace_dir"/*.worktrees; do
   [ -d "$wt_root" ] || continue
   while IFS= read -r wt; do
     [ -n "$wt" ] || continue
     [ -e "$wt/.git" ] || continue
-    candidates=$((candidates + 1))
-    if [ "$SECONDS" -ge "$deadline" ]; then unknown=1; break 2; fi
+    if [ "$SECONDS" -ge "$deadline" ]; then blocked=1; break 2; fi
     branch=$(GIT_OPTIONAL_LOCKS=0 git -C "$wt" branch --show-current 2>/dev/null)
-    if [ -z "$branch" ]; then unknown=1; continue; fi
-    # Dirty work is never reclaimable.
-    if ! run_timed "$(remaining)" "$tmp/st" env GIT_OPTIONAL_LOCKS=0 git -C "$wt" status --porcelain --untracked-files=no; then
-      unknown=1; continue
+    if [ -z "$branch" ]; then blocked=1; continue; fi
+    # Any uncommitted or untracked file keeps the worktree.
+    if ! run_timed "$(remaining)" "$tmp/st" env GIT_OPTIONAL_LOCKS=0 git -C "$wt" status --porcelain; then
+      blocked=1; continue
     fi
     [ -s "$tmp/st" ] && continue
-    command -v "$gh_bin" >/dev/null 2>&1 || { unknown=1; continue; }
-    if ! run_timed "$(remaining)" "$tmp/pr" bash -c 'cd "$1" && exec "$2" pr list --head "$3" --state all --json state --jq ".[0].state // \"NONE\""' _ "$wt" "$gh_bin" "$branch"; then
-      unknown=1; continue
-    fi
-    state=$(tr -d '[:space:]' <"$tmp/pr")
+    state=$(pr_state "$wt" "$gh_bin" pr list --head "$branch" --state all --json state --jq '.[0].state // "NONE"') || { blocked=1; continue; }
     case "$state" in
       MERGED|CLOSED) ;;
       OPEN|NONE) continue ;;
-      *) unknown=1; continue ;;
+      *) blocked=1; continue ;;
     esac
-    # Unpushed commits keep the copy.
+    # Unpushed commits keep the copy. A missing upstream blocks the check.
     if run_timed "$(remaining)" "$tmp/ah" env GIT_OPTIONAL_LOCKS=0 git -C "$wt" rev-list --count '@{upstream}..HEAD'; then
-      ahead=$(tr -d '[:space:]' <"$tmp/ah")
-      [ "$ahead" = 0 ] || continue
+      [ "$(tr -d '[:space:]' <"$tmp/ah")" = 0 ] || continue
     else
-      unknown=1; continue
+      blocked=1; continue
     fi
-    if run_timed "$(remaining)" "$tmp/sz" du -sk "$wt"; then
-      reclaim_kb=$((reclaim_kb + $(awk '{print $1+0}' "$tmp/sz")))
-    else
-      unknown=1
-    fi
+    add_size "$wt"
   done < <(find "$wt_root" -mindepth 1 -maxdepth 1 -type d -mtime "+$age_days" 2>/dev/null)
 done
 
-if [ "$unknown" = 1 ]; then
-  line="$line; reclaimable size unknown"
+# 2b. Review copies (age and PR come from the record that review-copy.sh writes).
+if command -v jq >/dev/null 2>&1; then
+  while IFS= read -r root; do
+    [ -n "$root" ] && [ -d "$root" ] || continue
+    for copy in "$root"/*/; do
+      copy=${copy%/}
+      rec="$copy/.git/apexyard-review-copy.json"
+      [ -f "$rec" ] || continue
+      if [ "$SECONDS" -ge "$deadline" ]; then blocked=1; break 2; fi
+      repo=$(jq -r '.repo // empty' "$rec" 2>/dev/null)
+      pr=$(jq -r '.pr // empty' "$rec" 2>/dev/null)
+      created=$(jq -r '.created_at // empty' "$rec" 2>/dev/null)
+      case "$pr" in ''|*[!0-9]*) blocked=1; continue ;; esac
+      [ -n "$repo" ] && [ -n "$created" ] || { blocked=1; continue; }
+      c_epoch=$(iso_epoch "$created") || c_epoch=""
+      case "$c_epoch" in ''|*[!0-9]*) blocked=1; continue ;; esac
+      [ $((now_epoch - c_epoch)) -ge "$min_age" ] || continue
+      state=$(pr_state "$copy" "$gh_bin" pr view "$pr" --repo "$repo" --json state --jq .state) || { blocked=1; continue; }
+      case "$state" in
+        MERGED|CLOSED) add_size "$copy" ;;
+        OPEN) ;;
+        *) blocked=1 ;;
+      esac
+    done
+  done <<EOF_RROOTS
+$review_roots
+EOF_RROOTS
+fi
+
+if [ "$blocked" = 1 ]; then
+  line="$line; at least $(fmt_kb "$reclaim_kb") can be reclaimed"
 else
   line="$line; $(fmt_kb "$reclaim_kb") can be reclaimed"
 fi

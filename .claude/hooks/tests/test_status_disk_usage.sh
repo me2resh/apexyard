@@ -36,7 +36,7 @@ SHIM
 }
 
 run_helper() { # $1 sandbox, $2 gh
-  APEXYARD_OPS_ROOT="$1" APEXYARD_GH="$2" TMPDIR="$1/tmp" bash "$HELPER"
+  APEXYARD_OPS_ROOT="$1" APEXYARD_GH="$2" TMPDIR="$1/tmp" APEXYARD_REVIEW_COPY_ROOT="$1/copies" bash "$HELPER"
 }
 
 # --- 1. empty sandbox: 0 KB used, 0 KB reclaimable, one line.
@@ -85,15 +85,46 @@ esac
 git -C "$sb/workspace/proj.worktrees/old" checkout -q -- blob
 touch -t 202001010000 "$sb/workspace/proj.worktrees/old"
 
-# --- 5. gh missing: the size is unknown, not a guess.
-out=$(APEXYARD_OPS_ROOT="$sb" APEXYARD_GH="/nonexistent/gh" TMPDIR="$sb/tmp" bash "$HELPER")
+# --- 4b. an untracked file keeps the worktree.
+echo new > "$sb/workspace/proj.worktrees/old/untracked.txt"
+touch -t 202001010000 "$sb/workspace/proj.worktrees/old"
+out=$(run_helper "$sb" "$gh")
 case "$out" in
-  *"; reclaimable size unknown") ok gh-missing-unknown ;;
-  *) bad gh-missing-unknown "$out" ;;
+  *"; 0 KB can be reclaimed") ok untracked-kept ;;
+  *) bad untracked-kept "$out" ;;
+esac
+rm -f "$sb/workspace/proj.worktrees/old/untracked.txt"
+touch -t 202001010000 "$sb/workspace/proj.worktrees/old"
+
+# --- 5. gh missing: the check is blocked, so the figure is a lower bound.
+out=$(APEXYARD_OPS_ROOT="$sb" APEXYARD_GH="/nonexistent/gh" TMPDIR="$sb/tmp" APEXYARD_REVIEW_COPY_ROOT="$sb/copies" bash "$HELPER")
+case "$out" in
+  *"; at least "*" can be reclaimed") ok gh-missing-lower-bound ;;
+  *) bad gh-missing-lower-bound "$out" ;;
 esac
 
+# --- 5b. a review copy older than the age limit with a merged PR is reclaimable.
+mkdir -p "$sb/copies/r-pr7/.git"
+dd if=/dev/zero of="$sb/copies/r-pr7/blob" bs=1024 count=2048 2>/dev/null
+printf '{"repo":"o/r","pr":7,"created_at":"2020-01-01T00:00:00Z"}\n' > "$sb/copies/r-pr7/.git/apexyard-review-copy.json"
+mkdir -p "$sb/copies/r-pr8/.git"
+printf '{"repo":"o/r","pr":8,"created_at":"2099-01-01T00:00:00Z"}\n' > "$sb/copies/r-pr8/.git/apexyard-review-copy.json"
+rm -rf "$sb/workspace/proj.worktrees/old"
+git -C "$sb" worktree prune
+out=$(run_helper "$sb" "$gh")
+case "$out" in
+  *"; 2.0 MB can be reclaimed"|*"; 2 MB can be reclaimed") ok review-copy-reclaimable ;;
+  *) bad review-copy-reclaimable "$out" ;;
+esac
+out=$(run_helper "$sb" "$ghopen")
+case "$out" in
+  *"; 0 KB can be reclaimed") ok review-copy-open-kept ;;
+  *) bad review-copy-open-kept "$out" ;;
+esac
+mkdir -p "$sb/workspace/proj.worktrees/old"
+
 # --- 6. budget from config: a 0 GB budget marks the line over budget.
-printf '{"disk_budget":{"max_gb":0}}\n' > "$sb/.claude/project-config.json"
+printf '{"disk_budget":{"max_owned_gb":0}}\n' > "$sb/.claude/project-config.json"
 out=$(run_helper "$sb" "$gh")
 case "$out" in
   *"(over the 0 GB budget)") ok config-budget ;;
@@ -109,15 +140,15 @@ start=$SECONDS
 APEXYARD_DISK_TIMEBOX=0 APEXYARD_OPS_ROOT="$sb" APEXYARD_GH="$gh" TMPDIR="$sb/tmp" bash "$HELPER" >/dev/null
 [ $((SECONDS - start)) -le 5 ] && ok timebox || bad timebox "took $((SECONDS - start))s"
 
-# --- 9. briefing gains the line when the helper is next to it.
+# --- 9. the briefing stays at 4 lines and has no disk line.
 mkdir -p "$sb/.claude/skills/status"
 cp "$BRIEF" "$HELPER" "$sb/.claude/skills/status/"
 out=$(APEXYARD_OPS_ROOT="$sb" APEXYARD_CWD="$sb" APEXYARD_GH="" TMPDIR="$sb/tmp" bash "$sb/.claude/skills/status/briefing.sh")
-last=$(printf '%s\n' "$out" | tail -1)
-case "$last" in
-  "ApexYard is using "*) ok briefing-line ;;
-  *) bad briefing-line "$out" ;;
-esac
+if [ "$(printf '%s\n' "$out" | grep -c '^')" = 4 ] && ! printf '%s' "$out" | grep -q "ApexYard is using"; then
+  ok briefing-unchanged
+else
+  bad briefing-unchanged "$out"
+fi
 
 rm -rf "$sb" "$gh" "$ghopen"
 echo "Total: $PASS passed, $FAIL failed"
