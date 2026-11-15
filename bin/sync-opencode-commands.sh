@@ -239,18 +239,18 @@ if [ -s "$TMPBASE/conflicts" ]; then
 fi
 
 if [ "$CHECK" -eq 1 ]; then
+  # Report both lists before deciding the exit code. A fork with stale
+  # wrappers AND a name conflict should see the whole picture in one run.
+  if [ "$conflicts" -gt 0 ]; then
+    echo "$conflicts name conflict(s) left alone — not written by this generator:" >&2
+    sed 's/^/  /' "$TMPBASE/conflicts" >&2
+    echo "Rename the skill or remove the file to let the generator manage that name." >&2
+  fi
   if [ -s "$TMPBASE/drift" ]; then
     echo "opencode commands out of date:" >&2
     sed 's/^/  /' "$TMPBASE/drift" >&2
     echo "Run bin/sync-opencode-commands.sh to refresh them." >&2
     exit 1
-  fi
-  if [ "$conflicts" -gt 0 ]; then
-    echo "opencode commands up to date ($unchanged wrappers in $OUT_DIR)." >&2
-    echo "$conflicts name conflict(s) left alone — not written by this generator:" >&2
-    sed 's/^/  /' "$TMPBASE/conflicts" >&2
-    echo "Rename the skill or remove the file to let the generator manage that name." >&2
-    exit 0
   fi
   echo "opencode commands up to date ($unchanged wrappers in $OUT_DIR)."
   exit 0

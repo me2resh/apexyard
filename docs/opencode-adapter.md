@@ -29,7 +29,7 @@ It writes one wrapper per `.claude/skills/<id>/SKILL.md`, at `.opencode/commands
 - The generator refuses to write through a symlink. It skips a symlinked target, and a symlinked output directory stops the run with exit 2.
 - The generator skips `_lib-*` helpers, directories without a `SKILL.md`, and names that are not valid command IDs. It falls back to `apexyard /<id> skill` for a skill whose `description:` is a block scalar, and it says so on stderr.
 
-`.gitignore` lists `.opencode/commands/`. The wrappers regenerate per machine and per fork, the same way the install script's `.opencode/plugins/apexyard/` stays local. Run the generator once after installing the adapter, and again after any `/update` that changes skills. A fork that commits the wrappers instead can wire `--check` into CI.
+`.gitignore` lists `.opencode/commands/`. The wrappers regenerate per machine and per fork, the same way the install script's `.opencode/plugins/apexyard/` stays local. Run the generator once after installing the adapter. `/update` regenerates them automatically (step 1e), so a fork that pulls new skills keeps its menu current. A fork that commits the wrappers instead can wire `--check` into CI.
 
 Command names come from skill IDs, so they shadow any opencode built-in with the same name: `/status` is apexyard's status skill, not opencode's.
 

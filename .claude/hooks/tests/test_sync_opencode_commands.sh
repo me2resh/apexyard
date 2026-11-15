@@ -157,6 +157,15 @@ bash "$SCRIPT" --root "$FORK2" --check > "$TMPBASE/conflict2.log" 2>&1
 assert_eq "--check reports a conflict as no drift" "$?" "0"
 assert_contains "--check names the conflict" "name conflict" "$TMPBASE/conflict2.log"
 
+# A stale generated wrapper plus a name conflict must both be reported in one
+# run, not only after the first is fixed. Copied from the first fixture so the
+# file carries a real generator marker.
+cp "$OUT/status.md" "$FORK2/.opencode/commands/gone.md"
+bash "$SCRIPT" --root "$FORK2" --check > "$TMPBASE/conflict3.log" 2>&1
+assert_eq "--check with drift and a conflict exits 1" "$?" "1"
+assert_contains "--check still names the conflict alongside drift" "name conflict" "$TMPBASE/conflict3.log"
+assert_contains "--check names the drifted file" "gone.md" "$TMPBASE/conflict3.log"
+
 echo "symlinks"
 # cp writes through a symlink, so a symlinked target would put the wrapper
 # outside the output directory.
