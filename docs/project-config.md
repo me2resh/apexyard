@@ -261,7 +261,7 @@ Decision record: [AgDR-0292](agdr/AgDR-0292-human-review-queue.md).
 
 `disk_budget` sets the limits for the folders that ApexYard owns.
 At SessionStart, `check-disk-budget.sh` measures these folders and the free disk space.
-When a limit is exceeded, it proposes a sweep. It never removes anything.
+When usage exceeds a limit, it proposes a sweep. It never removes anything.
 
 | Key | Default | Meaning |
 |-----|---------|---------|
@@ -270,7 +270,7 @@ When a limit is exceeded, it proposes a sweep. It never removes anything.
 | `min_free_percent` | `10` | Propose a sweep when the disk has less free space than this. |
 | `sweep_min_age_days` | `7` | A sweep lists only copies of this age or older. |
 | `measure_timeout_seconds` | `3` | Time limit for the SessionStart measurement. A slower disk skips the size check. |
-| `review_copy_roots` | `[]` | More folders that hold review copies. The `review-copy.sh` root is always included. A sweep looks at their direct children. |
+| `review_copy_roots` | `[]` | More folders that hold review copies. The sweep always includes the `review-copy.sh` root. A sweep looks at their direct children. |
 | `extra_paths` | `[]` | More folders to measure, for example a shared build cache. A sweep never removes them. |
 
 Owned folders: `.claude/worktrees`, `<workspace>/*.worktrees`, `<workspace>/*/.claude/worktrees`, `.claude/session`, the `review-copy.sh` root (`$APEXYARD_REVIEW_COPY_ROOT`, else `<TMPDIR>/apexyard-review-copies`), `review_copy_roots` and `extra_paths`.
