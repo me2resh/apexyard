@@ -1,5 +1,5 @@
 ---
-id: AgDR-0301
+id: AgDR-0304
 timestamp: 2026-11-15T12:00:00Z
 agent: platform-engineer
 model: claude-opus-5-5
@@ -9,7 +9,7 @@ status: executed
 category: architecture
 ---
 
-# AgDR-0301: Share one build cache across worktrees through an opt-out env script
+# AgDR-0304: Share one build cache across worktrees through an opt-out env script
 
 > In the context of disk growth from per-worktree dependency and build copies (me2resh/apexyard#2070 step 2), facing the need to share caches without a hook change, I decided to add `bin/apexyard-build-env`, which prints exports for one shared cache, to accept that installed folders stay per worktree.
 

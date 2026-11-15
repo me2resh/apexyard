@@ -1,6 +1,6 @@
 #!/bin/bash
 # Print shell exports that point every worktree at one shared build cache.
-# me2resh/apexyard#2070 step 2, AgDR-0301.
+# me2resh/apexyard#2070 step 2, AgDR-0304.
 #
 # Usage:
 #   eval "$(bin/apexyard-build-env)"     # in the worktree, before a build

@@ -246,7 +246,7 @@ Parallel writers: npm, pnpm, yarn, pip and Go caches are safe for concurrent use
 Cargo locks the build folder, so two cargo builds of one repo run one after the other.
 Worktrees on different branches can make cargo rebuild some crates. The result stays correct.
 Isolated builds keep their own worktree, branch and ticket marker. Only the build cache is shared.
-See [AgDR-0301](agdr/AgDR-0301-shared-build-cache.md).
+See [AgDR-0304](agdr/AgDR-0304-shared-build-cache.md).
 
 ## Reviewer GitHub App (`review_identity`)
 
