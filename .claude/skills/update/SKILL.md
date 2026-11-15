@@ -47,7 +47,7 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 /update --git-merge                  # history merge (git merge) instead of the per-file update
 /update --from-version v1.2.0        # override the version anchor (use when fork anchor is missing/wrong)
 /update --skip-migrations            # files-only sync; do NOT run the per-version migration chain
-/update --skip-adapter-sync          # do not refresh an already-installed Codex adapter
+/update --skip-adapter-sync          # do not refresh generated adapters or opencode commands
 /update --from-dev                   # (hidden) pull from upstream/dev — pre-release; expect breakage
 ```
 
@@ -61,7 +61,7 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 | `--dry-run` | Run the preview step only. Print the commit delta and exit; no fetch-after-preview, no branch creation, no merge. **Does NOT execute migrations** — only previews the planned chain. |
 | `--from-version vN.N.N` | Explicit version-anchor override. Use when `.claude/framework-version` is missing (legacy fork pre-v1.4.0) OR you've manually rolled back and the anchor is stale. The chain is built against this value instead of the file. Refuses if the value doesn't match `vMAJOR.MINOR.PATCH`. |
 | `--skip-migrations` | Sync the framework files but DO NOT run the per-version migration chain. Prints an advisory warning naming each skipped pair and reminding the operator that the migrations can be replayed later with `bash .claude/migrations/<pair>.sh`. The anchor file IS still advanced to the new release tag, so subsequent runs won't re-offer the same migrations. Use sparingly — the chain is the point. |
-| `--skip-adapter-sync` | Do not refresh an already-installed Codex adapter. Detection is installation-based, not harness-session-based: without this flag, `/update` reconciles only a manifest-backed or complete legacy ApexYard Codex adapter and leaves uninstalled forks untouched. Intended as a troubleshooting escape hatch. |
+| `--skip-adapter-sync` | Do not refresh the generated artifacts `/update` reconciles. That is an installed Codex adapter and, when the opencode adapter is installed, the opencode slash-command wrappers. Detection is installation-based, not harness-session-based: without this flag, `/update` reconciles only a manifest-backed or complete legacy ApexYard Codex adapter and regenerates only opencode wrappers for a fork that has the opencode adapter. Uninstalled artifacts are left untouched. Intended as a troubleshooting escape hatch. |
 | `--from-dev` | **Hidden / opt-in.** Sync from `upstream/dev` (pre-release work) instead of the latest `upstream/main` tag. Prints a `⚠ PRE-RELEASE SYNC` banner BEFORE any fetch/state-mutation. Same sync-branch + conflict-resolution flow; branch is named `chore/sync-upstream-dev` (or `chore/#<TICKET>-sync-upstream-dev` if a tracking issue is supplied). Intended for the framework maintainer (testing pre-release work on another machine) and for adopters who explicitly want to validate an upcoming framework change. **Not** in the skill's `description` frontmatter on purpose — `/help` should not surface it, since the adopter contract is tagged releases (see AgDR-0007 release-cut model). Combinable with `--rebase` and `--dry-run`. **When `--from-dev` is set, the migration chain is automatically skipped** — pre-release work doesn't have a release tag to anchor against. |
 
 ## Output
@@ -358,9 +358,10 @@ Exit 0.
 
 Any other preview path that exits 0 without creating a sync branch (for
 example, the operator declines unreleased `upstream/main` commits) MUST call
-`reconcile_installed_codex_adapter` before cleanup and exit. This closes the
-stale-adapter bug even when there is no release work to merge. `--dry-run`
-reaches the same helper but prints intent without mutating files.
+`reconcile_installed_codex_adapter` and `reconcile_installed_opencode_commands`
+before cleanup and exit. This closes the stale-adapter bug even when there is
+no release work to merge. `--dry-run` reaches both helpers but prints intent
+without mutating files.
 
 **No release drift, but main has moved (common, NOT actionable):**
 
@@ -1208,8 +1209,9 @@ Skill done. No remote state changed.
 | Anchor file says `unknown` (malformed content) | Treated identically to missing — interactive prompt in step 8b. |
 | Chain has a missing link (release shipped without a migration script) | Refuse with a clear message naming the gap; advance the anchor anyway so subsequent runs don't loop on the same gap. This is a framework bug — file an issue. |
 | `--skip-migrations` passed | Chain detection runs (printed for visibility) but no `migration_run` invocations. Anchor still advances. |
-| `--skip-adapter-sync` passed | Skip adapter detection/generation on every exit path; framework sync behavior is unchanged. |
+| `--skip-adapter-sync` passed | Skip adapter detection/generation and opencode command regeneration on every exit path; framework sync behavior is unchanged. |
 | Codex adapter reconciliation fails during explicit `/update` | Fail non-zero and print the direct `--reconcile-installed` retry command; never report stale generated governance as current. |
+| opencode command regeneration fails during explicit `/update` | Fail non-zero and print `bash bin/sync-opencode-commands.sh`; a missing or broken generator must not pass silently. |
 | Individual migration exits 1 (conflict) | Chain pauses. Anchor NOT advanced. Operator resolves, then re-runs `/update`. |
 | Individual migration exits 2 (hard error) | Chain aborts. Anchor NOT advanced. Print the script's stderr and exit 2. |
 | `--from-version` argument fails the semver regex | Refuse with `--from-version: expected vMAJOR.MINOR.PATCH (got 'X')`. Exit 1 before any fetch. |

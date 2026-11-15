@@ -181,6 +181,17 @@ ln -s "$TMPBASE" "$FORK2/.opencode/commands-link"
 bash "$SCRIPT" --root "$FORK2" --out "$FORK2/.opencode/commands-link" > "$TMPBASE/symlink2.log" 2>&1
 assert_eq "symlinked output directory exits 2" "$?" "2"
 
+# The ancestor can be the link, not the leaf: `.opencode` -> elsewhere moves
+# every wrapper out of the fork even though the output directory looks local.
+FORK5="$TMPBASE/fork-ancestor"
+mkdir -p "$FORK5/.claude/skills/status" "$FORK5/elsewhere"
+printf -- '---\nname: status\ndescription: Project snapshot.\n---\n\n# Status\n' \
+  > "$FORK5/.claude/skills/status/SKILL.md"
+ln -s "$FORK5/elsewhere" "$FORK5/.opencode"
+bash "$SCRIPT" --root "$FORK5" > "$TMPBASE/ancestor.log" 2>&1
+assert_eq "symlinked ancestor exits 2" "$?" "2"
+assert_no_file "nothing written through the ancestor" "$FORK5/elsewhere/status.md"
+
 echo "description shapes"
 # A block-scalar description parses as the indicator itself. The wrapper must
 # carry the fallback summary instead of a bare "description: >".
@@ -193,6 +204,21 @@ assert_eq "block-scalar description still generates" "$?" "0"
 assert_eq "block-scalar indicator is not emitted as the value" \
   "$(frontmatter_of "$FORK3/.opencode/commands/blocky.md" | sed -n 's/^  //p')" "apexyard /blocky skill"
 assert_contains "the fallback is announced" "block-scalar description" "$TMPBASE/block.log"
+
+# A CRLF SKILL.md must still yield its description, with no carriage return
+# in the wrapper. A hint with no description still has to reach the palette.
+FORK4="$TMPBASE/fork-crlf"
+mkdir -p "$FORK4/.claude/skills/crlf" "$FORK4/.claude/skills/hintonly"
+printf -- '---\r\nname: crlf\r\ndescription: A windows-authored skill.\r\nargument-hint: "[<id>]"\r\n---\r\n\r\n# CRLF\r\n' \
+  > "$FORK4/.claude/skills/crlf/SKILL.md"
+printf -- '---\nname: hintonly\nargument-hint: "[<id>]"\n---\n\n# Hint only\n' \
+  > "$FORK4/.claude/skills/hintonly/SKILL.md"
+bash "$SCRIPT" --root "$FORK4" > "$TMPBASE/crlf.log" 2>&1
+assert_eq "CRLF skills still generate" "$?" "0"
+assert_contains "CRLF description is parsed" "A windows-authored skill." "$FORK4/.opencode/commands/crlf.md"
+assert_eq "no CR reaches the wrapper" \
+  "$(tr -cd '\r' < "$FORK4/.opencode/commands/crlf.md" | wc -c | tr -d ' ')" "0"
+assert_frontmatter_contains "a hint survives an empty description" "Usage: [<id>]" "$FORK4/.opencode/commands/hintonly.md"
 
 echo "errors"
 bash "$SCRIPT" --root "$TMPBASE/does-not-exist" > "$TMPBASE/err1.log" 2>&1

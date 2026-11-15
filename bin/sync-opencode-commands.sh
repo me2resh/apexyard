@@ -81,7 +81,17 @@ SKILLS_DIR="$ROOT/.claude/skills"
 [ -d "$SKILLS_DIR" ] || { echo "sync-opencode-commands: no skills directory at $SKILLS_DIR" >&2; exit 2; }
 
 # Writing through a symlinked output directory would land the wrappers outside
-# the fork. Refuse instead of following it.
+# the fork. Refuse instead of following it. Check every existing component of
+# the path, because `.opencode` itself can be the link.
+case "$OUT_DIR" in /*) ;; *) OUT_DIR="$PWD/$OUT_DIR" ;; esac
+_out_parent="$(dirname "$OUT_DIR")"
+while [ -n "$_out_parent" ] && [ "$_out_parent" != "." ] && [ "$_out_parent" != "/" ]; do
+  if [ -L "$_out_parent" ]; then
+    echo "sync-opencode-commands: refusing to write: $_out_parent is a symlink" >&2
+    exit 2
+  fi
+  _out_parent="$(dirname "$_out_parent")"
+done
 if [ -L "$OUT_DIR" ]; then
   echo "sync-opencode-commands: refusing to write: $OUT_DIR is a symlink" >&2
   exit 2
@@ -93,6 +103,8 @@ fi
 frontmatter_value() {
   awk -v key="$2" '
     BEGIN { sq = sprintf("%c", 39) }
+    # A CRLF SKILL.md must still parse, or its description is silently lost.
+    { sub(/\r$/, "") }
     NR == 1 && $0 != "---" { exit }
     NR == 1 { inside = 1; next }
     inside && $0 == "---" { exit }
@@ -185,19 +197,21 @@ for skill_dir in "$SKILLS_DIR"/*/; do
     continue
   fi
 
+  # One value line, however the parts are missing: description only, hint only,
+  # both, or neither. The block scalar keeps colons, quotes, backticks and em
+  # dashes safe. opencode expands $ / @ / ! in the command body, so the hint
+  # stays here, in metadata.
+  value="$description"
+  if [ -n "$hint" ]; then
+    value="${value:+${value} }Usage: ${hint}"
+  fi
+  if [ -z "$value" ]; then
+    value="apexyard /${id} skill"
+  fi
+
   {
     printf -- '---\n'
-    if [ -n "$description" ]; then
-      # Block scalar: safe for colons, quotes, backticks and em dashes. The
-      # hint rides along in the same scalar so the palette shows it too.
-      if [ -n "$hint" ]; then
-        printf 'description: >-\n  %s Usage: %s\n' "${description//$'\n'/ }" "${hint//$'\n'/ }"
-      else
-        printf 'description: >-\n  %s\n' "${description//$'\n'/ }"
-      fi
-    else
-      printf 'description: >-\n  apexyard /%s skill\n' "$id"
-    fi
+    printf 'description: >-\n  %s\n' "${value//$'\n'/ }"
     printf -- '---\n'
     wrapper_content "$id"
   } > "$TMPBASE/rendered"
