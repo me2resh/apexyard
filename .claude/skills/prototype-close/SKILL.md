@@ -11,7 +11,7 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 
 `/prototype-close` is deprecated (me2resh/apexyard#2028). Use `/prototype --close`.
 This alias ships deprecated in v5.11.0. v5.12.0 removes it.
-Permissions follow the skill that runs. If your settings allow `Skill(prototype-close)`, also allow `Skill(prototype)`.
+This alias reads a file. It does not run `/prototype`, so `Skill(prototype-close)` is enough for the alias. The new command `/prototype --close` runs `/prototype` and needs `Skill(prototype)`.
 
 ## Usage
 
@@ -26,11 +26,19 @@ Permissions follow the skill that runs. If your settings allow `Skill(prototype-
 
    ```
    Note: /prototype-close is deprecated. Use /prototype --close --promote|--discard [ticket].
-   v5.12.0 removes the alias. A Skill(prototype-close) permission now needs Skill(prototype).
+   v5.12.0 removes the alias. The new command needs a Skill(prototype) permission.
    ```
 
-2. Read `../prototype/close.md` from this skill's directory. Under the ops root, that file is `.claude/skills/prototype/close.md`.
-3. Follow that file with `--close $ARGUMENTS` as the arguments. The behaviour, markers, and memo paths are the same as `/prototype --close`.
+2. Read the mode file in this table. Use the ops-root path, or the path relative to this skill's directory:
+
+   <!-- skill-modes:alias (test_skill_modes_2028.sh reads this table) -->
+   | Mode file (under the ops root) | Relative to this skill's directory | Arguments to pass |
+   |--------------------------------|------------------------------------|-------------------|
+   | `.claude/skills/_lib-modes/prototype-close.md` | `../_lib-modes/prototype-close.md` | `--close $ARGUMENTS` |
+
+3. Follow that file with the arguments in the table. The behaviour, markers, and paths are the same as `/prototype --close`.
+
+This alias does not read `/prototype`. It works when an adopter overrides `/prototype` with `custom-skills/prototype/`.
 
 ---
 

@@ -1282,7 +1282,7 @@ What now?
   3. Abort — stop here; the 2 already-filed tickets stay
 ```
 
-Mirrors the failure-handling shape of `/task --batch` (see [`.claude/skills/task/batch.md`](../task/batch.md) § "Failure handling").
+Mirrors the failure-handling shape of `/task --batch` (see [`.claude/skills/_lib-modes/task-batch.md`](../_lib-modes/task-batch.md) § "Failure handling").
 
 #### Report
 

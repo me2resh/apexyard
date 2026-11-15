@@ -50,14 +50,19 @@ Each dimension has a dedicated expert skill for when you need to go deeper than 
 ## Routing to full audits
 
 `/launch-check` stays a quick sweep. It does not run the full audits itself.
-After the table, for each WARN or FAIL row, name the matching full audit and offer to run it.
-Run an audit only when the operator says yes. When you offer more than one audit, use `AskUserQuestion` with multi-select. Recommend the audit for the most severe row first.
+After the table, for each WARN or FAIL row, name the matching full audit. Then ask one "Next steps" question.
+
+- Use `AskUserQuestion` with multi-select. Make each audit its own option, with its row and status. Put the audit for the most severe row first.
+- Add one separate option to create tickets for the blocking items. Add one option for "none for now".
+- Without `AskUserQuestion`, print the numbered menu in § "Output format" and ask for the numbers.
+- Run only the audits that the operator selects. Create tickets only when the operator selects the ticket option.
+- A bare "yes" does not select anything. Ask the operator to pick the numbers.
 
 | Row with WARN or FAIL | Full audit to name and offer |
 |-----------------------|------------------------------|
 | 1 Security, any finding | `/threat-model` |
 | 1 Security, a dependency finding (vulnerable, outdated, or licence-flagged package from `npm audit`, `pip audit`, or similar) | `/audit-deps` |
-| 1 Security, and an open PR exists for the project's current branch | `/security-review <PR>` |
+| 1 Security, and an open PR exists for the project's current branch | `/security-review <number> <owner/repo>` |
 | 2 Accessibility | `/accessibility-audit` |
 | 3 Compliance | `/compliance-check` |
 | 4 Analytics | `/analytics-audit` |
@@ -80,7 +85,7 @@ else
 fi
 ```
 
-The lookup prints a JSON list. An empty list (`[]`) means that the branch has no open PR. Offer `/security-review <number>` only when the list has an entry.
+The lookup prints a JSON list. An empty list (`[]`) means that the branch has no open PR. Offer `/security-review <number> <owner/repo>` only when the list has an entry. Always pass the repository, so the review does not resolve the number in the ops repo.
 Do not offer `/security-review` when the list is empty, when the command fails, or when `gh` is not installed. Do not use `gh pr view` with `--repo` and no PR argument. That form always fails.
 A PASS row gets no offer. A row with more than one match gets every match, for example `/threat-model` and `/audit-deps`.
 
@@ -114,13 +119,15 @@ Warnings (non-blocking, address before next launch):
   - [ ] Add alt text to 3 images (accessibility)
   - [ ] Add og:image to landing and pricing pages (SEO)
 
-Full audits for the WARN and FAIL rows (run one? yes / pick / no):
-  - /compliance-check    (row 3, FAIL)
-  - /monitoring-audit    (row 8, FAIL)
-  - /accessibility-audit (row 2, WARN)
-  - /seo-audit           (row 5, WARN)
-  - /geo-audit           (row 6, WARN)
-  - /mutation-test       (row 10, WARN)
+Next steps. Pick any, for example "1 3 7", or "8" for none:
+  1. Run /compliance-check     (row 3, FAIL)
+  2. Run /monitoring-audit     (row 8, FAIL)
+  3. Run /accessibility-audit  (row 2, WARN)
+  4. Run /seo-audit            (row 5, WARN)
+  5. Run /geo-audit            (row 6, WARN)
+  6. Run /mutation-test        (row 10, WARN)
+  7. Create tickets for the 2 blocking items
+  8. None for now
 ```
 
 **Do NOT dump hundreds of lines.** Each dimension gets ONE row in the table. Details go in follow-up messages only if the user asks "tell me more about the security findings" — not upfront.
@@ -315,7 +322,7 @@ Count PASS/WARN/FAIL, apply the verdict logic, format the output table.
 
 Print the table exactly as shown in the "Output format" section above. Add the full-audit offers from § "Routing to full audits". Then continue to Step 6 to persist the run and render the trend section.
 
-**Do NOT auto-create tickets for the findings.** Offer: "Want me to create tickets for the blocking items?" — but let the user decide. The launch check is advisory.
+**Do NOT auto-create tickets for the findings.** The ticket option is part of the "Next steps" question in § "Routing to full audits". Create tickets only when the operator selects it. The launch check is advisory.
 
 ## Workflow mode (`--workflow`) — opt-in parallel + adversarial verify
 
@@ -521,7 +528,7 @@ Do NOT run the 9-dimension sweep in this mode. Do NOT write any new JSON. This m
 3. **30 seconds per dimension.** Quick grep and file scanning, not deep code review.
 4. **Auto-PASS non-applicable dimensions.** A CLI doesn't need a cookie banner.
 5. **Advisory, not blocking.** The user decides go/no-go based on the findings. The skill does NOT block deploys mechanically.
-6. **Don't create tickets unprompted.** Offer to create them. Let the user decide.
+6. **Don't create tickets unprompted.** Offer them as a separate option in the "Next steps" question. Let the user decide.
 7. **Run from the project directory.** The skill checks `workspace/<project>/`, not the ops repo.
 8. **Persist every run via the lib.** Step 6 always calls `audit_run_persist`, regardless of opt-in commit state. The `.audit-history-tracked` marker only controls whether the JSON files are committed; the MD artefacts are committed unconditionally and persistence happens on every run.
 9. **Resolve paths via the lib.** `audit_resolve_dir` (inside `_lib-audit-history.sh`) calls `portfolio_projects_dir` for you — the SKILL doesn't need to source the portfolio helper directly any more.

@@ -2,7 +2,7 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 
 # /prototype --close — Close a Prototype via the Disposition Gate
 
-This file is the close mode of `/prototype`. `/prototype --close` reads it, and the deprecated `/prototype-close` alias reads it too (me2resh/apexyard#2028).
+This file is the close mode of `/prototype`. `/prototype --close` reads it, and the deprecated `/prototype-close` alias reads it too (me2resh/apexyard#2028). It lives in `.claude/skills/_lib-modes/` so that an override of `/prototype` does not move it.
 The close mode does not run the `/prototype` creation interview. It does not write the active-issue-skill marker.
 
 The disposition gate prevents the worst-of-both case: a prototype that "looked great in the demo" but never decides what to do with it, leaving a throwaway mockup that quietly gets promoted into production. Every prototype must close with one of two paths:
@@ -39,7 +39,7 @@ Defaults match today's single-fork layout. See `docs/multi-project.md`.
 
 Two paths:
 
-- Ignore the `--close` flag in `$ARGUMENTS`. It only selects this mode.
+- Ignore the `--close` flag wherever it is in `$ARGUMENTS`. It only selects this mode.
 - If `$ARGUMENTS` includes a number (e.g. `--promote 142` or `--discard owner/repo#142`), use that.
 - Otherwise read the active-ticket marker of the working tree you are in (see `/start-ticket` "Read the active ticket") and use the ticket recorded there. If no marker resolves, ask:
 

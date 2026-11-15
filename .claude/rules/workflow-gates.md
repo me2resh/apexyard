@@ -136,7 +136,7 @@ Spike tickets (prefix `[Spike]`, label `spike`) are hypothesis-driven, time-boxe
 2. Active ticket marker references a `[Spike]`- or `[Prototype]`-prefixed ticket
 3. Branch name starts with `spike/` or `prototype/`
 
-Any one match exempts the gate; otherwise the production rule applies. See `.claude/skills/spike/SKILL.md`, `.claude/skills/spike/close.md`, `.claude/skills/prototype/SKILL.md`, `.claude/skills/prototype/close.md`, and `docs/agdr/AgDR-0017-spike-skill-schema-and-exemptions.md`.
+Any one match exempts the gate; otherwise the production rule applies. See `.claude/skills/spike/SKILL.md`, `.claude/skills/_lib-modes/spike-close.md`, `.claude/skills/prototype/SKILL.md`, `.claude/skills/_lib-modes/prototype-close.md`, and `docs/agdr/AgDR-0017-spike-skill-schema-and-exemptions.md`.
 
 ## QA State is Mandatory
 

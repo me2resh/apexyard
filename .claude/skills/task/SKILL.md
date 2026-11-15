@@ -33,16 +33,24 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 /task --batch --priority P1 --parent #42 File the auth refactor tickets
 ```
 
-## Batch mode — `/task --batch`
+## Modes
 
-Check `$ARGUMENTS` first, before any other step.
-If the first word is `--batch`, read `batch.md` in this skill's directory (`.claude/skills/task/batch.md`).
-Follow that file with the same `$ARGUMENTS`, then stop. Do not run the single-ticket steps below.
+Check `$ARGUMENTS` first, before any other step. Look at every word, not only the first word.
+When a word in `$ARGUMENTS` is exactly a flag in the table, read the mode file in the same row. Follow that file with the same `$ARGUMENTS`, then stop.
+In a mode, do not run the steps below. Do not write the active-issue-skill marker of step 0.
+
+<!-- skill-modes:route (test_skill_modes_2028.sh reads this table) -->
+| Flag | Mode file (under the ops root) |
+|------|--------------------------------|
+| `--batch` | `.claude/skills/_lib-modes/task-batch.md` |
+
+The mode file is in `.claude/skills/_lib-modes/`, not in this skill's directory. It stays in place when an adopter overrides `/task` with `custom-skills/task/`. An override keeps the mode only when its SKILL.md has this section. Copy this section into the override to keep the mode.
+
 Batch mode keeps every behaviour of the old `/tickets-batch` skill: mixed ticket types, the 2 to 20 limit, one batch confirmation, and partial-failure handling.
-The optional `--project`, `--priority`, `--parent`, and `--labels` flags prefill the shared questions.
-`/tickets-batch` still works as a deprecated alias that loads the same file.
+The optional `--project`, `--priority`, `--parent`, and `--labels` flags prefill the shared questions. They can come before or after `--batch`.
+`/tickets-batch` still works as a deprecated alias that reads the same mode file.
 
-If `$ARGUMENTS` does not start with `--batch`, run the single-ticket process below. It is unchanged.
+If no word in `$ARGUMENTS` is a flag in the table, run the process below.
 
 ## Process
 

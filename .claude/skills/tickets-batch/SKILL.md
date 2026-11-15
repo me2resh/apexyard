@@ -11,7 +11,7 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 
 `/tickets-batch` is deprecated (me2resh/apexyard#2028). Use `/task --batch`.
 This alias ships deprecated in v5.11.0. v5.12.0 removes it.
-Permissions follow the skill that runs. If your settings allow `Skill(tickets-batch)`, also allow `Skill(task)`.
+This alias reads a file. It does not run `/task`, so `Skill(tickets-batch)` is enough for the alias. The new command `/task --batch` runs `/task` and needs `Skill(task)`.
 
 ## Usage
 
@@ -26,11 +26,19 @@ Permissions follow the skill that runs. If your settings allow `Skill(tickets-ba
 
    ```
    Note: /tickets-batch is deprecated. Use /task --batch [file-or-description].
-   v5.12.0 removes the alias. A Skill(tickets-batch) permission now needs Skill(task).
+   v5.12.0 removes the alias. The new command needs a Skill(task) permission.
    ```
 
-2. Read `../task/batch.md` from this skill's directory. Under the ops root, that file is `.claude/skills/task/batch.md`.
-3. Follow that file with `--batch $ARGUMENTS` as the arguments. The behaviour is the same as `/task --batch`: mixed ticket types, the 2 to 20 limit, one batch confirmation, and partial-failure handling.
+2. Read the mode file in this table. Use the ops-root path, or the path relative to this skill's directory:
+
+   <!-- skill-modes:alias (test_skill_modes_2028.sh reads this table) -->
+   | Mode file (under the ops root) | Relative to this skill's directory | Arguments to pass |
+   |--------------------------------|------------------------------------|-------------------|
+   | `.claude/skills/_lib-modes/task-batch.md` | `../_lib-modes/task-batch.md` | `--batch $ARGUMENTS` |
+
+3. Follow that file with the arguments in the table. The behaviour, markers, and paths are the same as `/task --batch`.
+
+This alias does not read `/task`. It works when an adopter overrides `/task` with `custom-skills/task/`.
 
 ---
 

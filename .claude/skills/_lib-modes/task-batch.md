@@ -1,6 +1,6 @@
 # /task --batch — Bulk-File Structured Tickets
 
-This file is the batch mode of `/task`. `/task --batch` reads it, and the deprecated `/tickets-batch` alias reads it too (me2resh/apexyard#2028).
+This file is the batch mode of `/task`. `/task --batch` reads it, and the deprecated `/tickets-batch` alias reads it too (me2resh/apexyard#2028). It lives in `.claude/skills/_lib-modes/` so that an override of `/task` does not move it.
 `/task` without `--batch` does not read this file and does not change.
 
 Read `.claude/rules/writing-standard.md`. Use the **controlled technical writing profile** for every
@@ -45,7 +45,7 @@ The argument is free-form — a description, a markdown file path, or empty. Ste
 
 ### Prefill flags (optional)
 
-Remove `--batch` and these flags from `$ARGUMENTS` before step 2 reads the rest. Each flag takes one value.
+Remove `--batch` and these flags from `$ARGUMENTS` wherever they are, before step 2 reads the rest. Each prefill flag takes one value.
 
 | Flag | Prefills | Example |
 |------|----------|---------|

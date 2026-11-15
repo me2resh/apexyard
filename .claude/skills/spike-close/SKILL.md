@@ -11,7 +11,7 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 
 `/spike-close` is deprecated (me2resh/apexyard#2028). Use `/spike --close`.
 This alias ships deprecated in v5.11.0. v5.12.0 removes it.
-Permissions follow the skill that runs. If your settings allow `Skill(spike-close)`, also allow `Skill(spike)`.
+This alias reads a file. It does not run `/spike`, so `Skill(spike-close)` is enough for the alias. The new command `/spike --close` runs `/spike` and needs `Skill(spike)`.
 
 ## Usage
 
@@ -26,11 +26,19 @@ Permissions follow the skill that runs. If your settings allow `Skill(spike-clos
 
    ```
    Note: /spike-close is deprecated. Use /spike --close --promote|--discard [ticket].
-   v5.12.0 removes the alias. A Skill(spike-close) permission now needs Skill(spike).
+   v5.12.0 removes the alias. The new command needs a Skill(spike) permission.
    ```
 
-2. Read `../spike/close.md` from this skill's directory. Under the ops root, that file is `.claude/skills/spike/close.md`.
-3. Follow that file with `--close $ARGUMENTS` as the arguments. The behaviour, markers, and memo paths are the same as `/spike --close`.
+2. Read the mode file in this table. Use the ops-root path, or the path relative to this skill's directory:
+
+   <!-- skill-modes:alias (test_skill_modes_2028.sh reads this table) -->
+   | Mode file (under the ops root) | Relative to this skill's directory | Arguments to pass |
+   |--------------------------------|------------------------------------|-------------------|
+   | `.claude/skills/_lib-modes/spike-close.md` | `../_lib-modes/spike-close.md` | `--close $ARGUMENTS` |
+
+3. Follow that file with the arguments in the table. The behaviour, markers, and paths are the same as `/spike --close`.
+
+This alias does not read `/spike`. It works when an adopter overrides `/spike` with `custom-skills/spike/`.
 
 ---
 

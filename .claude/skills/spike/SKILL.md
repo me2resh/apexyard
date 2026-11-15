@@ -36,16 +36,23 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 /spike --close --discard         # close mode: uses the active-ticket marker, writes a memo
 ```
 
-## Close mode — `/spike --close`
+## Modes
 
-Check `$ARGUMENTS` first, before any other step.
-If the first word is `--close`, read `close.md` in this skill's directory (`.claude/skills/spike/close.md`).
-Follow that file with the same `$ARGUMENTS`, then stop.
-In close mode, do not run the creation steps below. Do not write the active-issue-skill marker of step 0.
+Check `$ARGUMENTS` first, before any other step. Look at every word, not only the first word.
+When a word in `$ARGUMENTS` is exactly a flag in the table, read the mode file in the same row. Follow that file with the same `$ARGUMENTS`, then stop.
+In a mode, do not run the steps below. Do not write the active-issue-skill marker of step 0.
+
+<!-- skill-modes:route (test_skill_modes_2028.sh reads this table) -->
+| Flag | Mode file (under the ops root) |
+|------|--------------------------------|
+| `--close` | `.claude/skills/_lib-modes/spike-close.md` |
+
+The mode file is in `.claude/skills/_lib-modes/`, not in this skill's directory. It stays in place when an adopter overrides `/spike` with `custom-skills/spike/`. An override keeps the mode only when its SKILL.md has this section. Copy this section into the override to keep the mode.
+
 The close mode keeps every behaviour of the old `/spike-close` skill: the PROMOTE and DISCARD paths, the follow-up `[Feature]`, the memo path, and the close comment.
-`/spike-close` still works as a deprecated alias that loads the same file.
+`/spike-close` still works as a deprecated alias that reads the same mode file.
 
-If `$ARGUMENTS` does not start with `--close`, run the creation process below.
+If no word in `$ARGUMENTS` is a flag in the table, run the process below.
 
 ## Process
 

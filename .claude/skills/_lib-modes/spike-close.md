@@ -2,7 +2,7 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 
 # /spike --close — Close a Spike via the Disposition Gate
 
-This file is the close mode of `/spike`. `/spike --close` reads it, and the deprecated `/spike-close` alias reads it too (me2resh/apexyard#2028).
+This file is the close mode of `/spike`. `/spike --close` reads it, and the deprecated `/spike-close` alias reads it too (me2resh/apexyard#2028). It lives in `.claude/skills/_lib-modes/` so that an override of `/spike` does not move it.
 The close mode does not run the `/spike` creation interview. It does not write the active-issue-skill marker.
 
 The disposition gate prevents the worst-of-both case: a spike that "succeeded" but never decides what to do with the code, leaving half-shipped exploration in main. Every spike must close with one of two paths:
@@ -37,7 +37,7 @@ Defaults match today's single-fork layout. See `docs/multi-project.md`.
 
 Two paths:
 
-- Ignore the `--close` flag in `$ARGUMENTS`. It only selects this mode.
+- Ignore the `--close` flag wherever it is in `$ARGUMENTS`. It only selects this mode.
 - If `$ARGUMENTS` includes a number (e.g. `--promote 142` or `--discard owner/repo#142`), use that.
 - Otherwise read the active-ticket marker of the working tree you are in (see `/start-ticket` "Read the active ticket") and use the ticket recorded there. If no marker resolves, ask:
 
