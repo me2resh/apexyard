@@ -21,7 +21,7 @@
 #   1. Asserts the discovery directory (`.opencode/plugins/`) contains NO
 #      top-level `.ts` files — every adapter file lives one level down,
 #      inside the `apexyard/` subdirectory.
-#   2. Dynamically imports ONLY `.opencode/plugins/apexyard/index.ts` — the
+#   2. Dynamically imports ONLY the code entry (`.opencode/apexyard/index.ts`) — the
 #      one file opencode's subdirectory discovery would actually load — and
 #      asserts the import succeeds (every relative import in the chain:
 #      index -> gate-dispatcher -> derive-gates -> derive-gates-core,
@@ -74,29 +74,35 @@ bash "$FRAMEWORK_ROOT/bin/install-opencode-adapter.sh" \
 
 DISCOVERY_DIR="$FIXTURE_PROJECT/.opencode/plugins"
 ENTRY="$DISCOVERY_DIR/apexyard.ts"
-SUB_ENTRY="$DISCOVERY_DIR/apexyard/index.ts"
+CODE_DIR="$FIXTURE_PROJECT/.opencode/apexyard"
+SUB_ENTRY="$CODE_DIR/index.ts"
 
 FAIL=0
 
 echo ""
-echo "== Check 1: exactly one top-level .ts file (the apexyard.ts shim) under the discovery dir =="
-# opencode loads only top-level files (glob {plugin,plugins}/*.{ts,js}); a
-# subdirectory-only install is never loaded (me2resh/apexyard bug: gates inert).
+echo "== Check 1: exactly one top-level .ts file (the apexyard.ts shim) under the discovery dir, and no code subdirectory there =="
+# opencode 1.x loads only top-level files (glob {plugin,plugins}/*.{ts,js});
+# 2.x also loads <discovery>/<name>/index.ts. The code directory therefore
+# sits BESIDE the discovery dir: with it inside, opencode loads the adapter
+# twice and runs every gate twice (me2resh/apexyard#2072).
 TOP_LEVEL_TS=$(find "$DISCOVERY_DIR" -maxdepth 1 -type f -name '*.ts' | sort)
 EXPECTED_SHIM="$DISCOVERY_DIR/apexyard.ts"
 if [ "$TOP_LEVEL_TS" != "$EXPECTED_SHIM" ]; then
   echo "FAIL: expected exactly $EXPECTED_SHIM as the only top-level .ts file, found:" >&2
   echo "$TOP_LEVEL_TS" >&2
   FAIL=1
-elif [ "$(cat "$EXPECTED_SHIM")" != 'export { default } from "./apexyard/index.ts";' ]; then
+elif [ -d "$DISCOVERY_DIR/apexyard" ]; then
+  echo "FAIL: $DISCOVERY_DIR/apexyard still exists — opencode 2.x discovers its index.ts and loads the adapter twice" >&2
+  FAIL=1
+elif [ "$(cat "$EXPECTED_SHIM")" != 'export { default } from "../apexyard/index.ts";' ]; then
   echo "FAIL: unexpected shim content in $EXPECTED_SHIM" >&2
   FAIL=1
 else
-  echo "PASS: apexyard.ts is the only top-level .ts file and re-exports apexyard/index.ts."
+  echo "PASS: apexyard.ts is the only top-level .ts file, the code dir sits outside the discovery dir, and the shim re-exports it."
 fi
 
 echo ""
-echo "== Check 2: apexyard/index.ts exists =="
+echo "== Check 2: the code entry exists beside the discovery dir =="
 [ -f "$SUB_ENTRY" ] || { echo "FAIL: expected entry not found: $SUB_ENTRY" >&2; FAIL=1; }
 
 RUNNER="$TMPDIR/run-load-assertion.mjs"
@@ -211,20 +217,23 @@ else
 fi
 
 echo ""
-echo "== Check 5: re-running the installer on an older install (no shim) adds the shim =="
+echo "== Check 5: re-running the installer on a pre-#2072 install moves the code out and rewrites the shim =="
 P5="$TMPDIR/upgrade"
 mkdir -p "$P5/.opencode/plugins/apexyard"
 : > "$P5/.opencode/plugins/apexyard/index.ts"
+printf 'export { default } from "./apexyard/index.ts";\n' > "$P5/.opencode/plugins/apexyard.ts"
 bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P5/.opencode/plugins" >/dev/null
-if [ "$(cat "$P5/.opencode/plugins/apexyard.ts")" = 'export { default } from "./apexyard/index.ts";' ]; then
-  echo "PASS: upgrade run added the shim."
+if [ "$(cat "$P5/.opencode/plugins/apexyard.ts")" = 'export { default } from "../apexyard/index.ts";' ] \
+  && [ -f "$P5/.opencode/apexyard/index.ts" ] \
+  && [ ! -e "$P5/.opencode/plugins/apexyard" ]; then
+  echo "PASS: upgrade run moved the code directory out of the discovery dir and rewrote the shim."
 else
-  echo "FAIL: upgrade run did not add the shim" >&2; FAIL=1
+  echo "FAIL: upgrade run did not produce the single-entry layout" >&2; FAIL=1
 fi
 
 echo ""
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: the real, shipped install layout (bin/install-opencode-adapter.sh's output) loads cleanly — no top-level helper files in the discovery dir, and apexyard/index.ts default-exports a V2 definition whose setup registers the execute.before gate hook."
+  echo "PASS: the real, shipped install layout (bin/install-opencode-adapter.sh's output) loads cleanly — one discovered shim, the code directory outside the discovery dir, and apexyard/index.ts default-exports a V2 definition whose setup registers the execute.before gate hook."
   exit 0
 fi
 exit 1

@@ -24,11 +24,16 @@
 #      same directory makes opencode try to load THEM as plugins too.
 #
 # The fix is an install LAYOUT, not a dispatch-logic change: every file
-# this adapter needs lives inside one subdirectory, with a re-export SHIM
-# (`index.ts` — the ONLY file exporting anything, and its only export is
-# the default plugin) as the sole discovered entry. See
-# `harness-adapters/opencode/src/index.ts`'s header comment for the full
-# mechanism. This script produces that layout mechanically instead of
+# this adapter needs lives inside one subdirectory OUTSIDE the discovery
+# directory, with a re-export SHIM in the discovery directory as the sole
+# discovered entry. The shim's only export is the default plugin. The code
+# directory sits beside `.opencode/plugins/`, not inside it, because
+# opencode 2.x also discovers `<discovery>/<subdir>/index.ts`: keeping the
+# code inside the discovery directory made opencode load the adapter twice
+# and run every gate twice (me2resh/apexyard#2072). Older opencode 1.x
+# discovers top-level files only, so the shim stays the entry there too.
+# See `harness-adapters/opencode/src/index.ts`'s header comment for the
+# full mechanism. This script produces that layout mechanically instead of
 # asking an adopter to hand-copy files into the right shape (and dir name)
 # every time.
 #
@@ -66,16 +71,19 @@ usage() {
 Usage: bin/install-opencode-adapter.sh [--target-dir <path>] [--name <subdir>] [--root <path>]
 
 Installs the apexyard opencode gate adapter (gate-dispatcher.ts + its
-helper modules) into <target-dir>/<name>/, the layout opencode's local
-plugin discovery loads cleanly (a single index.ts entry per subdirectory,
-whose only export is the default plugin).
+helper modules) into <parent>/<name>/, where <parent> is the directory
+that CONTAINS the plugin discovery dir. The discovery dir gets a single
+top-level shim file (<name>.ts) that re-exports the subdirectory entry.
+Keeping the code directory outside the discovery dir stops opencode 2.x
+from loading the adapter a second time through <discovery>/<name>/index.ts.
 
 Options:
   --target-dir PATH  Directory opencode scans for plugins.
                       Defaults to "<cwd>/.opencode/plugins" (PLURAL — see
                       this script's header comment) — run this script from
                       the project you want opencode to enforce gates in.
-  --name NAME         Subdirectory name under --target-dir. Default: apexyard.
+  --name NAME         Subdirectory name under the discovery dir's parent.
+                      Default: apexyard.
   --root PATH         Path to the apexyard ops fork (where harness-adapters/
                        lives). Defaults to this script's own repo root.
   -h, --help          Show this help.
@@ -136,11 +144,20 @@ case "$NAME" in
     ;;
 esac
 
+# The code lives beside the discovery directory, never inside it: opencode 2.x
+# also discovers `<discovery>/<name>/index.ts`, so an in-tree subdirectory is
+# loaded a second time and every gate runs twice (#2072). Only the shim file
+# sits in the discovery directory.
+CODE_PARENT="$(dirname "$TARGET_DIR")"
+DEST="$CODE_PARENT/$NAME"
+SHIM="$TARGET_DIR/$NAME.ts"
+LEGACY_DEST="$TARGET_DIR/$NAME"
+
 # Refuse symlinks on the install path. The shim is written into $TARGET_DIR,
 # and a symlink there could redirect the write to a file outside the project
-# (for example a gate hook). The same holds for the parent .opencode dir.
-SHIM="$TARGET_DIR/$NAME.ts"
-for link_path in "$(dirname "$TARGET_DIR")" "$TARGET_DIR" "$SHIM"; do
+# (for example a gate hook). The same holds for the parent .opencode dir and
+# the code directory.
+for link_path in "$CODE_PARENT" "$TARGET_DIR" "$DEST" "$SHIM"; do
   if [ -L "$link_path" ]; then
     echo "ERROR: refusing to install: $link_path is a symlink. Remove it or install into a real directory." >&2
     exit 1
@@ -152,9 +169,9 @@ for f in index.ts gate-dispatcher.ts derive-gates.ts resolve-ops-root.ts; do
 done
 [ -f "$SHARED_CORE" ] || { echo "ERROR: expected shared-core file not found: $SHARED_CORE" >&2; exit 1; }
 
-DEST="$TARGET_DIR/$NAME"
+DEST="$CODE_PARENT/$NAME"
 rm -rf "$DEST"
-mkdir -p "$DEST"
+mkdir -p "$DEST" "$TARGET_DIR"
 
 cp "$ADAPTER_SRC/index.ts" "$DEST/index.ts"
 cp "$ADAPTER_SRC/gate-dispatcher.ts" "$DEST/gate-dispatcher.ts"
@@ -181,17 +198,25 @@ if ! grep -Eq 'from ["'"'"']\./derive-gates-core\.ts["'"'"']' "$DEST/derive-gate
 fi
 
 # Write the shim LAST, after every check passed, so a failed install never
-# leaves a shim that points at a broken copy. opencode's local plugin glob is
-# `{plugin,plugins}/*.{ts,js}`: top-level files only, so a file inside a
-# subdirectory is never loaded. The shim re-exports the subdirectory entry;
-# its only export is the default plugin (the #844 crash cannot recur).
+# leaves a shim that points at a broken copy. opencode 1.x discovers top-level
+# files only (`{plugin,plugins}/*.{ts,js}`) and 2.x discovers both those and
+# `<discovery>/<name>/index.ts`, so this file is the single entry under both.
+# The shim re-exports the code directory beside the discovery dir, and its
+# only export is the default plugin (the #844 crash cannot recur).
 # Write to a temp file in the same directory and rename it into place: mv
 # replaces the path itself and never follows a symlink. Re-running the
 # installer adds the shim to an older install.
 SHIM_TMP="$(mktemp "$TARGET_DIR/.apexyard-shim.XXXXXX")"
-printf 'export { default } from "./%s/index.ts";\n' "$NAME" > "$SHIM_TMP"
+printf 'export { default } from "../%s/index.ts";\n' "$NAME" > "$SHIM_TMP"
 chmod 644 "$SHIM_TMP"
 mv -f "$SHIM_TMP" "$SHIM"
+
+# A pre-#2072 install kept the code inside the discovery directory. Leaving
+# that directory in place would keep the double load alive, so remove it once
+# the new copy and shim are in place.
+if [ "$LEGACY_DEST" != "$DEST" ] && [ -d "$LEGACY_DEST" ]; then
+  rm -rf "$LEGACY_DEST"
+fi
 
 if [ "$(basename "$TARGET_DIR")" = "plugin" ]; then
   echo "WARNING: --target-dir ends in the singular 'plugin' — opencode's real, live-verified discovery dir is PLURAL ('plugins'). Continuing, but opencode will not find this install unless '$TARGET_DIR' is itself scanned." >&2
@@ -225,12 +250,15 @@ if command -v opencode >/dev/null 2>&1; then
 fi
 
 echo "Installed the apexyard opencode gate adapter:"
-echo "  $TARGET_DIR/$NAME.ts          <- the file opencode loads (top-level shim)"
+echo "  $SHIM          <- the only file opencode discovers (shim)"
 echo "  $DEST/index.ts               <- the real entry, re-exported by the shim"
 echo "  $DEST/gate-dispatcher.ts"
 echo "  $DEST/resolve-ops-root.ts"
 echo "  $DEST/derive-gates.ts"
 echo "  $DEST/derive-gates-core.ts"
 echo ""
+echo "The code directory sits beside $TARGET_DIR, not inside it, so opencode"
+echo "loads the adapter once (me2resh/apexyard#2072)."
+echo ""
 echo "Next: (cd \"$ROOT/harness-adapters/opencode\" && npm install)"
-echo "Then run opencode from the project containing $TARGET_DIR — it loads $SHIM (the top-level shim)."
+echo "Then run opencode from the project containing $TARGET_DIR — it loads $SHIM."
