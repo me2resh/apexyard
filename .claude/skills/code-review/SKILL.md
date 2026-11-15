@@ -140,9 +140,10 @@ refusal message — but the cheap fix is upstream of both: don't pass a path.
 
 **Body path (AgDR-0266).** Rex writes the body with Write to `<ops-root>/.claude/session/reviews/bodies/<owner>__<repo>__<pr>-rex.md` (`review_body_path`), then posts it with `tracker_review_submit <owner/repo> <pr> comment <body_file>`. Not a heredoc.
 
+Rex does not edit the `ready-to-merge` label. The orchestrator edits it, after it clears the active-reviewer marker, in its own Bash call.
 On GitHub, add `ready-to-merge` after APPROVED: `gh pr edit {number} --repo "$PR_HOST_REPO" --add-label ready-to-merge`.
 Remove it after CHANGES REQUESTED: `gh pr edit {number} --repo "$PR_HOST_REPO" --remove-label ready-to-merge`.
-A label failure changes no verdict or marker.
+A denied or failed label call changes no verdict and no marker.
 
 ### 8. Offer pre-merge QA after APPROVED
 
