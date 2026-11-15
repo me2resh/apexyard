@@ -70,9 +70,7 @@ Use either scratch pattern:
 
 The orchestrator prepares the clone before arming the active-reviewer marker.
 `block-reviewer-repo-mutation.sh` blocks `git clone`, `git fetch`, and `git checkout` during active review.
-The orchestrator makes the clone light with `.claude/skills/code-review/review-copy.sh create`.
-The copy is shallow and single-commit. It sits under `<temp dir>/apexyard-review-copies/` and has a record of the PR, the session and the creation time (AgDR-0305).
-Use the path that the orchestrator gives you. Do not make a full clone.
+Use `review-copy.sh`.
 
 If a hook blocks a scratch-clone or export command, stop that step.
 Report the exact command, hook name, and message to the orchestrator.

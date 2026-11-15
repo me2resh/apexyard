@@ -42,10 +42,7 @@ See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the ful
 
 For tests and probes, use the scratch-clone pattern in `.claude/agents/code-reviewer.md` § "Running tests in a scratch clone". If a hook blocks a command, stop and report the command, hook, and message. Never disguise a command to bypass a hook.
 
-The reviewer mutation lock blocks `git clone`, `git fetch`, and `git checkout` while the active-reviewer marker exists. Prepare the scratch clone and fetch the PR head before step 0 arms the marker.
-
-Make the copy light. Run `.claude/skills/code-review/review-copy.sh create <repo-url> <repo-slug> <pr-number> <head-sha>` before step 0. It makes a shallow, one-commit, standalone clone of the PR head under one folder, `<temp dir>/apexyard-review-copies/`. It writes a record of the PR, the session and the creation time to `.git/apexyard-review-copy.json` in the copy. Give the printed path to the reviewer. A sweep can list copies with `review-copy.sh list` and remove one with `review-copy.sh remove <path>`. Do not make a full clone for a scratch review (AgDR-0305).
-
+The reviewer mutation lock blocks `git clone`, `git fetch`, and `git checkout` while the active-reviewer marker exists. Make the light copy (`docs/skills/review-copies.md`) before step 0 arms the marker.
 ## Process
 
 Read .claude/rules/writing-standard.md before drafting or posting a review.
