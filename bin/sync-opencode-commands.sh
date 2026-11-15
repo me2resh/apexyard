@@ -24,6 +24,9 @@
 #
 # Generated wrappers are disposable. They are pruned only when they carry the
 # generator marker, so a hand-written .opencode/commands/*.md is never removed.
+# The same marker guards the write path: when the target exists without it, the
+# generator warns and leaves the file alone instead of overwriting it. A symlink
+# at the target, or at the output directory, is refused for the same reason.
 
 set -euo pipefail
 
@@ -77,6 +80,13 @@ SKILLS_DIR="$ROOT/.claude/skills"
 
 [ -d "$SKILLS_DIR" ] || { echo "sync-opencode-commands: no skills directory at $SKILLS_DIR" >&2; exit 2; }
 
+# Writing through a symlinked output directory would land the wrappers outside
+# the fork. Refuse instead of following it.
+if [ -L "$OUT_DIR" ]; then
+  echo "sync-opencode-commands: refusing to write: $OUT_DIR is a symlink" >&2
+  exit 2
+fi
+
 # frontmatter_value <file> <key>
 # Prints the first "key: value" line of the leading YAML block, unwrapped from
 # surrounding quotes. Prints nothing when the key is absent.
@@ -103,8 +113,11 @@ frontmatter_value() {
 }
 
 # Body of one wrapper. Kept deliberately short: the skill owns the behaviour.
+# The argument hint lives in the frontmatter description, not here: opencode
+# expands $, @ and ! in a command template at invocation time, and the
+# frontmatter is metadata rather than template text.
 wrapper_content() {
-  local id="$1" hint="$2"
+  local id="$1"
   cat <<EOF
 $MARKER
 
@@ -112,9 +125,6 @@ Load the apexyard skill \`$id\` with the skill tool and follow it exactly. It is
 the operator-invoked /$id command; do not substitute a summary of your own for
 what the skill prescribes.
 EOF
-  if [ -n "$hint" ]; then
-    printf '\nUsage for this command: `%s`\n' "${hint//\`/}"
-  fi
   printf '\n$ARGUMENTS\n'
 }
 
@@ -123,6 +133,7 @@ trap 'rm -rf "$TMPBASE"' EXIT
 
 : > "$TMPBASE/expected"
 : > "$TMPBASE/drift"
+: > "$TMPBASE/conflicts"
 generated=0
 unchanged=0
 pruned=0
@@ -142,19 +153,53 @@ for skill_dir in "$SKILLS_DIR"/*/; do
 
   description="$(frontmatter_value "$skill_file" description)"
   hint="$(frontmatter_value "$skill_file" argument-hint)"
+  # A CRLF SKILL.md would otherwise carry a bare carriage return into the
+  # wrapper. The hint drops its backticks so no shell substitution can form
+  # from it.
+  description="${description//$'\r'/}"
+  hint="${hint//$'\r'/}"
+  hint="${hint//\`/}"
+
+  # A block scalar (`>` or `|`) or an empty value parses as the indicator
+  # itself. Emitting that would produce "description: >", so warn and use the
+  # fallback summary instead.
+  case "$description" in
+    '>'|'|'|'>-'|'>+'|'|-'|'|+')
+      printf 'sync-opencode-commands: %s has a block-scalar description; using the fallback summary\n' "$id" >&2
+      description=""
+      ;;
+  esac
+
   target="$OUT_DIR/$id.md"
   printf '%s\n' "$target" >> "$TMPBASE/expected"
+
+  # Two paths must never take a file away from the operator: a symlink at the
+  # target (cp would write through it), and an existing target that this
+  # generator did not write. Both are reported, neither is touched.
+  if [ -L "$target" ]; then
+    printf '%s\n' "$target" >> "$TMPBASE/conflicts"
+    continue
+  fi
+  if [ -f "$target" ] && ! grep -qF "$MARKER" "$target"; then
+    printf '%s\n' "$target" >> "$TMPBASE/conflicts"
+    continue
+  fi
 
   {
     printf -- '---\n'
     if [ -n "$description" ]; then
-      # Block scalar: safe for colons, quotes, backticks and em dashes.
-      printf 'description: >-\n  %s\n' "${description//$'\n'/ }"
+      # Block scalar: safe for colons, quotes, backticks and em dashes. The
+      # hint rides along in the same scalar so the palette shows it too.
+      if [ -n "$hint" ]; then
+        printf 'description: >-\n  %s Usage: %s\n' "${description//$'\n'/ }" "${hint//$'\n'/ }"
+      else
+        printf 'description: >-\n  %s\n' "${description//$'\n'/ }"
+      fi
     else
       printf 'description: >-\n  apexyard /%s skill\n' "$id"
     fi
     printf -- '---\n'
-    wrapper_content "$id" "$hint"
+    wrapper_content "$id"
   } > "$TMPBASE/rendered"
 
   if [ -f "$target" ] && cmp -s "$TMPBASE/rendered" "$target"; then
@@ -188,6 +233,11 @@ if [ -d "$OUT_DIR" ]; then
   done
 fi
 
+conflicts=0
+if [ -s "$TMPBASE/conflicts" ]; then
+  conflicts=$(wc -l < "$TMPBASE/conflicts" | tr -d ' ')
+fi
+
 if [ "$CHECK" -eq 1 ]; then
   if [ -s "$TMPBASE/drift" ]; then
     echo "opencode commands out of date:" >&2
@@ -195,8 +245,20 @@ if [ "$CHECK" -eq 1 ]; then
     echo "Run bin/sync-opencode-commands.sh to refresh them." >&2
     exit 1
   fi
+  if [ "$conflicts" -gt 0 ]; then
+    echo "opencode commands up to date ($unchanged wrappers in $OUT_DIR)." >&2
+    echo "$conflicts name conflict(s) left alone — not written by this generator:" >&2
+    sed 's/^/  /' "$TMPBASE/conflicts" >&2
+    echo "Rename the skill or remove the file to let the generator manage that name." >&2
+    exit 0
+  fi
   echo "opencode commands up to date ($unchanged wrappers in $OUT_DIR)."
   exit 0
+fi
+
+if [ "$conflicts" -gt 0 ]; then
+  echo "opencode commands: $conflicts file(s) left alone — not written by this generator:" >&2
+  sed 's/^/  /' "$TMPBASE/conflicts" >&2
 fi
 
 echo "opencode commands: $generated written, $unchanged unchanged, $pruned pruned ($OUT_DIR)."

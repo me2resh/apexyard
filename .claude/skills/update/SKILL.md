@@ -224,6 +224,41 @@ Unlike the SessionStart advisory nudge described below, an explicit `/update`
 is strict: a detected adapter that cannot be generated and verified makes the
 update fail instead of being reported as current.
 
+#### 1e. Reconcile installed opencode command wrappers
+
+A fork that runs the opencode adapter needs one more artifact refreshed, or a
+skill added upstream never appears in opencode's `/` menu. The wrappers are
+generated, gitignored files, so they cannot come down with the sync. This step
+regenerates them when the adapter is installed and does nothing otherwise.
+
+```bash
+reconcile_installed_opencode_commands() {
+  if [ "$SKIP_ADAPTER_SYNC" = "1" ]; then
+    echo "opencode command reconciliation skipped (--skip-adapter-sync)."
+    return 0
+  fi
+  local root script
+  root="$(git rev-parse --show-toplevel)"
+  if [ ! -f "$root/.opencode/plugins/apexyard.ts" ] && [ ! -d "$root/.opencode/plugins/apexyard" ]; then
+    return 0
+  fi
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "DRY-RUN: would regenerate opencode command wrappers."
+    return 0
+  fi
+  script="$root/bin/sync-opencode-commands.sh"
+  if [ ! -f "$script" ]; then
+    echo "opencode command reconciliation failed: missing $script" >&2
+    return 1
+  fi
+  bash "$script" --root "$root"
+}
+```
+
+A hand-written `.opencode/commands/<name>.md` that collides with a skill name is
+reported and left alone. It is the operator's file, and the directory is
+gitignored, so no git operation can restore it.
+
 ### 2. Fetch both remotes
 
 `git fetch upstream --quiet` brings down all upstream branches by default (including `upstream/dev`), so a single fetch covers both the default and the `--from-dev` target. No conditional fetch needed.
@@ -310,6 +345,7 @@ Then report. Examples:
 
 ```bash
 reconcile_installed_codex_adapter || exit 1
+reconcile_installed_opencode_commands || exit 1
 marker_home="$(git rev-parse --show-toplevel)"
 . "$marker_home/.claude/hooks/_lib-session-markers.sh"
 skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
@@ -1059,6 +1095,11 @@ state:
 reconcile_installed_codex_adapter || {
   echo "Framework files synced, but the installed Codex adapter could not be reconciled." >&2
   echo "Fix the generator error, then retry: bash bin/sync-codex-adapter.sh --reconcile-installed" >&2
+  exit 1
+}
+reconcile_installed_opencode_commands || {
+  echo "Framework files synced, but the installed opencode command wrappers could not be regenerated." >&2
+  echo "Fix the generator error, then retry: bash bin/sync-opencode-commands.sh" >&2
   exit 1
 }
 ```
