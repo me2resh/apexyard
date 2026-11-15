@@ -20,6 +20,14 @@
     "baseline_timeout_seconds": 600
   },
 
+  "disk_budget": {
+    "_comment": "Disk limits for folders ApexYard owns (me2resh/apexyard#2070). max_gb and age_days drive the /status usage line. min_free_percent is for the session-start budget check (step 4). review_copy_dir empty means the default review-copy folder.",
+    "max_gb": 10,
+    "min_free_percent": 10,
+    "age_days": 7,
+    "review_copy_dir": ""
+  },
+
   "orbit": {
     "default_planning": false,
     "governed_prefixes": ["Feature", "Task", "Slice"]

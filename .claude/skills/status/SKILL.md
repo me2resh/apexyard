@@ -175,6 +175,22 @@ This section is read-only.
 A `dead` or `none` owner with `dirty` or `unpushed` work needs a human decision.
 Never remove, release, or relaunch a worktree from this section.
 
+### H. Disk use
+
+Run the helper once for the whole portfolio and print its one line at the end of the output:
+
+```bash
+bash "$ops_root/.claude/skills/status/disk-usage.sh"
+```
+
+Example: `ApexYard is using 12.3 GB; 9.1 GB can be reclaimed`.
+The helper measures only folders that ApexYard owns: worktrees under `workspace/*.worktrees`, the review-copy folder, `.claude/session`, and build output in the project clones.
+Reclaimable means a worktree that is older than `disk_budget.age_days` (default 7), has no uncommitted or unpushed work, and has a merged or closed PR.
+When the helper cannot decide, the line says `reclaimable size unknown`.
+When the total is above `disk_budget.max_gb` (default 10), the line ends with `(over the N GB budget)`.
+The helper has a time box of 6 seconds. A timeout prints `ApexYard disk use is unknown`.
+This section is read-only. It never removes anything. Step 4 of me2resh/apexyard#2070 owns the sweep.
+
 ## Portfolio output
 
 Run sections A–D and G for each project in the registry.
@@ -263,7 +279,7 @@ Branch:            feature/GH-42-csv-export
 Role set:          backend ; Waiting on you: 2 PRs, the oldest 3 hours
 ```
 
-The Role set line appends the human review queue status (me2resh/apexyard#1995). When the tracker is unavailable the suffix reads `; Waiting on you: unknown`. The briefing stays exactly 4 lines.
+The Role set line appends the human review queue status (me2resh/apexyard#1995). When the tracker is unavailable the suffix reads `; Waiting on you: unknown`. The briefing prints one more line, the disk use line from section H, when `disk-usage.sh` is present. The `--json` output does not change.
 
 Behaviour:
 

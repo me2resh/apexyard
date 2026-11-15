@@ -319,3 +319,13 @@ printf '%-18s %s\n' "Active workspace:" "$workspace"
 printf '%-18s %s\n' "Active ticket:"    "$ticket"
 printf '%-18s %s\n' "Branch:"           "$branch"
 printf '%-18s %s\n' "Role set:"         "${role_set}${waiting_suffix}"
+
+# ---------------------------------------------------------------------------
+# 8. Disk use line (me2resh/apexyard#2070). Read-only and time-boxed. The line
+# prints only when the helper sits next to this script, so a sandbox copy of
+# this script keeps the 4-line shape.
+# ---------------------------------------------------------------------------
+_disk_helper="$(dirname "${BASH_SOURCE[0]}")/disk-usage.sh"
+if [ -f "$_disk_helper" ]; then
+  APEXYARD_OPS_ROOT="$ops_root" bash "$_disk_helper" 2>/dev/null || true
+fi
