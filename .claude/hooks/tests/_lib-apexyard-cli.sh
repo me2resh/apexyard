@@ -15,7 +15,7 @@ export GIT_COMMITTER_NAME=Test GIT_COMMITTER_EMAIL=test@example.invalid
 export GIT_TERMINAL_PROMPT=0
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
 # A caller's own Cockpit settings must not reach a real pipx or install source.
-unset APEXYARD_PIPX APEXYARD_COCKPIT APEXYARD_COCKPIT_SOURCE APEXYARD_COCKPIT_TAG
+unset APEXYARD_PIPX APEXYARD_COCKPIT APEXYARD_COCKPIT_SOURCE APEXYARD_COCKPIT_CMD APEXYARD_COCKPIT_TAG
 # Agent sessions export these. A test must not reach the real ops repo.
 unset APEXYARD_OPS_ROOT APEXYARD_PORTFOLIO_ROOT
 mkdir -p "$sb/fixture/.claude" "$sb/tools"
@@ -83,5 +83,5 @@ finish() {
   [ "$failed" -eq 0 ]
 }
 init_ops() {
-  /bin/bash "$CLI" init --dir "$sb/ops" > "$sb/init.out" 2>&1
+  /bin/bash "$CLI" init --org example-org --name ops --dir "$sb/ops" > "$sb/init.out" 2>&1
 }

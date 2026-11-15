@@ -215,6 +215,20 @@ check "1: no write verb reached gh" test -z "$(grep -E '^(pr (merge|review|comme
 check "1: no gh api call with fields except GraphQL queries" test -z "$(grep '^api ' "$GHLOG" | grep -v '^api graphql' | grep -E ' (-f|-F|--field|--raw-field) ')"
 check "1: gh was called" test -s "$GHLOG"
 
+check "1: approved PR is not awaiting the owner" test "$(printf '%s' "$J" | jq -r .awaiting_owner_only)" = false
+echo "== 1b. awaiting_owner_only"
+base_data "$F1"; approve_at "$F1"; rm -f "$REVIEWS_DIR/acme__widget__7-ceo.approved"
+J=$(run_cli "$OPS" --json)
+check "1b: owner record missing, rest green: ceo and review gate are missing" test "$(status_of "$J" ceo) $(status_of "$J" "review gate")" = "missing missing"
+check "1b: only the owner is awaited" test "$(printf '%s' "$J" | jq -r .awaiting_owner_only)" = true
+rm -f "$REVIEWS_DIR/acme__widget__7-rex.approved"
+J=$(run_cli "$OPS" --json)
+check "1b: rex record missing is not owner-only" test "$(printf '%s' "$J" | jq -r .awaiting_owner_only)" = false
+printf '%s\n' "$F1" > "$REVIEWS_DIR/acme__widget__7-rex.approved"
+jq '.state = "CLOSED"' "$D/pr.json" > "$D/pr.json.tmp" && mv "$D/pr.json.tmp" "$D/pr.json"
+J=$(run_cli "$OPS" --json)
+check "1b: closed PR is not owner-only" test "$(printf '%s' "$J" | jq -r .awaiting_owner_only)" = false
+
 echo "== 2. new commit after approval"
 base_data "$F2"; approve_at "$F1"
 jq -n --argjson c "$(commit_node "$F2" "$F1")" --arg b "$B1" '{data:{repository:{ref:{target:{oid:$b}},c0:$c}}}' > "$D/chain.json"

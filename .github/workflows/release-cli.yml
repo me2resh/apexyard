@@ -3,6 +3,9 @@ name: Release CLI
 # auto-tag-on-release-pr-merge.yml after the tag and GitHub Release exist
 # (AgDR-0276, AgDR-0076). A tag push made with
 # GITHUB_TOKEN starts no workflow, so this workflow has no tag trigger.
+# The npm-publish job publishes create-apexyard from the canonical repository
+# only. It reads NPM_TOKEN from the protected npm-publish environment, or uses
+# npm trusted publishing (OIDC). With neither, it skips with a notice (AgDR-0300).
 on:
   workflow_call:
     inputs:
@@ -10,6 +13,10 @@ on:
         description: "Release tag, for example v5.11.0"
         required: true
         type: string
+    secrets:
+      NPM_TOKEN:
+        description: "Not passed by the caller. npm-publish reads NPM_TOKEN from its environment."
+        required: false
   workflow_dispatch:
     inputs:
       tag:
@@ -24,6 +31,8 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+    outputs:
+      npm-sha256: ${{ steps.pack.outputs.sha256 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -35,7 +44,24 @@ jobs:
         run: |
           bash bin/build-release-assets.sh "$VERSION" dist
           bash bin/stamp-packaging.sh "$VERSION" dist
+      - name: Pack and test the npm tarball once
+        # npm-publish publishes these exact bytes. It checks the SHA-256 below.
+        id: pack
+        env:
+          VERSION: ${{ inputs.tag }}
+        run: |
+          version=${VERSION#v}
+          tgz="dist/create-apexyard-$version.tgz"
           (cd dist/create-apexyard && npm pack --ignore-scripts --pack-destination ..)
+          test -f "$tgz"
+          check=$(mktemp -d)
+          tar -xzf "$tgz" -C "$check"
+          archive_sha=$(sha256sum "dist/apexyard-$VERSION.tar.gz" | cut -d' ' -f1)
+          jq -e --arg tag "$VERSION" --arg sha "$archive_sha" \
+            '.apexyard.tag == $tag and .apexyard.sha256 == $sha and (has("scripts") | not)' \
+            "$check/package/package.json" > /dev/null
+          (cd "$RUNNER_TEMP" && node "$check/package/bin/create-apexyard.js" --help < /dev/null)
+          echo "sha256=$(sha256sum "$tgz" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
       - name: Attach assets to release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -46,3 +72,66 @@ jobs:
             gh release create "$VERSION" --verify-tag --title "$VERSION" --generate-notes
           fi
           gh release upload "$VERSION" dist/*.tar.gz dist/*.sha256 dist/install.sh dist/apexyard.rb dist/*.tgz --clobber
+
+  npm-publish:
+    # Publish the tarball that the release job built and tested, from the
+    # canonical repository and for a release tag only.
+    needs: release
+    if: github.repository == 'me2resh/apexyard' && startsWith(inputs.tag, 'v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The owner protects this environment with a required reviewer.
+    # NPM_TOKEN is an environment secret, so other workflows cannot read it.
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Publish create-apexyard to npm
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.tag }}
+          EXPECTED_SHA256: ${{ needs.release.outputs.npm-sha256 }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          TRUSTED_PUBLISHING: ${{ vars.NPM_TRUSTED_PUBLISHING }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ] && [ "$TRUSTED_PUBLISHING" != true ]; then
+            echo "::notice::No NPM_TOKEN and no trusted publishing. The npm publish was skipped."
+            exit 0
+          fi
+          # Publish a release tag only, never a branch name.
+          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::$VERSION is not a release tag." >&2
+            exit 1
+          fi
+          gh api "repos/$GH_REPO/git/ref/tags/$VERSION" --jq .ref > /dev/null
+          version=${VERSION#v}
+          if npm view "create-apexyard@$version" version > /dev/null 2>&1; then
+            echo "::notice::create-apexyard@$version is already on npm."
+            exit 0
+          fi
+          work=$(mktemp -d)
+          tgz="$work/create-apexyard-$version.tgz"
+          gh release download "$VERSION" --pattern "create-apexyard-$version.tgz" --dir "$work"
+          actual=$(sha256sum "$tgz" | cut -d' ' -f1)
+          if [ -z "$EXPECTED_SHA256" ] || [ "$actual" != "$EXPECTED_SHA256" ]; then
+            echo "::error::The release tarball is not the tarball that this run built and tested." >&2
+            exit 1
+          fi
+          # Move latest only forward. An older version goes to the backport tag.
+          dist_tag=latest
+          case "$version" in *-*) dist_tag=next ;; esac
+          current=$(npm view create-apexyard dist-tags.latest 2>/dev/null || true)
+          if [ "$dist_tag" = latest ] && [ -n "$current" ] && \
+            [ "$(printf '%s\n%s\n' "$current" "$version" | sort -V | tail -n 1)" != "$version" ]; then
+            dist_tag=backport
+          fi
+          : > "$work/.npmrc"
+          if [ -n "$NODE_AUTH_TOKEN" ]; then
+            # shellcheck disable=SC2016 # npm expands the variable, not the shell.
+            printf '//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}\n' > "$work/.npmrc"
+          fi
+          # npm 11.5.1 or later supports trusted publishing (OIDC). Pin the npm version.
+          NPM_CONFIG_USERCONFIG="$work/.npmrc" npx --yes npm@11.6.2 publish "$tgz" \
+            --provenance --access public --ignore-scripts --tag "$dist_tag"

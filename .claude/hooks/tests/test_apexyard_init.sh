@@ -23,21 +23,33 @@ check 'next step doctor' grep -q "1. Run 'apexyard doctor'." "$sb/public.out"
 check 'next step open' grep -Fq "2. Run: cd $sb/public && claude /onboard" "$sb/public.out"
 check 'next step windows' grep -q '3. On Windows, use Git Bash or WSL.' "$sb/public.out"
 check 'no agent start without wizard' test ! -e "$FAKE_AGENT_LOG"
-if /bin/bash "$CLI" init --dir "$sb/ops" > "$sb/refuse.out" 2>&1; then rc=0; else rc=$?; fi
+if /bin/bash "$CLI" init --org other --name ops --dir "$sb/ops" > "$sb/refuse.out" 2>&1; then rc=0; else rc=$?; fi
 check 'refuse nonempty' test "$rc" = 2
 check 'refusal reason' grep -q 'not empty' "$sb/refuse.out"
-check 'dry run succeeds' /bin/bash "$CLI" init --org other --dry-run --dir "$sb/dry" > "$sb/dry.out" 2>&1
+check 'dry run succeeds' /bin/bash "$CLI" init --org other --name other-ops --dry-run --dir "$sb/dry" > "$sb/dry.out" 2>&1
 check 'dry run no directory' test ! -e "$sb/dry"
 check 'dry run no create' test "$(grep -c 'repo create' "$FAKE_GH_LOG")" = 2
-if APEXYARD_GH="$sb/missing" /bin/bash "$CLI" init --dir "$sb/missing-dir" > "$sb/missing.out" 2>&1; then rc=0; else rc=$?; fi
+if APEXYARD_GH="$sb/missing" /bin/bash "$CLI" init --org other --name ops --dir "$sb/missing-dir" > "$sb/missing.out" 2>&1; then rc=0; else rc=$?; fi
 check 'missing gh exit' test "$rc" = 2
 check 'missing gh message' grep -q 'required command not found' "$sb/missing.out"
+creates=$(grep -c 'repo create' "$FAKE_GH_LOG")
+if /bin/bash "$CLI" init --dir "$sb/notty-both" < /dev/null > "$sb/notty-both.out" 2>&1; then rc=0; else rc=$?; fi
+check 'no terminal exit' test "$rc" = 2
+check 'no terminal names org' grep -q -- '--org' "$sb/notty-both.out"
+check 'no terminal names name' grep -q -- '--name' "$sb/notty-both.out"
+check 'no terminal no prompt' test "$(grep -Ec 'Repository name|Create it\?' "$sb/notty-both.out" || true)" = 0
+check 'no terminal no folder' test ! -e "$sb/notty-both"
+if /bin/bash "$CLI" init --org other --dir "$sb/notty-name" < /dev/null > "$sb/notty-name.out" 2>&1; then rc=0; else rc=$?; fi
+check 'no terminal one missing exit' test "$rc" = 2
+check 'no terminal omits given flag' test "$(grep -c -- '--org' "$sb/notty-name.out" || true)" = 0
+check 'no terminal names missing flag' grep -q -- '--name' "$sb/notty-name.out"
+check 'no terminal creates nothing' test "$(grep -c 'repo create' "$FAKE_GH_LOG")" = "$creates"
 check 'main branch' test "$(git -C "$sb/ops" branch --show-current)" = main
 export FAKE_REMOTE="$sb/branch.git" APEXYARD_FRAMEWORK_REF=main
 echo new > "$sb/fixture/new.txt"
 git -C "$sb/fixture" add -- new.txt
 git -C "$sb/fixture" commit -m newer >/dev/null
-check 'branch ref succeeds' /bin/bash "$CLI" init --org other --dir "$sb/branch" > "$sb/branch.out" 2>&1
+check 'branch ref succeeds' /bin/bash "$CLI" init --org other --name branch-ops --dir "$sb/branch" > "$sb/branch.out" 2>&1
 check 'branch version' test "$(cat "$sb/branch/.claude/framework-version")" = "$(git -C "$sb/fixture" describe --tags --always)"
 # Each wizard run uses its own local remote and target.
 export FAKE_REMOTE="$sb/defaults.git"
@@ -188,21 +200,21 @@ printf 'pipx %s\n' "$*" >> "$FAKE_COCKPIT_LOG"
 echo fake-secret-must-stay-hidden
 exit "${FAKE_PIPX_STATUS:-0}"
 SH
-cat > "$sb/tools/apexyard-premium" <<'SH'
+cat > "$sb/tools/example-cockpit" <<'SH'
 #!/usr/bin/env bash
-printf 'premium %s\n' "$*" >> "$FAKE_COCKPIT_LOG"
+printf 'cockpit %s\n' "$*" >> "$FAKE_COCKPIT_LOG"
 echo fake-secret-must-stay-hidden
 exit "${FAKE_SETUP_STATUS:-0}"
 SH
-chmod +x "$sb/tools/pipx" "$sb/tools/apexyard-premium"
+chmod +x "$sb/tools/pipx" "$sb/tools/example-cockpit"
 check 'flag off output silent' test "$(grep -ic cockpit "$sb/init.out" || true)" = 0
 /bin/bash "$CLI" init --help > "$sb/help.out"
 check 'flag off help silent' test "$(grep -ic cockpit "$sb/help.out" || true)" = 0
 if /bin/bash "$CLI" init --cockpit > "$sb/disabled.out" 2>&1; then rc=0; else rc=$?; fi
 check 'disabled option exit' test "$rc" = 2
 check 'disabled option message' grep -Fq 'unknown option: --cockpit' "$sb/disabled.out"
-export APEXYARD_COCKPIT=1
-for mode in yes no default direct install-fail setup-fail missing override; do
+export APEXYARD_COCKPIT=1 APEXYARD_COCKPIT_SOURCE=git+https://example.invalid/example-cockpit.git APEXYARD_COCKPIT_CMD=example-cockpit
+for mode in yes no default direct install-fail setup-fail missing override unconfigured; do
   export FAKE_REMOTE="$sb/cockpit-$mode.git"
   target="$sb/cockpit-$mode"
   : > "$FAKE_COCKPIT_LOG"
@@ -219,34 +231,38 @@ for mode in yes no default direct install-fail setup-fail missing override; do
       # Point at a pipx that does not exist. Removing the stub from PATH
       # would let a system pipx in /usr/bin run and reach the network.
       [ "$mode" != missing ] || export APEXYARD_PIPX="$sb/no-such-pipx"
+      saved_source=$APEXYARD_COCKPIT_SOURCE
       if [ "$mode" = override ]; then
-        export APEXYARD_COCKPIT_SOURCE=git+file:///sandbox/premium APEXYARD_COCKPIT_TAG=test-tag
+        export APEXYARD_COCKPIT_SOURCE=git+file:///sandbox/example-cockpit APEXYARD_COCKPIT_TAG=test-tag
       fi
+      [ "$mode" != unconfigured ] || unset APEXYARD_COCKPIT_SOURCE APEXYARD_COCKPIT_CMD
       check "$mode exits zero" /bin/bash "$CLI" init --yes --cockpit --org acme --name "$mode" --dir "$target" > "$target.out" 2>&1
-      unset APEXYARD_COCKPIT_SOURCE APEXYARD_COCKPIT_TAG APEXYARD_PIPX ;;
+      export APEXYARD_COCKPIT_SOURCE=$saved_source APEXYARD_COCKPIT_CMD=example-cockpit
+      unset APEXYARD_COCKPIT_TAG APEXYARD_PIPX ;;
   esac
   check "$mode keeps setup" test -f "$target/onboarding.yaml"
   check "$mode next steps" grep -q 'Next:' "$target.out"
   check "$mode output hides child secrets" test "$(grep -c fake-secret "$target.out" || true)" = 0
   case "$mode" in
-    no|default|missing) check "$mode skips commands" test ! -s "$FAKE_COCKPIT_LOG" ;;
-    override) check 'source and tag overrides' grep -Fxq 'pipx install git+file:///sandbox/premium@test-tag' "$FAKE_COCKPIT_LOG" ;;
-    *) check "$mode pinned source" grep -Fxq 'pipx install git+https://github.com/me2resh/apexyard-premium.git@v0.15.2' "$FAKE_COCKPIT_LOG" ;;
+    no|default|missing|unconfigured) check "$mode skips commands" test ! -s "$FAKE_COCKPIT_LOG" ;;
+    override) check 'source and tag overrides' grep -Fxq 'pipx install git+file:///sandbox/example-cockpit@test-tag' "$FAKE_COCKPIT_LOG" ;;
+    *) check "$mode pinned source" grep -Fxq 'pipx install git+https://example.invalid/example-cockpit.git@v0.15.2' "$FAKE_COCKPIT_LOG" ;;
   esac
   case "$mode" in
-    yes|direct|setup-fail|override) check "$mode setup folders" grep -Fxq "premium setup --ops $target --portfolio $target" "$FAKE_COCKPIT_LOG" ;;
+    yes|direct|setup-fail|override) check "$mode setup folders" grep -Fxq "cockpit setup --ops $target --portfolio $target" "$FAKE_COCKPIT_LOG" ;;
   esac
   case "$mode" in
+    unconfigured) check 'not configured message' grep -q 'it is not configured' "$target.out" ;;
     missing) check 'missing pipx guidance' grep -q 'pipx is missing. Install pipx' "$target.out" ;;
-    install-fail) check 'access guidance' grep -q 'Request access to apexyard-premium' "$target.out"
-      check 'failed install skips setup' test "$(grep -c '^premium' "$FAKE_COCKPIT_LOG" || true)" = 0 ;;
+    install-fail) check 'access guidance' grep -q 'Request access to the Cockpit package' "$target.out"
+      check 'failed install skips setup' test "$(grep -c '^cockpit' "$FAKE_COCKPIT_LOG" || true)" = 0 ;;
     setup-fail) check 'setup guidance' grep -q 'Cockpit setup failed.' "$target.out" ;;
     yes) check 'handoff after install' grep -Fxq "$target /onboard" "$FAKE_AGENT_LOG"
       check 'exact install question' grep -Fq 'Install the Cockpit too? [y/N]' "$target.out" ;;
   esac
   check "$mode argv has no secret" test "$(grep -c fake-secret "$FAKE_COCKPIT_LOG" || true)" = 0
 done
-unset APEXYARD_COCKPIT FAKE_PIPX_STATUS FAKE_SETUP_STATUS
+unset APEXYARD_COCKPIT APEXYARD_COCKPIT_SOURCE APEXYARD_COCKPIT_CMD FAKE_PIPX_STATUS FAKE_SETUP_STATUS
 if FAKE_GH_OFFLINE=1 FAKE_GH_ORIGIN_FAIL=1 /bin/bash "$CLI" init --org acme --name offline --dir "$sb/offline" > "$sb/offline.out" 2>&1; then rc=0; else rc=$?; fi
 check 'offline push failure exit' test "$rc" -ne 0
 check 'offline origin keeps clone' test -d "$sb/offline/.git"

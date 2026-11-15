@@ -132,3 +132,25 @@ if "$ROOT/bin/manage-portfolio-adapters.sh" --check --registry "$FIXTURE/portfol
 fi
 grep -q 'unsafe hooks link target' "$TMP/unsafe-out"
 echo "PASS: split-portfolio adapter anchor"
+
+# opencode drift: an install without the top-level apexyard.ts shim is inert
+# and must report as drift, not ok.
+OC="$TMP/oc-project"
+mkdir -p "$OC/.claude" "$OC/.opencode/plugins/apexyard"
+printf '{}\n' > "$OC/.claude/settings.json"
+: > "$OC/.opencode/plugins/apexyard/index.ts"
+cat > "$TMP/registry-oc.yaml" <<YAML
+version: 1
+projects:
+  - name: oc
+    workspace: oc-project
+    adapters: [opencode]
+YAML
+if "$ROOT/bin/manage-portfolio-adapters.sh" --check --registry "$TMP/registry-oc.yaml" >"$TMP/oc-out" 2>&1; then
+  echo "expected a missing apexyard.ts shim to report drift" >&2
+  exit 1
+fi
+grep -q 'shim missing or wrong' "$TMP/oc-out"
+printf 'export { default } from "./apexyard/index.ts";\n' > "$OC/.opencode/plugins/apexyard.ts"
+"$ROOT/bin/manage-portfolio-adapters.sh" --check --registry "$TMP/registry-oc.yaml" >/dev/null
+echo "PASS: opencode shim drift check"

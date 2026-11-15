@@ -309,6 +309,12 @@ fi
 # Field width matches slide 6 (column alignment to 19 chars after the
 # label) so every briefing renders identically regardless of values.
 # ---------------------------------------------------------------------------
+if [ "${1:-}" = --json ]; then
+  jq -n --arg workspace "$workspace" --arg ticket "$ticket" --arg branch "$branch" \
+    --arg role_set "${role_set}${waiting_suffix}" \
+    '{workspace:$workspace,ticket:$ticket,branch:$branch,role_set:$role_set}'
+  exit $?
+fi
 printf '%-18s %s\n' "Active workspace:" "$workspace"
 printf '%-18s %s\n' "Active ticket:"    "$ticket"
 printf '%-18s %s\n' "Branch:"           "$branch"

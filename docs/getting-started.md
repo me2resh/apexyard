@@ -39,9 +39,11 @@ curl -fsSL https://apexyard.ai/install | sh   # checks the release checksum; lis
 apexyard init
 ```
 
-`apexyard init` asks for the account or organisation, the repo name, private or public, the folder and your coding agent. Then it shows the plan and asks before it creates anything. To skip the questions, pass them as options: `apexyard init --org your-org --name ops --private --yes`.
+`apexyard init` asks for the account or organisation, the repo name, private or public, the folder and your coding agent. Then it shows the plan and asks before it creates anything.
 
-Before launch, testers with Cockpit access can set `APEXYARD_COCKPIT=1` to enable an optional install after repository setup. The wizard asks first and defaults to no. With `--yes` or no terminal, add `--cockpit` to install. This requires pipx and existing GitHub access to the premium repo. If installation fails, init continues to `/onboard`.
+**For scripts and CI.** With no terminal, `apexyard init` never asks. It needs `--org` and `--name`, and it exits with status 2 and names each missing flag if you leave one out. Pass the values as options, for example `apexyard init --org ACME --name ops --private --yes`. `--yes` accepts the defaults for the other questions.
+
+Before launch, testers with Cockpit access can set `APEXYARD_COCKPIT=1` to enable an optional install after repository setup. The wizard asks first and defaults to no. With `--yes` or no terminal, add `--cockpit` to install. This requires pipx, access to the Cockpit package, and two settings from your ApexYard contact: `APEXYARD_COCKPIT_SOURCE` and `APEXYARD_COCKPIT_CMD`. With either one unset, init skips the Cockpit. If installation fails, init continues to `/onboard`.
 
 At the end, `apexyard init` offers to open the new repo in Claude Code with `/onboard`. `/onboard` asks about your company, your stack and your first project. With another agent, open the folder and run `/onboard` yourself.
 
@@ -55,7 +57,7 @@ Coming soon:
 
 - A Homebrew tap: `brew install me2resh/tap/apexyard`. Homebrew will install jq
   and gh too.
-- An npm package: `npx create-apexyard --org your-org --name ops --private`. It
+- An npm package: `npx create-apexyard --org ACME --name ops --private`. It
   will install the CLI when the CLI is absent, then run `apexyard init` with
   these options. Do not run `apexyard init` again after it, because the target
   directory is no longer empty.
@@ -187,8 +189,42 @@ Every framework skill also runs from the terminal. The CLI opens Claude Code in 
 apexyard skills                 # list the skills
 apexyard inbox                  # starts /inbox
 apexyard code-review 42         # starts /code-review 42
-apexyard ticket owner/repo#N    # makes or reuses the ticket worktree, then starts the ticket
+apexyard start N --repo project # Create or reuse a ticket worktree.
+apexyard check --repo project   # Run local advisory gate checks on the branch.
 ```
+
+Use `apexyard start <ticket>` to open a ticket worktree and start an agent.
+Use `N`, `repo#N`, or `owner/repo#N` for the ticket.
+The `ticket` command remains an alias.
+
+The command resolves the repository in this order:
+
+1. Use `--repo <name|owner/name>` when specified. The name is a registry project name.
+2. Match the current folder's git origin to a registered project. This includes linked worktrees.
+3. Read the repository and clone path from `apexyard.projects.yaml`. Use the configured portfolio registry path.
+4. In the ops repository, select a registered project at the numbered prompt. With `--json` or no terminal, the command lists projects and exits with an error.
+5. If no repository matches, the command prints one line with a `--repo` hint and exits with an error.
+
+Use `--dry-run` to print the repository, ticket, and branch without changes.
+Use `--json` to print `repo`, `ticket`, `branch`, `worktree`, and `clone` as JSON.
+Without `--dry-run`, the command prints these values before it starts work.
+Use `--agent <name>` to select `claude`, `codex`, `cursor-agent`, `opencode`, or `pi`.
+The default agent is `claude`. Each agent starts in the ticket worktree.
+The agent reads the project rules through its framework adapter.
+The `cursor-agent` CLI reads instructions but does not enforce hooks.
+
+Use `apexyard check` to run the same class of gate checks on the current branch before you push.
+The command runs `bin/run-pre-push-checks.sh` and `bin/run-configured-pre-push-checks.sh` when those scripts exist in the target tree.
+It also runs the branch-name, commit-format, commit-refs, and secrets hooks with a synthetic payload.
+It prints one line per check: `pass`, `FAIL`, or `not verified`.
+A missing script, missing `jq`, missing base ref, detached HEAD, or missing `gh` for commit-refs yields `not verified`, never `pass`.
+The command writes no file in the repository, no marker, and no git index change. It runs the scripts and hooks of the checked-out tree. Do not run it on a checkout you do not trust.
+The result is advisory. The required check on the pull request decides.
+Use `--repo <name|owner/name>` to select a registered project.
+Use `--json` to print one object with `repo`, `branch`, `base`, `advisory`, and `checks`.
+Each `checks` entry has `name`, `status` (`pass`, `fail`, or `not_verified`), and `message`.
+The secrets hook scans staged changes only.
+Exit `1` when any check fails. Exit `0` when no check fails. Exit `2` on resolution or usage errors.
 
 Approval skills, such as `/approve-merge`, run only inside your agent. If `claude` is not on your PATH, the CLI prints the command to run in your agent tool.
 
@@ -580,6 +616,34 @@ workflows:
   require_technical_design: false
   require_qa_signoff: false
 ```
+
+---
+
+## Inspect PR Gates
+
+Run `apexyard why N` from a registered clone or worktree.
+Use `repo#N`, `owner/repo#N`, or `--repo <name|owner/name>` to select a repository.
+From the ops repo, select a numbered project or use `--repo`.
+The first line gives the next action. The full gate item table follows.
+
+Run `apexyard queue` to list open PRs that need only owner approval.
+The command reads each registered repository. It uses the existing PR gate evaluator.
+The evaluator reports `awaiting_owner_only` in its JSON. The value is `true` when the owner record is the only open item.
+The pre-merge QA stamp counts as an item. A PR with no QA stamp does not appear in the list.
+The command skips drafts and PRs with a failed check, and it checks up to six PRs at the same time.
+Unverified PRs appear separately. These commands do not write approval records or change git refs.
+
+Use `--json` for these JSON shapes:
+
+- `why`: `{repo, pr, next_action, verified, items}`.
+  `items` contains the evaluator objects, including `section`, `name`, `status`, and `detail`.
+  If the evaluator cannot run, the command exits 1 and emits `{repo, pr, next_action:null, verified:false, reason}`.
+- `queue`: `{ready:[{repo,pr,url,title,next_action}], not_verified:[{repo,pr,reason}], blocked_count:N}`.
+  A failed repository listing uses `pr:null`.
+  `blocked_count` counts the PRs that do not wait only for the owner, including drafts and PRs with a failed check.
+  It excludes unverified PRs.
+- `status`: `{workspace, ticket, branch, role_set}`.
+  Values match the briefing text, including placeholders and the role queue suffix.
 
 ---
 

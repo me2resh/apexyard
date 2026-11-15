@@ -1,0 +1,54 @@
+# create-apexyard package check (AgDR-0300)
+#
+# Builds the CLI archive, stamps the npm package with a test tag, and packs
+# it once. Runs the launcher help from that tarball, then dry-runs the
+# publish of the same tarball. Nothing is published.
+# The release workflow (release-cli.yml) publishes the package.
+
+name: create-apexyard package
+
+on:
+  pull_request:
+    paths:
+      - "packaging/**"
+      - "install.sh"
+      - "bin/apexyard"
+      - "bin/apexyard-*.sh"
+      - "bin/_lib-*.sh"
+      - "bin/build-release-assets.sh"
+      - "bin/stamp-packaging.sh"
+      - ".claude/skills/preflight/preflight.sh"
+      - ".claude/hooks/_lib-*.sh"
+      - ".github/workflows/create-apexyard.yml"
+      - ".github/workflows/release-cli.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: create-apexyard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  dry-run:
+    name: npm publish dry run
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build and stamp the package
+        run: |
+          bash bin/build-release-assets.sh v0.0.0-ci dist
+          bash bin/stamp-packaging.sh v0.0.0-ci dist
+      - name: Pack the tarball once
+        run: (cd dist/create-apexyard && npm pack --ignore-scripts --pack-destination ..)
+      - name: Run the launcher help from the tarball
+        run: |
+          check=$(mktemp -d)
+          tar -xzf dist/create-apexyard-0.0.0-ci.tgz -C "$check"
+          (cd "$RUNNER_TEMP" && node "$check/package/bin/create-apexyard.js" --help < /dev/null)
+      - name: Dry-run the npm publish of the same tarball
+        # The ./ prefix stops npm from reading dist/x as a GitHub user/repo.
+        run: npm publish ./dist/create-apexyard-0.0.0-ci.tgz --dry-run --ignore-scripts --access public --tag ci
