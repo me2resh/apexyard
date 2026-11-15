@@ -46,7 +46,10 @@ set -euo pipefail
 input=$(cat)
 name=$(basename "$0")
 printf '%s\n' "$name" >> "${DISPATCH_LOG:?}"
-if [ "$name" = block-git-add-all.sh ] && grep -q 'git add -A' <<<"$input"; then
+# Mirror the real gate's flag set (-A / --all / .). A stub that matched only
+# `git add -A` made the #2071 routing cases assert the stub, not the routing:
+# `echo built; git add .` reached the gate and still passed.
+if [ "$name" = block-git-add-all.sh ] && grep -qE 'git add[[:space:]]+(-A|--all|\.)([[:space:]"]|$)' <<<"$input"; then
   exit 2
 fi
 if [ "${DISPATCH_FAIL_SCRIPT:-}" = "$name" ]; then
@@ -609,6 +612,34 @@ run 'git add -A'
 rc=$?
 set -e
 [ "$rc" -eq 2 ]
+[ "$(grep -c '^block-git-add-all.sh$' "$TMP/log")" -eq 1 ]
+
+# #2071: the gate must not depend on the command starting with `git add`.
+# A prefix (`cd … &&`, `;`) used to skip routing entirely. It must still run
+# the gate, exactly once.
+: > "$TMP/log"
+set +e
+run 'cd /some/repo && git add -A'
+rc=$?
+set -e
+[ "$rc" -eq 2 ]
+[ "$(grep -c '^block-git-add-all.sh$' "$TMP/log")" -eq 1 ]
+
+: > "$TMP/log"
+set +e
+run 'echo built; git add .'
+rc=$?
+set -e
+[ "$rc" -eq 2 ]
+[ "$(grep -c '^block-git-add-all.sh$' "$TMP/log")" -eq 1 ]
+
+# An explicit path is not a whole-tree stage and must pass.
+: > "$TMP/log"
+set +e
+run 'cd /some/repo && git add src/app.ts'
+rc=$?
+set -e
+[ "$rc" -eq 0 ]
 [ "$(grep -c '^block-git-add-all.sh$' "$TMP/log")" -eq 1 ]
 
 # Broken jq must not fail-open a merge. The real merge gates fail closed
