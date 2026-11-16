@@ -2,11 +2,11 @@
 # ApexYard agent-routing config — adopter's per-agent model + endpoint overrides
 # =============================================================================
 #
-# This file is the **adopter customisation surface** for ApexYard's 24
-# Claude Code sub-agents (19 role-derived personas + 5 utility agents).
+# This file is the **adopter customisation surface** for ApexYard's 15
+# Claude Code sub-agents (10 role-derived personas + 5 utility and review agents, AgDR-0301).
 # It lets you override the framework's shipped per-agent model defaults
 # (e.g. switch the QA Engineer from Sonnet to Opus, or route the Data
-# Analyst through a local Ollama endpoint) in ONE central file kept in
+# Engineer through a local Ollama endpoint) in ONE central file kept in
 # your private portfolio repo.
 #
 # See docs/agdr/AgDR-0050-agent-runtime-overhaul.md § Axis 3 for the
@@ -133,8 +133,8 @@ agents: {}
 #       model: opus              # framework default; rarely overridden
 #     backend-engineer:
 #       model: sonnet            # framework default; explicit pin
-#     data-analyst:
-#       model: sonnet            # bump from haiku for richer SQL output
+#     data-engineer:
+#       model: opus              # bump from sonnet for deeper SQL analysis
 #
 # Example C — local routing via LiteLLM proxy + Ollama (adopter-opt-in):
 #
@@ -144,7 +144,7 @@ agents: {}
 # Four candidate models below (commented), with RAM-at-load estimates
 # at q4 quantization. Uncomment the entry that matches your hardware.
 # All four are reasonable starting points for ticket-manager + data-
-# analyst-style structured-output work; none is recommended over the
+# engineer SQL structured-output work; none is recommended over the
 # others by the framework.
 #
 #   agents:
@@ -154,7 +154,7 @@ agents: {}
 #       # model: ollama/deepseek-coder-v2:16b  # ~12 GB RAM, M1+ Max / 14+ GB GPU
 #       # model: ollama/mistral-small3:24b     # ~18 GB RAM, M1+ Max / 20+ GB GPU
 #       endpoint: http://localhost:4000        # LiteLLM proxy fronting Ollama
-#     data-analyst:
+#     data-engineer:
 #       # model: ollama/llama3.1:8b            # SQL / dashboard work, lightweight
 #       endpoint: http://localhost:4000
 #

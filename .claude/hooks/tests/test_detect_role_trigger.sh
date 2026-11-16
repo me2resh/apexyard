@@ -321,13 +321,49 @@ in=$(jq -nc \
 run_case "hybrid class-aware: Backend Engineer prompted → in-thread-lens banner" 0 \
   "Backend Engineer.*adopt its lens in-thread" "$in"
 
-# 4f. Prompted UX Designer (in-flow-class) — banner offers in-thread lens
+# 4f. Prompted UI Designer (in-flow-class) — banner offers in-thread lens
 #     adoption.
+in=$(jq -nc \
+  --arg prm "put on your UI Designer hat for this flow review" \
+  '{hook_event_name:"UserPromptSubmit", prompt:$prm}')
+run_case "hybrid class-aware: UI Designer prompted → in-thread-lens banner" 0 \
+  "Ui Designer.*adopt its lens in-thread" "$in"
+
+# 4f-alias. AgDR-0301: an old role title resolves to its receiver. These
+#     cases name the retired titles on purpose: they pin the aliases.
 in=$(jq -nc \
   --arg prm "put on your UX Designer hat for this flow review" \
   '{hook_event_name:"UserPromptSubmit", prompt:$prm}')
-run_case "hybrid class-aware: UX Designer prompted → in-thread-lens banner" 0 \
-  "Ux Designer.*adopt its lens in-thread" "$in"
+run_case "alias: retired UX title → UI Designer in-thread banner [AgDR-0301]" 0 \
+  "UI Designer \(holds the former UX Designer work\).*roles/design/ui-designer.md" "$in"
+in=$(jq -nc \
+  --arg prm "act as the head of engineering and review this stack choice" \
+  '{hook_event_name:"UserPromptSubmit", prompt:$prm}')
+run_case "alias: retired engineering head title → Tech Lead spawn banner [AgDR-0301]" 0 \
+  "Tech Lead \(holds the former Head of Engineering work\).*subagent_type: tech-lead" "$in"
+in=$(jq -nc \
+  --arg prm "as the head of security, assess this risk" \
+  '{hook_event_name:"UserPromptSubmit", prompt:$prm}')
+run_case "alias: retired security head title → Hakim spawn banner [AgDR-0301]" 0 \
+  "Security Auditor \(holds the former Head of Security work\).*subagent_type: security-reviewer" "$in"
+in=$(jq -nc \
+  --arg prm "as the data analyst, size this A/B test" \
+  '{hook_event_name:"UserPromptSubmit", prompt:$prm}')
+run_case "alias: retired analyst title → Data Engineer in-thread banner [AgDR-0301]" 0 \
+  "Data Engineer \(holds the former Data Analyst work\).*roles/data/data-engineer.md" "$in"
+in=$(jq -nc \
+  --arg prm "act as the product manager, then as the head of product, for this roadmap" \
+  '{hook_event_name:"UserPromptSubmit", prompt:$prm}')
+run_case "alias: receiver title wins over the retired title [AgDR-0301]" 0 \
+  "^ROLE TRIGGER: Product Manager owns" "$in"
+got=$(printf '%s' "$in" | bash "$HOOK" 2>&1 >/dev/null | grep -c '^ROLE TRIGGER:')
+if [ "$got" = "1" ]; then
+  echo "PASS [alias: receiver title and retired title fire one banner [AgDR-0301]]"
+  PASS=$((PASS+1))
+else
+  echo "FAIL [alias: receiver title and retired title fire one banner [AgDR-0301]]: got $got banners" >&2
+  FAIL=$((FAIL+1)); FAILED="${FAILED}alias-one-banner "
+fi
 
 # 4g. Prompted Pen Tester (isolated-work-class) — banner offers SPAWN
 #     with subagent_type: penetration-tester.
