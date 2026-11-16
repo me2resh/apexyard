@@ -192,6 +192,6 @@ Use this table only when the project plans its work with ORBIT. Map each user st
 | Role | Name | Date | Status |
 |------|------|------|--------|
 | Product Manager | | | Author |
-| Head of Product | | | Pending |
+| Human approver (product) | | | Pending |
 | Tech Lead | | | Pending |
-| Head of Design | | | Pending |
+| UI Designer | | | Pending |

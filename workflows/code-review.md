@@ -13,8 +13,8 @@ Code review is a **role-activated** workflow. The roles below activate automatic
 | **Author** | Creates PR, responds to feedback. The engineer who wrote the code: [Backend Engineer](../roles/engineering/backend-engineer.md) or [Frontend Engineer](../roles/engineering/frontend-engineer.md). | `roles/engineering/{backend,frontend}-engineer.md` |
 | **Code Reviewer agent (Rex)** | Automated first-pass review on every commit. Checks architecture, tests, security, AgDR, glossary. | `.claude/agents/code-reviewer.md` |
 | **Tech Lead reviewer** | Human approval gate. Signs off on architecture, design patterns, team conventions. | [`roles/engineering/tech-lead.md`](../roles/engineering/tech-lead.md) |
-| **Security Auditor** (conditional) | Activates when the PR diff touches `**/auth/**`, `**/crypto/**`, `**/secrets/**`, `.env*`, or similar. Findings + required fixes hand off to the Tech Lead; strategy / compliance / repeated-pattern concerns escalate to the [Head of Security](../roles/security/head-of-security.md). | [`roles/security/security-auditor.md`](../roles/security/security-auditor.md) |
-| **UI Designer** (conditional) | Owns the **routine per-PR design gate** — activates when the PR diff touches UI components, design tokens, or visible layout, reviews the implementation diff, and records approval via `/approve-design`. The [Head of Design](../roles/design/head-of-design.md) is the **escalation path** (design-system changes, cross-product visual standards, disagreements, no UI Designer available), not the routine reviewer. See AgDR-0106. | [`roles/design/ui-designer.md`](../roles/design/ui-designer.md) |
+| **Security Auditor** (conditional) | Activates when the PR diff touches `**/auth/**`, `**/crypto/**`, `**/secrets/**`, `.env*`, or similar. Findings + required fixes hand off to the Tech Lead; risk acceptance and exceptions to security requirements go to the human approver (AgDR-0301). | [`roles/security/security-auditor.md`](../roles/security/security-auditor.md) |
+| **UI Designer** (conditional) | Owns the **routine per-PR design gate** — activates when the PR diff touches UI components, design tokens, or visible layout, reviews the implementation diff, and records approval via `/approve-design`. Design-system changes, cross-product visual standards, and disagreements go to the **human approver**, not to an agent. See AgDR-0301, which supersedes AgDR-0106. | [`roles/design/ui-designer.md`](../roles/design/ui-designer.md) |
 | **QA Engineer** | Not a reviewer — takes over at the QA phase after merge to verify acceptance criteria. | [`roles/engineering/qa-engineer.md`](../roles/engineering/qa-engineer.md) |
 
 Rex and the Security Auditor split scope and do not repeat each other's checks. Rex owns code quality, tests, and the writing profile. The Security Auditor owns security and gate integrity. See `.claude/agents/code-reviewer.md` § "Scope Split with the Security Auditor" and `.claude/agents/security-reviewer.md` § "Scope Split with the Code Reviewer".
@@ -161,8 +161,8 @@ QUESTION:   "Why did you choose Map over Object here?"
 | Standard feature | 1 (Tech Lead or Senior) |
 | Infrastructure | 1 + Platform Engineer |
 | Security-related | 1 + Security review |
-| UI change | 1 + UI Designer (routine design gate; Head of Design on escalation) |
-| Architecture change | Head of Engineering |
+| UI change | 1 + UI Designer (routine design gate; the human approver on escalation) |
+| Architecture change | Solution Architect review (Tariq) + the human approver |
 | External contribution (any files) | Full code review (Rex) + full security review (Hakim). See below. |
 
 ### External contributions

@@ -12,9 +12,9 @@ Write a feature specification or product requirements document (PRD).
 
 ## Activated role
 
-When `/write-spec` runs, activate the **[Product Manager](../../../roles/product/product-manager.md)** role — they own PRD creation, user stories, and acceptance criteria. For roadmap-level prioritisation calls, escalate to the **[Head of Product](../../../roles/product/head-of-product.md)**.
+When `/write-spec` runs, activate the **[Product Manager](../../../roles/product/product-manager.md)** role — they own PRD creation, user stories, and acceptance criteria. For roadmap-level prioritisation calls, escalate to the **human approver** (AgDR-0301).
 
-Design-heavy features should also involve the **[UX Designer](../../../roles/design/ux-designer.md)** (for user flows) and the **[UI Designer](../../../roles/design/ui-designer.md)** (for component specs) once the PRD has a problem statement. Technical feasibility review happens at the Tech Design phase, not here — the `/write-spec` output hands off to the [Tech Lead](../../../roles/engineering/tech-lead.md) who activates for Phase 2.
+Design-heavy features should also involve the **[UI Designer](../../../roles/design/ui-designer.md)** (for user flows and component specs) once the PRD has a problem statement. Technical feasibility review happens at the Tech Design phase, not here — the `/write-spec` output hands off to the [Tech Lead](../../../roles/engineering/tech-lead.md) who activates for Phase 2.
 
 See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the full activation protocol.
 

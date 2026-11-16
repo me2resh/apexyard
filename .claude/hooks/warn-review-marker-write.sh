@@ -838,7 +838,7 @@ Expected active-reviewer marker: ${ACTIVE_REVIEWER_MARKER}
   (must contain: <owner>/<repo>#${TARGET_PR:-<pr>}:${MARKER_TYPE:-<role>})
 
 IF YOU ARE A BUILD-CLASS SUB-AGENT (backend-engineer, frontend-engineer,
-platform-engineer, product-manager, data-engineer, ui-designer, ux-designer,
+platform-engineer, product-manager, data-engineer, ui-designer,
 tech-lead, etc.): STOP. Do NOT write this file. You cannot nest the Agent
 tool to spawn the real reviewer, so any "review" you produce here is the
 author reviewing their own work — the exact failure this warning exists to

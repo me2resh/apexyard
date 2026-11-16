@@ -4,6 +4,8 @@
 # Usage:
 #   remove-worktree.sh list   <source-tree> <merged-head-branch> [--merged-head <sha>]
 #   remove-worktree.sh remove <source-tree> <worktree-path> <merged-head-branch> [--merged-head <sha>]
+#   remove-worktree.sh list-copies <source-tree> --merged-head <sha> [--pr-commit <sha>]...
+#   remove-worktree.sh remove-copy <source-tree> <worktree-path> --merged-head <sha> [--pr-commit <sha>]...
 #
 #   <source-tree>  The local clone of the PR's repo: workspace/<name>/ for a
 #                  managed project, or the ops root for an ops fork PR. The
@@ -27,6 +29,24 @@
 #         A worktree that the calling session owns stays eligible. Its owner
 #         record is released just before git removes the worktree, and
 #         acquired again if git refuses.
+# list-copies
+#         Lists the review copies of the merged PR (#2070). A review copy is
+#         a linked worktree with a detached HEAD at the merged head or at a
+#         commit given with --pr-commit. The output has the same format as
+#         list, and every refusal rule below applies.
+# remove-copy
+#         Removes one review copy after the user has said yes. It re-checks
+#         that git still lists the path, that the HEAD is still detached at
+#         one of the given commits, and every refusal rule below.
+#
+# A worktree's ignored files are its build output. `git worktree remove`
+# deletes them with the worktree, so the list modes show them for the prompt.
+#
+# Each removal appends one line to the removal log,
+# <ops-root>/.claude/session/cleanup.log. The line has the UTC time, the kind
+# (worktree or review-copy), the path, the source tree, the branch or HEAD, and
+# the merged head. A remove mode refuses before it removes anything when it
+# cannot append to the log.
 #
 # Candidates come only from `git worktree list --porcelain -z`, which needs
 # git 2.36 or later. An older git rejects -z. The list is then empty, so the
@@ -55,25 +75,58 @@ SOURCE="${2:-}"
 ARG="${3:-}"
 MERGED_BRANCH="${4:-}"
 MERGED_HEAD=""
+# The commits that a review copy may hold: the merged head and each --pr-commit.
+COPY_HEADS=()
 usage() {
   echo "usage: remove-worktree.sh list <source-tree> <branch> [--merged-head <sha>] | remove <source-tree> <path> <branch> [--merged-head <sha>]" >&2
+  echo "       remove-worktree.sh list-copies <source-tree> --merged-head <sha> [--pr-commit <sha>]... | remove-copy <source-tree> <path> --merged-head <sha> [--pr-commit <sha>]..." >&2
 }
-if [ -z "$MODE" ] || [ -z "$SOURCE" ] || [ -z "$ARG" ] \
-  || { [ "$MODE" = remove ] && [ -z "$MERGED_BRANCH" ]; }; then
-  usage
-  exit 2
-fi
+# valid_sha <value>: a full 40- or 64-digit hex object name
+valid_sha() {
+  case "$1" in ''|*[!a-fA-F0-9]*) return 1 ;; esac
+  case "${#1}" in 40|64) return 0 ;; *) return 1 ;; esac
+}
+lower_sha() { printf '%s' "$1" | tr 'A-F' 'a-f'; }
 case "$MODE" in
-  list) shift 3 ;;
-  remove) shift 4 ;;
+  list|remove)
+    if [ -z "$SOURCE" ] || [ -z "$ARG" ] \
+      || { [ "$MODE" = remove ] && [ -z "$MERGED_BRANCH" ]; }; then
+      usage
+      exit 2
+    fi
+    if [ "$MODE" = list ]; then shift 3; else shift 4; fi
+    if [ "$#" -ne 0 ]; then
+      [ "$#" -eq 2 ] && [ "$1" = --merged-head ] || { usage; exit 2; }
+      MERGED_HEAD=$2
+      valid_sha "$MERGED_HEAD" || { usage; exit 2; }
+    fi
+    ;;
+  list-copies|remove-copy)
+    if [ "$MODE" = list-copies ]; then
+      [ "$#" -ge 2 ] || { usage; exit 2; }
+      ARG=""
+      shift 2
+    else
+      [ "$#" -ge 3 ] && [ -n "$ARG" ] || { usage; exit 2; }
+      shift 3
+    fi
+    [ -n "$SOURCE" ] || { usage; exit 2; }
+    while [ "$#" -gt 0 ]; do
+      if [ "$#" -lt 2 ] || ! valid_sha "$2"; then usage; exit 2; fi
+      case "$1" in
+        --merged-head) [ -z "$MERGED_HEAD" ] || { usage; exit 2; }; MERGED_HEAD=$2 ;;
+        --pr-commit) ;;
+        *) usage; exit 2 ;;
+      esac
+      COPY_HEADS+=("$(lower_sha "$2")")
+      shift 2
+    done
+    # A review copy is matched on the merged PR, so the merged head is required.
+    [ -n "$MERGED_HEAD" ] || { usage; exit 2; }
+    ;;
+  '') usage; exit 2 ;;
   *) echo "remove-worktree: unknown mode $MODE" >&2; exit 2 ;;
 esac
-if [ "$#" -ne 0 ]; then
-  [ "$#" -eq 2 ] && [ "$1" = --merged-head ] || { usage; exit 2; }
-  MERGED_HEAD=$2
-  case "$MERGED_HEAD" in ''|*[!a-fA-F0-9]*) usage; exit 2 ;; esac
-  case "${#MERGED_HEAD}" in 40|64) ;; *) usage; exit 2 ;; esac
-fi
 
 HOOK_DIR="$(cd "$(dirname "$0")/../../hooks" && pwd)"
 if [ ! -f "$HOOK_DIR/_lib-active-ticket.sh" ]; then
@@ -104,28 +157,34 @@ OPS_REAL=$(cd -P "$OPS" 2>/dev/null && pwd)
 SESSION_TREE=$(git rev-parse --show-toplevel 2>/dev/null)
 [ -z "$SESSION_TREE" ] || SESSION_TREE=$(cd -P "$SESSION_TREE" 2>/dev/null && pwd)
 
-# Parse the porcelain output into parallel arrays: path, branch ref, locked.
+# Parse the porcelain output into parallel arrays: path, branch ref, locked,
+# and HEAD commit. A detached worktree has an empty branch.
 WT_PATHS=()
 WT_BRANCH=()
 WT_LOCKED=()
+WT_HEAD=()
 cur_path=""
 cur_branch=""
 cur_locked=0
+cur_head=""
 flush() {
   if [ -n "$cur_path" ]; then
     WT_PATHS+=("$cur_path")
     WT_BRANCH+=("$cur_branch")
     WT_LOCKED+=("$cur_locked")
+    WT_HEAD+=("$cur_head")
   fi
   cur_path=""
   cur_branch=""
   cur_locked=0
+  cur_head=""
 }
 # -z ends each field with a NUL, so a path with a newline stays one field.
 # git before 2.36 has no -z here and fails, which leaves the list empty.
 while IFS= read -r -d '' line; do
   case "$line" in
     "worktree "*) flush; cur_path="${line#worktree }" ;;
+    "HEAD "*) cur_head=$(lower_sha "${line#HEAD }") ;;
     "branch "*) cur_branch="${line#branch }" ;;
     "locked"*) cur_locked=1 ;;
     "") ;;
@@ -195,28 +254,98 @@ refusal_for() {
   esac
 }
 
+# print_candidate <index>: one ok or refused row, then the ignored files of an
+# ok row. The ignored files are the build output that the removal deletes.
+print_candidate() {
+  local i="$1" why ignored total
+  why=$(refusal_for "$i")
+  if [ -n "$why" ]; then
+    printf 'refused (%s)\t%s\n' "$why" "${WT_PATHS[$i]}"
+    return
+  fi
+  printf 'ok\t%s\n' "${WT_PATHS[$i]}"
+  ignored=$(git -C "${WT_PATHS[$i]}" ls-files --others --ignored --exclude-standard 2>/dev/null)
+  if [ -n "$ignored" ]; then
+    printf '%s\n' "$ignored" | head -n 20 | sed 's/^/  /'
+    total=$(printf '%s\n' "$ignored" | wc -l | tr -d ' ')
+    if [ "$total" -gt 20 ]; then printf '  ... and %s more ignored files\n' "$((total - 20))"; fi
+  fi
+}
+
+# is_copy_head <sha>: the commit is the merged head or a given PR commit
+is_copy_head() {
+  local h
+  [ -n "$1" ] || return 1
+  for h in "${COPY_HEADS[@]}"; do
+    [ "$h" = "$1" ] && return 0
+  done
+  return 1
+}
+
+# The removal log lives in the ops root's gitignored session folder.
+CLEANUP_LOG="$OPS/.claude/session/cleanup.log"
+log_ready() {
+  mkdir -p "$OPS/.claude/session" 2>/dev/null && { : >> "$CLEANUP_LOG"; } 2>/dev/null
+}
+# log_removal <kind> <path> <branch-or-head>: one tab-separated line. %q keeps
+# a path with a tab or a newline on one line.
+log_removal() {
+  local stamp
+  stamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+  if ! printf '%s\t%s\t%q\t%q\t%s\t%s\n' "$stamp" "$1" "$2" "$SOURCE" "$3" "${MERGED_HEAD:--}" >> "$CLEANUP_LOG" 2>/dev/null; then
+    echo "remove-worktree: removed, but could not write the removal log $CLEANUP_LOG: $2" >&2
+  fi
+}
+
+# remove_checked <path> <kind> <branch-or-head>: the caller has run every
+# refusal check. Release this session's owner record, then let git remove the
+# worktree with no --force. Exits the script.
+remove_checked() {
+  local path="$1" kind="$2" detail="$3" released_own=0
+  if ! log_ready; then
+    echo "remove-worktree: refused, cannot write the removal log $CLEANUP_LOG: $path" >&2
+    exit 1
+  fi
+  # The release re-checks the owner under the record lock.
+  if worktree_owner_is_self "$path"; then
+    if ! worktree_owner_release "$path"; then
+      echo "remove-worktree: refused, cannot release this session's owner record: $path" >&2
+      exit 1
+    fi
+    released_own=1
+  fi
+  if git -C "$COMMON" worktree remove "$path"; then
+    log_removal "$kind" "$path" "$detail"
+    echo "removed $path"
+    exit 0
+  fi
+  if [ "$released_own" = 1 ] && ! worktree_owner_acquire "$path"; then
+    echo "remove-worktree: could not acquire this session's owner record again, so it stays released: $path" >&2
+  fi
+  echo "remove-worktree: git did not remove $path. It may hold changes. Review it, then remove it yourself." >&2
+  exit 1
+}
+
 case "$MODE" in
   list)
     found=0
-    ignored=""
-    total=0
     for i in "${!WT_PATHS[@]}"; do
       [ "${WT_BRANCH[$i]}" = "refs/heads/$ARG" ] || continue
       found=1
-      why=$(refusal_for "$i")
-      if [ -n "$why" ]; then
-        printf 'refused (%s)\t%s\n' "$why" "${WT_PATHS[$i]}"
-      else
-        printf 'ok\t%s\n' "${WT_PATHS[$i]}"
-        ignored=$(git -C "${WT_PATHS[$i]}" ls-files --others --ignored --exclude-standard 2>/dev/null)
-        if [ -n "$ignored" ]; then
-          printf '%s\n' "$ignored" | head -n 20 | sed 's/^/  /'
-          total=$(printf '%s\n' "$ignored" | wc -l | tr -d ' ')
-          if [ "$total" -gt 20 ]; then printf '  ... and %s more ignored files\n' "$((total - 20))"; fi
-        fi
-      fi
+      print_candidate "$i"
     done
     [ "$found" = 1 ] || echo "none: no linked worktree holds branch $ARG"
+    exit 0
+    ;;
+  list-copies)
+    found=0
+    for i in "${!WT_PATHS[@]}"; do
+      [ -z "${WT_BRANCH[$i]}" ] || continue
+      is_copy_head "${WT_HEAD[$i]}" || continue
+      found=1
+      print_candidate "$i"
+    done
+    [ "$found" = 1 ] || echo "none: no detached worktree holds a commit of the merged PR"
     exit 0
     ;;
   remove)
@@ -231,24 +360,28 @@ case "$MODE" in
         echo "remove-worktree: refused, $why: $ARG" >&2
         exit 1
       fi
-      # The release re-checks the owner under the record lock.
-      released_own=0
-      if worktree_owner_is_self "$ARG"; then
-        if ! worktree_owner_release "$ARG"; then
-          echo "remove-worktree: refused, cannot release this session's owner record: $ARG" >&2
-          exit 1
-        fi
-        released_own=1
+      remove_checked "$ARG" worktree "$MERGED_BRANCH"
+    done
+    echo "remove-worktree: $ARG is not a linked worktree of $SOURCE" >&2
+    exit 1
+    ;;
+  remove-copy)
+    for i in "${!WT_PATHS[@]}"; do
+      [ "${WT_PATHS[$i]}" = "$ARG" ] || continue
+      if [ -n "${WT_BRANCH[$i]}" ]; then
+        echo "remove-worktree: refused, the worktree holds a branch, so it is not a review copy: $ARG" >&2
+        exit 1
       fi
-      if git -C "$COMMON" worktree remove "$ARG"; then
-        echo "removed $ARG"
-        exit 0
+      if ! is_copy_head "${WT_HEAD[$i]}"; then
+        echo "remove-worktree: refused, the worktree HEAD is not a commit of the merged PR: $ARG" >&2
+        exit 1
       fi
-      if [ "$released_own" = 1 ] && ! worktree_owner_acquire "$ARG"; then
-        echo "remove-worktree: could not acquire this session's owner record again, so it stays released: $ARG" >&2
+      why=$(refusal_for "$i")
+      if [ -n "$why" ]; then
+        echo "remove-worktree: refused, $why: $ARG" >&2
+        exit 1
       fi
-      echo "remove-worktree: git did not remove $ARG. It may hold changes. Review it, then remove it yourself." >&2
-      exit 1
+      remove_checked "$ARG" review-copy "${WT_HEAD[$i]}"
     done
     echo "remove-worktree: $ARG is not a linked worktree of $SOURCE" >&2
     exit 1

@@ -36,28 +36,22 @@ An agent uses the effort of its tier unless the map gives an agent effort.
 | Agent | Tier | Effort | Reason |
 | --- | --- | --- | --- |
 | Code Reviewer (Rex) | reason | high | Checks correctness and review evidence. |
-| Security Reviewer (Hakim) | reason | high | Examines threats and security boundaries. |
+| Security Reviewer (Hakim) | reason | high | Examines threats and security boundaries, and owns the security posture (AgDR-0301). |
 | Solution Architect (Tariq) | reason | high | Tests design assumptions and trade-offs. |
 | Contrarian (Naqid) | reason | high | Challenges premises and finds counterarguments. |
-| Head of Engineering | reason | high | Makes cross-project engineering decisions. |
 | Penetration Tester | reason | unset | Specialized testing needs separate measurement before tuning. |
-| Tech Lead | reason | medium | Authors designs and coordinates implementation. |
+| Tech Lead | reason | high | Authors designs, owns architecture principles and stack standards (AgDR-0301). |
 | SRE | reason | medium | Implements reliability and observability changes. |
 | Backend Engineer | build | medium | Implements scoped application changes. |
 | Frontend Engineer | build | medium | Implements scoped interface changes. |
 | Platform Engineer | build | medium | Builds infrastructure and tooling. |
-| Data Engineer | build | medium | Builds data pipelines and models. |
-| UI Designer | build | medium | Authors component and visual specifications. |
-| UX Designer | build | medium | Authors flows and interaction specifications. |
-| Product Manager | build | medium | Authors requirements and acceptance criteria. |
+| Data Engineer | build | medium | Builds data pipelines and models, runs analysis, and owns data governance (AgDR-0301). |
+| UI Designer | build | medium | Authors component and visual specifications, user flows, and the design system (AgDR-0301). |
+| Product Manager | build | medium | Authors requirements, the roadmap, and research (AgDR-0301). The human approver makes the strategy decision. |
 | QA Engineer | build | medium | Runs exact-commit checks before merge. |
-| Head of Product | build | high | Makes roadmap and feasibility decisions. |
-| Head of Design | build | high | Makes design-system and visual-standard decisions. |
-| Head of Security | build | high | Makes security strategy and compliance decisions. |
-| Head of Data | build | high | Makes data governance and reporting decisions. |
 | Dependency Auditor | build | unset | Retains inherited effort for utility checks. |
-| Product Analyst | build | unset | Research needs vary by assignment. |
-| Data Analyst | light | unset | Analysis needs vary by assignment. |
+
+No shipped agent uses the `light` tier after AgDR-0301. The tier stays in the map for adopter routing and future agents.
 
 ## Skill stages
 
