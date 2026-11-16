@@ -14,6 +14,11 @@ PASS=0; FAIL=0
 ok() { echo "PASS [$1]"; PASS=$((PASS+1)); }
 bad() { echo "FAIL [$1]: $2" >&2; FAIL=$((FAIL+1)); }
 
+# Nonzero bytes avoid sparse files and zero-block filesystem optimizations.
+write_fixture() {
+  LC_ALL=C tr '\0' 'x' < /dev/zero | head -c "$2" > "$1"
+}
+
 mk_sandbox() {
   local sb
   sb=$(mktemp -d); sb=$(cd "$sb" && pwd -P)
@@ -56,7 +61,7 @@ git -C "$sb" push -q origin HEAD:refs/heads/base 2>/dev/null
 mkdir -p "$sb/workspace/proj.worktrees"
 git -C "$sb" worktree add -q -b feature/old "$sb/workspace/proj.worktrees/old" 2>/dev/null
 git -C "$sb/workspace/proj.worktrees/old" push -q -u origin feature/old 2>/dev/null
-dd if=/dev/zero of="$sb/workspace/proj.worktrees/old/blob" bs=1024 count=3072 2>/dev/null
+write_fixture "$sb/workspace/proj.worktrees/old/blob" 3145728
 git -C "$sb/workspace/proj.worktrees/old" add blob
 git -C "$sb/workspace/proj.worktrees/old" -c user.email=t@t -c user.name=t commit -q -m blob
 git -C "$sb/workspace/proj.worktrees/old" push -q 2>/dev/null
@@ -106,7 +111,7 @@ esac
 # --- 5b. a review copy older than the age limit with a merged PR is reclaimable.
 copy="$sb/copies/o__r-pr7"
 git init -q "$copy"
-dd if=/dev/zero of="$copy/blob" bs=1024 count=2048 2>/dev/null
+write_fixture "$copy/blob" 2097152
 git -C "$copy" add blob
 git -C "$copy" -c user.email=t@t -c user.name=t commit -qm blob
 sha=$(git -C "$copy" rev-parse HEAD)
@@ -133,7 +138,24 @@ expect_copy() {
     *) bad "$label" "$result" ;;
   esac
 }
-expect_copy review-copy-reclaimable '2 MB'
+# Allow allocation and display rounding, while distinguishing one, two, or three copies.
+expect_copy_size() {
+  local label=$1 min_kb=$2 max_kb=$3 result
+  result=$(run_helper "$sb" "$gh")
+  if printf '%s\n' "$result" | awk -F '; ' -v min="$min_kb" -v max="$max_kb" '
+    NF == 2 && $2 ~ /^[0-9]+([.][0-9]+)? (KB|MB|GB) can be reclaimed$/ {
+      split($2, size, " ")
+      kb = size[1] * (size[2] == "GB" ? 1048576 : size[2] == "MB" ? 1024 : 1)
+      if (kb >= min && kb <= max) valid = 1
+    }
+    END { exit !valid }
+  '; then
+    ok "$label"
+  else
+    bad "$label" "expected ${min_kb}-${max_kb} KB reclaimable: $result"
+  fi
+}
+expect_copy_size review-copy-reclaimable 1536 3072
 record r
 expect_copy ownerless-record-kept '0 KB'
 record o/r
@@ -160,18 +182,18 @@ git -C "$copy" branch -D saved-local >/dev/null
 git -C "$copy" worktree add -q --detach "$sb/extra-wt" "$sha"
 expect_copy extra-worktree-kept '0 KB'
 git -C "$copy" worktree remove "$sb/extra-wt"
-expect_copy clean-copy-reclaimable '2 MB'
+expect_copy_size clean-copy-reclaimable 1536 3072
 
 # Configured roots add to the step-3 root and physical duplicates count once.
 mkdir -p "$sb/additional"
 cp -R "$copy" "$sb/additional/o__r-pr7"
 printf '{"disk_budget":{"review_copy_roots":["additional","copies"]}}\n' > "$sb/.claude/project-config.json"
-expect_copy additive-deduplicated-roots '4 MB'
+expect_copy_size additive-deduplicated-roots 3584 5120
 # Leading ~/ resolves against HOME.
 printf '{"disk_budget":{"review_copy_roots":["~/additional"]}}\n' > "$sb/.claude/project-config.json"
 old_home=$HOME
 export HOME="$sb"
-expect_copy home-root '4 MB'
+expect_copy_size home-root 3584 5120
 export HOME="$old_home"
 rm "$sb/.claude/project-config.json"
 
@@ -207,7 +229,7 @@ old_path=$PATH
 export PATH="$sb/shims:$PATH"
 check_unsafe_root foreign-owned-root-excluded
 export PATH="$old_path"
-expect_copy safe-root-restored '2 MB'
+expect_copy_size safe-root-restored 1536 3072
 mkdir -p "$sb/workspace/proj.worktrees/old"
 
 # --- 6. budget from config: a 0 GB budget marks the line over budget.
