@@ -23,7 +23,7 @@ mk_sandbox() {
   local sb
   sb=$(mktemp -d); sb=$(cd "$sb" && pwd -P)
   mkdir -p "$sb/.claude/hooks" "$sb/.claude/session" "$sb/workspace"
-  for lib in _lib-read-config.sh _lib-portfolio-paths.sh; do
+  for lib in _lib-read-config.sh _lib-portfolio-paths.sh _lib-disk-budget.sh; do
     [ -f "$SRC_ROOT/.claude/hooks/$lib" ] && cp "$SRC_ROOT/.claude/hooks/$lib" "$sb/.claude/hooks/$lib"
   done
   cp "$SRC_ROOT/.claude/project-config.defaults.json" "$sb/.claude/project-config.defaults.json"
@@ -260,6 +260,36 @@ out=$(run_helper "$sb" "$gh")
 case "$out" in
   *"(over the 0 GB budget)") ok config-budget ;;
   *) bad config-budget "$out" ;;
+esac
+# Decimal, leading-zero and large budgets use the SessionStart number rule.
+check_budget() {
+  local label=$1 value=$2 expected=$3 result
+  printf '{"disk_budget":{"max_owned_gb":%s}}\n' "$value" > "$sb/.claude/project-config.json"
+  result=$(run_helper "$sb" "$gh" --json)
+  if jq -e --argjson expected "$expected" '
+    .max_owned_bytes == $expected and
+    (.max_owned_bytes | type == "number" and . >= 0 and floor == .)
+  ' <<< "$result" >/dev/null; then
+    ok "$label"
+  else bad "$label" "$result"; fi
+}
+check_budget decimal-budget 2.5 2684354560
+check_budget leading-zero-budget '"08"' 8589934592
+check_budget large-budget 99999999999 107374182398926258176
+check_budget invalid-budget '"invalid"' 10737418240
+
+# A small fractional budget proves the text comparison and label use it too.
+check_budget fractional-over-budget 0.001 1073742
+out=$(run_helper "$sb" "$gh")
+case "$out" in
+  *"(over the 0.001 GB budget)") ok fractional-text-budget ;;
+  *) bad fractional-text-budget "$out" ;;
+esac
+check_budget decimal-under-budget 2.5 2684354560
+out=$(run_helper "$sb" "$gh")
+case "$out" in
+  *"(over the "*) bad decimal-text-budget "$out" ;;
+  *) ok decimal-text-budget ;;
 esac
 rm -f "$sb/.claude/project-config.json"
 
