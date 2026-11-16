@@ -170,7 +170,7 @@ spike_commit_exempt() {
 }
 
 if spike_commit_exempt; then
-  echo "WARN: spike/prototype commit detected — require-agdr-for-arch-changes bypassed. AgDRs not required for throw-away exploration; ship a memo on /spike-close or /prototype-close instead. See .claude/rules/workflow-gates.md § Spike work." >&2
+  echo "WARN: spike/prototype commit detected — require-agdr-for-arch-changes bypassed. AgDRs not required for throw-away exploration; ship a memo on /spike --close or /prototype --close instead. See .claude/rules/workflow-gates.md § Spike work." >&2
   exit 0
 fi
 

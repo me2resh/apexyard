@@ -12,6 +12,16 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 
 Deep-dive accessibility analysis against the Web Content Accessibility Guidelines 2.2 Level AA. Produces a prioritized findings list with fix instructions. Invoke when `/launch-check`'s accessibility row shows WARN or FAIL, or proactively for any user-facing app.
 
+## Usage
+
+```
+/accessibility-audit                       # audit the project in the current directory
+/accessibility-audit workspace/my-app      # audit the project at this path
+```
+
+This audit runs on its own. It does not need a `/launch-check` run first.
+`/launch-check` names and offers this audit when its accessibility row shows WARN or FAIL.
+
 ## WCAG Principles (POUR)
 
 | Principle | What it means | Key checks |

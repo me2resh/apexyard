@@ -12,6 +12,16 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 
 Deep-dive performance analysis focused on what's measurable from the codebase without running Lighthouse. Checks bundle size, image optimization, lazy loading, code splitting, and caching configuration. Invoke when `/launch-check`'s performance row shows WARN or FAIL.
 
+## Usage
+
+```
+/performance-audit                       # audit the project in the current directory
+/performance-audit workspace/my-app      # audit the project at this path
+```
+
+This audit runs on its own. It does not need a `/launch-check` run first.
+`/launch-check` names and offers this audit when its performance row shows WARN or FAIL.
+
 ## Process
 
 ### Step 1: Bundle analysis
