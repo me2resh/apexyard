@@ -53,6 +53,22 @@ case "$out" in
 esac
 [ "$(printf '%s\n' "$out" | grep -c '^')" = 1 ] && ok one-line || bad one-line "$out"
 
+# An unreadable entry makes du fail but preserves the sizes it can measure.
+mkdir "$sb/.claude/session/unreadable"
+write_fixture "$sb/.claude/session/readable" 2097152
+chmod 000 "$sb/.claude/session/unreadable"
+if du -sk "$sb/.claude/session" >/dev/null 2>&1; then
+  bad unreadable-fixture "du must fail on the unreadable entry"
+fi
+out=$(run_helper "$sb" "$gh")
+chmod 700 "$sb/.claude/session/unreadable"
+case "$out" in
+  *"timed out"*) bad unreadable-total "$out" ;;
+  'ApexYard is using 2 MB;'*) ok unreadable-total ;;
+  *) bad unreadable-total "$out" ;;
+esac
+rm -rf "$sb/.claude/session/unreadable" "$sb/.claude/session/readable"
+
 # --- 2. an old, clean, pushed worktree with a merged PR is reclaimable.
 remote="$sb/remote.git"; git init -q --bare "$remote"
 git -C "$sb" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
@@ -246,8 +262,12 @@ rm -f "$sb/.claude/project-config.json"
 
 # --- 8. a zero time box ends fast and never blocks.
 start=$SECONDS
-APEXYARD_DISK_TIMEBOX=0 APEXYARD_OPS_ROOT="$sb" APEXYARD_GH="$gh" TMPDIR="$sb/tmp" bash "$HELPER" >/dev/null
+out=$(APEXYARD_DISK_TIMEBOX=0 APEXYARD_OPS_ROOT="$sb" APEXYARD_GH="$gh" TMPDIR="$sb/tmp" bash "$HELPER")
 [ $((SECONDS - start)) -le 5 ] && ok timebox || bad timebox "took $((SECONDS - start))s"
+case "$out" in
+  'ApexYard disk use is unknown (measurement timed out)') ok timeout-message ;;
+  *) bad timeout-message "$out" ;;
+esac
 
 # --- 9. the briefing stays at 4 lines and has no disk line.
 mkdir -p "$sb/.claude/skills/status"

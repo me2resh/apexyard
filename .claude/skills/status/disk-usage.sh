@@ -109,11 +109,11 @@ start=$SECONDS
 deadline=$((start + timebox))
 
 # run_timed <seconds> <outfile> <cmd...>: run in background, kill at the limit.
-# Preserve command failures; return 1 when the time limit expires.
+# Preserve command failures; return 124 when the time limit expires.
 run_timed() {
   local limit=$1 out=$2 pid waited=0
   shift 2
-  [ "$SECONDS" -lt "$deadline" ] || return 1
+  [ "$SECONDS" -lt "$deadline" ] || return 124
   "$@" >"$out" 2>/dev/null &
   pid=$!
   while kill -0 "$pid" 2>/dev/null; do
@@ -121,7 +121,7 @@ run_timed() {
       kill "$pid" 2>/dev/null
       kill -KILL "$pid" 2>/dev/null
       wait "$pid" 2>/dev/null
-      return 1
+      return 124
     fi
     sleep 0.2
     waited=$((waited + 1))
@@ -166,12 +166,13 @@ done
 
 total_kb=0
 if [ "${#targets[@]}" -gt 0 ]; then
-  if run_timed "$(remaining)" "$tmp/du" du -sk "${targets[@]}"; then
-    total_kb=$(awk '{s+=$1} END{print s+0}' "$tmp/du")
-  else
+  du_status=0
+  run_timed "$(remaining)" "$tmp/du" du -sk "${targets[@]}" || du_status=$?
+  if [ "$du_status" -eq 124 ]; then
     echo "ApexYard disk use is unknown (measurement timed out)"
     exit 0
   fi
+  total_kb=$(awk '{s+=$1} END{print s+0}' "$tmp/du")
 fi
 
 line="ApexYard is using $(fmt_kb "$total_kb")"
