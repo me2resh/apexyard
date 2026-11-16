@@ -17,7 +17,17 @@ Deep-dive audit against the emerging GEO + AEO conventions. Checks discovery fil
 - `/seo-audit` — Google-shaped SEO: title, description, og, sitemap, robots.txt, schema for Googlebot
 - `/geo-audit` — LLM/agent surface: `llms.txt`, `AGENTS.md`, AI-crawler directives, citation JSON-LD, token economics
 
-`/launch-check` fans out to both at milestone boundaries so the production-readiness verdict covers both audiences.
+`/launch-check` runs a quick check of both audiences. When its SEO or generative-engine row shows WARN or FAIL, it names and offers the matching full audit.
+
+## Usage
+
+```
+/geo-audit                       # audit the project in the current directory
+/geo-audit workspace/my-app      # audit the project at this path
+```
+
+This audit runs on its own. It does not need a `/launch-check` run first.
+`/launch-check` names and offers this audit when its generative-engine row shows WARN or FAIL.
 
 ## Two sub-scopes — GEO and AEO
 
@@ -217,7 +227,7 @@ touch projects/<name>/audits/geo-audit/.audit-history-tracked
 | `templates/audits/geo-audit.md` | Per-run body template (audit family standard, AgDR-0019) |
 | `.claude/hooks/_lib-audit-history.sh` | Shared persistence + trend rendering (audit family standard, AgDR-0019) |
 | `.claude/skills/seo-audit/SKILL.md` | Google-shaped SEO sibling — independent, complementary |
-| `.claude/skills/launch-check/SKILL.md` | Fans out to both this skill and `/seo-audit` at milestone boundaries |
+| `.claude/skills/launch-check/SKILL.md` | Quick sweep. Offers this skill or `/seo-audit` on a WARN or FAIL row |
 
 Design rationale: [`docs/agdr/AgDR-0043-geo-audit-skill.md`](../../../docs/agdr/AgDR-0043-geo-audit-skill.md).
 

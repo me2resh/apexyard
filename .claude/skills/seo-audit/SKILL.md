@@ -12,7 +12,17 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 
 Deep-dive SEO audit against Google's best practices. Checks on-page SEO, technical SEO, and social sharing metadata. Invoke when `/launch-check`'s SEO row shows WARN or FAIL.
 
-> **See also**: `/geo-audit` for the LLM/agent-discoverability sibling check — `llms.txt`, `AGENTS.md`, AI-crawler directives in `robots.txt`, JSON-LD citation metadata, token economics. `/seo-audit` covers the Googlebot audience; `/geo-audit` covers the LLM-crawler and coding-agent audience. The two run independently; `/launch-check` fans out to both at milestone boundaries.
+> **See also**: `/geo-audit` for the LLM/agent-discoverability sibling check — `llms.txt`, `AGENTS.md`, AI-crawler directives in `robots.txt`, JSON-LD citation metadata, token economics. `/seo-audit` covers the Googlebot audience; `/geo-audit` covers the LLM-crawler and coding-agent audience. The two run independently. When `/launch-check` shows WARN or FAIL on the SEO or generative-engine row, it names and offers the matching audit.
+
+## Usage
+
+```
+/seo-audit                       # audit the project in the current directory
+/seo-audit workspace/my-app      # audit the project at this path
+```
+
+This audit runs on its own. It does not need a `/launch-check` run first.
+`/launch-check` names and offers this audit when its SEO row shows WARN or FAIL.
 
 ## Process
 

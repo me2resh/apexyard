@@ -364,7 +364,7 @@ Ensure your `package.json` has these scripts:
 
 ### Refresh Ready PRs (`refresh-ready-prs.yml`)
 
-Copy this workflow into `.github/workflows/`. Create the `ready-to-merge` repository label before Rex uses it.
+Copy this workflow into `.github/workflows/`. Create the `ready-to-merge` repository label before the `/code-review` orchestrator uses it.
 Set `INTEGRATION_BRANCHES` to `main` for projects without `dev`. The default is `dev`.
 For other branches, also change the static `on.push.branches` list. GitHub does not expand environment variables in event filters.
 

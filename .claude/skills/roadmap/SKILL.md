@@ -40,7 +40,7 @@ The Path resolution section's example sources the helper *once* for documentatio
 
 ## Activated role
 
-When `/roadmap` runs, activate the **[Head of Product](../../../roles/product/head-of-product.md)** role — they own roadmap prioritisation, strategic sequencing, and milestone decisions. For adding a specific item with a PRD, chain to `/write-spec` which activates the [Product Manager](../../../roles/product/product-manager.md) instead. For items that require data-driven reprioritisation, involve the [Product Analyst](../../../roles/product/product-analyst.md).
+When `/roadmap` runs, activate the **[Product Manager](../../../roles/product/product-manager.md)** role — they own roadmap prioritisation, strategic sequencing, milestone proposals, and research (AgDR-0301). The human approver approves a material roadmap change. For adding a specific item with a PRD, chain to `/write-spec`. For items that require data-driven reprioritisation, ask the [Data Engineer](../../../roles/data/data-engineer.md) to check the numbers.
 
 See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the full activation protocol.
 
