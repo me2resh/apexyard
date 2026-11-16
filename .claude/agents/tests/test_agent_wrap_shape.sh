@@ -1,12 +1,15 @@
 #!/bin/bash
 # Smoke test for the role-derived sub-agent wrappers shipped under
 # me2resh/apexyard#347, plus the `## Activation mode` section coverage
-# on all 19 role files. Per AgDR-0050 Axis 1 (WRAP), Axis 2 (default
-# model matrix), and Axis 6 (HYBRID role-trigger integration).
+# on every active role file. Per AgDR-0050 Axis 1 (WRAP), Axis 2 (default
+# model matrix), and Axis 6 (HYBRID role-trigger integration). AgDR-0301
+# reduced the roster to 15 agents and 12 active role files.
 #
 # Wave history:
 #   - #347 PR 1 (merged): engineering dept (7 agents) + `## Activation
 #     mode` section on all 19 role files.
+#   - #2027: 23 agents became 15 (AgDR-0301). Eight role files became
+#     redirect stubs for one release.
 #   - #347 PR 2: product + design depts (6 agents) — covered here.
 #   - #347 PR 3 (upcoming): security + data depts (6 agents).
 #   - #347 PR 4 (upcoming): utility-agent `model:` frontmatter
@@ -22,9 +25,12 @@
 #   4. Each agent file's body references the role file
 #      `@roles/<dept>/<role>.md` (the WRAP contract — agent files
 #      are thin wrappers that delegate identity to roles/)
-#   5. All 19 role files have a `## Activation mode` section
+#   5. All active role files have a `## Activation mode` section
 #   6. Each role file's `## Activation mode` section declares a `Class:`
 #      value matching the AgDR-0050 § Axis 6 table exactly
+#   7. The roster holds exactly 15 agent files (AgDR-0301)
+#   8. Each redirect stub names its receiver and has no
+#      `## Activation mode` section, and no agent file remains for it
 #
 # Test style follows the framework convention (set -u, ROOT from
 # dirname, red/green helpers, FAIL counter, exit 0/1). No external
@@ -46,13 +52,12 @@ FAIL=0
 red()    { printf '\033[31m%s\033[0m\n' "$*"; }
 green()  { printf '\033[32m%s\033[0m\n' "$*"; }
 
-# 13 role-derived agents shipped to date (#347 PR 1 + PR 2).
+# 10 role-derived agents after the 23-to-15 roster change (AgDR-0301).
 # Format: "<slug>:<expected_model>:<expected_persona_name>:<dept>"
 # <dept> is the subdir under roles/ that hosts the canonical role file.
 # The agent body must reference `@roles/<dept>/<slug>.md`.
 ROLE_AGENTS=(
   # PR 1 — engineering dept
-  "head-of-engineering:opus:Khalid:engineering"
   "tech-lead:opus:Hisham:engineering"
   "backend-engineer:sonnet:Karim:engineering"
   "frontend-engineer:sonnet:Yasmin:engineering"
@@ -60,21 +65,14 @@ ROLE_AGENTS=(
   "platform-engineer:sonnet:Adel:engineering"
   "sre:opus:Saif:engineering"
   # PR 2 — product dept
-  "head-of-product:sonnet:Omar:product"
   "product-manager:sonnet:Mariam:product"
-  "product-analyst:sonnet:Hanan:product"
   # PR 2 — design dept
-  "head-of-design:sonnet:Maha:design"
   "ui-designer:sonnet:Nour:design"
-  "ux-designer:sonnet:Iman:design"
   # PR 3 — security dept (security-reviewer.md is the Hakim/Hatim consolidation,
   # checked separately below — it keeps its non-standard filename so /security-review
   # and the auto-fire hook keep working)
-  "head-of-security:sonnet:Faisal:security"
   "penetration-tester:opus:Hamza:security"
   # PR 3 — data dept
-  "head-of-data:sonnet:Khalil:data"
-  "data-analyst:haiku:Nadia:data"
   "data-engineer:sonnet:Anwar:data"
 )
 
@@ -92,27 +90,20 @@ UTILITY_AGENTS=(
   "dependency-auditor:sonnet:Munir"
 )
 
-# All 19 role files (path under roles/) + expected Activation mode Class.
-# Per AgDR-0050 § Axis 6 (HYBRID integration table).
+# All 12 active role files (path under roles/) + expected Activation mode Class.
+# Per AgDR-0050 § Axis 6 (HYBRID integration table) and AgDR-0301
+# (the 23-to-15 roster). The solution architect role has its own test.
 ROLE_CLASSES=(
-  "engineering/head-of-engineering.md:isolated-work-class"
   "engineering/tech-lead.md:isolated-work-class"
   "engineering/backend-engineer.md:in-flow-class"
   "engineering/frontend-engineer.md:in-flow-class"
   "engineering/qa-engineer.md:isolated-work-class"
   "engineering/platform-engineer.md:in-flow-class"
   "engineering/sre.md:isolated-work-class"
-  "product/head-of-product.md:isolated-work-class"
   "product/product-manager.md:in-flow-class"
-  "product/product-analyst.md:isolated-work-class"
-  "design/head-of-design.md:isolated-work-class"
   "design/ui-designer.md:in-flow-class"
-  "design/ux-designer.md:in-flow-class"
-  "security/head-of-security.md:isolated-work-class"
   "security/security-auditor.md:isolated-work-class"
   "security/penetration-tester.md:isolated-work-class"
-  "data/head-of-data.md:isolated-work-class"
-  "data/data-analyst.md:isolated-work-class"
   "data/data-engineer.md:in-flow-class"
 )
 
@@ -163,11 +154,11 @@ for agent_file in "$AGENTS_DIR"/*.md; do
   case "$slug" in
     # The tier map in .claude/harness-models.json sets these values
     # (me2resh/apexyard#2033). This list pins the decisions a second time.
-    code-reviewer|security-reviewer|solution-architect|contrarian)
+    # tech-lead moved to high when it took the engineering-standards
+    # work of the former head agent (AgDR-0301).
+    code-reviewer|security-reviewer|solution-architect|contrarian|tech-lead)
       expected_effort=high ;;
-    head-of-engineering|head-of-product|head-of-design|head-of-security|head-of-data)
-      expected_effort=high ;;
-    backend-engineer|frontend-engineer|platform-engineer|tech-lead|data-engineer|sre|ui-designer|ux-designer|product-manager|qa-engineer)
+    backend-engineer|frontend-engineer|platform-engineer|data-engineer|sre|ui-designer|product-manager|qa-engineer)
       expected_effort=medium ;;
   esac
   if [ -n "$actual_effort" ] && ! valid_effort "$actual_effort"; then
@@ -352,10 +343,72 @@ for entry in "${ROLE_CLASSES[@]}"; do
   green "  PASS: $rel ($actual_class)"
 done
 
+# -----------------------------------------------------------------------------
+# Invariant 7 — the roster holds exactly 15 agent files (AgDR-0301).
+# -----------------------------------------------------------------------------
+echo
+echo "== Roster count (AgDR-0301)"
+agent_count=0
+for agent_file in "$AGENTS_DIR"/*.md; do
+  [ -f "$agent_file" ] && agent_count=$((agent_count + 1))
+done
+if [ "$agent_count" -eq 15 ]; then
+  green "  PASS: 15 agent files"
+else
+  red "  FAIL: $agent_count agent files (expected 15 per AgDR-0301)"
+  FAIL=$((FAIL + 1))
+fi
+
+# -----------------------------------------------------------------------------
+# Invariant 8 — redirect stubs (AgDR-0301). Each stub names its receiver
+# role file, has no `## Activation mode` section, and has no agent file.
+# Format: "<stub path under roles/>:<receiver path under roles/>"
+# Remove this list with the stubs in the release after AgDR-0301.
+# -----------------------------------------------------------------------------
+REDIRECT_STUBS=(
+  "engineering/head-of-engineering.md:engineering/tech-lead.md"
+  "product/head-of-product.md:product/product-manager.md"
+  "product/product-analyst.md:product/product-manager.md"
+  "security/head-of-security.md:security/security-auditor.md"
+  "design/head-of-design.md:design/ui-designer.md"
+  "design/ux-designer.md:design/ui-designer.md"
+  "data/head-of-data.md:data/data-engineer.md"
+  "data/data-analyst.md:data/data-engineer.md"
+)
+echo
+echo "== Redirect stubs (AgDR-0301)"
+for entry in "${REDIRECT_STUBS[@]}"; do
+  stub="${entry%%:*}"
+  receiver="${entry#*:}"
+  stub_file="$ROLES_DIR/$stub"
+  slug=$(basename "$stub" .md)
+  if [ ! -f "$stub_file" ]; then
+    red "  FAIL: missing redirect stub $stub_file"
+    FAIL=$((FAIL + 1))
+    continue
+  fi
+  if grep -q '^## Activation mode' "$stub_file"; then
+    red "  FAIL: $stub — a redirect stub must not declare an Activation mode"
+    FAIL=$((FAIL + 1))
+    continue
+  fi
+  if ! grep -qF "roles/$receiver" "$stub_file"; then
+    red "  FAIL: $stub — does not name its receiver roles/$receiver"
+    FAIL=$((FAIL + 1))
+    continue
+  fi
+  if [ -f "$AGENTS_DIR/$slug.md" ]; then
+    red "  FAIL: $stub — agent file .claude/agents/$slug.md still exists"
+    FAIL=$((FAIL + 1))
+    continue
+  fi
+  green "  PASS: $stub -> $receiver"
+done
+
 echo
 if [ "$FAIL" -gt 0 ]; then
   red "FAIL: $FAIL invariant(s) failed"
   exit 1
 fi
-green "PASS: role-derived agent wrap-shape + utility-agent Axis 2 baselines + 19-role Activation mode coverage"
+green "PASS: role-derived agent wrap-shape + utility-agent Axis 2 baselines + Activation mode coverage + 15-agent roster + redirect stubs"
 exit 0

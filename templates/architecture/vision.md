@@ -6,7 +6,7 @@
 
 > **North-star architecture.** Use `vision.md` for *target-state* + the *current → target migration path*. Use [`c4-context.md`](c4-context.md) for the as-is system context. Use [`c4-container.md`](c4-container.md) for the as-is container topology. Vision is the only template here that explicitly addresses *where the architecture is going* and *what we are choosing not to build*.
 >
-> Audience: tech leads, head of engineering, the CTO. Reviewed every quarter (default cadence — see § Review cadence below). One vision per system / domain.
+> Audience: tech leads, the human approver, the CTO. Reviewed every quarter (default cadence — see § Review cadence below). One vision per system / domain.
 >
 > **Recommended authoring path:** run `/tech-vision <project-name>` — interactive section-by-section interviewer that forces the load-bearing sections (Current-vs-Target, Anti-scope, Migration path) to actually get filled in instead of left as stubs. Markdown-only output written to `projects/<project-name>/architecture/vision.md`. Re-run quarterly with `r` (refresh) to preserve content across reviews. See [`.claude/skills/tech-vision/SKILL.md`](../../.claude/skills/tech-vision/SKILL.md).
 
@@ -107,7 +107,7 @@ The "reconsider when" clause is load-bearing — it prevents the section from ro
 
 ## Review cadence
 
-This vision is reviewed **quarterly** by default (Tech Lead + Head of Engineering + at least one engineer who has shipped against the current state). The review checks:
+This vision is reviewed **quarterly** by default (Tech Lead + the human approver + at least one engineer who has shipped against the current state). The review checks:
 
 - Have the migration milestones from the previous quarter shipped? If not, what blocked them?
 - Does the target state still match the business direction, or has the business shifted?

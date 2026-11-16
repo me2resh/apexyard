@@ -148,7 +148,7 @@ The orchestrator reads `build.isolation` and checks concurrency before each spaw
 The spawn prompt must name the selected mode.
 
 - **`worktree` mode (default):** pass `isolation: "worktree"` for spawned build-class agents.
-  This covers backend, frontend, platform, and data engineers, product managers, UI designers, and UX designers.
+  This covers backend, frontend, platform, and data engineers, product managers, and UI designers.
   The harness creates a worktree under `.claude/worktrees/agent-<id>`.
 - **`branch` mode:** spawn in the foreground without worktree isolation only when no other writer is active on that checkout.
   Instruct the agent to follow the branch checks and lifecycle above.

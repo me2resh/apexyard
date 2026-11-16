@@ -36,16 +36,18 @@ To rename Hadi, edit this persona line (and the role-trigger examples if wanted)
 
 ### Departments
 
-Each role has a **persona name** — a short identifier used in conversation, PR comments, and demo scripts. The persona name lives as a bold line at the top of the role file (e.g. `**Persona name**: Khalid`). Agents carry the same identifier as a `persona_name` YAML frontmatter field. Rationale + full mapping table: [AgDR-0018](docs/agdr/AgDR-0018-persona-naming-convention.md).
+Each role has a **persona name** — a short identifier used in conversation, PR comments, and demo scripts. The persona name lives as a bold line at the top of the role file (e.g. `**Persona name**: Hisham`). Agents carry the same identifier as a `persona_name` YAML frontmatter field. Rationale: [AgDR-0018](docs/agdr/AgDR-0018-persona-naming-convention.md). The current roster of 15 agents: [AgDR-0301](docs/agdr/AgDR-0301-agent-roster-15.md).
 
 | Department | Roles (with persona names) | Path |
 |------------|----------------------------|------|
-| Engineering | Khalid (Head), Hisham (Tech Lead), Karim (Backend), Yasmin (Frontend), Salim (QA), Adel (Platform), Saif (SRE) | `roles/engineering/` |
+| Engineering | Hisham (Tech Lead), Karim (Backend), Yasmin (Frontend), Salim (QA), Adel (Platform), Saif (SRE) | `roles/engineering/` |
 | Architecture | Tariq (Solution Architect) | `roles/architecture/` |
-| Product | Omar (Head), Mariam (PM), Hanan (Product Analyst) | `roles/product/` |
-| Design | Maha (Head), Nour (UI Designer), Iman (UX Designer) | `roles/design/` |
-| Security | Faisal (Head), Hakim (Security Auditor), Hamza (Pen Tester) | `roles/security/` |
-| Data | Khalil (Head), Nadia (Data Analyst), Anwar (Data Engineer) | `roles/data/` |
+| Product | Mariam (PM) | `roles/product/` |
+| Design | Nour (UI Designer) | `roles/design/` |
+| Security | Hakim (Security Auditor), Hamza (Pen Tester) | `roles/security/` |
+| Data | Anwar (Data Engineer) | `roles/data/` |
+
+There are no department-head agents. Head-level approvals go to the human approver (AgDR-0301).
 
 ### Activation
 

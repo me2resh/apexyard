@@ -20,7 +20,7 @@ C4Container
         Container(overlay, ".cursor/", "hooks.json + rules", "Thin Cursor overlay. sessionStart maps session_id onto CLAUDE_CODE_SESSION_ID. Does not copy the Claude Code gates.")
         Container(skills, ".claude/skills/", "Markdown SKILL.md files", "Slash commands — /setup, /handover, /update, /status, /inbox, /approve-merge, /approve-design, /decide, /code-review, etc. Cursor's single skill root when third-party configs are on. Custom overrides win. Framework bak copies move to .claude/skill-framework-bak/ so Cursor does not list duplicates (AgDR-0187).")
         Container(agents, ".claude/agents/", "Markdown agent defs", "Sub-agent definitions — code-reviewer (Rex), security-reviewer (Hakim), dependency-auditor (Munir), solution-architect (Tariq), contrarian (Naqid), plus the department-aligned role agents.")
-        Container(roles, "roles/", "Markdown role files", "20 role definitions across engineering / product / design / security / data / architecture. Activated by role-triggers.md matcher rules.")
+        Container(roles, "roles/", "Markdown role files", "12 role definitions across engineering / product / design / security / data / architecture. Activated by role-triggers.md matcher rules.")
         Container(workflows, "workflows/", "Markdown process docs", "SDLC, code review, deployment — the prose contract for how work moves.")
         Container(registry, "apexyard.projects.yaml", "YAML", "Portfolio registry. Lists every managed project. Skills iterate this to aggregate across projects.")
         Container(onboarding, "onboarding.yaml", "YAML", "Per-fork configuration — company, team, tech stack, quality bar.")
@@ -71,7 +71,7 @@ The diagram captures which "container" does what *when interpreted by the right 
 
 - Specific hook-to-rule mapping (which hook enforces which rule) — see `docs/rule-audit.md` for that.
 - The full list of 66 skills — see `docs/claude-md-reference.md` § "Available skills".
-- The full list of 20 roles — see `.claude/rules/role-triggers.md`.
+- The full list of 12 roles — see `.claude/rules/role-triggers.md`.
 - The user's local `workspace/<name>/` clones of managed projects — they're gitignored and sit outside the ApexYard boundary (they belong to the managed project, not to ApexYard).
 
 ## Related diagrams
@@ -161,3 +161,5 @@ That guard is a text backstop (AgDR-0104). The typed commands stay. The gates st
 **2026-10-19 — Ticket marker session and branch warning (AgDR-0257, me2resh/apexyard#1533).** The ticket marker now records `session_id` and `branch`. `/start-ticket` asks before it overwrites a different ticket from a different session. Headless and `/fan-out` runs cancel and leave the marker unchanged. `require-active-ticket.sh` and `require-migration-ticket.sh` warn once per session when the marker session or branch does not match. The mismatch never blocks. Reasoning: two sessions in one clone overwrote the marker with no message, so edits passed against the wrong ticket. The C4 containers stay the same. The change is inside the hooks container and the start-ticket skill.
 
 **2026-10-19 — No macOS CI runners (AgDR-0259, me2resh/apexyard#1814).** Hook CI drops every `macos-latest` matrix leg. Linux jq-1.7 and jq-1.8 remain. `refresh-ready-prs.yml` runs on `workflow_dispatch` only. PR workflows cancel superseded runs. Every job has a timeout of 30 minutes or less. Bash 3.2 and macOS system awk run locally before push (`/bin/bash bin/run-hook-tests.sh`). Reasoning: macOS Actions minutes filled the CI queue and dominated list-price cost. The C4 containers stay the same. The change sits in `.github/workflows/` and contributor docs.
+
+**2026-11-14 — Agent roster from 23 to 15 (AgDR-0301, me2resh/apexyard#2027).** Eight agents merge into five receivers: the Tech Lead, the Product Manager, the UI Designer, the Security Auditor, and the Data Engineer. The roles container now holds 12 role files and 8 redirect stubs for one release. Head-level approvals go to the human approver. Rex, Hakim, and Tariq keep their review gates, and Naqid stays advisory. The C4 containers stay the same.

@@ -17,7 +17,7 @@ OMIT_AGENTS="code-reviewer solution-architect contrarian qa-engineer dependency-
 # The #1650 and #1662 evals found 4 misses of 19 without CLAUDE.md.
 # Report: docs/eval-agents/reports/review-agents-lean-2026-10-12.md.
 KEEP_AGENTS="security-reviewer"
-BUILD_AGENTS="backend-engineer frontend-engineer platform-engineer data-engineer product-manager ui-designer ux-designer"
+BUILD_AGENTS="backend-engineer frontend-engineer platform-engineer data-engineer product-manager ui-designer"
 FAIL=0
 
 pass() { printf '  ok   %s\n' "$1"; }
