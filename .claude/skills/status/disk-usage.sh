@@ -9,12 +9,13 @@
 # Read-only. It never deletes, never fetches, never blocks for long.
 # Folders measured (only folders that ApexYard owns):
 #   - <workspace>/*.worktrees       (worktrees of managed projects)
-#   - the review-copy folder        (review-copy.sh root; APEXYARD_REVIEW_COPY_ROOT)
+#   - review-copy folders           (review-copy.sh root, plus disk_budget.review_copy_roots)
 #   - <ops>/.claude/session         (session state)
 #   - build output in <workspace>/*/ (node_modules, target, build, dist, coverage)
 #
 # Reclaimable = worktrees and review copies older than sweep_min_age_days,
-# with no work at risk and a merged or closed PR. A blocked check gives "at least X".
+# with no uncommitted, untracked or stashed work, no commits that are not on
+# a remote, and a merged or closed PR. A blocked check gives "at least X".
 #
 # Inputs (env, all optional; tests use them):
 #   APEXYARD_OPS_ROOT      ops-fork root (default: walk up from this script)
@@ -37,7 +38,7 @@ case "$timebox" in ''|*[!0-9]*) timebox=6 ;; esac
 cd "$ops_root" 2>/dev/null || { echo "ApexYard disk use is unknown (no ops root)"; exit 0; }
 # Step 4 owns the disk_budget keys. Built-in defaults apply until they exist.
 max_gb=10; age_days=7
-review_roots=""; extra_paths=""
+review_roots_cfg=""; extra_paths=""
 workspace_dir=""
 if [ -f "$ops_root/.claude/hooks/_lib-read-config.sh" ]; then
   # shellcheck source=/dev/null
@@ -47,7 +48,7 @@ if [ -f "$ops_root/.claude/hooks/_lib-read-config.sh" ]; then
     age_days=$(config_get_or '.disk_budget.sweep_min_age_days' 7 2>/dev/null)
     cfg_timeout=$(config_get_or '.disk_budget.measure_timeout_seconds' '' 2>/dev/null)
     [ -n "${APEXYARD_DISK_TIMEBOX:-}" ] || timebox="$cfg_timeout"
-    review_roots=$(config_get '.disk_budget.review_copy_roots[]?' 2>/dev/null)
+    review_roots_cfg=$(config_get '.disk_budget.review_copy_roots[]?' 2>/dev/null)
     extra_paths=$(config_get '.disk_budget.extra_paths[]?' 2>/dev/null)
   fi
 fi
@@ -65,24 +66,60 @@ case "$age_days" in ''|*[!0-9]*) age_days=7 ;; esac
 if [ -n "${APEXYARD_REVIEW_COPY_ROOT:-}" ]; then
   default_root="${APEXYARD_REVIEW_COPY_ROOT%/}"
 else
-  tbase=$(CDPATH='' cd -- "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P) || tbase="${TMPDIR:-/tmp}"
+  [ -d "${TMPDIR:-/tmp}" ] && tbase="${TMPDIR:-/tmp}" || tbase=/tmp
+  tbase=$(CDPATH='' cd -- "$tbase" 2>/dev/null && pwd -P) || tbase="${TMPDIR:-/tmp}"
   default_root="${tbase%/}/apexyard-review-copies"
 fi
-[ -n "$review_roots" ] || review_roots="$default_root"
+# disk_budget.review_copy_roots ADDS folders; it never replaces the step-3
+# root (me2resh/apexyard#2078 review finding C). A relative entry resolves
+# against ops_root; a leading ~/ expands to $HOME, matching _db_resolve in
+# _lib-disk-budget.sh (step 4). Dedupe by physical path so a root listed
+# twice (or already equal to the default) is never measured twice.
+resolve_review_root() {
+  local raw="${1%/}" resolved metadata owner mode
+  # The case patterns match a literal ~ on purpose.
+  # shellcheck disable=SC2088
+  case "$raw" in
+    '~') raw="$HOME" ;;
+    '~/'*) raw="$HOME/${raw#\~/}" ;;
+    /*) ;;
+    *) raw="$ops_root/${raw#./}" ;;
+  esac
+  [ -d "$raw" ] && [ ! -L "$raw" ] || return 1
+  metadata=$(stat -c '%u %a' "$raw" 2>/dev/null) ||
+    metadata=$(stat -f '%u %Lp' "$raw" 2>/dev/null) || return 1
+  read -r owner mode <<< "$metadata"
+  [ "$owner" = "$(id -u)" ] || return 1
+  [[ "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+  (( (8#$mode & 0022) == 0 )) || return 1
+  if [ -d "$raw" ]; then
+    resolved=$(CDPATH='' cd -- "$raw" 2>/dev/null && pwd -P) || resolved="$raw"
+  else
+    resolved="$raw"
+  fi
+  printf '%s\n' "$resolved"
+}
+review_roots=$(
+  { printf '%s\n' "$default_root"; printf '%s\n' "$review_roots_cfg"; } |
+    while IFS= read -r r; do [ -n "$r" ] && resolve_review_root "$r"; done |
+    awk 'NF && !seen[$0]++'
+)
 
 start=$SECONDS
 deadline=$((start + timebox))
 
 # run_timed <seconds> <outfile> <cmd...>: run in background, kill at the limit.
-# Return 0 when the command finished in time, 1 when it was killed.
+# Preserve command failures; return 1 when the time limit expires.
 run_timed() {
   local limit=$1 out=$2 pid waited=0
   shift 2
+  [ "$SECONDS" -lt "$deadline" ] || return 1
   "$@" >"$out" 2>/dev/null &
   pid=$!
   while kill -0 "$pid" 2>/dev/null; do
     if [ "$waited" -ge $((limit * 5)) ]; then
       kill "$pid" 2>/dev/null
+      kill -KILL "$pid" 2>/dev/null
       wait "$pid" 2>/dev/null
       return 1
     fi
@@ -90,7 +127,6 @@ run_timed() {
     waited=$((waited + 1))
   done
   wait "$pid" 2>/dev/null
-  return 0
 }
 
 remaining() {
@@ -183,6 +219,11 @@ for wt_root in "$workspace_dir"/*.worktrees; do
       blocked=1; continue
     fi
     [ -s "$tmp/st" ] && continue
+    # A stash keeps the worktree: it holds uncommitted work.
+    if ! run_timed "$(remaining)" "$tmp/stash" env GIT_OPTIONAL_LOCKS=0 git -C "$wt" stash list; then
+      blocked=1; continue
+    fi
+    [ -s "$tmp/stash" ] && continue
     state=$(pr_state "$wt" "$gh_bin" pr list --head "$branch" --state all --json state --jq '.[0].state // "NONE"') || { blocked=1; continue; }
     case "$state" in
       MERGED|CLOSED) ;;
@@ -199,33 +240,73 @@ for wt_root in "$workspace_dir"/*.worktrees; do
   done < <(find "$wt_root" -mindepth 1 -maxdepth 1 -type d -mtime "+$age_days" 2>/dev/null)
 done
 
-# 2b. Review copies (age and PR come from the record that review-copy.sh writes).
+# 2b. Review copies (age and PR come from the record that review-copy.sh
+# writes). A copy gets the same "no work at risk" bar as a worktree
+# (me2resh/apexyard#2078 review finding B): no uncommitted, untracked or
+# stashed work, and no commits that are not on a remote.
 if command -v jq >/dev/null 2>&1; then
   while IFS= read -r root; do
     [ -n "$root" ] && [ -d "$root" ] || continue
     for copy in "$root"/*/; do
       copy=${copy%/}
+      [ -d "$copy/.git" ] && [ ! -L "$copy/.git" ] || continue
       rec="$copy/.git/apexyard-review-copy.json"
       [ -f "$rec" ] || continue
       if [ "$SECONDS" -ge "$deadline" ]; then blocked=1; break 2; fi
       repo=$(jq -r '.repo // empty' "$rec" 2>/dev/null)
       pr=$(jq -r '.pr // empty' "$rec" 2>/dev/null)
       created=$(jq -r '.created_at // empty' "$rec" 2>/dev/null)
+      rec_sha=$(jq -r '.head_sha // empty' "$rec" 2>/dev/null)
       case "$pr" in ''|*[!0-9]*) blocked=1; continue ;; esac
-      [ -n "$repo" ] && [ -n "$created" ] || { blocked=1; continue; }
+      [ -n "$created" ] || { blocked=1; continue; }
       c_epoch=$(iso_epoch "$created") || c_epoch=""
       case "$c_epoch" in ''|*[!0-9]*) blocked=1; continue ;; esac
       [ $((now_epoch - c_epoch)) -ge "$min_age" ] || continue
-      state=$(pr_state "$copy" "$gh_bin" pr view "$pr" --repo "$repo" --json state --jq .state) || { blocked=1; continue; }
-      case "$state" in
-        MERGED|CLOSED) add_size "$copy" ;;
-        OPEN) ;;
-        *) blocked=1 ;;
+      # Old records without an owner cannot identify the PR safely.
+      [[ "$repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || continue
+      full_repo="$repo"
+      [ ! -L "$copy" ] || continue
+      if ! run_timed "$(remaining)" "$tmp/wt" env GIT_OPTIONAL_LOCKS=0 git -C "$copy" worktree list --porcelain; then
+        blocked=1; continue
+      fi
+      [ "$(awk '/^worktree /{n++} END{print n+0}' "$tmp/wt")" = 1 ] || continue
+      # Uncommitted, untracked or stashed work keeps the copy.
+      if ! run_timed "$(remaining)" "$tmp/st" env GIT_OPTIONAL_LOCKS=0 git -C "$copy" status --porcelain; then
+        blocked=1; continue
+      fi
+      [ -s "$tmp/st" ] && continue
+      if ! run_timed "$(remaining)" "$tmp/stash" env GIT_OPTIONAL_LOCKS=0 git -C "$copy" stash list; then
+        blocked=1; continue
+      fi
+      [ -s "$tmp/stash" ] && continue
+      pr_info=$(pr_state "$copy" "$gh_bin" pr view "$pr" --repo "$full_repo" --json state,headRefOid --jq '[.state,(.headRefOid // "")] | join("|")') || { blocked=1; continue; }
+      cp_state=${pr_info%%|*}
+      cp_pr_head=${pr_info#*|}
+      case "$cp_state" in
+        MERGED|CLOSED) ;;
+        OPEN) continue ;;
+        *) blocked=1; continue ;;
       esac
+      # Unpushed commits keep the copy, unless HEAD is a remote-tracking
+      # commit, the recorded head, or the PR's live head (same rule as the
+      # step-4 sweep, bin/apexyard-disk-sweep.sh).
+      # Include all local refs, so a saved branch cannot lose unique work.
+      exclusions=()
+      for sha in "$rec_sha" "$cp_pr_head"; do
+        [[ "$sha" =~ ^[0-9a-fA-F]{40,64}$ ]] || continue
+        exclusions+=("^$sha")
+      done
+      if ! run_timed "$(remaining)" "$tmp/local" env GIT_OPTIONAL_LOCKS=0 git -C "$copy" rev-list --count HEAD --all --not --remotes --not "${exclusions[@]}"; then
+        blocked=1; continue
+      fi
+      [ "$(tr -d '[:space:]' <"$tmp/local")" = 0 ] || continue
+      add_size "$copy"
     done
   done <<EOF_RROOTS
 $review_roots
 EOF_RROOTS
+else
+  blocked=1
 fi
 
 if [ "$blocked" = 1 ]; then

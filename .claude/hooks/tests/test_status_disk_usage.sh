@@ -104,23 +104,110 @@ case "$out" in
 esac
 
 # --- 5b. a review copy older than the age limit with a merged PR is reclaimable.
-mkdir -p "$sb/copies/r-pr7/.git"
-dd if=/dev/zero of="$sb/copies/r-pr7/blob" bs=1024 count=2048 2>/dev/null
-printf '{"repo":"o/r","pr":7,"created_at":"2020-01-01T00:00:00Z"}\n' > "$sb/copies/r-pr7/.git/apexyard-review-copy.json"
-mkdir -p "$sb/copies/r-pr8/.git"
-printf '{"repo":"o/r","pr":8,"created_at":"2099-01-01T00:00:00Z"}\n' > "$sb/copies/r-pr8/.git/apexyard-review-copy.json"
+copy="$sb/copies/o__r-pr7"
+git init -q "$copy"
+dd if=/dev/zero of="$copy/blob" bs=1024 count=2048 2>/dev/null
+git -C "$copy" add blob
+git -C "$copy" -c user.email=t@t -c user.name=t commit -qm blob
+sha=$(git -C "$copy" rev-parse HEAD)
+record() {
+  jq -n --arg repo "$1" --arg sha "$sha" --arg path "$copy" \
+    '{repo:$repo,pr:7,head_sha:$sha,session:"test",created_at:"2020-01-01T00:00:00Z",path:$path}' > "$copy/.git/apexyard-review-copy.json"
+}
+record o/r
 rm -rf "$sb/workspace/proj.worktrees/old"
 git -C "$sb" worktree prune
-out=$(run_helper "$sb" "$gh")
-case "$out" in
-  *"; 2.0 MB can be reclaimed"|*"; 2 MB can be reclaimed") ok review-copy-reclaimable ;;
-  *) bad review-copy-reclaimable "$out" ;;
+# Assert both the record repo and PR reach gh unchanged.
+cat > "$gh" <<'SHIM'
+#!/bin/bash
+case "$*" in
+  'pr view 7 --repo o/r --json state,headRefOid --jq '*) echo 'MERGED|' ;;
+  *) exit 1 ;;
 esac
+SHIM
+expect_copy() {
+  local label=$1 expected=$2 result
+  result=$(run_helper "$sb" "$gh")
+  case "$result" in
+    *"; $expected can be reclaimed") ok "$label" ;;
+    *) bad "$label" "$result" ;;
+  esac
+}
+expect_copy review-copy-reclaimable '2 MB'
+record r
+expect_copy ownerless-record-kept '0 KB'
+record o/r
 out=$(run_helper "$sb" "$ghopen")
-case "$out" in
-  *"; 0 KB can be reclaimed") ok review-copy-open-kept ;;
-  *) bad review-copy-open-kept "$out" ;;
-esac
+case "$out" in *'; 0 KB can be reclaimed') ok review-copy-open-kept ;; *) bad review-copy-open-kept "$out" ;; esac
+
+echo changed >> "$copy/blob"
+expect_copy dirty-copy-kept '0 KB'
+git -C "$copy" checkout -q -- blob
+echo new > "$copy/untracked"
+expect_copy untracked-copy-kept '0 KB'
+rm "$copy/untracked"
+echo stash >> "$copy/blob"
+git -C "$copy" -c user.email=t@t -c user.name=t stash -q
+expect_copy stashed-copy-kept '0 KB'
+git -C "$copy" stash drop -q
+git -C "$copy" -c user.email=t@t -c user.name=t commit -q --allow-empty -m local
+expect_copy unpushed-copy-kept '0 KB'
+git -C "$copy" branch saved-local
+git -C "$copy" reset -q --hard "$sha"
+git -C "$copy" checkout -q --detach "$sha"
+expect_copy unpushed-other-branch-kept '0 KB'
+git -C "$copy" branch -D saved-local >/dev/null
+git -C "$copy" worktree add -q --detach "$sb/extra-wt" "$sha"
+expect_copy extra-worktree-kept '0 KB'
+git -C "$copy" worktree remove "$sb/extra-wt"
+expect_copy clean-copy-reclaimable '2 MB'
+
+# Configured roots add to the step-3 root and physical duplicates count once.
+mkdir -p "$sb/additional"
+cp -R "$copy" "$sb/additional/o__r-pr7"
+printf '{"disk_budget":{"review_copy_roots":["additional","copies"]}}\n' > "$sb/.claude/project-config.json"
+expect_copy additive-deduplicated-roots '4 MB'
+# Leading ~/ resolves against HOME.
+printf '{"disk_budget":{"review_copy_roots":["~/additional"]}}\n' > "$sb/.claude/project-config.json"
+old_home=$HOME
+export HOME="$sb"
+expect_copy home-root '4 MB'
+export HOME="$old_home"
+rm "$sb/.claude/project-config.json"
+
+# Unsafe roots are excluded from measurement as well as reclaimability.
+check_unsafe_root() {
+  local label=$1 result
+  result=$(run_helper "$sb" "$gh")
+  case "$result" in
+    'ApexYard is using '*'; 0 KB can be reclaimed')
+      case "$result" in *' MB;'*|*' GB;'*) bad "$label" "$result" ;; *) ok "$label" ;; esac ;;
+    *) bad "$label" "$result" ;;
+  esac
+}
+mv "$sb/copies" "$sb/real-copies"
+ln -s "$sb/real-copies" "$sb/copies"
+check_unsafe_root symlink-root-excluded
+rm "$sb/copies"
+mv "$sb/real-copies" "$sb/copies"
+for mode in 770 707; do
+  chmod "$mode" "$sb/copies"
+  check_unsafe_root "writable-root-$mode-excluded"
+done
+chmod 700 "$sb/copies"
+# Simulate foreign ownership without requiring chown privileges.
+mkdir "$sb/shims"
+real_stat=$(command -v stat)
+cat > "$sb/shims/stat" <<SHIM
+#!/bin/bash
+case "\$*" in *"$sb/copies"*) echo '999999 700' ;; *) exec "$real_stat" "\$@" ;; esac
+SHIM
+chmod +x "$sb/shims/stat"
+old_path=$PATH
+export PATH="$sb/shims:$PATH"
+check_unsafe_root foreign-owned-root-excluded
+export PATH="$old_path"
+expect_copy safe-root-restored '2 MB'
 mkdir -p "$sb/workspace/proj.worktrees/old"
 
 # --- 6. budget from config: a 0 GB budget marks the line over budget.

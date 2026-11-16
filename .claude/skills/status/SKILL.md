@@ -184,11 +184,11 @@ bash "$ops_root/.claude/skills/status/disk-usage.sh"
 ```
 
 Example: `ApexYard is using 12.3 GB; 9.1 GB can be reclaimed`.
-The helper measures only folders that ApexYard owns: worktrees under `workspace/*.worktrees`, the review-copy folder, `.claude/session`, and build output in the project clones.
-Reclaimable means a worktree or review copy that is older than `disk_budget.sweep_min_age_days` (default 7), has no uncommitted, untracked or unpushed work, and has a merged or closed PR. Review copies come from `review-copy.sh` (`APEXYARD_REVIEW_COPY_ROOT` or `<temp dir>/apexyard-review-copies`); the age comes from the copy record.
+The helper measures only folders that ApexYard owns: worktrees under `workspace/*.worktrees`, review-copy folders, `.claude/session`, and build output in the project clones.
+Reclaimable means a worktree or review copy that is older than `disk_budget.sweep_min_age_days` (default 7), has no uncommitted, untracked or stashed work, has no commits that are not on a remote, and has a merged or closed PR. Review copies come from `review-copy.sh`'s root (`APEXYARD_REVIEW_COPY_ROOT` or `<temp dir>/apexyard-review-copies`) plus every folder in `disk_budget.review_copy_roots` — the configured roots ADD to the step-3 root, they never replace it. The age comes from the copy record. The record must identify the repo as `owner/name`; older records without an owner are not reclaimable. Copies with extra worktrees are kept. Review roots must be real directories owned by the current user, without group or world write permission.
 When a check is blocked (for example a detached HEAD), the line says `at least X can be reclaimed`.
 When the total is above `disk_budget.max_owned_gb` (default 10), the line ends with `(over the N GB budget)`. Step 4 owns the `disk_budget` keys; this helper reads them with built-in defaults.
-The helper has a time box of `disk_budget.measure_timeout_seconds` (default 6). A timeout prints `ApexYard disk use is unknown`. Briefing mode does not run it.
+The helper has a time box of `disk_budget.measure_timeout_seconds` (default 6 when the key is absent). A timeout prints `ApexYard disk use is unknown`. Briefing mode does not run it.
 This section is read-only. It never removes anything. Step 4 of me2resh/apexyard#2070 owns the sweep.
 
 ## Portfolio output
