@@ -42,7 +42,7 @@ SHIM
 
 run_helper() { # $1 sandbox, $2 gh
   # Size assertions need complete measurements, including on slower CI runners.
-  APEXYARD_DISK_TIMEBOX=60 APEXYARD_OPS_ROOT="$1" APEXYARD_GH="$2" TMPDIR="$1/tmp" APEXYARD_REVIEW_COPY_ROOT="$1/copies" bash "$HELPER"
+  APEXYARD_DISK_TIMEBOX=60 APEXYARD_OPS_ROOT="$1" APEXYARD_GH="$2" TMPDIR="$1/tmp" APEXYARD_REVIEW_COPY_ROOT="$1/copies" bash "$HELPER" "${@:3}"
 }
 
 # --- 1. empty sandbox: 0 KB used, 0 KB reclaimable, one line.
@@ -124,6 +124,11 @@ case "$out" in
   *"; at least "*" can be reclaimed") ok gh-missing-lower-bound ;;
   *) bad gh-missing-lower-bound "$out" ;;
 esac
+
+json=$(run_helper "$sb" /nonexistent/gh --json)
+if jq -e '.schema == "apexyard.disk-usage/1" and .reclaimable_is_lower_bound == true and .timed_out == false and (.used_bytes | type == "number") and (.reclaimable_bytes | type == "number") and .max_owned_bytes == 10737418240' <<< "$json" >/dev/null; then
+  ok json-lower-bound-fields
+else bad json-lower-bound-fields "$json"; fi
 
 # --- 5b. a review copy older than the age limit with a merged PR is reclaimable.
 copy="$sb/copies/o__r-pr7"
@@ -269,6 +274,19 @@ case "$out" in
   'ApexYard disk use is unknown (measurement timed out)') ok timeout-message ;;
   *) bad timeout-message "$out" ;;
 esac
+
+json=$(APEXYARD_DISK_TIMEBOX=0 APEXYARD_OPS_ROOT="$sb" bash "$HELPER" --json)
+if jq -e '.timed_out == true and .used_bytes == null and .reclaimable_bytes == null and .reclaimable_is_lower_bound == false' <<< "$json" >/dev/null; then
+  ok json-timeout
+else bad json-timeout "$json"; fi
+json=$(APEXYARD_OPS_ROOT="$sb/missing" bash "$HELPER" --json)
+if jq -e '.used_bytes == null and .reclaimable_bytes == null and .timed_out == false' <<< "$json" >/dev/null; then
+  ok json-no-root
+else bad json-no-root "$json"; fi
+json=$(run_helper "$sb" "$gh" --json)
+if jq -e '.reclaimable_is_lower_bound == false and .timed_out == false and (.used_bytes | floor == .)' <<< "$json" >/dev/null; then
+  ok json-complete
+else bad json-complete "$json"; fi
 
 # --- 9. the briefing stays at 4 lines and has no disk line.
 mkdir -p "$sb/.claude/skills/status"

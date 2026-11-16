@@ -337,3 +337,10 @@ The shim walks up from `$PWD` looking for the apexyard fork root — the `.apexy
 ---
 
 *Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+
+Machine readers can run `disk-usage.sh --json` for one JSON object.
+The schema is `apexyard.disk-usage/1`.
+Fields are `used_bytes`, `reclaimable_bytes`, `reclaimable_is_lower_bound`, `timed_out`, and `max_owned_bytes`.
+Byte counts are integers. Unavailable measurements have null used and reclaimable counts.
+The lower-bound flag matches “at least” in text output. The timeout flag matches “measurement timed out”.
+The schema string changes its version number only on a breaking change.
