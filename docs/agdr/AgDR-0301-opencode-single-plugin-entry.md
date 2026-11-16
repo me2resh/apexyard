@@ -47,4 +47,5 @@ The drift check in `bin/manage-portfolio-adapters.sh` reports that directory as 
 
 - A running opencode session must restart after re-running the installer, because the plugin set is read at startup.
 - `--target-dir` keeps its meaning (the discovery directory). `--name` now names a directory beside that directory.
+- The installer refuses three inputs that would put the code back inside a scanned directory or delete an operator's files: a `--target-dir` not named `plugins`, a `--name` equal to that directory's own name, and a code directory that already exists without an adapter entry.
 - AgDR-0299's shim decision stands. Its "top-level files only" measurement no longer describes 2.x.

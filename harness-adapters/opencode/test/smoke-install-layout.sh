@@ -18,9 +18,10 @@
 # drift from what the script actually produces) into a scratch directory,
 # then:
 #
-#   1. Asserts the discovery directory (`.opencode/plugins/`) contains NO
-#      top-level `.ts` files — every adapter file lives one level down,
-#      inside the `apexyard/` subdirectory.
+#   1. Asserts the discovery directory (`.opencode/plugins/`) contains exactly
+#      ONE top-level `.ts` file — the `apexyard.ts` shim — and NO `apexyard/`
+#      code subdirectory, because opencode 2.x discovers
+#      `<discovery>/<name>/index.ts` as well (#2072).
 #   2. Dynamically imports ONLY the code entry (`.opencode/apexyard/index.ts`) — the
 #      one file opencode's subdirectory discovery would actually load — and
 #      asserts the import succeeds (every relative import in the chain:
@@ -40,8 +41,9 @@
 #
 # This does NOT re-verify a live, model-driven opencode session (that gap is
 # already documented in docs/opencode-adapter.md's "honest breakdown" table
-# and is unrelated to install layout) — it verifies the install layout
-# itself never reproduces the #844 crash again.
+# and is unrelated to install layout) — it verifies the install layout itself
+# never reproduces the #844 crash again, and that the installer leaves exactly
+# one discovered entry (#2072).
 #
 # RUN
 # ---
@@ -229,6 +231,69 @@ if [ "$(cat "$P5/.opencode/plugins/apexyard.ts")" = 'export { default } from "..
   echo "PASS: upgrade run moved the code directory out of the discovery dir and rewrote the shim."
 else
   echo "FAIL: upgrade run did not produce the single-entry layout" >&2; FAIL=1
+fi
+
+echo ""
+echo "== Check 6: inputs that would destroy the discovery dir or a neighbour are refused =="
+# --name equal to the discovery dir's own name makes the code path BE the
+# discovery dir, and the installer removes that path with rm -rf. It deleted
+# every plugin the operator had installed there (#2072 review).
+P6="$TMPDIR/name-collision"
+mkdir -p "$P6/.opencode/plugins"
+printf 'export const mine = 1;\n' > "$P6/.opencode/plugins/operator-plugin.ts"
+if bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P6/.opencode/plugins" --name plugins >/dev/null 2>&1; then
+  echo "FAIL: installer accepted --name plugins, which collides with the discovery dir" >&2; FAIL=1
+elif [ ! -f "$P6/.opencode/plugins/operator-plugin.ts" ]; then
+  echo "FAIL: the refused run still deleted the operator's plugin" >&2; FAIL=1
+else
+  echo "PASS: --name plugins refused and the operator's plugin is intact."
+fi
+# A target that is not a discovery directory is refused before the code path is
+# derived from its parent: `--target-dir .opencode` put the code at
+# <project>/apexyard and deleted the operator's own apexyard/ there.
+P6B="$TMPDIR/bad-target"
+mkdir -p "$P6B/.opencode" "$P6B/apexyard"
+printf 'notes\n' > "$P6B/apexyard/notes.md"
+if bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P6B/.opencode" >/dev/null 2>&1; then
+  echo "FAIL: installer accepted a --target-dir that is not a discovery directory" >&2; FAIL=1
+elif [ ! -f "$P6B/apexyard/notes.md" ]; then
+  echo "FAIL: the refused run still deleted the operator's apexyard/ directory" >&2; FAIL=1
+else
+  echo "PASS: a non-discovery --target-dir is refused and its neighbour is intact."
+fi
+# A trailing `/.` used to spell the code path two ways, so the legacy removal
+# deleted the copy the same run had just written and left a dangling shim.
+P6C="$TMPDIR/trailing-dot"
+mkdir -p "$P6C/.opencode/plugins"
+bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P6C/.opencode/plugins/." >/dev/null
+if [ -f "$P6C/.opencode/apexyard/index.ts" ] && [ ! -e "$P6C/.opencode/plugins/apexyard" ]; then
+  echo "PASS: a trailing '/.' target still produces the single-entry layout."
+else
+  echo "FAIL: a trailing '/.' target deleted the code directory or left a second entry" >&2; FAIL=1
+fi
+
+echo ""
+echo "== Check 7: the installer will not remove a directory it did not write =="
+P7="$TMPDIR/foreign-dest"
+mkdir -p "$P7/.opencode/plugins" "$P7/.opencode/custom"
+printf 'notes\n' > "$P7/.opencode/custom/notes.md"
+if bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P7/.opencode/plugins" --name custom >/dev/null 2>&1; then
+  echo "FAIL: installer removed a foreign directory at its code path" >&2; FAIL=1
+elif [ ! -f "$P7/.opencode/custom/notes.md" ]; then
+  echo "FAIL: the refused run still deleted the foreign directory" >&2; FAIL=1
+else
+  echo "PASS: a foreign directory at the code path is refused and left intact."
+fi
+
+echo ""
+echo "== Check 8: the installer verifies one discovered entry instead of claiming one =="
+P8="$TMPDIR/second-shim"
+mkdir -p "$P8/.opencode/plugins"
+printf 'export { default } from "../apexyard/index.ts";\n' > "$P8/.opencode/plugins/other.ts"
+if bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P8/.opencode/plugins" >/dev/null 2>&1; then
+  echo "FAIL: installer reported success with a second shim re-exporting the same code dir" >&2; FAIL=1
+else
+  echo "PASS: a second shim is refused instead of reported as a single entry."
 fi
 
 echo ""

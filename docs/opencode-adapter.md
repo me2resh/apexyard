@@ -69,6 +69,8 @@ bash test/smoke-install-layout.sh           # real install layout: exports only 
 
 **Still open**: a live end-to-end re-run under opencode 1.x. `server()` serves that path again, but this change exercised only the V2 dispatch path live. Unit tests cover the V1 hook shape.
 
+**Layout change ([#2072](https://github.com/me2resh/apexyard/issues/2072), 2026-11-16).** The live runs above loaded the code from `.opencode/plugins/apexyard/`, the pre-#2072 layout. The dispatcher code and the V2 registration did not change; only the install path moved. No live opencode run covers the new path yet. The "one discovered entry" claim rests on the layout and on a Node import of the shim, not on a server log.
+
 ## Relationship to the pi and Codex adapters
 
 | Adapter | Gate source | Mechanism |

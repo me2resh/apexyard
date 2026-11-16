@@ -78,12 +78,16 @@ Keeping the code directory outside the discovery dir stops opencode 2.x
 from loading the adapter a second time through <discovery>/<name>/index.ts.
 
 Options:
-  --target-dir PATH  Directory opencode scans for plugins.
-                      Defaults to "<cwd>/.opencode/plugins" (PLURAL — see
-                      this script's header comment) — run this script from
-                      the project you want opencode to enforce gates in.
-  --name NAME         Subdirectory name under the discovery dir's parent.
-                      Default: apexyard.
+  --target-dir PATH  Directory opencode scans for plugins. It must be named
+                      "plugins" (or the singular "plugin", which opencode
+                      does not scan — a warning prints). Defaults to
+                      "<cwd>/.opencode/plugins" (PLURAL — see this script's
+                      header comment) — run this script from the project you
+                      want opencode to enforce gates in.
+  --name NAME         Subdirectory name beside the discovery dir. Default:
+                      apexyard. It must differ from the discovery dir's own
+                      name, and the installer refuses to delete a directory at
+                      that path that is not one of its own installs.
   --root PATH         Path to the apexyard ops fork (where harness-adapters/
                        lives). Defaults to this script's own repo root.
   -h, --help          Show this help.
@@ -128,9 +132,36 @@ ADAPTER_SRC="$ROOT/harness-adapters/opencode/src"
 SHARED_CORE="$ROOT/harness-adapters/_shared/derive-gates-core.ts"
 [ -z "$TARGET_DIR" ] && TARGET_DIR="$(pwd)/.opencode/plugins"
 
-# The install path is deleted with `rm -rf "$TARGET_DIR/$NAME"` below, so a
-# blank or path-escaping --name must be rejected rather than expanding to the
-# target dir itself.
+# Resolve the target to ONE spelling before anything is derived from it. The
+# legacy-directory removal below decides by string comparison, so `plugins/.`
+# and `plugins` would compare unequal, and the second spelling would delete the
+# copy this same run had just written (#2072 review).
+while :; do
+  case "$TARGET_DIR" in
+    */) TARGET_DIR="${TARGET_DIR%/}" ;;
+    */.) TARGET_DIR="${TARGET_DIR%/.}" ;;
+    *) break ;;
+  esac
+done
+case "$TARGET_DIR" in
+  /*) ;;
+  *) TARGET_DIR="$PWD/$TARGET_DIR" ;;
+esac
+
+case "$(basename "$TARGET_DIR")" in
+  plugins|plugin) ;;
+  *)
+    echo "ERROR: --target-dir must be opencode's plugin discovery directory, which is named 'plugins' (got: '$TARGET_DIR')." >&2
+    echo "       The code directory is installed BESIDE it, so any other name puts the code where opencode never looks." >&2
+    exit 2
+    ;;
+esac
+
+# The install path is deleted with `rm -rf "$DEST"` below, so a blank or
+# path-escaping --name must be rejected. So must a name that collapses onto the
+# directory it is derived from: `--name plugins` with the default --target-dir
+# makes $DEST the discovery dir itself, and the rm -rf would then delete every
+# plugin the adopter installed there.
 case "$NAME" in
   ""|.|..|*/*)
     echo "ERROR: --name must be a single non-empty path segment (got: '$NAME') — it is removed with rm -rf under the target dir." >&2
@@ -143,6 +174,11 @@ case "$NAME" in
     exit 2
     ;;
 esac
+if [ "$NAME" = "$(basename "$TARGET_DIR")" ]; then
+  echo "ERROR: --name '$NAME' is the discovery directory's own name — that would put the code inside the directory opencode scans." >&2
+  echo "       Pass a different --name, for example the default 'apexyard'." >&2
+  exit 2
+fi
 
 # The code lives beside the discovery directory, never inside it: opencode 2.x
 # also discovers `<discovery>/<name>/index.ts`, so an in-tree subdirectory is
@@ -160,6 +196,19 @@ LEGACY_DEST="$TARGET_DIR/$NAME"
 for link_path in "$CODE_PARENT" "$TARGET_DIR" "$DEST" "$SHIM"; do
   if [ -L "$link_path" ]; then
     echo "ERROR: refusing to install: $link_path is a symlink. Remove it or install into a real directory." >&2
+    exit 1
+  fi
+done
+
+# $DEST and $LEGACY_DEST are removed with rm -rf, so only remove a directory
+# this installer wrote. A directory at either path with no adapter entry at
+# index.ts is the operator's; deleting it is data loss. A single-segment
+# --target-dir reaches the project root, where an `apexyard/` of the operator's
+# own is a plausible neighbour.
+for owned in "$DEST" "$LEGACY_DEST"; do
+  if [ -e "$owned" ] && [ ! -f "$owned/index.ts" ]; then
+    echo "ERROR: refusing to remove $owned: it exists and is not an apexyard adapter install." >&2
+    echo "       Move it aside, or pass a different --name." >&2
     exit 1
   fi
 done
@@ -197,6 +246,15 @@ if ! grep -Eq 'from ["'"'"']\./derive-gates-core\.ts["'"'"']' "$DEST/derive-gate
   exit 1
 fi
 
+# A pre-#2072 install kept the code inside the discovery directory. Leaving it
+# in place would keep the double load alive, so remove it BEFORE the shim goes
+# in: if the removal fails, `set -e` stops the run with the old layout intact
+# and no new shim. Writing the shim first left two live entries whenever the
+# removal failed (#2072 review).
+if [ "$LEGACY_DEST" != "$DEST" ] && [ -d "$LEGACY_DEST" ]; then
+  rm -rf "$LEGACY_DEST"
+fi
+
 # Write the shim LAST, after every check passed, so a failed install never
 # leaves a shim that points at a broken copy. opencode 1.x discovers top-level
 # files only (`{plugin,plugins}/*.{ts,js}`) and 2.x discovers both those and
@@ -211,11 +269,23 @@ printf 'export { default } from "../%s/index.ts";\n' "$NAME" > "$SHIM_TMP"
 chmod 644 "$SHIM_TMP"
 mv -f "$SHIM_TMP" "$SHIM"
 
-# A pre-#2072 install kept the code inside the discovery directory. Leaving
-# that directory in place would keep the double load alive, so remove it once
-# the new copy and shim are in place.
-if [ "$LEGACY_DEST" != "$DEST" ] && [ -d "$LEGACY_DEST" ]; then
-  rm -rf "$LEGACY_DEST"
+# #2072 asks the installer to VERIFY a single entry, not to claim one. Count the
+# discovered files that re-export THIS install: a second shim is a second plugin
+# instance, and an in-tree code directory is the 2.x second entry. Other plugins
+# in the same directory belong to the operator and are not counted here.
+shims=0
+for discovered in "$TARGET_DIR"/*.ts "$TARGET_DIR"/*.js; do
+  if [ -f "$discovered" ] && grep -Fq "from \"../$NAME/index.ts\"" "$discovered"; then
+    shims=$((shims + 1))
+  fi
+done
+if [ -d "$TARGET_DIR/$NAME" ]; then
+  echo "ERROR: $TARGET_DIR/$NAME still exists — opencode 2.x discovers its index.ts and loads the adapter twice (#2072)." >&2
+  exit 1
+fi
+if [ "$shims" -ne 1 ]; then
+  echo "ERROR: expected exactly one shim re-exporting ../$NAME/index.ts in $TARGET_DIR, found $shims — opencode would load $shims adapter instances (#2072)." >&2
+  exit 1
 fi
 
 if [ "$(basename "$TARGET_DIR")" = "plugin" ]; then
