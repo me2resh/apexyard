@@ -27,7 +27,7 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 
 ## Activated role
 
-When `/validate-idea` runs, activate the **[Product Manager](../../../roles/product/product-manager.md)** role for the validation read-out, with optional handoff to **[Head of Product](../../../roles/product/head-of-product.md)** if the verdict is `green` and a roadmap-impact call is needed. The role's "is this worth doing?" lens is exactly the right perspective.
+When `/validate-idea` runs, activate the **[Product Manager](../../../roles/product/product-manager.md)** role for the validation read-out, with optional handoff to the **human approver** (AgDR-0301) if the verdict is `green` and a roadmap-impact call is needed. The role's "is this worth doing?" lens is exactly the right perspective.
 
 See `.claude/rules/role-triggers.md` for the activation protocol.
 

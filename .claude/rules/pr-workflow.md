@@ -239,7 +239,7 @@ This rule also applies to other destructive / externally-visible / hard-to-rever
 
 ## Build agents cannot self-review
 
-A build-class sub-agent (backend-engineer, frontend-engineer, platform-engineer, product-manager, data-engineer, ui-designer, ux-designer) starts as a spawned agent to implement a ticket. It cannot nest the Agent tool, which means it cannot spawn the real `code-reviewer` (Rex). Any "review" a build agent produces is the author reviewing their own work: not an independent pass.
+A build-class sub-agent (backend-engineer, frontend-engineer, platform-engineer, product-manager, data-engineer, ui-designer) starts as a spawned agent to implement a ticket. It cannot nest the Agent tool, which means it cannot spawn the real `code-reviewer` (Rex). Any "review" a build agent produces is the author reviewing their own work: not an independent pass.
 
 **This matters for the merge gate.** The two-reviews requirement (workflow-gates rule #5) depends on Rex being a separate agent with a separate context. Suppose a build agent impersonates Rex: it frames its final report as "Rex Code Review: Verdict: APPROVED" and fabricates a `*-rex.approved` marker. That satisfies the *filename* of the gate requirement without satisfying its *intent*. It is a visible rule violation, not an edge case.
 

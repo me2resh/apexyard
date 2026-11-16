@@ -16,7 +16,7 @@ Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 
 ## Phase 1: Planning
 
-> **Primary role**: [Tech Lead](../roles/engineering/tech-lead.md) · **Supporting**: [Product Manager](../roles/product/product-manager.md), [Head of Engineering](../roles/engineering/head-of-engineering.md) · **Trigger**: new feature enters the sprint with an approved PRD
+> **Primary role**: [Tech Lead](../roles/engineering/tech-lead.md) · **Supporting**: [Product Manager](../roles/product/product-manager.md), the human approver (new stacks, major designs) · **Trigger**: new feature enters the sprint with an approved PRD
 >
 > Read the Tech Lead role file and adopt it before starting this phase. See [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md) for the full activation protocol.
 
@@ -58,7 +58,7 @@ Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 
 ## Phase 1.5: Journey Preview (optional, recommended for UI-heavy features)
 
-> **Primary role**: [UX Designer](../roles/design/ux-designer.md) · **Supporting**: [Product Manager](../roles/product/product-manager.md) (PRD source), [UI Designer](../roles/design/ui-designer.md) (visual review) · **Skill**: `/journey`
+> **Primary role**: [UI Designer](../roles/design/ui-designer.md) (user flows and visual review) · **Supporting**: [Product Manager](../roles/product/product-manager.md) (PRD source, checks the journey against the PRD) · **Skill**: `/journey`
 >
 > Slots between an approved PRD and the tech-design phase. Optional — skip for tiny features and pure-backend changes; use it when the feature has a multi-page user flow that will benefit from a "preview before build" check.
 
@@ -81,7 +81,7 @@ Skill reference: `.claude/skills/journey/SKILL.md`. Rendering decision rationale
 
 ## Phase 2: Technical Design
 
-> **Primary role**: [Tech Lead](../roles/engineering/tech-lead.md) (authors the design) · **Reviewer**: [Solution Architect](../roles/architecture/solution-architect.md) (Tariq — independently reviews the design before Build; the non-code analog of Rex) · **Escalation**: [Head of Engineering](../roles/engineering/head-of-engineering.md) (enterprise / cross-project / new-tech-stack architecture) · **Supporting**: [UX Designer](../roles/design/ux-designer.md), [UI Designer](../roles/design/ui-designer.md) (if UI involved)
+> **Primary role**: [Tech Lead](../roles/engineering/tech-lead.md) (authors the design) · **Reviewer**: [Solution Architect](../roles/architecture/solution-architect.md) (Tariq — independently reviews the design before Build; the non-code analog of Rex) · **Escalation**: the human approver (enterprise / cross-project / new-tech-stack architecture) · **Supporting**: [UI Designer](../roles/design/ui-designer.md) (if UI involved)
 >
 > The Tech Lead **authors** the technical design; the Solution Architect **reviews** it. Author and reviewer are separate by design. When the design lands as a PR, `require-architecture-review.sh` gates the merge on Tariq's sign-off (Gate 3b) — the design must be sound before the team builds against it.
 
@@ -97,7 +97,7 @@ Skill reference: `.claude/skills/journey/SKILL.md`. Rendering decision rationale
 |----------|-------|--------|
 | Write technical design | Tech Lead / Senior Engineer | Design document |
 | Design review (`/design-review`) | Solution Architect (Tariq) | Architecture sign-off or required changes |
-| Architecture escalation | Head of Engineering (if enterprise / cross-project / new tech) | Approval |
+| Architecture escalation | Human approver (if enterprise / cross-project / new tech) | Approval |
 | Break into tasks | Tech Lead | Task list with estimates |
 | Identify risks | Tech Lead | Risk register |
 
@@ -355,7 +355,7 @@ Record the reused result in the post-merge sign-off. If evidence is incomplete, 
 
 ## Phase 7: Monitor
 
-> **Primary role**: [SRE](../roles/engineering/sre.md) · **Escalation**: [Head of Engineering](../roles/engineering/head-of-engineering.md) on sustained incident · **Trigger**: deployment to production, first 24-48h watch window
+> **Primary role**: [SRE](../roles/engineering/sre.md) · **Escalation**: [Tech Lead](../roles/engineering/tech-lead.md), then the human approver, on sustained incident · **Trigger**: deployment to production, first 24-48h watch window
 
 ### Entry Criteria
 
@@ -388,12 +388,12 @@ Every phase has a primary role that activates automatically when the phase start
 | Phase | Primary role | Supporting roles |
 |-------|--------------|------------------|
 | Planning | [Tech Lead](../roles/engineering/tech-lead.md) | [Product Manager](../roles/product/product-manager.md), Engineers |
-| Technical Design | [Tech Lead](../roles/engineering/tech-lead.md) (author) | [Solution Architect](../roles/architecture/solution-architect.md) (reviewer, gate), [Head of Engineering](../roles/engineering/head-of-engineering.md) (escalation), [UX Designer](../roles/design/ux-designer.md) / [UI Designer](../roles/design/ui-designer.md) |
+| Technical Design | [Tech Lead](../roles/engineering/tech-lead.md) (author) | [Solution Architect](../roles/architecture/solution-architect.md) (reviewer, gate), human approver (escalation), [UI Designer](../roles/design/ui-designer.md) |
 | Build | [Backend Engineer](../roles/engineering/backend-engineer.md) / [Frontend Engineer](../roles/engineering/frontend-engineer.md) | [Tech Lead](../roles/engineering/tech-lead.md) |
 | Code Review | [Tech Lead](../roles/engineering/tech-lead.md) + Rex | [Security Auditor](../roles/security/security-auditor.md) (if auth), [UI Designer](../roles/design/ui-designer.md) (if UI) |
 | QA | [QA Engineer](../roles/engineering/qa-engineer.md) | Engineers (bug fixes) |
 | Deploy | [Platform Engineer](../roles/engineering/platform-engineer.md) | [SRE](../roles/engineering/sre.md) |
-| Monitor | [SRE](../roles/engineering/sre.md) | [Head of Engineering](../roles/engineering/head-of-engineering.md) (escalation) |
+| Monitor | [SRE](../roles/engineering/sre.md) | [Tech Lead](../roles/engineering/tech-lead.md), human approver (escalation) |
 
 ---
 
