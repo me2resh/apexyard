@@ -213,6 +213,14 @@ mkdir -p "$TMP/elsewhere"
 git -C "$PROJ" worktree add -q "$TMP/elsewhere/wt" -b feature/GH-1-elsewhere 2>/dev/null
 printf '[{"number":5,"state":"MERGED","headRefOid":"x"}]\n' > "$MOCK/list-feature_GH-1-elsewhere.json"
 
+# Bash 3.2 must enumerate worktrees even when the review-root array is empty.
+override '{"disk_budget":{"review_copy_roots":[],"sweep_min_age_days":7}}'
+dry=$(cd "$OPS" && APEXYARD_REVIEW_COPY_ROOT="$TMP/missing-review-copies" PATH="$TMP/ghbin:$PATH" "$BASH" "$SWEEP" 2>&1); rc=$?
+check "no review root: dry run exits 0" "[ $rc -eq 0 ]"
+check "no review root: no unbound variable" "! printf '%s' \"\$dry\" | grep -q 'unbound variable'"
+removes=$(printf '%s\n' "$dry" | sed -n '/^Remove/,/^$/p')
+check "no review root: eligible worktree is listed" "printf '%s' \"\$removes\" | grep -q '/merged '"
+
 # Review copies in the step-3 shape (AgDR-0305): a standalone clone with
 # <copy>/.git/apexyard-review-copy.json. The root comes from
 # APEXYARD_REVIEW_COPY_ROOT, as review-copy.sh reads it.

@@ -290,7 +290,7 @@ evaluate() {
   PR_REF=""
   PR_STATE=""
   if [ -L "$path" ]; then _keep "symbolic link, not followed"; return; fi
-  if _in_list "$(dirname "$path")" "${REVIEW_ROOTS[@]}"; then
+  if [ "${#REVIEW_ROOTS[@]}" -gt 0 ] && _in_list "$(dirname "$path")" "${REVIEW_ROOTS[@]}"; then
     _is_review_child "$path" || { _keep "unsafe review-copy root or path"; return; }
   fi
   real=$(disk_budget_real "$path") || { _keep "folder is missing"; return; }
@@ -392,7 +392,7 @@ candidates() {
   local root child
   [ "${#ROOTS[@]}" -gt 0 ] || return 0
   for root in "${ROOTS[@]}"; do
-    if _in_list "$root" "${REVIEW_ROOTS[@]}"; then
+    if [ "${#REVIEW_ROOTS[@]}" -gt 0 ] && _in_list "$root" "${REVIEW_ROOTS[@]}"; then
       _db_safe_review_root "$root" >/dev/null || continue
     fi
     for child in "$root"/*; do
