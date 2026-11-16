@@ -12,7 +12,7 @@
 #
 # Usage:
 #   review-copy.sh root
-#   review-copy.sh create <repo-url> <repo-slug> <pr-number> [<head-sha>]
+#   review-copy.sh create <repo-url> <owner/name> <pr-number> [<head-sha>]
 #   review-copy.sh list
 #   review-copy.sh remove <copy-path>
 #
@@ -37,18 +37,39 @@ rc_root() {
 
 rc_die() { printf 'review-copy: %s\n' "$*" >&2; exit 1; }
 
+# Validate before resolving so a symlink cannot hide behind its destination.
+rc_checked_root() {
+  local root metadata owner mode
+  root=$(rc_root) || rc_die "cannot resolve the review copy root"
+  [ ! -L "$root" ] || rc_die "root must not be a symlink: $root"
+  if [ ! -e "$root" ]; then
+    # Parent directories may be shared. Only the review root needs mode 0700.
+    # shellcheck disable=SC2174
+    mkdir -m 700 -p "$root" || rc_die "cannot create $root"
+  fi
+  [ -d "$root" ] || rc_die "root must be a real directory: $root"
+  if metadata=$(stat -c '%u %a' "$root" 2>/dev/null); then
+    :
+  else
+    metadata=$(stat -f '%u %Lp' "$root" 2>/dev/null) || rc_die "cannot inspect root: $root"
+  fi
+  read -r owner mode <<< "$metadata"
+  [ "$owner" = "$(id -u)" ] || rc_die "root must be owned by the current user: $root"
+  [[ "$mode" =~ ^[0-7]{3,4}$ ]] || rc_die "cannot read root permissions: $root"
+  (( (8#$mode & 0022) == 0 )) || rc_die "root must not be group- or world-writable: $root"
+  (cd "$root" && pwd -P) || rc_die "cannot resolve $root"
+}
+
 rc_create() {
-  local url="${1:-}" slug="${2:-}" pr="${3:-}" sha="${4:-}" root dir got now
-  [ -n "$url" ] && [ -n "$slug" ] && [ -n "$pr" ] || rc_die "usage: create <repo-url> <repo-slug> <pr-number> [<head-sha>]"
+  local url="${1:-}" repo="${2:-}" pr="${3:-}" sha="${4:-}" root dir got now
+  [ -n "$url" ] && [ -n "$repo" ] && [ -n "$pr" ] || rc_die "usage: create <repo-url> <owner/name> <pr-number> [<head-sha>]"
   case "$pr" in ''|*[!0-9]*) rc_die "pr-number must be digits" ;; esac
-  case "$slug" in ''|*[!A-Za-z0-9._-]*) rc_die "repo-slug may hold only letters, digits, dot, dash, underscore" ;; esac
+  [[ "$repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || rc_die "repo must be owner/name with safe letters, digits, dot, dash or underscore"
   case "$sha" in *[!0-9a-f]*) rc_die "head-sha must be lower-case hex" ;; esac
   command -v jq >/dev/null 2>&1 || rc_die "jq is required"
-  root=$(rc_root) || rc_die "cannot resolve the review copy root"
-  mkdir -p "$root" || rc_die "cannot create $root"
-  root=$(cd "$root" && pwd -P) || rc_die "cannot resolve $root"
-  dir="$root/$slug-pr$pr"
-  [ ! -e "$dir" ] || rc_die "$dir exists; run remove first"
+  root=$(rc_checked_root) || exit 1
+  dir="$root/${repo%/*}__${repo#*/}-pr$pr"
+  [ ! -e "$dir" ] && [ ! -L "$dir" ] || rc_die "$dir exists; run remove first"
   git init -q "$dir" || rc_die "git init failed"
   cd "$dir" || rc_die "cannot enter $dir"
   if ! git remote add origin "$url" \
@@ -63,7 +84,7 @@ rc_create() {
     rc_die "PR $pr head is $got, not $sha; the PR changed"
   fi
   now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  if ! jq -n --arg repo "$slug" --argjson pr "$pr" --arg sha "$got" \
+  if ! jq -n --arg repo "$repo" --argjson pr "$pr" --arg sha "$got" \
     --arg session "${CLAUDE_CODE_SESSION_ID:-unknown}" --arg created "$now" --arg path "$dir" \
     '{repo:$repo,pr:$pr,head_sha:$sha,session:$session,created_at:$created,path:$path}' \
     > "$dir/.git/$RECORD_NAME"; then
@@ -76,22 +97,23 @@ rc_create() {
 
 rc_list() {
   local root f
-  root=$(rc_root) || rc_die "cannot resolve the review copy root"
-  [ -d "$root" ] || return 0
+  root=$(rc_checked_root) || exit 1
   for f in "$root"/*/.git/"$RECORD_NAME"; do
     [ -f "$f" ] || continue
-    jq -c . "$f" 2>/dev/null || printf '{"path":"%s","error":"unreadable record"}\n' "${f%/.git/*}"
+    jq -c 'if (.repo | type) == "string" then
+      if (.repo | test("^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")) then . else .repo = "unknown" end
+      else .repo = "unknown" end' "$f" 2>/dev/null || printf '{"path":"%s","error":"unreadable record"}\n' "${f%/.git/*}"
   done
 }
 
 rc_remove() {
   local target="${1:-}" root phys
   [ -n "$target" ] || rc_die "usage: remove <copy-path>"
-  root=$(rc_root) || rc_die "cannot resolve the review copy root"
+  root=$(rc_checked_root) || exit 1
+  [ ! -L "${target%/}" ] || rc_die "copy must not be a symlink: $target"
   [ -d "$target" ] || rc_die "$target is not a folder"
   phys=$(cd "$target" && pwd -P) || rc_die "cannot resolve $target"
-  root=$(cd "$root" 2>/dev/null && pwd -P) || rc_die "root folder is missing"
-  case "$phys" in "$root"/*) ;; *) rc_die "$phys is outside $root" ;; esac
+  [ "${phys%/*}" = "$root" ] || rc_die "$phys must be a direct child of $root"
   [ -f "$phys/.git/$RECORD_NAME" ] || rc_die "$phys has no review copy record; not removed"
   [ -d "$phys/.git" ] && [ ! -L "$phys/.git" ] || rc_die "$phys is not a standalone clone"
   rm -rf "$phys"
