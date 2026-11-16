@@ -21,14 +21,21 @@ fi
 # `echo hi; git add -A`, `FOO=1 git add -A`, `sudo git add -A`, a `bash -c`
 # wrapper and a multi-line script each reach the same staging command.
 # A quoted mention — a commit message, a printf payload, a PR body — stays
-# allowed, because the `git` there follows a quote rather than a separator.
+# allowed when the `git` there follows a quote or any other character that is
+# not a command separator. A parenthesised mention such as "(git add -A)" is
+# allowed for the same reason: `(` and `{` are prose punctuation as often as
+# command openers, and treating them as command positions would block ordinary
+# review prose. That is a false block on an ordinary command (kind 1,
+# AgDR-0267), so it outranks the catch. The cost is deliberate and named:
+# `(git add -A)` and `{ git add -A; }` are NOT caught. `dev` did not catch
+# them either, so they are exotic shapes that stay advisory (epic #1846).
 # A heredoc body is NOT stripped before this check: the governance rule in
 # _lib-strip-heredoc.sh forbids deciding whether a gate fires from stripped
 # text, so a body line that starts with `git add -A` still blocks. Write the
 # message with `-F <file>`, or quote the mention.
 _add_flag='(-A|--all|\.)'
-_add_tail='([[:space:];&|)]|$)'
-_add_pos='(^[[:space:]]*|[;&|({][[:space:]]*|[[:space:]](then|do|else)[[:space:]]+)'
+_add_tail='([[:space:];&|]|$)'
+_add_pos='(^[[:space:]]*|[;&|][[:space:]]*|[[:space:]](then|do|else)[[:space:]]+)'
 _add_prefix='((sudo|env|command|nohup|time|exec|builtin)[[:space:]]+)*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*'
 _add_git='git[[:space:]]+((-[Cc]|--git-dir|--work-tree)[[:space:]]+[^[:space:];&|]+[[:space:]]+)*add[[:space:]]+'"${_add_flag}${_add_tail}"
 _add_wrapped="${_add_pos}${_add_prefix}(bash|sh|zsh|dash)([[:space:]]+-[A-Za-z-]+)*[[:space:]]+-[A-Za-z]*c[A-Za-z]*[[:space:]]+.*git[[:space:]]+add[[:space:]]+${_add_flag}"

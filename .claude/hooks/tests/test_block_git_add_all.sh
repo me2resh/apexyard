@@ -10,7 +10,12 @@
 # the hook matches `git add -A / --all / .` at a COMMAND position — start of a
 # line, after a shell separator, after `then`/`do`/`else`, past a common command
 # prefix (sudo/env/assignments) or a `-c` shell wrapper. A quoted mention (a
-# commit message, a printf payload, a PR body) stays allowed.
+# commit message, a printf payload, a PR body) stays allowed, and so does a
+# parenthesised one: `(` and `{` are prose punctuation as often as command
+# openers, so blocking them would be a false block on an ordinary command
+# (AgDR-0267). `(git add -A)` and `{ git add -A; }` are therefore NOT caught —
+# an exotic-shape residue that `dev` also left open (epic #1846), not a
+# regression.
 #
 # Exit 0 if every case passes; 1 on the first failing case.
 
@@ -61,8 +66,6 @@ expect 2 'sudo git add -A'
 expect 2 'env GIT_DIR=.git git add -A'
 expect 2 'git -C sub add -A'
 expect 2 'git -c user.name=x add --all'
-expect 2 '(git add -A)'
-expect 2 '{ git add -A; }'
 expect 2 'if true; then git add -A; fi'
 expect 2 'make && git add . && git commit -m build'
 expect 2 "bash -c 'git add -A'"
@@ -80,6 +83,20 @@ expect 0 'git commit -m "never run git add -A"'
 expect 0 'gh pr comment 1 --body "do not use git add -A"'
 expect 0 'grep -rn "git add -A" docs/'
 expect 0 "printf '%s' '{\"tool_input\":{\"command\":\"git add -A\"}}'"
+
+# A parenthesised or braced mention is ordinary review prose. `dev` allowed it
+# and the head must not block it (a false block on an ordinary command is kind
+# 1, AgDR-0267). These four cases are the regression this matrix exists to pin.
+expect 0 'git commit -m "docs: explain why (git add -A) is blocked"'
+expect 0 'gh pr comment 2073 --body "the guard blocks (git add -A) at command position"'
+expect 0 'printf "%s\n" "example: (git add -A)"'
+expect 0 'echo "note; (git add -A) is blocked"'
+
+# Deliberate residue, not a regression: `(` and `{` are not command positions
+# here, so a real subshell or brace group that stages the whole tree is missed.
+# `dev` missed it too; the class belongs to epic #1846.
+expect 0 '(git add -A)'
+expect 0 '{ git add -A; }'
 
 # --- routing: the dispatcher must reach the gate without a prefix -----------
 # The gate table row carries no command predicate any more, and the hook is in
