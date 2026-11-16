@@ -278,10 +278,10 @@ If `MERGE_RC` = 3 (`tracker.kind: none`, no host CLI configured):
 
 When the merged PR adds a slice record, print `Next: /orbit handoff --slice <path> to file the proposed slice.`
 
-### 9a. Optional: offer to remove the merged PR's worktree
+### 9a. Optional: offer to remove the merged PR's worktree and review copies
 
 Skip unless `MERGE_RC` is 0 without `--no-merge`. Follow docs/skills/approve-merge-worktree-offer.md.
-List candidates with `.claude/skills/approve-merge/remove-worktree.sh list "<source-tree>" "<head-branch>" --merged-head "<merged-head-sha>"`, using the verified PR head from step 4. For `owner unknown`, follow the linked release procedure. Never offer force release for an `alive` owner. Ask with `AskUserQuestion` ("Remove it" or "Keep it") and show the listed ignored files. On "Remove it", run the `remove` command from that doc. Remove only a listed path, after a yes, and never with `--force`.
+Run `.claude/skills/approve-merge/remove-worktree.sh` `list` and `list-copies` with `--merged-head "<merged-head-sha>"`, the verified PR head from step 4. For `owner unknown`, follow the linked release procedure. Never offer force release for an `alive` owner. Propose all `ok` rows and their ignored files in one `AskUserQuestion`. On a yes, run `remove` or `remove-copy` from that doc. Remove only a listed path, never with `--force`.
 
 ### 10. Optional: post-merge child-issue closure
 
