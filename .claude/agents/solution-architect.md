@@ -70,6 +70,7 @@ Use either scratch pattern:
 
 The orchestrator prepares the clone before arming the active-reviewer marker.
 `block-reviewer-repo-mutation.sh` blocks `git clone`, `git fetch`, and `git checkout` during active review.
+Use `review-copy.sh`.
 
 If a hook blocks a scratch-clone or export command, stop that step.
 Report the exact command, hook name, and message to the orchestrator.
