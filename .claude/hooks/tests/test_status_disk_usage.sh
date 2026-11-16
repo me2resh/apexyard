@@ -41,7 +41,8 @@ SHIM
 }
 
 run_helper() { # $1 sandbox, $2 gh
-  APEXYARD_OPS_ROOT="$1" APEXYARD_GH="$2" TMPDIR="$1/tmp" APEXYARD_REVIEW_COPY_ROOT="$1/copies" bash "$HELPER"
+  # Size assertions need complete measurements, including on slower CI runners.
+  APEXYARD_DISK_TIMEBOX=60 APEXYARD_OPS_ROOT="$1" APEXYARD_GH="$2" TMPDIR="$1/tmp" APEXYARD_REVIEW_COPY_ROOT="$1/copies" bash "$HELPER"
 }
 
 # --- 1. empty sandbox: 0 KB used, 0 KB reclaimable, one line.
@@ -118,7 +119,7 @@ rm -f "$sb/workspace/proj.worktrees/old/untracked.txt"
 touch -t 202001010000 "$sb/workspace/proj.worktrees/old"
 
 # --- 5. gh missing: the check is blocked, so the figure is a lower bound.
-out=$(APEXYARD_OPS_ROOT="$sb" APEXYARD_GH="/nonexistent/gh" TMPDIR="$sb/tmp" APEXYARD_REVIEW_COPY_ROOT="$sb/copies" bash "$HELPER")
+out=$(APEXYARD_DISK_TIMEBOX=60 APEXYARD_OPS_ROOT="$sb" APEXYARD_GH="/nonexistent/gh" TMPDIR="$sb/tmp" APEXYARD_REVIEW_COPY_ROOT="$sb/copies" bash "$HELPER")
 case "$out" in
   *"; at least "*" can be reclaimed") ok gh-missing-lower-bound ;;
   *) bad gh-missing-lower-bound "$out" ;;
