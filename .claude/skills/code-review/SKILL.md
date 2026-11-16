@@ -104,7 +104,7 @@ rm -f "$active_marker"
 
 The marker is keyed on session, repo, PR and review kind (me2resh/apexyard#1649). Each review writes and clears only its own file, so reviews run at the same time. The mutation lock applies to review agents only; the orchestrator and build agents can keep working. Use the same `<owner/repo>`, `<pr>` and kind in the write step and the exit step. Spawn the reviewer with the Agent tool and `subagent_type: code-reviewer`. Never use `general-purpose`: the lock finds a review agent by that type.
 
-Nothing mechanically stops a build-class sub-agent writing the same file; what makes Rex's marker legitimate is that a real, independent review happened. See `.claude/hooks/warn-review-marker-write.sh` and `.claude/rules/pr-workflow.md` § "Build agents cannot self-review".
+Nothing mechanically stops a build-class sub-agent writing the same file; Rex's marker is legitimate because a real, independent review happened. See `.claude/hooks/warn-review-marker-write.sh` and `.claude/rules/pr-workflow.md` § "Build agents cannot self-review".
 
 ### 0a. Never hand the reviewer a marker path (me2resh/apexyard#1144)
 
@@ -118,17 +118,15 @@ correct resolution: the agent obeys the instruction it was handed, and the
 marker lands at the bare-number `<pr>-rex.approved` instead. **No gate reads
 that path** — there is no bare-number fallback on any on-disk marker lookup.
 
-The failure is silent in the dangerous direction. `ls .claude/session/reviews/`
-shows a file that reads, to a human, like a valid approval; only the merge
-attempt reveals otherwise. And at that moment the obvious repair — moving the
-file into place — is marker forging, the behaviour
+The failure is silent. `ls .claude/session/reviews/` shows a file that
+looks like a valid approval; only the merge attempt shows otherwise. The
+obvious repair — moving the file into place — is marker forging, the behaviour
 [`pr-workflow.md`](../../rules/pr-workflow.md) § "Build agents cannot
 self-review" exists to prevent. The right recovery is always: delete the
 gate-invisible file and re-run a real review.
 
-`warn-unqualified-review-marker.sh` warns (advisory, never blocks) when a
-bare-number marker appears, and the merge gates name the near-miss in their
-refusal message — but the cheap fix is upstream of both: don't pass a path.
+`warn-unqualified-review-marker.sh` warns (advisory) on a bare-number marker,
+and the merge gates name the near-miss. The cheap fix is upstream: pass no path.
 
 1. Fetch PR details and the latest commit SHA
 2. Get the diff
@@ -140,9 +138,10 @@ refusal message — but the cheap fix is upstream of both: don't pass a path.
 
 **Body path (AgDR-0266).** Rex writes the body with Write to `<ops-root>/.claude/session/reviews/bodies/<owner>__<repo>__<pr>-rex.md` (`review_body_path`), then posts it with `tracker_review_submit <owner/repo> <pr> comment <body_file>`. Not a heredoc.
 
+Rex does not edit the `ready-to-merge` label. After the marker clears, edit it in its own Bash call.
 On GitHub, add `ready-to-merge` after APPROVED: `gh pr edit {number} --repo "$PR_HOST_REPO" --add-label ready-to-merge`.
 Remove it after CHANGES REQUESTED: `gh pr edit {number} --repo "$PR_HOST_REPO" --remove-label ready-to-merge`.
-A label failure changes no verdict or marker.
+A denied or failed label call changes no verdict and no marker.
 
 ### 8. Offer pre-merge QA after APPROVED
 

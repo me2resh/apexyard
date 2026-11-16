@@ -120,7 +120,7 @@ as evidence the PR is up to date.
 After each integration-branch push, the workflow refreshes only the oldest eligible behind PR with the `ready-to-merge` label.
 Eligible PRs are open, non-draft, and from the same repository.
 A failed attempt stops the refresh run.
-Rex adds the label on APPROVED and removes it on CHANGES REQUESTED.
+The `/code-review` orchestrator adds the label on APPROVED and removes it on CHANGES REQUESTED. Rex does not edit the label.
 A new non-merge commit removes the label and needs another Rex review.
 Base-branch merge commits retain the label. Carry-over keeps Rex's approval only when the existing check returns `true`.
 A refresh failure comment means the orchestrator must resolve the conflict or API failure.

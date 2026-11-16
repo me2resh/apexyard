@@ -558,9 +558,9 @@ Add a `### Fallow Findings  *(advisory — JS/TS static analysis, changed scope)
 6. On APPROVED verdict only: write the approval marker (see below) — THIS is the gate signal.
 ```
 
-On GitHub, add `ready-to-merge` after APPROVED: `gh pr edit {number} --repo "$PR_HOST_REPO" --add-label ready-to-merge`.
-Remove it after CHANGES REQUESTED: `gh pr edit {number} --repo "$PR_HOST_REPO" --remove-label ready-to-merge`.
-Report label failures without changing the verdict or approval marker.
+Do NOT add or remove the `ready-to-merge` label. The `/code-review` orchestrator owns the label.
+Write the approval marker in its own Bash call, with no other side effect. Do not put `gh pr edit` or any label edit in that call.
+The auto-mode classifier denies a marker call that also edits a label, and then no marker is written.
 
 **CRITICAL**: Always include the commit SHA in your review. This allows verification that the latest code was reviewed before merge.
 
