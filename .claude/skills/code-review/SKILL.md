@@ -42,7 +42,7 @@ See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the ful
 
 For tests and probes, use the scratch-clone pattern in `.claude/agents/code-reviewer.md` § "Running tests in a scratch clone". If a hook blocks a command, stop and report the command, hook, and message. Never disguise a command to bypass a hook.
 
-The reviewer mutation lock blocks `git clone`, `git fetch`, and `git checkout` while the active-reviewer marker exists. Prepare the scratch clone and fetch the PR head before step 0 arms the marker.
+The reviewer mutation lock blocks `git clone`, `git fetch`, and `git checkout` while the active-reviewer marker exists. Make the light copy (`docs/skills/review-copies.md`) before step 0 arms the marker.
 
 ## Process
 
