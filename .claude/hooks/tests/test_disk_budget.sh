@@ -332,6 +332,27 @@ check "apply: plan deleted" "[ ! -e '$OPS/.claude/session/disk-sweep/plan-$plan_
 (cd "$OPS" && PATH="$TMP/ghbin:$PATH" bash "$SWEEP" --apply "$plan_id") >/dev/null 2>&1; rc=$?
 check "apply: a used plan cannot run again" "[ $rc -ne 0 ]"
 
+# JSON plans preserve unusual paths and can be applied without re-enumeration.
+odd="$RC_ROOT/space \"quote"
+make_copy "$odd" 7 2026-01-01T00:00:00Z
+control="$RC_ROOT/"$'back\\slash\nline\tcontrol\001'
+make_copy "$control" 7 2026-01-01T00:00:00Z
+json=$(cd "$OPS" && PATH="$TMP/ghbin:$PATH" bash "$SWEEP" --json 2>"$TMP/json.err")
+if jq -e --arg path "$odd" '.schema == "apexyard.disk-sweep-plan/1" and (.plan_id | type == "string") and any(.items[]; .path == $path and .kind == "clone" and (.bytes | type == "number") and (.reason | length > 0)) and any(.kept[]; .reason | contains("stash")) and any(.kept[]; .reason | contains("additional worktrees"))' <<< "$json" >/dev/null; then
+  pass "JSON plan: fields, escaped path and keep reasons"
+else fail "JSON plan: fields, escaped path and keep reasons"; fi
+if jq -e --arg path "$control" 'any(.items[]; .path == $path)' <<< "$json" >/dev/null; then
+  pass "JSON plan: newline and control characters"
+else fail "JSON plan: newline and control characters"; fi
+json_plan=$(jq -r .plan_id <<< "$json")
+printf 'later\n' > "$odd/later.txt"
+# Add another eligible copy after planning. It must survive apply.
+make_copy "$RC_ROOT/not-planned" 7 2026-01-01T00:00:00Z
+applied_json=$(cd "$OPS" && PATH="$TMP/ghbin:$PATH" bash "$SWEEP" --apply "$json_plan" --json 2>"$TMP/json.err"); rc=$?
+if [ "$rc" -eq 0 ] && jq -e --arg path "$odd" '.schema == "apexyard.disk-sweep-apply/1" and (.removed | type == "array") and any(.skipped[]; .path == $path and (.reason | contains("uncommitted")))' <<< "$applied_json" >/dev/null && jq -e --arg path "$control" 'any(.removed[]; .path == $path and (.reason | length > 0))' <<< "$applied_json" >/dev/null && [ ! -e "$control" ] && [ -f "$odd/later.txt" ] && [ -d "$RC_ROOT/not-planned" ]; then
+  pass "JSON apply: saved plan and dirty protection"
+else fail "JSON apply: saved plan and dirty protection"; fi
+
 # The tracker is not gh: no PR lookup, everything is kept.
 override '{"tracker":{"kind":"none"}}'
 rm -f "$MOCK/calls"
@@ -342,5 +363,5 @@ check "tracker not gh: no gh call" "[ ! -f '$MOCK/calls' ]"
 measured=$(cd "$OPS" && bash "$SWEEP" --measure 2>&1); rc=$?
 check "measure: lists owned folders" "[ $rc -eq 0 ] && printf '%s' \"\$measured\" | grep -q 'proj.worktrees'"
 
-printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
+printf '\nTotal: %s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

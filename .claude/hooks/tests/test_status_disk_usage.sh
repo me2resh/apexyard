@@ -23,7 +23,7 @@ mk_sandbox() {
   local sb
   sb=$(mktemp -d); sb=$(cd "$sb" && pwd -P)
   mkdir -p "$sb/.claude/hooks" "$sb/.claude/session" "$sb/workspace"
-  for lib in _lib-read-config.sh _lib-portfolio-paths.sh; do
+  for lib in _lib-read-config.sh _lib-portfolio-paths.sh _lib-disk-budget.sh; do
     [ -f "$SRC_ROOT/.claude/hooks/$lib" ] && cp "$SRC_ROOT/.claude/hooks/$lib" "$sb/.claude/hooks/$lib"
   done
   cp "$SRC_ROOT/.claude/project-config.defaults.json" "$sb/.claude/project-config.defaults.json"
@@ -42,7 +42,7 @@ SHIM
 
 run_helper() { # $1 sandbox, $2 gh
   # Size assertions need complete measurements, including on slower CI runners.
-  APEXYARD_DISK_TIMEBOX=60 APEXYARD_OPS_ROOT="$1" APEXYARD_GH="$2" TMPDIR="$1/tmp" APEXYARD_REVIEW_COPY_ROOT="$1/copies" bash "$HELPER"
+  APEXYARD_DISK_TIMEBOX=60 APEXYARD_OPS_ROOT="$1" APEXYARD_GH="$2" TMPDIR="$1/tmp" APEXYARD_REVIEW_COPY_ROOT="$1/copies" bash "$HELPER" "${@:3}"
 }
 
 # --- 1. empty sandbox: 0 KB used, 0 KB reclaimable, one line.
@@ -124,6 +124,11 @@ case "$out" in
   *"; at least "*" can be reclaimed") ok gh-missing-lower-bound ;;
   *) bad gh-missing-lower-bound "$out" ;;
 esac
+
+json=$(run_helper "$sb" /nonexistent/gh --json)
+if jq -e '.schema == "apexyard.disk-usage/1" and .reclaimable_is_lower_bound == true and .timed_out == false and (.used_bytes | type == "number") and (.reclaimable_bytes | type == "number") and .max_owned_bytes == 10737418240' <<< "$json" >/dev/null; then
+  ok json-lower-bound-fields
+else bad json-lower-bound-fields "$json"; fi
 
 # --- 5b. a review copy older than the age limit with a merged PR is reclaimable.
 copy="$sb/copies/o__r-pr7"
@@ -256,6 +261,36 @@ case "$out" in
   *"(over the 0 GB budget)") ok config-budget ;;
   *) bad config-budget "$out" ;;
 esac
+# Decimal, leading-zero and large budgets use the SessionStart number rule.
+check_budget() {
+  local label=$1 value=$2 expected=$3 result
+  printf '{"disk_budget":{"max_owned_gb":%s}}\n' "$value" > "$sb/.claude/project-config.json"
+  result=$(run_helper "$sb" "$gh" --json)
+  if jq -e --argjson expected "$expected" '
+    .max_owned_bytes == $expected and
+    (.max_owned_bytes | type == "number" and . >= 0 and floor == .)
+  ' <<< "$result" >/dev/null; then
+    ok "$label"
+  else bad "$label" "$result"; fi
+}
+check_budget decimal-budget 2.5 2684354560
+check_budget leading-zero-budget '"08"' 8589934592
+check_budget large-budget 99999999999 107374182398926258176
+check_budget invalid-budget '"invalid"' 10737418240
+
+# A small fractional budget proves the text comparison and label use it too.
+check_budget fractional-over-budget 0.001 1073742
+out=$(run_helper "$sb" "$gh")
+case "$out" in
+  *"(over the 0.001 GB budget)") ok fractional-text-budget ;;
+  *) bad fractional-text-budget "$out" ;;
+esac
+check_budget decimal-under-budget 2.5 2684354560
+out=$(run_helper "$sb" "$gh")
+case "$out" in
+  *"(over the "*) bad decimal-text-budget "$out" ;;
+  *) ok decimal-text-budget ;;
+esac
 rm -f "$sb/.claude/project-config.json"
 
 # --- 7. nothing is removed by a run.
@@ -269,6 +304,19 @@ case "$out" in
   'ApexYard disk use is unknown (measurement timed out)') ok timeout-message ;;
   *) bad timeout-message "$out" ;;
 esac
+
+json=$(APEXYARD_DISK_TIMEBOX=0 APEXYARD_OPS_ROOT="$sb" bash "$HELPER" --json)
+if jq -e '.timed_out == true and .used_bytes == null and .reclaimable_bytes == null and .reclaimable_is_lower_bound == false' <<< "$json" >/dev/null; then
+  ok json-timeout
+else bad json-timeout "$json"; fi
+json=$(APEXYARD_OPS_ROOT="$sb/missing" bash "$HELPER" --json)
+if jq -e '.used_bytes == null and .reclaimable_bytes == null and .timed_out == false' <<< "$json" >/dev/null; then
+  ok json-no-root
+else bad json-no-root "$json"; fi
+json=$(run_helper "$sb" "$gh" --json)
+if jq -e '.reclaimable_is_lower_bound == false and .timed_out == false and (.used_bytes | floor == .)' <<< "$json" >/dev/null; then
+  ok json-complete
+else bad json-complete "$json"; fi
 
 # --- 9. the briefing stays at 4 lines and has no disk line.
 mkdir -p "$sb/.claude/skills/status"
