@@ -242,12 +242,30 @@ printf '{"number":8,"state":"MERGED","headRefOid":"0123456789abcdef"}\n' > "$MOC
 # copy-y: record, but created today.
 make_copy "$RC_ROOT/copy-y" 9 "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 printf '{"number":9,"state":"MERGED","headRefOid":"0123456789abcdef"}\n' > "$MOCK/view-9.json"
+# Saved work outside HEAD must survive.
+make_copy "$RC_ROOT/copy-stash" 7 2026-01-01T00:00:00Z
+printf 'saved work\n' > "$RC_ROOT/copy-stash/saved.txt"
+git -C "$RC_ROOT/copy-stash" stash push -q --include-untracked
+make_copy "$RC_ROOT/copy-side" 7 2026-01-01T00:00:00Z
+copy_head=$(git -C "$RC_ROOT/copy-side" rev-parse HEAD)
+git -C "$RC_ROOT/copy-side" checkout -q -b side
+git -C "$RC_ROOT/copy-side" commit -q --allow-empty -m "side work"
+git -C "$RC_ROOT/copy-side" checkout -q --detach "$copy_head"
+make_copy "$RC_ROOT/copy-worktrees" 7 2026-01-01T00:00:00Z
+git -C "$RC_ROOT/copy-worktrees" worktree add -q --detach "$TMP/copy-linked"
+# Unsafe roots must not even have their children listed.
+mkdir -p "$TMP/linked-root-target" "$TMP/world-root"
+make_copy "$TMP/linked-root-target/unsafe-link-copy" 7 2026-01-01T00:00:00Z
+make_copy "$TMP/world-root/unsafe-mode-copy" 7 2026-01-01T00:00:00Z
+ln -s "$TMP/linked-root-target" "$TMP/linked-root"
+chmod 0777 "$TMP/world-root"
+
 # copy-e: under a configured extra root.
 mkdir -p "$TMP/extra-rc"
 make_copy "$TMP/extra-rc/copy-e" 7 2026-01-01T00:00:00Z
 ln -s "$TMP/elsewhere" "$RC_ROOT/link"
 
-override "{\"disk_budget\":{\"review_copy_roots\":[\"$TMP/extra-rc\"],\"sweep_min_age_days\":7}}"
+override "{\"disk_budget\":{\"review_copy_roots\":[\"$TMP/extra-rc\",\"$TMP/linked-root\",\"$TMP/world-root\"],\"sweep_min_age_days\":7}}"
 
 dry=$(cd "$OPS" && PATH="$TMP/ghbin:$PATH" bash "$SWEEP" 2>&1); rc=$?
 printf '%s\n' "$dry" > "$TMP/dry.txt"
@@ -273,6 +291,12 @@ check "dry run: symbolic link kept" "printf '%s' \"\$keeps\" | grep '/link ' | g
 check "dry run: worktree outside owned folders not listed" "! grep -q 'elsewhere' '$TMP/dry.txt'"
 check "dry run: nothing removed" "[ -d '$WT/merged' ] && [ -d '$RC_ROOT/copy-a' ]"
 
+check "dry run: stash kept with reason" "printf '%s' \"\$keeps\" | grep 'copy-stash' | grep -q 'stash'"
+check "dry run: side branch kept with reason" "printf '%s' \"\$keeps\" | grep 'copy-side' | grep -q 'not pushed'"
+check "dry run: additional worktree kept" "printf '%s' \"\$keeps\" | grep 'copy-worktrees' | grep -q 'additional worktrees'"
+check "dry run: symlink root skipped with warning" "grep 'warning: skipping unsafe review-copy root:' '$TMP/dry.txt' | grep -q '/linked-root ' && ! grep -q 'unsafe-link-copy' '$TMP/dry.txt'"
+check "dry run: mode 0777 root skipped with warning" "grep 'warning: skipping unsafe review-copy root:' '$TMP/dry.txt' | grep -q '/world-root ' && ! grep -q 'unsafe-mode-copy' '$TMP/dry.txt'"
+
 plan_id=$(sed -n 's/^Plan: //p' "$TMP/dry.txt")
 check "dry run: plan saved" "[ -n '$plan_id' ] && [ -f '$OPS/.claude/session/disk-sweep/plan-$plan_id' ]"
 
@@ -292,6 +316,8 @@ check "apply: closed worktree removed" "[ ! -e '$WT/closed' ]"
 check "apply: review copies removed" "[ ! -e '$RC_ROOT/copy-a' ] && [ ! -e '$TMP/extra-rc/copy-e' ]"
 check "apply: item changed since the dry run is kept" "[ -f '$WT/merged2/later.txt' ] && grep -q 'kept.*merged2' '$TMP/apply.txt'"
 check "apply: items not in the plan untouched" "[ -d '$WT/open' ] && [ -d '$WT/dirty' ] && [ -d '$WT/young' ] && [ -d '$RC_ROOT/copy-b' ] && [ -d '$RC_ROOT/copy-c' ] && [ -d '$RC_ROOT/copy-d' ] && [ -d '$RC_ROOT/copy-y' ] && [ -d '$TMP/elsewhere/wt' ]"
+check "apply: saved clone work survives" "[ -d '$RC_ROOT/copy-stash' ] && [ -d '$RC_ROOT/copy-side' ] && [ -d '$TMP/copy-linked' ]"
+check "apply: unsafe roots untouched" "[ -d '$TMP/linked-root-target/unsafe-link-copy' ] && [ -d '$TMP/world-root/unsafe-mode-copy' ]"
 check "apply: log has removed lines" "[ \"\$(grep -c \$'\\tremoved\\t' '$LOG')\" -eq 4 ]"
 check "apply: log has the kept line" "grep -q \$'\\tkept\\t.*merged2' '$LOG'"
 check "apply: plan deleted" "[ ! -e '$OPS/.claude/session/disk-sweep/plan-$plan_id' ]"

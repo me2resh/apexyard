@@ -89,7 +89,7 @@ done < <(disk_budget_sweep_roots "$OPS")
 REVIEW_ROOTS=()
 while IFS= read -r r; do
   [ -n "$r" ] || continue
-  r=$(disk_budget_real "$r" 2>/dev/null) || continue
+  r=$(_db_safe_review_root "$r") || continue
   REVIEW_ROOTS+=("$r")
 done < <(_db_review_roots "$OPS")
 
@@ -119,7 +119,12 @@ _is_sweep_child() {
 _is_review_child() {
   local parent
   parent=$(dirname "$1")
-  [ "${#REVIEW_ROOTS[@]}" -gt 0 ] && _in_list "$parent" "${REVIEW_ROOTS[@]}"
+  [ "${#REVIEW_ROOTS[@]}" -gt 0 ] && _in_list "$parent" "${REVIEW_ROOTS[@]}" || return 1
+  [ ! -L "$1" ] || return 1
+  local root real
+  root=$(_db_safe_review_root "$parent") || return 1
+  real=$(disk_budget_real "$1") || return 1
+  [ "$(dirname "$real")" = "$root" ]
 }
 
 _slug_from_url() {
@@ -285,6 +290,9 @@ evaluate() {
   PR_REF=""
   PR_STATE=""
   if [ -L "$path" ]; then _keep "symbolic link, not followed"; return; fi
+  if _in_list "$(dirname "$path")" "${REVIEW_ROOTS[@]}"; then
+    _is_review_child "$path" || { _keep "unsafe review-copy root or path"; return; }
+  fi
   real=$(disk_budget_real "$path") || { _keep "folder is missing"; return; }
   if ! _is_sweep_child "$real"; then _keep "outside the folders that ApexYard owns"; return; fi
   case "$START_DIR/" in
@@ -321,8 +329,21 @@ evaluate() {
   fi
 
   if [ "$V_KIND" != "export" ]; then
-    st=$(git -C "$real" status --porcelain 2>/dev/null) || { _keep "git status failed"; return; }
+    st=$(git -C "$real" status --porcelain --untracked-files=all 2>/dev/null) || { _keep "git status failed"; return; }
     if [ -n "$st" ]; then _keep "uncommitted or untracked changes"; return; fi
+  fi
+
+  if [ "$V_KIND" = "clone" ]; then
+    st=$(git -C "$real" stash list 2>/dev/null) || { _keep "git cannot read stashes"; return; }
+    if [ -n "$st" ]; then _keep "stash contains saved work"; return; fi
+    st=$(git -C "$real" rev-list --all "^$R_HEAD_SHA" --not --remotes 2>/dev/null) ||
+      { _keep "git cannot check local commits"; return; }
+    if [ -n "$st" ]; then _keep "commits that are not pushed"; return; fi
+    st=$(git -C "$real" worktree list --porcelain 2>/dev/null) ||
+      { _keep "git cannot list worktrees"; return; }
+    if [ "$(printf '%s\n' "$st" | awk '/^worktree / { n++ } END { print n+0 }')" -ne 1 ]; then
+      _keep "clone has additional worktrees"; return
+    fi
   fi
 
   created=$R_CREATED
@@ -371,6 +392,9 @@ candidates() {
   local root child
   [ "${#ROOTS[@]}" -gt 0 ] || return 0
   for root in "${ROOTS[@]}"; do
+    if _in_list "$root" "${REVIEW_ROOTS[@]}"; then
+      _db_safe_review_root "$root" >/dev/null || continue
+    fi
     for child in "$root"/*; do
       [ -e "$child" ] || [ -L "$child" ] || continue
       [ -d "$child" ] || [ -L "$child" ] || continue

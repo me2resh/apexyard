@@ -142,6 +142,24 @@ _db_review_roots() {
   done
 }
 
+# Validate before resolving so a linked root is never accepted.
+_db_safe_review_root() {
+  local root="${1%/}" metadata owner mode
+  if [ ! -e "$root" ] && [ ! -L "$root" ]; then return 1; fi
+  if [ -d "$root" ] && [ ! -L "$root" ]; then
+    metadata=$(stat -c '%u %a' "$root" 2>/dev/null) ||
+      metadata=$(stat -f '%u %Lp' "$root" 2>/dev/null) || metadata=""
+    read -r owner mode <<< "$metadata"
+    if [ "$owner" = "$(id -u)" ] && [[ "$mode" =~ ^[0-7]{3,4}$ ]] &&
+       [ $((8#$mode & 0022)) -eq 0 ]; then
+      disk_budget_real "$root"
+      return
+    fi
+  fi
+  printf 'apexyard-disk-sweep: warning: skipping unsafe review-copy root: %s (requires a real directory owned by this user without group/world write)\n' "$root" >&2
+  return 1
+}
+
 _db_extra_paths() {
   local ops="$1" value
   config_get '.disk_budget.extra_paths[]?' 2>/dev/null | while IFS= read -r value; do
@@ -172,7 +190,7 @@ disk_budget_owned_paths() {
   {
     _db_worktree_containers "$ops" "$ws"
     _db_existing_dir "$ops/.claude/session"
-    _db_review_roots "$ops" | while IFS= read -r p; do _db_existing_dir "$p"; done
+    _db_review_roots "$ops" | while IFS= read -r p; do _db_safe_review_root "$p"; done
     _db_extra_paths "$ops" | while IFS= read -r p; do _db_existing_dir "$p"; done
   } | awk 'NF && !seen[$0]++'
 }
@@ -185,7 +203,7 @@ disk_budget_sweep_roots() {
   home_real=$(disk_budget_real "$HOME" 2>/dev/null || true)
   {
     _db_worktree_containers "$ops" "$ws"
-    _db_review_roots "$ops" | while IFS= read -r p; do _db_existing_dir "$p"; done
+    _db_review_roots "$ops" | while IFS= read -r p; do _db_safe_review_root "$p"; done
   } | awk -v ws="$ws_real" -v ops="$ops_real" -v home="$home_real" '
       NF && $0 != "/" && $0 != ws && $0 != ops && $0 != home && !seen[$0]++
     '
