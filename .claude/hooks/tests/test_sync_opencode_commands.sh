@@ -204,7 +204,7 @@ assert_eq "trailing slash does not bypass the symlink check" "$?" "2"
 
 # An explicit --out that crosses a symlink inside the fork must be refused. A
 # check of the leaf and its direct parent alone misses a link further up.
-mkdir -p "$FORK2/.opencode/real/commands" "$TMPBASE/outside-target"
+mkdir -p "$TMPBASE/outside-target"
 ln -s "$TMPBASE/outside-target" "$FORK2/.opencode/intermediate"
 bash "$SCRIPT" --root "$FORK2" --out "$FORK2/.opencode/intermediate/deeper/commands" > "$TMPBASE/symlink4.log" 2>&1
 assert_eq "--out through a symlinked intermediate exits 2" "$?" "2"
@@ -221,10 +221,39 @@ bash "$SCRIPT" --root "$FORK5" > "$TMPBASE/ancestor.log" 2>&1
 assert_eq "symlinked ancestor exits 2" "$?" "2"
 assert_no_file "nothing written through the ancestor" "$FORK5/elsewhere/status.md"
 
+# A relative --out resolves against the physical working directory. Entered
+# through a symlink, the logical spelling used to skip every in-fork component.
+ln -s "$FORK5" "$TMPBASE/link-cwd"
+( cd "$TMPBASE/link-cwd" && bash "$SCRIPT" --root "$FORK5" --out .opencode/commands ) > "$TMPBASE/relative-out.log" 2>&1
+assert_eq "relative --out from a symlinked cwd exits 2" "$?" "2"
+assert_no_file "nothing written through the relative --out link" "$FORK5/elsewhere/commands/status.md"
+
+# A component that does not exist before `..` must not hide the link.
+bash "$SCRIPT" --root "$FORK5" --out "$FORK5/nope/../.opencode/commands" > "$TMPBASE/dotdot.log" 2>&1
+assert_eq "missing component before .. exits 2" "$?" "2"
+assert_no_file "nothing written through the .. link" "$FORK5/elsewhere/commands/status.md"
+
+# An --out spelled through a symlinked alias of the root must still be checked.
+ln -s "$FORK5" "$TMPBASE/link-root"
+bash "$SCRIPT" --root "$FORK5" --out "$TMPBASE/link-root/.opencode/commands" > "$TMPBASE/link-root.log" 2>&1
+assert_eq "--out via a symlinked root alias exits 2" "$?" "2"
+assert_no_file "nothing written through the root alias" "$FORK5/elsewhere/commands/status.md"
+
+# An empty --out is a usage error, not a write to the filesystem root.
+bash "$SCRIPT" --root "$FORK5" --out "" > "$TMPBASE/empty-out.log" 2>&1
+assert_eq "empty --out exits 2" "$?" "2"
+assert_contains "empty --out names the problem" "non-empty" "$TMPBASE/empty-out.log"
+
+# An --out outside the root stays the operator's named destination.
+mkdir -p "$TMPBASE/outside-out"
+bash "$SCRIPT" --root "$FORK5" --out "$TMPBASE/outside-out/commands" > "$TMPBASE/outside-out.log" 2>&1
+assert_eq "outside-root --out still writes" "$?" "0"
+assert_file "outside-root wrapper written" "$TMPBASE/outside-out/commands/status.md"
+
 # A symlink ABOVE the fork does not move a write outside it. A fork under a
 # symlinked projects or home folder (and /tmp on macOS) must still generate.
-# The root is resolved with `pwd -P`; only the output directory and its parent
-# are checked for links.
+# The root is resolved with `pwd -P`; every component below it is link-checked,
+# while a link above it is allowed.
 LINKED_REAL="$TMPBASE/fork-under-link"
 make_fork "$LINKED_REAL"
 ln -s "$TMPBASE" "$TMPBASE/link-to-tmp"

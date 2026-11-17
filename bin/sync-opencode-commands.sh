@@ -65,7 +65,7 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     --out)
-      [ $# -ge 2 ] || { echo "sync-opencode-commands: --out needs a path" >&2; exit 2; }
+      [ $# -ge 2 ] && [ -n "$2" ] || { echo "sync-opencode-commands: --out needs a non-empty path" >&2; exit 2; }
       OUT_DIR="$2"
       OUT_EXPLICIT=1
       shift
@@ -77,39 +77,67 @@ while [ $# -gt 0 ]; do
 done
 
 [ -d "$ROOT" ] || { echo "sync-opencode-commands: no such directory: $ROOT" >&2; exit 2; }
-# Resolve the physical path. A fork reached through a symlinked parent (`/tmp`
-# on macOS, a symlinked home or projects folder) is a valid fork: the link does
-# not move a write outside it. The output check below therefore starts at the
-# resolved root, not at `/`.
+# A fork reached through a symlinked parent (`/tmp` on macOS, a symlinked home
+# or projects folder) is a valid fork: the link does not move a write outside it.
 ROOT="$(cd "$ROOT" && pwd -P)"
 [ "$OUT_EXPLICIT" -eq 1 ] || OUT_DIR="$ROOT/.opencode/commands"
 SKILLS_DIR="$ROOT/.claude/skills"
 
 [ -d "$SKILLS_DIR" ] || { echo "sync-opencode-commands: no skills directory at $SKILLS_DIR" >&2; exit 2; }
 
+# lexical_path <absolute path>
+# Collapse `.` and `..` and duplicate slashes. The generator writes to the
+# result, so a component that does not exist yet cannot hide a `..` jump over a
+# link.
+lexical_path() {
+  local rest="$1" part out=""
+  while [ -n "$rest" ]; do
+    part="${rest%%/*}"
+    case "$rest" in */*) rest="${rest#*/}" ;; *) rest="" ;; esac
+    case "$part" in
+      ''|.) ;;
+      ..) out="${out%/*}" ;;
+      *) out="$out/$part" ;;
+    esac
+  done
+  printf '%s' "${out:-/}"
+}
+
 # Writing through a symlinked output directory would land the wrappers outside
-# the fork. Refuse instead of following it. Walk the output directory and its
-# parents up to the resolved root, so `.opencode`, an intermediate folder and a
-# trailing slash are all covered. Stop at the root: a symlink above it cannot
-# redirect a write inside the fork. An explicit --out outside the root is the
+# the fork. Normalise first: a relative --out resolves against the physical
+# working directory, and `.`/`..` collapse, so containment does not depend on how
+# the operator spelled the path. Then check every component below the first one
+# that resolves inside the root. An explicit --out outside the root is the
 # operator's named destination, so only its leaf is checked.
-while [ -n "$OUT_DIR" ] && [ "${OUT_DIR%/}" != "$OUT_DIR" ]; do OUT_DIR="${OUT_DIR%/}"; done
-[ -n "$OUT_DIR" ] || OUT_DIR="/"
-case "$OUT_DIR" in /*) ;; *) OUT_DIR="$PWD/$OUT_DIR" ;; esac
-_out_check="$OUT_DIR"
-while :; do
-  if [ -L "$_out_check" ]; then
-    echo "sync-opencode-commands: refusing to write: $_out_check is a symlink" >&2
-    exit 2
+case "$OUT_DIR" in
+  /*) ;;
+  *) OUT_DIR="$(cd "$PWD" && pwd -P)/$OUT_DIR" ;;
+esac
+OUT_DIR="$(lexical_path "$OUT_DIR")"
+_out_in_fork=0
+_out_acc=""
+_out_rest="$OUT_DIR"
+while [ -n "$_out_rest" ]; do
+  _out_part="${_out_rest%%/*}"
+  case "$_out_rest" in */*) _out_rest="${_out_rest#*/}" ;; *) _out_rest="" ;; esac
+  [ -n "$_out_part" ] || continue
+  _out_acc="$_out_acc/$_out_part"
+  if [ "$_out_in_fork" -eq 1 ]; then
+    if [ -L "$_out_acc" ]; then
+      echo "sync-opencode-commands: refusing to write: $_out_acc is a symlink" >&2
+      exit 2
+    fi
+  elif [ -d "$_out_acc" ]; then
+    _out_physical="$(cd "$_out_acc" && pwd -P)"
+    case "$_out_physical" in
+      "$ROOT"|"$ROOT"/*) _out_in_fork=1 ;;
+    esac
   fi
-  _out_parent="$(dirname "$_out_check")"
-  [ "$_out_parent" = "$_out_check" ] && break
-  case "$_out_parent" in
-    "$ROOT"|"$ROOT"/*) _out_check="$_out_parent" ;;
-    *) break ;;
-  esac
-  [ "$_out_check" = "$ROOT" ] && break
 done
+if [ "$_out_in_fork" -eq 0 ] && [ -L "$OUT_DIR" ]; then
+  echo "sync-opencode-commands: refusing to write: $OUT_DIR is a symlink" >&2
+  exit 2
+fi
 
 # frontmatter_value <file> <key>
 # Prints the first "key: value" line of the leading YAML block, unwrapped from
@@ -246,6 +274,18 @@ for skill_dir in "$SKILLS_DIR"/*/; do
   fi
 
   mkdir -p "$OUT_DIR"
+  # The check above is lexical. Resolving the directory after creation catches a
+  # path that still lands outside the fork once the kernel follows it.
+  if [ "$_out_in_fork" -eq 1 ]; then
+    _out_physical="$(cd "$OUT_DIR" && pwd -P)"
+    case "$_out_physical" in
+      "$ROOT"|"$ROOT"/*) ;;
+      *)
+        echo "sync-opencode-commands: refusing to write: $OUT_DIR resolves outside $ROOT" >&2
+        exit 2
+        ;;
+    esac
+  fi
   cp "$TMPBASE/rendered" "$target"
   generated=$((generated + 1))
 done
