@@ -114,6 +114,10 @@ case "$OUT_DIR" in
   *) OUT_DIR="$(cd "$PWD" && pwd -P)/$OUT_DIR" ;;
 esac
 OUT_DIR="$(lexical_path "$OUT_DIR")"
+if [ "$OUT_DIR" = "/" ]; then
+  echo "sync-opencode-commands: refusing to write: / is not an output directory" >&2
+  exit 2
+fi
 _out_in_fork=0
 _out_acc=""
 _out_rest="$OUT_DIR"
@@ -274,8 +278,9 @@ for skill_dir in "$SKILLS_DIR"/*/; do
   fi
 
   mkdir -p "$OUT_DIR"
-  # The check above is lexical. Resolving the directory after creation catches a
-  # path that still lands outside the fork once the kernel follows it.
+  # The check above is lexical. Resolving the directory after creation bounds a
+  # write that would land outside the fork. A race can still create empty
+  # directories there, but no wrapper is written.
   if [ "$_out_in_fork" -eq 1 ]; then
     _out_physical="$(cd "$OUT_DIR" && pwd -P)"
     case "$_out_physical" in

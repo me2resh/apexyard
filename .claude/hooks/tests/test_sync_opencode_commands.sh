@@ -197,8 +197,8 @@ ln -s "$TMPBASE" "$FORK2/.opencode/commands-link"
 bash "$SCRIPT" --root "$FORK2" --out "$FORK2/.opencode/commands-link" > "$TMPBASE/symlink2.log" 2>&1
 assert_eq "symlinked output directory exits 2" "$?" "2"
 
-# A trailing slash must not hide the link: `dirname` drops the leaf and
-# `[ -L path/ ]` resolves it, so the path is normalised before the check.
+# A trailing slash must not hide the link: the path is collapsed lexically
+# before the component walk, so `path/` and `path` reach the same check.
 bash "$SCRIPT" --root "$FORK2" --out "$FORK2/.opencode/commands-link/" > "$TMPBASE/symlink3.log" 2>&1
 assert_eq "trailing slash does not bypass the symlink check" "$?" "2"
 
@@ -243,6 +243,12 @@ assert_no_file "nothing written through the root alias" "$FORK5/elsewhere/comman
 bash "$SCRIPT" --root "$FORK5" --out "" > "$TMPBASE/empty-out.log" 2>&1
 assert_eq "empty --out exits 2" "$?" "2"
 assert_contains "empty --out names the problem" "non-empty" "$TMPBASE/empty-out.log"
+
+# The filesystem root is not a command directory, and a privileged run would
+# fill it. Refuse it like an empty value.
+bash "$SCRIPT" --root "$FORK5" --out / > "$TMPBASE/root-out.log" 2>&1
+assert_eq "filesystem root as --out exits 2" "$?" "2"
+assert_contains "filesystem root refusal is named" "not an output directory" "$TMPBASE/root-out.log"
 
 # An --out outside the root stays the operator's named destination.
 mkdir -p "$TMPBASE/outside-out"
