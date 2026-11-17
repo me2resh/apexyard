@@ -166,6 +166,22 @@ assert_eq "--check with drift and a conflict exits 1" "$?" "1"
 assert_contains "--check still names the conflict alongside drift" "name conflict" "$TMPBASE/conflict3.log"
 assert_contains "--check names the drifted file" "gone.md" "$TMPBASE/conflict3.log"
 
+# A directory at the target path is not a regular file. `cp` would write the
+# rendered wrapper inside it as `.../<id>.md/rendered`, so every run would write
+# and --check would report drift forever. Report a conflict instead.
+FORK6="$TMPBASE/fork-dir-target"
+mkdir -p "$FORK6/.claude/skills/status" "$FORK6/.opencode/commands/status.md"
+printf -- '---\nname: status\ndescription: Project snapshot.\n---\n\n# Status\n' \
+  > "$FORK6/.claude/skills/status/SKILL.md"
+bash "$SCRIPT" --root "$FORK6" > "$TMPBASE/dir-target.log" 2>&1
+assert_eq "directory at the target still exits 0" "$?" "0"
+assert_contains "directory at the target is left alone" "left alone" "$TMPBASE/dir-target.log"
+assert_contains "directory at the target is named" "status.md" "$TMPBASE/dir-target.log"
+assert_no_file "no wrapper written inside the directory target" "$FORK6/.opencode/commands/status.md/rendered"
+bash "$SCRIPT" --root "$FORK6" --check > "$TMPBASE/dir-target-check.log" 2>&1
+assert_eq "directory at the target is no drift under --check" "$?" "0"
+assert_contains "directory at the target is a conflict under --check" "name conflict" "$TMPBASE/dir-target-check.log"
+
 echo "symlinks"
 # cp writes through a symlink, so a symlinked target would put the wrapper
 # outside the output directory.
@@ -191,6 +207,18 @@ ln -s "$FORK5/elsewhere" "$FORK5/.opencode"
 bash "$SCRIPT" --root "$FORK5" > "$TMPBASE/ancestor.log" 2>&1
 assert_eq "symlinked ancestor exits 2" "$?" "2"
 assert_no_file "nothing written through the ancestor" "$FORK5/elsewhere/status.md"
+
+# A symlink ABOVE the fork does not move a write outside it. A fork under a
+# symlinked projects or home folder (and /tmp on macOS) must still generate.
+# The root is resolved with `pwd -P`; only the output directory and its parent
+# are checked for links.
+LINKED_REAL="$TMPBASE/fork-under-link"
+make_fork "$LINKED_REAL"
+ln -s "$TMPBASE" "$TMPBASE/link-to-tmp"
+bash "$SCRIPT" --root "$TMPBASE/link-to-tmp/fork-under-link" > "$TMPBASE/linked-parent.log" 2>&1
+assert_eq "fork through a symlinked parent exits 0" "$?" "0"
+assert_file "wrapper written under the physical root" "$LINKED_REAL/.opencode/commands/status.md"
+assert_no_file "no second output directory created at the link" "$TMPBASE/link-to-tmp/.opencode/commands/status.md"
 
 echo "description shapes"
 # A block-scalar description parses as the indicator itself. The wrapper must

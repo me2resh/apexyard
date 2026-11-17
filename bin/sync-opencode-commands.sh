@@ -26,7 +26,10 @@
 # generator marker, so a hand-written .opencode/commands/*.md is never removed.
 # The same marker guards the write path: when the target exists without it, the
 # generator warns and leaves the file alone instead of overwriting it. A symlink
-# at the target, or at the output directory, is refused for the same reason.
+# or any other non-regular file at the target, or a symlink at the output
+# directory or its parent (`.opencode`), is refused for the same reason. A
+# symlink above the root does not redirect a write inside the fork, so it is
+# allowed: the root is resolved with `pwd -P`.
 
 set -euo pipefail
 
@@ -75,27 +78,29 @@ while [ $# -gt 0 ]; do
 done
 
 [ -d "$ROOT" ] || { echo "sync-opencode-commands: no such directory: $ROOT" >&2; exit 2; }
-ROOT="$(cd "$ROOT" && pwd)"
+# Resolve the physical path. A fork reached through a symlinked parent (`/tmp`
+# on macOS, a symlinked home or projects folder) is a valid fork: the link does
+# not move a write outside it. The output check below therefore starts at the
+# resolved root, not at `/`.
+ROOT="$(cd "$ROOT" && pwd -P)"
+[ "$OUT_EXPLICIT" -eq 1 ] || OUT_DIR="$ROOT/.opencode/commands"
 SKILLS_DIR="$ROOT/.claude/skills"
 
 [ -d "$SKILLS_DIR" ] || { echo "sync-opencode-commands: no skills directory at $SKILLS_DIR" >&2; exit 2; }
 
 # Writing through a symlinked output directory would land the wrappers outside
-# the fork. Refuse instead of following it. Check every existing component of
-# the path, because `.opencode` itself can be the link.
+# the fork. Refuse instead of following it. Check only the components this
+# script controls: the output directory and its direct parent, so `.opencode`
+# itself can be the link. A symlink above the root is not ours to refuse; the
+# physical root was resolved above, so a link there cannot redirect a write.
 case "$OUT_DIR" in /*) ;; *) OUT_DIR="$PWD/$OUT_DIR" ;; esac
 _out_parent="$(dirname "$OUT_DIR")"
-while [ -n "$_out_parent" ] && [ "$_out_parent" != "." ] && [ "$_out_parent" != "/" ]; do
-  if [ -L "$_out_parent" ]; then
-    echo "sync-opencode-commands: refusing to write: $_out_parent is a symlink" >&2
+for _out_check in "$_out_parent" "$OUT_DIR"; do
+  if [ -L "$_out_check" ]; then
+    echo "sync-opencode-commands: refusing to write: $_out_check is a symlink" >&2
     exit 2
   fi
-  _out_parent="$(dirname "$_out_parent")"
 done
-if [ -L "$OUT_DIR" ]; then
-  echo "sync-opencode-commands: refusing to write: $OUT_DIR is a symlink" >&2
-  exit 2
-fi
 
 # frontmatter_value <file> <key>
 # Prints the first "key: value" line of the leading YAML block, unwrapped from
@@ -186,9 +191,14 @@ for skill_dir in "$SKILLS_DIR"/*/; do
   printf '%s\n' "$target" >> "$TMPBASE/expected"
 
   # Two paths must never take a file away from the operator: a symlink at the
-  # target (cp would write through it), and an existing target that this
-  # generator did not write. Both are reported, neither is touched.
+  # target (cp would write through it), and any other existing target that is
+  # not a regular file (cp would write into a directory). Both are reported,
+  # neither is touched.
   if [ -L "$target" ]; then
+    printf '%s\n' "$target" >> "$TMPBASE/conflicts"
+    continue
+  fi
+  if [ -e "$target" ] && [ ! -f "$target" ]; then
     printf '%s\n' "$target" >> "$TMPBASE/conflicts"
     continue
   fi
