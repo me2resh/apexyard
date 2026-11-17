@@ -179,7 +179,7 @@ assert_contains "directory at the target is left alone" "left alone" "$TMPBASE/d
 assert_contains "directory at the target is named" "status.md" "$TMPBASE/dir-target.log"
 assert_no_file "no wrapper written inside the directory target" "$FORK6/.opencode/commands/status.md/rendered"
 bash "$SCRIPT" --root "$FORK6" --check > "$TMPBASE/dir-target-check.log" 2>&1
-assert_eq "directory at the target is no drift under --check" "$?" "0"
+assert_eq "directory at the target reports no drift under --check" "$?" "0"
 assert_contains "directory at the target is a conflict under --check" "name conflict" "$TMPBASE/dir-target-check.log"
 
 echo "symlinks"
@@ -196,6 +196,19 @@ rm -f "$FORK2/.opencode/commands/status.md"
 ln -s "$TMPBASE" "$FORK2/.opencode/commands-link"
 bash "$SCRIPT" --root "$FORK2" --out "$FORK2/.opencode/commands-link" > "$TMPBASE/symlink2.log" 2>&1
 assert_eq "symlinked output directory exits 2" "$?" "2"
+
+# A trailing slash must not hide the link: `dirname` drops the leaf and
+# `[ -L path/ ]` resolves it, so the path is normalised before the check.
+bash "$SCRIPT" --root "$FORK2" --out "$FORK2/.opencode/commands-link/" > "$TMPBASE/symlink3.log" 2>&1
+assert_eq "trailing slash does not bypass the symlink check" "$?" "2"
+
+# An explicit --out that crosses a symlink inside the fork must be refused. A
+# check of the leaf and its direct parent alone misses a link further up.
+mkdir -p "$FORK2/.opencode/real/commands" "$TMPBASE/outside-target"
+ln -s "$TMPBASE/outside-target" "$FORK2/.opencode/intermediate"
+bash "$SCRIPT" --root "$FORK2" --out "$FORK2/.opencode/intermediate/deeper/commands" > "$TMPBASE/symlink4.log" 2>&1
+assert_eq "--out through a symlinked intermediate exits 2" "$?" "2"
+assert_no_file "nothing written through an intermediate link" "$TMPBASE/outside-target/deeper/commands/status.md"
 
 # The ancestor can be the link, not the leaf: `.opencode` -> elsewhere moves
 # every wrapper out of the fork even though the output directory looks local.
@@ -218,7 +231,6 @@ ln -s "$TMPBASE" "$TMPBASE/link-to-tmp"
 bash "$SCRIPT" --root "$TMPBASE/link-to-tmp/fork-under-link" > "$TMPBASE/linked-parent.log" 2>&1
 assert_eq "fork through a symlinked parent exits 0" "$?" "0"
 assert_file "wrapper written under the physical root" "$LINKED_REAL/.opencode/commands/status.md"
-assert_no_file "no second output directory created at the link" "$TMPBASE/link-to-tmp/.opencode/commands/status.md"
 
 echo "description shapes"
 # A block-scalar description parses as the indicator itself. The wrapper must

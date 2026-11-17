@@ -26,10 +26,10 @@
 # generator marker, so a hand-written .opencode/commands/*.md is never removed.
 # The same marker guards the write path: when the target exists without it, the
 # generator warns and leaves the file alone instead of overwriting it. A symlink
-# or any other non-regular file at the target, or a symlink at the output
-# directory or its parent (`.opencode`), is refused for the same reason. A
-# symlink above the root does not redirect a write inside the fork, so it is
-# allowed: the root is resolved with `pwd -P`.
+# or any other non-regular file at the target is refused for the same reason, and
+# so is a symlink anywhere on the output path inside the fork. A symlink above
+# the root does not redirect a write inside the fork, so it is allowed: the root
+# is resolved with `pwd -P`.
 
 set -euo pipefail
 
@@ -62,7 +62,6 @@ while [ $# -gt 0 ]; do
     --root)
       [ $# -ge 2 ] || { echo "sync-opencode-commands: --root needs a path" >&2; exit 2; }
       ROOT="$2"
-      [ "$OUT_EXPLICIT" -eq 1 ] || OUT_DIR="$ROOT/.opencode/commands"
       shift
       ;;
     --out)
@@ -89,17 +88,27 @@ SKILLS_DIR="$ROOT/.claude/skills"
 [ -d "$SKILLS_DIR" ] || { echo "sync-opencode-commands: no skills directory at $SKILLS_DIR" >&2; exit 2; }
 
 # Writing through a symlinked output directory would land the wrappers outside
-# the fork. Refuse instead of following it. Check only the components this
-# script controls: the output directory and its direct parent, so `.opencode`
-# itself can be the link. A symlink above the root is not ours to refuse; the
-# physical root was resolved above, so a link there cannot redirect a write.
+# the fork. Refuse instead of following it. Walk the output directory and its
+# parents up to the resolved root, so `.opencode`, an intermediate folder and a
+# trailing slash are all covered. Stop at the root: a symlink above it cannot
+# redirect a write inside the fork. An explicit --out outside the root is the
+# operator's named destination, so only its leaf is checked.
+while [ -n "$OUT_DIR" ] && [ "${OUT_DIR%/}" != "$OUT_DIR" ]; do OUT_DIR="${OUT_DIR%/}"; done
+[ -n "$OUT_DIR" ] || OUT_DIR="/"
 case "$OUT_DIR" in /*) ;; *) OUT_DIR="$PWD/$OUT_DIR" ;; esac
-_out_parent="$(dirname "$OUT_DIR")"
-for _out_check in "$_out_parent" "$OUT_DIR"; do
+_out_check="$OUT_DIR"
+while :; do
   if [ -L "$_out_check" ]; then
     echo "sync-opencode-commands: refusing to write: $_out_check is a symlink" >&2
     exit 2
   fi
+  _out_parent="$(dirname "$_out_check")"
+  [ "$_out_parent" = "$_out_check" ] && break
+  case "$_out_parent" in
+    "$ROOT"|"$ROOT"/*) _out_check="$_out_parent" ;;
+    *) break ;;
+  esac
+  [ "$_out_check" = "$ROOT" ] && break
 done
 
 # frontmatter_value <file> <key>
