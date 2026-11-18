@@ -6,6 +6,10 @@
 #   ApexYard is using 12.3 GB; reclaimable size unknown
 #   ApexYard disk use is unknown (measurement timed out)
 #
+# --json prints one object: schema (apexyard.disk-usage/1), used_bytes,
+# reclaimable_bytes, reclaimable_is_lower_bound, timed_out, max_owned_bytes.
+# Sizes are integer bytes, or null when measurement cannot run.
+# The schema version changes only on a breaking change.
 # Read-only. It never deletes, never fetches, never blocks for long.
 # Folders measured (only folders that ApexYard owns):
 #   - <workspace>/*.worktrees       (worktrees of managed projects)
@@ -24,18 +28,30 @@
 
 set -u
 
+json=false
+[ "${1:-}" != --json ] || json=true
+max_gb=10
+usage_json() {
+  printf '{"schema":"apexyard.disk-usage/1","used_bytes":%s,"reclaimable_bytes":%s,"reclaimable_is_lower_bound":%s,"timed_out":%s,"max_owned_bytes":%s}\n' \
+    "$1" "$2" "$3" "$4" "$(awk -v g="$max_gb" 'BEGIN { printf "%.0f", g * 1073741824 }')"
+}
+unknown() {
+  if $json; then usage_json null null false "${2:-false}"
+  else echo "ApexYard disk use is unknown ($1)"; fi
+}
+
 ops_root="${APEXYARD_OPS_ROOT:-}"
 if [ -z "$ops_root" ]; then
   ops_root=$(CDPATH='' cd -- "$(dirname "${BASH_SOURCE[0]}")/../../.." 2>/dev/null && pwd -P) || ops_root=""
 fi
-[ -n "$ops_root" ] || { echo "ApexYard disk use is unknown (no ops root)"; exit 0; }
+[ -n "$ops_root" ] || { unknown "no ops root"; exit 0; }
 
 gh_bin="${APEXYARD_GH:-gh}"
 timebox="${APEXYARD_DISK_TIMEBOX:-6}"
 case "$timebox" in ''|*[!0-9]*) timebox=6 ;; esac
 
 # The config library finds the repo from the working directory.
-cd "$ops_root" 2>/dev/null || { echo "ApexYard disk use is unknown (no ops root)"; exit 0; }
+cd "$ops_root" 2>/dev/null || { unknown "no ops root"; exit 0; }
 # Step 4 owns the disk_budget keys. Built-in defaults apply until they exist.
 max_gb=10; age_days=7
 review_roots_cfg=""; extra_paths=""
@@ -60,7 +76,15 @@ if [ -f "$ops_root/.claude/hooks/_lib-portfolio-paths.sh" ]; then
     workspace_dir=$(cd "$ops_root" 2>/dev/null && portfolio_workspace_dir 2>/dev/null)
 fi
 [ -n "$workspace_dir" ] || workspace_dir="$ops_root/workspace"
-case "$max_gb" in ''|*[!0-9]*) max_gb=10 ;; esac
+# Sourcing this library only defines constants and functions. The ops root
+# is resolved above; use the SessionStart parser without loading other settings.
+if [ -f "$ops_root/.claude/hooks/_lib-disk-budget.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$ops_root/.claude/hooks/_lib-disk-budget.sh"
+  max_gb=$(_db_number "$max_gb" "$DB_DEFAULT_MAX_GB" max_owned_gb)
+else
+  max_gb=10
+fi
 case "$age_days" in ''|*[!0-9]*) age_days=7 ;; esac
 # Review-copy root: same rule as review-copy.sh (step 3).
 if [ -n "${APEXYARD_REVIEW_COPY_ROOT:-}" ]; then
@@ -140,7 +164,7 @@ fmt_kb() {
     else if (k >= 1024) printf "%.0f MB", k/1024; else printf "%d KB", k }'
 }
 
-tmp=$(mktemp -d 2>/dev/null) || { echo "ApexYard disk use is unknown (no temp folder)"; exit 0; }
+tmp=$(mktemp -d 2>/dev/null) || { unknown "no temp folder"; exit 0; }
 trap 'rm -rf "$tmp"' EXIT
 
 # --- 1. Collect the folders ApexYard owns (only those that exist).
@@ -169,7 +193,7 @@ if [ "${#targets[@]}" -gt 0 ]; then
   du_status=0
   run_timed "$(remaining)" "$tmp/du" du -sk "${targets[@]}" || du_status=$?
   if [ "$du_status" -eq 124 ]; then
-    echo "ApexYard disk use is unknown (measurement timed out)"
+    unknown "measurement timed out" true
     exit 0
   fi
   total_kb=$(awk '{s+=$1} END{print s+0}' "$tmp/du")
@@ -316,8 +340,14 @@ else
   line="$line; $(fmt_kb "$reclaim_kb") can be reclaimed"
 fi
 
-if [ "$total_kb" -gt $((max_gb * 1048576)) ]; then
+if awk -v k="$total_kb" -v g="$max_gb" 'BEGIN { exit !(k > g * 1048576) }'; then
   line="$line (over the $max_gb GB budget)"
 fi
-echo "$line"
+if $json; then
+  lower=false
+  [ "$blocked" != 1 ] || lower=true
+  usage_json "$((total_kb * 1024))" "$((reclaim_kb * 1024))" "$lower" false
+else
+  echo "$line"
+fi
 exit 0
