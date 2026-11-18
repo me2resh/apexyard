@@ -1,0 +1,7 @@
+[
+  {
+    "id": "GHSA-fc5q-39xc-vjpf",
+    "reason": "ReDoS in picomatch <=4.0.7 in dev-time glob tooling (opencode adapter, Next.js starter). No patched release on 18 Nov 2026. Owner approved a time-boxed ignore.",
+    "expires": "2026-12-31"
+  }
+]

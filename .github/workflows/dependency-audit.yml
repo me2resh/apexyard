@@ -72,19 +72,10 @@ jobs:
             --md-out "$RUNNER_TEMP/dep-audit-report.md"
           code=$?
           set -e
-          # The helper fails on Critical. Enforce High through its JSON report.
-          python3 - "$RUNNER_TEMP/dep-audit-report.json" "$code" <<'PYTHON'
-          import json
-          import sys
-          from pathlib import Path
-
-          report = json.loads(Path(sys.argv[1]).read_text())
-          totals = report['severity_totals']
-          blocking = totals.get('High', 0) + totals.get('Critical', 0)
-          if blocking:
-              print('::error::Dependency audit found HIGH or CRITICAL vulnerabilities.')
-          sys.exit(1 if blocking else int(sys.argv[2]))
-          PYTHON
+          # Apply repository-only exceptions without changing the shared helper.
+          python3 .github/scripts/dependency-audit-policy.py \
+            "$RUNNER_TEMP/dep-audit-report.json" \
+            .github/dependency-audit-ignore.json "$code"
 
       - name: Report dependency audit to step summary
         if: always()
@@ -92,7 +83,7 @@ jobs:
           if [ -f "$RUNNER_TEMP/dep-audit-report.md" ]; then
             {
               cat "$RUNNER_TEMP/dep-audit-report.md"
-              echo 'Policy: The job fails on HIGH or CRITICAL findings. It also fails when the audit cannot complete (helper exit 3, incomplete coverage, such as a registry outage) or a severity is Unknown (exit 4). MODERATE (Medium) and LOW are reported only.'
+              echo 'Policy: The job fails on HIGH or CRITICAL findings unless a valid, unexpired repository ignore applies. Invalid ignore entries fail the job. It also fails when the audit cannot complete (helper exit 3, incomplete coverage, such as a registry outage) or a severity is Unknown (exit 4). MODERATE (Medium) and LOW are reported only.'
             } >> "$GITHUB_STEP_SUMMARY"
           else
             echo '## Dependency audit: FAILED - no report was produced.' >> "$GITHUB_STEP_SUMMARY"
