@@ -23,6 +23,7 @@ INPUT=$(cat)
 # APEXYARD_SESSION_START_HOOK: warn-unqualified-review-marker.sh
 # APEXYARD_SESSION_START_HOOK: warn-legacy-ticket-markers.sh
 # APEXYARD_SESSION_START_HOOK: print-progress-note.sh
+# APEXYARD_SESSION_START_HOOK: check-disk-budget.sh
 
 run_direct() {
   local script="$1" rc=0
@@ -54,6 +55,7 @@ scripts=(
   warn-unqualified-review-marker.sh
   warn-legacy-ticket-markers.sh
   print-progress-note.sh
+  check-disk-budget.sh
 )
 
 # Pinning is the one ordering dependency. Run it before the remaining hooks.

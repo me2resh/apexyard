@@ -17,7 +17,7 @@ The directory holds the Claude Code parts that make the markdown process into a 
 | Hooks | `.claude/hooks/` | Shell scripts that enforce SDLC rules. They enforce ticket-first edits, ORBIT slices, migrations, automatic code review, merge gates, and red-CI blocks. They also check commit format, AgDRs, branch and PR titles, secrets, onboarding config, upstream drift, leak protection, skill intent, and review markers. Bootstrap skills are exempt from the ticket-first gate. |
 | Rules | `.claude/rules/` | 23 modular rule files. Planning and process: AgDR triggers, plan mode, loop mode, parallel work, right-size ceremony, reconcile before build, workflow gates. Agents and roles: agent role selection, role triggers, skill first, isolated builds, build-handbook discovery. Git and PRs: git conventions, PR quality, PR workflow, external-write retry, leak protection, ticket vocabulary. Writing and reporting: writing standard, reporting style, evidence grounding, glossary lookup, code standards. |
 | Handbooks | `handbooks/` | Coding standards that the adopter writes. Rex reads them during code review. `architecture/` and `general/` always load. `language/<lang>/` loads when the diff matches. Handbooks are advisory unless they carry the `ENFORCEMENT: blocking` marker. See [`handbooks/README.md`](../handbooks/README.md). |
-| Agents | `.claude/agents/` | 23 sub-agents: 4 utility agents (Rex, Hakim, Munir, Naqid), 7 engineering, 1 architecture (Tariq), 6 product and design, and 5 security and data. See AgDR-0050, AgDR-0054, AgDR-0078, and AgDR-0105. |
+| Agents | `.claude/agents/` | 15 sub-agents: 4 utility agents (Rex, Hakim, Munir, Naqid), 6 engineering, 1 architecture (Tariq), 2 product and design, and 2 security and data. See AgDR-0050, AgDR-0054, AgDR-0078, AgDR-0105, and AgDR-0301. |
 | Skills | `.claude/skills/` | Slash commands. The full list follows. |
 | Settings | `.claude/settings.json` | Connects the hooks to the Claude Code hook events: `PreToolUse`, `PostToolUse`, `SessionStart`, `UserPromptSubmit`, and `ConfigChange`. |
 
@@ -30,12 +30,14 @@ See `docs/getting-started.md` for the integration model and for how to install t
 ### Available skills (72)
 
 Each row gives one line for a skill. The full text for each skill is in `.claude/skills/<name>/SKILL.md`.
+The count includes 3 deprecated aliases: `/spike-close`, `/prototype-close`, and `/tickets-batch` (me2resh/apexyard#2028).
+Each alias passes its arguments to the new mode. The aliases ship deprecated in v5.11.0, and v5.12.0 removes them. The new commands run `/spike`, `/prototype`, and `/task`, so they need `Skill(spike)`, `Skill(prototype)`, or `Skill(task)`.
 
 | Skill | Purpose |
 |-------|---------|
 | `/preflight` | Read-only environment checks before setup. Also available as `apexyard doctor`. |
 | `/setup` | First-run bootstrap. Configures `onboarding.yaml` in 3 exchanges. |
-| `/launch-check` | Production readiness audit. Runs a 10-dimension go/no-go check at milestone boundaries. The opt-in `--workflow` mode runs the dimensions in parallel. |
+| `/launch-check` | Quick 10-dimension go/no-go check at milestones. On WARN or FAIL, it names and offers the matching full audit. `--workflow` runs in parallel. |
 | `/threat-model` | STRIDE threat model: spoofing, tampering, repudiation, disclosure, DoS, and EoP. |
 | `/accessibility-audit` | WCAG 2.1 AA accessibility audit: perceivable, operable, understandable, robust. |
 | `/compliance-check` | GDPR and ePrivacy compliance: consent, privacy policy, data handling, and user rights. |
@@ -69,14 +71,14 @@ Each row gives one line for a skill. The full text for each skill is in `.claude
 | `/bug` | Creates a structured bug ticket with Given/When/Then, repro steps, and severity. |
 | `/report-apexyard-bug` | Reports a bug in the apexyard framework itself to `me2resh/apexyard`, with leak scrubbing. Different from `/bug`. |
 | `/request-apexyard-feature` | Requests a feature for the apexyard framework itself from `me2resh/apexyard`. Different from `/feature`. |
-| `/task` | Creates a structured technical task ticket with a driver, scope, and acceptance criteria. |
-| `/tickets-batch` | Files 5 to 20 structured tickets in one shared-context flow. |
+| `/task` | Creates a structured technical task ticket. `--batch` files 2 to 20 mixed tickets in one shared-context flow. |
+| `/tickets-batch` | Deprecated alias for `/task --batch`. |
 | `/migration` | Creates a labelled migration ticket and a migration AgDR. The migration gate needs them. |
-| `/spike` | Creates a time-boxed spike ticket with a hypothesis. Answers "will it work?". Throwaway. Exempt from the AgDR and coverage gates. |
+| `/spike` | Creates a time-boxed spike ticket. `--close --promote` files a feature; `--close --discard` writes a memo. Exempt from the AgDR and coverage gates. |
 | `/scaffold` | Interviews the owner and generates the project floor from a validated scaffold spec. |
-| `/spike-close` | Disposition gate for spikes. `--promote` files a feature. `--discard` writes a memo. |
-| `/prototype` | Creates a throwaway UX or demo prototype ticket. Answers "how should it look and feel?". Same exemptions as `/spike`. |
-| `/prototype-close` | Disposition gate for prototypes. `--promote` files a feature. `--discard` writes a memo. |
+| `/spike-close` | Deprecated alias for `/spike --close`. |
+| `/prototype` | Creates a throwaway UX or demo prototype ticket. `--close --promote` or `--close --discard` records the disposition. Same exemptions as `/spike`. |
+| `/prototype-close` | Deprecated alias for `/prototype --close`. |
 | `/walking-skeleton` | Creates a feature ticket for the thinnest end-to-end slice through every layer. The team keeps and grows it. Full SDLC. |
 | `/codify-rule` | Turns a review comment that caught a Rex miss into a draft handbook entry. |
 | `/investigation` | Creates an investigation ticket and a live document for long root-cause work. |

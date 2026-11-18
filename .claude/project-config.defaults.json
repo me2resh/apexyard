@@ -220,6 +220,17 @@
     "isolation": "worktree"
   },
 
+  "disk_budget": {
+    "_comment": "me2resh/apexyard#2070 step 4 / AgDR-0306. Advisory disk budget for the folders that ApexYard owns. At SessionStart, check-disk-budget.sh measures them with a time limit. When they use more than max_owned_gb, or the disk has less than min_free_percent free, it proposes a sweep. It never removes anything. bin/apexyard-disk-sweep.sh lists copies older than sweep_min_age_days whose PR is merged or closed (dry run), and removes them with --apply <plan-id> only after the user says yes. The review-copy root of .claude/skills/code-review/review-copy.sh (AgDR-0305) is always included. review_copy_roots adds more folders that hold review copies. extra_paths adds folders to the measurement only. A path can start with ~/ or be relative to the ops root. Set enabled to false to turn the SessionStart check off.",
+    "enabled": true,
+    "max_owned_gb": 10,
+    "min_free_percent": 10,
+    "sweep_min_age_days": 7,
+    "measure_timeout_seconds": 3,
+    "review_copy_roots": [],
+    "extra_paths": []
+  },
+
   "pre_push": {
     "commands": [],
     "_comment": "Default is empty — per-fork overrides (see docs/project-config.md) populate this with the commands the project actually runs (lint, typecheck, test, build). An empty list makes bin/run-configured-pre-push-checks.sh a no-op. That script, invoked from .githooks/pre-push, runs this list; .claude/hooks/pre-push-gate.sh no longer reads it (#1366, AgDR-0173)."

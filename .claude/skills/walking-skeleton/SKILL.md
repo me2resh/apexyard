@@ -16,8 +16,8 @@ Creates a structured GitHub Issue for a **walking skeleton** — the thinnest po
 >
 > | Skill | Question it answers | Lifecycle |
 > |-------|---------------------|-----------|
-> | `/spike` | "Will this **technically** work?" | **THROWAWAY** — discarded after the answer is in (`/spike-close`). |
-> | `/prototype` | "What should this **look and feel** like?" | **THROWAWAY** — discarded after the direction is chosen (`/prototype-close`). |
+> | `/spike` | "Will this **technically** work?" | **THROWAWAY** — discarded after the answer is in (`/spike --close`). |
+> | `/prototype` | "What should this **look and feel** like?" | **THROWAWAY** — discarded after the direction is chosen (`/prototype --close`). |
 > | **`/walking-skeleton`** | "Is the **whole architecture** wired and deployable end-to-end?" | **KEPT** — the production spine you flesh out. Full SDLC. |
 >
 > The walking skeleton is the **opposite** of a spike/prototype: minimal but **production-shaped and kept**. This distinction prevents the common, expensive confusion where a throwaway exploration gets accidentally promoted into production. A walking skeleton is held to the full bar from day one *because* it stays — it is **NOT** exempt from the AgDR + coverage gates the way `/spike` and `/prototype` are. See `workflows/sdlc.md` § Phase 1 and `.claude/rules/workflow-gates.md`.

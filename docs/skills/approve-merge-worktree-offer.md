@@ -1,12 +1,20 @@
-# /approve-merge step 9a: offer to remove the merged worktree
+# /approve-merge step 9a: offer to remove the merged worktree and review copies
 
 This is the full text of step 9a. The skill keeps a short form.
 
-## 9a. Optional: offer to remove the merged PR's worktree
+## 9a. Optional: offer to remove the merged PR's worktree and review copies
 
 Skip this step when `MERGE_RC` is not 0, and when `--no-merge` was passed.
 
 A merged PR often leaves a linked worktree on disk. Removing it also removes its ticket marker, because the marker lives in the worktree's git dir. Offer the removal. Never do it without a yes.
+
+The step covers three items in one proposal (#2070):
+
+- The **PR worktree**: a linked worktree that holds the PR's head branch.
+- The **review copies**: linked worktrees with a detached HEAD at a commit of the PR. A reviewer or QA engineer makes them with `git worktree add <path> <sha>`.
+- The **build output**: the ignored files in each of these worktrees. `git worktree remove` deletes them with the worktree.
+
+A standalone scratch clone or a `git archive` export is not a linked worktree. The helper does not find it. Leave it for a later sweep.
 
 1. Find the local clone of the PR's repo, the **source tree**. For a registered project it is `workspace/<name>/`, or the `workspace:` path of its registry entry. For a PR on the ops fork it is the ops root.
 2. List the candidates with the helper.
@@ -48,12 +56,41 @@ A merged PR often leaves a linked worktree on disk. Removing it also removes its
    A missing owner library or `jq` refuses cleanup with `owner check unavailable`.
    An inconclusive preservation check also refuses cleanup.
    For an `owner unknown` refusal, follow the release procedure below.
-3. If there is an `ok` worktree, ask with `AskUserQuestion`. Show the path and the ignored files the helper listed, because `git worktree remove` deletes them. Offer "Remove it" and "Keep it".
-4. On "Remove it", run:
+3. List the review copies with the helper.
+   Use the same `<merged-head-sha>`.
+   Add one `--pr-commit` argument for each other commit SHA of the PR, if the tracker gives them.
+   For GitHub, `gh pr view <pr> --repo <owner/repo> --json commits --jq '.commits[].oid'` prints them.
+
+   ```bash
+   .claude/skills/approve-merge/remove-worktree.sh list-copies "<source-tree>" --merged-head "<merged-head-sha>" --pr-commit "<pr-commit-sha>"
+   ```
+
+   The helper lists a linked worktree only when its HEAD is detached at one of these commits.
+   It never lists a worktree that holds a branch.
+   It prints the same `ok` and `refused (<reason>)` rows and applies the same checks as `list`.
+   An earlier commit counts as preserved only when it is an ancestor of the merged head or a remote holds it.
+   The output of the two list commands is the dry run. It removes nothing.
+4. If there is an `ok` row, propose the removal with `AskUserQuestion`.
+   Show each `ok` path and its kind: PR worktree or review copy.
+   Show the ignored files that the helper listed, because `git worktree remove` deletes them.
+   Show each `refused` row with its reason, and say that it stays on disk.
+   Offer "Remove them" and "Keep them".
+5. On "Remove them", run one command for each `ok` path.
+   For the PR worktree, run:
 
    ```bash
    .claude/skills/approve-merge/remove-worktree.sh remove "<source-tree>" "<path>" "<head-branch>" --merged-head "<merged-head-sha>"
    ```
+
+   For a review copy, run:
+
+   ```bash
+   .claude/skills/approve-merge/remove-worktree.sh remove-copy "<source-tree>" "<path>" --merged-head "<merged-head-sha>" --pr-commit "<pr-commit-sha>"
+   ```
+
+   Pass the same `--pr-commit` arguments as in step 3.
+   The `remove-copy` command rechecks that the HEAD is still detached at one of the given commits.
+   It then rechecks every refusal rule.
 
    The helper rechecks the branch and every refusal rule.
    When the calling session owns the worktree, the helper releases that record with `worktree_owner_release`.
@@ -65,7 +102,13 @@ A merged PR often leaves a linked worktree on disk. Removing it also removes its
    A dirty worktree stops the step.
    Report the helper's message.
    Leave a refused worktree for the user.
-5. On "Keep it", do nothing. Do not ask again.
+
+   Each removal appends one line to the removal log `<ops-root>/.claude/session/cleanup.log`.
+   The line has these tab-separated fields: UTC time, kind, path, source tree, branch or HEAD, and merged head.
+   The kind is `worktree` or `review-copy`.
+   The helper refuses before it removes anything when it cannot write the log.
+   After the removals, tell the user the removed paths and the log path.
+6. On "Keep them", do nothing. Do not ask again.
 
 Never remove a path that the helper did not list. Never pass `--force`.
 

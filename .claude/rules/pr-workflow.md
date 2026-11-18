@@ -120,7 +120,7 @@ as evidence the PR is up to date.
 After each integration-branch push, the workflow refreshes only the oldest eligible behind PR with the `ready-to-merge` label.
 Eligible PRs are open, non-draft, and from the same repository.
 A failed attempt stops the refresh run.
-Rex adds the label on APPROVED and removes it on CHANGES REQUESTED.
+The `/code-review` orchestrator adds the label on APPROVED and removes it on CHANGES REQUESTED. Rex does not edit the label.
 A new non-merge commit removes the label and needs another Rex review.
 Base-branch merge commits retain the label. Carry-over keeps Rex's approval only when the existing check returns `true`.
 A refresh failure comment means the orchestrator must resolve the conflict or API failure.
@@ -239,7 +239,7 @@ This rule also applies to other destructive / externally-visible / hard-to-rever
 
 ## Build agents cannot self-review
 
-A build-class sub-agent (backend-engineer, frontend-engineer, platform-engineer, product-manager, data-engineer, ui-designer, ux-designer) starts as a spawned agent to implement a ticket. It cannot nest the Agent tool, which means it cannot spawn the real `code-reviewer` (Rex). Any "review" a build agent produces is the author reviewing their own work: not an independent pass.
+A build-class sub-agent (backend-engineer, frontend-engineer, platform-engineer, product-manager, data-engineer, ui-designer) starts as a spawned agent to implement a ticket. It cannot nest the Agent tool, which means it cannot spawn the real `code-reviewer` (Rex). Any "review" a build agent produces is the author reviewing their own work: not an independent pass.
 
 **This matters for the merge gate.** The two-reviews requirement (workflow-gates rule #5) depends on Rex being a separate agent with a separate context. Suppose a build agent impersonates Rex: it frames its final report as "Rex Code Review: Verdict: APPROVED" and fabricates a `*-rex.approved` marker. That satisfies the *filename* of the gate requirement without satisfying its *intent*. It is a visible rule violation, not an edge case.
 

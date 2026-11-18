@@ -33,7 +33,7 @@ The gate table is in `.claude/rules/workflow-gates.md`. It is the one source for
 
 ### Roles
 
-`roles/{department}/*.md` define 20 role identities (Backend/Frontend/Platform Engineer, Tech Lead, QA, Product Manager, Security Auditor, etc.) with CAN/CANNOT boundaries. They activate on specific triggers (a diff touching `**/auth/**` → Security Auditor; a PR carrying a technical design → Solution Architect review), not on every session. Full trigger table: `.claude/rules/role-triggers.md`. When you adopt a role, read its file and stay in it until the task completes.
+`roles/{department}/*.md` define 12 role identities (Backend/Frontend/Platform Engineer, Tech Lead, QA, Product Manager, Security Auditor, etc.) with CAN/CANNOT boundaries. They activate on specific triggers (a diff touching `**/auth/**` → Security Auditor; a PR carrying a technical design → Solution Architect review), not on every session. Full trigger table: `.claude/rules/role-triggers.md`. When you adopt a role, read its file and stay in it until the task completes.
 
 ### Load-bearing conventions
 
@@ -114,10 +114,10 @@ The rest of this file is for an agent extending **apexyard itself** — its hook
 - `.claude/` — framework hooks, agents, rules, skills, settings.json
   - `.claude/hooks/` — shell scripts and shared libraries (wired in `.claude/settings.json` to the PreToolUse, PostToolUse, SessionStart, UserPromptSubmit and ConfigChange events)
   - `.claude/skills/` — slash commands (one dir per skill, each with `SKILL.md`)
-  - `.claude/agents/` — 23 sub-agents: 4 utility (Rex code-reviewer, Hakim security-reviewer/auditor, Munir dep-auditor, Naqid contrarian) + 19 dept-aligned agents across engineering / product / design / security / data (the pr-manager + ticket-manager lifecycle agents were retired — AgDR-0105; their lifecycles are owned by the merge gates / `/approve-merge` and the structured ticket skills)
+  - `.claude/agents/` — 15 sub-agents: 4 utility (Rex code-reviewer, Hakim security-reviewer/auditor, Munir dep-auditor, Naqid contrarian) + Tariq solution-architect + 10 department agents across engineering / product / design / security / data. AgDR-0301 merged the five department heads, the Product Analyst, the UX Designer and the Data Analyst into receivers. AgDR-0105 retired the pr-manager and ticket-manager lifecycle agents.
   - `.claude/rules/` — 23 modular rule files. CLAUDE.md indexes them by name. Load a file when the work needs it. Claude Code excludes this tree from auto-load via per-clone `claudeMdExcludes` in `.claude/settings.local.json` (AgDR-0233).
   - `.claude/settings.json` — hook wiring. `/setup` and SessionStart write per-clone `claudeMdExcludes` into gitignored `.claude/settings.local.json`.
-- `roles/` — 20 role definitions across Engineering, Product, Design, Security, Data, Architecture
+- `roles/` — 12 role definitions across Engineering, Product, Design, Security, Data, Architecture (plus 8 redirect stubs for one release, AgDR-0301)
 - `workflows/` — SDLC, code-review, deployment workflow docs
 - `templates/` — PRD, ADR, AgDR (Agent Decision Record), migration AgDR, C4 L1/L2, vision, sequence, DFD, audit templates, ticket templates
 - `handbooks/` — adopter-authored Rex-consumed standards (architecture / general / language buckets, path-convention discovery)
