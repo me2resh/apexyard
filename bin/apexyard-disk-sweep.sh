@@ -42,7 +42,26 @@
 # Files: plans and the log live in <ops>/.claude/session/disk-sweep/.
 #   removed.log  one tab-separated line for each item that --apply checked.
 
+# --json (plan or --apply): one JSON object on stdout.
+# Plan schema: apexyard.disk-sweep-plan/1.
+# Fields: schema, plan_id, items [{path, kind, bytes, reason}], kept [{path, reason}].
+# Apply schema: apexyard.disk-sweep-apply/1, removed and skipped [{path, reason}].
+# The schema version changes only on a breaking change.
 set -uo pipefail
+
+JSON=false
+args=()
+for arg in "$@"; do
+  if [ "$arg" = --json ]; then JSON=true; else args+=("$arg"); fi
+done
+set -- "${args[@]+"${args[@]}"}"
+if $JSON; then
+  command -v jq >/dev/null 2>&1 || { echo 'apexyard-disk-sweep: --json requires jq' >&2; exit 2; }
+fi
+
+_json_entry() {
+  jq -cn --arg path "$1" --arg reason "$2" '{path:$path,reason:$reason}'
+}
 
 SELF_DIR=$(cd "$(dirname "$0")" && pwd -P) || exit 2
 HOOKS="$SELF_DIR/../.claude/hooks"
@@ -389,7 +408,7 @@ evaluate() {
 }
 
 candidates() {
-  local root child
+  local root child seen=()
   [ "${#ROOTS[@]}" -gt 0 ] || return 0
   for root in "${ROOTS[@]}"; do
     if [ "${#REVIEW_ROOTS[@]}" -gt 0 ] && _in_list "$root" "${REVIEW_ROOTS[@]}"; then
@@ -398,9 +417,15 @@ candidates() {
     for child in "$root"/*; do
       [ -e "$child" ] || [ -L "$child" ] || continue
       [ -d "$child" ] || [ -L "$child" ] || continue
-      printf '%s\n' "$child"
+      if $JSON; then
+        if [ "${#seen[@]}" -gt 0 ] && _in_list "$child" "${seen[@]}"; then continue; fi
+        seen+=("$child")
+        printf '%s\0' "$child"
+      else
+        printf '%s\n' "$child"
+      fi
     done
-  done | awk '!seen[$0]++'
+  done | { if $JSON; then cat; else awk '!seen[$0]++'; fi; }
 }
 
 # _shown_path <item> - the physical path, or the item itself for a symbolic
@@ -458,23 +483,43 @@ cmd_measure() {
 
 cmd_dry_run() {
   local item real kb total=0 count=0 keep_lines="" remove_lines="" plan_id plan
-  local plan_entries=""
-  while IFS= read -r item; do
+  local plan_entries="" items="" kept_json="" bytes delim=$'\n'
+  $JSON && delim=''
+
+  while IFS= read -r -d "$delim" item; do
     [ -n "$item" ] || continue
     evaluate "$item"
     real=$(_shown_path "$item")
     if [ "$V_ACTION" = "remove" ]; then
       kb=$(_size_kb "$real")
+      bytes=null
+      case "$kb" in ''|*[!0-9]*) ;; *) bytes=$((kb * 1024)) ;; esac
+      if $JSON; then
+        items="$items$(jq -cn --arg path "$real" --arg kind "$V_KIND" --argjson bytes "$bytes" \
+          --arg reason "$PR_REF $PR_STATE age $V_AGE" '{path:$path,kind:$kind,bytes:$bytes,reason:$reason}')"$'\n'
+      fi
       kb=${kb:-0}
       total=$((total + kb))
       count=$((count + 1))
       remove_lines="$remove_lines$(printf '  %10s  %-8s  %s  %s %s  age %s' "$(disk_budget_format_kb "$kb")" "$V_KIND" "$real" "$PR_REF" "$PR_STATE" "$V_AGE")"$'\n'
       plan_entries="$plan_entries$real"$'\n'
     else
+      $JSON && kept_json="$kept_json$(_json_entry "$real" "$V_REASON")"$'\n'
       keep_lines="$keep_lines$(printf '  %-8s  %s  (%s)' "${V_KIND:--}" "$real" "$V_REASON")"$'\n'
     fi
   done < <(candidates)
 
+  if $JSON; then
+    mkdir -p "$STATE_DIR" || die "cannot create $STATE_DIR"
+    plan_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+    plan="$STATE_DIR/plan-$plan_id"
+    # NUL-delimited paths preserve newlines. Legacy text plans remain accepted.
+    { printf 'apexyard-nul-plan/1\n'; printf '%s' "$items" | jq -j '.path, "\u0000"'; } > "$plan" || die "cannot write $plan"
+    jq -cn --arg id "$plan_id" --argjson items "$(printf '%s' "$items" | jq -s .)" \
+      --argjson kept "$(printf '%s' "$kept_json" | jq -s .)" \
+      '{schema:"apexyard.disk-sweep-plan/1",plan_id:$id,items:$items,kept:$kept}'
+    return
+  fi
   printf 'ApexYard disk sweep - dry run. Nothing was removed.\n'
   printf 'Rules: copies older than %s days whose PR is merged or closed.\n\n' "$DB_MIN_AGE_DAYS"
   if [ "$count" -eq 0 ]; then
@@ -497,6 +542,7 @@ cmd_dry_run() {
 
 cmd_apply() {
   local plan_id="$1" plan item real kb removed=0 kept=0 failed=0 why mtime
+  local removed_json="" skipped_json="" delim=$'\n' header
   case "$plan_id" in
     ''|*[!A-Za-z0-9-]*) die "plan id is not valid: $plan_id" ;;
   esac
@@ -508,14 +554,18 @@ cmd_apply() {
     die "plan $plan_id is older than 24 hours. Run a new dry run."
   fi
 
-  printf 'ApexYard disk sweep - apply plan %s.\n' "$plan_id"
-  while IFS= read -r item; do
+  $JSON || printf 'ApexYard disk sweep - apply plan %s.\n' "$plan_id"
+  IFS= read -r header < "$plan"
+  [ "$header" != apexyard-nul-plan/1 ] || delim=''
+
+  while IFS= read -r -d "$delim" item; do
     case "$item" in /*) ;; *) continue ;; esac
     evaluate "$item"
     real=$(_shown_path "$item")
     if [ "$V_ACTION" != "remove" ]; then
       kept=$((kept + 1))
-      printf '  kept     %s (%s)\n' "$real" "$V_REASON"
+      $JSON && skipped_json="$skipped_json$(_json_entry "$real" "$V_REASON")"$'\n'
+      $JSON || printf '  kept     %s (%s)\n' "$real" "$V_REASON"
       _log kept "${V_KIND:--}" "$real" "${PR_REF:--} ${PR_STATE:--}" "-" "$V_REASON"
       continue
     fi
@@ -523,16 +573,23 @@ cmd_apply() {
     kb=${kb:-0}
     if why=$(remove_item "$real"); then
       removed=$((removed + 1))
-      printf '  removed  %s (%s)\n' "$real" "$(disk_budget_format_kb "$kb")"
+      $JSON && removed_json="$removed_json$(_json_entry "$real" "removed")"$'\n'
+      $JSON || printf '  removed  %s (%s)\n' "$real" "$(disk_budget_format_kb "$kb")"
       _log removed "$V_KIND" "$real" "$PR_REF $PR_STATE" "${kb}KB" "age $V_AGE"
     else
       failed=$((failed + 1))
-      printf '  failed   %s (%s)\n' "$real" "${why:-removal failed}"
+      $JSON && skipped_json="$skipped_json$(_json_entry "$real" "${why:-removal failed}")"$'\n'
+      $JSON || printf '  failed   %s (%s)\n' "$real" "${why:-removal failed}"
       _log failed "$V_KIND" "$real" "$PR_REF $PR_STATE" "${kb}KB" "${why:-removal failed}"
     fi
-  done < "$plan"
+  done < <(if [ "$header" = apexyard-nul-plan/1 ]; then tail -n +2 "$plan"; else cat "$plan"; fi)
   rm -f -- "$plan" "$OPS/.claude/session/disk-budget-size"
-  printf 'Removed %s, kept %s, failed %s. Log: %s\n' "$removed" "$kept" "$failed" "$LOG_FILE"
+  $JSON || printf 'Removed %s, kept %s, failed %s. Log: %s\n' "$removed" "$kept" "$failed" "$LOG_FILE"
+  if $JSON; then
+    jq -cn --argjson removed "$(printf '%s' "$removed_json" | jq -s .)" \
+      --argjson skipped "$(printf '%s' "$skipped_json" | jq -s .)" \
+      '{schema:"apexyard.disk-sweep-apply/1",removed:$removed,skipped:$skipped}'
+  fi
   [ "$failed" -eq 0 ]
 }
 

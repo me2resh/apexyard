@@ -12,6 +12,16 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 
 Deep-dive observability analysis. Checks that production issues will be detected, alerted on, and resolvable. Invoke when `/launch-check`'s monitoring row shows WARN or FAIL.
 
+## Usage
+
+```
+/monitoring-audit                       # audit the project in the current directory
+/monitoring-audit workspace/my-app      # audit the project at this path
+```
+
+This audit runs on its own. It does not need a `/launch-check` run first.
+`/launch-check` names and offers this audit when its monitoring row shows WARN or FAIL.
+
 ## Observability Pillars
 
 | Pillar | Question | What to look for |

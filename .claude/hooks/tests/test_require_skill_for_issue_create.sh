@@ -214,7 +214,7 @@ in=$(jq -nc --arg c "gh issue create --repo foo/bar --title x" '{tool_name:"Bash
 run_case "empty skill marker → blocked" 2 "BLOCKED" "$in" "$sb"
 
 # --- Wrapped tracker_create (skill shapes) stay allowed --------------------
-# /tickets-batch, /roadmap, /spike-close --promote, and /prototype-close
+# /task --batch, /roadmap, /spike --close --promote, and /prototype --close
 # --promote assign result="$(tracker_create …)" without the skill marker.
 # This gate must not match `$(…)`: that would block every adopter. The
 # ORBIT guard covers wrapped creates (AgDR-0217). No git remote is needed:
