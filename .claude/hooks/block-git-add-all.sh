@@ -32,14 +32,13 @@ fi
 # A heredoc body is NOT stripped before this check: the governance rule in
 # _lib-strip-heredoc.sh forbids deciding whether a gate fires from stripped
 # text, so a body line that starts with `git add -A` still blocks. Write the
-# message with `-F <file>`, or wrap the mention in backticks.
+# message with `-F <file>`.
 # A prose mention directly after a separator inside quotes blocks only when
 # the flag is followed by more text or a closing `)`/`}`: `"x && git add -A
 # done"` blocks, while `"x && git add -A"` stays allowed because a closing
 # quote right after the flag is not a direct-pattern terminator. The `-c`
 # wrapper tail does accept a closing quote, so a wrapper mention inside prose
-# still blocks. AgDR-0262 accepts prose blocks; use `-F` / `--body-file`, or
-# wrap the mention in backticks.
+# still blocks. AgDR-0262 accepts prose blocks; use `-F` / `--body-file`.
 _add_flag='(-A|--all|\.)'
 _add_tail='([[:space:];&|)}<>]|$)'
 _add_pos='(^[[:space:]]*|[;&|][[:space:]]*|[[:space:]](then|do|else)[[:space:]]+)'
