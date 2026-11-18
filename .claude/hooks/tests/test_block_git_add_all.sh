@@ -72,6 +72,8 @@ expect 2 "bash -c 'git add -A'"
 expect 2 'bash -lc "cd x && git add -A"'
 expect 2 "bash -c 'git add .'"
 expect 2 'sh -c "cd x; git add ."'
+expect 2 'git add -A>/dev/null'
+expect 2 "bash -c 'git add -A>/dev/null'"
 expect 2 'cd x
   git add -A'
 
@@ -90,6 +92,11 @@ expect 0 "bash -c 'git add .gitignore'"
 expect 0 "bash -c 'make' && git add .github/workflows/ci.yml"
 expect 0 "bash -c 'git add ./src'"
 expect 0 "printf '%s' '{\"tool_input\":{\"command\":\"git add -A\"}}'"
+# A closing quote right after the flag is not a terminator, so this prose
+# mention stays allowed (the header names this shape; #2073 delta review).
+expect 0 'git commit -m "x && git add -A"'
+# The same prose with trailing text does block, as the header states.
+expect 2 'git commit -m "x && git add -A done"'
 
 # A parenthesised or braced mention is ordinary review prose. `dev` allowed it
 # and the head must not block it (a false block on an ordinary command is kind

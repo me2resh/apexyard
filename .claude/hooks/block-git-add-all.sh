@@ -33,11 +33,13 @@ fi
 # _lib-strip-heredoc.sh forbids deciding whether a gate fires from stripped
 # text, so a body line that starts with `git add -A` still blocks. Write the
 # message with `-F <file>`, or quote the mention.
-# A prose mention directly after a separator inside quotes — a commit message
-# such as `"x && git add -A"` — also blocks. AgDR-0262 accepts that a gate
-# parser can block on prose; use `-F` / `--body-file`, or backticks.
+# A prose mention directly after a separator inside quotes blocks only when
+# the flag is followed by more text or a closing `)`/`}`: `"x && git add -A
+# done"` blocks, while `"x && git add -A"` stays allowed because a closing
+# quote right after the flag is not a terminator. AgDR-0262 accepts prose
+# blocks; use `-F` / `--body-file`, or wrap the mention in backticks.
 _add_flag='(-A|--all|\.)'
-_add_tail='([[:space:];&|)}]|$)'
+_add_tail='([[:space:];&|)}<>]|$)'
 _add_pos='(^[[:space:]]*|[;&|][[:space:]]*|[[:space:]](then|do|else)[[:space:]]+)'
 _add_prefix='((sudo|env|command|nohup|time|exec|builtin)[[:space:]]+)*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*'
 _add_git='git[[:space:]]+((-[Cc]|--git-dir|--work-tree)[[:space:]]+[^[:space:];&|]+[[:space:]]+)*add[[:space:]]+'"${_add_flag}${_add_tail}"
@@ -45,7 +47,7 @@ _add_git='git[[:space:]]+((-[Cc]|--git-dir|--work-tree)[[:space:]]+[^[:space:];&
 # so the flag must be followed by a real terminator. Without it, `\.` matches
 # the first character of a dot path (`bash -c 'git add .gitignore'`) and
 # explicit-path staging is falsely blocked (#2073 review).
-_add_wtail="([[:space:];&|)}'\"]|\$)"
+_add_wtail="([[:space:];&|)}<>'\"]|\$)"
 _add_wrapped="${_add_pos}${_add_prefix}(bash|sh|zsh|dash)([[:space:]]+-[A-Za-z-]+)*[[:space:]]+-[A-Za-z]*c[A-Za-z]*[[:space:]]+.*git[[:space:]]+add[[:space:]]+${_add_flag}${_add_wtail}"
 
 if printf '%s' "$COMMAND" | grep -qE "${_add_pos}${_add_prefix}${_add_git}" \
@@ -71,7 +73,7 @@ If you have many files in the same change, group by directory:
 That's still explicit (you typed the path) and still safe.
 
 If the match is prose in a commit message or body, write the text to a
-file and pass -F <file> or --body-file <file>, or quote the mention.
+file and pass -F <file> or --body-file <file>.
 
 The one common exception — staging all files under a single feature
 directory after a refactor — is fine via the directory form above.
