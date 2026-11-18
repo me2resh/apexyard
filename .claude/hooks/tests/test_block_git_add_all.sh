@@ -70,6 +70,8 @@ expect 2 'if true; then git add -A; fi'
 expect 2 'make && git add . && git commit -m build'
 expect 2 "bash -c 'git add -A'"
 expect 2 'bash -lc "cd x && git add -A"'
+expect 2 "bash -c 'git add .'"
+expect 2 'sh -c "cd x; git add ."'
 expect 2 'cd x
   git add -A'
 
@@ -82,6 +84,11 @@ expect 0 'echo hi; git add src/app.ts'
 expect 0 'git commit -m "never run git add -A"'
 expect 0 'gh pr comment 1 --body "do not use git add -A"'
 expect 0 'grep -rn "git add -A" docs/'
+# A dot path is an explicit path, not whole-tree staging. The `-c` wrapper
+# tail must not let `\.` match the first character of the path (#2073 review).
+expect 0 "bash -c 'git add .gitignore'"
+expect 0 "bash -c 'make' && git add .github/workflows/ci.yml"
+expect 0 "bash -c 'git add ./src'"
 expect 0 "printf '%s' '{\"tool_input\":{\"command\":\"git add -A\"}}'"
 
 # A parenthesised or braced mention is ordinary review prose. `dev` allowed it
@@ -94,7 +101,8 @@ expect 0 'echo "note; (git add -A) is blocked"'
 
 # Deliberate residue, not a regression: `(` and `{` are not command positions
 # here, so a real subshell or brace group that stages the whole tree is missed.
-# `dev` missed it too; the class belongs to epic #1846.
+# `dev` missed it too; the class belongs to epic #1846. Known gap: flip these
+# to expect 2 when the catch lands.
 expect 0 '(git add -A)'
 expect 0 '{ git add -A; }'
 
