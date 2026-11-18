@@ -1,7 +1,7 @@
 # AgDR-0299: opencode adapter loads through a top-level shim
 
-> Superseded for the install layout by [AgDR-0301](AgDR-0301-opencode-single-plugin-entry.md): opencode 2.x also discovers `<dir>/index.ts`, so the code directory moved beside the discovery directory. The shim decision below still stands.
-
+> Superseded for the install layout by [AgDR-0308](AgDR-0308-opencode-single-plugin-entry.md): opencode 2.x also discovers `<dir>/index.ts`, so the code directory moved beside the discovery directory. The shim decision below still stands.
+>
 > opencode loads only top-level plugin files, so the installer writes a top-level shim beside the adapter subfolder. This supersedes part of AgDR-0092.
 
 ## Context

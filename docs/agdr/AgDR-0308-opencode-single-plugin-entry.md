@@ -1,4 +1,4 @@
-# AgDR-0301: opencode adapter keeps its code outside the discovery directory
+# AgDR-0308: opencode adapter keeps its code outside the discovery directory
 
 > Supersedes the install-layout part of AgDR-0299 and of AgDR-0092. The adapter code now lives in `.opencode/apexyard/`, and `.opencode/plugins/apexyard.ts` stays the single discovered entry.
 
@@ -39,13 +39,15 @@ opencode 1.x loads that shim, because its glob matches top-level files only.
 opencode 2.x loads the same shim, and it finds no `<discovery>/<name>/index.ts` to load a second time.
 The helper modules live outside every discovery glob, so the #844 crash class cannot return.
 
-The installer removes a pre-#2072 `<discovery>/<name>/` directory after a successful install.
-The drift check in `bin/manage-portfolio-adapters.sh` reports that directory as drift, so an adopter who only pulls `/update` sees it and re-runs the installer.
+The installer writes the new shim before removing a pre-#2072 `<discovery>/<name>/` directory. A failed removal then leaves both entries and an installer error, rather than a shim that points at a deleted directory and no gates at all. The final single-entry check still fails the run if the old directory remains.
+The drift check in `bin/manage-portfolio-adapters.sh` reports that directory as drift.
+A registered portfolio project with `adapters: [opencode]` is reconciled in install mode by `/update`, so the installer runs again and migrates the layout.
+A single-fork install, or any install outside the registry, is not covered by `/update`; its adopter must re-run `bin/install-opencode-adapter.sh` and restart opencode.
 `harness-adapters/opencode/test/smoke-install-layout.sh` asserts one discovered file, no in-tree code directory, and the upgrade path.
 
 ## Consequences
 
 - A running opencode session must restart after re-running the installer, because the plugin set is read at startup.
 - `--target-dir` keeps its meaning (the discovery directory). `--name` now names a directory beside that directory.
-- The installer refuses three inputs that would put the code back inside a scanned directory or delete an operator's files: a `--target-dir` not named `plugins`, a `--name` equal to that directory's own name, and a code directory that already exists without an adapter entry.
+- The installer refuses inputs that would put the code back inside a scanned directory or delete an operator's files: a `--target-dir` not named `plugins` or containing `..`, a `--name` equal to a discovery directory's name, and a code directory that already exists without an adapter entry. Symlinks on the install path and a second discovered shim are also refused.
 - AgDR-0299's shim decision stands. Its "top-level files only" measurement no longer describes 2.x.

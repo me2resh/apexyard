@@ -217,6 +217,32 @@ if bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P4C/.opencode/plugi
 else
   echo "PASS: symlinked .opencode dir refused."
 fi
+# 4d: the code directory itself is a symlink.
+P4D="$TMPDIR/sym-code-dir"
+mkdir -p "$P4D/.opencode/plugins" "$TMPDIR/real-code-dir"
+printf 'user code\n' > "$TMPDIR/real-code-dir/user.ts"
+ln -s "$TMPDIR/real-code-dir" "$P4D/.opencode/apexyard"
+if bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P4D/.opencode/plugins" >/dev/null 2>&1; then
+  echo "FAIL: installer accepted a symlinked code directory" >&2; FAIL=1
+elif [ ! -f "$TMPDIR/real-code-dir/user.ts" ]; then
+  echo "FAIL: installer wrote through the code-directory symlink" >&2; FAIL=1
+else
+  echo "PASS: symlinked code directory refused, target untouched."
+fi
+# 4e: the shim path is a directory. mv would drop the temp shim inside it and
+# the run would end with no discovered entry.
+P4E="$TMPDIR/shim-is-dir"
+mkdir -p "$P4E/.opencode/plugins/apexyard.ts"
+printf 'operator\n' > "$P4E/.opencode/plugins/apexyard.ts/keep.txt"
+if bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P4E/.opencode/plugins" >/dev/null 2>&1; then
+  echo "FAIL: installer accepted a directory at the shim path" >&2; FAIL=1
+elif [ ! -f "$P4E/.opencode/plugins/apexyard.ts/keep.txt" ]; then
+  echo "FAIL: the refused run changed the operator's file in the shim directory" >&2; FAIL=1
+elif [ -e "$P4E/.opencode/apexyard" ]; then
+  echo "FAIL: the refused run wrote a code directory before checking the shim path" >&2; FAIL=1
+else
+  echo "PASS: a directory at the shim path is refused before any install writes."
+fi
 
 echo ""
 echo "== Check 5: re-running the installer on a pre-#2072 install moves the code out and rewrites the shim =="
@@ -260,6 +286,31 @@ elif [ ! -f "$P6B/apexyard/notes.md" ]; then
   echo "FAIL: the refused run still deleted the operator's apexyard/ directory" >&2; FAIL=1
 else
   echo "PASS: a non-discovery --target-dir is refused and its neighbour is intact."
+fi
+# A name that names an opencode discovery directory is refused. With a singular
+# target-dir, `--name plugins` would make the code path the real plural
+# discovery dir and the installer would rm -rf every plugin inside it.
+P6A="$TMPDIR/reserved-name"
+mkdir -p "$P6A/.opencode/plugins"
+printf 'export const mine = 1;\n' > "$P6A/.opencode/plugins/operator-plugin.ts"
+if bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P6A/.opencode/plugins" --name plugin >/dev/null 2>&1; then
+  echo "FAIL: installer accepted --name plugin, which is a discovery directory name" >&2; FAIL=1
+elif [ ! -f "$P6A/.opencode/plugins/operator-plugin.ts" ]; then
+  echo "FAIL: the refused reserved-name run still deleted the operator's plugin" >&2; FAIL=1
+else
+  echo "PASS: --name plugin refused and the operator's plugin is intact."
+fi
+# A '..' segment is refused before any derived path is checked, so a symlinked
+# intermediate directory cannot redirect the code or legacy path.
+P6D="$TMPDIR/dotdot-target"
+mkdir -p "$P6D/.opencode/plugins"
+printf 'export const mine = 1;\n' > "$P6D/.opencode/plugins/operator-plugin.ts"
+if bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P6D/.opencode/plugins/../plugins" >/dev/null 2>&1; then
+  echo "FAIL: installer accepted a --target-dir with a '..' segment" >&2; FAIL=1
+elif [ ! -f "$P6D/.opencode/plugins/operator-plugin.ts" ]; then
+  echo "FAIL: the refused '..' run still deleted the operator's plugin" >&2; FAIL=1
+else
+  echo "PASS: a --target-dir with a '..' segment is refused and the operator's plugin is intact."
 fi
 # A trailing `/.` used to spell the code path two ways, so the legacy removal
 # deleted the copy the same run had just written and left a dangling shim.

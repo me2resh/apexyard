@@ -148,6 +148,14 @@ case "$TARGET_DIR" in
   *) TARGET_DIR="$PWD/$TARGET_DIR" ;;
 esac
 
+case "$TARGET_DIR" in
+  ..|../*|*/..|*/../*)
+    echo "ERROR: --target-dir must not contain a '..' path segment (got: '$TARGET_DIR')." >&2
+    echo "       A '..' segment can change the derived parent and code paths after the symlink checks run." >&2
+    exit 2
+    ;;
+esac
+
 case "$(basename "$TARGET_DIR")" in
   plugins|plugin) ;;
   *)
@@ -179,6 +187,15 @@ if [ "$NAME" = "$(basename "$TARGET_DIR")" ]; then
   echo "       Pass a different --name, for example the default 'apexyard'." >&2
   exit 2
 fi
+# opencode also scans the singular `plugin` directory. A code directory with
+# either reserved name is itself a second plugin source, and with a singular
+# --target-dir it is the plural discovery dir the installer would rm -rf.
+case "$NAME" in
+  plugin|plugins)
+    echo "ERROR: --name '$NAME' names an opencode plugin discovery directory. Pass a different --name, for example the default 'apexyard'." >&2
+    exit 2
+    ;;
+esac
 
 # The code lives beside the discovery directory, never inside it: opencode 2.x
 # also discovers `<discovery>/<name>/index.ts`, so an in-tree subdirectory is
@@ -199,6 +216,13 @@ for link_path in "$CODE_PARENT" "$TARGET_DIR" "$DEST" "$SHIM"; do
     exit 1
   fi
 done
+# mv would move the temp shim INTO this directory instead of replacing the
+# path, leaving zero discovered entries after the legacy directory was removed.
+if [ -d "$SHIM" ]; then
+  echo "ERROR: refusing to install: $SHIM is a directory, not a shim file." >&2
+  echo "       Move it aside so the installer can write the single discovered entry." >&2
+  exit 1
+fi
 
 # $DEST and $LEGACY_DEST are removed with rm -rf, so only remove a directory
 # this installer wrote. A directory at either path with no adapter entry at
@@ -246,18 +270,13 @@ if ! grep -Eq 'from ["'"'"']\./derive-gates-core\.ts["'"'"']' "$DEST/derive-gate
   exit 1
 fi
 
-# A pre-#2072 install kept the code inside the discovery directory. Leaving it
-# in place would keep the double load alive, so remove it BEFORE the shim goes
-# in: if the removal fails, `set -e` stops the run with the old layout intact
-# and no new shim. Writing the shim first left two live entries whenever the
-# removal failed (#2072 review).
-if [ "$LEGACY_DEST" != "$DEST" ] && [ -d "$LEGACY_DEST" ]; then
-  rm -rf "$LEGACY_DEST"
-fi
-
-# Write the shim LAST, after every check passed, so a failed install never
-# leaves a shim that points at a broken copy. opencode 1.x discovers top-level
-# files only (`{plugin,plugins}/*.{ts,js}`) and 2.x discovers both those and
+# Write the shim BEFORE removing the legacy in-tree directory. If the removal
+# fails, `set -e` stops the run with the shim already pointing at the new code
+# directory and the old entry still present: opencode then loads the adapter
+# twice (the original #2072 symptom), which is the safer failure — gates still
+# run. Removing first could leave the old shim pointing at a deleted directory
+# and no gates at all. opencode 1.x discovers top-level files only
+# (`{plugin,plugins}/*.{ts,js}`) and 2.x discovers both those and
 # `<discovery>/<name>/index.ts`, so this file is the single entry under both.
 # The shim re-exports the code directory beside the discovery dir, and its
 # only export is the default plugin (the #844 crash cannot recur).
@@ -268,6 +287,14 @@ SHIM_TMP="$(mktemp "$TARGET_DIR/.apexyard-shim.XXXXXX")"
 printf 'export { default } from "../%s/index.ts";\n' "$NAME" > "$SHIM_TMP"
 chmod 644 "$SHIM_TMP"
 mv -f "$SHIM_TMP" "$SHIM"
+
+# The shim now points at the new code directory, so removing the legacy
+# in-tree directory can no longer leave the install with zero gates. The
+# single-entry check below still fails the run if this removal does not
+# happen, so a legacy directory never passes silently.
+if [ "$LEGACY_DEST" != "$DEST" ] && [ -d "$LEGACY_DEST" ]; then
+  rm -rf "$LEGACY_DEST"
+fi
 
 # #2072 asks the installer to VERIFY a single entry, not to claim one. Count the
 # discovered files that re-export THIS install: a second shim is a second plugin

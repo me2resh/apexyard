@@ -163,4 +163,15 @@ if "$ROOT/bin/manage-portfolio-adapters.sh" --check --registry "$TMP/registry-oc
 fi
 grep -q 'legacy in-tree code dir' "$TMP/oc-out"
 rm -rf "$OC/.opencode/plugins/apexyard"
+# A symlinked code directory is drift: the installer refuses it, and --check
+# must not report ok for the same unsafe layout.
+rm -rf "$OC/.opencode/apexyard"
+mkdir -p "$TMP/outside-code-dir"
+ln -s "$TMP/outside-code-dir" "$OC/.opencode/apexyard"
+if "$ROOT/bin/manage-portfolio-adapters.sh" --check --registry "$TMP/registry-oc.yaml" >"$TMP/oc-out" 2>&1; then
+  echo "expected a symlinked code directory to report drift" >&2
+  exit 1
+fi
+grep -q 'opencode adapter path is a symlink' "$TMP/oc-out"
+rm -f "$OC/.opencode/apexyard"
 echo "PASS: opencode shim drift check"
