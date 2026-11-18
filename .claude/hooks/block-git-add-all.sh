@@ -39,6 +39,14 @@ fi
 # quote right after the flag is not a direct-pattern terminator. The `-c`
 # wrapper tail does accept a closing quote, so a wrapper mention inside prose
 # still blocks. AgDR-0262 accepts prose blocks; use `-F` / `--body-file`.
+# Not caught, by design: this is a regex guardrail, not a shell parser
+# (AgDR-0267). A bare `eval`, command substitution (`$(git add -A)`,
+# backticks), an opening `(`/`{` (above), wrapper options (`sudo -u …`,
+# `env -i …`), attached git options (`-Csub`, `--git-dir=.git`), an absolute
+# path to git, a backslash-escaped `git`, and a quoted assignment value with
+# spaces all pass. Chasing them adds false blocks on ordinary commands, the
+# kind-1 cost AgDR-0267 ranks first; epic #1846 is closed, so a new tracker
+# issue is needed before any future catch.
 _add_flag='(-A|--all|\.)'
 _add_tail='([[:space:];&|)}<>]|$)'
 _add_pos='(^[[:space:]]*|[;&|][[:space:]]*|[[:space:]](then|do|else)[[:space:]]+)'
