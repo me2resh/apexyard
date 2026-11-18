@@ -257,6 +257,37 @@ Override example (opt-in refuse mode with a tighter limit):
 
 Decision record: [AgDR-0292](agdr/AgDR-0292-human-review-queue.md).
 
+## Disk budget (`disk_budget`)
+
+`disk_budget` sets the limits for the folders that ApexYard owns.
+At SessionStart, `check-disk-budget.sh` measures these folders and the free disk space.
+When usage exceeds a limit, it proposes a sweep. It never removes anything.
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `enabled` | `true` | Set to `false` to turn the SessionStart check off. |
+| `max_owned_gb` | `10` | Propose a sweep when the owned folders use more than this size. |
+| `min_free_percent` | `10` | Propose a sweep when the disk has less free space than this. |
+| `sweep_min_age_days` | `7` | A sweep lists only copies of this age or older. |
+| `measure_timeout_seconds` | `3` | Time limit for the SessionStart measurement. A slower disk skips the size check. |
+| `review_copy_roots` | `[]` | More folders that hold review copies. The sweep always includes the `review-copy.sh` root. A sweep looks at their direct children. |
+| `extra_paths` | `[]` | More folders to measure, for example a shared build cache. A sweep never removes them. |
+
+Owned folders: `.claude/worktrees`, `<workspace>/*.worktrees`, `<workspace>/*/.claude/worktrees`, `.claude/session`, the `review-copy.sh` root (`$APEXYARD_REVIEW_COPY_ROOT`, else `<TMPDIR>/apexyard-review-copies`), `review_copy_roots` and `extra_paths`.
+A review-copy clone needs its record `.git/apexyard-review-copy.json` (AgDR-0305). A sweep keeps a copy with no record.
+
+Run the sweep from the ops root:
+
+1. Run `bin/apexyard-disk-sweep.sh` for a dry run. It lists what it removes and what it keeps, with the reason.
+2. Show the list to the user.
+3. After the user says yes, run `bin/apexyard-disk-sweep.sh --apply <plan-id>`.
+
+`--apply` checks each item again. It keeps an item that has changes, unpushed commits, an open PR or a live owner.
+It logs each result to `.claude/session/disk-sweep/removed.log`.
+`bin/apexyard-disk-sweep.sh --measure` prints the size of each owned folder with no time limit.
+
+Decision record: [AgDR-0306](agdr/AgDR-0306-disk-budget-at-session-start.md).
+
 ## Extending the defaults
 
 ### Add a new ticket prefix (e.g. `[Security]`)
@@ -353,3 +384,18 @@ The lib that implements board moves lives at `.claude/hooks/_lib-project-board.s
 ## Backward compatibility
 
 `validate-commit-format.sh` previously read a flat `commit_types` top-level key from `.claude/project-config.json`. The framework still honours that reader as a fallback, so forks that customised commit types before apexyard#109 keep working without edits. New customisations should use the nested `commit.type_whitelist` form.
+
+For machine readers, run `bin/apexyard-disk-sweep.sh --json` or `--dry-run --json`.
+The output schema is `apexyard.disk-sweep-plan/1`.
+It contains `plan_id`, `items`, and `kept`.
+Each item contains `path`, `kind`, `bytes` (integer or null), and `reason`.
+Kinds use the existing sweep classification, including `worktree` and `clone`.
+Each kept entry contains `path` and `reason`.
+An empty JSON plan still has a saved, applicable `plan_id`.
+
+Run `bin/apexyard-disk-sweep.sh --apply <plan-id> --json` after approval.
+The output schema is `apexyard.disk-sweep-apply/1`.
+It contains `removed` and `skipped` arrays with `path` and `reason` entries.
+Skipped entries include failed removals. Exit codes match text mode.
+Apply checks only saved paths again and retains dirty worktrees.
+The schema string changes its version number only on a breaking change.

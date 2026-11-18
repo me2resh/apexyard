@@ -175,6 +175,22 @@ This section is read-only.
 A `dead` or `none` owner with `dirty` or `unpushed` work needs a human decision.
 Never remove, release, or relaunch a worktree from this section.
 
+### H. Disk use
+
+Run the helper once for the whole portfolio and print its one line at the end of the output:
+
+```bash
+bash "$ops_root/.claude/skills/status/disk-usage.sh"
+```
+
+Example: `ApexYard is using 12.3 GB; 9.1 GB can be reclaimed`.
+The helper measures only folders that ApexYard owns: worktrees under `workspace/*.worktrees`, review-copy folders, `.claude/session`, and build output in the project clones.
+Reclaimable means a worktree or review copy that is older than `disk_budget.sweep_min_age_days` (default 7), has no uncommitted, untracked or stashed work, has no commits that are not on a remote, and has a merged or closed PR. Review copies come from `review-copy.sh`'s root (`APEXYARD_REVIEW_COPY_ROOT` or `<temp dir>/apexyard-review-copies`) plus every folder in `disk_budget.review_copy_roots` — the configured roots ADD to the step-3 root, they never replace it. The age comes from the copy record. The record must identify the repo as `owner/name`; older records without an owner are not reclaimable. Copies with extra worktrees are kept. Review roots must be real directories owned by the current user, without group or world write permission.
+When a check is blocked (for example a detached HEAD), the line says `at least X can be reclaimed`.
+When the total is above `disk_budget.max_owned_gb` (default 10), the line ends with `(over the N GB budget)`. Step 4 owns the `disk_budget` keys; this helper reads them with built-in defaults.
+The helper has a time box of `disk_budget.measure_timeout_seconds` (default 6 when the key is absent). A timeout prints `ApexYard disk use is unknown`. Briefing mode does not run it.
+This section is read-only. It never removes anything. Step 4 of me2resh/apexyard#2070 owns the sweep.
+
 ## Portfolio output
 
 Run sections A–D and G for each project in the registry.
@@ -263,7 +279,7 @@ Branch:            feature/GH-42-csv-export
 Role set:          backend ; Waiting on you: 2 PRs, the oldest 3 hours
 ```
 
-The Role set line appends the human review queue status (me2resh/apexyard#1995). When the tracker is unavailable the suffix reads `; Waiting on you: unknown`. The briefing stays exactly 4 lines.
+The Role set line appends the human review queue status (me2resh/apexyard#1995). When the tracker is unavailable the suffix reads `; Waiting on you: unknown`. The briefing stays exactly 4 lines. It does not show the disk use line, because the measurement is too slow for the briefing.
 
 Behaviour:
 
@@ -321,3 +337,10 @@ The shim walks up from `$PWD` looking for the apexyard fork root — the `.apexy
 ---
 
 *Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+
+Machine readers can run `disk-usage.sh --json` for one JSON object.
+The schema is `apexyard.disk-usage/1`.
+Fields are `used_bytes`, `reclaimable_bytes`, `reclaimable_is_lower_bound`, `timed_out`, and `max_owned_bytes`.
+Byte counts are integers. Unavailable measurements have null used and reclaimable counts.
+The lower-bound flag matches “at least” in text output. The timeout flag matches “measurement timed out”.
+The schema string changes its version number only on a breaking change.

@@ -221,12 +221,13 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 9. CLAUDE.md skill table updated to 51 + /codify-rule row present
+# 9. Skill table count matches the tracked skills + /codify-rule row present
+#    (the count is computed, so it does not go stale; me2resh/apexyard#2028)
 # ---------------------------------------------------------------------------
 echo ""
-echo "9. CLAUDE.md skill table updates:"
-assert_grep "skill count bumped to 51"              "51 slash commands"               "$claude_md"
-assert_grep "Available skills heading at 51"        "^### Available skills \(51\)"     "$claude_md"
+echo "9. Skill table updates:"
+skill_total=$(git -C "$ops_root" ls-files '.claude/skills/*/SKILL.md' | awk -F/ '$3 !~ /^_/' | wc -l | tr -d ' ')
+assert_grep "Available skills heading at $skill_total" "^### Available skills \($skill_total\)" "$claude_md"
 assert_grep "/codify-rule row present"              '`/codify-rule`'                  "$claude_md"
 
 # ---------------------------------------------------------------------------

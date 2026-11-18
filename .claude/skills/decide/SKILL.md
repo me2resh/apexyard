@@ -13,7 +13,7 @@ Forces structured decision-making and creates an auditable Agent Decision Record
 
 ## Activated role
 
-When `/decide` runs, activate the **[Tech Lead](../../../roles/engineering/tech-lead.md)** role — they own technical decisions within their domain. For decisions that cross the architecture-review threshold (new service, new tech stack, new external integration, major data model change), escalate to the **[Head of Engineering](../../../roles/engineering/head-of-engineering.md)** before creating the AgDR.
+When `/decide` runs, activate the **[Tech Lead](../../../roles/engineering/tech-lead.md)** role — they own technical decisions within their domain. For decisions that cross the architecture-review threshold (new service, new tech stack, new external integration, major data model change), escalate to the human approver before creating the AgDR (AgDR-0301).
 
 If the decision touches auth / crypto / secrets / PII, also involve the **[Security Auditor](../../../roles/security/security-auditor.md)** for sign-off on the security implications before finalising the choice.
 

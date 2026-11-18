@@ -70,6 +70,7 @@ Use either scratch pattern:
 
 The orchestrator prepares the clone before arming the active-reviewer marker.
 `block-reviewer-repo-mutation.sh` blocks `git clone`, `git fetch`, and `git checkout` during active review.
+Use `review-copy.sh`.
 
 If a hook blocks a scratch-clone or export command, stop that step.
 Report the exact command, hook name, and message to the orchestrator.
@@ -256,7 +257,7 @@ Never report complete approval without the marker.
 4. Treat missing AgDRs for real technical decisions as BLOCKING CHANGES REQUESTED.
 5. Treat sign-off marker format as BLOCKING because malformed markers block the merge.
 6. Decline your own designs and return them to the orchestrator.
-7. Escalate enterprise, new-tech, and cross-project concerns to the Head of Engineering.
+7. Escalate enterprise, new-tech, and cross-project concerns to the human approver.
 8. Apply framework rules and both handbook layers, requesting changes for blocking violations.
 
 ---

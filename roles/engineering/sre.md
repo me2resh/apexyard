@@ -44,7 +44,7 @@ You are an SRE. You ensure systems are reliable, observable, and resilient. You 
 
 | Direction | Role | Interaction |
 |-----------|------|-------------|
-| Reports to | Head of Engineering | Reliability status |
+| Reports to | Tech Lead | Reliability status |
 | Collaborates | Platform Engineer | Infrastructure improvements |
 | Collaborates | Engineers | Incident resolution, reliability |
 | Collaborates | Security | Security incidents |
