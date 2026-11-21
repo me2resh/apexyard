@@ -547,6 +547,55 @@ run_wrapper "$A" PreToolUse "$(p_run "echo deny-me" "$A/plain-dir")"
 expect_decision "A25e workspace in a plain subdirectory of the fork reaches the gate" deny "refuses deny-me"
 rm -rf "$N" "$A/plain-dir"
 
+# A nested .agents hook or plugin config between agy's directory and the
+# fork root could override the fork's hooks. Every call gets deny.
+NA_RX="nested \.agents hook or plugin config at $A/sub/\.agents can override the fork's hooks; remove it from the live fork"
+mkdir -p "$A/sub/deeper/.agents" "$A/sub/.agents" "$A/other/.agents"
+for kind in hooks.json plugins.json plugins; do
+  if [ "$kind" = plugins ]; then mkdir -p "$A/sub/.agents/plugins"; else printf '{}' > "$A/sub/.agents/$kind"; fi
+  run_wrapper "$A" PreToolUse "$(p_tool list_dir "$A/sub/deeper")"
+  expect_decision "A25n1 nested .agents/$kind gets deny for a read-only tool" deny "$NA_RX"
+  run_wrapper "$A" PreToolUse "$(p_run "git status" "$A/sub/deeper")"
+  expect_decision "A25n2 nested .agents/$kind gets deny for run_command" deny "$NA_RX"
+  run_wrapper "$A" PreToolUse "$(p_run_top "git status" "$A" "\"$A/sub/deeper\"")"
+  expect_decision "A25n3 nested .agents/$kind on the top-level cwd path gets deny" deny "$NA_RX"
+  run_wrapper "$A" SessionStart "$(p_session "$A/sub/deeper")"
+  printf '%s' "$OUT" | jq -e '.injectSteps | length == 1 and (.[0].errorMessage.userMessage | test("nested .agents hook or plugin config at .*/sub/.agents"))' >/dev/null 2>&1 \
+    && ok "A25n4 nested .agents/$kind gives a SessionStart error step" || bad "A25n4 SessionStart nested $kind" "$OUT"
+  rm -rf "$A/sub/.agents/$kind"
+done
+ln -s "$A/no-such-file.json" "$A/sub/.agents/hooks.json"
+run_wrapper "$A" PreToolUse "$(p_tool list_dir "$A/sub")"
+expect_decision "A25n5 a dangling nested .agents/hooks.json symlink gets deny" deny "$NA_RX"
+rm -f "$A/sub/.agents/hooks.json"
+# Off the path: a sibling, the fork root's own wiring, and a managed project.
+printf '{}' > "$A/other/.agents/hooks.json"
+run_wrapper "$A" PreToolUse "$(p_tool list_dir "$A/sub/deeper")"
+expect_decision "A25n6 a sibling folder's .agents/hooks.json is not on the path" ask
+na_root_made=0
+if [ ! -e "$A/.agents/hooks.json" ]; then mkdir -p "$A/.agents"; printf '{}' > "$A/.agents/hooks.json"; na_root_made=1; fi
+mkdir -p "$A/workspace/proj/.agents/plugins"
+printf '{}' > "$A/workspace/proj/.agents/hooks.json"
+run_wrapper "$A" PreToolUse "$(p_tool list_dir "$A")"
+expect_decision "A25n7 the fork root's own .agents wiring is not denied" ask
+run_wrapper "$A" PreToolUse "$(p_run "git status" "$A")"
+expect_decision "A25n8 a managed project's .agents under workspace/ does not trip agy at the fork root" ask
+# A linked worktree is its own fork root: its .agents/ is its wiring, and
+# the parent fork's .agents/ is above the walk.
+W="$A/.claude/worktrees/wt"
+mkdir -p "$W/.claude" "$W/.agents"
+: > "$W/.apexyard-fork"
+cp -R "$A/.claude/hooks" "$W/.claude/hooks"
+cp "$A/.claude/settings.json" "$W/.claude/settings.json"
+copy_adapter "$W"
+printf '{}' > "$W/.agents/hooks.json"
+run_wrapper "$W" PreToolUse "$(p_tool list_dir "$W")"
+expect_decision "A25n9 a worktree session with its own wiring is not denied (read-only)" ask
+run_wrapper "$W" PreToolUse "$(p_run "git status" "$W")"
+expect_decision "A25n10 a worktree session with its own wiring is not denied (run_command)" ask
+rm -rf "$A/.claude/worktrees" "$A/sub" "$A/other" "$A/workspace"
+[ "$na_root_made" = 0 ] || rm -f "$A/.agents/hooks.json"
+
 run_wrapper "$A" Bogus "$(p_run "ls" "$A")"
 expect_decision "A26 unknown event argument gets deny" deny "unknown event"
 

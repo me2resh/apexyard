@@ -180,6 +180,14 @@ The agy wiring is a protected target in the live fork root, as `.claude/hooks/` 
 
 Write, Edit, MultiEdit, and Bash changes there get `deny`, under agy and Claude Code alike. Change these files in an isolated worktree. `bash bin/sync-agy-adapter.sh` still regenerates `.agents/hooks.json`, because the gate judges only the command text.
 
+agy also reads `.agents/` config in folders between its directory and the fork root. A nested `hooks.json`, `plugins.json`, or `plugins/` there could override the fork's hooks. So on every PreToolUse and SessionStart call, the wrapper checks each folder from agy's directory up to the fork root:
+
+- The walk starts at the top-level `cwd` and at `workspacePaths[0]`, in lexical and physical form. It stops before the fork root, whose `.agents/` is the real wiring.
+- It checks only the folders on that path, never a subfolder, so the cost is a few file checks per call.
+- A match gets `deny` for every tool, read-only tools included: "a nested .agents hook or plugin config at <dir> can override the fork's hooks; remove it from the live fork". At SessionStart, the same text is an error step.
+- A sibling folder is not on the path. A managed project under `workspace/` does not trip the check while agy runs in the fork root. When agy runs inside that project's folder, its `.agents/` config is on the path and gets `deny`.
+- A linked worktree is its own fork root, so its `.agents/` is its wiring, and the parent fork's `.agents/` is above the walk.
+
 The Bash check reads the command text, as the other shell-text gates do. A write through an interpreter or an unknown verb, for example a script that a command runs, is not caught (AgDR-0267).
 
 ## Decision log
@@ -215,7 +223,7 @@ The wrapper prints its decision before it writes the line, and it ignores loggin
 - **Agent shell session id:** a PreToolUse hook cannot change the agent's command. So agy's `run_command` shell does not get `APEXYARD_SESSION_ID`.
 - **Network reads:** `search_web` and `read_url_content` are in the read-only allowlist. Claude Code has the same path, because no PreToolUse gate covers `WebFetch` or `WebSearch`.
 - **`if` predicates:** the wrapper matches a `Bash(<glob>)` predicate against the whole command. Claude Code matches each subcommand. No PreToolUse handler uses `if` today.
-- **Nested `.agents/` folders:** agy honours `plugins.json` in every `.agents/` folder between its `cwd` and the fork root. The protection covers only the fork root's `.agents/`.
+- **Nested `.agents/` folders:** the wrapper denies every call while a nested `.agents/` hook or plugin config sits on the path from agy's directory to the fork root. It does not stop a person from creating one. The next call shows the deny.
 - **Other adapters:** the Codex, opencode, and pi wiring is not a protected target yet.
 - **Conformance CI:** not planned. The terms of service forbid an automated agy run.
 

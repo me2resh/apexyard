@@ -902,6 +902,43 @@ check_session_snapshot() {
   return 0
 }
 
+# check_nested_agents: agy reads .agents/ hook and plugin config in folders
+# between its directory and the fork root. A nested hooks.json, plugins.json,
+# or plugins/ can add or replace hooks, and so override the fork's gates. The
+# walk starts at the top-level cwd and at workspacePaths[0], in lexical and
+# physical form. It checks each ancestor up to, but not including, the fork
+# root, whose .agents/ is the real wiring. It never reads a subfolder, so the
+# cost is a few stat calls per call. A start outside the fork walks nothing.
+# The workspace checks below deny it for a gated tool.
+check_nested_agents() {
+  [ -n "$OPS_ROOT" ] || return 0
+  local ws top start form d
+  ws=$(jq -r '.workspacePaths | if type == "array" and length > 0 and (.[0] | type) == "string"
+      and (.[0] | test("[\u0000-\u001f\u007f]") | not) then .[0] else "" end' "$WORK/input" 2>/dev/null) || ws=""
+  top=$(jq -r '.cwd | if type == "string" and (test("[\u0000-\u001f\u007f]") | not) then . else "" end' "$WORK/input" 2>/dev/null) || top=""
+  case "$ws" in /*) ;; *) ws="" ;; esac
+  case "$top" in
+    ''|/*) ;;
+    *) if [ -n "$ws" ]; then top="$ws/$top"; else top=""; fi ;;
+  esac
+  for start in "$top" "$ws"; do
+    [ -n "$start" ] || continue
+    for form in "$(perm_lexical "$start")" "$(CDPATH='' cd -- "$start" 2>/dev/null && pwd -P)"; do
+      d="$form"
+      while [ -n "$d" ]; do
+        case "$d/" in "$OPS_ROOT/"?*) ;; *) break ;; esac
+        if [ -e "$d/.agents/hooks.json" ] || [ -L "$d/.agents/hooks.json" ] \
+          || [ -e "$d/.agents/plugins.json" ] || [ -L "$d/.agents/plugins.json" ] \
+          || [ -e "$d/.agents/plugins" ] || [ -L "$d/.agents/plugins" ]; then
+          fail "ApexYard agy adapter: a nested .agents hook or plugin config at $d/.agents can override the fork's hooks; remove it from the live fork."
+        fi
+        d=${d%/*}
+      done
+    done
+  done
+  return 0
+}
+
 main() {
   case "$EVENT" in
     PreToolUse|SessionStart) ;;
@@ -916,6 +953,9 @@ main() {
     || fail "ApexYard agy adapter: cannot store the hook payload."
   jq -e 'type == "object"' "$WORK/input" >/dev/null 2>&1 \
     || fail "ApexYard agy adapter: the hook payload on stdin is not a JSON object."
+
+  # Before the tool policy, so a read-only tool and SessionStart are covered.
+  check_nested_agents
 
   # The tool policy runs before settings.json is read, so a read-only tool
   # gets ask even when the fork is broken.
