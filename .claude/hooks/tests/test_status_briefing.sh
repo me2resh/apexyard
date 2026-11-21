@@ -280,6 +280,14 @@ fi
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
+sb=$(make_fork)
+out=$(APEXYARD_OPS_ROOT="$sb" APEXYARD_CWD="$sb" APEXYARD_GH="" bash "$HELPER_SRC" --json)
+if printf '%s' "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert set(d)=={"workspace","ticket","branch","role_set"}'; then
+  PASS=$((PASS+1))
+else
+  FAIL=$((FAIL+1))
+fi
+rm -rf "$sb"
 echo "Total: $PASS passed, $FAIL failed"
 if [ "$FAIL" -gt 0 ]; then
   echo "Failed cases: $FAILED_CASES" >&2

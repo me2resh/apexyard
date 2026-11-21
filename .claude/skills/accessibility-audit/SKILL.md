@@ -1,6 +1,6 @@
 ---
 name: accessibility-audit
-description: WCAG 2.2 AA audit — perceivable, operable, understandable, robust criteria. Deep-dive for /launch-check accessibility.
+description: WCAG 2.2 AA audit. Checks perceivable, operable, understandable, robust criteria. Deep-dive for /launch-check accessibility.
 disable-model-invocation: false
 argument-hint: "[project-path]"
 effort: high
@@ -11,6 +11,16 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 # /accessibility-audit — WCAG 2.2 AA Compliance
 
 Deep-dive accessibility analysis against the Web Content Accessibility Guidelines 2.2 Level AA. Produces a prioritized findings list with fix instructions. Invoke when `/launch-check`'s accessibility row shows WARN or FAIL, or proactively for any user-facing app.
+
+## Usage
+
+```
+/accessibility-audit                       # audit the project in the current directory
+/accessibility-audit workspace/my-app      # audit the project at this path
+```
+
+This audit runs on its own. It does not need a `/launch-check` run first.
+`/launch-check` names and offers this audit when its accessibility row shows WARN or FAIL.
 
 ## WCAG Principles (POUR)
 

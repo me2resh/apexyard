@@ -28,6 +28,9 @@
 
 set -u
 
+# Configured checks may launch suites directly or through run-hook-tests.sh.
+unset CDPATH
+
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 if [ -z "$REPO_ROOT" ]; then
   echo "ERROR: not inside a git repository." >&2

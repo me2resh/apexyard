@@ -7,7 +7,7 @@
 #
 #   1. .claude/rules/reporting-style.md exists and carries the ApexYard footer.
 #   2. CLAUDE.md indexes it by name at .claude/rules/reporting-style.md.
-#   3. CLAUDE.md's rules-count line is updated (13) and names "reporting style".
+#   3. docs/claude-md-reference.md's rules-count line is updated (13) and names "reporting style".
 #   4. The opt-in output style exists with valid name + description frontmatter.
 #
 # Test style matches the existing tests/*.sh — bash + grep, no framework.
@@ -22,6 +22,8 @@ set -u
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 RULE="$SRC_ROOT/.claude/rules/reporting-style.md"
 CLAUDE_MD="$SRC_ROOT/CLAUDE.md"
+# The rules-count line moved from CLAUDE.md to the reference page (#2035).
+REFERENCE_MD="$SRC_ROOT/docs/claude-md-reference.md"
 STYLE="$SRC_ROOT/.claude/output-styles/human-report.md"
 
 fail=0
@@ -48,20 +50,20 @@ else
   die "CLAUDE.md does not index .claude/rules/reporting-style.md without an @ import"
 fi
 
-# 3. CLAUDE.md rules-count line is present and at least 13 (>= the count as
+# 3. The reference page rules-count line is present and at least 13 (>= the count as
 # of this rule's own PR, #783). Checked as a lower bound rather than an exact
 # match so a later rule addition (e.g. #784's isolated-builds.md, which bumps
 # this to 14) doesn't spuriously fail this test — see AgDR-driven rule growth.
-RULES_COUNT=$(grep -oE '[0-9]+ modular rule files' "$CLAUDE_MD" 2>/dev/null | grep -oE '^[0-9]+' | head -n 1)
+RULES_COUNT=$(grep -oE '[0-9]+ modular rule files' "$REFERENCE_MD" 2>/dev/null | grep -oE '^[0-9]+' | head -n 1)
 if [ -n "$RULES_COUNT" ] && [ "$RULES_COUNT" -ge 13 ]; then
-  pass "CLAUDE.md rules count present and >= 13 (found: $RULES_COUNT)"
+  pass "docs/claude-md-reference.md rules count present and >= 13 (found: $RULES_COUNT)"
 else
-  die "CLAUDE.md rules-count line missing or below 13 (found: ${RULES_COUNT:-none})"
+  die "docs/claude-md-reference.md rules-count line missing or below 13 (found: ${RULES_COUNT:-none})"
 fi
-if grep -qi 'reporting style' "$CLAUDE_MD" 2>/dev/null; then
-  pass "CLAUDE.md rules list names 'reporting style'"
+if grep -qi 'reporting style' "$REFERENCE_MD" 2>/dev/null; then
+  pass "docs/claude-md-reference.md rules list names 'reporting style'"
 else
-  die "CLAUDE.md rules list does not name 'reporting style'"
+  die "docs/claude-md-reference.md rules list does not name 'reporting style'"
 fi
 
 # 4. Output style exists with frontmatter

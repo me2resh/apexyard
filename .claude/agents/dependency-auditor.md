@@ -256,7 +256,7 @@ Serialize package names, paths, and advisory text as data. Never interpolate the
 
 | Severity | Channel | Audience |
 |----------|---------|----------|
-| Critical / High / Unknown | Realtime (Slack / pager) | Head of Security, Tech Lead |
+| Critical / High / Unknown | Realtime (Slack / pager) | Security Auditor, Tech Lead, human approver |
 | Medium | Weekly report | Engineering team |
 | Low | Weekly report | Engineering team |
 

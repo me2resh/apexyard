@@ -13,6 +13,14 @@ The sections below are REQUIRED — the validate-pr-create hook + Rex check for 
 -
 -
 
+## Decisions made for you
+
+<!-- Required. List defaults chosen, scope cut, and conflicting requirements with their resolutions.
+     Explain each choice and its reason. Use "None" only with a one-line reason.
+     Rex checks specificity. This section does not add a blocking hook check. -->
+
+-
+
 ## Testing
 
 <!-- How a reviewer verifies this. Commands run, what passed. -->

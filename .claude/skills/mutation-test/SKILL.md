@@ -1,6 +1,6 @@
 ---
 name: mutation-test
-description: Mutation-testing sensor — language-dispatched (Stryker/MutPy/go-mutesting/mutant), milestone-cadence not per-PR, exit-3 graceful-degrade.
+description: Mutation-testing sensor, language-dispatched (Stryker/MutPy/go-mutesting/mutant), milestone-cadence not per-PR, exit-3 graceful-degrade.
 argument-hint: "[project-path] [--language=ts|js|python|go|ruby] [--runner=<name>] [--threshold=<N>] [--check-only]"
 allowed-tools: Bash, Read, Glob, Grep, Write
 ---
@@ -11,7 +11,7 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 
 Runs **mutation testing** against a project to measure whether the test suite *constrains* behaviour, not just *executes* lines. Coverage % answers "did the test run this line?"; mutation testing answers "if I broke this line, would the test catch it?".
 
-Pairs with `/launch-check` (fans out to this skill at milestone boundaries) and complements the existing `> 80%` coverage gate from `.claude/rules/workflow-gates.md`. **Not** run per-PR — see § "When to use this" for the cadence rationale.
+Pairs with `/launch-check` (it offers this skill when its behaviour-quality row shows WARN) and complements the existing `> 80%` coverage gate from `.claude/rules/workflow-gates.md`. **Not** run per-PR — see § "When to use this" for the cadence rationale.
 
 ## Runtime requirements
 
@@ -53,7 +53,7 @@ Defaults to single-fork mode. Split-portfolio v2 adopters resolve to the sibling
 
 | Trigger | Use `/mutation-test`? |
 |---------|----------------------|
-| Milestone boundary (epic done, release prep, launch check) | **Yes** — `/launch-check` dispatches automatically |
+| Milestone boundary (epic done, release prep, launch check) | **Yes** — `/launch-check` offers it on a WARN row; the operator chooses to run it |
 | Quarterly health check | Yes — explicit invocation |
 | Weekly cron via CI workflow | Yes — adopter wires a scheduled workflow |
 | Per-PR pre-merge gate | **No** — too slow (20–40 min on a medium codebase). Rex + the coverage gate cover per-PR test quality. |
@@ -61,7 +61,7 @@ Defaults to single-fork mode. Split-portfolio v2 adopters resolve to the sibling
 | After adding new test infrastructure | Yes — confirm the new tests actually constrain |
 | First-time on a brownfield project | Yes — expect a low score on the first run; treat it as a baseline |
 
-The skill is **NOT** wired to any pre-commit, pre-push, or merge-gate hook. It runs only when explicitly invoked or when `/launch-check` fans out to it.
+The skill is **NOT** wired to any pre-commit, pre-push, or merge-gate hook. It runs only when explicitly invoked, for example after the operator picks it from the `/launch-check` next-steps question.
 
 ## Process
 
@@ -335,14 +335,14 @@ Adopters override per-project in `.claude/project-config.json`:
 | `.claude/skills/mutation-test/detect.sh` | Language detection + runner-availability check (shared between full and `--check-only` modes) |
 | `.claude/skills/mutation-test/tests/smoke.sh` | Language-detection + graceful-degradation + report-shape tests |
 | `.claude/project-config.defaults.json` → `mutation.*` | Default runner map + threshold + timeout |
-| `.claude/skills/launch-check/SKILL.md` § "10. Behaviour quality" | The launch-check dimension that dispatches here |
+| `.claude/skills/launch-check/SKILL.md` § "10. Behaviour quality" | The launch-check dimension that offers this skill |
 
 Design rationale: see [`docs/agdr/AgDR-0045-mutation-test-skill.md`](../../../docs/agdr/AgDR-0045-mutation-test-skill.md).
 
 ## See also
 
 - AgDR-0045 — runner choices, threshold rationale, why-not-per-PR, graceful-degrade pattern, report location convention
-- `.claude/skills/launch-check/SKILL.md` — milestone-boundary umbrella that fans out to this skill
+- `.claude/skills/launch-check/SKILL.md` — milestone-boundary quick sweep that offers this skill
 - `.claude/skills/pdf/SKILL.md` — the graceful-degrade shape this skill mirrors
 - `.claude/skills/process/SKILL.md` — sibling skill with the same exit-3 install-advisory pattern
 - `.claude/rules/workflow-gates.md` — the existing > 80% coverage gate that this skill complements (coverage = was-it-executed; mutation = does-it-constrain)

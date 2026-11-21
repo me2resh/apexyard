@@ -20,13 +20,31 @@ PT_CWD=${PT_CWD:-${CLAUDE_PROJECT_DIR:-$PWD}}
 PT_CWD=$(pt_physical "$PT_CWD") || pt_block 'cannot resolve the effective directory.'
 PT_FALLBACK=${PT_OPS:-${PT_PROJECT:-$PT_CWD}}
 tool=$(jq -r '.tool_name // "Bash"' <<<"$INPUT")
-if [ "$tool" != Bash ]; then
-  target=$(jq -er '.tool_input.file_path // .tool_input.notebook_path // empty' <<<"$INPUT") || pt_block 'missing edit target.'
+if [ "$tool" = apply_patch ]; then
+  [ -r "$HOOK_DIR/dispatch-apply-patch.sh" ] || pt_block 'the patch dispatcher is missing or unreadable.'
+  exec bash "$HOOK_DIR/dispatch-apply-patch.sh" <<<"$INPUT"
+fi
+if ! hook_is_shell_call "$INPUT"; then
+  target=$(jq -er '.tool_input.file_path // .tool_input.notebook_path // empty' <<<"$INPUT") || pt_block "missing edit target (tool_name: $tool)."
   pt_protected "$target" && pt_block 'the edit target is live hook state. Use an isolated worktree.'
   exit 0
 fi
-cmd=$(jq -er '.tool_input.command' <<<"$INPUT") || pt_block 'missing Bash command.'
+# Preserve Claude Code's Bash command validation. Other shell transports must
+# provide the non-empty string used by the command-shape classifier.
+if [ "$tool" != Bash ] && ! jq -e '.tool_input.command | type == "string" and length > 0' >/dev/null 2>&1 <<<"$INPUT"; then
+  pt_block "missing edit target (tool_name: $tool)."
+fi
+cmd=$(jq -er '.tool_input.command' <<<"$INPUT") || {
+  if [ "$tool" = Bash ]; then pt_block 'missing Bash command.'; fi
+  pt_block "missing edit target (tool_name: $tool)."
+}
 cwd="$PT_CWD"
+# The sole agent-callable state writer. Match the complete raw command.
+# shellcheck source=/dev/null
+. "$HOOK_DIR/_lib-start-ticket-command.sh" || pt_block 'ticket command matcher missing.'
+if start_ticket_command_allowed "$cmd" "$PT_CWD" "${HOOK_DIR%/.claude/hooks}"; then
+  exit 0
+fi
 # Each protected-form test ignores letter case (pt_nocase).
 pt_token() { pt_nocase pt_token_nocase "$@"; }
 pt_token_nocase() {
@@ -146,7 +164,7 @@ PT_STATE_DIR=$(mktemp -d 2>/dev/null) || PT_STATE_DIR=""
 
 pt_git() {
   local unresolved=0
-  local i=1 arg verb tree="$PT_CWD" opts=0 first=1 raw="$cmd" gitcwd="$cwd"
+  local i=1 arg verb tree="$PT_CWD" opts=0 first=1 parent raw="$cmd" gitcwd="$cwd"
   local -a paths=()
   while [ "$i" -lt "${#words[@]}" ]; do
     arg=${words[$i]}; i=$((i+1))
@@ -171,7 +189,7 @@ pt_git() {
     PT_GIT_TREE_KEY="$tree"
     PT_CWD=$(pt_physical "$tree") || PT_CWD="$PT_FALLBACK"
     tree="$PT_CWD"
-    while [ "$tree" != / ] && [ ! -e "$tree/.git" ]; do tree=$(dirname "$tree"); done
+    while [ "$tree" != / ] && [ ! -e "$tree/.git" ]; do parent=$(dirname "$tree"); [ "$parent" = "$tree" ] && break; tree="$parent"; done
     PT_GIT_TREE_CWD="$PT_CWD"; PT_GIT_TREE_ROOT="$tree"
   fi
   case "$PT_CWD" in *'$'*) tree="$PT_FALLBACK"; PT_CWD="$tree" ;; esac
@@ -193,6 +211,20 @@ pt_git() {
   if [ "$unresolved" = 1 ]; then
     case "${verb:-}" in checkout|restore|apply|am|checkout-index|read-tree) pt_block 'non-literal git work tree.' ;; esac
   fi
+  # Pager-opening grep forms keep the existing operand checks.
+  if [ "${verb:-}" = grep ]; then
+    for arg in "${words[@]:$i}"; do
+      case "$arg" in
+        --) break ;;
+        -O*|-[!-]*O*) verb=grep-with-pager; break ;;
+        --op*)
+          local pager_option=--open-files-in-pager
+          case "$pager_option" in
+            "${arg%%=*}"*) verb=grep-with-pager; break ;;
+          esac ;;
+      esac
+    done
+  fi
   case "${verb:-}" in
     apply)
       for arg in "${words[@]}"; do [ "$arg" != --unsafe-paths ] || pt_block 'git apply --unsafe-paths is not safe.'; done
@@ -202,7 +234,18 @@ pt_git() {
     read-tree) for arg in "${words[@]}"; do [ "$arg" != -u ] || { pt_live "$tree" && pt_block 'read-tree writes a live root.'; }; done; return 0 ;;
     rm|mv) pt_operands "git $verb" "$i"; return 0 ;;
     checkout|restore) ;;
-    log|show|diff|blame|ls-files|status) return 0 ;;
+    ls-files|status|ls-tree|grep|cat-file|rev-parse|for-each-ref|show-ref|merge-base|describe|name-rev|check-ignore|check-attr) return 0 ;;
+    log|show|diff|blame|rev-list|shortlog|range-diff)
+      # Diff output options write even when the verb otherwise only reads.
+      # Scan past -- because an earlier option can consume it as a value.
+      while [ "$i" -lt "${#words[@]}" ]; do
+        arg=${words[$i]}; i=$((i+1))
+        case "$arg" in
+          --outp|--outpu|--output) pt_judge "${words[$i]:-}"; i=$((i+1)) ;;
+          --outp=*|--outpu=*|--output=*) pt_judge "${arg#*=}" ;;
+        esac
+      done
+      return 0 ;;
     archive)
       while [ "$i" -lt "${#words[@]}" ]; do
         arg=${words[$i]}; i=$((i+1))
@@ -317,22 +360,33 @@ pt_operands() {
 }
 pt_state_writer_nocase() {
   local val="$2"
-  case "$1" in pin-ops-root.sh|write-session-snapshot.sh|record-subagent-start.sh|dispatch-session-start.sh)
+  case "$1" in
+    pin-ops-root.sh|write-session-snapshot.sh|record-subagent-start.sh|dispatch-session-start.sh)
     case "$val" in ''|*'$'*|*'`'*) pt_block 'state writers are harness-only.' ;; esac
     pt_protected "$val" 1 && pt_block 'state writer sandbox is protected.'
     [[ "$(pt_physical "$val")" != "$PT_PIN_DIR" ]] || pt_block 'state writer sandbox is the live pin tree.' ;;
   esac
   return 0
 }
+pt_start_ticket_command() {
+  local command
+  command=$(pt_expand "$1")
+  case "${command##*/}" in
+    [aA][pP][eE][xX][yY][aA][rR][dD]-[sS][tT][aA][rR][tT]-[tT][iI][cC][kK][eE][tT])
+      pt_block 'state writers are harness-only; use the exact start-ticket helper command.' ;;
+  esac
+}
 pt_simple() {
   local segment="$1" word verb i start=0 savecwd="$PT_CWD" arg name val expanded sandbox_pin=""
+  local created_dir="${PT_MKDIR_NEXT:-}"
+  PT_MKDIR_NEXT=""; PT_MKDIR_CANDIDATE=""
   local -a words=() filtered=() redirect_slots=()
   local record kind operator skip=0 here_string="" capture_string=0 redirect_input="" capture_input=0
   local here_refs="${2:-}" ref body_id body_fd wanted_fd=0 selected_body=""
   # Operators have a separate token kind. A quoted ">" is an ordinary word.
   while IFS= read -r -d '' record; do
     kind=${record:0:1}; word=${record:1}
-    case "$kind" in D|H|P|S|E) continue ;; esac
+    case "$kind" in D|H|P|S|Q|E) continue ;; esac
     if [ "$skip" = 1 ]; then
       [ "$capture_string" = 0 ] || here_string="$word"
       [ "$capture_input" = 0 ] || redirect_input="$word"
@@ -423,6 +477,7 @@ pt_simple() {
   done
   [ "$start" -lt "${#words[@]}" ] || return 0
   words=("${words[@]:$start}"); verb=${words[0]##*/}
+  pt_start_ticket_command "${words[0]}"
   # State writers may run only with a literal sandbox assignment.
   for word in "${words[@]}"; do pt_nocase pt_state_writer_nocase "${word##*/}" "$sandbox_pin"; done
   case "$verb" in
@@ -435,7 +490,15 @@ pt_simple() {
       # Keep the old directory. It stays in effect if the cd fails.
       PT_PENDING[${#PT_PENDING[@]}]="$PT_CWD"
       case "$arg" in -|*'$'*|*'`'*) PT_CWD="$PT_FALLBACK" ;; /*) PT_CWD=$(pt_physical "$arg") ;; *) PT_CWD=$(pt_physical "$PT_CWD/$arg") ;; esac
-      { [ -d "$PT_CWD" ] && [ -x "$PT_CWD" ]; } || PT_CWD="$PT_FALLBACK"
+      if ! { [ -d "$PT_CWD" ] && [ -x "$PT_CWD" ]; }; then
+        # Only the immediately preceding successful mkdir -p can supply a
+        # directory that does not exist yet during command inspection.
+        if [ "$verb" != cd ] || [ -z "$created_dir" ] ||
+           [ "${words[$i]:-}" != "$created_dir" ] ||
+           pt_dir_is_sensitive "$PT_CWD" || pt_protected "$PT_CWD" 1; then
+          PT_CWD="$PT_FALLBACK"
+        fi
+      fi
       return 0 ;;
     popd)
       PT_PENDING[${#PT_PENDING[@]}]="$PT_CWD"
@@ -464,6 +527,7 @@ pt_simple() {
         [ "$have_script" = 0 ] || { ( pt_scan "$script" ) || exit 2; }
         return 0
       fi
+      [ "$have_script" = 0 ] || pt_start_ticket_command "$script"
       case "$script" in /dev/stdin|/dev/fd/*|-) have_script=0 ;; esac
       if [ "$have_script" = 0 ] && [ -z "$here_string" ] && [ -z "$here_refs" ]; then
         # The shell reads its program from a pipe or a redirect. The gate
@@ -515,14 +579,79 @@ pt_simple() {
           for arg in "${words[@]:1:$((i-1))}"; do case "$arg" in -*) ;; *) pt_judge "$arg" 1 ;; esac; done; words=("${words[@]:$((i+1))}"); pt_token_context && pt_block 'find has an unextractable mutation operand.'; return 0 ;; esac
       done; return 0 ;;
     patch) pt_patch; return 0 ;;
+    awk|gawk|mawk)
+      for word in "${words[@]:1}"; do
+        case "$word" in -i|-i*|--in-place*|-f|-f*|--file*) pt_token_context && pt_block 'awk in-place program names protected state.' ;; esac
+        # Awk output is program text, so shell redirection parsing cannot see it.
+        if [[ "$word" =~ system[[:space:]]*\( ]] || [[ "$word" =~ (print|printf)[^\;\}]*\| ]]; then
+          pt_token_context && pt_block 'awk shell program names protected state.'
+        fi
+        if [[ "$word" =~ (print|printf)[^\;\}]*\> ]]; then
+          # Judge every literal output, including multiple print statements.
+          # A computed output remains unresolved and fails closed.
+          local awk_output_re='>>?[[:space:]]*"([^"]+)"[[:space:]]*([;}
+]|$)' awk_rest="$word" awk_match
+          while [[ "$awk_rest" =~ $awk_output_re ]]; do
+            awk_match=${BASH_REMATCH[0]}
+            pt_judge "${BASH_REMATCH[1]}"
+            awk_rest=${awk_rest/"$awk_match"/}
+          done
+          if [[ "$awk_rest" =~ (print|printf)[^\;\}]*\> ]]; then
+            pt_token_context && pt_block 'awk output program names protected state.'
+          fi
+        fi
+      done
+      return 0 ;;
+    sort)
+      i=1
+      while [ "$i" -lt "${#words[@]}" ]; do
+        word=${words[$i]}; i=$((i+1))
+        case "$word" in
+          -o|--output) pt_judge "${words[$i]:-}"; i=$((i+1)) ;;
+          -o*) pt_judge "${word#-o}" ;;
+          --output=*) pt_judge "${word#*=}" ;;
+          --compress-program*) pt_token_context && pt_block 'sort runs an external program on protected input.' ;;
+          --*) ;;
+          -*o*)
+            arg=${word#*o}
+            if [ -n "$arg" ]; then pt_judge "$arg"
+            else pt_judge "${words[$i]:-}"; i=$((i+1)); fi ;;
+        esac
+      done
+      return 0 ;;
+    uniq)
+      i=1; local uniq_inputs=0
+      while [ "$i" -lt "${#words[@]}" ]; do
+        word=${words[$i]}; i=$((i+1))
+        case "$word" in
+          -f|-s|-w|--skip-fields|--skip-chars|--check-chars) i=$((i+1)) ;;
+          -*) ;;
+          *) uniq_inputs=$((uniq_inputs+1)); [ "$uniq_inputs" -lt 2 ] || pt_judge "$word" ;;
+        esac
+      done
+      return 0 ;;
+    active_issue_skill_marker_path|review_marker_path|review_markers_dir|review_body_path|review_body_dir)
+      # These library helpers only print paths.
+      return 0 ;;
+
     cp|mv|install|dd|ln|link|rsync|ditto|rm|rmdir|unlink|shred|chmod|chown|chgrp|chflags|chattr|xattr|setfacl|touch|mkdir|truncate|tar|unzip|cpio|pax|perl|ruby|gsed|sed|ed|ex|vi|vim|sponge|tee|base64|openssl|iconv|plutil|uudecode|gzip|gunzip|bzip2|bunzip2|xz|unxz)
-      pt_operands "$verb"; ;;
-    cat|grep|rg|jq|ls|diff|cmp|head|tail|wc|stat|file|readlink|realpath|shasum|sha256sum|test|'['|printf|echo|true|false|exit|return|pwd) ;;
+      pt_operands "$verb"
+      if [ "$start" = 0 ] && [ "${words[0]}" = mkdir ] &&
+         [ "${#words[@]}" = 3 ] && [ "${words[1]}" = -p ]; then
+        case "${words[2]}" in
+          # No `..` part and no leading `~`: those can resolve differently at
+          # run time (symlink parents, home lookup), so they keep the fallback.
+          ''|-*|'~'*|*'$'*|*'`'*|..|../*|*/..|*/../*) ;;
+          *) PT_MKDIR_CANDIDATE=${words[2]} ;;
+        esac
+      fi
+      ;;
+    cut|cat|grep|rg|jq|ls|diff|cmp|head|tail|wc|stat|file|readlink|realpath|shasum|sha256sum|du|md5|md5sum|shellcheck|test|'['|printf|echo|true|false|exit|return|pwd) ;;
     *)
       for word in "${words[@]:1}"; do
         expanded=$(pt_expand "$word")
         case "$expanded" in ''|-*|*'$'*|*'`'*) continue ;; esac
-        pt_token_context && pt_protected "$expanded" 1 && pt_block 'unknown verb has a live protected operand.'
+        pt_token_context && pt_protected "$expanded" 1 && pt_block "unknown verb '$verb' has a live protected operand '$expanded'."
       done ;;
   esac
   # Interpreter heredocs need the complete body, not just the header segment.
@@ -536,7 +665,7 @@ pt_simple() {
   # Literal read-only commands need no write-detector subprocesses. Redirects
   # were judged above. Keep substitutions on the detector path.
   case "$verb" in
-    cat|grep|rg|jq|ls|diff|cmp|head|tail|wc|stat|file|readlink|realpath|shasum|sha256sum|test|'['|printf|echo|true|false|exit|return|pwd|fi|done|break|continue)
+    cut|cat|grep|rg|jq|ls|diff|cmp|head|tail|wc|stat|file|readlink|realpath|shasum|sha256sum|du|md5|md5sum|shellcheck|test|'['|printf|echo|true|false|exit|return|pwd|fi|done|break|continue)
       case "$segment" in *'$('*|*'`'*) ;; *) return 0 ;; esac ;;
   esac
   # Interpreter writes and other unextractable writes use the additive rule.
@@ -554,7 +683,7 @@ pt_simple() {
   return 0
 }
 pt_patch() {
-  local i=1 arg file="${redirect_input:-}" output="" inputs=() tree path header
+  local i=1 arg file="${redirect_input:-}" output="" inputs=() tree path header parent
   file=$(pt_expand "$file")
   case "$file" in ''|/*) ;; *) file="$PT_CWD/$file" ;; esac
   for arg in "${words[@]}"; do [ "$arg" != --dry-run ] || return 0; done
@@ -571,7 +700,7 @@ pt_patch() {
     esac
   done
   tree=$(pt_physical "$PT_CWD")
-  while [ "$tree" != / ] && [ ! -e "$tree/.git" ]; do tree=$(dirname "$tree"); done
+  while [ "$tree" != / ] && [ ! -e "$tree/.git" ]; do parent=$(dirname "$tree"); [ "$parent" = "$tree" ] && break; tree="$parent"; done
   pt_live "$tree" && pt_block 'patch writes a live work tree.'
   [ -z "$output" ] || pt_judge "$output"
   if [ "${#inputs[@]}" -gt 0 ]; then pt_judge "${inputs[0]}"; fi
@@ -600,6 +729,7 @@ pt_list_end() {
 }
 pt_walk_tokens() {
   local first="$1" last="$2" i j k depth token kind segment="" pipeline=0 here_refs="" list_start=1
+  local PT_MKDIR_NEXT="" PT_MKDIR_CANDIDATE=""
   for ((i=first;i<=last;i++)); do
     if [ "$list_start" = 1 ]; then
       list_start=0
@@ -625,6 +755,13 @@ pt_walk_tokens() {
     [ "$kind" != P ] || continue
     # A command substitution runs in a subshell with the current directory.
     if [ "$kind" = S ]; then ( pt_scan "$token" ) || exit 2; continue; fi
+    if [ "$kind" = Q ]; then
+      # Paired backticks execute inside double quotes. Scan even a body with
+      # invalid syntax: Bash 3.2 can run its valid start before the error.
+      ( pt_scan "$token" ) || exit 2
+      /bin/bash -n <<<"$token" 2>/dev/null || pt_block 'cannot parse quoted command substitution.'
+      continue
+    fi
     if [ "$kind" = W ]; then
       token=${token//\'/\'\\\'\'}
       segment="$segment '$token'"
@@ -641,26 +778,27 @@ pt_walk_tokens() {
         done
         [ "$depth" = 0 ] || pt_block 'unclosed shell scope.'
         ( pt_walk_tokens "$((i+1))" "$((j-1))" ) || exit 2
-        i="$j" ;;
+        i="$j"; PT_MKDIR_NEXT=""; PT_MKDIR_CANDIDATE="" ;;
       ')') pt_block 'unmatched shell scope.' ;;
       '|')
         [ -z "$segment" ] || { ( pt_simple "$segment" "$here_refs" ) || exit 2; }
-        segment=""; here_refs=""; pipeline=1 ;;
+        segment=""; here_refs=""; pipeline=1; PT_MKDIR_NEXT=""; PT_MKDIR_CANDIDATE="" ;;
       '&')
         [ -z "$segment" ] || { ( pt_simple "$segment" "$here_refs" ) || exit 2; }
-        segment=""; here_refs=""; pipeline=0; pt_list_end; list_start=1 ;;
+        segment=""; here_refs=""; pipeline=0; PT_MKDIR_NEXT=""; PT_MKDIR_CANDIDATE=""; pt_list_end; list_start=1 ;;
       ';'|';;'|';&'|';;&'|'&&'|'||')
         if [ -n "$segment" ]; then
           if [ "$pipeline" = 1 ]; then ( pt_simple "$segment" "$here_refs" ) || exit 2; else pt_simple "$segment" "$here_refs"; fi
         fi
         segment=""; here_refs=""; pipeline=0
         case "$token" in
-          '&&') ;;
+          '&&') PT_MKDIR_NEXT="$PT_MKDIR_CANDIDATE" ;;
           '||')
+            PT_MKDIR_NEXT=""
             # "cd x || exit" stops on a failed cd. Any other right side can
             # run in the old directory.
             case "${tokens[$((i+1))]:-}" in Wexit|Wreturn) PT_PENDING=() ;; *) PT_OR_ACTIVE=1 ;; esac ;;
-          *) pt_list_end; list_start=1 ;;
+          *) PT_MKDIR_NEXT=""; pt_list_end; list_start=1 ;;
         esac ;;
       *) segment="$segment $token" ;;
     esac

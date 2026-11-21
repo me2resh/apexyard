@@ -14,6 +14,8 @@
 1 .claude/hooks/tests/test_agdr_skill.sh
 1 .claude/hooks/tests/test_agent_role_selection.sh
 34 .claude/hooks/tests/test_agent_routing_sync_and_drift.sh
+40 .claude/hooks/tests/test_apexyard_check.sh
+230 .claude/hooks/tests/test_apexyard_pr_status.sh
 38 .claude/hooks/tests/test_approve_merge_worktree.sh
 45 .claude/hooks/tests/test_artifact_completeness.sh
 8 .claude/hooks/tests/test_audit_history.sh
@@ -21,6 +23,7 @@
 5 .claude/hooks/tests/test_awk_fallback.sh
 2 .claude/hooks/tests/test_awk_fallback_missing.sh
 140 .claude/hooks/tests/test_block_ambient_tracker_repo.sh
+12 .claude/hooks/tests/test_block_git_add_all.sh
 80 .claude/hooks/tests/test_block_main_push.sh
 17 .claude/hooks/tests/test_block_main_push_heredoc.sh
 171 .claude/hooks/tests/test_block_merge_on_red_ci.sh

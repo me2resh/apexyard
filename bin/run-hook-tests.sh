@@ -23,6 +23,10 @@
 
 set -uo pipefail
 
+# CDPATH makes cd print the directory it chose, so a $(cd … && pwd)
+# capture holds two lines. Clear it for the runner and every suite.
+unset CDPATH
+
 FILES=
 LIST=0
 SHARD=${HOOK_TEST_SHARD-}
@@ -227,7 +231,7 @@ for t in ${TESTS[@]+"${TESTS[@]}"}; do
   # _test-session-isolation.sh (me2resh/apexyard#1549).
   # Pass _APEXYARD_TEST_PIN_DIR so the helper reuses SUITE_PIN_DIR.
   # shellcheck disable=SC2086
-  if env -u CLAUDE_CODE_SESSION_ID \
+  if env -u CLAUDE_CODE_SESSION_ID -u CDPATH \
       APEXYARD_OPS_DISABLE_PIN=1 \
       APEXYARD_DISABLE_RESOLUTION_CACHE=1 \
       APEXYARD_OPS_PIN_DIR="$SUITE_PIN_DIR" \

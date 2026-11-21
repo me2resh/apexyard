@@ -1,6 +1,6 @@
 # Skill First — Reach for a Skill Before Doing It by Hand
 
-ApexYard ships 62 slash commands, each one a focused workflow with its own template, structured export, and cross-checks — `/threat-model` produces a STRIDE writeup against `templates/audits/threat-model.md`, `/dfd` emits a Mermaid diagram plus optional Threat Dragon JSON, `/write-spec` fills out `templates/prd.md`. Skills are discoverable via `/help` and invoked explicitly, but nothing *suggests* one from intent alone. When a request clearly maps to a shipped skill, an agent relying on its own discipline can quietly do the work by hand instead — reasoning through a threat model in prose, drafting a PRD from scratch, sketching a data-flow diagram as an ad-hoc Mermaid block. The output can look similar at a glance, but it diverges from the template, skips the skill's built-in cross-checks, and doesn't land in the structured location (`docs/agdr/`, `templates/audits/`, `projects/<name>/prds/`) other tooling expects.
+ApexYard ships many slash commands (the full list is in `docs/claude-md-reference.md`), each one a focused workflow with its own template, structured export, and cross-checks — `/threat-model` produces a STRIDE writeup against `templates/audits/threat-model.md`, `/dfd` emits a Mermaid diagram plus optional Threat Dragon JSON, `/write-spec` fills out `templates/prd.md`. Skills are discoverable via `/help` and invoked explicitly, but nothing *suggests* one from intent alone. When a request clearly maps to a shipped skill, an agent relying on its own discipline can quietly do the work by hand instead — reasoning through a threat model in prose, drafting a PRD from scratch, sketching a data-flow diagram as an ad-hoc Mermaid block. The output can look similar at a glance, but it diverges from the template, skips the skill's built-in cross-checks, and doesn't land in the structured location (`docs/agdr/`, `templates/audits/`, `projects/<name>/prds/`) other tooling expects.
 
 This rule is the **trigger heuristic** — the skill-side sibling of [`agent-role-selection.md`](agent-role-selection.md) (which role to spawn) and [`plan-mode.md`](plan-mode.md) (when to plan first). It defines when to stop and check "does a skill already own this?" before improvising.
 
@@ -20,7 +20,7 @@ Heuristic: before starting audit, diagram, spec, or ticket-shaped work, ask whet
 | "plan this initiative", "plan the quarter" | `/plan-initiative` | An in-chat milestone list with no topo-sorted ticket filing |
 | "decide between X and Y", "let's decide" | `/decide` | Picking a library/approach with no AgDR recorded |
 
-This list is illustrative, not exhaustive — the authoritative, extensible map lives at `.claude/project-config.defaults.json` → `skill_intent.map` (see "Backstop" below). If a request matches a skill not listed here, the same heuristic applies: check `/help` or the skill table in `CLAUDE.md` before reasoning it through by hand.
+This list is illustrative, not exhaustive — the authoritative, extensible map lives at `.claude/project-config.defaults.json` → `skill_intent.map` (see "Backstop" below). If a request matches a skill not listed here, the same heuristic applies: check `/help` or the skill table in `docs/claude-md-reference.md` before reasoning it through by hand.
 
 ## When NOT to reach for a skill
 

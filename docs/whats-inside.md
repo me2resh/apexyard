@@ -1,4 +1,4 @@
-# What's Inside ApexYard
+# What Is Inside ApexYard
 
 This page lists the ApexYard components. It covers the directory layout, roles,
 workflow documents, templates, and the runnable `.claude/` layer.
@@ -7,6 +7,25 @@ The [README](../README.md) gives the short version. This page is the detailed
 reference. The files use plain Markdown and shell. Claude Code reads them from
 the repository root. Hooks run when you use `git` or `gh`.
 
+## Marketing site
+
+The site that was previously bundled in this repository has moved to
+[me2resh/apexyard-site](https://github.com/me2resh/apexyard-site). It deploys
+independently at [apexyard.ai](https://apexyard.ai).
+
+## More ways ApexYard differs
+
+The README keeps five headline rows. These extra rows complete the comparison:
+
+| Area | Without ApexYard | With ApexYard |
+|---|---|---|
+| Database migrations | High-risk edits | Migrations require a migration ticket and rollback plan. |
+| Architecture | Scattered notes | C4 templates and the `/c4` skill create a shared model. |
+| Portfolio view | Several GitHub tabs | `/inbox`, `/status`, and `/tasks` read one registry. |
+| Upstream updates | Easy to forget | `/update` reports drift and guides the sync. |
+| Roles | Repeated context | Role files activate from clear triggers. |
+| Onboarding | Manual setup | `/setup` collects the required configuration. |
+
 ## Directory layout
 
 ```
@@ -14,13 +33,13 @@ apexyard/
 ├── CLAUDE.md              # Stack entry point -- Claude Code reads this first
 ├── onboarding.yaml        # Your company config -- fill this in to adopt the stack
 │
-├── roles/                 # AI agent role definitions (20 across 6 departments)
-│   ├── engineering/       # Backend, Frontend, QA, Platform, SRE, Tech Lead, Head of Eng
+├── roles/                 # AI agent role definitions (12 across 6 departments, AgDR-0301)
+│   ├── engineering/       # Tech Lead, Backend, Frontend, QA, Platform, SRE
 │   ├── architecture/      # Solution Architect (Tariq)
-│   ├── product/           # Product Manager, Product Analyst, Head of Product
-│   ├── design/            # UI Designer, UX Designer, Head of Design
-│   ├── security/          # Security Auditor, Penetration Tester, Head of Security
-│   └── data/              # Data Analyst, Data Engineer, Head of Data
+│   ├── product/           # Product Manager
+│   ├── design/            # UI Designer
+│   ├── security/          # Security Auditor, Penetration Tester
+│   └── data/              # Data Engineer
 │
 ├── workflows/             # Development lifecycle processes
 │   ├── sdlc.md            # Full SDLC including the database-migration sub-workflow
@@ -38,9 +57,9 @@ apexyard/
 ├── .claude/               # Claude Code primitives (the runnable layer)
 │   ├── settings.json      # Hook wiring (PreToolUse, PostToolUse, SessionStart)
 │   ├── hooks/             # 55 shell scripts — ticket-first, ORBIT slice gate, migration gate, two-marker merge gate, red-CI block, secrets scan, branch/PR validation, leak protection, upstream-drift banner
-│   ├── rules/             # 22 modular rule files. CLAUDE.md indexes them by name.
-│   ├── agents/            # 23 sub-agents — Rex (Code Reviewer), Hakim (Security Auditor), Tariq (Solution Architect), the engineering / product / design / data / security personas, plus utility agents (dependency auditor, The Contrarian)
-│   └── skills/            # 68 slash commands — see CLAUDE.md for the full list
+│   ├── rules/             # 23 modular rule files. CLAUDE.md indexes them by name.
+│   ├── agents/            # 15 sub-agents — Rex (Code Reviewer), Hakim (Security Auditor), Tariq (Solution Architect), the engineering / product / design / data / security personas, plus utility agents (dependency auditor, The Contrarian)
+│   └── skills/            # 72 slash commands (includes 3 deprecated aliases) — see docs/claude-md-reference.md for the full list
 │
 ├── workspace/             # Live local clones of managed projects — gitignored
 ├── projects/              # Per-project committed docs (README, roadmap, AgDRs, updates)
@@ -57,16 +76,19 @@ apexyard/
 
 ## Roles
 
-ApexYard includes 20 software-development roles across 6 departments. A role
+ApexYard includes 12 software-development roles across 6 departments. A role
 activates when its trigger matches the work. For example, a pull request that
 touches `**/auth/**` activates the Security Auditor. A ticket labelled `qa`
 activates the QA Engineer. See [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md)
 for the full trigger table.
 
-### Engineering (7 roles)
+There are no department-head roles. Each former head and specialist role merged
+into one receiver, and head-level approvals go to the human approver. See
+[AgDR-0301](agdr/AgDR-0301-agent-roster-15.md).
 
-- **Head of Engineering** -- Technical strategy, architecture standards, quality
-- **Tech Lead** -- Feature design, code review, team coordination
+### Engineering (6 roles)
+
+- **Tech Lead** -- Feature design, code review, team coordination, architecture principles, stack standards
 - **Backend Engineer** -- Domain logic, APIs, infrastructure
 - **Frontend Engineer** -- UI components, design system, accessibility
 - **QA Engineer** -- Test strategy, automation, quality gates
@@ -75,31 +97,24 @@ for the full trigger table.
 
 ### Architecture (1 role)
 
-- **Solution Architect** (Tariq) -- Independent design review before Build: NFRs, patterns, tech-debt, risk, traceability — the non-code analog of the Code Reviewer
+- **Solution Architect** (Tariq) -- Independent design review before Build: NFRs, patterns, tech-debt, risk, traceability: the non-code analog of the Code Reviewer
 
-### Product (3 roles)
+### Product (1 role)
 
-- **Head of Product** -- Roadmap, prioritization, feasibility
-- **Product Manager** -- PRDs, user stories, acceptance criteria
-- **Product Analyst** -- Market research, metrics, competitive analysis
+- **Product Manager** -- Roadmap, prioritization, feasibility, market research, PRDs, user stories, acceptance criteria
 
-### Design (3 roles)
+### Design (1 role)
 
-- **Head of Design** -- Design system, UX principles, visual standards
-- **UI Designer** -- Visual design tokens, component specifications
-- **UX Designer** -- User flows, information architecture, usability
+- **UI Designer** -- Design system, UX principles, user flows, information architecture, visual design tokens, component specifications
 
-### Security (3 roles)
+### Security (2 roles)
 
-- **Head of Security** -- Security strategy, threat modeling, compliance
-- **Security Auditor** -- Static analysis, vulnerability detection, OWASP
+- **Security Auditor** -- Static analysis, vulnerability detection, OWASP, security strategy, threat modeling, compliance (read-only)
 - **Penetration Tester** -- Active testing, exploit discovery, API security
 
-### Data (3 roles)
+### Data (1 role)
 
-- **Head of Data** -- Analytics strategy, data governance, reporting
-- **Data Analyst** -- SQL, dashboards, A/B testing, metrics
-- **Data Engineer** -- ETL pipelines, data modeling, data quality
+- **Data Engineer** -- ETL pipelines, data modeling, data quality, analytics strategy, data governance, SQL, dashboards, A/B testing
 
 ## Workflows
 
@@ -151,42 +166,42 @@ The `/migration` skill creates both artefacts in one guided flow; the `require-m
 | PRD | Product Requirements Document with user stories, acceptance criteria |
 | Technical Design | Architecture, domain model, API design, implementation plan |
 | ADR | Architecture Decision Record for significant technical decisions |
-| AgDR | Agent Decision Record — AI-specific decision tracking |
-| Migration AgDR | Migration-specific AgDR — rollback plan, downtime estimate, consumers, observability |
-| C4 Context (L1) | System context Mermaid diagram — external actors + system boundary |
-| C4 Container (L2) | Container Mermaid diagram — deployable units inside the system |
+| AgDR | Agent Decision Record: AI-specific decision tracking |
+| Migration AgDR | Migration-specific AgDR: rollback plan, downtime estimate, consumers, observability |
+| C4 Context (L1) | System context Mermaid diagram: external actors + system boundary |
+| C4 Container (L2) | Container Mermaid diagram: deployable units inside the system |
 
-## The `.claude/` layer — the runnable primitives
+## The `.claude/` layer: the runnable primitives
 
 The `.claude/` directory turns the documents into an enforced workflow. Claude
 Code loads it when it is at the repository root.
 
 | Layer | Path | What it is |
 |-------|------|------------|
-| **Hooks** | `.claude/hooks/` | 55 shell scripts that mechanically enforce SDLC rules — ticket-first edits (Edit/Write/Bash), ORBIT slice before Feature/Task issues, migration-ticket-first, auto code review, merge gates (Rex + CEO + design + architecture review), red-CI block, commit-format, AgDR-for-arch-changes, branch/PR-title validation, secrets scanning, private-ref leak protection, upstream-drift banner |
-| **Rules** | `.claude/rules/` | 22 modular rule files. CLAUDE.md indexes them by name. |
-| **Agents** | `.claude/agents/` | 23 sub-agents — the department personas plus utility agents |
-| **Skills** | `.claude/skills/` | 68 slash commands |
+| **Hooks** | `.claude/hooks/` | 55 shell scripts that mechanically enforce SDLC rules. These cover ticket-first edits (Edit/Write/Bash), ORBIT slice before Feature/Task issues, migration-ticket-first, auto code review, merge gates (Rex + CEO + design + architecture review). They also cover red-CI block, commit-format, AgDR-for-arch-changes, branch/PR-title validation, secrets scanning, private-ref leak protection, upstream-drift banner |
+| **Rules** | `.claude/rules/` | 23 modular rule files. CLAUDE.md indexes them by name. |
+| **Agents** | `.claude/agents/` | 15 sub-agents: the department personas plus utility agents |
+| **Skills** | `.claude/skills/` | 72 slash commands, including 3 deprecated aliases: `/spike-close`, `/prototype-close`, `/tickets-batch`. |
 | **Settings** | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### The 22 rule files
+### The 23 rule files
 
-`agdr-decisions`, `agent-role-selection`, `build-handbook-discovery`, `code-standards`, `evidence-grounding`, `git-conventions`, `glossary-lookup`, `isolated-builds`, `leak-protection`, `loop-mode`, `parallel-work`, `plan-mode`, `pr-quality`, `pr-workflow`, `reconcile-before-build`, `reporting-style`, `right-size-ceremony`, `role-triggers`, `skill-first`, `ticket-vocabulary`, `workflow-gates`, `writing-standard`.
+`agdr-decisions`, `agent-role-selection`, `build-handbook-discovery`, `code-standards`, `evidence-grounding`, `external-write-retry`, `git-conventions`, `glossary-lookup`, `isolated-builds`, `leak-protection`, `loop-mode`, `parallel-work`, `plan-mode`, `pr-quality`, `pr-workflow`, `reconcile-before-build`, `reporting-style`, `right-size-ceremony`, `role-triggers`, `skill-first`, `ticket-vocabulary`, `workflow-gates`, `writing-standard`.
 
-### The 23 sub-agents
+### The 15 sub-agents
 
-Utility agents: **Rex** (`code-reviewer`), **Hakim** (`security-reviewer`), **Tariq** (`solution-architect`), **Naqid** (`contrarian`), plus `dependency-auditor`. The remaining 18 are the department-role agents (engineering, product, design, security, data — one per role file).
+Utility and review agents: **Rex** (`code-reviewer`), **Hakim** (`security-reviewer`), **Tariq** (`solution-architect`), **Naqid** (`contrarian`), plus **Munir** (`dependency-auditor`). The remaining 10 are the department-role agents: `tech-lead`, `backend-engineer`, `frontend-engineer`, `qa-engineer`, `platform-engineer`, `sre`, `product-manager`, `ui-designer`, `penetration-tester` and `data-engineer`. AgDR-0301 records the move from 23 agents to 15.
 
-### The 68 skills
+### The 72 skills
 
-The full, one-line-per-skill list lives in [`CLAUDE.md`](../CLAUDE.md) under "Available skills". Highlights by category:
+The full skill list, with one line for each skill, is in [`docs/claude-md-reference.md`](claude-md-reference.md) under "Available skills". Highlights by category:
 
-- **Bootstrap & sync** — `/setup`, `/handover`, `/update`, `/split-portfolio`
-- **Planning & tickets** — `/scaffold`, `/write-spec`, `/plan-initiative`, `/feature`, `/bug`, `/task`, `/tickets-batch`, `/spike`, `/prototype`, `/walking-skeleton`, `/migration`, `/investigation`, `/idea`
-- **Review & decisions** — `/decide`, `/agdr`, `/code-review`, `/security-review`, `/design-review`, `/challenge`, `/approve-merge`, `/approve-design`, `/approve-architecture`
-- **Audits** — `/launch-check`, `/threat-model`, `/accessibility-audit`, `/compliance-check`, `/analytics-audit`, `/seo-audit`, `/geo-audit`, `/performance-audit`, `/monitoring-audit`, `/docs-audit`, `/mutation-test`, `/audit-deps`
-- **Architecture & diagrams** — `/c4`, `/dfd`, `/tech-vision`, `/journey`, `/feature-diagram`, `/extract-features`, `/process`
-- **Portfolio** — `/projects`, `/inbox`, `/status`, `/tasks`, `/roadmap`, `/stakeholder-update`, `/fan-out`
+- **Bootstrap & sync**: `/setup`, `/handover`, `/update`, `/split-portfolio`
+- **Planning & tickets**: `/scaffold`, `/write-spec`, `/plan-initiative`, `/feature`, `/bug`, `/task` (and `/task --batch`), `/spike` (and `/spike --close`), `/prototype` (and `/prototype --close`), `/walking-skeleton`, `/migration`, `/investigation`, `/idea`
+- **Review & decisions**: `/decide`, `/agdr`, `/code-review`, `/security-review`, `/design-review`, `/challenge`, `/approve-merge`, `/explain-pr`, `/approve-design`, `/approve-architecture`
+- **Audits**: `/launch-check`, `/threat-model`, `/accessibility-audit`, `/compliance-check`, `/analytics-audit`, `/seo-audit`, `/geo-audit`, `/performance-audit`, `/monitoring-audit`, `/docs-audit`, `/mutation-test`, `/audit-deps`
+- **Architecture & diagrams**: `/c4`, `/dfd`, `/tech-vision`, `/journey`, `/feature-diagram`, `/extract-features`, `/process`
+- **Portfolio**: `/projects`, `/inbox`, `/status`, `/tasks`, `/roadmap`, `/stakeholder-update`, `/fan-out`
 
 ## CI/CD pipelines
 
@@ -200,11 +215,11 @@ Reusable GitHub Actions workflows live at `golden-paths/pipelines/`:
 | `security.yml` | Semgrep SAST + npm audit + secrets detection |
 | `dependency-audit.yml` | Weekly vulnerability + license scan |
 | `pr-title-check.yml` | Enforce ticket ID in PR titles |
-| `review-check.yml` | Block merge if Code Reviewer hasn't reviewed the latest commit |
+| `review-check.yml` | Block merge if Code Reviewer has not reviewed the latest commit |
 | `seo-check.yml` | SEO analysis for content files |
 
 Copy whichever you need into your project's `.github/workflows/`. Full details in `golden-paths/pipelines/README.md`.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

@@ -1,6 +1,6 @@
 ---
 name: performance-audit
-description: Performance audit — bundle size, image opt, lazy load, code split, caching, CWV. Deep-dive for /launch-check performance.
+description: Performance audit. Checks bundle size, image opt, lazy load, code split, caching, CWV. Deep-dive for /launch-check performance.
 disable-model-invocation: false
 argument-hint: "[project-path]"
 effort: medium
@@ -11,6 +11,16 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 # /performance-audit — Bundle & Core Web Vitals Analysis
 
 Deep-dive performance analysis focused on what's measurable from the codebase without running Lighthouse. Checks bundle size, image optimization, lazy loading, code splitting, and caching configuration. Invoke when `/launch-check`'s performance row shows WARN or FAIL.
+
+## Usage
+
+```
+/performance-audit                       # audit the project in the current directory
+/performance-audit workspace/my-app      # audit the project at this path
+```
+
+This audit runs on its own. It does not need a `/launch-check` run first.
+`/launch-check` names and offers this audit when its performance row shows WARN or FAIL.
 
 ## Process
 

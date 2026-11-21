@@ -38,7 +38,7 @@
   "graduation_path": {
     "name": "apexyard (full framework)",
     "url": "https://github.com/me2resh/apexyard",
-    "what_you_get": "19 role definitions, portfolio registry, AgDR memory, two-marker merge gate, migration enforcement, stakeholder updates, cross-project /inbox + /tasks + /status",
+    "what_you_get": "12 role definitions, portfolio registry, AgDR memory, two-marker merge gate, migration enforcement, stakeholder updates, cross-project /inbox + /tasks + /status",
     "delivery": "fork-based ops repo (not a plugin)"
   }
 }

@@ -37,7 +37,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, mkdirSync, cpSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, cpSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -428,3 +428,138 @@ test(
 
 void execFileSync;
 void cpSync;
+
+function makeFileGateFixture() {
+  const opsRoot = makeIsolatedOpsRoot();
+  const logPath = join(opsRoot, "targets.jsonl");
+  const script = `
+    const fs = require("node:fs");
+    const input = JSON.parse(fs.readFileSync(0, "utf8")).tool_input;
+    fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(input) + "\\n");
+    if (!input.file_path) {
+      console.error("missing edit target");
+      process.exit(2);
+    }
+    if (input.file_path === "blocked file.md") {
+      console.error("file gate blocked the target");
+      process.exit(2);
+    }
+  `;
+  writeFileSync(join(opsRoot, ".claude/hooks/file-gate.sh"),
+    `#!/bin/bash\n"${process.execPath}" -e '${script}'\n`);
+  const { pi, handlers } = makeMockPi();
+  registerGateDispatcher(pi as unknown as ExtensionAPI, {
+    resolveOpsRoot: () => opsRoot,
+    gates: [{ name: "file-gate", hookRelativePath: ".claude/hooks/file-gate.sh",
+      wires: [{ tool: "edit", commandGlob: null }, { tool: "write", commandGlob: null }] }],
+  });
+  return {
+    call: (toolName: string, input: Record<string, unknown>) => handlers.get("tool_call")!(
+      { type: "tool_call", toolCallId: "file", toolName, input }, { cwd: opsRoot }),
+    inputs: () => readFileSync(logPath, "utf8").trim().split("\n").map((line) => JSON.parse(line)),
+  };
+}
+
+for (const toolName of ["write", "edit"]) {
+  test(`Pi ${toolName} sends both path fields and uses the hook verdict`, async () => {
+    const fixture = makeFileGateFixture();
+    assert.equal(await fixture.call(toolName, { path: "allow.md", content: "text" }), undefined);
+    const result = await fixture.call(toolName, { path: "blocked file.md", content: "text" });
+    assert.equal(result?.block, true);
+    assert.match(result?.reason ?? "", /file gate blocked the target/);
+    assert.deepEqual(fixture.inputs(), [
+      { file_path: "allow.md", path: "allow.md" },
+      { file_path: "blocked file.md", path: "blocked file.md" },
+    ]);
+  });
+}
+
+test("omp edit checks the path and blocks the MV destination", async () => {
+  const fixture = makeFileGateFixture();
+  const result = await fixture.call("edit", {
+    path: "greet.py",
+    paths: ["greet.py"],
+    input: '[greet.py#A1B2]\nMV "blocked file.md"\n',
+  });
+  assert.equal(result?.block, true);
+  assert.match(result?.reason ?? "", /file gate blocked the target/);
+  assert.deepEqual(fixture.inputs(), ["greet.py", "blocked file.md"].map((path) => ({ file_path: path, path })));
+});
+
+test("omp edit checks both paths without an MV line", async () => {
+  const fixture = makeFileGateFixture();
+  const result = await fixture.call("edit", {
+    path: "greet.py",
+    paths: ["greet.py", "PLAN.md", "", null, 7, "PLAN.md"],
+    input: "[greet.py#A1B2]\nREM",
+  });
+  assert.equal(result, undefined);
+  assert.deepEqual(fixture.inputs(), ["greet.py", "PLAN.md"].map((path) => ({ file_path: path, path })));
+});
+
+test("Pi edit checks only path when input is absent", async () => {
+  const fixture = makeFileGateFixture();
+  assert.equal(await fixture.call("edit", { path: "greet.py" }), undefined);
+  assert.deepEqual(fixture.inputs(), [{ file_path: "greet.py", path: "greet.py" }]);
+});
+
+test("omp edit sends one header target to the hook", async () => {
+  const fixture = makeFileGateFixture();
+  assert.equal(await fixture.call("edit", { i: "change", input: "[greet.py#A1B2]\nREM" }), undefined);
+  assert.deepEqual(fixture.inputs(), [{ file_path: "greet.py", path: "greet.py" }]);
+});
+
+for (const destination of ['"blocked file.md"', "'blocked file.md'", "blocked.md"]) {
+  test(`omp edit checks each target for MV ${destination}`, async () => {
+    const fixture = makeFileGateFixture();
+    const result = await fixture.call("edit", { i: "change", input:
+      `[greet.py#A1B2]\nPUT 1*:\n+text\n[PLAN.md#3c4d]\nMV ${destination}\n[greet.py#FFFF]\nREM` });
+    const target = destination === "blocked.md" ? "blocked.md" : "blocked file.md";
+    assert.deepEqual(fixture.inputs(), ["greet.py", "PLAN.md", target].map((path) => ({ file_path: path, path })));
+    if (target === "blocked.md") assert.equal(result, undefined);
+    else {
+      assert.equal(result?.block, true);
+      assert.match(result?.reason ?? "", /file gate blocked the target/);
+    }
+  });
+}
+
+for (const line of ["[src/a.js#ZZ]", "  [src/a.js#ZZ]", 'MV "dest.js" extra', "mv dest.js", "  mV dest.js", "MV"]) {
+  test(`omp edit blocks an unread target line: ${line}`, async () => {
+    const fixture = makeFileGateFixture();
+    const result = await fixture.call("edit", { input: `[greet.py#A1B2]\n${line}` });
+    assert.equal(result?.block, true);
+    assert.match(result?.reason ?? "", /apexyard Pi gate adapter.*edit target could not be read/);
+    assert.throws(() => fixture.inputs(), { code: "ENOENT" });
+  });
+}
+
+test("omp edit blocks input with no readable target", async () => {
+  const fixture = makeFileGateFixture();
+  const result = await fixture.call("edit", { i: "change", input: "PUT 1*:\n+text" });
+  assert.equal(result?.block, true);
+  assert.match(result?.reason ?? "", /apexyard Pi gate adapter.*edit target could not be read/);
+});
+
+
+test("omp eval is blocked when an ops root resolves", async () => {
+  const opsRoot = makeIsolatedOpsRoot();
+  const { pi, handlers } = makeMockPi();
+  registerGateDispatcher(pi as unknown as ExtensionAPI, { resolveOpsRoot: () => opsRoot, gates: [] });
+  const result = await handlers.get("tool_call")!(
+    { type: "tool_call", toolCallId: "eval", toolName: "eval", input: {} }, { cwd: opsRoot });
+  assert.deepEqual(result, {
+    block: true,
+    reason: "The ApexYard gate adapter blocks the omp eval tool. " +
+      "Code run by eval can do what the bash gates block. " +
+      "Use the bash tool so the gates can check the command.",
+  });
+});
+
+test("omp eval has no effect when no ops root resolves", async () => {
+  const { pi, handlers } = makeMockPi();
+  registerGateDispatcher(pi as unknown as ExtensionAPI, { resolveOpsRoot: () => undefined });
+  const result = await handlers.get("tool_call")!(
+    { type: "tool_call", toolCallId: "eval", toolName: "eval", input: {} }, { cwd: "/" });
+  assert.equal(result, undefined);
+});

@@ -1,0 +1,83 @@
+{
+  "schema": "apexyard.diagram/v1",
+  "diagram": {
+    "type": "feature",
+    "title": "Sample feature",
+    "project": "sample-app",
+    "direction": "LR"
+  },
+  "generated": {
+    "by": "/feature-diagram",
+    "date": "2026-10-29"
+  },
+  "repo": {
+    "name": "example-org/sample-app",
+    "web_url": "https://github.com/example-org/sample-app",
+    "commit": null
+  },
+  "groups": [
+    {
+      "id": "Screens",
+      "kind": "layer",
+      "label": "Screens (v2), core: Q&A/path #1 [beta] \"quoted\""
+    },
+    {
+      "id": "Routes",
+      "kind": "layer",
+      "label": "Routes (v2), core: Q&A/path #1 [beta] \"quoted\""
+    },
+    {
+      "id": "Jobs",
+      "kind": "layer",
+      "label": "Jobs"
+    },
+    {
+      "id": "Models",
+      "kind": "layer",
+      "label": "Models (v2), core: Q&A/path #1 [beta] \"quoted\""
+    }
+  ],
+  "nodes": [
+    {
+      "id": "actor",
+      "kind": "screen",
+      "label": "{{CSP}} and {{DATA}}",
+      "technology": "",
+      "group": "Screens"
+    },
+    {
+      "id": "api",
+      "kind": "route",
+      "label": "API",
+      "group": "Routes",
+      "tags": [
+        "internal"
+      ],
+      "technology": ""
+    },
+    {
+      "id": "db",
+      "kind": "model",
+      "label": "Records",
+      "group": "Models",
+      "technology": ""
+    }
+  ],
+  "edges": [
+    {
+      "from": "Screens",
+      "to": "Routes",
+      "label": "submits (v2), core: Q&A/path #1 [beta] \"quoted\""
+    },
+    {
+      "from": "Routes",
+      "to": "Jobs",
+      "label": "enqueues"
+    },
+    {
+      "from": "Jobs",
+      "to": "Models",
+      "label": "writes"
+    }
+  ]
+}

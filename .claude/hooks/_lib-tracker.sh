@@ -17,6 +17,7 @@
 #   tracker_review_kind [<owner/repo>] echoes the code-review host adapter kind
 #   tracker_kind [<owner/repo>]        compatibility alias for tracker_issue_kind
 #   tracker_id_pattern [<owner/repo>]  echoes the configured ID regex
+#   tracker_open_pr_heads <owner/repo> echo [{number,head},...] of open PR heads (gh only; others return 1)
 #   tracker_owner_repo_param <slug>    formats the owner/repo parameter (gh: "owner/repo"; others: empty)
 #   tracker_view <id> [<owner_repo>]   dispatches the view command and emits normalised JSON on stdout
 #                                      Exit 0 = ticket exists; non-zero = doesn't, or CLI errored.
@@ -30,8 +31,10 @@
 #                                      plain string, passed through). The `custom` adapter still omits
 #                                      body unless the operator's `normalise_jq` emits one (consumers
 #                                      read it as `.body // empty`).
-#   tracker_create <owner/repo> <title> [<body_file>] [<labels_csv>]
+#   tracker_create <owner/repo> <title> [<body_file>] [<labels_csv>] [<milestone>]
 #                                      creates a ticket via the per-project CLI; emits {ref,url}.
+#                                      The optional milestone falls back to the project's
+#                                      `tracker.milestone` registry key; empty = none (#1830).
 #   tracker_review_submit <owner/repo> <pr> <verdict> [<body_file>]  (#758)
 #                                      submits a PR/MR review to the git host. verdict is one of
 #                                      approve|comment|request-changes (default comment). gh + glab
@@ -342,6 +345,37 @@ tracker_kind() {
   value=$(tracker_issue_kind "$repo") || return $?
   [ -z "$repo" ] && _TRACKER_KIND_CACHE="$value"
   echo "$value"
+}
+
+# ------------------------------------------------------------------------------
+# Public: tracker_open_pr_heads <owner/repo>
+#   Echo a JSON array [{number, head},...] of open PR numbers with their
+#   head commit SHA (lowercase). Used by _lib-review-queue.sh to match
+#   rex-approved PRs against live open PR heads.
+#
+#   Returns 0 and writes JSON on success (gh adapter only).
+#   Returns 1 for non-gh trackers; the queue degrades to unknown.
+#   Returns 1 on CLI failure; the queue degrades to unknown.
+#   me2resh/apexyard#1995 / AgDR-0292
+# ------------------------------------------------------------------------------
+tracker_open_pr_heads() {
+  local repo="${1:-}"
+  local kind out
+  [ -n "$repo" ] || return 1
+  kind=$(tracker_review_kind "$repo") || kind="gh"
+  case "$kind" in
+    gh)
+      out=$(apexyard_gh pr list --repo "$repo" \
+        --state open --json number,headRefOid --limit 200 2>/dev/null) || return 1
+      printf '%s' "$out" | \
+        jq '[.[] | {number: .number, head: (.headRefOid | ascii_downcase)}]' \
+        2>/dev/null || return 1
+      ;;
+    *)
+      # Non-gh tracker: degrade gracefully.
+      return 1
+      ;;
+  esac
 }
 
 # ------------------------------------------------------------------------------
@@ -700,7 +734,14 @@ tracker_state() {
 # the `create_command` TEMPLATE is reserved for the trusted `custom` kind (same
 # trust class as view_command's custom adapter).
 #
-# Contract: tracker_create <owner/repo> <title> [<body_file>] [<labels_csv>]
+# Contract: tracker_create <owner/repo> <title> [<body_file>] [<labels_csv>] [<milestone>]
+#   milestone (#1830): opt-in. An explicit 5th argument wins; otherwise the
+#     project's `tracker.milestone` registry value is used; with neither, no
+#     milestone flag reaches the CLI and behaviour is unchanged. An empty
+#     argument counts as unset, so one call cannot opt out of the default. gh and glab
+#     pass it as a `--milestone` argument in the create call itself, so an
+#     unknown title makes the CLI fail and nothing is filed. The `custom`
+#     adapter exposes it as $TRACKER_MILESTONE, which a template may ignore.
 #   On success: emits normalised JSON {"ref":..., "url":...} on stdout, exit 0.
 #     - ref is the tracker's issue reference as a STRING (callers must not do
 #       arithmetic on it — a future tracker may return a key like LIN-42). The
@@ -769,13 +810,70 @@ _tracker_check_private_refs() {
   "$scanner" "$repo" "$title" "$body_file"
 }
 
+# Prepare only priority labels named by the configured scheme. This step only
+# helps: a failure warns and never stops the create. The loop splits by hand,
+# because zsh does not word-split an unquoted variable on IFS.
+_tracker_priority_labels_gh() {
+  local repo="$1" labels="$2" scheme label rest names exists
+  [ -n "$labels" ] || return 0
+  scheme=$(_tracker_config_get_or '.ticket.label_priority_scheme' 'P0,P1,P2,P3')
+  rest="$labels,"
+  while [ -n "$rest" ]; do
+    label=${rest%%,*}
+    rest=${rest#*,}
+    [ -n "$label" ] || continue
+    case ",$scheme," in
+      *,"$label",*) ;;
+      *) continue ;;
+    esac
+    # GitHub label names are unique without regard to case.
+    if ! names=$(gh label list --repo "$repo" --search "$label" --json name --limit 100) ||
+       ! exists=$(printf '%s' "$names" | jq -r --arg name "$label" \
+         'any(.[]; (.name | ascii_downcase) == ($name | ascii_downcase))'); then
+      printf 'tracker_create: could not check priority label %s; continuing.\n' "$label" >&2
+      continue
+    fi
+    if [ "$exists" = false ]; then
+      if gh label create "$label" --repo "$repo" >/dev/null 2>&1; then
+        printf 'tracker_create: created missing priority label %s.\n' "$label" >&2
+      else
+        printf 'tracker_create: could not create priority label %s; continuing.\n' "$label" >&2
+      fi
+    fi
+  done
+  return 0
+}
+
+# Recover a completed write without issuing another create command.
+_tracker_recover_create_gh() {
+  local repo="$1" title="$2" login now since candidates recovery_window=600
+  login=$(gh api user --jq .login 2>/dev/null) || return 1
+  [ -n "$login" ] || return 1
+  now=$(date -u +%s) || return 1
+  since=$((now - recovery_window))
+  candidates=$(gh issue list --repo "$repo" --state all --author "$login" \
+    --search "created:>=$(date -u -r "$since" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "@$since" +%Y-%m-%dT%H:%M:%SZ)" \
+    --limit 100 --json number,title,url,createdAt,author) || return 1
+  printf '%s' "$candidates" | jq -cer --arg title "$title" --arg login "$login" \
+    --argjson since "$since" --argjson now "$now" '
+    [.[] | select(.title == $title and .author.login == $login)
+      | select((.createdAt | fromdateiso8601) >= $since and
+               (.createdAt | fromdateiso8601) <= $now)]
+    | sort_by(.createdAt) | last | select(. != null)
+    | {ref:(.number | tostring), url:.url}'
+}
+
 # Internal adapter: gh → run `gh issue create` with safe arg passing.
 _tracker_create_gh() {
-  local repo="$1" title="$2" body_file="$3" labels="$4"
+  local repo="$1" title="$2" body_file="$3" labels="$4" milestone="${5:-}"
+  _tracker_priority_labels_gh "$repo" "$labels" || return 1
   local -a args
   args=(issue create --repo "$repo" --title "$title")
   if [ -n "$body_file" ] && [ -f "$body_file" ]; then
     args+=(--body-file "$body_file")
+  fi
+  if [ -n "$milestone" ]; then
+    args+=(--milestone "$milestone")
   fi
   if [ -n "$labels" ]; then
     local l
@@ -794,11 +892,14 @@ _tracker_create_gh() {
 # as a single quoted arg (injection-safe — not re-evaluated). Labels are a
 # single comma-separated --label value. --yes skips the interactive prompt.
 _tracker_create_glab() {
-  local repo="$1" title="$2" body_file="$3" labels="$4"
+  local repo="$1" title="$2" body_file="$3" labels="$4" milestone="${5:-}"
   local -a args
   args=(issue create -R "$repo" --title "$title")
   if [ -n "$body_file" ] && [ -f "$body_file" ]; then
     args+=(--description "$(cat "$body_file")")
+  fi
+  if [ -n "$milestone" ]; then
+    args+=(--milestone "$milestone")
   fi
   if [ -n "$labels" ]; then
     args+=(--label "$labels")
@@ -832,7 +933,8 @@ _tracker_create_template() {
 # it is scoped to the trusted, operator-authored `custom` template. Only the
 # {owner_repo} placeholder — a safe slug — is substituted into the command
 # string. The arbitrary values (title / body file / labels) are exposed as
-# ENVIRONMENT VARIABLES ($TRACKER_TITLE / $TRACKER_BODY_FILE / $TRACKER_LABELS)
+# ENVIRONMENT VARIABLES ($TRACKER_TITLE / $TRACKER_BODY_FILE / $TRACKER_LABELS /
+# $TRACKER_MILESTONE, the last empty when unset)
 # that the operator references with double-quoted expansions — so they are
 # quoted VALUES at eval time, never re-tokenised as command syntax. A title full
 # of `; rm -rf …` is inert. The custom command is expected to emit the issue URL
@@ -843,7 +945,7 @@ _tracker_create_template() {
 # config authored by the maintainer), not agent/user-supplied free text. Only
 # the arbitrary, untrusted values (title/body/labels) go via env.
 _tracker_create_custom() {
-  local repo="$1" title="$2" body_file="$3" labels="$4"
+  local repo="$1" title="$2" body_file="$3" labels="$4" milestone="${5:-}"
   local tpl
   tpl=$(_tracker_create_template "$repo")
   if [ -z "$tpl" ]; then
@@ -852,12 +954,12 @@ _tracker_create_custom() {
   local cmd="$tpl"
   cmd="${cmd//\{owner_repo\}/$repo}"
   TRACKER_REPO="$repo" TRACKER_TITLE="$title" TRACKER_BODY_FILE="$body_file" TRACKER_LABELS="$labels" \
-    eval "$cmd"
+    TRACKER_MILESTONE="$milestone" eval "$cmd"
 }
 
-# Public: tracker_create <owner/repo> <title> [<body_file>] [<labels_csv>]
+# Public: tracker_create <owner/repo> <title> [<body_file>] [<labels_csv>] [<milestone>]
 tracker_create() {
-  local repo="$1" title="$2" body_file="${3:-}" labels="${4:-}"
+  local repo="$1" title="$2" body_file="${3:-}" labels="${4:-}" milestone="${5:-}"
   if [ -z "$repo" ] || [ -z "$title" ]; then
     return 1
   fi
@@ -882,21 +984,36 @@ tracker_create() {
 
   _tracker_check_private_refs "$repo" "$title" "$body_file" || return $?
 
-  local raw rc
-  case "$kind" in
-    gh)     raw=$(_tracker_create_gh     "$repo" "$title" "$body_file" "$labels"); rc=$? ;;
-    glab)   raw=$(_tracker_create_glab   "$repo" "$title" "$body_file" "$labels"); rc=$? ;;
-    custom) raw=$(_tracker_create_custom "$repo" "$title" "$body_file" "$labels"); rc=$? ;;
-    *)      raw=$(_tracker_create_gh     "$repo" "$title" "$body_file" "$labels"); rc=$? ;;  # best-effort default
-  esac
-  if [ $rc -ne 0 ] || [ -z "$raw" ]; then
-    return 1
+  # Opt-in milestone (#1830): an explicit argument wins, else the project's
+  # `tracker.milestone` registry key. With neither, it stays empty and no
+  # adapter adds a milestone flag.
+  if [ -z "$milestone" ]; then
+    milestone=$(_tracker_project_value "$repo" milestone 2>/dev/null) || milestone=""
+    # First line only: the python reader can return a multi-line value that
+    # the yq reader would have cut.
+    milestone=${milestone%%$'\n'*}
   fi
 
-  local result
-  result=$(_tracker_extract_ref_url "$raw")
+  local raw rc
+  case "$kind" in
+    gh)     raw=$(_tracker_create_gh     "$repo" "$title" "$body_file" "$labels" "$milestone"); rc=$? ;;
+    glab)   raw=$(_tracker_create_glab   "$repo" "$title" "$body_file" "$labels" "$milestone"); rc=$? ;;
+    custom) raw=$(_tracker_create_custom "$repo" "$title" "$body_file" "$labels" "$milestone"); rc=$? ;;
+    *)      raw=$(_tracker_create_gh     "$repo" "$title" "$body_file" "$labels" "$milestone"); rc=$? ;;  # best-effort default
+  esac
+  local result=""
+  if [ "$rc" -eq 0 ] && [ -n "$raw" ]; then
+    result=$(_tracker_extract_ref_url "$raw") || result=""
+  fi
   if [ -z "$result" ] || [ "$result" = "null" ]; then
-    return 1
+    case "$kind" in
+      glab|custom) return 1 ;;
+      *)
+        printf 'tracker_create: create failed; checking for a completed issue.\n' >&2
+        result=$(_tracker_recover_create_gh "$repo" "$title") || return 1
+        printf 'tracker_create: recovered existing issue after create failure.\n' >&2
+        ;;
+    esac
   fi
   echo "$result"
 }
@@ -2266,7 +2383,7 @@ tracker_check_issues() {
   if [ "$verdict" = "disabled" ]; then
     {
       echo "⚠ GitHub Issues is DISABLED on $repo, but tracker.kind is \"$kind\"."
-      echo "  Issue-creating skills (/feature, /bug, /task, /tickets-batch, /idea, …) will fail."
+      echo "  Issue-creating skills (/feature, /bug, /task, /task --batch, /idea, …) will fail."
       echo "  Enable it (needs admin):  $(tracker_issues_enable_hint "$repo")"
       echo "  Or: Settings → General → Features → Issues."
       echo "  (Tracking elsewhere? Set tracker.kind to linear/jira/none in .claude/project-config.json.)"

@@ -1,6 +1,6 @@
 ---
 name: stakeholder-update
-description: Generate a weekly / monthly / launch stakeholder update — synthesises PRs, closed issues, AgDRs, and roadmap into a narrative.
+description: Generate a weekly / monthly / launch stakeholder update. Synthesises PRs, closed issues, AgDRs, and roadmap into a narrative.
 argument-hint: "weekly | monthly | launch"
 allowed-tools: Bash, Read, Grep, Glob
 ---

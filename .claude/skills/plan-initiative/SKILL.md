@@ -452,7 +452,8 @@ tracker_lib="$(r="$PWD"; while [ -n "$r" ] && [ "$r" != / ]; do \
 # ── per milestone ────────────────────────────────────────────────────────────
 body_file="$(mktemp)"
 printf '%s\n' "$body" > "$body_file"
-# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] → {"ref","url"}.
+# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] [<milestone>] → {"ref","url"}.
+# The milestone is optional: omit it and the project's tracker.milestone default (if any) applies.
 result="$(tracker_create "$repo" "[Feature] {milestone-name}" "$body_file" "enhancement,${priority:-P2}")"
 rc=$?
 rm -f "$body_file"
@@ -467,7 +468,7 @@ more URL-parsing). Record `milestone_name → ref` in an in-memory map for pass 
 (the map now holds tracker references, so a non-numeric tracker key like `LIN-42`
 works unchanged — do not do arithmetic on it).
 
-On non-zero exit, stop pass 1 immediately. Use the same failure-handling shape as `/tickets-batch` § "Failure handling" (4 options: Retry, Skip, Edit, Abort; don't roll back filed tickets on abort).
+On non-zero exit, stop pass 1 immediately. Use the same failure-handling shape as `/task --batch` § "Failure handling" (`.claude/skills/_lib-modes/task-batch.md`) (4 options: Retry, Skip, Edit, Abort; don't roll back filed tickets on abort).
 
 #### Pass 2 — add cross-references to each filed ticket
 

@@ -8,7 +8,11 @@ allowed-tools: Bash, Read, Grep, Glob
 
 # /code-review — Code Review
 
-Review a pull request for quality, security, and adherence to standards.
+Review PR quality, security, and standards.
+
+
+Call `progress_note_update "$tree" Completed 'Review verdict: <evidence and head SHA>'` after the observed result.
+Details: docs/progress-notes.md.
 
 ## LSP-aware (optional, recommended)
 
@@ -38,12 +42,12 @@ See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the ful
 
 For tests and probes, use the scratch-clone pattern in `.claude/agents/code-reviewer.md` § "Running tests in a scratch clone". If a hook blocks a command, stop and report the command, hook, and message. Never disguise a command to bypass a hook.
 
-The reviewer mutation lock blocks `git clone`, `git fetch`, and `git checkout` while the active-reviewer marker exists. Prepare the scratch clone and fetch the PR head before step 0 arms the marker.
+The reviewer mutation lock blocks `git clone`, `git fetch`, and `git checkout` while the active-reviewer marker exists. Make the light copy (`docs/skills/review-copies.md`) before step 0 arms the marker.
 
 ## Process
 
-Before you draft or post a review, read .claude/rules/writing-standard.md.
-Use the controlled technical writing profile. The review is a durable artifact.
+Read .claude/rules/writing-standard.md before drafting or posting a review.
+Apply its controlled technical writing profile.
 Treat a writing-profile fault in the PR as advisory, per the Code Reviewer
 agent's § "Blocking-Severity Bar", unless the fault changes meaning or drops
 evidence — request changes only for that kind of fault.
@@ -52,6 +56,11 @@ Use the Code Reviewer agent's required Output Format for first reviews, re-revie
 Retain its required sections and give each checklist result a reason or evidence reference.
 Before submission, check the report against that format and repair omissions.
 Do not write a process transcript.
+
+### Severity policy
+
+Follow [policy resolution](../../../docs/skills/drive-to-green.md#override-the-review-policy) before spawning Rex.
+Give Rex the resolved policy path. Overrides change no gate decision.
 
 ### CI order and depth
 
@@ -69,7 +78,10 @@ The check is `rex_approval_carries_over` in `.claude/hooks/_lib-merge-behind.sh`
 
 ### 0. Write the active-reviewer marker (REQUIRED — me2resh/apexyard#843)
 
-Before spawning the Code Reviewer agent (Rex), write the active-reviewer session marker. It records that this review pass is the sanctioned one, and suppresses `warn-review-marker-write.sh`'s advisory warning on Rex's `*-rex.approved` write (that hook warns and never blocks since #1026 — AgDR-0111). The marker is scoped to THIS Claude Code session (me2resh/apexyard#1376) — resolve its path through `active_reviewer_marker_path`, never write the bare `.claude/session/active-reviewer` path directly, or a concurrent session's review would read or clobber it. At skill entry:
+Before spawning Rex, write the active-reviewer marker to sanction this pass and suppress the advisory review-marker warning.
+Resolve its session-scoped path with `active_reviewer_marker_path` (me2resh/apexyard#1376).
+Never write `.claude/session/active-reviewer` directly: concurrent sessions could overwrite it.
+At skill entry:
 
 ```bash
 # Ops root: pin first, then walk up (docs/skills/shared/ops-root.md).
@@ -80,7 +92,7 @@ mkdir -p "$(dirname "$active_marker")"
 printf '%s\n' "<owner/repo>#<pr>:rex" > "$active_marker"
 ```
 
-On skill exit (after Rex posts its verdict, whether APPROVED or CHANGES REQUESTED), clear the marker. Shell variables do not persist across separate Bash tool calls, so the exit step re-resolves `ops_root` and `active_marker` from scratch — it does not reuse the step-0 variable, which would silently be empty in a later call and turn the `rm -f` into a no-op:
+Clear the marker after Rex posts APPROVED or CHANGES REQUESTED. Shell variables do not persist across separate Bash tool calls, so the exit step re-resolves `ops_root` and `active_marker` from scratch. It does not reuse the step-0 variable, which would silently be empty in a later call and turn the `rm -f` into a no-op:
 
 ```bash
 # Ops root: pin first, then walk up (docs/skills/shared/ops-root.md).
@@ -92,7 +104,7 @@ rm -f "$active_marker"
 
 The marker is keyed on session, repo, PR and review kind (me2resh/apexyard#1649). Each review writes and clears only its own file, so reviews run at the same time. The mutation lock applies to review agents only; the orchestrator and build agents can keep working. Use the same `<owner/repo>`, `<pr>` and kind in the write step and the exit step. Spawn the reviewer with the Agent tool and `subagent_type: code-reviewer`. Never use `general-purpose`: the lock finds a review agent by that type.
 
-Nothing mechanically stops a build-class sub-agent writing the same file; what makes Rex's marker legitimate is that a real, independent review happened. See `.claude/hooks/warn-review-marker-write.sh` and `.claude/rules/pr-workflow.md` § "Build agents cannot self-review".
+Nothing mechanically stops a build-class sub-agent writing the same file; Rex's marker is legitimate because a real, independent review happened. See `.claude/hooks/warn-review-marker-write.sh` and `.claude/rules/pr-workflow.md` § "Build agents cannot self-review".
 
 ### 0a. Never hand the reviewer a marker path (me2resh/apexyard#1144)
 
@@ -106,17 +118,15 @@ correct resolution: the agent obeys the instruction it was handed, and the
 marker lands at the bare-number `<pr>-rex.approved` instead. **No gate reads
 that path** — there is no bare-number fallback on any on-disk marker lookup.
 
-The failure is silent in the dangerous direction. `ls .claude/session/reviews/`
-shows a file that reads, to a human, like a valid approval; only the merge
-attempt reveals otherwise. And at that moment the obvious repair — moving the
-file into place — is marker forging, the behaviour
+The failure is silent. `ls .claude/session/reviews/` shows a file that
+looks like a valid approval; only the merge attempt shows otherwise. The
+obvious repair — moving the file into place — is marker forging, the behaviour
 [`pr-workflow.md`](../../rules/pr-workflow.md) § "Build agents cannot
 self-review" exists to prevent. The right recovery is always: delete the
 gate-invisible file and re-run a real review.
 
-`warn-unqualified-review-marker.sh` warns (advisory, never blocks) when a
-bare-number marker appears, and the merge gates name the near-miss in their
-refusal message — but the cheap fix is upstream of both: don't pass a path.
+`warn-unqualified-review-marker.sh` warns (advisory) on a bare-number marker,
+and the merge gates name the near-miss. The cheap fix is upstream: pass no path.
 
 1. Fetch PR details and the latest commit SHA
 2. Get the diff
@@ -128,9 +138,10 @@ refusal message — but the cheap fix is upstream of both: don't pass a path.
 
 **Body path (AgDR-0266).** Rex writes the body with Write to `<ops-root>/.claude/session/reviews/bodies/<owner>__<repo>__<pr>-rex.md` (`review_body_path`), then posts it with `tracker_review_submit <owner/repo> <pr> comment <body_file>`. Not a heredoc.
 
+Rex does not edit the `ready-to-merge` label. After the marker clears, edit it in its own Bash call.
 On GitHub, add `ready-to-merge` after APPROVED: `gh pr edit {number} --repo "$PR_HOST_REPO" --add-label ready-to-merge`.
 Remove it after CHANGES REQUESTED: `gh pr edit {number} --repo "$PR_HOST_REPO" --remove-label ready-to-merge`.
-A label failure changes no verdict or marker.
+A denied or failed label call changes no verdict and no marker.
 
 ### 8. Offer pre-merge QA after APPROVED
 

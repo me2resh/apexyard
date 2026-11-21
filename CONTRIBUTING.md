@@ -22,6 +22,18 @@ git checkout -b feature/GH-<issue>-short-slug upstream/dev
 gh pr create --base dev --fill
 ```
 
+Read `checks.*` only from the ops root's git-ignored `.claude/project-config.json` and shipped defaults.
+Managed-project clones and worktrees cannot supply these settings.
+Linked ticket worktrees use the ops root's settings.
+
+To record the health of `dev` when you start a ticket, set the base check in your local `.claude/project-config.json` (git ignores this file):
+
+```json
+{ "checks": { "baseline_command": "bash bin/run-hook-tests.sh" } }
+```
+
+`/start-ticket` then runs the hook test suite once on the unchanged base and records the result. A red result tells you that a failure existed before your change. The shipped defaults leave this command unset, so adopters' projects never run the framework's suite.
+
 A maintainer + the Code Reviewer agent (Rex) review every PR before merge.
 
 ---
@@ -49,13 +61,18 @@ These aren't style suggestions — `.claude/hooks/` blocks them mechanically, so
 
 Full detail lives in `.claude/rules/` (`git-conventions.md`, `pr-quality.md`, `pr-workflow.md`).
 
+## A new path needs an owner
+
+Each shipped path needs a glob in `.claude/ownership-manifest.yaml`.
+CI runs `bin/check-ownership-manifest.sh` and fails on an unmatched path.
+
 ## Before you open a PR
 
 Run what CI runs, locally:
 
 ```bash
 /bin/bash bin/run-hook-tests.sh   # hook test suite under Bash 3.2 — must be green
-npx markdownlint-cli2@0.23.2 '**/*.md'  # if you touched markdown (same pin as the gate)
+npx markdownlint-cli2@0.24.0 '**/*.md'  # if you touched markdown (same pin as the gate)
 shellcheck .claude/hooks/*.sh     # if you touched hooks
 ```
 

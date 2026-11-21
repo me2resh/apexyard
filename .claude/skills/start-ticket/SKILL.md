@@ -37,6 +37,10 @@ Defaults match single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./
 
 ## Process
 
+### Review queue check (#1995)
+
+`bin/apexyard-start-ticket` calls `review_queue_check` before writing the marker. At `review_queue.limit` (default 4) it warns; `mode=refuse` stops with an error. Unknown tracker never blocks.
+
 ### 1. Parse Arguments
 
 Expected forms:
@@ -66,7 +70,7 @@ The lib emits normalised JSON: `{state, title, url, labels}`. Each tracker adapt
 
 If the lib exits non-zero with empty stdout, the issue does not exist (or the CLI isn't installed / authenticated). Stop and report the error — do not write the marker.
 
-If `state` indicates the ticket is closed (gh: `CLOSED`; linear/jira/asana: `Done` / `Closed` / `Resolved` / `Cancelled`), warn the user and confirm before continuing (sometimes you do want to resume work on a re-opened issue).
+If `state` indicates the ticket is closed (gh: `CLOSED`; linear/jira/asana: `Done` / `Closed` / `Resolved` / `Cancelled` / `Canceled`), warn the user and confirm before continuing (sometimes you do want to resume work on a re-opened issue).
 
 When the resolved project has `orbit.default_planning: true`, check `body`
 for an `ORBIT slice:` line, including the bold form
@@ -112,11 +116,13 @@ fi
 ops_root=$(resolve_ops_root)
 ```
 
-If `$ops_root` is still empty after sourcing (no pin, and `resolve_ops_root`'s own internal walk also found no anchor above cwd), tell the user and stop. Starting a ticket without the fork doesn't make sense.
+If `$ops_root` remains empty after sourcing, report the missing fork and stop.
 
 #### 4b. Look the tracker repo up in the registry
 
-Given the ticket's `owner/repo` (from step 1), resolve the registry path via `portfolio_registry` (see "Path resolution" above — do NOT hardcode `$ops_root/apexyard.projects.yaml`; in split-portfolio v2 the registry lives in the sibling repo, not the ops fork) and grep it for a project whose `repo:` field matches. `$ops_root` is already resolved and guaranteed to carry a `.claude/hooks/` tree (step 4a only succeeds when it does), so source directly from it — no second walk-up needed. One registry-safe way (uses `yq` when available, falls back to a greppy read):
+Resolve the registry with `portfolio_registry`, then find the project whose `repo:` matches the ticket's `owner/repo`.
+Source helpers from `$ops_root`, resolved in step 4a. Do not hardcode the registry path.
+Use `yq` when available, with the fallback below:
 
 ```bash
 source "$ops_root/.claude/hooks/_lib-read-config.sh"
@@ -182,6 +188,26 @@ no question. See step 5; `docs/skills/start-ticket-rationale.md`.
 
 ### 5. Write the markers
 
+Use the helper first from the working tree that holds the code:
+
+```bash
+bin/apexyard-start-ticket owner/repo#42
+```
+
+Replace the reference with the resolved literal repo and number.
+From another directory, use the absolute helper path under the ops root.
+Use a plain command without wrappers, variables, pipes, redirections, or extra arguments.
+The helper fetches the title and URL through the tracker library.
+It prints the current working tree marker path.
+It refuses closed issues and foreign-session takeovers without prompting.
+Report failures and stop in headless sessions. Do not retry a denied permission through another route.
+
+#### Interactive Write fallback
+
+Use the following route only when an interactive session needs the existing workflow.
+A denied helper command is not permission to bypass a gate.
+
+
 Write the markers in three steps. The issue title never goes on a command line. A title can hold shell syntax such as `>`, `| tee` or `sed -i`, and the ticket gate reads such a command as a file write. A fresh tree has no ticket yet, so the gate would block `/start-ticket` itself.
 
 1. Run this fixed command to get the path of the ticket fields file. Replace `$ops_root` with the path from step 4:
@@ -214,23 +240,32 @@ Write the markers in three steps. The issue title never goes on a command line. 
 
 When the tree fails validation, the command writes only the old-layout marker and prints a one-line note. That is not an error. The hooks read the old-layout marker for that tree as they did before.
 
-`active_ticket_write` writes `repo`, `number`, `title`, `url`, `suggested_branch`, `session_id`, `branch`, and `started_at` with `printf '%s\n'` (reject `\n`/`\r`; title one line; first-match reads; AgDR-0257). `APEXYARD_START_TICKET_TAKEOVER=1` is a cooperative signal: set it inline on the single write after take over — never export or inherit. Headless and `/fan-out` must not set it. Residual: an agent can still set it, spoof session id, or edit the marker (as before this PR). Legacy writer writes the same keys.
-
-`active_ticket_write` refuses a tree that is not the ops fork or a registered clone. It also refuses a symlink in the path, a repo owned by another user, and a malformed `.git` file. It prints the reason to stderr. If it prints a hint about the sandbox, the session may not write into the git dir. Tell the user. The old-layout marker still covers the tree. See AgDR-0222 for the allowlist the user can add.
-
-`active_ticket_write_legacy` prints a one-line note and writes nothing when the old-layout path is blocked. An example is a `tickets/<project>` file where the per-worktree marker needs a directory. Report the note to the user. Do not delete the file.
+The writers record session and branch identity (AgDR-0257).
+Read `docs/skills/start-ticket-rationale.md` for writer validation and take-over details.
+Report sandbox denials and legacy-path conflicts. Do not delete conflicting files.
 
 Do NOT write the marker with the Edit or Write tool. `.git` is a protected path for those tools.
 
 ### Read the active ticket
 
-Other skills read the active ticket of the working tree through the same resolver. Run this from the tree you are in:
+From the current tree, read the active ticket:
 
 ```bash
 bash -c '. "$1/.claude/hooks/_lib-active-ticket.sh" && active_ticket_init "$PWD" && active_ticket_lookup "$PWD" && cat "$REPLY"' _ "$ops_root"
 ```
 
-The command prints the marker (`repo=`, `number=`, `title=`, `url=`), or nothing when no marker covers the tree. It reads the marker in the tree's git dir first, then the old-layout marker.
+This prints `repo=`, `number=`, `title=`, and `url=`, or nothing without markers.
+It reads the tree's git-dir marker before the old-layout marker.
+
+### Create the progress note and goal
+
+Read `checks.*` only from the ops root's git-ignored `.claude/project-config.json` and shipped defaults.
+Ignore managed-project config, including in ticket worktrees.
+
+Call `baseline_check "$tree"` after the fallback marker write.
+Stop on refusal.
+Set `/goal`: acceptance criteria met, PR open, CI green at head SHA, Rex APPROVED at that head, progress note current; limit: 20 turns.
+Details: docs/progress-notes.md.
 
 ### 6. Move the board card to "In progress" (opt-in)
 

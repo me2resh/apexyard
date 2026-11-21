@@ -34,10 +34,10 @@ T=$(mktemp -d)
 T=$(cd -P "$T" && pwd)
 trap 'rm -rf "$T"' EXIT
 
-# step5_block <n>: the n-th bash block of step 5, with its list indent removed.
+# step5_block <n>: the n-th interactive fallback block, with indent removed.
 step5_block() {
   awk -v want="$1" '
-    /^### 5\. Write the markers/ { in5 = 1; next }
+    /^#### Interactive Write fallback/ { in5 = 1; next }
     in5 && /^### / { exit }
     in5 && !code && /^[[:space:]]*```bash[[:space:]]*$/ { code = 1; n++; next }
     in5 && code && /^[[:space:]]*```[[:space:]]*$/ { code = 0; if (n == want) exit; next }

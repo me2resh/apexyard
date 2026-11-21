@@ -134,7 +134,7 @@ Skills, and other configs** is enabled.
 
 The generated `.cursor/hooks.json` is a **thin overlay**. It only maps
 Cursor `session_id` onto `CLAUDE_CODE_SESSION_ID` so the ops-root pin
-works. It does not copy the 86 Claude Code gate entries. A leftover
+works. It does not copy the Claude Code gate entries. A leftover
 full copy in `~/.cursor/hooks.json` can double-fire or fail closed.
 Remove it with `bin/install-cursor-adapter.sh --uninstall` then
 re-install.

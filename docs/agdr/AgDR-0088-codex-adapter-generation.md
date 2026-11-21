@@ -11,6 +11,19 @@
 
 ## Context
 
+### GH-1900 transport correction
+
+The Codex generator forwards the host `session_id` as `APEXYARD_SESSION_ID`.
+Patch calls carry data in `tool_input.command`, so the filtered wildcard
+dispatcher routes `apply_patch` through edit dispatch rather than shell
+classification. The protected-target entry also supports direct patch calls.
+Dispatch validates the patch envelope, extracts add, update, delete and move
+targets, and runs the configured edit handlers for each target as a Write
+payload. It preserves caller metadata and supplies the patch as content for
+the existing content checks. A denied target retains the handler's diagnostic.
+No policy is copied or added. This follows this record's canonical-hook
+delegation decision and AgDR-0280's filtered dispatch approach.
+
 - ApexYard's skills, hooks, agents, settings, migrations, registries, and rules
   are authored under `.claude/` today.
 - A first-pass Codex migration produced useful `.agents/` and `.codex/` output,

@@ -1,6 +1,6 @@
 ---
 name: onboard
-description: "Guided first-run onboarding — capability tour, handover-vs-new-project branch, and a guided first win via a real filed ticket. The front door for a brand-new ApexYard fork."
+description: "Guided first-run onboarding. Covers capability tour, handover-vs-new-project branch, and a guided first win via a real filed ticket. The front door for a brand-new ApexYard fork."
 disable-model-invocation: false
 argument-hint: ""
 effort: medium

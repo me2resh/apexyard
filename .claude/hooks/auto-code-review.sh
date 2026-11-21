@@ -44,6 +44,14 @@
 
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
+case "$TOOL_NAME" in
+  Bash|Edit|Write|MultiEdit|NotebookEdit|'') ;;
+  *)
+    # shellcheck source=/dev/null
+    . "$(dirname "$0")/_lib-fail-closed-json.sh" || exit 2
+    if hook_is_shell_call "$INPUT"; then TOOL_NAME=Bash; fi
+    ;;
+esac
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 # The `gh` output may surface at .tool_response.stdout (newer harness,
 # Claude Code 2.x+), .tool_response.output (older 1.x), or .tool_response as

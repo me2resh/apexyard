@@ -19,6 +19,10 @@
 # When the new worktree fails validation, only the old-layout marker is
 # written, with a one-line note. If neither marker is written, the script
 # removes the worktree and the branch it created. It never uses --force.
+# Before the markers, the script records the worktree's owner and lease in
+# the worktree's git dir (AgDR-0284). If that fails, it removes the worktree
+# and the branch it created. Unavailable operation identity keeps the tree
+# without an owner record.
 #
 # On success it prints the worktree path. On failure it prints the reason to
 # stderr and exits non-zero.
@@ -58,6 +62,12 @@ if [ ! -f "$HOOK_DIR/_lib-active-ticket.sh" ]; then
 fi
 # shellcheck source=/dev/null
 . "$HOOK_DIR/_lib-active-ticket.sh"
+if [ ! -f "$HOOK_DIR/_lib-worktree-owner.sh" ]; then
+  echo "prepare-worktree: _lib-worktree-owner.sh not found next to the hooks" >&2
+  exit 1
+fi
+# shellcheck source=/dev/null
+. "$HOOK_DIR/_lib-worktree-owner.sh"
 
 if [ -e "$WTPATH" ]; then
   echo "prepare-worktree: $WTPATH already exists" >&2
@@ -94,7 +104,22 @@ fi
 
 _at_memo_clear
 wrote=0
+owner_ok=0
+owner_reason="its git dir failed validation"
 if active_ticket_gitdir "$WTPATH"; then
+  # Acquire before marker writes, so a refusal cannot leave a branch marker.
+  # Return 2 means unavailable operation identity with no new lock or record.
+  owner_rc=0
+  worktree_owner_acquire "$WTPATH" || owner_rc=$?
+  case "$owner_rc" in
+    0) owner_ok=1 ;;
+    2) owner_reason="the operation identity is unavailable" ;;
+    *)
+      echo "prepare-worktree: could not record the worktree owner, so the worktree is removed" >&2
+      git -C "$SOURCE" worktree remove "$WTPATH" >/dev/null 2>&1 || true
+      git -C "$SOURCE" branch -d "$BRANCH" >/dev/null 2>&1 || true
+      exit 1 ;;
+  esac
   _at_memo_clear
   active_ticket_write "$WTPATH" "$REPO" "$NUMBER" "$TITLE" "$URL" "$BRANCH" && wrote=1
 else
@@ -116,6 +141,10 @@ if [ "$wrote" = 0 ]; then
   git -C "$SOURCE" worktree remove "$WTPATH" >/dev/null 2>&1 || true
   git -C "$SOURCE" branch -d "$BRANCH" >/dev/null 2>&1 || true
   exit 1
+fi
+
+if [ "$owner_ok" = 0 ]; then
+  echo "prepare-worktree: note: $WTPATH has no owner record, because $owner_reason" >&2
 fi
 
 printf '%s\n' "$WTPATH"

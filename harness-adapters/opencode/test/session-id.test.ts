@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildToolExecuteBeforeHook, execGateHookReal } from "../src/gate-dispatcher.ts";
+import { buildToolExecuteBeforeHandler, execGateHookReal } from "../src/gate-dispatcher.ts";
 import type { GateDefinition } from "../src/derive-gates.ts";
 
 /** Same sid precedence as `.claude/hooks/_lib-session-markers.sh`. */
@@ -35,15 +35,17 @@ test("native session id reaches both the hook and the skill shell", async () => 
     const gates: GateDefinition[] = [{
       name: "session",
       hookRelativePath: ".claude/hooks/session.sh",
-      wires: [{ tool: "bash", commandGlob: null }],
+      wires: [{ tool: "shell", commandGlob: null }],
     }];
-    const before = buildToolExecuteBeforeHook(root, gates, execGateHookReal);
+    const before = buildToolExecuteBeforeHandler(root, gates, execGateHookReal);
     const seen: string[] = [];
     for (const sessionID of ["native-A", "native-A", "native-B", "quote'id"]) {
       process.env.EXPECTED_ID = sessionID;
-      const output = { args: { command: 'printf %s "$APEXYARD_SESSION_ID"' } };
-      await before({ tool: "bash", sessionID, callID: "call" }, output);
-      seen.push(execFileSync("bash", ["-c", output.args.command], { encoding: "utf8" }));
+      // The handler mutates the event's own `input` object in place, exactly
+      // as opencode applies edits made by an execute.before hook.
+      const input = { command: 'printf %s "$APEXYARD_SESSION_ID"' };
+      await before({ tool: "shell", sessionID, input });
+      seen.push(execFileSync("bash", ["-c", input.command], { encoding: "utf8" }));
     }
     assert.deepEqual(seen, ["native-A", "native-A", "native-B", "quote'id"]);
   } finally {
@@ -80,13 +82,13 @@ test("inherited CLAUDE_CODE_SESSION_ID does not override adapter marker paths", 
       const gates: GateDefinition[] = [{
         name: `probe-${sessionID}`,
         hookRelativePath: `.claude/hooks/probe-${sessionID}.sh`,
-        wires: [{ tool: "bash", commandGlob: null }],
+        wires: [{ tool: "shell", commandGlob: null }],
       }];
-      const before = buildToolExecuteBeforeHook(root, gates, execGateHookReal);
-      const output = { args: { command: SHELL_PROBE } };
-      await before({ tool: "bash", sessionID, callID: "call" }, output);
+      const before = buildToolExecuteBeforeHandler(root, gates, execGateHookReal);
+      const input = { command: SHELL_PROBE };
+      await before({ tool: "shell", sessionID, input });
       hookPaths.push(readFileSync(outFile, "utf8"));
-      shellPaths.push(execFileSync("bash", ["-c", output.args.command], { encoding: "utf8" }));
+      shellPaths.push(execFileSync("bash", ["-c", input.command], { encoding: "utf8" }));
     }
 
     assert.deepEqual(hookPaths, [

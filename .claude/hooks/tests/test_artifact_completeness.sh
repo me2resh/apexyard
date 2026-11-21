@@ -50,6 +50,9 @@ cat > "$TMP/pr-complete.md" <<'BODY'
 ## Summary
 Update sample behavior.
 
+## Decisions made for you
+None: the ticket specified all behavior.
+
 ## Testing
 The local check passed.
 
@@ -229,6 +232,9 @@ for ref_line in 'Closes org/other#7' 'Refs org/other#7' 'Closes #7' 'Refs ABC-12
 ## Summary
 Update sample behavior.
 
+## Decisions made for you
+None: the ticket specified all behavior.
+
 ## Testing
 The local check passed.
 
@@ -267,6 +273,9 @@ run_pr_cmd() {
 COMPLETE_BODY_TEXT=$(cat <<'BODY'
 ## Summary
 Update sample behavior.
+
+## Decisions made for you
+None: the ticket specified all behavior.
 
 ## Testing
 Mention grep -F pattern and --body-file notes.md in the prose.

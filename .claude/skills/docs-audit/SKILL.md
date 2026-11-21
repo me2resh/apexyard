@@ -1,6 +1,6 @@
 ---
 name: docs-audit
-description: Diataxis docs audit — tutorials, how-to, reference, explanation; checks README, API docs, deployment guides, changelog, staleness.
+description: Diataxis docs audit. Checks tutorials, how-to, reference, explanation; checks README, API docs, deployment guides, changelog, staleness.
 disable-model-invocation: false
 argument-hint: "[project-path]"
 effort: medium
@@ -11,6 +11,16 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 # /docs-audit — Documentation Completeness (Diataxis)
 
 Deep-dive documentation analysis using the Diataxis framework. Checks that docs cover all four quadrants (tutorials, how-to guides, reference, explanation) and are not stale. Invoke when `/launch-check`'s documentation row shows WARN or FAIL.
+
+## Usage
+
+```
+/docs-audit                       # audit the project in the current directory
+/docs-audit workspace/my-app      # audit the project at this path
+```
+
+This audit runs on its own. It does not need a `/launch-check` run first.
+`/launch-check` names and offers this audit when its documentation row shows WARN or FAIL.
 
 ## Diataxis Framework
 

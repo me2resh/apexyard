@@ -73,6 +73,9 @@ cat > "$TMPROOT/.claude/hooks/block-test.sh" <<'SH'
 #!/usr/bin/env bash
 input=$(cat)
 case "$input" in
+  *session-probe*) printf '%s' "${APEXYARD_SESSION_ID:-missing}"; exit 0 ;;
+esac
+case "$input" in
   *deny*) exit 2 ;;
   *) exit 0 ;;
 esac
@@ -183,6 +186,12 @@ fi
 # Unsetting the session-id var for just this invocation forces the
 # fallback PWD-walk-up path the fixture below was actually built for.
 hook_command=$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$TMPROOT/.codex/hooks.json")
+session_result=$(printf '%s' '{"session_id":"host-session-1900","tool_name":"Bash","tool_input":{"command":"policy session-probe"}}' | (cd "$TMPROOT" && unset CLAUDE_CODE_SESSION_ID APEXYARD_SESSION_ID && bash -c "$hook_command"))
+if [ "$session_result" = host-session-1900 ]; then
+  mark_pass "host session_id reaches the hook environment"
+else
+  mark_fail "host session_id reaches the hook environment" "$session_result"
+fi
 printf '{"tool_name":"Bash","tool_input":{"command":"policy deny"}}\n' | (cd "$TMPROOT" && unset CLAUDE_CODE_SESSION_ID && bash -c "$hook_command") >/tmp/_codex_adapter_block.out 2>&1
 block_rc=$?
 if [ "$block_rc" -eq 2 ]; then

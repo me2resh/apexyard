@@ -21,9 +21,9 @@
 #      one-liner
 #   8. AgDR-0042 names the 5 dimensions in its Decision section
 #   9. AgDR-0042 references the ticket (#298)
-#  10. CLAUDE.md /handover skill row mentions harnessability
+#  10. docs/claude-md-reference.md /handover skill row mentions harnessability
 #  11. docs/multi-project.md /handover skill row mentions harnessability
-#  12. Skill count in CLAUDE.md is unchanged (this is an extension to an
+#  12. Skill count in docs/claude-md-reference.md is unchanged (this is an extension to an
 #      existing skill, not a new one)
 #
 # Exit 0 if all cases pass; 1 on first failure.
@@ -33,10 +33,11 @@ set -u
 SRC_ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 SKILL_MD="$SRC_ROOT/.claude/skills/handover/SKILL.md"
 AGDR="$SRC_ROOT/docs/agdr/AgDR-0042-harnessability-scoring-dimensions.md"
-CLAUDE_MD="$SRC_ROOT/CLAUDE.md"
+# The skill table and quick reference moved from CLAUDE.md to this page (#2035).
+SKILL_CATALOG="$SRC_ROOT/docs/claude-md-reference.md"
 MULTI_DOC="$SRC_ROOT/docs/multi-project.md"
 
-for f in "$SKILL_MD" "$AGDR" "$CLAUDE_MD" "$MULTI_DOC"; do
+for f in "$SKILL_MD" "$AGDR" "$SKILL_CATALOG" "$MULTI_DOC"; do
   if [ ! -f "$f" ]; then
     echo "FAIL: missing $f" >&2
     exit 1
@@ -183,14 +184,14 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Case 10: CLAUDE.md /handover skill row mentions harnessability.
+# Case 10: the skill-table /handover row mentions harnessability.
 # ---------------------------------------------------------------------------
 # Find the /handover skill-row line; grep for "harnessability" within it.
-handover_row_claude=$(grep -E '^\| `/handover` \|' "$CLAUDE_MD" || true)
+handover_row_claude=$(grep -E '^\| `/handover` \|' "$SKILL_CATALOG" || true)
 if echo "$handover_row_claude" | grep -iqF "harnessability"; then
-  mark_pass "10. CLAUDE.md /handover skill row mentions harnessability"
+  mark_pass "10. skill-table /handover row mentions harnessability"
 else
-  mark_fail "10. CLAUDE.md /handover row" "no 'harnessability' on the /handover row"
+  mark_fail "10. skill-table /handover row" "no 'harnessability' on the /handover row"
 fi
 
 # ---------------------------------------------------------------------------
@@ -205,16 +206,16 @@ fi
 
 # ---------------------------------------------------------------------------
 # Case 12: the harnessability-scoring extension to /handover is NOT a new
-# skill, so the CLAUDE.md "Available skills (N)" header must stay CONSISTENT
+# skill, so the skill-table "Available skills (N)" header must stay CONSISTENT
 # with the actual skill count on disk (no spurious bump). Computed dynamically
 # — counts SKILL.md files the same way site_counts does — so it survives
 # legitimate count changes instead of pinning a literal that goes stale (#528).
 # ---------------------------------------------------------------------------
 actual_skills=$(find "$SRC_ROOT/.claude/skills" -name SKILL.md 2>/dev/null | wc -l | tr -d ' ')
-if grep -qE "### Available skills \($actual_skills\)" "$CLAUDE_MD"; then
-  mark_pass "12. CLAUDE.md skill-count header matches actual skill count ($actual_skills)"
+if grep -qE "### Available skills \($actual_skills\)" "$SKILL_CATALOG"; then
+  mark_pass "12. skill-table count header matches actual skill count ($actual_skills)"
 else
-  mark_fail "12. skill count" "CLAUDE.md '### Available skills (N)' header != actual SKILL.md count ($actual_skills)"
+  mark_fail "12. skill count" "docs/claude-md-reference.md '### Available skills (N)' header != actual SKILL.md count ($actual_skills)"
 fi
 
 # ---------------------------------------------------------------------------

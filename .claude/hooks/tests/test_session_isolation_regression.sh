@@ -11,6 +11,10 @@
 
 set -u
 
+# shellcheck disable=SC1007  # Intentionally empty CDPATH keeps cd silent.
+TMPDIR=$(CDPATH= cd -- "${TMPDIR:-/tmp}" && pwd) || exit 1
+export TMPDIR
+
 # Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
 # shellcheck disable=SC1091
 . "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
@@ -29,6 +33,8 @@ done
 PASS=0
 FAIL=0
 FAILED_CASES=""
+OUTPUT_DIR=$(mktemp -d "${TMPDIR:-/tmp}/session-isolation-test.XXXXXX") || exit 1
+trap 'rm -rf "$OUTPUT_DIR"' EXIT
 
 mark_pass() { echo "  PASS $1"; PASS=$((PASS + 1)); }
 mark_fail() {
@@ -49,7 +55,7 @@ dir_fingerprint() {
 }
 
 SID="regression-1549-fake-session"
-VICTIM=$(mktemp -d "${TMPDIR:-/tmp}/apexyard-1549-victim.XXXXXX") || exit 1
+VICTIM=$(mktemp -d "$OUTPUT_DIR/victim.XXXXXX") || exit 1
 printf '%s\n' "/path/to/real/ops-fork" >"$VICTIM/ops-root-${SID}"
 printf 'cache-sentinel\n' >"$VICTIM/resolve-cache-${SID}-config-json"
 VICTIM_BEFORE=$(dir_fingerprint "$VICTIM")
@@ -102,7 +108,7 @@ printf '%s\n' "/path/to/real/ops-fork" >"$VICTIM/ops-root-${SID}"
 printf 'cache-sentinel\n' >"$VICTIM/resolve-cache-${SID}-config-json"
 VICTIM_BEFORE=$(dir_fingerprint "$VICTIM")
 
-MINI_WITH=$(mktemp "${TMPDIR:-/tmp}/apexyard-1549-mini-with.XXXXXX") || exit 1
+MINI_WITH=$(mktemp "$OUTPUT_DIR/mini-with.XXXXXX") || exit 1
 cat >"$MINI_WITH" <<EOF
 #!/bin/bash
 set -u
@@ -122,7 +128,7 @@ EOF
 if CLAUDE_CODE_SESSION_ID="$SID" \
   APEXYARD_OPS_PIN_DIR="$VICTIM" \
   env -u APEXYARD_OPS_DISABLE_PIN -u APEXYARD_DISABLE_RESOLUTION_CACHE \
-  bash "$MINI_WITH" >/tmp/_1549_mini_with.out 2>&1; then
+  bash "$MINI_WITH" >"$OUTPUT_DIR/_1549_mini_with.out" 2>&1; then
   VICTIM_AFTER_MINI=$(dir_fingerprint "$VICTIM")
   if [ "$VICTIM_AFTER_MINI" = "$VICTIM_BEFORE" ]; then
     mark_pass "write-capable mini suite with helper leaves victim pin dir byte-identical"
@@ -132,7 +138,7 @@ if CLAUDE_CODE_SESSION_ID="$SID" \
   fi
 else
   mark_fail "mini suite with helper" \
-    "mini suite failed; tail:"$'\n'"$(tail -n 20 /tmp/_1549_mini_with.out)"
+    "mini suite failed; tail:"$'\n'"$(tail -n 20 "$OUTPUT_DIR/_1549_mini_with.out")"
 fi
 rm -f "$MINI_WITH"
 
@@ -141,7 +147,7 @@ printf '%s\n' "/path/to/real/ops-fork" >"$VICTIM/ops-root-${SID}"
 printf 'cache-sentinel\n' >"$VICTIM/resolve-cache-${SID}-config-json"
 VICTIM_BEFORE=$(dir_fingerprint "$VICTIM")
 
-MINI_WITHOUT=$(mktemp "${TMPDIR:-/tmp}/apexyard-1549-mini-without.XXXXXX") || exit 1
+MINI_WITHOUT=$(mktemp "$OUTPUT_DIR/mini-without.XXXXXX") || exit 1
 cat >"$MINI_WITHOUT" <<EOF
 #!/bin/bash
 set -u
@@ -154,13 +160,13 @@ EOF
 CLAUDE_CODE_SESSION_ID="$SID" \
   APEXYARD_OPS_PIN_DIR="$VICTIM" \
   env -u APEXYARD_OPS_DISABLE_PIN -u APEXYARD_DISABLE_RESOLUTION_CACHE \
-  bash "$MINI_WITHOUT" >/tmp/_1549_mini_without.out 2>&1 || true
+  bash "$MINI_WITHOUT" >"$OUTPUT_DIR/_1549_mini_without.out" 2>&1 || true
 pin_after_mini=$(cat "$VICTIM/ops-root-${SID}-mini")
 if [ -n "$pin_after_mini" ] && [ "$pin_after_mini" != "/path/to/real/ops-fork" ]; then
   mark_pass "write-capable mini suite without helper creates a new victim pin"
 else
   mark_fail "mini suite without helper" \
-    "expected a new pin; pin='$pin_after_mini'; tail:"$'\n'"$(tail -n 20 /tmp/_1549_mini_without.out)"
+    "expected a new pin; pin='$pin_after_mini'; tail:"$'\n'"$(tail -n 20 "$OUTPUT_DIR/_1549_mini_without.out")"
 fi
 rm -f "$MINI_WITHOUT"
 
@@ -168,9 +174,9 @@ rm -f "$MINI_WITHOUT"
 printf '%s\n' "/path/to/real/ops-fork" >"$VICTIM/ops-root-${SID}"
 printf 'cache-sentinel\n' >"$VICTIM/resolve-cache-${SID}-config-json"
 VICTIM_BEFORE=$(dir_fingerprint "$VICTIM")
-RUNNER_PIN=$(mktemp -d "${TMPDIR:-/tmp}/apexyard-1549-runner-pins.XXXXXX") || exit 1
+RUNNER_PIN=$(mktemp -d "$OUTPUT_DIR/runner-pins.XXXXXX") || exit 1
 
-MINI_RUNNER=$(mktemp "${TMPDIR:-/tmp}/apexyard-1549-mini-runner.XXXXXX") || exit 1
+MINI_RUNNER=$(mktemp "$OUTPUT_DIR/mini-runner.XXXXXX") || exit 1
 cat >"$MINI_RUNNER" <<EOF
 #!/bin/bash
 set -u
@@ -185,7 +191,7 @@ if CLAUDE_CODE_SESSION_ID="$SID" APEXYARD_OPS_PIN_DIR="$VICTIM" \
     APEXYARD_OPS_DISABLE_PIN=1 \
     APEXYARD_DISABLE_RESOLUTION_CACHE=1 \
     APEXYARD_OPS_PIN_DIR="$RUNNER_PIN" \
-    bash "$MINI_RUNNER" >/tmp/_1549_runner_wrap.out 2>&1; then
+    bash "$MINI_RUNNER" >"$OUTPUT_DIR/_1549_runner_wrap.out" 2>&1; then
   VICTIM_AFTER_RUNNER=$(dir_fingerprint "$VICTIM")
   if [ "$VICTIM_AFTER_RUNNER" = "$VICTIM_BEFORE" ]; then
     mark_pass "runner-style env wrapper leaves victim pin dir byte-identical"
@@ -197,7 +203,7 @@ else
   # pin-ops-root is a silent no-op without CLAUDE_CODE_SESSION_ID (runner unsets it)
   # so a non-zero exit would be unexpected; still report.
   mark_fail "runner-style wrapper" \
-    "mini suite failed; tail:"$'\n'"$(tail -n 20 /tmp/_1549_runner_wrap.out)"
+    "mini suite failed; tail:"$'\n'"$(tail -n 20 "$OUTPUT_DIR/_1549_runner_wrap.out")"
 fi
 rm -f "$MINI_RUNNER"
 

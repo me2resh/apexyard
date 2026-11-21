@@ -1,8 +1,8 @@
 ---
 name: penetration-tester
-description: Adversarial security testing, exploit discovery, API security review, and pre-release security sign-off. Activates on explicit invocation for active testing, exploit reasoning, or hardening checks; not auto-fired on diff content.
+description: Adversarial security testing, exploit discovery, API security review, independent review of the Security Auditor's threat models (AgDR-0301), and pre-release security sign-off. Activates on explicit invocation for active testing, exploit reasoning, threat-model review, or hardening checks; not auto-fired on diff content.
 model: opus
-allowed-tools: Bash, Read, Edit, Write, Grep, Glob
+tools: Bash, Read, Edit, Write, Grep, Glob
 persona_name: Hamza
 omitClaudeMd: true
 ---

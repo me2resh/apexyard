@@ -27,14 +27,16 @@
  * --------------------------------------------------------
  * pi's dispatcher resolves the ops root on EVERY `tool_call` event, because
  * pi hands the dispatcher a fresh `ctx.cwd` on each event. opencode's
- * plugin lifecycle is different: a plugin function is called ONCE per
- * session, at load time, and receives `directory`/`worktree` in that single
- * call — there is no later opportunity for cwd to differ from what was
- * passed at init. So this module resolves the ops root once, at plugin
- * init, from `directory` (falling back to `worktree`); the gate dispatcher
- * caches that single result for the session rather than re-resolving per
- * tool call. This is a genuine platform difference, not a missed
- * optimization — see `src/gate-dispatcher.ts` for where this is called.
+ * plugin lifecycle is different: `setup(ctx)` runs ONCE per plugin instance,
+ * at load time. V2 exposes the instance's location as `ctx.location`
+ * (`directory`, plus `project.directory` / `project.canonical`) and does not
+ * hand later hook callbacks a fresher cwd — a V2 `execute.before` event
+ * carries `sessionID` and the tool call, not a working directory. So this
+ * module resolves the ops root once, at plugin init, from
+ * `ctx.location.directory`; the gate dispatcher caches that single result
+ * rather than re-resolving per tool call. This is a genuine platform
+ * difference, not a missed optimization — see `src/gate-dispatcher.ts` for
+ * where this is called.
  *
  * WHAT THIS DOES NOT DO
  * ----------------------
@@ -47,7 +49,7 @@ import { existsSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
 
 export interface ResolveOpsRootOptions {
-  /** Directory to start the walk-up from — opencode's PluginInput.directory (or .worktree). */
+  /** Directory to start the walk-up from — opencode's ctx.location.directory. */
   startCwd?: string;
   /** Explicit override — highest priority, skips the walk when set and valid. */
   explicitOpsRoot?: string;
@@ -101,7 +103,7 @@ export function walkUpOpsRoot(startDir: string): string | undefined {
  *      an invalid override falls through rather than silently pointing the
  *      merge gate at the wrong directory.
  *   2. Walk-up from `options.startCwd` (typically opencode's
- *      `PluginInput.directory`), identical logic to `_lib-ops-root.sh`'s
+ *      `ctx.location.directory`), identical logic to `_lib-ops-root.sh`'s
  *      `resolve_ops_root_walk`.
  *   3. `undefined` if neither resolves — callers should fail toward
  *      re-review (not enforcing), never toward silently allowing on a

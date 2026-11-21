@@ -59,14 +59,18 @@ setup() {
   esac
   printf 'FROM scratch\n' > "$b/Dockerfile"
   git -C "$b" add Dockerfile
+  ln -s . "$b/repo"
+  printf 'subject\n' > "$b/plain-message"
+  printf 'decided by AgDR-0287\n' > "$b/agdr-message"
   echo "$b"
 }
 
-# run_case <name> <mode> <want rc>
+# run_case <name> <mode> <want rc> [command]
 run_case() {
-  local name="$1" mode="$2" want="$3" dir rc err
+  local name="$1" mode="$2" want="$3" dir rc err command
+  command=${4:-'git commit -m "feat(#1): add a Dockerfile"'}
   dir=$(setup "$mode")
-  err=$(cd "$dir" && printf '%s' "$(jq -nc --arg c 'git commit -m "feat(#1): add a Dockerfile"' '{tool_input:{command:$c}}')" | bash "$HOOK" 2>&1 >/dev/null)
+  err=$(cd "$dir" && printf '%s' "$(jq -nc --arg c "$command" '{tool_input:{command:$c}}')" | bash "$HOOK" 2>&1 >/dev/null)
   rc=$?
   if [ "$rc" = "$want" ]; then ok "$name"; else bad "$name" "want rc=$want got $rc (${err:0:200})"; fi
 }
@@ -81,6 +85,53 @@ run_case "spike_marker_in_project_a_does_not_exempt_project_b (old tickets/a)" a
 run_case "an old current-ticket that governs b exempts b" a-old-current 0
 run_case "spike_marker_in_project_a_does_not_exempt_project_b (old current-ticket, plain tickets/b)" a-old-current-b 2
 run_case "an old tickets/b spike file still exempts b's main clone" b-old-tickets 0
+
+run_case "reference only in second message" none 0 "git commit -m 'subject' -m 'decided by AgDR-0287'"
+run_case "reference only in third message" none 0 "git commit -m 'subject' -m 'body' -m 'decided by AgDR-0287'"
+run_case "single quoted subject and double quoted body" none 0 "git commit -m 'subject' -m \"decided by AgDR-0287\""
+run_case "equals message form" none 0 "git commit --message='subject' --message='decided by AgDR-0287'"
+run_case "attached short message form" none 0 "git commit -m'subject' -m'decided by AgDR-0287'"
+run_case "separate long message form" none 0 "git commit --message 'subject' --message 'decided by AgDR-0287'"
+run_case "no reference in any message" none 2 "git commit -m 'subject' -m 'body' -m 'details'"
+run_case "invalid AgDR id" none 2 "git commit -m 'subject' -m 'decided by AgDR-XYZ'"
+
+run_case "chained add then commit" none 2 "git add Dockerfile && git commit -m 'feat(#1): add a Dockerfile'"
+run_case "cd then commit with and" none 2 "cd repo && git commit -m 'subject'"
+run_case "cd then commit with semicolon" none 2 "cd repo; git commit -m 'subject'"
+run_case "continued first message" none 2 $'git commit \\\n-m \'feat(#1): add a Dockerfile\''
+run_case "variable before message" none 2 'git commit $VAR -m "subject"'
+run_case "separator before message" none 2 "git commit -- -m 'subject'"
+run_case "continued second message reference" none 0 $'git commit -m \'subject\' \\\n-m \'decided by AgDR-0287\''
+run_case "chained second message reference" none 0 "git add Dockerfile && git commit -m 'subject' -m 'AgDR-0287'"
+run_case "file without reference" none 2 "git commit -F plain-message"
+run_case "file with reference" none 0 "git commit -F agdr-message"
+run_case "long file without reference" none 2 "git commit --file plain-message"
+run_case "long file with reference" none 0 "git commit --file agdr-message"
+run_case "interactive commit" none 0 "git commit"
+run_case "reference in next invocation cannot exempt" none 2 "git commit -m 'subject' && echo 'AgDR-0287'"
+
+run_case "raw command collects messages across invocations" none 0 "git commit -m 'AgDR-0287'; git commit -m 'subject'"
+run_case "two referenced commits" none 0 "git commit -m 'AgDR-0287'; git commit -m 'AgDR-0287'"
+
+# A standalone hook copy has no readable helper beside it.
+ORIGINAL_HOOK="$HOOK"
+mkdir -p "$TMP/no-helper"
+cp "$HOOK" "$TMP/no-helper/require-agdr-for-arch-changes.sh"
+HOOK="$TMP/no-helper/require-agdr-for-arch-changes.sh"
+run_case "missing helper blocks message commit" none 2 "git commit -m 'subject'"
+HOOK="$ORIGINAL_HOOK"
+
+run_case "heredoc message keeps reference" none 0 "$(cat <<'COMMAND'
+git commit -m "$(cat <<'EOF'
+subject
+
+Decided by AgDR-0042
+EOF
+)"
+COMMAND
+)"
+run_case "git commit text in subject and reference in second message" none 0 "git commit -m 'describe git commit behavior' -m 'Decided by AgDR-0042'"
+run_case "double quoted subject and single quoted body" none 0 "git commit -m \"subject\" -m 'Decided by AgDR-0042'"
 
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" = 0 ]

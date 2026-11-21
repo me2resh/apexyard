@@ -14,6 +14,8 @@ See `docs/agdr/AgDR-0082-pi-gate-dispatcher-adapter.md`'s "Update (GH-840)" sect
 
 ## Install
 
+For omp 18.10.2, see [omp (oh my pi)](../../docs/harnesses/pi.md#omp-oh-my-pi).
+
 ```bash
 cd harness-adapters/pi
 npm install       # pulls in @earendil-works/pi-coding-agent (real pi types + runtime)

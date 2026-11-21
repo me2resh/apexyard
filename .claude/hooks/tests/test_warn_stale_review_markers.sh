@@ -62,6 +62,7 @@ make_sandbox() {
   src_root=$(cd "$(dirname "$0")/../../.." && pwd)
   if [ -f "$src_root/.claude/hooks/_lib-read-config.sh" ]; then
     cp "$src_root/.claude/hooks/_lib-read-config.sh" "$sb/.claude/hooks/_lib-read-config.sh"
+    cp "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)/_lib-fail-closed-json.sh" "$sb/.claude/hooks/_lib-fail-closed-json.sh"
   fi
   if [ -f "$src_root/.claude/project-config.defaults.json" ]; then
     cp "$src_root/.claude/project-config.defaults.json" "$sb/.claude/project-config.defaults.json"

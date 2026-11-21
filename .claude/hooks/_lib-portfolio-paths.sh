@@ -308,7 +308,7 @@ _portfolio_root() {
 # entered outside a Windows-drive-letter input.
 # ------------------------------------------------------------------------------
 _portfolio_canonicalize() {
-  local p="$1" dir tail=""
+  local p="$1" dir tail="" parent
 
   case "$p" in
     [A-Za-z]:/*|[A-Za-z]:\\*)
@@ -333,7 +333,7 @@ _portfolio_canonicalize() {
     else
       tail="$(basename "$dir")/$tail"
     fi
-    dir="$(dirname "$dir")"
+    parent=$(dirname "$dir"); [ "$parent" = "$dir" ] && break; dir="$parent"
   done
 
   if [ ! -e "$dir" ]; then
@@ -1006,4 +1006,18 @@ portfolio_resolve_template() {
 
   # 3. Neither exists.
   return 1
+}
+
+# Exact registry parent for permission validation. Keep symlinks unresolved so
+# the writer can refuse them rather than silently granting their destination.
+portfolio_permissions_root() {
+  local registry root
+  root=$(_portfolio_root)
+  registry=$(_portfolio_get '.portfolio.registry' './apexyard.projects.yaml')
+  [ -n "$root" ] && [ -n "$registry" ] || return 1
+  case "$registry" in
+    /*) ;;
+    *) registry="$root/$registry" ;;
+  esac
+  dirname "$registry"
 }

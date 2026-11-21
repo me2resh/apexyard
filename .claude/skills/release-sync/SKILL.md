@@ -1,6 +1,6 @@
 ---
 name: release-sync
-description: Sync main back to dev after a squash-merge release — files a PR that makes the release squash commit an ancestor of dev, eliminating future merge conflict accumulation.
+description: Sync main back to dev after a squash-merge release. Files a PR that makes the release squash commit an ancestor of dev, eliminating future merge conflict accumulation.
 argument-hint: "<version, e.g. v2.0.3>"
 allowed-tools: Bash, Read, Write
 ---

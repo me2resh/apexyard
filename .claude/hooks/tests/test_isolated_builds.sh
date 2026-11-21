@@ -9,7 +9,7 @@
 #
 #   1. .claude/rules/isolated-builds.md exists and carries the ApexYard footer.
 #   2. CLAUDE.md indexes it by name at .claude/rules/isolated-builds.md.
-#   3. CLAUDE.md's rules-count line is updated (14) and names "isolated builds".
+#   3. docs/claude-md-reference.md's rules-count line is updated (14) and names "isolated builds".
 #
 # Test style matches the existing tests/*.sh (e.g. test_reporting_style.sh)
 # — bash + grep, no framework.
@@ -24,6 +24,8 @@ set -u
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 RULE="$SRC_ROOT/.claude/rules/isolated-builds.md"
 CLAUDE_MD="$SRC_ROOT/CLAUDE.md"
+# The rules-count line moved from CLAUDE.md to the reference page (#2035).
+REFERENCE_MD="$SRC_ROOT/docs/claude-md-reference.md"
 
 fail=0
 pass() { echo "PASS: $1"; }
@@ -49,21 +51,21 @@ else
   die "CLAUDE.md does not index .claude/rules/isolated-builds.md without an @ import"
 fi
 
-# 3. CLAUDE.md rules-count line is present and at least 14 (>= the count as
+# 3. The reference page rules-count line is present and at least 14 (>= the count as
 # of this rule's own PR, #784). Checked as a lower bound rather than an exact
 # match so a later rule addition (e.g. #788's agent-role-selection.md, which
 # bumps this to 15) doesn't spuriously fail this test — same fix applied
 # retroactively here that test_reporting_style.sh already used for #783.
-RULES_COUNT=$(grep -oE '[0-9]+ modular rule files' "$CLAUDE_MD" 2>/dev/null | grep -oE '^[0-9]+' | head -n 1)
+RULES_COUNT=$(grep -oE '[0-9]+ modular rule files' "$REFERENCE_MD" 2>/dev/null | grep -oE '^[0-9]+' | head -n 1)
 if [ -n "$RULES_COUNT" ] && [ "$RULES_COUNT" -ge 14 ]; then
-  pass "CLAUDE.md rules count present and >= 14 (found: $RULES_COUNT)"
+  pass "docs/claude-md-reference.md rules count present and >= 14 (found: $RULES_COUNT)"
 else
-  die "CLAUDE.md rules-count line missing or below 14 (found: ${RULES_COUNT:-none})"
+  die "docs/claude-md-reference.md rules-count line missing or below 14 (found: ${RULES_COUNT:-none})"
 fi
-if grep -qi 'isolated builds' "$CLAUDE_MD" 2>/dev/null; then
-  pass "CLAUDE.md rules list names 'isolated builds'"
+if grep -qi 'isolated builds' "$REFERENCE_MD" 2>/dev/null; then
+  pass "docs/claude-md-reference.md rules list names 'isolated builds'"
 else
-  die "CLAUDE.md rules list does not name 'isolated builds'"
+  die "docs/claude-md-reference.md rules list does not name 'isolated builds'"
 fi
 
 if [ "$fail" -eq 0 ]; then

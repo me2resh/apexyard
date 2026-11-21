@@ -31,7 +31,7 @@ ok() { echo "PASS [$1]"; PASS=$((PASS + 1)); }
 bad() { echo "FAIL [$1]: $2" >&2; FAIL=$((FAIL + 1)); }
 
 PATTERN='session/tickets|current-ticket'
-ALLOWED_RX='^(\.claude/hooks/_lib-active-ticket\.sh|\.claude/hooks/warn-legacy-ticket-markers\.sh|\.claude/hooks/block-ambient-tracker-repo\.sh|\.claude/skills/start-ticket/SKILL\.md|\.claude/skills/status/briefing\.sh|CHANGELOG\.md|docs/agdr/.*|docs/technical-designs/.*|\.claude/hooks/tests/.*)$'
+ALLOWED_RX='^(\.claude/hooks/_lib-active-ticket\.sh|\.claude/hooks/warn-legacy-ticket-markers\.sh|\.claude/hooks/block-ambient-tracker-repo\.sh|\.claude/skills/start-ticket/SKILL\.md|\.claude/skills/status/briefing\.sh|CHANGELOG\.md|docs/agdr/.*|docs/technical-designs/.*|docs/gate-state-contract\.md|\.claude/hooks/tests/.*)$'
 
 # offenders <file list on stdin>: prints each file that matches PATTERN and is not allowed
 offenders() {

@@ -46,7 +46,10 @@ set -euo pipefail
 input=$(cat)
 name=$(basename "$0")
 printf '%s\n' "$name" >> "${DISPATCH_LOG:?}"
-if [ "$name" = block-git-add-all.sh ] && grep -q 'git add -A' <<<"$input"; then
+# Mirror the real gate's flag set (-A / --all / .). A stub that matched only
+# `git add -A` made the #2071 routing cases assert the stub, not the routing:
+# `echo built; git add .` reached the gate and still passed.
+if [ "$name" = block-git-add-all.sh ] && grep -qE 'git add[[:space:]]+(-A|--all|\.)([[:space:]"]|$)' <<<"$input"; then
   exit 2
 fi
 if [ "${DISPATCH_FAIL_SCRIPT:-}" = "$name" ]; then
@@ -383,11 +386,10 @@ run_json() {
 
 # broad-space retains older routing, even where Bash removes the pair.
 # Prefix routing cannot see these later verbs, so this exercises the join.
-for command in $'echo ok; git\\\npush' $"echo 'git"$'\\\n'$"push'"; do
-  : > "$TMP/log"
-  run_json "$command"
-  [ "$(grep -c '^block-main-push.sh$' "$TMP/log")" -eq 1 ]
-done
+command=$'echo ok; git\\\npush'
+: > "$TMP/log"
+run_json "$command"
+[ "$(grep -c '^block-main-push.sh$' "$TMP/log")" -eq 1 ]
 for command in $'echo ok; git\\\ncommit' $'echo # git\\\ncommit'; do
   : > "$TMP/log"
   run_json "$command"
@@ -575,15 +577,25 @@ for command in \
   fi
 done
 
-# The scan does not scrub quoted data. Text that only mentions a push still
-# routes the push gates. Pin that over-match so a later change does not
-# scrub the input and lose `sh -c '...'` routing with it.
-: > "$TMP/log"
-run_json "echo 'run git push later' > notes.txt"
-[ "$(grep -c '^block-main-push.sh$' "$TMP/log")" -eq 1 ]
-: > "$TMP/log"
-run_json "sh -c 'git push origin main'"
-[ "$(grep -c '^block-main-push.sh$' "$TMP/log")" -eq 1 ]
+# One quoted argument is data; nested shell command strings still route.
+for command in "grep -n -E 'git push|credential' f" \
+  'echo "run git push later"' \
+  "echo 'run git push later' > notes.txt" $"echo 'git"$'\\\n'$"push'"; do
+  : > "$TMP/log"
+  run_json "$command"
+  if grep -qE '^(block-main-push|check-secrets)\.sh$' "$TMP/log"; then
+    echo "FAIL: quoted data routed protected gates: $command" >&2
+    exit 1
+  fi
+done
+for command in 'rg -n "git push origin dev" docs/' "sh -c 'git push origin main'" \
+  "python3 -c 'import os; os.system(\"git push origin dev\")'" \
+  "bash <<< 'git push origin dev'" "grep x f | sh -c 'git push'" \
+  "echo 'git push origin dev' | sh"; do
+  : > "$TMP/log"
+  run_json "$command"
+  [ "$(grep -c '^block-main-push.sh$' "$TMP/log")" -eq 1 ]
+done
 
 # A blocking push gate still blocks when only the scan reaches it.
 : > "$TMP/log"
@@ -600,6 +612,34 @@ run 'git add -A'
 rc=$?
 set -e
 [ "$rc" -eq 2 ]
+[ "$(grep -c '^block-git-add-all.sh$' "$TMP/log")" -eq 1 ]
+
+# #2071: the gate must not depend on the command starting with `git add`.
+# A prefix (`cd … &&`, `;`) used to skip routing entirely. It must still run
+# the gate, exactly once.
+: > "$TMP/log"
+set +e
+run 'cd /some/repo && git add -A'
+rc=$?
+set -e
+[ "$rc" -eq 2 ]
+[ "$(grep -c '^block-git-add-all.sh$' "$TMP/log")" -eq 1 ]
+
+: > "$TMP/log"
+set +e
+run 'echo built; git add .'
+rc=$?
+set -e
+[ "$rc" -eq 2 ]
+[ "$(grep -c '^block-git-add-all.sh$' "$TMP/log")" -eq 1 ]
+
+# An explicit path is not a whole-tree stage and must pass.
+: > "$TMP/log"
+set +e
+run 'cd /some/repo && git add src/app.ts'
+rc=$?
+set -e
+[ "$rc" -eq 0 ]
 [ "$(grep -c '^block-git-add-all.sh$' "$TMP/log")" -eq 1 ]
 
 # Broken jq must not fail-open a merge. The real merge gates fail closed

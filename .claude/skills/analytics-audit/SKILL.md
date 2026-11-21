@@ -1,6 +1,6 @@
 ---
 name: analytics-audit
-description: Analytics audit — SDK config, event naming, funnel completeness, dashboards. Deep-dive for /launch-check analytics.
+description: Analytics audit. Checks SDK config, event naming, funnel completeness, dashboards. Deep-dive for /launch-check analytics.
 disable-model-invocation: false
 argument-hint: "[project-path]"
 effort: medium
@@ -11,6 +11,16 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 # /analytics-audit — Event Taxonomy & Coverage
 
 Deep-dive analytics analysis. Checks that tracking is configured, events follow a naming convention, key user funnels are instrumented, and dashboards exist. Invoke when `/launch-check`'s analytics row shows WARN or FAIL.
+
+## Usage
+
+```
+/analytics-audit                       # audit the project in the current directory
+/analytics-audit workspace/my-app      # audit the project at this path
+```
+
+This audit runs on its own. It does not need a `/launch-check` run first.
+`/launch-check` names and offers this audit when its analytics row shows WARN or FAIL.
 
 ## Process
 

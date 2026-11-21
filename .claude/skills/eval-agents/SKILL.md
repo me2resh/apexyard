@@ -1,6 +1,6 @@
 ---
 name: eval-agents
-description: Score a review agent (Rex/Hakim/Tariq) against a labeled PR corpus — ground-truth defect-set overlap, never a prose rubric. Headline metric is approve-precision.
+description: Score a review agent (Rex/Hakim/Tariq) against a labeled PR corpus, ground-truth defect-set overlap, never a prose rubric. Headline metric is approve-precision.
 argument-hint: "<rex|hakim|tariq> [--corpus <path>] [--check-only]"
 allowed-tools: Bash, Read, Glob, Grep, Agent
 ---
@@ -277,6 +277,12 @@ WARN  otherwise
 
 ### Step 7 — Write the report
 
+For Rex and Tariq, include the [21 November cases](../../../docs/eval-agents/pending/2026-11-21.md) as a separate subset.
+Report subset recall as caught defects divided by scored ground-truth defects.
+Report clean-control false alarms beside recall.
+List pending cases outside the denominator and report `n/a` when none can run.
+Do not imply that starter-corpus recall measures pending cases.
+
 `<reports_dir>/<agent>-<YYYY-MM-DD>.md` (default `docs/eval-agents/reports/`). Same-day reruns append `-NN` rather than clobber (mirrors `/mutation-test`).
 
 ````markdown
@@ -394,6 +400,39 @@ Override per-project in `.claude/project-config.json` (shallow-merge — overrid
 11. **Every score is the output of non-deterministic LLM steps, not a fixed measurement.** Both the candidate spawn (Step 3d) and the defect-overlap match against the frozen key (Step 3g) are judgment calls made by an LLM — the frozen `ground_truth_defects` are fixed, but *matching a fresh run's findings against them* is not a byte-for-byte comparison, and re-running the exact same corpus against the exact same agent can produce a different verdict_justified call on a borderline entry. A score delta between two runs (this week's approve-precision vs. last month's) is **not automatically a real regression** — it can just as easily be run-to-run noise in the matching step. Treat a delta as a prompt to look at *which specific entries* flipped and re-read the agent's actual output for that entry, never as a number to trend-line on its own. This is the same caveat AgDR-0089 and spike #825 already carry for the starter corpus's small N — non-determinism compounds it, it doesn't replace it.
 
 ## Implementation notes
+
+### Review rounds and reverts
+
+`lib/review_rounds.py` prints a 30-day report with one row per merged PR.
+It reads GitHub with GET calls and writes only stdout.
+Use `--export` to save evidence outside the repository for an offline rerun.
+Saved exports can contain private review text.
+Keep private exports outside this public repository.
+
+```bash
+python3 .claude/skills/eval-agents/lib/review_rounds.py --repo OWNER/REPO
+python3 .claude/skills/eval-agents/lib/review_rounds.py --input EXPORT.json --as-of 2026-11-22T00:00:00Z
+```
+
+A round means one distinct reviewed commit per agent across reviews and conversation comments.
+Repeated submissions on that commit count once per agent.
+Exclude submissions after merge when their timestamps exist.
+The script uses the miner's reviewer, verdict, and reviewed-commit parsers.
+It reports agent submissions with missing verdicts or commits as unknown.
+It fetches every closed-PR page before filtering by merge time.
+API failures stop the report instead of producing partial counts.
+
+Reverts count explicit `This reverts commit FULL_SHA.` trailers in merge commits within the same window.
+The target must match the original PR's merge commit.
+Manual reversals, constituent-commit reversions, and reverts outside the window remain unmeasured.
+Zero means no matching trailer, rather than proof that no reversal occurred.
+The script does not measure reviewer recall.
+
+The export object contains `repo` and `prs`.
+Each PR contains `number`, `merged_at`, `merge_commit_sha`, `merge_message`, `reviews`, and `comments`.
+Review and comment objects retain their GitHub API fields.
+Use a fixed `--as-of` timestamp to reproduce the window.
+The window includes its start and excludes its end.
 
 | File | Purpose |
 |---|---|

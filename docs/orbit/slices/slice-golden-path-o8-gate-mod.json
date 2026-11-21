@@ -1,0 +1,37 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-golden-path-o8-gate-mod",
+  "planId": "plan-apexyard-harness-golden-path",
+  "outcomeId": "o8-claude-code-gate-mod",
+  "basedOn": {
+    "planRevision": 4,
+    "reconciliationId": "reconciliation-plan-apexyard-harness-golden-path-20261028T092303Z",
+    "repositories": {}
+  },
+  "objective": "Build the Claude Code gate band and approval pane as an opt-in plugin, with an AgDR, behind the existing hooks.",
+  "why": "All six o8 criteria are not-verified. The apexyard-status band shows the ticket, waiting PRs and the reviewer lock, but no CI state. No approval pane exists. The AgDR-0234 hook path already records a human menu approval for an exact head SHA.",
+  "contributesTo": [
+    "ac8-1",
+    "ac8-2",
+    "ac8-3",
+    "ac8-4",
+    "ac8-5",
+    "ac8-6"
+  ],
+  "scope": {
+    "include": [
+      "An AgDR that records the split between the hooks and the mod and the Cockpit",
+      "A band above the prompt with the active ticket and CI state and a running reviewer and the PRs that wait for a human approval",
+      "A pane with Approve and Not yet that shows the repo and PR and head SHA and CI state and Rex verdict",
+      "Approval recording through the AgDR-0234 hook path for the exact head SHA shown",
+      "Plugin packaging and a marketplace entry",
+      "Tests for a stale SHA and a missing human key press and the mod being off"
+    ],
+    "exclude": [
+      "Replacing any bash hook",
+      "Other harnesses",
+      "Cockpit changes",
+      "A token meter"
+    ]
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "schema": "apexyard.diagram/v1",
+  "diagram": {
+    "type": "dfd",
+    "title": "Sample data flow",
+    "project": "sample-app",
+    "direction": "LR"
+  },
+  "generated": {
+    "by": "/dfd",
+    "date": "2026-10-29"
+  },
+  "repo": {
+    "name": "example-org/sample-app",
+    "web_url": "https://github.com/example-org/sample-app",
+    "commit": null
+  },
+  "groups": [
+    {
+      "id": "parent",
+      "kind": "trust_zone",
+      "label": "Parent"
+    },
+    {
+      "id": "child",
+      "kind": "trust_zone",
+      "label": "Child",
+      "parent": "parent"
+    },
+    {
+      "id": "sibling",
+      "kind": "trust_zone",
+      "label": "Sibling",
+      "parent": "parent"
+    },
+    {
+      "id": "other",
+      "kind": "trust_zone",
+      "label": "Other"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "actor",
+      "kind": "actor",
+      "label": "Customer",
+      "group": "other"
+    },
+    {
+      "id": "api",
+      "kind": "process",
+      "label": "API",
+      "group": "child",
+      "tags": [
+        "internal"
+      ]
+    },
+    {
+      "id": "db",
+      "kind": "store",
+      "label": "Records",
+      "group": "sibling"
+    }
+  ],
+  "edges": [
+    {
+      "from": "actor",
+      "to": "api",
+      "label": "HTTPS"
+    },
+    {
+      "from": "api",
+      "to": "db",
+      "label": "Read records"
+    },
+    {
+      "from": "db",
+      "to": "actor",
+      "label": "cycle"
+    },
+    {
+      "from": "api",
+      "to": "api",
+      "label": "retry"
+    },
+    {
+      "from": "api",
+      "to": "db",
+      "label": "parallel"
+    }
+  ]
+}

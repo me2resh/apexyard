@@ -76,3 +76,21 @@ The shim shape (`export { default } from ...`, exposing nothing else) is not str
 **What did NOT change:** no dispatch/gate-evaluation logic in `gate-dispatcher.ts`, `derive-gates.ts`, `resolve-ops-root.ts`, or `harness-adapters/_shared/derive-gates-core.ts` — this is purely an install-layout and documentation fix. `bin/install-pi-adapter.sh`'s one piece of generated content is the rewritten import specifier in the installed `derive-gates.ts` copy; the shared core's own file is copied byte-for-byte.
 
 **Artifacts**: `harness-adapters/pi/src/index.ts`, `bin/install-pi-adapter.sh`, `harness-adapters/pi/test/smoke-install-layout.sh`, `harness-adapters/pi/README.md` (install section rewritten), Bug: me2resh/apexyard#844.
+
+
+## Update (GH-1907)
+
+**Decision: support omp through the Pi adapter.** The tested version is omp 18.10.2, macOS arm64 binary, SHA-256 `9752e3d7f7bdab636e21495a6affc196e8ffc3a2dffaf529db2dd73d2bdea255`. Tests used print mode with a local scripted model. They did not test a hosted model, interactive mode, MCP, the `task` subagent tool, or Linux or Windows binaries. omp finds the adapter in `<project>/.omp/extensions`; it does not scan `.pi/extensions`.
+
+**Decision: block the omp `eval` tool by exact name inside an ApexYard fork, with no opt-out.** In the live test, code run by `eval` pushed to `main` and bypassed every bash gate.
+
+**Options considered:**
+
+- Block `eval` by name (chosen).
+- Block `eval` unless an opt-out variable is set. This adds a control that an agent can remove if it can set the environment.
+- Scan the `eval` code text with the bash gates. This cannot be complete for Python or JavaScript.
+- Allow only a list of known tools. This would block new tools safely, but it breaks Pi tools and needs an omp tool list that the adapter cannot verify.
+
+**Known limit:** the match uses the exact name. Another tool that runs code, or one added in a later omp release, is not gated. Only `eval` was checked in omp 18.10.2.
+
+**Decision: send both `file_path` and `path` to file hooks.** `block-protected-target-writes.sh` reads only `file_path`. Before this change, every Pi and omp edit and write was blocked. The omp `edit` input can hold many targets: `path`, `paths`, `[PATH#TAG]` headers, and `MV` destinations. The adapter gates every target and blocks the call if it cannot read any target line.

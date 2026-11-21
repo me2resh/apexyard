@@ -35,6 +35,13 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC1007  # Intentionally empty CDPATH keeps cd silent.
+TMPDIR=$(CDPATH= cd -- "${TMPDIR:-/tmp}" && pwd) || exit 1
+export TMPDIR
+
+WORKDIR=$(mktemp -d "${TMPDIR:-/tmp}/codify-rule-smoke.XXXXXX") || exit 1
+trap 'rm -rf "$WORKDIR"' EXIT
+
 PASS=0
 FAIL=0
 
@@ -79,7 +86,8 @@ fi
 
 skill_md="$ops_root/.claude/skills/codify-rule/SKILL.md"
 agdr_md="$ops_root/docs/agdr/AgDR-0040-codify-rule-skill.md"
-claude_md="$ops_root/CLAUDE.md"
+# The skill table moved from CLAUDE.md to this page (#2035).
+claude_md="$ops_root/docs/claude-md-reference.md"
 multi_md="$ops_root/docs/multi-project.md"
 
 echo "Smoke test: /codify-rule contract checks (ops_root=$ops_root)"
@@ -140,15 +148,15 @@ assert_grep "ENFORCEMENT: blocking"  "ENFORCEMENT: blocking"           "$skill_m
 # typically "the literal line ENFORCEMENT: blocking ... when --blocking
 # was passed"). Catches the failure mode where someone removes the
 # wiring but leaves both phrases scattered in the file.
-if grep -nE "ENFORCEMENT: blocking" "$skill_md" | awk -F: '{print $1}' > /tmp/codify_enforce_lines.txt \
-   && grep -nE "[-]{1,2}blocking" "$skill_md" | awk -F: '{print $1}' > /tmp/codify_flag_lines.txt; then
+if grep -nE "ENFORCEMENT: blocking" "$skill_md" | awk -F: '{print $1}' > "$WORKDIR/codify_enforce_lines.txt" \
+   && grep -nE "[-]{1,2}blocking" "$skill_md" | awk -F: '{print $1}' > "$WORKDIR/codify_flag_lines.txt"; then
   co_located=0
   while read -r e_line; do
     while read -r f_line; do
       diff=$((e_line - f_line)); [ "$diff" -lt 0 ] && diff=$((-diff))
       if [ "$diff" -le 3 ]; then co_located=1; break 2; fi
-    done < /tmp/codify_flag_lines.txt
-  done < /tmp/codify_enforce_lines.txt
+    done < "$WORKDIR/codify_flag_lines.txt"
+  done < "$WORKDIR/codify_enforce_lines.txt"
   if [ "$co_located" -eq 1 ]; then
     echo "  PASS: --blocking flag and ENFORCEMENT: blocking marker are co-located in the spec (≤3 lines apart)"
     PASS=$((PASS + 1))
@@ -156,7 +164,6 @@ if grep -nE "ENFORCEMENT: blocking" "$skill_md" | awk -F: '{print $1}' > /tmp/co
     echo "  FAIL: --blocking and ENFORCEMENT: blocking both appear but are not co-located (>3 lines apart) — the wiring sentence may have been removed"
     FAIL=$((FAIL + 1))
   fi
-  rm -f /tmp/codify_enforce_lines.txt /tmp/codify_flag_lines.txt
 fi
 
 # ---------------------------------------------------------------------------
@@ -214,12 +221,13 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 9. CLAUDE.md skill table updated to 51 + /codify-rule row present
+# 9. Skill table count matches the tracked skills + /codify-rule row present
+#    (the count is computed, so it does not go stale; me2resh/apexyard#2028)
 # ---------------------------------------------------------------------------
 echo ""
-echo "9. CLAUDE.md skill table updates:"
-assert_grep "skill count bumped to 51"              "51 slash commands"               "$claude_md"
-assert_grep "Available skills heading at 51"        "^### Available skills \(51\)"     "$claude_md"
+echo "9. Skill table updates:"
+skill_total=$(git -C "$ops_root" ls-files '.claude/skills/*/SKILL.md' | awk -F/ '$3 !~ /^_/' | wc -l | tr -d ' ')
+assert_grep "Available skills heading at $skill_total" "^### Available skills \($skill_total\)" "$claude_md"
 assert_grep "/codify-rule row present"              '`/codify-rule`'                  "$claude_md"
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "about": "Select user documents and skill titles and descriptions. Exclude internal records.",
+  "include": [
+    {
+      "glob": "docs/*.md"
+    },
+    {
+      "glob": "docs/how-to/**/*.md"
+    },
+    {
+      "glob": "docs/harnesses/**/*.md"
+    },
+    {
+      "glob": "docs/onboarding/**/*.md"
+    },
+    {
+      "glob": "README.md"
+    },
+    {
+      "glob": "SECURITY.md"
+    },
+    {
+      "glob": ".claude/hooks/README.md"
+    },
+    {
+      "glob": ".claude/rules/git-conventions.md"
+    },
+    {
+      "glob": ".claude/rules/pr-workflow.md"
+    },
+    {
+      "glob": ".claude/rules/workflow-gates.md"
+    },
+    {
+      "glob": "handbooks/*.md"
+    },
+    {
+      "glob": "roles/**/*.md"
+    },
+    {
+      "glob": ".claude/skills/*/SKILL.md",
+      "frontmatterOnly": true
+    }
+  ],
+  "exclude": [
+    "docs/agdr/**",
+    "docs/designs/**",
+    "docs/prds/**",
+    "docs/technical-designs/**",
+    "docs/spikes/**",
+    "docs/spike-825/**",
+    "docs/spike-848/**",
+    "docs/spike-memos/**",
+    "docs/spike-reports/**",
+    "docs/skills/shared/**",
+    "docs/eval-agents/**",
+    "docs/perf/**",
+    "docs/quality-regression/**"
+  ]
+}

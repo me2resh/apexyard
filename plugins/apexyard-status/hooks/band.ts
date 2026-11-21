@@ -234,11 +234,55 @@ export function lockLabels(texts: Array<string | null>): string | null {
   return labels.length > 0 ? labels.join(', ') : null
 }
 
-// The text of the "waiting" segment. Lists up to three references.
-export function waitingText(waiting: string[], offline = false): string {
+export type CiState = 'pass' | 'fail' | 'pending' | 'none' | 'unknown'
+
+// The statusCheckRollup list from gh -> one CI word. Display only: the
+// merge-on-red-CI hook makes its own decision.
+export function ciState(rollup: unknown): CiState {
+  if (!Array.isArray(rollup)) return 'unknown'
+  if (rollup.length === 0) return 'none'
+  let pending = false
+  for (const raw of rollup) {
+    const c = (raw ?? {}) as { status?: unknown; conclusion?: unknown; state?: unknown }
+    const word = String(c.conclusion ?? c.state ?? '').toUpperCase()
+    if (['FAILURE', 'CANCELLED', 'TIMED_OUT', 'ERROR', 'ACTION_REQUIRED', 'STARTUP_FAILURE'].includes(word)) return 'fail'
+    if (c.state !== undefined && c.conclusion === undefined) {
+      if (word !== 'SUCCESS') pending = true
+      continue
+    }
+    const status = String(c.status ?? 'COMPLETED').toUpperCase()
+    if (status !== 'COMPLETED' || !['SUCCESS', 'NEUTRAL', 'SKIPPED'].includes(word)) pending = true
+  }
+  return pending ? 'pending' : 'pass'
+}
+
+// The read-only CI query for one PR (repo and number given) or for the PR of
+// the current branch (no repo, run in the working directory).
+export function ciArgv(repo: string | null, pr: number | null): string[] {
+  const target = repo && pr ? [String(pr), '--repo', repo] : []
+  return ['gh', 'pr', 'view', ...target, '--json', 'number,statusCheckRollup']
+}
+
+// gh output -> { number, ci }, or null.
+export function parseCi(stdout: string): { number: number; ci: CiState } | null {
+  try {
+    const v = JSON.parse(stdout) as { number?: unknown; statusCheckRollup?: unknown }
+    return typeof v.number === 'number' ? { number: v.number, ci: ciState(v.statusCheckRollup) } : null
+  } catch {
+    return null
+  }
+}
+
+export function ciWord(ci: CiState): string {
+  return ci === 'none' ? 'no checks' : ci
+}
+
+// The text of the "waiting" segment. Lists up to three references, each
+// with its CI word when the CI map has one.
+export function waitingText(waiting: string[], offline = false, ci: Record<string, CiState> = {}): string {
   const tag = offline ? ' (offline)' : ''
   if (waiting.length === 0) return `nothing waiting for /approve-merge${tag}`
-  const shown = waiting.slice(0, 3).join(', ')
+  const shown = waiting.slice(0, 3).map(r => (ci[r] ? `${r} (CI ${ciWord(ci[r])})` : r)).join(', ')
   const more = waiting.length > 3 ? ` +${waiting.length - 3}` : ''
   return `${waiting.length} waiting for your /approve-merge${tag}: ${shown}${more}`
 }

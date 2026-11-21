@@ -34,15 +34,21 @@ command -v jq >/dev/null 2>&1 || fail "jq is required"
 [ -f "$SETTINGS" ] || fail "settings.json not found at $SETTINGS"
 [ -f "$PROFILE" ] || fail "profile not found at $PROFILE"
 
-# entry_field SCRIPT FIELD -> value of FIELD on the single PreToolUse entry
-# whose command names SCRIPT. Fails unless exactly one entry matches.
+# entry_field SCRIPT FIELD -> value of FIELD on the primary PreToolUse entry
+# whose command names SCRIPT. Ignores the Cursor shell wildcard that also
+# invokes dispatch-bash.sh --shell-alias-only (GH-1909). Fails unless exactly
+# one primary entry matches.
 entry_field() {
   local script="$1" field="$2" count
   count=$(jq --arg s "$script" \
-    '[.hooks.PreToolUse[].hooks[] | select(.command | contains($s))] | length' "$SETTINGS")
-  [ "$count" -eq 1 ] || fail "expected exactly one PreToolUse entry for $script, found $count"
+    '[.hooks.PreToolUse[].hooks[]
+      | select(.command | contains($s))
+      | select(.command | contains("--shell-alias-only") | not)] | length' "$SETTINGS")
+  [ "$count" -eq 1 ] || fail "expected exactly one primary PreToolUse entry for $script, found $count"
   jq -r --arg s "$script" --arg f "$field" \
-    '[.hooks.PreToolUse[].hooks[] | select(.command | contains($s))][0][$f] // empty' "$SETTINGS"
+    '[.hooks.PreToolUse[].hooks[]
+      | select(.command | contains($s))
+      | select(.command | contains("--shell-alias-only") | not)][0][$f] // empty' "$SETTINGS"
 }
 
 profile_p95() {
@@ -75,15 +81,28 @@ done
 [ "$(entry_field limit-reviewer-writes.sh onFailure)" = block ] \
   || fail "reviewer write-scope guard must set onFailure to block (#1840)"
 
-# Only the six named entries may set onFailure.
+# Only the named fail-closed entries may set onFailure. The Cursor shell
+# wildcard also invokes dispatch-bash.sh and sets onFailure (GH-1909).
 others=$(jq -r '[.. | objects | select(has("onFailure")) | .command]
   | map(select((contains("dispatch-bash.sh") or contains("require-active-ticket.sh") or contains("block-forged-menu-approval.sh") or contains("block-protected-target-writes.sh") or contains("block-hook-disabling-config-change.sh") or contains("limit-reviewer-writes.sh")) | not))
   | length' "$SETTINGS")
 [ "$others" -eq 0 ] || fail "$others hook entries outside the fail-closed gates set onFailure"
 
-# Each fail-closed entry occurs once.
+# Six primary fail-closed entries plus the Cursor shell wildcard dispatcher.
 total=$(jq '[.. | objects | select(has("onFailure"))] | length' "$SETTINGS")
-[ "$total" -eq 6 ] || fail "expected exactly 6 entries with onFailure, found $total"
+[ "$total" -eq 7 ] || fail "expected exactly 7 entries with onFailure, found $total"
+
+alias_on_failure=$(jq -r '[.hooks.PreToolUse[].hooks[]
+  | select(.command | contains("dispatch-bash.sh") and contains("--shell-alias-only"))][0].onFailure // empty' "$SETTINGS")
+[ "$alias_on_failure" = block ] \
+  || fail "Cursor shell wildcard dispatch entry must set onFailure to block (got '${alias_on_failure:-unset}')"
+alias_timeout=$(jq -r '[.hooks.PreToolUse[].hooks[]
+  | select(.command | contains("dispatch-bash.sh") and contains("--shell-alias-only"))][0].timeout // empty' "$SETTINGS")
+case "$alias_timeout" in
+  ''|*[!0-9]*) fail "Cursor shell wildcard dispatch entry must set a numeric timeout (got '${alias_timeout:-unset}')" ;;
+esac
+[ "$alias_timeout" -ge 10 ] \
+  || fail "Cursor shell wildcard dispatch timeout $alias_timeout s is under the 10 second floor"
 
 # Hooks are on by default: no tracked settings file turns them off.
 for file in "$ROOT/.claude/settings.json" "$ROOT/.claude/settings.local.json"; do

@@ -206,7 +206,8 @@ for current_plan in "${selected_plans[@]}"; do
       .planId == $plan.id and .basedOn.planRevision == $plan.revision and
       ((.contributesTo // []) as $refs |
         (if ($refs | type) == "string" then [$refs] else $refs end) as $ids |
-        (($ids | index($outcome.id)) != null or
+        (((.outcomeIds // [] | index($outcome.id)) != null) or
+         ($ids | index($outcome.id)) != null or
          any($criteria[]; .id as $id | ($ids | index($id)) != null)))) | not) |
     "WARNING: ORBIT outcome \($outcome.id) has unmet criteria and no slice (Plan \($plan.id) revision \($plan.revision))."
   ' 2>/dev/null); then

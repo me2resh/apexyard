@@ -1,6 +1,6 @@
 ---
 name: tasks
-description: Flat actionable task list across the portfolio with direct URLs — PRs to review, issues to triage, comments, failing CI.
+description: Flat actionable task list across the portfolio with direct URLs. Covers PRs to review, issues to triage, comments, failing CI.
 allowed-tools: Bash, Read, Grep, Glob
 ---
 

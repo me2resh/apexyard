@@ -1,6 +1,6 @@
 ---
 name: compliance-check
-description: GDPR + ePrivacy audit — consent, privacy policy, data handling, right-to-deletion, DPAs. Deep-dive for /launch-check compliance.
+description: GDPR + ePrivacy audit. Checks consent, privacy policy, data handling, right-to-deletion, DPAs. Deep-dive for /launch-check compliance.
 disable-model-invocation: false
 argument-hint: "[project-path]"
 effort: high
@@ -13,6 +13,16 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 Deep-dive regulatory compliance analysis. Checks cookie consent, privacy policy, terms of service, data handling, and user rights. Invoke when `/launch-check`'s compliance row shows WARN or FAIL, or proactively before launching in the EU/UK.
 
 **Consumes the DFD produced by [`/dfd`](../dfd/SKILL.md) for data-handling analysis (Step 4).** The DFD's classifications table at `projects/<project>/architecture/dfd.md` is the source of truth for which fields are PII / PCI / secrets, and the DFD's external-services list is the source of truth for cross-border transfers and third-party processors. If the DFD doesn't exist, this skill falls back to its own grep-based discovery (degraded mode — surface in the output banner). See AgDR-0026 for the single-source-of-truth rationale.
+
+## Usage
+
+```
+/compliance-check                       # audit the project in the current directory
+/compliance-check workspace/my-app      # audit the project at this path
+```
+
+This audit runs on its own. It does not need a `/launch-check` run first.
+`/launch-check` names and offers this audit when its compliance row shows WARN or FAIL.
 
 ## Compliance Areas
 

@@ -107,7 +107,7 @@ if [ -z "$ROOT" ]; then
       ROOT="$cur"
       break
     fi
-    cur=$(dirname "$cur")
+    parent=$(dirname "$cur"); [ "$parent" = "$cur" ] && break; cur="$parent"
   done
 fi
 [ -n "$ROOT" ] || exit 0

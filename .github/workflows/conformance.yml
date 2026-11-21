@@ -3,6 +3,8 @@
 # Proves apexyard's mechanical governance gates still block a REAL,
 # credentialed agent turn under each live-proven third-party harness
 # (opencode, pi, Codex) — not a mock, not a by-construction unit test.
+# Only opencode runs, on every trigger. Pi and codex are out of the matrix
+# until their keys are funded (AgDR-0298).
 # One matrix job per harness drives exactly one gated model turn
 # (instructing the agent to run `git add -A`) and asserts the delegated,
 # UNMODIFIED `.claude/hooks/block-git-add-all.sh` fired — via
@@ -21,12 +23,14 @@
 # See docs/conformance-ci.md for the full rationale (AgDR-0095).
 #
 # GREEN-CONTINUOUS: the harness-agnostic "proven" headline is gated on
-# N=3 consecutive scheduled green runs per harness, tracked via a
+# N=3 consecutive scheduled green runs for opencode, tracked via a
 # `green_streak` counter committed to the orphan `conformance-badge`
 # branch. Any red run (including a fail-closed missing-secret run)
-# resets that harness's streak to 0. See docs/conformance-ci.md.
+# resets opencode's streak to 0. Pi and codex show grey manual badges
+# and keep their streak files. See docs/conformance-ci.md.
 #
 # Decision record: docs/agdr/AgDR-0095-conformance-ci-badge.md
+# Schedule amendment: docs/agdr/AgDR-0278-conformance-zero-cost-schedule.md
 # Promoted from spike: me2resh/apexyard#848
 # Feature: me2resh/apexyard#871
 
@@ -35,17 +39,18 @@ name: Conformance CI
 on:
   workflow_call:
   schedule:
-    # Daily, not per-PR: pi and Codex bill a real per-turn API cost and
-    # per-PR frequency would multiply that cost with the number of PRs
+    # Only opencode runs daily on its free model. Pi and Codex run on
+    # dispatch and workflow_call because they bill a real per-turn API cost.
+    # Per-PR frequency would multiply that cost with the number of PRs
     # touching unrelated files. Daily is frequent enough to catch drift
     # (a harness upgrade silently breaking the adapter, a hook wording
     # change breaking the assertion anchor) inside the 3-day
-    # green-continuous window without meaningfully increasing spend.
+    # green-continuous window for opencode without increasing API spend.
     - cron: "17 6 * * *"
   workflow_dispatch:
     inputs:
       harness:
-        description: "Run a single harness only (opencode|pi|codex), or leave blank for all three"
+        description: "Harness to run (opencode only until pi and codex are keyed), or leave blank"
         required: false
         type: string
 
@@ -59,13 +64,35 @@ concurrency:
 jobs:
   conform:
     name: conformance / ${{ matrix.harness }}
+    # Run a schedule only in the canonical repository (#1981). In a fork, the
+    # daily run spends the fork's Actions minutes, and the badge job below
+    # commits an orphan branch into the fork. workflow_call and
+    # workflow_dispatch runs still work in forks.
+    if: github.event_name != 'schedule' || github.repository == 'me2resh/apexyard'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        harness: [opencode, pi, codex]
+        # pi and codex are out of the matrix until the owner funds their keys
+        # (me2resh/apexyard#2057). Their install and drive steps below stay in
+        # place, so re-adding a harness is a one-line change here:
+        #   pi    -> add "pi" to the list; needs repo secret
+        #            CONFORMANCE_ANTHROPIC_API_KEY
+        #   codex -> add "codex" to the list; needs repo secret
+        #            CONFORMANCE_OPENAI_API_KEY
+        # Without its secret a re-added harness fails closed (see the
+        # credential step), so set the secret first. To run them on
+        # dispatch and workflow_call only, use the previous expression:
+        #   fromJSON(github.event_name == 'schedule' && '["opencode"]' || '["opencode", "pi", "codex"]')
+        harness: ["opencode"]
     steps:
+      - name: Reject a harness that is not in the matrix
+        if: github.event_name == 'workflow_dispatch' && inputs.harness != '' && inputs.harness != 'opencode'
+        run: |
+          echo "::error::Harness '${{ inputs.harness }}' is not in the matrix. Only opencode runs until pi and codex are keyed (see the comment on the matrix)."
+          exit 1
+
       - name: Skip non-selected harness (manual single-harness dispatch)
         if: github.event_name == 'workflow_dispatch' && inputs.harness != '' && inputs.harness != matrix.harness
         run: |
@@ -166,7 +193,7 @@ jobs:
         env:
           SCRATCH_DIR: ${{ steps.scratch.outputs.dir }}
         run: |
-          npm install -g opencode-ai@1.17.16
+          npm install -g opencode-ai@1.18.35
           bash bin/install-opencode-adapter.sh --root "$(pwd)" --target-dir "$SCRATCH_DIR/.opencode/plugins"
           (cd harness-adapters/opencode && npm install)
 
@@ -261,7 +288,9 @@ jobs:
   badge:
     name: publish status badge
     needs: conform
-    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    # always() would start this job even when conform skips, so it carries the
+    # same schedule guard (#1981).
+    if: always() && ((github.event_name == 'schedule' && github.repository == 'me2resh/apexyard') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

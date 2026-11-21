@@ -10,6 +10,10 @@
 
 set -u
 
+# shellcheck disable=SC1007  # Intentionally empty CDPATH keeps cd silent.
+TMPDIR=$(CDPATH= cd -- "${TMPDIR:-/tmp}" && pwd) || exit 1
+export TMPDIR
+
 # Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
 # shellcheck disable=SC1091
 . "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
@@ -20,6 +24,8 @@ GENERATOR_SRC="$(cd "$(dirname "$0")/../../.." && pwd)/bin/sync-codex-adapter.sh
 PASS=0
 FAIL=0
 FAILED=""
+OUTPUT_DIR=$(mktemp -d "${TMPDIR:-/tmp}/upstream-drift-test.XXXXXX") || exit 1
+trap 'rm -rf "$OUTPUT_DIR"' EXIT
 
 # Build an upstream with a v1.0.0 release and a v1.1.0 release; both have
 # CHANGELOG entries. Returns the upstream repo path.
@@ -56,6 +62,7 @@ make_fork() {
     git fetch upstream --tags --quiet
     mkdir -p .claude/hooks .claude/session
     cp "$HOOK_SRC" .claude/hooks/check-upstream-drift.sh
+    cp "$(dirname "$HOOK_SRC")/_lib-gh-timeout.sh" "$(dirname "$HOOK_SRC")/_lib-adapter-check-cache.sh" .claude/hooks/
     chmod +x .claude/hooks/check-upstream-drift.sh
   )
   echo "$fk"
@@ -63,7 +70,7 @@ make_fork() {
 
 run_hook_from() {
   local fk="$1"
-  ( cd "$fk" || exit 1; bash .claude/hooks/check-upstream-drift.sh 2>&1 )
+  ( cd "$fk" || exit 1; bash "$fk/.claude/hooks/check-upstream-drift.sh" 2>&1 )
 }
 
 assert() {
@@ -177,7 +184,8 @@ case_codex_bootstrap_warns_without_mutating() {
     cp "$GENERATOR_SRC" bin/sync-codex-adapter.sh
     printf '%s\n' '{"hooks":{}}' > .claude/settings.json
     printf '%s\n' '# old status skill' > .claude/skills/status/SKILL.md
-    bash bin/sync-codex-adapter.sh >/dev/null
+    # Absolute invocation keeps inherited CDPATH out of script-location output.
+    bash "$fk/bin/sync-codex-adapter.sh" >/dev/null
     rm .codex/apexyard-adapter.json
     mkdir -p .claude/skills/tutorial
     printf '%s\n' '# newly synced tutorial skill' > .claude/skills/tutorial/SKILL.md
@@ -209,7 +217,7 @@ case_codex_bootstrap_uninstalled_noop() {
     mkdir -p bin
     cp "$GENERATOR_SRC" bin/sync-codex-adapter.sh
   )
-  run_hook_from "$fk" >/tmp/_upstream_drift_codex_uninstalled.out
+  run_hook_from "$fk" >"$OUTPUT_DIR/adapter-uninstalled.out"
   if [ ! -e "$fk/.agents" ] && [ ! -e "$fk/.codex" ]; then
     echo "PASS [SessionStart leaves an uninstalled Codex adapter absent]"
     PASS=$((PASS+1))

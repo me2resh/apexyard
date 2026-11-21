@@ -19,7 +19,7 @@
 #      always-load — handbook README convention)
 #  14. AgDR-0048 exists, has body-H1 only (no YAML frontmatter),
 #      and contains the "In the context of..." one-liner
-#  15. CLAUDE.md QUICK REFERENCE table includes a `topologies/` row
+#  15. docs/claude-md-reference.md quick reference table includes a `topologies/` row
 #  16. /update SKILL.md mentions topology drift detection (step 8c)
 #  17. topologies/README.md lists all three v1 topologies
 #
@@ -31,7 +31,8 @@ SRC_ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 HANDOVER_SKILL="$SRC_ROOT/.claude/skills/handover/SKILL.md"
 UPDATE_SKILL="$SRC_ROOT/.claude/skills/update/SKILL.md"
 AGDR="$SRC_ROOT/docs/agdr/AgDR-0048-topology-templates.md"
-CLAUDE_MD="$SRC_ROOT/CLAUDE.md"
+# The skill table and quick reference moved from CLAUDE.md to this page (#2035).
+QUICK_REF="$SRC_ROOT/docs/claude-md-reference.md"
 TOPOLOGIES_DIR="$SRC_ROOT/topologies"
 TOPOLOGIES_README="$TOPOLOGIES_DIR/README.md"
 
@@ -51,7 +52,7 @@ pass() {
   green "PASS: $1"
 }
 
-for f in "$HANDOVER_SKILL" "$UPDATE_SKILL" "$AGDR" "$CLAUDE_MD" "$TOPOLOGIES_README"; do
+for f in "$HANDOVER_SKILL" "$UPDATE_SKILL" "$AGDR" "$QUICK_REF" "$TOPOLOGIES_README"; do
   if [ ! -f "$f" ]; then
     fail "expected file missing: $f"
   fi
@@ -183,11 +184,11 @@ else
   fail "AgDR-0048 missing"
 fi
 
-# 15. CLAUDE.md QUICK REFERENCE has topologies/ row
-if grep -q "topologies/" "$CLAUDE_MD"; then
-  pass "CLAUDE.md mentions topologies/"
+# 15. The quick reference has a topologies/ row
+if grep -q "topologies/" "$QUICK_REF"; then
+  pass "quick reference mentions topologies/"
 else
-  fail "CLAUDE.md missing topologies/ reference"
+  fail "quick reference missing topologies/ reference"
 fi
 
 # 16. /update SKILL.md mentions topology drift detection

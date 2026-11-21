@@ -1,0 +1,58 @@
+{
+  "schema": "apexyard.diagram/v1",
+  "diagram": {
+    "type": "c4-context",
+    "title": "Sample c4-context (v2), core: Q&A/path #1 [beta] \"quoted\"",
+    "project": "sample-app",
+    "direction": "LR"
+  },
+  "generated": {
+    "by": "/c4",
+    "date": "2026-10-29"
+  },
+  "repo": {
+    "name": "example-org/sample-app",
+    "web_url": "https://github.com/example-org/sample-app",
+    "commit": null
+  },
+  "groups": [],
+  "nodes": [
+    {
+      "id": "actor",
+      "kind": "person",
+      "label": "Customer (v2), core: Q&A/path #1 [beta] \"quoted\"",
+      "technology": "",
+      "description": "Description (v2), core: Q&A/path #1 [beta] \"quoted\""
+    },
+    {
+      "id": "api",
+      "kind": "system",
+      "label": "API",
+      "tags": [
+        "internal"
+      ],
+      "technology": "",
+      "description": "Description (v2), core: Q&A/path #1 [beta] \"quoted\""
+    },
+    {
+      "id": "db",
+      "kind": "external_system",
+      "label": "Records",
+      "technology": "",
+      "description": "Description (v2), core: Q&A/path #1 [beta] \"quoted\""
+    }
+  ],
+  "edges": [
+    {
+      "from": "actor",
+      "to": "api",
+      "label": "HTTPS (v2), core: Q&A/path #1 [beta] \"quoted\"",
+      "technology": "HTTPS (v2), core: Q&A/path #1 [beta] \"quoted\""
+    },
+    {
+      "from": "api",
+      "to": "db",
+      "label": "Read records"
+    }
+  ]
+}

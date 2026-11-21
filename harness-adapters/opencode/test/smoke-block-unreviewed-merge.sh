@@ -80,16 +80,24 @@ const [, , adapterRoot, opsRoot, command] = process.argv;
 const dispatcherUrl = pathToFileURL(join(adapterRoot, "src", "gate-dispatcher.ts")).href;
 const { registerGateDispatcher } = await import(dispatcherUrl);
 
-const hooks = registerGateDispatcher(
-  { directory: opsRoot, worktree: opsRoot },
-  { resolveOpsRoot: () => opsRoot },
-);
+// Drive the V2 entry point the way opencode does: hand setup() a Context and
+// capture the execute.before hook it registers, then fire that hook with a
+// realistic V2 event ({ tool, input }).
+let registered;
+const ctx = {
+  location: { directory: opsRoot },
+  tool: {
+    hook: async (name, cb) => {
+      if (name === "execute.before") registered = cb;
+      return { dispose: async () => {} };
+    },
+  },
+};
+await registerGateDispatcher(ctx, { resolveOpsRoot: () => opsRoot });
 
 try {
-  await hooks["tool.execute.before"](
-    { tool: "bash", sessionID: "smoke", callID: "smoke-1" },
-    { args: { command } },
-  );
+  if (!registered) throw new Error("no execute.before hook was registered");
+  await registered({ tool: "shell", input: { command } });
   console.log("RESULT: ALLOWED (no throw)");
 } catch (err) {
   console.log("RESULT: BLOCKED");

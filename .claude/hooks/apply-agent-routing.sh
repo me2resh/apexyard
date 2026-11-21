@@ -141,7 +141,7 @@ mkdir -p "$ENV_DIR"
 #   <name>\t<key>\t<value>
 # Where key ∈ {model, endpoint, env, timeout_seconds}. (#358 dropped the
 # advertised-but-not-wired `allowed_tools_override` field; the per-agent
-# allowed-tools list lives in .claude/agents/<name>.md frontmatter.)
+# tools list lives in .claude/agents/<name>.md frontmatter.)
 # env values come out as a JSON-encoded object so the consumer below can
 # iterate KEY=VAL pairs without parsing YAML twice.
 #

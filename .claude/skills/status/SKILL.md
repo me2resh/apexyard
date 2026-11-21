@@ -1,6 +1,6 @@
 ---
 name: status
-description: Project snapshot — git state, open PRs + CI, recent merges, in-progress issue. Use `--briefing` for compact form.
+description: Project snapshot. Covers git state, open PRs + CI, recent merges, in-progress issue. Use `--briefing` for compact form.
 allowed-tools: Bash, Read, Grep, Glob
 ---
 
@@ -143,9 +143,59 @@ Surface anything unusual:
 - More than 20 dirty files (probably forgot to commit)
 - Branch is more than 5 commits behind `origin/main` (rebase recommended)
 
+### G. Worktrees
+
+Run the helper once for each locally cloned project in scope.
+Also run it once for the ops repo.
+Use the helper from the ops repo, passing the clone directory as its argument:
+
+```bash
+bash "$ops_root/.claude/skills/status/worktree-report.sh" "$repo_dir"
+```
+
+Capture stdout, stderr, and the exit status separately.
+The helper prints tab-separated fields with a header: `path`, `branch`, `owner`, `work`, and `ticket`.
+Render the rows as a table with Path, Branch, Owner, Work, and Ticket columns.
+The helper omits the main working tree.
+After exit 0 with only a header, show `Worktrees: none` for that repo.
+After exit 2, show `Worktrees: report failed — <stderr>`.
+Mark an uncloned project's section as `(workspace not cloned)`.
+
+Owner values are `alive`, `dead`, `unknown`, `none`, or `released`.
+Work values are `dirty`, `unpushed`, `preserved`, or `unknown:<reason>`.
+`preserved` means every HEAD commit exists on a local remote-tracking ref.
+The report does not fetch those refs or check whether a PR merged.
+An unknown value preserves uncertainty about the worktree.
+Treat a `none` owner as unknown evidence, even when work is `preserved`.
+
+Split indexes report `unknown:split index` and skip status inspection.
+The helper detects the setting or shared-index files without opening the index through Git.
+
+This section is read-only.
+A `dead` or `none` owner with `dirty` or `unpushed` work needs a human decision.
+Never remove, release, or relaunch a worktree from this section.
+
+### H. Disk use
+
+Run the helper once for the whole portfolio and print its one line at the end of the output:
+
+```bash
+bash "$ops_root/.claude/skills/status/disk-usage.sh"
+```
+
+Example: `ApexYard is using 12.3 GB; 9.1 GB can be reclaimed`.
+The helper measures only folders that ApexYard owns: worktrees under `workspace/*.worktrees`, review-copy folders, `.claude/session`, and build output in the project clones.
+Reclaimable means a worktree or review copy that is older than `disk_budget.sweep_min_age_days` (default 7), has no uncommitted, untracked or stashed work, has no commits that are not on a remote, and has a merged or closed PR. Review copies come from `review-copy.sh`'s root (`APEXYARD_REVIEW_COPY_ROOT` or `<temp dir>/apexyard-review-copies`) plus every folder in `disk_budget.review_copy_roots` — the configured roots ADD to the step-3 root, they never replace it. The age comes from the copy record. The record must identify the repo as `owner/name`; older records without an owner are not reclaimable. Copies with extra worktrees are kept. Review roots must be real directories owned by the current user, without group or world write permission.
+When a check is blocked (for example a detached HEAD), the line says `at least X can be reclaimed`.
+When the total is above `disk_budget.max_owned_gb` (default 10), the line ends with `(over the N GB budget)`. Step 4 owns the `disk_budget` keys; this helper reads them with built-in defaults.
+The helper has a time box of `disk_budget.measure_timeout_seconds` (default 6 when the key is absent). A timeout prints `ApexYard disk use is unknown`. Briefing mode does not run it.
+This section is read-only. It never removes anything. Step 4 of me2resh/apexyard#2070 owns the sweep.
+
 ## Portfolio output
 
-Run sections A–D for each project in the registry. Use a per-project header:
+Run sections A–D and G for each project in the registry.
+Include section G for the ops repo under its own header.
+Use a per-project header:
 
 ```
 ═══════════════════════════════════════
@@ -161,6 +211,11 @@ Open PRs: 2
 
 Recently merged: 3
   …
+
+Worktrees:
+  | Path | Branch | Owner | Work | Ticket |
+  |------|--------|-------|------|--------|
+  | … | … | … | … | … |
 
 ═══════════════════════════════════════
 PROJECT: billing-api  (handover)
@@ -204,20 +259,27 @@ Recent AgDRs:
 
 Warnings:
   ⚠ 1 untracked .env.local file (don't commit it)
+
+Worktrees:
+  | Path | Branch | Owner | Work | Ticket |
+  |------|--------|-------|------|--------|
+  | … | … | … | … | … |
 ```
 
 ## Briefing mode (`--briefing` / `-b`)
 
 A compact 4-line "where am I" snapshot — workspace, ticket, branch, role. Designed to answer the orientation question in 2 seconds at the top of a session, instead of running 3 skills (`/projects`, `/inbox`, `/status`). This is the same output produced by `bin/apexyard status` (the CLI shim — see below), so the on-screen view in Claude Code and the shell view stay identical.
 
-Output shape (me2resh/apexyard#182):
+Output shape (me2resh/apexyard#182, me2resh/apexyard#1995):
 
 ```
 Active workspace:  example-app
 Active ticket:     #42 — Add CSV export
 Branch:            feature/GH-42-csv-export
-Role set:          backend
+Role set:          backend ; Waiting on you: 2 PRs, the oldest 3 hours
 ```
+
+The Role set line appends the human review queue status (me2resh/apexyard#1995). When the tracker is unavailable the suffix reads `; Waiting on you: unknown`. The briefing stays exactly 4 lines. It does not show the disk use line, because the measurement is too slow for the briefing.
 
 Behaviour:
 
@@ -226,7 +288,7 @@ Behaviour:
 | Active workspace | cwd: `<ops_root>/workspace/<name>/...` → `<name>`; `<ops_root>` exactly → `(ops)`; anywhere else → `(unknown)` |
 | Active ticket | The marker of the working tree the cwd is in (`apexyard-ticket` in its git dir, resolved by `.claude/hooks/_lib-active-ticket.sh`). A cwd outside the ops fork and its registered clones has no marker. Format: `#<number> — <title>`. No marker → `(none)` |
 | Branch | `git branch --show-current`, run inside the inferred workspace dir (or cwd if no workspace). Detached HEAD or no git repo → `(no branch)` |
-| Role set | Active ticket's labels — first match against the canonical list (`backend`, `frontend`, `qa`, `security`, `platform`, `sre`, `data`, `ux`, `ui`, `product`, `tech-lead`, plus the `-engineer` / `-auditor` / `-designer` / `-manager` / `-lead` long forms). No match (or no ticket) → `<none — inferred per task>` |
+| Role set | Active ticket's labels - first match against the canonical list (`backend`, `frontend`, `qa`, `security`, `platform`, `sre`, `data`, `ux`, `ui`, `product`, `tech-lead`, plus the `-engineer` / `-auditor` / `-designer` / `-manager` / `-lead` long forms). No match (or no ticket) -> `<none - inferred per task>`. Followed by `; Waiting on you: N PRs, the oldest X hours` from `_lib-review-queue.sh`. |
 
 Implementation: the logic lives in `.claude/skills/status/briefing.sh` so it's testable in isolation and runnable from a plain shell (no Claude Code dependency). Smoke tests at `.claude/hooks/tests/test_status_briefing.sh`.
 
@@ -261,7 +323,7 @@ The shim walks up from `$PWD` looking for the apexyard fork root — the `.apexy
 1. **Read-only** — never modify state from this skill
 2. **Always show branch + dirty count** — even if everything is clean
 3. **Map branch → issue automatically** — saves the user from looking it up
-4. **Don't print empty sections** — except git, which always appears
+4. **Don't print empty sections** — except git and `Worktrees: none`, which always appear
 5. **Multi-project iterates the registry** — not "all repos in the org"
 6. **Never fail noisily** — if `gh` is unavailable, show git data and a warning
 7. **Always include warnings section if there are any** — silence on dirty `.env` is dangerous
@@ -275,3 +337,10 @@ The shim walks up from `$PWD` looking for the apexyard fork root — the `.apexy
 ---
 
 *Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+
+Machine readers can run `disk-usage.sh --json` for one JSON object.
+The schema is `apexyard.disk-usage/1`.
+Fields are `used_bytes`, `reclaimable_bytes`, `reclaimable_is_lower_bound`, `timed_out`, and `max_owned_bytes`.
+Byte counts are integers. Unavailable measurements have null used and reclaimable counts.
+The lower-bound flag matches “at least” in text output. The timeout flag matches “measurement timed out”.
+The schema string changes its version number only on a breaking change.

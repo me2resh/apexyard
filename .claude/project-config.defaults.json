@@ -11,8 +11,15 @@
     "design_paths",
     "design_paths_exclude",
     "architecture_paths",
-    "tracker_repo"
+    "tracker_repo",
+    "gates"
   ],
+
+  "checks": {
+    "baseline_command": null,
+    "baseline_mode": "warn",
+    "baseline_timeout_seconds": 600
+  },
 
   "orbit": {
     "default_planning": false,
@@ -88,7 +95,9 @@
       "bin/run-pre-push-checks.sh",
       ".githooks/*",
       ".github/workflows/*"
-    ]
+    ],
+    "_comment_approval_quiz": "me2resh/apexyard#1997, opt-in. When true, /approve-merge asks three questions about the change (AskUserQuestion) before it writes the CEO marker. Pass --quiz on one run to turn the check on without changing config. Default false: the quiz does not run. The marker format, the approval record and the merge-gate hooks do not change.",
+    "approval_quiz": false
   },
 
   "qa": {
@@ -186,7 +195,13 @@
     "_comment_human_approver_title": "me2resh/apexyard#957 — DISPLAY-ONLY override for the prose word used for the human per-PR merge approver in hook messages and /approve-merge output (e.g. 'Maintainer', 'Dev Lead'). Default 'CEO' is a zero-behaviour-change no-op. Marker filenames stay '-ceo.approved', and the structured fields (sha=, approved_by=user, skill_version=) are UNCHANGED regardless of this value — this key only affects printed text, never gate logic. See docs/agdr/AgDR-0103-configurable-approver-display-title.md."
   },
 
-  "docs_index": {
+  "review_queue": {
+    "limit": 4,
+    "mode": "warn",
+    "_comment": "me2resh/apexyard#1995 / AgDR-0292 - human review queue. limit is how many Rex-approved PRs may wait for /approve-merge before spawn points warn (or refuse when mode is refuse). Default mode warn never blocks. Unknown tracker prints Waiting on you: unknown and never refuses."
+  },
+
+    "docs_index": {
     "_comment": "me2resh/apexyard#753 — the maintain-docs-index.sh PostToolUse hook. OFF by default: it writes a tracked docs/INDEX.md into projects/<name>/docs/ on doc edits, so adopters opt in. When enabled it (1) regenerates the per-project docs/INDEX.md (grouped, git-dated TOC) and (2) nudges when a *.md/*.html lands under projects/<name>/ outside docs/. Advisory only — never blocks.",
     "enabled": false,
     "index_filename": "INDEX.md"
@@ -204,6 +219,17 @@
   "build": {
     "_comment": "me2resh/apexyard#1381 — build isolation for the whole ops fork, not per project. `worktree` remains the default from #784. `branch` applies only to a foreground build spawn with no other active writer on that checkout. The orchestrator chooses the mode at spawn time and tells the agent. Background or concurrent build spawns always use worktrees. Any value other than `branch`, including an empty result, means `worktree`. In branch mode, refuse to switch with tracked uncommitted or staged changes; untracked files do not count. Check HEAD is still the ticket branch before each commit and stop if not. See `.claude/rules/isolated-builds.md` and AgDR-0210.",
     "isolation": "worktree"
+  },
+
+  "disk_budget": {
+    "_comment": "me2resh/apexyard#2070 step 4 / AgDR-0306. Advisory disk budget for the folders that ApexYard owns. At SessionStart, check-disk-budget.sh measures them with a time limit. When they use more than max_owned_gb, or the disk has less than min_free_percent free, it proposes a sweep. It never removes anything. bin/apexyard-disk-sweep.sh lists copies older than sweep_min_age_days whose PR is merged or closed (dry run), and removes them with --apply <plan-id> only after the user says yes. The review-copy root of .claude/skills/code-review/review-copy.sh (AgDR-0305) is always included. review_copy_roots adds more folders that hold review copies. extra_paths adds folders to the measurement only. A path can start with ~/ or be relative to the ops root. Set enabled to false to turn the SessionStart check off.",
+    "enabled": true,
+    "max_owned_gb": 10,
+    "min_free_percent": 10,
+    "sweep_min_age_days": 7,
+    "measure_timeout_seconds": 3,
+    "review_copy_roots": [],
+    "extra_paths": []
   },
 
   "pre_push": {

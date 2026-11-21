@@ -11,8 +11,8 @@
 #   SAST        : Semgrep r/bash — shell hook scripts under .claude/hooks/**
 #                 No JS/TS source (site/ moved to me2resh/apexyard-site, #663).
 #                 CodeQL/ESLint would have nothing to scan.
-#   Dep audits  : N/A — no package.json, requirements.txt, or pyproject.toml
-#                 in this repo. Marked explicitly so adopters aren't confused.
+#   Dep audits  : npm adapter lockfiles and hash-pinned Python audit tools.
+#                 HIGH and CRITICAL findings fail. MODERATE and LOW are advisory.
 #   SBOM/licence: N/A — no third-party deps. Trivial SBOM = not worth generating.
 #
 # Fail threshold: WARNING+ (equivalent to "medium+"). INFO findings are reported
@@ -187,26 +187,11 @@ jobs:
           retention-days: 30
 
   # --------------------------------------------------------------------------
-  # Job 3: Dependency audit — N/A notice
+  # Job 3: Dependency audit using the golden-path helper
   # --------------------------------------------------------------------------
-  dep-audit-na:
-    name: Dependency audit (N/A)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Note — no dependency manifests in this repo
-        run: |
-          echo "## Dependency Audit: N/A" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "This repository contains no \`package.json\`, \`requirements.txt\`," \
-               "\`pyproject.toml\`, or other dependency manifests." >> "$GITHUB_STEP_SUMMARY"
-          echo "There are no third-party runtime deps to audit." >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "When this changes (e.g. a site build step is added), replace this" \
-               "job with \`npm audit --audit-level=moderate\` or \`pip-audit\`." >> "$GITHUB_STEP_SUMMARY"
-
-          echo "No dependency manifests — dep audit skipped (N/A for this repo)."
+  dep-audit:
+    name: Dependency audit
+    uses: ./.github/workflows/dependency-audit.yml
 
   # --------------------------------------------------------------------------
   # Job 4: SBOM / licence — N/A notice
@@ -234,7 +219,7 @@ jobs:
     name: Security Gate
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [secrets-scan, sast-shell, dep-audit-na, sbom-na]
+    needs: [secrets-scan, sast-shell, dep-audit, sbom-na]
     if: always()
 
     steps:
@@ -242,16 +227,17 @@ jobs:
         run: |
           SECRETS="${{ needs.secrets-scan.result }}"
           SAST="${{ needs.sast-shell.result }}"
+          DEPS="${{ needs.dep-audit.result }}"
 
           echo "## Security Gate Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "| Job | Result |" >> "$GITHUB_STEP_SUMMARY"
           echo "|-----|--------|" >> "$GITHUB_STEP_SUMMARY"
           echo "| Secrets (gitleaks) | $SECRETS |" >> "$GITHUB_STEP_SUMMARY"
           echo "| SAST — shell (Semgrep) | $SAST |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Dep audit | N/A — no manifests |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Dep audit | $DEPS |" >> "$GITHUB_STEP_SUMMARY"
           echo "| SBOM/licence | N/A — no deps |" >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "$SECRETS" != "success" ] || [ "$SAST" != "success" ]; then
+          if [ "$SECRETS" != "success" ] || [ "$SAST" != "success" ] || [ "$DEPS" != "success" ]; then
             echo "::error::Security gate FAILED — one or more security jobs did not pass. A release cannot proceed until all findings are resolved."
             exit 1
           fi

@@ -1,6 +1,6 @@
 ---
 name: design-sync
-description: Sync a local component library to a claude.ai/design design-system project incrementally — one component at a time, never a wholesale replace. Drives the DesignSync tool.
+description: Sync a local component library to a claude.ai/design design-system project incrementally, one component at a time, never a wholesale replace. Drives the DesignSync tool.
 argument-hint: "[--project <uuid>] [--dir <localDir>] [component-name…]"
 ---
 

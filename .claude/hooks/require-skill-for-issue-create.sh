@@ -26,6 +26,14 @@ set -u
 
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
+case "$TOOL_NAME" in
+  Bash|Edit|Write|MultiEdit|NotebookEdit|'') ;;
+  *)
+    # shellcheck source=/dev/null
+    . "$(dirname "$0")/_lib-fail-closed-json.sh" || exit 2
+    if hook_is_shell_call "$INPUT"; then TOOL_NAME=Bash; fi
+    ;;
+esac
 if [ "$TOOL_NAME" != "Bash" ]; then
   exit 0
 fi
@@ -77,8 +85,8 @@ NORM_CMD=$(echo "$COMMAND" | tr -s '[:space:]' ' ')
 # Substring-anywhere matching false-positives on commit messages or
 # scripts that mention the pattern in prose, e.g.
 # `git commit -m "...mentions gh issue create..."`.
-# Do not match `$(pat…)` here: /tickets-batch, /roadmap, /spike-close
-# --promote, and /prototype-close assign `result="$(tracker_create …)"`
+# Do not match `$(pat…)` here: /task --batch, /roadmap, /spike --close
+# --promote, and /prototype --close assign `result="$(tracker_create …)"`
 # without writing the active-issue-skill marker. Wrapped-create detection
 # for ORBIT lives only in require-orbit-slice-for-ticket.sh (AgDR-0217).
 MATCHED=""

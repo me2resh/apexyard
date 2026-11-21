@@ -65,6 +65,9 @@
 
 set -euo pipefail
 
+# Keep relative cd silent in checks that launch suites directly.
+unset CDPATH
+
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 if [ -z "$REPO_ROOT" ]; then
   echo "ERROR: not inside a git repository." >&2
@@ -77,6 +80,7 @@ if [ "${1:-}" = "--list" ]; then
   echo "shellcheck"
   echo "subpacks"
   echo "writing-profile"
+  echo "agent-tiers"
   exit 0
 fi
 
@@ -174,7 +178,7 @@ echo "pre-push checks:" >&2
 # whatever is latest at that moment, so a new rule in an upstream release turns
 # a green gate red with no change on the adopter's side.
 #
-# The pin tracks CI. 0.23.2 is the markdownlint-cli2 bundled by
+# The pin tracks CI. 0.24.0 is the markdownlint-cli2 bundled by
 # markdownlint-cli2-action at the tag recorded below, which
 # .github/workflows/markdown-lint.yml pins — so local pre-push and CI judge by
 # the same ruleset.
@@ -185,8 +189,8 @@ echo "pre-push checks:" >&2
 # workflow and fails when they diverge, which turns the Dependabot PR red until
 # someone updates this pin deliberately.
 # shellcheck disable=SC2034  # read by test_pre_push_markdownlint_batch.sh, not by this script
-MARKDOWNLINT_ACTION_TAG="v24.2.0"   # markdownlint-cli2-action tag this pin belongs to
-MARKDOWNLINT_CMD="command -v npx >/dev/null 2>&1 || { echo 'INFO: npx not found — markdownlint check skipped. Install Node.js (https://nodejs.org) to enable it locally.'; exit 0; }; md_files=\$(git ls-files '*.md' 2>/dev/null); [ -z \"\$md_files\" ] && { echo 'INFO: no tracked markdown files found — markdownlint check skipped.'; exit 0; }; echo \"\$md_files\" | tr '\\n' '\\0' | xargs -0 -s 7000 npx --yes markdownlint-cli2@0.23.2 2>&1"
+MARKDOWNLINT_ACTION_TAG="v25.0.0"   # markdownlint-cli2-action tag this pin belongs to
+MARKDOWNLINT_CMD="command -v npx >/dev/null 2>&1 || { echo 'INFO: npx not found — markdownlint check skipped. Install Node.js (https://nodejs.org) to enable it locally.'; exit 0; }; md_files=\$(git ls-files '*.md' 2>/dev/null); [ -z \"\$md_files\" ] && { echo 'INFO: no tracked markdown files found — markdownlint check skipped.'; exit 0; }; echo \"\$md_files\" | tr '\\n' '\\0' | xargs -0 -s 7000 npx --yes markdownlint-cli2@0.24.0 2>&1"
 run_check "markdownlint" "$MARKDOWNLINT_CMD" || true
 
 # 2. shellcheck — .claude/hooks/*.sh, severity=warning
@@ -211,6 +215,15 @@ if [ -f "$WRITING_PROFILE_SCRIPT" ]; then
 else
   echo "INFO: $WRITING_PROFILE_SCRIPT not found — writing-profile check skipped." >&2
 fi
+
+# 5. agent-tiers: agent and skill frontmatter match the tier map in
+# .claude/harness-models.json (me2resh/apexyard#2033, AgDR-0294).
+# The script accepts a model that the local routing hook rewrote, so an
+# active agent-routing.yaml does not block a push. CI checks every model
+# through .claude/agents/tests/test_agent_tier_map.sh.
+# A missing script or a missing jq skips with a note.
+AGENT_TIERS_CMD="[ -f bin/sync-agent-tiers.sh ] || { echo 'INFO: bin/sync-agent-tiers.sh not found — agent-tiers check skipped.'; exit 0; }; command -v jq >/dev/null 2>&1 || { echo 'INFO: jq not found — agent-tiers check skipped. Install jq to enable it.'; exit 0; }; bash bin/sync-agent-tiers.sh --check 2>&1"
+run_check "agent-tiers" "$AGENT_TIERS_CMD" || true
 
 # ---------------------------------------------------------------------------
 # Result

@@ -13,6 +13,7 @@ trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/.claude/hooks"
 git -C "$TMP" init -q
 cp "$SRC_ROOT"/.claude/hooks/auto-code-review.sh "$TMP/.claude/hooks/"
+cp "$SRC_ROOT"/.claude/hooks/_lib-fail-closed-json.sh "$TMP/.claude/hooks/"
 cp "$SRC_ROOT"/.claude/hooks/_lib-command-scrub.sh "$TMP/.claude/hooks/"
 
 fail=0

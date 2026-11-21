@@ -33,6 +33,10 @@
 
 set -u
 
+# shellcheck disable=SC1007  # Intentionally empty CDPATH keeps cd silent.
+TMPDIR=$(CDPATH= cd -- "${TMPDIR:-/tmp}" && pwd) || exit 1
+export TMPDIR
+
 # Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
 # shellcheck disable=SC1091
 . "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
@@ -56,6 +60,8 @@ fi
 PASS=0
 FAIL=0
 FAILED_CASES=""
+BODY_DIR=$(mktemp -d "${TMPDIR:-/tmp}/pr-create-gate-anchor.XXXXXX") || exit 1
+trap 'rm -rf "$BODY_DIR"' EXIT
 
 # make_sandbox [branch]
 #   Default branch carries a ticket ID so cases that aren't testing the
@@ -91,12 +97,15 @@ make_sandbox() {
 run_case() {
   local label="$1" cmd="$2" want_rc="$3" want_stderr_regex="${4:-}"
   local sb; sb=$(make_sandbox)
+  # Copy fixtures so command strings can use whitespace-free relative paths.
+  cp -R "$BODY_DIR/." "$sb/"
   mock_gh_install "$sb"
 
   local input
   input=$(jq -nc --arg c "$cmd" '{tool_input:{command:$c}}')
   local got_stderr got_rc
-  got_stderr=$(cd "$sb" && printf '%s' "$input" | bash .claude/hooks/validate-pr-create.sh 2>&1 >/dev/null)
+  # shellcheck disable=SC1007  # Intentionally empty CDPATH keeps cd silent.
+  got_stderr=$(CDPATH= cd -- "$sb" && printf '%s' "$input" | bash "$sb/.claude/hooks/validate-pr-create.sh" 2>&1 >/dev/null)
   got_rc=$?
   rm -rf "$sb"
 
@@ -130,12 +139,11 @@ run_case 'issue create whose --title says "over-matches gh pr create" does NOT t
 
 # --title embedding the phrase via --body-file content (not just inline
 # --body) — the gate must not be fooled by title OR body-file content.
-BF=$(mktemp /tmp/test-gate-anchor-body.XXXXXX.md)
+BF="$BODY_DIR/body.md"
 printf 'Example: gh pr create --title "x" --body "y"\n' > "$BF"
 run_case 'issue create with --title mentioning it AND --body-file containing it → no-op (exit 0)' \
-  "gh issue create --repo me2resh/apexyard --title 'fix: gh pr create gate bug' --body-file $BF" \
+  "gh issue create --repo me2resh/apexyard --title 'fix: gh pr create gate bug' --body-file ${BF##*/}" \
   0 ""
-rm -f "$BF"
 
 # ---------------------------------------------------------------------------
 # True positives must still fire — the anchor must not be so tight it misses
@@ -154,24 +162,25 @@ test
 | GH-900 | gate anchor fix |
 
 Refs #900"
-BF_OK=$(mktemp /tmp/test-gate-anchor-ok.XXXXXX.md)
+BF_OK="$BODY_DIR/ok.md"
 printf '%s' "$BODY_OK" > "$BF_OK"
 
 run_case 'a genuine gh pr create still validates and PASSES with a conforming title/body/branch' \
-  "gh pr create --repo me2resh/apexyard --title 'fix(#900): gate anchor' --head fix/GH-900-test --body-file $BF_OK" \
+  "gh pr create --repo me2resh/apexyard --title 'fix(#900): gate anchor' --head fix/GH-900-test --body-file ${BF_OK##*/}" \
   0 ""
 
 run_case 'a genuine gh pr create with a malformed title still BLOCKS' \
-  "gh pr create --repo me2resh/apexyard --title 'no ticket id here' --head fix/GH-900-test --body-file $BF_OK" \
+  "gh pr create --repo me2resh/apexyard --title 'no ticket id here' --head fix/GH-900-test --body-file ${BF_OK##*/}" \
   2 "doesn't match format"
 
 # Keep the pre-existing broader match for a continuation inside the verb.
 run_case 'broad-space continued PR verb still blocks a malformed title' \
-  $'gh pr\\\ncreate'" --repo me2resh/apexyard --title 'no ticket id here' --head fix/GH-900-test --body-file $BF_OK" \
+  $'gh pr\\\ncreate'" --repo me2resh/apexyard --title 'no ticket id here' --head fix/GH-900-test --body-file ${BF_OK##*/}" \
   2 "doesn't match format"
 
+# Keep cd prefixes in the sandbox so relative body files resolve there.
 run_case 'a leading cd prefix before a genuine gh pr create still validates' \
-  "cd /tmp && gh pr create --repo me2resh/apexyard --title 'fix(#900): gate anchor' --head fix/GH-900-test --body-file $BF_OK" \
+  "cd . && gh pr create --repo me2resh/apexyard --title 'fix(#900): gate anchor' --head fix/GH-900-test --body-file ${BF_OK##*/}" \
   0 ""
 
 # ---------------------------------------------------------------------------
@@ -185,35 +194,35 @@ run_case 'a leading cd prefix before a genuine gh pr create still validates' \
 # ---------------------------------------------------------------------------
 
 run_case 'a leading env-var assignment before a genuine gh pr create still validates' \
-  "FOO=bar gh pr create --repo me2resh/apexyard --title 'fix(#900): gate anchor' --head fix/GH-900-test --body-file $BF_OK" \
+  "FOO=bar gh pr create --repo me2resh/apexyard --title 'fix(#900): gate anchor' --head fix/GH-900-test --body-file ${BF_OK##*/}" \
   0 ""
 
 run_case 'a leading env-var assignment with a malformed title still BLOCKS' \
-  "FOO=bar gh pr create --repo me2resh/apexyard --title 'no ticket id here' --head fix/GH-900-test --body-file $BF_OK" \
+  "FOO=bar gh pr create --repo me2resh/apexyard --title 'no ticket id here' --head fix/GH-900-test --body-file ${BF_OK##*/}" \
   2 "doesn't match format"
 
 run_case 'a leading "time" wrapper before a genuine gh pr create still validates' \
-  "time gh pr create --repo me2resh/apexyard --title 'fix(#900): gate anchor' --head fix/GH-900-test --body-file $BF_OK" \
+  "time gh pr create --repo me2resh/apexyard --title 'fix(#900): gate anchor' --head fix/GH-900-test --body-file ${BF_OK##*/}" \
   0 ""
 
 run_case 'a leading "time" wrapper with a malformed title still BLOCKS' \
-  "time gh pr create --repo me2resh/apexyard --title 'no ticket id here' --head fix/GH-900-test --body-file $BF_OK" \
+  "time gh pr create --repo me2resh/apexyard --title 'no ticket id here' --head fix/GH-900-test --body-file ${BF_OK##*/}" \
   2 "doesn't match format"
 
 run_case 'a double leading cd (cd a && cd b && …) before a genuine gh pr create still validates' \
-  "cd /tmp && cd /tmp && gh pr create --repo me2resh/apexyard --title 'fix(#900): gate anchor' --head fix/GH-900-test --body-file $BF_OK" \
+  "cd . && cd . && gh pr create --repo me2resh/apexyard --title 'fix(#900): gate anchor' --head fix/GH-900-test --body-file ${BF_OK##*/}" \
   0 ""
 
 run_case 'a double leading cd with a malformed title still BLOCKS' \
-  "cd /tmp && cd /tmp && gh pr create --repo me2resh/apexyard --title 'no ticket id here' --head fix/GH-900-test --body-file $BF_OK" \
+  "cd . && cd . && gh pr create --repo me2resh/apexyard --title 'no ticket id here' --head fix/GH-900-test --body-file ${BF_OK##*/}" \
   2 "doesn't match format"
 
 run_case 'a generic non-cd prefix (X && gh pr create) still validates' \
-  "echo hi && gh pr create --repo me2resh/apexyard --title 'fix(#900): gate anchor' --head fix/GH-900-test --body-file $BF_OK" \
+  "echo hi && gh pr create --repo me2resh/apexyard --title 'fix(#900): gate anchor' --head fix/GH-900-test --body-file ${BF_OK##*/}" \
   0 ""
 
 run_case 'a generic non-cd prefix (X && gh pr create) with a malformed title still BLOCKS' \
-  "echo hi && gh pr create --repo me2resh/apexyard --title 'no ticket id here' --head fix/GH-900-test --body-file $BF_OK" \
+  "echo hi && gh pr create --repo me2resh/apexyard --title 'no ticket id here' --head fix/GH-900-test --body-file ${BF_OK##*/}" \
   2 "doesn't match format"
 
 # The gate widening must not defeat the anchor itself — a --title value that
@@ -283,8 +292,6 @@ run_case 'Hakim repro: gh pr create --head br | cat (no title) still validates' 
 run_case 'same shape (|) with an unquoted malformed title still BLOCKS' \
   "gh pr create --repo me2resh/apexyard --title fixbug --head fix/GH-900-test | cat" \
   2 "doesn't match format"
-
-rm -f "$BF_OK"
 
 echo ""
 echo "==================================="

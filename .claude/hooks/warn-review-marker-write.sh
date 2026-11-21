@@ -315,6 +315,14 @@ set -u
 
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
+case "$TOOL_NAME" in
+  Bash|Edit|Write|MultiEdit|NotebookEdit|'') ;;
+  *)
+    # shellcheck source=/dev/null
+    . "$(dirname "$0")/_lib-fail-closed-json.sh" || exit 2
+    if hook_is_shell_call "$INPUT"; then TOOL_NAME=Bash; fi
+    ;;
+esac
 
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -830,7 +838,7 @@ Expected active-reviewer marker: ${ACTIVE_REVIEWER_MARKER}
   (must contain: <owner>/<repo>#${TARGET_PR:-<pr>}:${MARKER_TYPE:-<role>})
 
 IF YOU ARE A BUILD-CLASS SUB-AGENT (backend-engineer, frontend-engineer,
-platform-engineer, product-manager, data-engineer, ui-designer, ux-designer,
+platform-engineer, product-manager, data-engineer, ui-designer,
 tech-lead, etc.): STOP. Do NOT write this file. You cannot nest the Agent
 tool to spawn the real reviewer, so any "review" you produce here is the
 author reviewing their own work — the exact failure this warning exists to

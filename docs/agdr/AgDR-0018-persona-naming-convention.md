@@ -48,10 +48,12 @@ The brief presented two placement options. Both are used, on a clear axis:
 
 The split is documented here so adopters can rely on it.
 
-### Full mapping (24 personas, Rex unchanged + 23 renamed)
+### Full mapping (25 personas, Rex unchanged + 23 renamed + main thread)
 
 | Slot | Persona name | Theme |
 |------|--------------|-------|
+| **Main thread** | | |
+| main thread (session router) | **Hadi** | the guide |
 | **Agents** | | |
 | code-reviewer | **Rex** (unchanged) | already-shipped brand |
 | security-reviewer | **Hakim** (was: Hatim; consolidated with Security Auditor role in #347 PR 3) | wise judgement |
@@ -83,11 +85,14 @@ The split is documented here so adopters can rely on it.
 | Data Analyst | **Nadia** | "early dew" — fresh signals |
 | Data Engineer | **Anwar** | light / radiant |
 
+The main-thread row (**Hadi**) was added by me2resh/apexyard#2045.
+
 ## Consequences
 
 - **Conversation idiom** — role activations can now use the short name. "Salim, verify ticket #42" is shorter and more conversational than "Act as the QA Engineer and verify ticket #42". Both forms remain valid; the trigger table in [`.claude/rules/role-triggers.md`](../../.claude/rules/role-triggers.md) is unchanged.
 - **Demo scripts and PR comments** stay coherent across agents — every reviewer / orchestrator has a name. The marketing slide at [`site/index.html`](../../site/index.html) and the skills index at [`site/skills.html`](../../site/skills.html) now name all five agents instead of two.
 - **Adopters can override per-fork** by editing the `persona_name` field in each agent's YAML frontmatter or the `**Persona name**:` line under each role's H1. No skill or hook reads `persona_name` for matching today, so overriding is purely cosmetic and safe.
+- **Main thread rename**. Adopters rename Hadi by editing the persona line in `CLAUDE.md` (and the role-trigger examples if wanted). No skill or hook reads the main-thread name, so renaming is cosmetic. Added by me2resh/apexyard#2045.
 - **Rex is the one exception to the rename**. Downstream references in demo scripts, PR markers (the `rex.approved` marker name is unchanged — see `.claude/hooks/block-unreviewed-merge.sh`), and historical conversation memories continue to work without churn.
 - **Shield → Hatim**, **Guardian → Munir**: any third-party docs / external blog posts / demo recordings that reference the old names will look dated. Acceptable cost — these are framework-internal names, not API contracts.
 - **No machine-readable usage today**, but the structured `persona_name` field in YAML frontmatter enables future hooks or skills to surface the name without parsing prose.

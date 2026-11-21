@@ -79,6 +79,13 @@ o1 first, because every later change and the harness o4 slice measure with its s
 - Blocking on a misstated count or evidence statement.
 - The CEO per-PR nod through a human-typed `/approve-merge`.
 
+## Ideas for a later revision
+
+Owner-approved discovery notes of 2026-10-29. They are not criteria and have no slice.
+
+- **Replay a review with one change.** Run a recorded review again on the same PR head with one change, the prompt or the model. Compare the verdicts and findings per entry. This shows the effect of one change before it ships, and it supports C4.
+- **Missed defects become eval entries.** When a later review or a human finds a defect that an approved review missed, add that PR to the `/eval-agents` corpus as a labeled entry. The corpus then grows from real misses, as C4 requires.
+
 ## Upstream gaps
 
 - me2resh/orbit-spec#21: one Plan revision per record root; superseded revisions go to `docs/orbit/history/`.

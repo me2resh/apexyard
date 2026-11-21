@@ -116,7 +116,7 @@ cp golden-paths/pipelines/scripts/dependency-audit-tools.requirements.txt .githu
 # Optional metadata companion (not required by the workflow install step):
 # cp golden-paths/pipelines/scripts/dependency-audit-tools.lock.json .github/scripts/
 # Compare helper_revision in the JSON report when refreshing after a framework upgrade.
-# The framework helper revision is 4.
+# The framework helper revision is 5.
 # dependency-audit-tools.requirements.txt is a hashed lock (#1478, AgDR-0194).
 # Regenerate it after changing a pin with the command below.
 ```
@@ -364,7 +364,7 @@ Ensure your `package.json` has these scripts:
 
 ### Refresh Ready PRs (`refresh-ready-prs.yml`)
 
-Copy this workflow into `.github/workflows/`. Create the `ready-to-merge` repository label before Rex uses it.
+Copy this workflow into `.github/workflows/`. Create the `ready-to-merge` repository label before the `/code-review` orchestrator uses it.
 Set `INTEGRATION_BRANCHES` to `main` for projects without `dev`. The default is `dev`.
 For other branches, also change the static `on.push.branches` list. GitHub does not expand environment variables in event filters.
 

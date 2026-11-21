@@ -1,6 +1,6 @@
 ---
 name: extract-features
-description: Six-axis Feature Inventory (routes / models / jobs / tests / UI / docs) — a "what we must preserve" spec for greenfield rewrites.
+description: Six-axis Feature Inventory (routes / models / jobs / tests / UI / docs), a "what we must preserve" spec for greenfield rewrites.
 argument-hint: "[project-name] [--with-mockups]"
 allowed-tools: Bash, Read, Grep, Glob, Write
 ---

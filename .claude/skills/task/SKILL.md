@@ -1,8 +1,8 @@
 ---
 name: task
-description: Create a structured technical task ticket (driver, scope, ACs) for tech debt, infra, refactoring, or non-user-facing changes.
-argument-hint: "<short title of the task>"
-allowed-tools: Bash, Read, Write
+description: Create a structured technical task ticket (driver, scope, ACs) for tech debt, infra, refactoring, or non-user-facing changes. `--batch` files 2 to 20 tickets.
+argument-hint: "<short title of the task> | --batch [--project <repo>] [--priority <P>] [--parent <ref>] [--labels <a,b>] [<file-or-description>]"
+allowed-tools: Bash, Read, Write, AskUserQuestion
 ---
 
 # /task — Create a Technical Task Ticket
@@ -29,7 +29,28 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 /task Set up PR-triggered CI pipeline
 /task Extract shared LikeCount component
 /task Migrate from DiceBear to local avatars
+/task --batch ./backlog-batches/auth-refactor.md          # batch mode: 2 to 20 mixed tickets
+/task --batch --priority P1 --parent #42 File the auth refactor tickets
 ```
+
+## Modes
+
+Check `$ARGUMENTS` first, before any other step. Look at every word, not only the first word.
+When a word in `$ARGUMENTS` is exactly a flag in the table, read the mode file in the same row. Follow that file with the same `$ARGUMENTS`, then stop.
+In a mode, do not run the steps below. Do not write the active-issue-skill marker of step 0.
+
+<!-- skill-modes:route (test_skill_modes_2028.sh reads this table) -->
+| Flag | Mode file (under the ops root) |
+|------|--------------------------------|
+| `--batch` | `.claude/skills/_lib-modes/task-batch.md` |
+
+The mode file is in `.claude/skills/_lib-modes/`, not in this skill's directory. It stays in place when an adopter overrides `/task` with `custom-skills/task/`. An override keeps the mode only when its SKILL.md has this section. Copy this section into the override to keep the mode.
+
+Batch mode keeps every behaviour of the old `/tickets-batch` skill: mixed ticket types, the 2 to 20 limit, one batch confirmation, and partial-failure handling.
+The optional `--project`, `--priority`, `--parent`, and `--labels` flags prefill the shared questions. They can come before or after `--batch`.
+`/tickets-batch` still works as a deprecated alias that reads the same mode file.
+
+If no word in `$ARGUMENTS` is a flag in the table, run the process below.
 
 ## Process
 
@@ -208,7 +229,8 @@ BODY
 # in tracker_create and rm below. The PreToolUse gate must read the file
 # before the create call runs; it cannot resolve a shell variable at that time.
 
-# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] → {"ref","url"}.
+# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] [<milestone>] → {"ref","url"}.
+# The milestone is optional: omit it and the project's tracker.milestone default (if any) applies.
 # It is gated by require-skill-for-issue-create.sh; the active-issue-skill
 # marker written in step 0 keeps this call allowed.
 result="$(tracker_create "{owner/repo}" "[{type}] {title}" "$body_file" "{priority}")"

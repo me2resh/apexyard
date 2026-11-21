@@ -4,40 +4,44 @@
 # Run: .claude/skills/eval-agents/tests/test-snapshot-diff.sh
 set -uo pipefail
 
+# shellcheck disable=SC1007  # Intentionally empty CDPATH keeps cd silent.
+TMPDIR=$(CDPATH= cd -- "${TMPDIR:-/tmp}" && pwd) || exit 1
+export TMPDIR
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SNAPSHOT_DIFF="$SCRIPT_DIR/../lib/snapshot-diff.sh"
+WORKDIR=$(mktemp -d "${TMPDIR:-/tmp}/snapshot-diff-test.XXXXXX") || exit 1
+trap 'rm -rf "$WORKDIR"' EXIT
+OUTPUT="$WORKDIR/output.out"
 
 pass=0
 fail=0
 
 check() {
   local desc="$1" expect_rc="$2"; shift 2
-  "$@" >/tmp/snapshot-diff-test.out 2>&1
+  "$@" >"$OUTPUT" 2>&1
   local rc=$?
   if [ "$rc" -eq "$expect_rc" ]; then
     echo "✓ $desc"
     pass=$((pass + 1))
   else
     echo "✗ $desc (expected exit $expect_rc, got $rc)"
-    cat /tmp/snapshot-diff-test.out
+    cat "$OUTPUT"
     fail=$((fail + 1))
   fi
 }
 
 check_output_contains() {
   local desc="$1" needle="$2"
-  if grep -qF "$needle" /tmp/snapshot-diff-test.out; then
+  if grep -qF "$needle" "$OUTPUT"; then
     echo "✓ $desc"
     pass=$((pass + 1))
   else
     echo "✗ $desc (output did not contain: $needle)"
-    cat /tmp/snapshot-diff-test.out
+    cat "$OUTPUT"
     fail=$((fail + 1))
   fi
 }
-
-WORKDIR="$(mktemp -d)"
-trap 'rm -rf "$WORKDIR"' EXIT
 
 TARGET="$WORKDIR/reviews"
 SNAP="$WORKDIR/snap.manifest"

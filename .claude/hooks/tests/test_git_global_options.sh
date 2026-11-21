@@ -51,8 +51,38 @@ check git-dir yes "$(has "git --git-dir=/some/repo/.git push origin main" push)"
 check git-dir-sp yes "$(has "git --git-dir /some/repo/.git push origin main" push)"
 check work-tree yes "$(has "git --work-tree /some/repo push origin main" push)"
 check no-pager yes "$(has "git --no-pager push origin main" push)"
-check quoted-text yes "$(has "echo 'run git push later'" push)"
+check quoted-text no "$(has "echo 'run git push later'" push)"
 check cd-and yes "$(has "cd /some/repo && git -C /other commit -m x" commit)"
+
+# Quoted arguments are data; nested shell command strings still execute.
+for verb in push commit; do
+  check "quoted-grep-$verb" no "$(has "grep -n -E 'git $verb|credential' f" "$verb")"
+  check "quoted-echo-$verb" no "$(has "echo \"run git $verb later\"" "$verb")"
+  check "quoted-rg-$verb" yes "$(has "rg -n \"git $verb origin dev\" docs/" "$verb")"
+  for cmd in "git $verb origin dev" "bash -c 'git $verb origin dev'" \
+    "sh -c \"git $verb origin dev\"" "eval 'git $verb origin dev'" "cd x && git $verb" \
+    "echo 'git $verb later'; git $verb"; do
+    check "executable-$cmd" yes "$(has "$cmd" "$verb")"
+  done
+done
+
+# Only simple allowlisted commands can treat a quoted push as data.
+for cmd in "python3 -c 'import os; os.system(\"git push origin dev\")'" \
+  "bash <<< 'git push origin dev'" "grep x f | sh -c 'git push'" \
+  "echo 'git push origin dev' | sh" "echo 'git push'; echo ok" \
+  "echo 'git push' && echo ok" "echo 'git push' || echo ok" \
+  $'echo \'git push\'\necho ok' "echo 'git push"; do
+  check "raw-push-$cmd" yes "$(has "$cmd" push)"
+done
+for data_word in grep egrep fgrep rg ag ack echo printf; do
+  check "assigned-raw-$data_word" yes "$(has "A='some value' B=x $data_word 'git push' >> notes.txt" push)"
+done
+
+# A command substitution keeps the existing conservative raw-text result.
+check substitution-push yes "$(has 'echo "$(cat <<EOF
+git push origin dev
+EOF
+)"' push)"
 
 git_prepare_invocation "git -C /repo -c core.quotepath=off commit -m x" commit ""
 check dash-c-value /repo "$GIT_DASH_C"
@@ -141,6 +171,83 @@ else
   fail=1
 fi
 
+# Secret diagnostics retain locations and rule names, never value fragments.
+redaction_repo="$test_tmp/redaction"
+mkdir -p "$redaction_repo"
+git -C "$redaction_repo" init -q
+fake_secret="$(printf '%s%s%s' 'q7Vm2Rz9' 'Lp4Nx6Wb' 'Tk8Cs3Hd')"
+for secret_file in first.txt 'second file.txt'; do
+  {
+    printf '# harmless heading\n'
+    secret_row=0
+    while [ "$secret_row" -lt 3 ]; do
+      secret_row=$((secret_row + 1))
+      printf '%s = "%s"\n' "$key_name" "$fake_secret"
+    done
+  } > "$redaction_repo/$secret_file"
+done
+git -C "$redaction_repo" add first.txt 'second file.txt'
+redaction_payload=$(jq -nc --arg command "git -C '$redaction_repo' commit -m 'fix: redact'" \
+  '{tool_input:{command:$command}}')
+if printf '%s' "$redaction_payload" | bash "$HOOKS/check-secrets.sh" >"$test_tmp/redaction.out" 2>&1; then
+  redaction_rc=0
+else
+  redaction_rc=$?
+fi
+check secrets-redaction-exit 2 "$redaction_rc"
+for location in first.txt:2 first.txt:3 first.txt:4 'second file.txt:2' 'second file.txt:3'; do
+  check "secrets-location-$location" yes "$(if grep -qF "$location: hardcoded-secret-assignment" "$test_tmp/redaction.out"; then printf yes; else printf no; fi)"
+done
+check secrets-max-five 5 "$(grep -c ': hardcoded-secret-assignment$' "$test_tmp/redaction.out")"
+check secrets-open-file yes "$(if grep -qF 'Open each file at the listed line' "$test_tmp/redaction.out"; then printf yes; else printf no; fi)"
+check secrets-whole-value-absent yes "$(if grep -qF "$fake_secret" "$test_tmp/redaction.out"; then printf no; else printf yes; fi)"
+fragment_leaked=no
+fragment_start=0
+while [ "$fragment_start" -le "$((${#fake_secret} - 8))" ]; do
+  if grep -qF "${fake_secret:$fragment_start:8}" "$test_tmp/redaction.out"; then
+    fragment_leaked=yes
+  fi
+  fragment_start=$((fragment_start + 1))
+done
+check secrets-eight-character-fragments-absent no "$fragment_leaked"
+
+# A byte that is not valid UTF-8, and an added line that starts with "++ ",
+# must neither unblock the commit nor print the value (Hakim H1-H3 on #2009).
+edge_repo="$test_tmp/redaction-edge"
+mkdir -p "$edge_repo"
+git -C "$edge_repo" init -q
+{
+  printf '# heading\n'
+  printf '%s = "%s" # caf\351\n' "$key_name" "$fake_secret"
+  printf '%s = "%s"\n' "$key_name" "$fake_secret"
+} > "$edge_repo/latin1.txt"
+{
+  printf '# heading\n'
+  printf '++ %s = "%s"\n' "$key_name" "$fake_secret"
+  printf '%s = "%s"\n' "$key_name" "$fake_secret"
+} > "$edge_repo/plusplus.txt"
+git -C "$edge_repo" add latin1.txt plusplus.txt
+edge_payload=$(jq -nc --arg command "git -C '$edge_repo' commit -m 'fix: edge'" \
+  '{tool_input:{command:$command}}')
+if printf '%s' "$edge_payload" | LC_ALL=en_US.UTF-8 bash "$HOOKS/check-secrets.sh" >"$test_tmp/edge.out" 2>&1; then
+  edge_rc=0
+else
+  edge_rc=$?
+fi
+check secrets-edge-exit 2 "$edge_rc"
+for location in latin1.txt:2 latin1.txt:3 plusplus.txt:2 plusplus.txt:3; do
+  check "secrets-edge-location-$location" yes "$(if grep -qF "$location: hardcoded-secret-assignment" "$test_tmp/edge.out"; then printf yes; else printf no; fi)"
+done
+fragment_leaked=no
+fragment_start=0
+while [ "$fragment_start" -le "$((${#fake_secret} - 8))" ]; do
+  if grep -qF "${fake_secret:$fragment_start:8}" "$test_tmp/edge.out"; then
+    fragment_leaked=yes
+  fi
+  fragment_start=$((fragment_start + 1))
+done
+check secrets-edge-fragments-absent no "$fragment_leaked"
+
 # A callback must not consume the remaining invocation prefixes.
 read_stdin_callback() {
   cat >/dev/null
@@ -223,6 +330,14 @@ run_hook() {
   set -e
   printf '%s' "$rc"
 }
+
+for cmd in "grep -n -E 'git push|credential' f" 'echo "run git push later"'; do
+  check "quoted-push-allowed-$cmd" 0 "$(run_hook "$HOOKS/block-main-push.sh" "$cmd" "$protected")"
+done
+for cmd in 'rg -n "git push origin dev" docs/' 'git push origin dev' "bash -c 'git push origin dev'" \
+  'sh -c "git push origin dev"' "eval 'git push origin dev'" 'cd x && git push'; do
+  check "real-push-blocked-$cmd" 2 "$(run_hook "$HOOKS/block-main-push.sh" "$cmd" "$protected")"
+done
 rc=$(run_hook "$HOOKS/block-main-push.sh" "git -C $feature push origin main" "$other")
 if [ "$rc" -eq 2 ]; then
   echo PASS block-protected-dash-c
