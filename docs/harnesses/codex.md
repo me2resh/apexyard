@@ -33,7 +33,7 @@ It deliberately does **not** copy the hooks, rules, migrations, or registries in
 ```bash
 bin/sync-codex-adapter.sh            # generate the adapter
 bin/sync-codex-adapter.sh --check    # verify generated files still match .claude/ (non-zero on drift)
-bin/sync-codex-adapter.sh --clean    # remove generated .agents/ and .codex/ trees before regenerating
+bin/sync-codex-adapter.sh --clean    # remove generated .agents/skills/ and .codex/ trees before regenerating
 bin/sync-codex-adapter.sh --reconcile-installed # refresh (writes) only when ApexYard's Codex adapter is installed
 bin/sync-codex-adapter.sh --check-installed     # read-only staleness check; never writes
 ```
