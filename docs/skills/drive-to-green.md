@@ -27,6 +27,7 @@ Upgrade note: the tags changed from Blocking / Important / Nit to Important / Ni
 The tally line is now `Important N | Nit N | Pre-existing N`, and the validator rejects the old form.
 If your custom `REVIEW.md` uses the old labels, rename them to the new tags.
 Each `- Pre-existing:` line must contain `Suggested ticket title: <title>`, and the Pre-existing count must match the lines.
+A Pre-existing CRITICAL, HIGH or MEDIUM line must also contain `SLA: N days. Due: YYYY-MM-DD` (see AgDR-0313).
 
 ## Run one PR
 

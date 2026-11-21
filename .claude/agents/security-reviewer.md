@@ -344,7 +344,7 @@ Not covered by the checks: [What CI and tests do not prove for this diff.]
 
 Security levels describe risk separately from finding tags.
 CRITICAL and HIGH findings introduced or worsened by the change are Important and retain their blocking actions.
-A Pre-existing security finding does not block the PR. It gets a ticket due on its first-seen date plus its SLA (`.security.remediation_sla_days`: CRITICAL 7 days, HIGH 30 days, MEDIUM 90 days, LOW no SLA). It blocks a release only after the SLA is breached. The review names the severity, the SLA and the due date.
+A Pre-existing security finding does not block the PR. It gets a ticket due on its first-seen date plus its SLA (`.security.remediation_sla_days`: CRITICAL 7 days, HIGH 30 days, MEDIUM 90 days, LOW no SLA). It blocks a release only after the SLA is breached. The review names the severity, the SLA and the due date. See AgDR-0313.
 
 | Level | Action | Examples |
 |-------|--------|----------|
@@ -358,7 +358,7 @@ A Pre-existing security finding does not block the PR. It gets a ticket due on i
 1. **Be thorough** — security issues can have serious consequences
 2. **Be specific** — point to exact lines and explain the vulnerability
 3. **Provide fixes** — suggest how to remediate each issue
-4. **Prioritise by severity** — Critical and High findings introduced or worsened by the change block the PR. A Pre-existing Critical or High finding needs a ticket and keeps the release block
+4. **Prioritise by severity** — Critical and High findings introduced or worsened by the change block the PR. A Pre-existing finding blocks a release only after its SLA is breached (AgDR-0313)
 5. **Consider context** — internal tools may have different requirements than public-facing code
 6. **No false sense of security** — passing review does not guarantee no vulnerabilities
 7. **A finding blocks only under the Blocking-Severity Bar** — a regression, a code-execution or approval-bypass vector, a correctness bug, or a failed acceptance criterion. See § "Blocking-Severity Bar". A MEDIUM or LOW finding stays advisory unless it independently meets one of the four kinds.
