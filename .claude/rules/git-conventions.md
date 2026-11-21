@@ -88,7 +88,7 @@ Exit with its return code: `0` allows the action and `2` blocks it.
 Use a fixed event identifier. Never log command text or secrets.
 
 `off` allows without logging. `enforce` blocks. `observe` appends one JSON line and allows.
-The log is `.claude/session/gate-observe.log`. The session directory is already gitignored.
+The log is `.claude/session/gate-observe.log`. Git already ignores the session directory.
 Logging failures warn and allow in observe mode.
 
 `/status --briefing` appends the event count to its role line when the log contains entries.
