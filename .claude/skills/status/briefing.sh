@@ -303,6 +303,14 @@ if command -v review_queue_line >/dev/null 2>&1; then
   [ -n "$_rq_line" ] && waiting_suffix=" ; $_rq_line"
 fi
 
+# Keep the briefing at four lines. Show observation counts on the role line.
+if [ -n "$ops_root" ] && [ -r "$ops_root/.claude/hooks/_lib-gate-mode.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$ops_root/.claude/hooks/_lib-gate-mode.sh"
+  _gate_line=$(gate_observe_summary "$ops_root")
+  [ -z "$_gate_line" ] || waiting_suffix+=" ; $_gate_line"
+fi
+
 # ---------------------------------------------------------------------------
 # 7. Print.
 #
