@@ -17,7 +17,8 @@ bash bin/sync-agy-adapter.sh --check  # exit non-zero on drift
 `.agents/hooks.json` is gitignored, because it holds this clone's absolute path
 to the wrapper. Run the sync again after a `.claude/settings.json` change, or
 after you move the clone. Then open agy in the fork root or a folder inside it.
-agy asks you to trust a new workspace folder before it loads the hooks.
+agy keeps trusted folders in `trustedWorkspaces` in its user settings. Whether
+agy asks before it loads the hooks in an untrusted folder was not tested.
 
 ## How it works
 

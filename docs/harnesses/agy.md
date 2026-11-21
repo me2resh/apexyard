@@ -38,7 +38,7 @@ Google's terms forbid driving agy from another agent. So no agent, harness, or C
 
 The last two rows come from one headless `agy -p` run, so the hooks run in non-interactive mode too. agy printed the deny reason and did not change the file. The fork build protects the agy wiring through a wider list that also covers other adapters. This port protects only the agy wiring, so here the same deny comes from different code, and it is not live-checked on this port.
 
-agy asked the person to trust the workspace folder, and then loaded `.agents/hooks.json`. It showed no permission prompt for any `ask` call (see [`ask` and agy's permission check](#ask-and-agys-permission-check)).
+In the fork root, agy loaded `.agents/hooks.json` with no trust step, because a parent folder was already trusted (see the workspace-trust open question below). agy showed no permission prompt for any `ask` call (see [`ask` and agy's permission check](#ask-and-agys-permission-check)).
 
 **Not verified live:** this port onto dev, including the `permissions.deny` checks and the persistent-terminal deny. `replace_file_content`, `multi_replace_file_content`, and `write_to_file` are not verified either, because agy CLI 1.5.14 did not use them.
 
@@ -77,6 +77,8 @@ Claude Code applies the `permissions.deny` rules in `.claude/settings.json` itse
 | `Bash(<prefix>:*)` | `run_command` | The normalized `CommandLine` is `<prefix>`, or starts with `<prefix>` and a space |
 
 The normalized `CommandLine` is trimmed, and each run of spaces and tabs in it becomes one space.
+
+The `Read(...)` check judges every string argument of a read-only tool, not only a path field, as a path. So a `search_web` query whose last path segment is `.env`, such as `config/.env`, gets `deny`. This over-match fails closed. A query that only mentions `.env` in other words does not match.
 
 Glob rules: a leading `//` is an absolute path, and `~/` is the home folder. A leading `/` is the fork root. A pattern with neither matches anywhere under the fork. `**` is any depth, including none, `*` is one path segment, and `?` is one character. Paths match without case. Over-matching is acceptable, because it fails closed.
 
@@ -221,7 +223,11 @@ The wrapper prints its decision before it writes the line, and it ignores loggin
 ## Open questions
 
 - **Crash or timeout:** the wrapper's own watchdog and output guard fail closed. A gate that runs too long gets `deny` before agy's timeout, and any wrapper error or malformed output becomes `deny`. The wrapper always exits 0 with one decision. A crash of the wrapper process itself under agy has not been observed live.
-- **Workspace trust:** agy asked the person to trust each new workspace folder before it loaded `.agents/hooks.json`. agy records the choice in `trustedWorkspaces` in the user settings.
+- **Workspace trust:** only these facts are observed:
+  - agy keeps trusted folders in `trustedWorkspaces` in its user settings.
+  - In the fork root, agy loaded `.agents/hooks.json` with no trust step, because a parent folder was already trusted.
+  - Each linked worktree that agy opened later has its own entry in that list.
+  - agy's bundled docs do not describe workspace trust. An untrusted folder was not tested.
 - **`agy -p`:** the hooks run. The contributor ran agy CLI 1.5.14 headless against the fork build. SessionStart injected the context, and an `edit_file` on `.agents/hooks.json` in the fork root got `deny` from `block-protected-target-writes.sh`. This port onto dev has not yet run live.
 - Does a subagent's own `run_command` reach the workspace hook? Until a check shows it, the subagent tools stay denied.
 - Do `ask_permission` and `list_permissions` grant a permission without a user prompt?
