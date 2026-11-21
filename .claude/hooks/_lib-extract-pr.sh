@@ -2040,8 +2040,11 @@ resolve_pr_base_config() {
   if [ -z "$base" ]; then
     return 0
   fi
-  json=$(apexyard_gh api -X GET -H 'Accept: application/vnd.github.raw' \
-    -f "ref=${base}" "repos/${cmd_repo}/contents/.claude/project-config.json" 2>/dev/null) || return 0
+  local enc_base
+  enc_base=$(jq -rn --arg b "$base" '$b|@uri' 2>/dev/null) || return 0
+  [ -n "$enc_base" ] || return 0
+  json=$(apexyard_gh api -H 'Accept: application/vnd.github.raw' \
+    "repos/${cmd_repo}/contents/.claude/project-config.json?ref=${enc_base}" 2>/dev/null) || return 0
   if printf '%s' "$json" | jq -e 'type == "object"' >/dev/null 2>&1; then
     printf '%s\n' "$json"
   fi
