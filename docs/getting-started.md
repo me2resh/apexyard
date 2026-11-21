@@ -520,7 +520,7 @@ Cargo workspaces with many crates take a long time to index initially. See the c
 
 For JavaScript / TypeScript projects, the Code Reviewer agent (Rex) can run [Fallow](https://docs.fallow.tools) static analysis during every code review. The analysis finds dead code, unused exports and dependencies, duplication, circular dependencies, and high complexity in changed code. It also previews fixes with a dry run. See `.claude/agents/code-reviewer.md` section 9 and [AgDR-0069](agdr/AgDR-0069-fallow-in-code-review.md).
 
-You must enable this optional analysis. Rex runs it only when the diff touches `**/*.{js,jsx,mjs,cjs,ts,tsx}` AND the `fallow` CLI exists on `PATH`. If the CLI is absent, Rex silently skips the step. Reviews work without Fallow and give more information with it. Findings are advisory (`nit:` / `suggestion:`). They never change a verdict on their own. The review only previews fixes (`fallow fix --dry-run`). It never changes your tree.
+You must enable this optional analysis. Rex runs it only when the diff touches `**/*.{js,jsx,mjs,cjs,ts,tsx}` AND the `fallow` CLI exists on `PATH`. If the CLI is absent, Rex silently skips the step. Reviews work without Fallow and give more information with it. Findings are advisory (`Nit` or `Pre-existing`). They never change a verdict on their own. The review only previews fixes (`fallow fix --dry-run`). It never changes your tree.
 
 To enable it on a JS/TS project:
 

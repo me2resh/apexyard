@@ -270,7 +270,7 @@ Discover and apply handbooks from BOTH the public `handbooks/**/*.md` tree AND (
 - `architecture/*.md` and `general/*.md` — always load (every design review)
 - `language/<lang>/*.md` — load when the design references that stack
 - `domain/<area>/*.md` — load per the `paths:` frontmatter convention
-- Advisory handbooks → `nit:` / `suggestion:` comments (verdict unaffected)
+- Advisory handbooks → `Nit` or `Pre-existing` findings (verdict unaffected)
 - Blocking handbooks (`ENFORCEMENT: blocking` at the top) → a violation makes the verdict **CHANGES REQUESTED**
 
 The framework default handbooks apply unless the adopter overrides them in the sibling portfolio repo's `custom-handbooks/`. Cite every handbook you apply by path.

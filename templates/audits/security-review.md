@@ -14,11 +14,16 @@
 
 ## Findings
 
-| # | Severity | OWASP class | Finding | File:Line | Status |
-|---|---|---|---|---|---|
-| F1 | critical | A03 Injection | (e.g. unsanitised user input concatenated into SQL) | `src/users.ts:42` | open |
-| F2 | high | A07 Auth failure | (e.g. JWT signature not verified) | `src/auth.ts:18` | open |
-| F3 | medium | A05 Misconfig | (e.g. CORS `Access-Control-Allow-Origin: *`) | `src/server.ts:8` | open |
+Give each finding exactly one tag: `Important`, `Nit`, or `Pre-existing`.
+Apply [Review severity](../REVIEW.md).
+Include base evidence and a suggested ticket title for each Pre-existing finding.
+Security levels and audit-history metrics do not replace the finding tags.
+
+| # | Tag | Severity | OWASP class | Finding | File:Line | Status |
+|---|---|---|---|---|---|---|
+| F1 | Important | critical | A03 Injection | (e.g. unsanitised user input concatenated into SQL) | `src/users.ts:42` | open |
+| F2 | Important | high | A07 Auth failure | (e.g. JWT signature not verified) | `src/auth.ts:18` | open |
+| F3 | Nit | medium | A05 Misconfig | (e.g. CORS `Access-Control-Allow-Origin: *`) | `src/server.ts:8` | open |
 
 ## Dependency vulnerabilities
 
