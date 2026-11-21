@@ -963,6 +963,15 @@ for rel in docs/.agents/hooks.json docs/.agents/plugins.json docs/.agents/plugin
   run_wrapper "$C" PreToolUse "$(p_run_top "echo {} > $rel" "$C" "$(jq -n --arg d "$C" '$d')")"
   expect_decision "C3h15 real gate: run_command redirect into nested $rel gets deny" deny "BLOCKED"
 done
+# A recursive copy or a link onto a nested .agents folder gets deny.
+for cmd in "cp -R x docs/.agents" "ln -s x docs/.agents" "cp -R x .claude/worktrees/wt/docs/.agents"; do
+  run_wrapper "$C" PreToolUse "$(p_run_top "$cmd" "$C" "$(jq -n --arg d "$C" '$d')")"
+  expect_decision "C3h18 real gate: run_command $cmd gets deny" deny "BLOCKED"
+done
+for cmd in "cp -R x docs/agents" "cp -R x .claude/worktrees/wt/.agents" "mkdir -p docs/.agents"; do
+  run_wrapper "$C" PreToolUse "$(p_run_top "$cmd" "$C" "$(jq -n --arg d "$C" '$d')")"
+  expect_decision "C3h19 real gate: run_command $cmd stays ask" ask
+done
 # A linked worktree's own root wiring stays editable, as its .claude/hooks/ is.
 for rel in docs/agents/hooks.json docs/.agents/skills/x.md .claude/worktrees/wt/.agents/hooks.json .claude/worktrees/wt/.agents/plugins/x/hooks.json; do
   run_wrapper "$C" PreToolUse "$(p_write_file "$C/$rel" '{}' "$C")"

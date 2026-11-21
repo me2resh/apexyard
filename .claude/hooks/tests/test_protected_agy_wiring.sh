@@ -107,6 +107,22 @@ for rel in docs/agents/hooks.json docs/.agents/skills/x.md .claude/worktrees/wt/
   check 0 "live nested control Bash redirect into $rel" run_bash "$L" "echo {} > $rel"
 done
 
+# A recursive copy or a link onto a nested .agents folder can bring a hook
+# config with it.
+check 2 "live cp -R onto docs/.agents" run_bash "$L" 'cp -R x docs/.agents'
+check 2 "live ln -s onto docs/.agents" run_bash "$L" 'ln -s x docs/.agents'
+check 2 "live cp -R onto docs/.AGENTS (case variant)" run_bash "$L" 'cp -R x docs/.AGENTS'
+check 2 "live cp -R onto docs/.agents/plugins" run_bash "$L" 'cp -R x docs/.agents/plugins'
+check 2 "live cp -R onto a worktree's docs/.agents" run_bash "$L" 'cp -R x .claude/worktrees/wt/docs/.agents'
+check 2 "live rm -rf docs/.agents" run_bash "$L" 'rm -rf docs/.agents'
+check 2 "live mv onto docs/.agents/plugins" run_bash "$L" 'mv x docs/.agents/plugins'
+check 0 "live cp -R onto docs/agents stays allowed" run_bash "$L" 'cp -R x docs/agents'
+check 0 "live mv onto docs/agents stays allowed" run_bash "$L" 'mv x docs/agents'
+check 0 "live cp -R onto a worktree's own .agents stays allowed" run_bash "$L" 'cp -R x .claude/worktrees/wt/.agents'
+check 0 "live mv onto a worktree's own .agents stays allowed" run_bash "$L" 'mv x .claude/worktrees/wt/.agents'
+check 0 "live rm -rf docs with no nested config stays allowed" run_bash "$L" 'rm -rf docs'
+check 0 "live mkdir docs/.agents stays allowed" run_bash "$L" 'mkdir -p docs/.agents'
+
 # Neighbours that are not agy gate wiring stay editable.
 check 0 "live .agents/skills stays editable" run_bash "$L" 'rm -rf .agents/skills'
 check 0 "live Write to another bin script stays allowed" run_edit Write "$L/bin/other-tool.sh"

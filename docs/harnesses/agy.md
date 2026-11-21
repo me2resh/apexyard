@@ -189,6 +189,7 @@ The agy wiring is a protected target in the live fork root, as `.claude/hooks/` 
 - `harness-adapters/agy/`,
 - `bin/sync-agy-adapter.sh`,
 - a nested `.agents/hooks.json`, `.agents/plugins.json`, or anything under `.agents/plugins/`, at any depth under the fork root and without case. This includes the `.agents/` config of a managed-project clone under `workspace/`, which matches the read-side check below. Under `.claude/worktrees/<name>/`, only that worktree's own root wiring is exempt, because a linked worktree is its own fork root. A nested form deeper inside the worktree is protected.
+- a nested `.agents` folder as the target of a recursive copy, a link, or a removal. A plain `mkdir` of it stays allowed. A move onto a new nested `.agents` folder, and a tree that already holds an `.agents/` config, are not caught.
 
 Write, Edit, MultiEdit, and Bash changes there get `deny`, under agy and Claude Code alike. Change these files in an isolated worktree. `bash bin/sync-agy-adapter.sh` still regenerates `.agents/hooks.json`, because the gate judges only the command text.
 

@@ -105,10 +105,15 @@ pt_protected_form_nocase() {
         rest=${p:${#wt}}
         case "$rest" in */*) sub=${rest#*/} ;; *) sub="" ;; esac
         case "$sub" in
-          .agents/hooks.json|.agents/plugins.json|.agents/plugins|.agents/plugins/*) ;;
+          .agents|.agents/hooks.json|.agents/plugins.json|.agents/plugins|.agents/plugins/*) ;;
           */.agents/hooks.json|*/.agents/plugins.json|*/.agents/plugins|*/.agents/plugins/*) return 0 ;;
+          */.agents) [ "$ancestors" != 1 ] || return 0 ;;
         esac ;;
       "$root/"*/.agents/hooks.json|"$root/"*/.agents/plugins.json|"$root/"*/.agents/plugins|"$root/"*/.agents/plugins/*) return 0 ;;
+      # A recursive copy, a link, or a removal whose target is a nested
+      # .agents folder can bring a hook config with it. A plain write of a
+      # file inside it still takes the forms above, so mkdir stays allowed.
+      "$root/"*/.agents) [ "$ancestors" != 1 ] || return 0 ;;
     esac
   done
   if [ "${#PT_ROOTS[@]}" = 0 ]; then
