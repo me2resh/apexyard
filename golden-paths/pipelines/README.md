@@ -116,7 +116,7 @@ cp golden-paths/pipelines/scripts/dependency-audit-tools.requirements.txt .githu
 # Optional metadata companion (not required by the workflow install step):
 # cp golden-paths/pipelines/scripts/dependency-audit-tools.lock.json .github/scripts/
 # Compare helper_revision in the JSON report when refreshing after a framework upgrade.
-# The framework helper revision is 4.
+# The framework helper revision is 5.
 # dependency-audit-tools.requirements.txt is a hashed lock (#1478, AgDR-0194).
 # Regenerate it after changing a pin with the command below.
 ```
