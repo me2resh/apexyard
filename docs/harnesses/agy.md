@@ -73,8 +73,10 @@ Claude Code applies the `permissions.deny` rules in `.claude/settings.json` itse
 | `Read(<glob>)` | Every string argument of a read-only tool, such as the `read_file` `Path` or a `view_file` path | The path, its lexical form, or its symlink-resolved form matches the glob. The resolved form follows the whole chain, up to 40 links. A loop, a longer chain, or an unreadable link gets `deny`. |
 | `Edit(<glob>)` | The file path of `write_file`, `edit_file`, and the other write tools | The same |
 | `Write(<glob>)` | The file path of `write_file` and `write_to_file` | The same |
-| `Bash(<cmd>)` | `run_command` | The trimmed `CommandLine` is `<cmd>` |
-| `Bash(<prefix>:*)` | `run_command` | The trimmed `CommandLine` is `<prefix>`, or starts with `<prefix>` and a space |
+| `Bash(<cmd>)` | `run_command` | The normalized `CommandLine` is `<cmd>` |
+| `Bash(<prefix>:*)` | `run_command` | The normalized `CommandLine` is `<prefix>`, or starts with `<prefix>` and a space |
+
+The normalized `CommandLine` is trimmed, and each run of spaces and tabs in it becomes one space.
 
 Glob rules: a leading `//` is an absolute path, and `~/` is the home folder. A leading `/` is the fork root. A pattern with neither matches anywhere under the fork. `**` is any depth, including none, `*` is one path segment, and `?` is one character. Paths match without case. Over-matching is acceptable, because it fails closed.
 
@@ -88,7 +90,8 @@ With the current rules, agy gets `deny` for these calls:
 
 Limits:
 
-- Matching is literal, with no shell parser. A chained or wrapped command, such as `x && printenv` or `sh -c printenv`, is not caught. This is the same limit as the shell-text gates (AgDR-0267).
+- Matching is literal, with no shell parser. Pipes, chains, wrapped commands, and absolute command paths are not caught. This is the same limit as the shell-text gates (AgDR-0267).
+- A rule never matches a word in the middle of a command, so a search for the word passes.
 - Other rule types, such as `WebFetch(...)`, are not applied.
 - When the rules cannot be read, a call that names a path or a command gets `deny`.
 - The other adapters (Codex, opencode, pi, and Cursor) do not apply these rules yet.
@@ -225,7 +228,7 @@ The wrapper prints its decision before it writes the line, and it ignores loggin
 
 ## Gaps + tracking
 
-- **Permission rules:** `permissions.deny` is applied literally under agy. A chained or wrapped command is not caught, and rule types other than `Read`, `Edit`, `Write`, and `Bash` are not applied. The other adapters do not apply these rules yet.
+- **Permission rules:** `permissions.deny` is applied literally under agy. Pipes, chains, wrapped commands, and absolute command paths are not caught. Rule types other than `Read`, `Edit`, `Write`, and `Bash` are not applied. The other adapters do not apply these rules yet.
 - **Terminal sandbox:** a `run_command` with `BypassSandbox` gets `deny`, because the repo enforces the policy, not agy. The cost: in a linked worktree, agy's git can fail inside its sandbox with "not a git repository: (null)", and agy may retry with `BypassSandbox`. That retry is denied, so git inside a worktree may not work under agy. The fork root is not affected.
 - **Agent shell session id:** a PreToolUse hook cannot change the agent's command. So agy's `run_command` shell does not get `APEXYARD_SESSION_ID`.
 - **Network reads:** `search_web` and `read_url_content` are in the read-only allowlist. Claude Code has the same path, because no PreToolUse gate covers `WebFetch` or `WebSearch`.

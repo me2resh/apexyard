@@ -675,8 +675,8 @@ check_arg_shape() {
 # is the fork root, and a pattern with neither matches anywhere under the
 # fork. ** is any depth, including none, * is one path segment, and ? is one
 # character. Paths match without case, so the rules over-match on purpose.
-# There is no shell parser: a chained or wrapped command, such as
-# "x && printenv" or "sh -c printenv", is not caught (AgDR-0267). Any other
+# There is no shell parser: pipes, chains, wrapped commands, and absolute
+# command paths are not caught (AgDR-0267). Any other
 # rule type, such as WebFetch(...), is not applied.
 
 # load_perm_rules: compile the rules once into $WORK/perm-rules.json. A
@@ -806,8 +806,10 @@ check_gated_denies() {
   local tool="$1" kinds="" file rule
   load_perm_rules
   if [ "$tool" = "Bash" ]; then
+    # Trim, then collapse each run of spaces and tabs to one space, so
+    # "gh  auth token" matches as "gh auth token". This can only add denies.
     rule=$(jq -r --slurpfile rules "$WORK/perm-rules.json" '
-      (.tool_input.command | gsub("\\A\\s+|\\s+\\z"; "")) as $c
+      (.tool_input.command | gsub("\\A\\s+|\\s+\\z"; "") | gsub("[ \\t]+"; " ")) as $c
       | [ $rules[0][] | select(.kind == "Bash")
           | select(if (.cmd | endswith(":*")) then (.cmd[:-2]) as $p | ($c == $p or ($c | startswith($p + " ")))
                    else $c == .cmd end) | .rule ] | (.[0] // "")' "$WORK/payload" 2>/dev/null) || rule="!error"

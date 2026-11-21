@@ -1024,6 +1024,11 @@ bash_case "P21 env gets deny" "env" deny 'rule Bash\(env\)'
 bash_case "P22 env FOO=1 cmd still reaches the gates" "env FOO=1 true" ask
 bash_case "P23 gh auth status still reaches the gates" "gh auth status" ask
 bash_case "P24 printenvx is not a printenv prefix match" "printenvx" ask
+# Runs of spaces and tabs collapse to one space before the match.
+bash_case "P24b gh auth token with doubled spaces gets deny" "gh  auth   token" deny 'rule Bash\(gh auth token\)'
+bash_case "P24c printenv with a tab before the argument gets deny" "$(printf 'printenv\tHOME')" deny 'rule Bash\(printenv:\*\)'
+bash_case "P24d a quoted doubled space in another command stays ask" 'echo "a  b"' ask
+bash_case "P24e git grep printenv is not a printenv match" "git grep printenv" ask
 # Known limit (AgDR-0267): literal matching does not see a chained or
 # wrapped command. This case pins the documented behaviour.
 bash_case "P25 known limit: a chained printenv is not caught" "true && printenv" ask
