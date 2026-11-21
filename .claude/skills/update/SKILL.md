@@ -344,12 +344,27 @@ Then report. Examples:
 **Up-to-date (no tag drift, no commit drift):**
 
 ```bash
-reconcile_installed_codex_adapter || exit 1
-reconcile_installed_opencode_commands || exit 1
-marker_home="$(git rev-parse --show-toplevel)"
-. "$marker_home/.claude/hooks/_lib-session-markers.sh"
-skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
-rm -f "$skill_marker"
+# Every exit path past step 0 must clear the bootstrap marker, including a
+# reconciliation failure. A marker left behind keeps the ticket-first exemption
+# open until its expiry, so both helpers run under one cleanup guard.
+cleanup_bootstrap_marker() {
+  local marker_home skill_marker
+  marker_home="$(git rev-parse --show-toplevel)"
+  # shellcheck disable=SC1091
+  . "$marker_home/.claude/hooks/_lib-session-markers.sh"
+  skill_marker=$(active_bootstrap_marker_path "$marker_home") || return 0
+  rm -f "$skill_marker"
+}
+
+if ! reconcile_installed_codex_adapter; then
+  cleanup_bootstrap_marker
+  exit 1
+fi
+if ! reconcile_installed_opencode_commands; then
+  cleanup_bootstrap_marker
+  exit 1
+fi
+cleanup_bootstrap_marker
 
 echo "Fork is up to date with upstream/main. Nothing to sync."
 ```
@@ -1086,7 +1101,7 @@ Topology drift: <N projects drifted | skipped> ({…}, …)
 
 This step **always** runs after step 8b. It does NOT block the sync — drift handling is purely additive and reversible (the operator can re-run `/update` later).
 
-### 8d. Reconcile an installed Codex adapter
+### 8d. Reconcile generated adapter output (Codex adapter, opencode command wrappers)
 
 After framework files, migrations, config offers, and topology handling have
 settled, refresh generated Codex output from the final canonical `.claude/`
@@ -1096,11 +1111,13 @@ state:
 reconcile_installed_codex_adapter || {
   echo "Framework files synced, but the installed Codex adapter could not be reconciled." >&2
   echo "Fix the generator error, then retry: bash bin/sync-codex-adapter.sh --reconcile-installed" >&2
+  cleanup_bootstrap_marker
   exit 1
 }
 reconcile_installed_opencode_commands || {
   echo "Framework files synced, but the installed opencode command wrappers could not be regenerated." >&2
   echo "Fix the generator error, then retry: bash bin/sync-opencode-commands.sh" >&2
+  cleanup_bootstrap_marker
   exit 1
 }
 ```
@@ -1211,7 +1228,7 @@ Skill done. No remote state changed.
 | `--skip-migrations` passed | Chain detection runs (printed for visibility) but no `migration_run` invocations. Anchor still advances. |
 | `--skip-adapter-sync` passed | Skip adapter detection/generation and opencode command regeneration on every exit path; framework sync behavior is unchanged. |
 | Codex adapter reconciliation fails during explicit `/update` | Fail non-zero and print the direct `--reconcile-installed` retry command; never report stale generated governance as current. |
-| opencode command regeneration fails during explicit `/update` | Fail non-zero and print `bash bin/sync-opencode-commands.sh`; a missing or broken generator must not pass silently. |
+| opencode command regeneration fails during explicit `/update` | Fail non-zero and print `bash bin/sync-opencode-commands.sh`; a missing or broken generator must not pass silently. The bootstrap marker is cleared before the non-zero exit. |
 | Individual migration exits 1 (conflict) | Chain pauses. Anchor NOT advanced. Operator resolves, then re-runs `/update`. |
 | Individual migration exits 2 (hard error) | Chain aborts. Anchor NOT advanced. Print the script's stderr and exit 2. |
 | `--from-version` argument fails the semver regex | Refuse with `--from-version: expected vMAJOR.MINOR.PATCH (got 'X')`. Exit 1 before any fetch. |
@@ -1293,7 +1310,7 @@ skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session
 rm -f "$skill_marker"
 ```
 
-Always remove the bootstrap marker on a clean exit (after the sync branch is ready to push, or on a confirmed-abort during conflict resolution). If the skill is interrupted, `clear-bootstrap-marker.sh` clears the marker when the same session restarts.
+Always remove the bootstrap marker on a clean exit (after the sync branch is ready to push, or on a confirmed-abort during conflict resolution). A reconciliation failure is also an exit path: the up-to-date preview and step 8d clear the marker before their non-zero exit. If the skill is interrupted, `clear-bootstrap-marker.sh` clears the marker when the same session restarts.
 
 ## Related
 

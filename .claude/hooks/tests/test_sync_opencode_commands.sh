@@ -23,6 +23,7 @@ FAIL=0
 FAILED=""
 
 mark_pass() { green "  ok   $1"; PASS=$((PASS + 1)); }
+mark_skip() { printf '  skip %s\n' "$1"; }
 mark_fail() {
   red "  FAIL $1: $2" >&2
   FAIL=$((FAIL + 1))
@@ -280,6 +281,50 @@ assert_eq "block-scalar indicator is not emitted as the value" \
   "$(frontmatter_of "$FORK3/.opencode/commands/blocky.md" | sed -n 's/^  //p')" "apexyard /blocky skill"
 assert_contains "the fallback is announced" "block-scalar description" "$TMPBASE/block.log"
 
+# A block-scalar header can carry an indentation indicator (`>2`, `|2-`, `>-2`).
+# Those must take the fallback too, not become the literal value.
+FORK7="$TMPBASE/fork-block-indicator"
+mkdir -p "$FORK7/.claude/skills/block2"
+printf -- '---\nname: block2\ndescription: >2\n  Two lines.\n---\n\n# Block2\n' \
+  > "$FORK7/.claude/skills/block2/SKILL.md"
+bash "$SCRIPT" --root "$FORK7" > "$TMPBASE/block2.log" 2>&1
+assert_eq "block-scalar header with an indentation indicator still generates" "$?" "0"
+assert_eq "indentation indicator is not emitted as the value" \
+  "$(frontmatter_of "$FORK7/.opencode/commands/block2.md" | sed -n 's/^  //p')" "apexyard /block2 skill"
+
+# A double-quoted description carries YAML escapes. The wrapper re-emits it as a
+# folded block scalar, where a backslash is literal, so the escapes must be
+# resolved rather than copied.
+FORK8="$TMPBASE/fork-escapes"
+mkdir -p "$FORK8/.claude/skills/escapes"
+printf -- '---\nname: escapes\ndescription: "Say \\"hi\\" and \\\\ bye."\n---\n\n# Escapes\n' \
+  > "$FORK8/.claude/skills/escapes/SKILL.md"
+bash "$SCRIPT" --root "$FORK8" > "$TMPBASE/escapes.log" 2>&1
+assert_eq "escaped description still generates" "$?" "0"
+assert_frontmatter_contains "quotes are unescaped" 'Say "hi" and \ bye.' "$FORK8/.opencode/commands/escapes.md"
+
+# A C0 control character would make the emitted YAML invalid. Strip it.
+FORK9="$TMPBASE/fork-control"
+mkdir -p "$FORK9/.claude/skills/control"
+printf -- '---\nname: control\ndescription: Bad \033 char.\n---\n\n# Control\n' \
+  > "$FORK9/.claude/skills/control/SKILL.md"
+bash "$SCRIPT" --root "$FORK9" > "$TMPBASE/control.log" 2>&1
+assert_eq "control-character description still generates" "$?" "0"
+assert_eq "no control byte reaches the wrapper" \
+  "$(tr -cd '\001-\010\013\014\016-\037\177' < "$FORK9/.opencode/commands/control.md" | wc -c | tr -d ' ')" "0"
+
+# opencode expands `, ! and @ in command text. The description is metadata, but
+# strip them there too so a skill cannot smuggle template syntax into the
+# wrapper.
+FORK10="$TMPBASE/fork-template-chars"
+mkdir -p "$FORK10/.claude/skills/tchars"
+printf -- '---\nname: tchars\ndescription: Load `x` at @/etc/passwd now! really.\n---\n\n# T\n' \
+  > "$FORK10/.claude/skills/tchars/SKILL.md"
+bash "$SCRIPT" --root "$FORK10" > "$TMPBASE/tchars.log" 2>&1
+assert_eq "template-character description still generates" "$?" "0"
+assert_not_contains "description drops a bare @" "@/etc/passwd" "$FORK10/.opencode/commands/tchars.md"
+assert_not_contains "description drops backticks" '`x`' "$FORK10/.opencode/commands/tchars.md"
+
 # A CRLF SKILL.md must still yield its description, with no carriage return
 # in the wrapper. A hint with no description still has to reach the palette.
 FORK4="$TMPBASE/fork-crlf"
@@ -310,8 +355,33 @@ if [ "${APEXYARD_TEST_LOCAL_COMMANDS:-0}" = "1" ] && [ -d "$ROOT/.opencode/comma
   bash "$SCRIPT" --check > "$TMPBASE/check-real.log" 2>&1
   assert_eq "local .opencode/commands matches skills" "$?" "0"
 else
-  mark_pass "local .opencode/commands not compared (opt in with APEXYARD_TEST_LOCAL_COMMANDS=1)"
+  mark_skip "local .opencode/commands not compared (opt in with APEXYARD_TEST_LOCAL_COMMANDS=1)"
 fi
+
+echo "real skills tree"
+# The checked-in skills tree is the input that matters: one usable skill folder
+# must produce exactly one wrapper, and no skill may trip the block-scalar
+# fallback. The wrappers are gitignored, so nothing in CI would otherwise catch
+# a skill whose frontmatter maps badly. The output goes to a temp dir, so the
+# contributor's own .opencode/commands is never touched.
+REAL_OUT="$TMPBASE/real"
+bash "$SCRIPT" --root "$ROOT" --out "$REAL_OUT" > "$TMPBASE/real.log" 2>&1
+assert_eq "the real skills tree generates" "$?" "0"
+
+expected_ids=""
+for skill_dir in "$ROOT/.claude/skills"/*/; do
+  [ -d "$skill_dir" ] || continue
+  id="$(basename "$skill_dir")"
+  case "$id" in _*|.*) continue ;; esac
+  [ -f "$skill_dir/SKILL.md" ] || continue
+  case "$id" in *[!a-zA-Z0-9._-]*) continue ;; esac
+  expected_ids="$expected_ids$id.md
+"
+done
+expected_ids="$(printf '%s' "$expected_ids" | sort)"
+written_ids="$(cd "$REAL_OUT" 2>/dev/null && ls *.md 2>/dev/null | sort)"
+assert_eq "one wrapper per usable skill" "$written_ids" "$expected_ids"
+assert_not_contains "no real skill trips the block-scalar fallback" "block-scalar" "$TMPBASE/real.log"
 
 echo
 if [ "$FAIL" -eq 0 ]; then

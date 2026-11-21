@@ -160,7 +160,15 @@ frontmatter_value() {
       if (length(line) >= 2) {
         first = substr(line, 1, 1)
         last = substr(line, length(line), 1)
-        if ((first == "\"" && last == "\"") || (first == sq && last == sq)) {
+        if (first == "\"" && last == "\"") {
+          # A double-quoted scalar carries YAML escapes. The wrapper re-emits
+          # the value as a folded block scalar, where a backslash is literal,
+          # so unescape the two sequences a description can hold.
+          line = substr(line, 2, length(line) - 2)
+          gsub(/\\\\/, "\001", line)
+          gsub(/\\"/, "\"", line)
+          gsub(/\001/, "\\", line)
+        } else if (first == sq && last == sq) {
           line = substr(line, 2, length(line) - 2)
         }
       }
@@ -212,21 +220,26 @@ for skill_dir in "$SKILLS_DIR"/*/; do
   description="$(frontmatter_value "$skill_file" description)"
   hint="$(frontmatter_value "$skill_file" argument-hint)"
   # A CRLF SKILL.md would otherwise carry a bare carriage return into the
-  # wrapper. The hint drops its backticks so no shell substitution can form
-  # from it.
-  description="${description//$'\r'/}"
-  hint="${hint//$'\r'/}"
+  # wrapper, and a C0 control character would make the YAML block invalid.
+  # opencode expands `, ! and @ in command text; the frontmatter is metadata,
+  # but the description is copied from an untrusted-in-shape skill file, so drop
+  # them here too, the same way the hint already does. The hint also drops its
+  # backticks so no shell substitution can form from it.
+  description="$(printf '%s' "$description" | LC_ALL=C tr -d '[:cntrl:]')"
+  hint="$(printf '%s' "$hint" | LC_ALL=C tr -d '[:cntrl:]')"
+  description="${description//\`/}"
+  description="${description//\!/}"
+  description="${description//@/}"
   hint="${hint//\`/}"
 
-  # A block scalar (`>` or `|`) or an empty value parses as the indicator
-  # itself. Emitting that would produce "description: >", so warn and use the
-  # fallback summary instead.
-  case "$description" in
-    '>'|'|'|'>-'|'>+'|'|-'|'|+')
-      printf 'sync-opencode-commands: %s has a block-scalar description; using the fallback summary\n' "$id" >&2
-      description=""
-      ;;
-  esac
+  # A block scalar (`>` or `|`, with an optional chomping and/or indentation
+  # indicator such as `>-`, `>2` or `|2-`) or an empty value parses as the
+  # header itself. Emitting that would produce "description: >", so warn and use
+  # the fallback summary instead.
+  if [[ "$description" =~ ^[\>\|][+-]?[0-9]?[+-]?$ ]]; then
+    printf 'sync-opencode-commands: %s has a block-scalar description; using the fallback summary\n' "$id" >&2
+    description=""
+  fi
 
   target="$OUT_DIR/$id.md"
   printf '%s\n' "$target" >> "$TMPBASE/expected"
