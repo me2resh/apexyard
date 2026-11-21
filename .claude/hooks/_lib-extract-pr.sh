@@ -2025,9 +2025,10 @@ resolve_pr_base_ref() {
 # The gates that judge a PR must not take their narrowing settings
 # (design_paths, design_paths_exclude, ui_paths, ui_paths_exclude) from that
 # PR's own checkout. A PR could then switch off the gate that judges it
-# (#2104). Callers read narrowing keys from this output. An empty result means
-# the base config is missing or unreadable. The caller then uses the broad
-# defaults. Output is valid JSON or empty. Only the GitHub forge is read.
+# (#2104). The gates call this only when the PR changes the config file. An
+# empty result means the base copy is absent (404) or unreadable. The caller
+# then uses the built-in defaults and no exclusions. Output is valid JSON or
+# empty. Only the GitHub forge is read. A glab merge returns empty.
 resolve_pr_base_config() {
   local pr_number="${1:-}" cmd_repo="${2:-}" base="" json=""
   if [ -z "$pr_number" ] || [ -z "$cmd_repo" ]; then
@@ -2041,7 +2042,8 @@ resolve_pr_base_config() {
     return 0
   fi
   local enc_base
-  enc_base=$(jq -rn --arg b "$base" '$b|@uri' 2>/dev/null) || return 0
+  # Query refs/heads/<base> so a tag with the same name cannot be read.
+  enc_base=$(jq -rn --arg b "refs/heads/${base}" '$b|@uri' 2>/dev/null) || return 0
   [ -n "$enc_base" ] || return 0
   json=$(apexyard_gh api -H 'Accept: application/vnd.github.raw' \
     "repos/${cmd_repo}/contents/.claude/project-config.json?ref=${enc_base}" 2>/dev/null) || return 0

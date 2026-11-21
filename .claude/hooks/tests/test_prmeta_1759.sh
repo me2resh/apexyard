@@ -185,7 +185,7 @@ echo "A) Real dispatcher, real gates"
 sb=$(new_sb src/server/main.go)
 marker "$sb" rex "$HEAD_A"; marker "$sb" ceo "$HEAD_A"
 dispatch "$sb" "$MERGE"
-if [ "$RC" = 0 ] && [ "$CALLS" = 7 ]; then pass "1 hit, plain merge, checks: 7 calls (incl. 2 base-config reads, #2104)"; else fail "1 plain" "rc=$RC calls=$CALLS err=${ERR:0:400}"; fi
+if [ "$RC" = 0 ] && [ "$CALLS" = 5 ]; then pass "1 hit, plain merge, checks: 5 calls"; else fail "1 plain" "rc=$RC calls=$CALLS err=${ERR:0:400}"; fi
 # D9 25: normal pass exits 0 (completion flag set on the normal path).
 [ "$RC" = 0 ] && pass "25 normal pass exits 0" || fail "25" "rc=$RC"
 # D9 22: no apexyard-pr-files.* temp file and no snapshot dir left behind.
@@ -195,13 +195,13 @@ if tmp_has "$sb" 'apexyard-pr-files*' || tmp_has "$sb" 'apexyard-prmeta*'; then 
 sb=$(new_sb src/server/main.go)
 marker "$sb" rex "$HEAD_A"; marker "$sb" ceo "$HEAD_A"
 T_CHECKS=none dispatch "$sb" "$MERGE"
-if [ "$RC" = 0 ] && [ "$CALLS" = 8 ]; then pass "1 hit, no checks: 8 calls"; else fail "1 no checks" "rc=$RC calls=$CALLS err=${ERR:0:400}"; fi
+if [ "$RC" = 0 ] && [ "$CALLS" = 6 ]; then pass "1 hit, no checks: 6 calls"; else fail "1 no checks" "rc=$RC calls=$CALLS err=${ERR:0:400}"; fi
 
 # D9 1: squash merge, UI and design files, markers present -> 5 calls.
 sb=$(new_sb src/components/Button.tsx docs/tech-design.md)
 marker "$sb" rex "$HEAD_A"; marker "$sb" ceo "$HEAD_A"; marker "$sb" design "$HEAD_A"; marker "$sb" architecture "$HEAD_A"
 T_COUNT=2 dispatch "$sb" "$SQUASH"
-if [ "$RC" = 0 ] && [ "$CALLS" = 7 ]; then pass "1 hit, squash, UI + design: 7 calls"; else fail "1 squash" "rc=$RC calls=$CALLS err=${ERR:0:400}"; fi
+if [ "$RC" = 0 ] && [ "$CALLS" = 5 ]; then pass "1 hit, squash, UI + design: 5 calls"; else fail "1 squash" "rc=$RC calls=$CALLS err=${ERR:0:400}"; fi
 # Paired unsafe case: the same PR with no design marker still blocks.
 sb=$(new_sb src/components/Button.tsx docs/tech-design.md)
 marker "$sb" rex "$HEAD_A"; marker "$sb" ceo "$HEAD_A"; marker "$sb" architecture "$HEAD_A"

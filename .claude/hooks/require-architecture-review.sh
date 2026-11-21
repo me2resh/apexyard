@@ -221,22 +221,13 @@ tech-design.*\.md$
 prd.*\.md$
 feature-spec.*\.md$'
 
-# Narrowing settings come from the PR's BASE branch, never from the PR's own
-# checkout (#2104, AgDR-0310). A PR must not switch off the gate that judges
-# it. An unreadable base config gives the broad defaults. The local
-# `.design_paths` may only ADD patterns to the base list.
-BASE_CONFIG=$(resolve_pr_base_config "$PR_NUMBER" "$CMD_REPO")
-if [ -n "$BASE_CONFIG" ]; then
-  BASE_CUSTOM=$(printf '%s' "$BASE_CONFIG" | jq -r '.design_paths // [] | join("|")' 2>/dev/null)
-  if [ -n "$BASE_CUSTOM" ] && [ "$BASE_CUSTOM" != "null" ]; then
-    DESIGN_GLOBS=$(printf '%s' "$BASE_CUSTOM" | tr '|' '\n')
-  fi
-fi
+DESIGN_GLOBS_DEFAULT=$DESIGN_GLOBS
+
+# Allow project-config to override (REPLACE the default list).
 if [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
   CUSTOM=$(jq -r '.design_paths // [] | join("|")' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
   if [ -n "$CUSTOM" ] && [ "$CUSTOM" != "null" ]; then
-    DESIGN_GLOBS="${DESIGN_GLOBS}
-$(printf '%s' "$CUSTOM" | tr '|' '\n')"
+    DESIGN_GLOBS=$(printf '%s' "$CUSTOM" | tr '|' '\n')
   fi
 fi
 
@@ -266,6 +257,33 @@ if [ "$CHANGED_RC" -ne 0 ] || [ -z "$CHANGED" ] || [ "$TOTAL_FILES" -gt 3000 ]; 
   exit 2
 fi
 
+# A PR that changes the tracked project config must not narrow the gate that
+# judges it (#2104, AgDR-0310). Only then, read the narrowing settings from
+# the base branch. An absent or unreadable base copy gives the built-in
+# defaults and no exclusions. A local `.design_paths` may still add patterns.
+# A PR that leaves the config alone keeps the local config unchanged.
+CONFIG_IN_PR=0
+BASE_CONFIG=""
+if printf '%s\n' "$CHANGED" | grep -qxF '.claude/project-config.json'; then
+  CONFIG_IN_PR=1
+  BASE_CONFIG=$(resolve_pr_base_config "$PR_NUMBER" "$CMD_REPO")
+  if [ -z "$BASE_CONFIG" ]; then
+    echo "NOTE: architecture-review gate could not read the base branch project config. Using the default design paths and no exclusions." >&2
+  fi
+  DESIGN_GLOBS=$DESIGN_GLOBS_DEFAULT
+  BASE_CUSTOM=$(printf '%s' "$BASE_CONFIG" | jq -r '.design_paths // [] | join("|")' 2>/dev/null)
+  if [ -n "$BASE_CUSTOM" ] && [ "$BASE_CUSTOM" != "null" ]; then
+    DESIGN_GLOBS=$(printf '%s' "$BASE_CUSTOM" | tr '|' '\n')
+  fi
+  if [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
+    CUSTOM=$(jq -r '.design_paths // [] | join("|")' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
+    if [ -n "$CUSTOM" ] && [ "$CUSTOM" != "null" ]; then
+      DESIGN_GLOBS="${DESIGN_GLOBS}
+$(printf '%s' "$CUSTOM" | tr '|' '\n')"
+    fi
+  fi
+fi
+
 TOUCHED_DESIGN=""
 while IFS= read -r FILE; do
   [ -z "$FILE" ] && continue
@@ -281,9 +299,16 @@ done <<< "$CHANGED"
 # Apply `.design_paths_exclude` — additive override that REMOVES paths from the
 # touched-design set even when DESIGN_GLOBS matched. Lets adopters keep the
 # broad defaults while carving out specific dirs (e.g. doc samples / fixtures).
-# Exclusions come from the base config only. A head exclusion would narrow the gate.
-if [ -n "$BASE_CONFIG" ]; then
-  EXCLUDE=$(printf '%s' "$BASE_CONFIG" | jq -r '.design_paths_exclude // [] | join("|")' 2>/dev/null)
+# When the PR changes the project config, exclusions come from the base copy only.
+EXCLUDE=""
+if [ "$CONFIG_IN_PR" = 1 ]; then
+  if [ -n "$BASE_CONFIG" ]; then
+    EXCLUDE=$(printf '%s' "$BASE_CONFIG" | jq -r '.design_paths_exclude // [] | join("|")' 2>/dev/null)
+  fi
+elif [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
+  EXCLUDE=$(jq -r '.design_paths_exclude // [] | join("|")' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
+fi
+if true; then
   if [ -n "$EXCLUDE" ] && [ "$EXCLUDE" != "null" ] && [ -n "$TOUCHED_DESIGN" ]; then
     FILTERED=""
     for FILE in $TOUCHED_DESIGN; do

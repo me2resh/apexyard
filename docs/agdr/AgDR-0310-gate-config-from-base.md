@@ -8,32 +8,35 @@ status: accepted
 ticket: me2resh/apexyard#2104
 ---
 
-# AgDR-0310: Read gate narrowing settings from the PR base branch
+# AgDR-0310: Read gate narrowing settings from the PR base when the PR changes the config
 
 ## Context
 
-The architecture gate and the UI design gate read `design_paths`, `design_paths_exclude`, `ui_paths` and `ui_paths_exclude` from the git top folder where the hook runs. That folder is the checkout of the PR. A PR could edit `.claude/project-config.json` and switch off the gate that judges it.
+The architecture gate and the UI design gate read `design_paths`, `design_paths_exclude`, `ui_paths` and `ui_paths_exclude` from the local project config. A PR that edits `.claude/project-config.json` could add an exclusion and switch off the gate that judges it.
+
+`.claude/project-config.json` is gitignored on most setups. The base branch then has no copy. A rule that always reads the base copy would ignore every local setting and block merges that pass today. The first version of this change had that fault.
 
 ## Decision
 
-Read these settings from the base branch of the PR. The hook fetches `.claude/project-config.json` at the base ref through the forge API (`resolve_pr_base_config` in `_lib-extract-pr.sh`).
+Act only when the PR changes `.claude/project-config.json`. The gate already holds the PR changed-file list, so the check costs no forge call.
 
-- Exclusion keys come from the base config only.
-- The effective pattern list is the base list, or the broad defaults when the base config has no list.
-- A local `design_paths` or `ui_paths` list only adds patterns. A PR can widen coverage. A PR cannot narrow it.
-- If the base config cannot be read, the hook uses the broad defaults and no exclusions. This fails closed.
-- Only the GitHub forge is read. A glab merge uses the broad defaults.
+- Config not in the PR: use the local config exactly as before. No behaviour change and no extra forge call.
+- Config in the PR: read `design_paths_exclude`, `ui_paths_exclude` and the path lists from the base branch copy (`resolve_pr_base_config` in `_lib-extract-pr.sh`).
+- Base copy absent (404) or unreadable: use the built-in default paths and no exclusions. Print one `NOTE:` line to stderr.
+- A local `design_paths` or `ui_paths` list may add patterns in both cases. A PR can widen coverage. A PR cannot narrow it.
+- The fetch queries `refs/heads/<base>`, so a tag with the same name cannot be read.
+- Only the GitHub forge is read. A GitLab merge request that changes the config uses the defaults. `docs/project-config.md` documents this.
 
 ## Alternatives considered
 
+- Always read the base copy. This ignores gitignored local config and blocks merges that pass today. Rejected after review.
 - Require owner approval for any change to these keys. This adds a new approval flow. It is larger than the fix needs.
-- Use `git show <base>:...` in the local clone. The clone may not hold the base ref. The forge API always has it.
 
 ## Consequences
 
-- A PR that does not change these keys behaves as before, because base and head hold the same values.
-- A PR that adds an exclusion or a narrowing list is still gated. The new exclusion takes effect after the PR merges.
-- Each merge check makes one extra forge call. A failed call gives the defaults.
+- A PR that does not change the config behaves as before.
+- A PR that changes the config is judged by the base settings. A new exclusion takes effect after that PR merges.
+- The extra forge call happens only when the config is in the PR diff.
 
 ## Not changed: the AgDR commit gate
 

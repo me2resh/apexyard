@@ -524,31 +524,43 @@ assert_eq "architecture menu record at other sha blocks" "2" "$code"
 rm -rf "$sb"
 
 echo ""
-echo "B) #2104: head adds design_paths_exclude for a changed design file, base has none -> BLOCK"
+echo "B) #2104: config NOT in the PR diff, local design_paths_exclude -> ALLOW (same as before the change)"
+sb=$(make_sandbox)
+mkdir -p "$sb/.claude"
+printf '%s\n' '{"design_paths_exclude": ["^projects/foo/"]}' > "$sb/.claude/project-config.json"
+install_mock_gh "$sb" '"projects/foo/docs/technical-design-x.md"' "$SHA"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "unchanged config, local exclude honoured" "0" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "B) #2104: PR changes the tracked config to add design_paths_exclude, base has none -> BLOCK"
 sb=$(make_sandbox)
 mkdir -p "$sb/.claude"
 printf '%s\n' '{"design_paths_exclude": [".*"]}' > "$sb/.claude/project-config.json"
 printf '%s\n' '{}' > "$sb/base-config.json"
-install_mock_gh "$sb" '"projects/foo/docs/technical-design-x.md"' "$SHA"
+install_mock_gh "$sb" '".claude/project-config.json" "projects/foo/docs/technical-design-x.md"' "$SHA"
 code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
 assert_eq "head exclude does not un-gate design file" "2" "$code"
 rm -rf "$sb"
 
 echo ""
-echo "B) #2104: head design_paths narrowing with unreadable base -> defaults -> BLOCK"
+echo "B) #2104: PR changes the config, base copy absent (404) -> defaults, no exclusions -> BLOCK"
 sb=$(make_sandbox)
 mkdir -p "$sb/.claude"
-printf '%s\n' '{"design_paths": ["^never-match-this-pr$"]}' > "$sb/.claude/project-config.json"
-install_mock_gh "$sb" '"projects/foo/docs/technical-design-x.md"' "$SHA"
+printf '%s\n' '{"design_paths": ["^never-match-this-pr$"], "design_paths_exclude": [".*"]}' > "$sb/.claude/project-config.json"
+install_mock_gh "$sb" '".claude/project-config.json" "projects/foo/docs/technical-design-x.md"' "$SHA"
 code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
 assert_eq "base unreadable falls back to defaults" "2" "$code"
 rm -rf "$sb"
 
 echo ""
-echo "B) #2104: base design_paths_exclude is honoured -> ALLOW"
+echo "B) #2104: PR changes the config, base design_paths_exclude is honoured -> ALLOW"
 sb=$(make_sandbox)
+mkdir -p "$sb/.claude"
+printf '%s\n' '{}' > "$sb/.claude/project-config.json"
 printf '%s\n' '{"design_paths_exclude": ["^projects/foo/"]}' > "$sb/base-config.json"
-install_mock_gh "$sb" '"projects/foo/docs/technical-design-x.md"' "$SHA"
+install_mock_gh "$sb" '".claude/project-config.json" "projects/foo/docs/technical-design-x.md"' "$SHA"
 code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
 assert_eq "base exclude still carves out" "0" "$code"
 rm -rf "$sb"
@@ -559,7 +571,7 @@ sb=$(make_sandbox)
 mkdir -p "$sb/.claude"
 printf '%s\n' '{"design_paths": ["\\.widen$"]}' > "$sb/.claude/project-config.json"
 printf '%s\n' '{}' > "$sb/base-config.json"
-install_mock_gh "$sb" '"docs/x.widen"' "$SHA"
+install_mock_gh "$sb" '".claude/project-config.json" "docs/x.widen"' "$SHA"
 code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
 assert_eq "head-added pattern is honoured" "2" "$code"
 rm -rf "$sb"
