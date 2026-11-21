@@ -120,6 +120,20 @@ check 0 "live cp -R onto docs/agents stays allowed" run_bash "$L" 'cp -R x docs/
 check 0 "live mv onto docs/agents stays allowed" run_bash "$L" 'mv x docs/agents'
 check 0 "live cp -R onto a worktree's own .agents stays allowed" run_bash "$L" 'cp -R x .claude/worktrees/wt/.agents'
 check 0 "live mv onto a worktree's own .agents stays allowed" run_bash "$L" 'mv x .claude/worktrees/wt/.agents'
+
+# A move onto a target that is not an existing directory renames the source
+# to it, so a folder moved onto a new .agents can bring a hook config.
+mkdir -p "$L/docs"
+if [ -e "$L/.agents" ]; then FAIL=$((FAIL+1)); echo "FAIL precondition: the live fork has no root .agents"; else PASS=$((PASS+1)); fi
+check 2 "live mv onto a new docs/.agents" run_bash "$L" 'mv x docs/.agents'
+check 2 "live git mv onto a new docs/.agents" run_bash "$L" 'git mv x docs/.agents'
+check 2 "live mv onto a worktree's new docs/.agents" run_bash "$L" 'mv x .claude/worktrees/wt/docs/.agents'
+check 2 "live mv onto a new root .agents" run_bash "$L" 'mv x .agents'
+check 0 "live mv to a new plain name stays allowed" run_bash "$L" 'mv x newname'
+check 0 "live mv inside docs stays allowed" run_bash "$L/docs" 'mv a b'
+check 0 "live mv into an existing docs/ stays allowed" run_bash "$L" 'mv x docs/'
+check 0 "live git mv a b stays allowed" run_bash "$L" 'git mv a b'
+rmdir "$L/docs"
 check 0 "live rm -rf docs with no nested config stays allowed" run_bash "$L" 'rm -rf docs'
 check 0 "live mkdir docs/.agents stays allowed" run_bash "$L" 'mkdir -p docs/.agents'
 

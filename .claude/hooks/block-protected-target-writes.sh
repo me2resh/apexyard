@@ -322,7 +322,14 @@ pt_operands() {
       if [ "$recursive" = 1 ]; then pt_judge "$dest" 1
       elif [ -n "$target" ] || [ -d "$(pt_expand "$dest")" ] || [ -d "$PT_CWD/$(pt_expand "$dest")" ]; then
         for arg in "${inputs[@]}"; do pt_judge "$dest/$(basename "$arg")"; done
-      else pt_judge "$dest"; fi
+      else
+        # A move onto a target that is not an existing directory renames the
+        # source to it. If the source is a folder, the target becomes a
+        # folder that can hold protected wiring, such as a new .agents. So
+        # the target is judged as an ancestor too. The ancestor forms are
+        # lexical, so a rename to an ordinary new name matches nothing.
+        case "$verb" in mv|'git mv') pt_judge "$dest" 1 ;; *) pt_judge "$dest" ;; esac
+      fi
       case "$verb" in mv|'git mv') removing=1 ;; esac
       if [ "$removing" = 1 ]; then for arg in "${inputs[@]}"; do pt_judge "$arg" 1; done; fi ;;
     tar)

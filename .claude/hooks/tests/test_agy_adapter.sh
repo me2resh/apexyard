@@ -968,6 +968,20 @@ for cmd in "cp -R x docs/.agents" "ln -s x docs/.agents" "cp -R x .claude/worktr
   run_wrapper "$C" PreToolUse "$(p_run_top "$cmd" "$C" "$(jq -n --arg d "$C" '$d')")"
   expect_decision "C3h18 real gate: run_command $cmd gets deny" deny "BLOCKED"
 done
+# A move onto a target that is not an existing directory is judged as a
+# folder that could hold protected wiring.
+if [ -e "$C/.agents" ] || [ -e "$C/docs/.agents" ]; then
+  bad "C3h20 precondition" "fork C already has an .agents folder"
+fi
+for cmd in "mv x docs/.agents" "git mv x docs/.agents" "mv x .claude/worktrees/wt/docs/.agents"; do
+  run_wrapper "$C" PreToolUse "$(p_run_top "$cmd" "$C" "$(jq -n --arg d "$C" '$d')")"
+  expect_decision "C3h20 real gate: run_command $cmd gets deny" deny "BLOCKED"
+done
+mkdir -p "$C/docs"
+for cmd in "mv x newname" "mv x docs/agents" "mv x docs/" "git mv a b" "mv x .claude/worktrees/wt/.agents"; do
+  run_wrapper "$C" PreToolUse "$(p_run_top "$cmd" "$C" "$(jq -n --arg d "$C" '$d')")"
+  expect_decision "C3h21 real gate: run_command $cmd stays ask" ask
+done
 for cmd in "cp -R x docs/agents" "cp -R x .claude/worktrees/wt/.agents" "mkdir -p docs/.agents"; do
   run_wrapper "$C" PreToolUse "$(p_run_top "$cmd" "$C" "$(jq -n --arg d "$C" '$d')")"
   expect_decision "C3h19 real gate: run_command $cmd stays ask" ask
