@@ -88,6 +88,9 @@ NESTED=(
   docs/.agents/plugins/x/hooks.json
   docs/.AGENTS/Hooks.JSON
   workspace/proj/.agents/hooks.json
+  # Deeper inside a linked worktree, a nested form is protected too.
+  .claude/worktrees/wt/docs/.agents/hooks.json
+  .claude/worktrees/wt/docs/.agents/plugins.json
 )
 for rel in "${NESTED[@]}"; do
   for tool in Write Edit MultiEdit; do
@@ -96,7 +99,8 @@ for rel in "${NESTED[@]}"; do
   check 2 "live nested Bash redirect into $rel" run_bash "$L" "echo {} > $rel"
   check 2 "live nested Bash rm $rel" run_bash "$L" "rm -f $rel"
 done
-for rel in docs/agents/hooks.json docs/.agents/skills/x.md .claude/worktrees/wt/docs/.agents/hooks.json; do
+# A linked worktree's own root wiring stays editable, as its .claude/hooks/ is.
+for rel in docs/agents/hooks.json docs/.agents/skills/x.md .claude/worktrees/wt/.agents/hooks.json .claude/worktrees/wt/.agents/plugins/x/hooks.json; do
   for tool in Write Edit; do
     check 0 "live nested control $tool $rel" run_edit "$tool" "$L/$rel"
   done

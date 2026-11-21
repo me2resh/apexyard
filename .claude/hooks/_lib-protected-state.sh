@@ -85,7 +85,7 @@ PT_ADAPTER_WIRING=(.agents/hooks.json .agents/plugins .agents/plugins.json harne
 # $2 enables ancestor checks for removal and recursive writes.
 pt_protected_form() { pt_nocase pt_protected_form_nocase "$@"; }
 pt_protected_form_nocase() {
-  local p="$1" ancestors="${2:-0}" root base env_path rel
+  local p="$1" ancestors="${2:-0}" root base env_path rel wt rest sub
   for root in ${PT_ROOTS[@]+"${PT_ROOTS[@]}"}; do
     case "$p" in "$root/.claude/settings.json"|"$root/.claude/settings.local.json"|"$root/.claude/hooks"|"$root/.claude/hooks/"*) return 0 ;; esac
     if [ "$ancestors" = 1 ]; then case "$root/.claude/hooks/" in "$p/"*) return 0 ;; esac; fi
@@ -96,9 +96,18 @@ pt_protected_form_nocase() {
     # agy also reads nested .agents/ hook config, so the same files are
     # protected at any depth under the root. Direct form only: deleting a
     # nested config is the remedy. A linked worktree under .claude/worktrees/
-    # is its own fork root, with its own wiring.
+    # is its own fork root, so only its own root wiring is exempt. A case
+    # pattern * also matches /, so the worktree name is split off by hand:
+    # the prefix is cut by length, then the first path component.
     case "$p" in
-      "$root/.claude/worktrees/"*) ;;
+      "$root/.claude/worktrees/"*)
+        wt="$root/.claude/worktrees/"
+        rest=${p:${#wt}}
+        case "$rest" in */*) sub=${rest#*/} ;; *) sub="" ;; esac
+        case "$sub" in
+          .agents/hooks.json|.agents/plugins.json|.agents/plugins|.agents/plugins/*) ;;
+          */.agents/hooks.json|*/.agents/plugins.json|*/.agents/plugins|*/.agents/plugins/*) return 0 ;;
+        esac ;;
       "$root/"*/.agents/hooks.json|"$root/"*/.agents/plugins.json|"$root/"*/.agents/plugins|"$root/"*/.agents/plugins/*) return 0 ;;
     esac
   done
