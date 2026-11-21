@@ -26,7 +26,11 @@ Recipe W3 in `docs/investigations/gate-load-source.md` shows the risk. A PR remo
 
 ## Decision
 
-Chosen: **base-branch loading**. Rex reads handbooks, guides, the severity policy and `custom-templates/REVIEW.md` with `git show origin/<base>:<path>` or the GitHub contents API at the base ref. Rex lists handbooks with `git ls-tree` at the base ref. A changed guide or handbook is part of the diff. It never sets the verdict, the blocking status or the load list for the same PR. The `/code-review` skill resolves the policy from the base branch and gives Rex the base ref.
+Chosen: **base-branch loading, scoped by repository**. The `/code-review` skill does not pass a base ref. Rex resolves it himself, because `git fetch` is blocked during review.
+
+- Files in the PR's own repository (public handbooks, guides, severity policy, `custom-templates/REVIEW.md`) load from the PR base. Rex reads `baseRefName` and `baseRefOid` with `gh pr view <pr> --repo <owner/repo> --json baseRefName,baseRefOid`. He reads each file with `gh api repos/<owner/repo>/contents/<path>?ref=<baseRefOid>` and lists paths with `gh api repos/<owner/repo>/git/trees/<baseRefOid>?recursive=1`. The base SHA avoids a stale `origin/<base>`.
+- Files in another repository (the private `custom-handbooks/` layer, ops-fork guides for a managed-project PR) load from that repository's default branch as checked out in the ops fork. The PR cannot change them. A blocking private handbook is still applied.
+- A handbook or guide that exists only on the PR head is diff content. Rex reviews it and never applies it. A changed copy never sets the verdict, the blocking status or the load list for the same PR.
 
 ## Consequences
 

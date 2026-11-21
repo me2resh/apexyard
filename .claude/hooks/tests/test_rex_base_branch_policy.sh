@@ -14,7 +14,15 @@ check() { if ! grep -qF -- "$2" "$1"; then echo "FAIL: $1 lacks: $2"; FAIL=1; fi
 AGENT="$ROOT/.claude/agents/code-reviewer.md"
 SKILL="$ROOT/.claude/skills/code-review/SKILL.md"
 check "$AGENT" 'Load handbooks and guides from the base branch'
-check "$AGENT" 'git show origin/<base>:<path>'
+check "$AGENT" 'gh pr view <pr> --repo <owner/repo> --json baseRefName,baseRefOid'
+check "$AGENT" 'contents/<path>?ref=<baseRefOid>'
+check "$AGENT" 'git/trees/<baseRefOid>?recursive=1'
+check "$AGENT" 'not a possibly stale `origin/<base>`'
+check "$AGENT" 'Files in the PR'"'"'s own repository'
+check "$AGENT" 'Files in another repository'
+check "$AGENT" 'default branch as checked out in the ops fork'
+check "$AGENT" 'A blocking private handbook is still applied'
+check "$AGENT" 'exists only on the PR head is diff content'
 check "$AGENT" 'never from the PR head'
 check "$AGENT" 'A changed copy never sets the verdict'
 check "$SKILL" 'from the PR base branch, not the PR head'
