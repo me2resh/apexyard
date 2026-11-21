@@ -74,16 +74,31 @@ pt_init() {
   PT_USER=$(pt_physical "${CLAUDE_CONFIG_DIR:-$HOME/.claude}") || return 2
   PT_HOME_CONFIG=$(pt_physical "$HOME/.claude") || return 2
 }
+# agy hook wiring, relative to a protected root (AgDR-0314). Each path can
+# switch the gates off under agy, or run another hook beside them:
+#   .agents/hooks.json      the wiring that bin/sync-agy-adapter.sh writes
+#   .agents/plugins/        plugin discovery; each plugin runs its own hooks.json
+#   .agents/plugins.json    plugin registration
+#   harness-adapters/agy/   the wrapper that the wiring runs
+#   bin/sync-agy-adapter.sh the generator; the gate passes its plain run
+PT_ADAPTER_WIRING=(.agents/hooks.json .agents/plugins .agents/plugins.json harness-adapters/agy bin/sync-agy-adapter.sh)
 # $2 enables ancestor checks for removal and recursive writes.
 pt_protected_form() { pt_nocase pt_protected_form_nocase "$@"; }
 pt_protected_form_nocase() {
-  local p="$1" ancestors="${2:-0}" root base env_path
+  local p="$1" ancestors="${2:-0}" root base env_path rel
   for root in ${PT_ROOTS[@]+"${PT_ROOTS[@]}"}; do
     case "$p" in "$root/.claude/settings.json"|"$root/.claude/settings.local.json"|"$root/.claude/hooks"|"$root/.claude/hooks/"*) return 0 ;; esac
     if [ "$ancestors" = 1 ]; then case "$root/.claude/hooks/" in "$p/"*) return 0 ;; esac; fi
+    for rel in "${PT_ADAPTER_WIRING[@]}"; do
+      case "$p" in "$root/$rel"|"$root/$rel/"*) return 0 ;; esac
+      if [ "$ancestors" = 1 ]; then case "$root/$rel/" in "$p/"*) return 0 ;; esac; fi
+    done
   done
   if [ "${#PT_ROOTS[@]}" = 0 ]; then
     case "$p" in */.claude/settings*.json|*/.claude/hooks*) return 0 ;; esac
+    for rel in "${PT_ADAPTER_WIRING[@]}"; do
+      case "$p" in */"$rel"|*/"$rel"/*) return 0 ;; esac
+    done
   fi
   for base in "$PT_USER" "$PT_HOME_CONFIG"; do
     case "$p" in "$base/settings.json"|"$base/session-env"|"$base/session-env/"*|"$base/shell-snapshots"|"$base/shell-snapshots/"*) return 0 ;; esac
