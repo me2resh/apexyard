@@ -172,7 +172,7 @@ refusal message — but the cheap fix is upstream of both: don't pass a path.
 
 Security levels describe risk separately from finding tags.
 CRITICAL and HIGH findings introduced or worsened by the change are Important and retain their blocking actions.
-A Pre-existing security finding does not block the PR. It gets a ticket due on its first-seen date plus its SLA (`.security.remediation_sla_days`: CRITICAL 7 days, HIGH 30 days, MEDIUM 90 days, LOW no SLA). It blocks a release only after the SLA is breached. The review names the severity, the SLA and the due date.
+A Pre-existing security finding does not block the PR. It gets a ticket due on its first-seen date plus its SLA (`.security.remediation_sla_days`: CRITICAL 7 days, HIGH 30 days, MEDIUM 90 days, LOW no SLA). It blocks a release only after the SLA is breached. The review names the severity, the SLA and the due date. Tracking: me2resh/apexyard#2109.
 
 | Level | Action |
 |-------|--------|

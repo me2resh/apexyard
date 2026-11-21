@@ -142,7 +142,7 @@ gh pr checks {number} --repo "$PR_HOST_REPO"
 
 Run gh pr checks once and never wait. Do not poll CI again, do not use `--watch`, and do not sleep. The orchestrator waits for CI before it spawns you.
 
-Run only the test or probe the security checklist needs to confirm a specific finding. Tag a red CI regression Important under kind 1 or kind 3. Tag a proven base failure Pre-existing with a suggested ticket title. For base failures or unknown provenance, post COMMENT with the CI limit. Keep the independent red CI gate in effect. Do not approve while CI for the head SHA is pending or absent — post `COMMENT` and state the limit.
+Run only the test or probe the security checklist needs to confirm a specific finding. Tag a red CI regression Important under kind 1 or kind 3. Tag a proven base failure Pre-existing with a suggested ticket title. For base failures or unknown provenance, post COMMENT with the CI limit. Keep the independent red CI gate in effect. Do not approve while CI is red, pending, or absent for the head SHA. Post `COMMENT` and state the limit.
 
 ## Scope Split with the Code Reviewer (me2resh/apexyard#1418, AgDR-0172)
 
@@ -303,6 +303,10 @@ Only `Important` findings can cause `CHANGES REQUESTED` under the applicable blo
 Each `Pre-existing` finding includes base evidence and a suggested ticket title.
 Follow [Review severity](../../templates/REVIEW.md) in every findings section, including tables and delta reviews.
 Keep all other security rules and independent gates in effect.
+"Worsened" and "base evidence" are defined in [Review severity](../../templates/REVIEW.md) § Pre-existing.
+Write each Pre-existing CRITICAL, HIGH or MEDIUM finding as `- Pre-existing: <finding>. Suggested ticket title: <title>. Severity: <level>. SLA: N days. Due: YYYY-MM-DD`.
+Ticket tracking and the first-seen date store: see follow-up ticket.
+Before you post, validate the body with `bash .claude/skills/code-review/check-review-body.sh --security <body-file>`. Fix any failure first.
 
 Every verdict includes `Not covered by the checks:` with limits specific to this diff.
 Name what CI and tests do not prove, including skipped checks and unverified security behavior.
@@ -344,7 +348,7 @@ Not covered by the checks: [What CI and tests do not prove for this diff.]
 
 Security levels describe risk separately from finding tags.
 CRITICAL and HIGH findings introduced or worsened by the change are Important and retain their blocking actions.
-A Pre-existing security finding does not block the PR. It gets a ticket due on its first-seen date plus its SLA (`.security.remediation_sla_days`: CRITICAL 7 days, HIGH 30 days, MEDIUM 90 days, LOW no SLA). It blocks a release only after the SLA is breached. The review names the severity, the SLA and the due date. See AgDR-0313.
+A Pre-existing security finding does not block the PR. It gets a ticket due on its first-seen date plus its SLA (`.security.remediation_sla_days`: CRITICAL 7 days, HIGH 30 days, MEDIUM 90 days, LOW no SLA). It blocks a release only after the SLA is breached. The review names the severity, the SLA and the due date. Tracking: me2resh/apexyard#2109. See AgDR-0313.
 
 | Level | Action | Examples |
 |-------|--------|----------|

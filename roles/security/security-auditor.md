@@ -103,12 +103,12 @@ Hakim also **owns the trust chain** (`.claude/hooks/**`, `.claude/settings.json`
 
 ## Vulnerability Response
 
-These response times apply to a vulnerability in released code. A finding in a PR diff follows § "Severity Levels": a CRITICAL or HIGH finding the change introduced or worsened blocks the merge. A Pre-existing finding follows the remediation SLA.
+These response times apply to a vulnerability in released code that the change introduced or worsened. A finding in a PR diff follows § "Severity Levels": a CRITICAL or HIGH finding the change introduced or worsened blocks the merge. A Pre-existing finding follows the remediation SLA (AgDR-0313): Critical 7 days, High 30 days, Medium 90 days, Low none. It blocks a release only after its SLA due date passes. Ticket tracking: me2resh/apexyard#2109.
 
-| Severity | Response Time | Action |
-|----------|---------------|--------|
-| Critical | < 24 hours | Immediate patch or mitigation. Block the next release until fixed |
-| High | < 7 days | Prioritize fix. Recommend that the human approver block the next release until fixed |
+| Severity | Response Time (introduced or worsened) | Action |
+|----------|----------------------------------------|--------|
+| Critical | < 24 hours | Immediate patch or mitigation. Block the PR and the next release until fixed |
+| High | < 7 days | Prioritize fix. Block the PR. Recommend that the human approver block the next release until fixed |
 | Medium | < 30 days | Schedule fix |
 | Low | < 90 days | Backlog |
 
