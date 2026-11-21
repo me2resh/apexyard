@@ -17,6 +17,10 @@ if [ -f "$reader" ]; then
   sla_h=$(config_get_or '.security.remediation_sla_days.high' 30 2>/dev/null || echo 30)
   sla_m=$(config_get_or '.security.remediation_sla_days.medium' 90 2>/dev/null || echo 90)
 fi
+# A value that is not a whole number falls back to its default.
+case "$sla_c" in ''|*[!0-9]*) sla_c=7 ;; esac
+case "$sla_h" in ''|*[!0-9]*) sla_h=30 ;; esac
+case "$sla_m" in ''|*[!0-9]*) sla_m=90 ;; esac
 today=$(date +%Y-%m-%d)
 awk -v mode="$mode" -v today="$today" -v sc="$sla_c" -v sh="$sla_h" -v sm="$sla_m" '
 function validdate(y, m, d,   dim, leap) {
@@ -27,11 +31,18 @@ function validdate(y, m, d,   dim, leap) {
   if (m == 2) { leap = (y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)); dim = leap ? 29 : 28 }
   return d <= dim
 }
+# Read the level only from the "Severity: <level>" label, never from prose.
+# Rex lines carry no label and get no SLA check. In --security mode each
+# Pre-existing line must carry the label. A LOW finding has no SLA.
 function checksla(line,   low, sev, s, a, due) {
   low = tolower(line)
-  if (!match(low, /(^|[^a-z])(critical|high|medium)([^a-z]|$)/)) return
-  s = substr(low, RSTART, RLENGTH)
-  sev = (s ~ /critical/) ? sc : (s ~ /high/ ? sh : sm)
+  if (!match(low, /severity: (critical|high|medium|low)([^a-z]|$)/)) {
+    if (mode == "security") bad=1
+    return
+  }
+  s = substr(low, RSTART + 10, RLENGTH - 10)
+  if (s ~ /^low/) return
+  sev = (s ~ /^critical/) ? sc : (s ~ /^high/ ? sh : sm)
   if (!match(line, /SLA: [0-9]+ days\. Due: [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/)) { bad=1; return }
   split(substr(line, RSTART, RLENGTH), a, /[^0-9]+/)
   if (a[2] + 0 != sev + 0) bad=1

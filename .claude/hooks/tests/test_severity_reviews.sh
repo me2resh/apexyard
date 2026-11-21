@@ -62,20 +62,25 @@ check bash "$parser" --security "$tmp/sec"
 secline() {
   printf 'Not covered by the checks: None\nImportant 0 | Nit 0 | Pre-existing 1\n- Pre-existing: %s Suggested ticket title: Fix it\n' "$1" > "$tmp/sec"
 }
-secline 'high finding on the base. SLA: 30 days. Due: 2099-12-21'; check bash "$parser" "$tmp/sec"
-secline 'critical finding on the base. SLA: 7 days. Due: 2099-12-21'; check bash "$parser" "$tmp/sec"
-secline 'medium finding on the base. SLA: 90 days. Due: 2099-12-21'; check bash "$parser" --security "$tmp/sec"
-secline 'high finding on the base. SLA: 7 days. Due: 2099-12-21'; check test "$(bash "$parser" "$tmp/sec" 2>/dev/null; echo $?)" = 1
-secline 'critical finding on the base. SLA: 30 days. Due: 2099-12-21'; check test "$(bash "$parser" "$tmp/sec" 2>/dev/null; echo $?)" = 1
-secline 'High finding on the base. SLA: 30 days. Due: 2020-01-01'; check test "$(bash "$parser" "$tmp/sec" 2>/dev/null; echo $?)" = 1
-secline 'High finding on the base. SLA: 30 days. Due: 21-12-2099'; check test "$(bash "$parser" "$tmp/sec" 2>/dev/null; echo $?)" = 1
-secline 'High finding on the base. SLA: 30 days. Due: 2099-02-30'; check test "$(bash "$parser" "$tmp/sec" 2>/dev/null; echo $?)" = 1
-secline 'High finding on the base. SLA: 30 days. Due: 2099-13-01'; check test "$(bash "$parser" --security "$tmp/sec" 2>/dev/null; echo $?)" = 1
+secline 'Finding on the base. Severity: high. SLA: 30 days. Due: 2099-12-21'; check bash "$parser" "$tmp/sec"
+secline 'Finding on the base. Severity: critical. SLA: 7 days. Due: 2099-12-21'; check bash "$parser" "$tmp/sec"
+secline 'Finding on the base. Severity: Medium. SLA: 90 days. Due: 2099-12-21'; check bash "$parser" --security "$tmp/sec"
+secline 'Finding on the base. Severity: high. SLA: 7 days. Due: 2099-12-21'; check test "$(bash "$parser" "$tmp/sec" 2>/dev/null; echo $?)" = 1
+secline 'Finding on the base. Severity: critical. SLA: 30 days. Due: 2099-12-21'; check test "$(bash "$parser" "$tmp/sec" 2>/dev/null; echo $?)" = 1
+secline 'Finding on the base. Severity: High. SLA: 30 days. Due: 2020-01-01'; check test "$(bash "$parser" "$tmp/sec" 2>/dev/null; echo $?)" = 1
+secline 'Finding on the base. Severity: High. SLA: 30 days. Due: 21-12-2099'; check test "$(bash "$parser" "$tmp/sec" 2>/dev/null; echo $?)" = 1
+secline 'Finding on the base. Severity: High. SLA: 30 days. Due: 2099-02-30'; check test "$(bash "$parser" "$tmp/sec" 2>/dev/null; echo $?)" = 1
+secline 'Finding on the base. Severity: High. SLA: 30 days. Due: 2099-13-01'; check test "$(bash "$parser" --security "$tmp/sec" 2>/dev/null; echo $?)" = 1
+# The level comes from the Severity label, never from prose (Rex and Hakim, review round 5).
+secline 'A high-privilege token on the critical path. Severity: HIGH. SLA: 30 days. Due: 2099-12-21'; check bash "$parser" --security "$tmp/sec"
+secline 'Old tests on the critical path fail on the base.'; check bash "$parser" "$tmp/sec"
+secline 'Old tests on the critical path fail on the base.'; check test "$(bash "$parser" --security "$tmp/sec" 2>/dev/null; echo $?)" = 1
+secline 'Verbose log on the base. Severity: LOW'; check bash "$parser" --security "$tmp/sec"
 check grep -qF 'config_get_or' "$parser"
 check grep -qF 'check-review-body.sh --security' "$root/.claude/agents/security-reviewer.md"
 check grep -qF 'the finding reproduces on the PR base commit' "$root/templates/REVIEW.md"
 sed 's/Pre-existing 0/Pre-existing 1/' "$tmp/body" > "$tmp/sec"
-echo '- Pre-existing: HIGH SQL injection on the base. Suggested ticket title: Fix SQL injection.' >> "$tmp/sec"
+echo '- Pre-existing: SQL injection on the base. Suggested ticket title: Fix SQL injection. Severity: HIGH.' >> "$tmp/sec"
 check test "$(bash "$parser" "$tmp/sec" 2>/dev/null; echo $?)" = 1
 preview="$root/.claude/skills/drive-to-green/dry-run.sh"
 printf 'changes\napproved\n' > "$tmp/state"

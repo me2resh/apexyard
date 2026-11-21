@@ -305,7 +305,8 @@ Follow [Review severity](../../templates/REVIEW.md) in every findings section, i
 Keep all other security rules and independent gates in effect.
 "Worsened" and "base evidence" are defined in [Review severity](../../templates/REVIEW.md) § Pre-existing.
 Write each Pre-existing CRITICAL, HIGH or MEDIUM finding as `- Pre-existing: <finding>. Suggested ticket title: <title>. Severity: <level>. SLA: N days. Due: YYYY-MM-DD`.
-Ticket tracking and the first-seen date store: see follow-up ticket.
+Write a Pre-existing LOW finding as `- Pre-existing: <finding>. Suggested ticket title: <title>. Severity: LOW`. The validator reads the level only from the `Severity:` label.
+Ticket tracking and the first-seen date store: me2resh/apexyard#2109.
 Before you post, validate the body with `bash .claude/skills/code-review/check-review-body.sh --security <body-file>`. Fix any failure first.
 
 Every verdict includes `Not covered by the checks:` with limits specific to this diff.
