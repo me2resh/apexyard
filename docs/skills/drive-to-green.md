@@ -45,6 +45,9 @@ One round includes a CI wait and one independent review.
 The first review counts as round one. Each delta review consumes another round.
 Do not start fixes after the final review round.
 Report open findings, failed checks, or missing evidence when the cap prevents progress.
+When round two still has a blocking finding open, stop and ask the owner to
+split the PR, narrow it, or accept the remaining items on record — see
+[`pr-workflow.md`](../../.claude/rules/pr-workflow.md#two-blocking-rounds-stop-and-ask-the-owner-me2reshapexyard2091).
 
 Give fixes to a role-appropriate build agent under the existing ticket and isolation rules.
 Give the agent finding IDs, evidence, scope, and required checks.

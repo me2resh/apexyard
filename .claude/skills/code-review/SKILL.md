@@ -62,6 +62,7 @@ Give each finding exactly one tag: `Important`, `Nit`, or `Pre-existing`.
 Only `Important` findings can cause `CHANGES REQUESTED` under the applicable blocking rules.
 `Nit` and `Pre-existing` findings never block the PR.
 Each `Pre-existing` finding includes base evidence and a suggested ticket title.
+Each `Important` line also carries a `Regression check:` field — see the agent's § "Regression check per blocker" (me2resh/apexyard#2091).
 Follow [Review severity](../../../templates/REVIEW.md) and the agent's Output Format.
 Keep all other security rules and independent gates in effect.
 
@@ -117,22 +118,12 @@ Nothing mechanically stops a build-class sub-agent writing the same file; Rex's 
 **The spawn prompt for Rex MUST NOT contain a literal marker path.** Say
 *"write your approval marker on an APPROVED verdict"*; say nothing about where.
 
-Rex already resolves the correct path through `review_marker_path` — the
-repo-qualified `<owner>__<repo>__<pr>-rex.approved` form from AgDR-0060,
-which is the exact path the gates read. A path in the prompt overrides that
-correct resolution: the agent obeys the instruction it was handed, and the
-marker lands at the bare-number `<pr>-rex.approved` instead. **No gate reads
-that path** — there is no bare-number fallback on any on-disk marker lookup.
-
-The failure is silent. `ls .claude/session/reviews/` shows a file that
-looks like a valid approval; only the merge attempt shows otherwise. The
-obvious repair — moving the file into place — is marker forging, the behaviour
-[`pr-workflow.md`](../../rules/pr-workflow.md) § "Build agents cannot
-self-review" exists to prevent. The right recovery is always: delete the
-gate-invisible file and re-run a real review.
-
-`warn-unqualified-review-marker.sh` warns (advisory) on a bare-number marker,
-and the merge gates name the near-miss. The cheap fix is upstream: pass no path.
+Rex already resolves the correct repo-qualified path itself (AgDR-0060). A
+path in the prompt overrides that and lands the marker where no gate reads
+it. See [`pr-workflow.md`](../../rules/pr-workflow.md) § "Never put a marker
+path in a reviewer's spawn prompt" for the failure mode and the recovery:
+delete the gate-invisible file and re-run a real review, never move it into
+place.
 
 1. Fetch PR details and the latest commit SHA
 2. Get the diff

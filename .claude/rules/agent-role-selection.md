@@ -55,6 +55,9 @@ The brief requires `## Decisions made for you` in the returned hand-back.
 Include known defaults, scope cuts, and requirement conflicts in the brief.
 The agent records additional choices and reasons in the same list.
 The orchestrator copies the returned list into the PR body before requesting review.
+When the brief fixes a Rex blocker that carries a `Regression check:` field, the
+agent adds the named test or handbook rule in the same fix commit and shows the
+test failing on the old commit, per [`pr-workflow.md`](pr-workflow.md#add-the-regression-test-in-the-fix-commit-me2reshapexyard2091).
 
 ## Backstop
 
