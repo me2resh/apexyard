@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Test the offline review report and labeled-subset recall for GH-2096.
 set -euo pipefail
+
+# Isolate from live session pins and caches.
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+
 export PYTHONDONTWRITEBYTECODE=1
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 LIB="$ROOT/.claude/skills/eval-agents/lib"
