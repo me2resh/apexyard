@@ -16,7 +16,7 @@ The skill, Munir (`.claude/agents/dependency-auditor.md`), and `golden-paths/pip
 
 `golden-paths/pipelines/scripts/dependency-audit.py`
 
-Adopters copy that helper beside the workflow as `.github/scripts/dependency-audit.py`. Compare `helper_revision` when refreshing. The current helper revision is 4.
+Adopters copy that helper beside the workflow as `.github/scripts/dependency-audit.py`. Compare `helper_revision` when refreshing. The current helper revision is 5.
 
 Design: [AgDR-0176](../../../docs/agdr/AgDR-0176-dependency-audit-ecosystem-dispatch.md).
 
