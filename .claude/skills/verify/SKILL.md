@@ -38,7 +38,7 @@ Report missing dependencies as blockers.
 
 Print `## Verify evidence` with the revision, commands, exit codes, and test summaries.
 Include any skipped checks and concrete blockers.
-Use Passed only when both commands succeed without unresolved required checks.
+Use Passed only when every command in steps 2 and 3 exits 0 without unresolved required checks.
 Otherwise report Failed or `Verify could not run` with the reason.
 Paste this evidence into the PR body before requesting review.
 This focused suite does not cover every framework hook.
