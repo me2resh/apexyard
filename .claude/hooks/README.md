@@ -355,7 +355,7 @@ These were already in place before the enforcement layer and remain unchanged (e
 
 | Hook | Event | Purpose |
 |------|-------|---------|
-| `block-git-add-all.sh` | PreToolUse / Bash | Blocks `git add -A / . / --all` |
+| `block-git-add-all.sh` | PreToolUse / Bash | Blocks `git add -A / . / --all` at any command position (`cd x && …`, `;`, `sudo`, `bash -c`), not only when the call starts with `git add` (#2071) |
 | `block-main-push.sh` | PreToolUse / Bash | Blocks pushing to `main` / `master` |
 | `validate-branch-name.sh` | PreToolUse / Bash | **Warns** on non-conforming branch names before push (warning-only; warning→blocker upgrade deferred to a follow-up ticket: breaking change) |
 | `check-secrets.sh` | PreToolUse / Bash | Scans commits for hardcoded secrets |

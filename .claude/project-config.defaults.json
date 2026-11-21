@@ -11,7 +11,8 @@
     "design_paths",
     "design_paths_exclude",
     "architecture_paths",
-    "tracker_repo"
+    "tracker_repo",
+    "gates"
   ],
 
   "checks": {

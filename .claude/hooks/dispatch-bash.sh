@@ -195,7 +195,7 @@ fi
 # APEXYARD_DISPATCH_GATE: Bash|*|block-reviewer-repo-mutation.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|block-reviewer-ci-wait.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|block-forged-menu-approval.sh
-# APEXYARD_DISPATCH_GATE: Bash|git add *|block-git-add-all.sh
+# APEXYARD_DISPATCH_GATE: Bash|*|block-git-add-all.sh
 # APEXYARD_DISPATCH_GATE: Bash|git push *|block-main-push.sh
 # APEXYARD_DISPATCH_GATE: Bash|git push *|validate-branch-name.sh
 # APEXYARD_DISPATCH_GATE: Bash|git push *|pre-push-gate.sh
@@ -256,7 +256,8 @@ for script in \
   warn-isolated-build-risk.sh \
   block-reviewer-repo-mutation.sh \
   block-reviewer-ci-wait.sh \
-  block-forged-menu-approval.sh; do
+  block-forged-menu-approval.sh \
+  block-git-add-all.sh; do
   case "$script" in
     # Ticket-first fails closed (me2resh/apexyard#1623).
     block-protected-target-writes.sh|require-active-ticket.sh) run_fail_closed_hook "$script" ;;
@@ -477,7 +478,6 @@ run_commit_gates() {
 }
 
 case "$COMMAND" in
-  "git add "*) run_hook block-git-add-all.sh ;;
   "git push "*) run_push_gates ;;
   "git commit "*) run_commit_gates ;;
   "gh issue create "*)
