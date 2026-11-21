@@ -9,6 +9,73 @@ from pathlib import Path
 import re
 
 
+# GHSA excludes ambiguous characters. Boundaries reject partial identifiers.
+ADVISORY_RE = re.compile(
+    r"(?<![A-Za-z0-9_-])(?:GHSA(?:-[23456789cfghjmpqrvwx]{4}){3}"
+    r"|CVE-[0-9]{4}-[0-9]{4,})(?![A-Za-z0-9_-])", re.IGNORECASE
+)
+NPM_PACKAGE_RE = re.compile(r"(?:@[a-z0-9._~-]+/)?[a-z0-9._~-]+")
+
+
+def advisory_ids(finding):
+    """Extract identifiers from advisory IDs, URLs, and aliases."""
+    values = [finding.get("advisory_id", ""), finding.get("url", ""),
+              *finding.get("aliases", [])]
+    return {match.upper() for value in values if isinstance(value, str)
+            for match in ADVISORY_RE.findall(value)}
+
+
+def project_scope(finding):
+    """The helper assigns each npm dependency set's manifests to its findings."""
+    manifests = finding.get("manifests")
+    if (finding.get("ecosystem") != "npm" or not isinstance(manifests, list)
+            or not manifests or not all(isinstance(path, str) and path for path in manifests)):
+        return None
+    return tuple(sorted(set(manifests)))
+
+
+def ignored_roots(start, findings, ignores):
+    """Resolve every reachable finding. Missing links and cycles fail closed."""
+    roots = set()
+    # Use an explicit stack so long chains cannot exceed Python's recursion limit.
+    stack = [(start, False)]
+    active, complete = set(), set()
+    while stack:
+        index, exiting = stack.pop()
+        if exiting:
+            active.remove(index)
+            complete.add(index)
+            continue
+        if index in active:
+            return None
+        if index in complete:
+            continue
+        finding = findings[index]
+        if finding["severity"] == "Unknown":
+            return None
+        identifiers = advisory_ids(finding)
+        if identifiers:
+            matched = identifiers.intersection(ignores)
+            if not matched:
+                return None
+            roots.update(matched)
+            complete.add(index)
+            continue
+        scope = project_scope(finding)
+        via = finding.get("advisory_id")
+        # report_to_dict omits raw.via. advisory_id retains its first item only.
+        if scope is None or not isinstance(via, str) or not NPM_PACKAGE_RE.fullmatch(via):
+            return None
+        targets = [i for i, item in enumerate(findings)
+                   if item.get("package") == via and project_scope(item) == scope]
+        if not targets:
+            return None
+        active.add(index)
+        stack.append((index, True))
+        stack.extend((target, False) for target in targets)
+    return roots or None
+
+
 def evaluate(report, entries, helper_exit, today):
     """Return policy messages and a failing status when any check blocks."""
     messages = []
@@ -29,23 +96,24 @@ def evaluate(report, entries, helper_exit, today):
             expiry = date.fromisoformat(entry["expires"])
             if expiry < today:
                 raise ValueError(f"expired on {expiry}")
-            ignores[entry["id"]] = entry["expires"]
+            ignores[entry["id"].upper()] = entry["expires"]
         except ValueError as error:
             messages.append(f"Invalid ignore {label}: {error}")
             failed = True
 
-    for finding in report["findings"]:
+    for index, finding in enumerate(report["findings"]):
         severity = finding["severity"]
         if severity == "Unknown":
             failed = True
         if severity not in ("High", "Critical"):
             continue
-        ids = [finding["advisory_id"], *finding["aliases"]]
-        matched = next((identifier for identifier in ids if identifier in ignores), None)
+        matched = ignored_roots(index, report["findings"], ignores)
         if matched:
+            details = ", ".join(f"{identifier} (expires {ignores[identifier]})"
+                                for identifier in sorted(matched))
             messages.append(
                 f"Ignored: {finding['package']} — {finding['advisory_id']} "
-                f"(matched {matched}, expires {ignores[matched]})"
+                f"(root advisories: {details})"
             )
         else:
             messages.append(f"Blocking: {severity} {finding['package']} — {finding['advisory_id']}")

@@ -26,7 +26,11 @@ class PolicyTests(unittest.TestCase):
     def setUp(self):
         self.entry = {'id': ADVISORY, 'reason': 'Owner approved', 'expires': '2026-12-31'}
         self.finding = {'package': 'picomatch', 'advisory_id': ADVISORY,
-                        'aliases': ['CVE-2026-12345'], 'severity': 'High'}
+                        'aliases': ['CVE-2026-12345'], 'severity': 'High',
+                        'ecosystem': 'npm', 'version': '<=4.0.7',
+                        'severity_reason': 'npm severity label',
+                        'manifests': ['app/package.json'],
+                        'remediation': 'npm update picomatch'}
         self.report = {'findings': [self.finding], 'dependency_sets': [], 'unsupported_only': False}
 
     def evaluate(self, code=0, today=date(2026, 11, 18)):
@@ -35,6 +39,69 @@ class PolicyTests(unittest.TestCase):
     def test_ignored_passes_before_and_on_expiry(self):
         self.assertEqual(self.evaluate()[0], 0)
         self.assertEqual(self.evaluate(today=date(2026, 12, 31))[0], 0)
+
+    def npm_chain(self):
+        # run_npm_audit chooses the first via URL or package name as advisory_id.
+        # report_to_dict keeps manifests and aliases, but does not serialize raw.via.
+        self.finding['advisory_id'] = 'https://github.com/advisories/' + ADVISORY
+        self.finding['aliases'] = []
+        fdir = dict(self.finding, package='fdir', advisory_id='picomatch')
+        tinyglobby = dict(self.finding, package='tinyglobby', advisory_id='fdir')
+        self.report['findings'] = [tinyglobby, fdir, self.finding]
+        return tinyglobby, fdir
+
+    def test_url_only_root_is_ignored_case_insensitively(self):
+        self.npm_chain()
+        self.entry['id'] = ADVISORY.lower()
+        self.finding['advisory_id'] = self.finding['advisory_id'].upper()
+        self.assertEqual(self.evaluate()[0], 0)
+
+    def test_two_level_chain_is_ignored_and_reports_root(self):
+        self.npm_chain()
+        status, messages = self.evaluate()
+        self.assertEqual(status, 0)
+        self.assertEqual(len(messages), 3)
+        for message in messages:
+            self.assertIn('Ignored:', message)
+            self.assertIn(ADVISORY.upper(), message)
+
+    def test_chain_to_other_high_advisory_blocks(self):
+        self.npm_chain()
+        self.finding['advisory_id'] = 'https://github.com/advisories/GHSA-2345-6789-cfgh'
+        status, messages = self.evaluate()
+        self.assertEqual(status, 1)
+        self.assertEqual(sum(message.startswith('Blocking:') for message in messages), 3)
+
+    def test_missing_chain_node_blocks(self):
+        self.npm_chain()
+        self.report['findings'].pop()
+        self.assertEqual(self.evaluate()[0], 1)
+
+    def test_cycle_blocks_without_recursion(self):
+        _, fdir = self.npm_chain()
+        fdir['advisory_id'] = 'tinyglobby'
+        self.assertEqual(self.evaluate()[0], 1)
+
+    def test_chain_cannot_cross_project_manifests(self):
+        self.npm_chain()
+        self.finding['manifests'] = ['other/package.json']
+        self.assertEqual(self.evaluate()[0], 1)
+
+    def test_all_matching_package_findings_must_have_ignored_roots(self):
+        self.npm_chain()
+        self.report['findings'].append(dict(self.finding, advisory_id='CVE-2026-99999'))
+        self.assertEqual(self.evaluate()[0], 1)
+
+    def test_unknown_chain_shape_blocks(self):
+        chain, _ = self.npm_chain()
+        chain['advisory_id'] = 'https://example.com/no-advisory'
+        self.assertEqual(self.evaluate()[0], 1)
+
+    def test_identifier_boundaries_reject_partial_matches(self):
+        for value in (ADVISORY + '-extra', 'prefix' + ADVISORY):
+            self.finding['advisory_id'] = value
+            self.finding['aliases'] = []
+            self.assertEqual(self.evaluate()[0], 1)
 
     def test_other_high_and_critical_block(self):
         for severity in ('High', 'Critical'):
@@ -80,6 +147,7 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(self.evaluate(code=1)[0], 1)
 
     def test_cli_logs_and_appends_ignored_finding_to_summary(self):
+        self.npm_chain()
         with tempfile.TemporaryDirectory() as directory:
             directory = Path(directory)
             report, ignores, summary = (directory / name for name in ('report.json', 'ignore.json', 'summary.md'))

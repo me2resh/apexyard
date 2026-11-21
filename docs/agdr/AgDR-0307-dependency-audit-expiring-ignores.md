@@ -37,6 +37,7 @@ Chosen: **an expiring ignore list, applied by a repo-only policy script**.
 
 - `.github/dependency-audit-ignore.json` holds entries with `id`, `reason` and `expires` (YYYY-MM-DD).
 - `.github/scripts/dependency-audit-policy.py` reads the helper's JSON report. A High or Critical finding fails the job unless a valid, unexpired entry names its advisory ID or an alias.
+- A derived finding follows package links within the same audited project. It passes only when every reachable root advisory has a valid ignore. Missing links, cycles, and unknown shapes fail.
 - An entry with a missing field, a bad date or a past expiry fails the job and is named.
 - An incomplete audit, an Unknown severity or a helper error still fails the job.
 - Ignored findings are listed in the log and the job summary.
