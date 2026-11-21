@@ -63,8 +63,8 @@ Each row states whether edits can judge themselves.
 | Rex and human merge approvals | Ops tree. `block-unreviewed-merge.sh:109-137` loads sibling libraries. Lines 299-309 select marker storage. Lines 450-492 handle approval carry-over. | Yes, if the selected ops tree contains the candidate changes. No automatic head fetch selects the code. |
 | Posted Rex review requirement | Ops tree code and configuration. `block-unreviewed-merge.sh:502-553` reads `review_markers.require_posted_review` and calls the tracker library. | Yes under the same condition. A candidate configuration edit can also disable this optional requirement. |
 | Green CI merge gate | Ops tree code. `block-merge-on-red-ci.sh:144-153` loads sibling parser and repository helpers. Lines 27-49 describe forge checks against head. | Yes under the same condition. Forge results describe head, but the local acceptance logic comes from the ops tree. |
-| UI design merge gate | Ops tree. `require-design-review-for-ui.sh:116-133` loads sibling libraries. Lines 229-249 load `_lib-ui-paths.sh`. Lines 320-321 select the design marker. | Yes under the same condition. Edited code or effective UI patterns can suppress the trigger. |
-| Architecture merge gate | Ops tree. `require-architecture-review.sh:101-118` loads sibling libraries. Lines 214-228 define patterns and read the local `design_paths` override. Lines 291-292 select the marker. | Yes under the same condition. Edited code or patterns can suppress the trigger. |
+| UI design merge gate | Ops-tree code. `require-design-review-for-ui.sh:116-133,229-249` loads sibling libraries. Lines 216,253,301-302 read project-root configuration. Lines 320-321 select the design marker. | Candidate ops-tree code can suppress the trigger. Project-clone `ui_paths` or `ui_paths_exclude` edits can also suppress it with unchanged ops hooks. |
+| Architecture merge gate | Ops-tree code. `require-architecture-review.sh:101-118` loads sibling libraries. Lines 201,224-225,272-273 read project-root configuration. Lines 291-292 select the marker. | Candidate ops-tree code can suppress the trigger. Project-clone `design_paths` or `design_paths_exclude` edits can also suppress it with unchanged ops hooks. |
 | Rex marker body and verdict validation | Ops tree. `.claude/skills/code-review/SKILL.md:87-90` sources the ops marker library. `_lib-review-markers.sh:677-711` validates the body, verdict, and SHA before writing. | Yes when the candidate library occupies that ops tree. Validation does not authenticate its own source revision. |
 | Human approval prerequisite helper | Supplied ops tree. `.claude/skills/approve-merge/scripts/approve-merge.sh:8-25,49-65` loads configuration, carry-over logic, and marker helpers from `marker_home`. | Yes if candidate files occupy that supplied tree. This helper checks prerequisites before human approval. |
 | Typed human marker writer | Ops-tree skill. `.claude/skills/approve-merge/SKILL.md:117,148-178` loads the marker helper and specifies the structured approval record. | Yes if candidate skill or library content supplies the procedure. Human approval remains a separate required action. |
@@ -111,12 +111,12 @@ The following table records the specified sources. It does not claim an observed
 | Shared review policy | Private portfolio `custom-templates/REVIEW.md`, then ops-tree `templates/REVIEW.md`. `_lib-portfolio-paths.sh:971-1000` resolves existing files. | Yes for a selected candidate copy. A separate private override prevents changes to the unused framework default from taking effect. |
 | Review-depth guide | Ops-tree `docs/skills/code-review-depth.md:3-9` requires exporting the tier script from base or a recorded trusted ops baseline. | The script has an explicit trusted-source rule. The guide itself has no revision pin. |
 | Tier classifier | Base `bin/review-tier.sh`, or trusted ops baseline, per `docs/skills/code-review-depth.md:3-9`. | No, when that procedure is followed. A head-only script edit must not control its own tier. |
-| Public handbook discovery guide | Ops-tree `handbooks/README.md:13-24` and agent discovery at `.claude/agents/code-reviewer.md:426-455`. | Yes for candidate guide content. Their architecture/general applicability wording differs. The agent narrows applicability by changed paths. |
+| Public handbook discovery guide | Ops-tree `handbooks/README.md:13-24` and agent discovery at `.claude/agents/code-reviewer.md:430-455`. | Yes for candidate guide content. Their architecture/general applicability wording differs. The agent narrows applicability by changed paths. |
 | Public architecture handbooks | Ops-tree `handbooks/architecture/*.md`. Agent lines 432-449 define selection. | Yes when candidate files occupy the selected public root. |
 | Public general handbooks | Ops-tree `handbooks/general/*.md`. Agent lines 432-449 define selection. | Yes under the same condition. |
 | Public language handbooks | Ops-tree `handbooks/language/<lang>/*.md`. Agent lines 432-449 match language extensions. | Yes under the same condition. |
-| Public domain handbooks and guide | Ops-tree `handbooks/domain/<area>/*.md` and `handbooks/domain/README.md`. Agent lines 449,457-466 define glob matching. | Yes under the same condition. Candidate `paths` edits can exclude the changed code. |
-| Private handbooks | Configured `portfolio_custom_handbooks_dir`. `_lib-portfolio-paths.sh:589-602` defaults to `./custom-handbooks`. Agent lines 426-455 load both layers. | No for changes confined to a separate public framework tree. Yes if candidate configuration redirects the root or candidate files occupy it. |
+| Public domain handbooks and guide | Ops-tree `handbooks/domain/<area>/*.md` and `handbooks/domain/README.md`. Agent lines 450,457-466 define glob matching. | Yes under the same condition. Candidate `paths` edits can exclude the changed code. |
+| Private handbooks | Configured `portfolio_custom_handbooks_dir`. `_lib-portfolio-paths.sh:589-602` defaults to `./custom-handbooks`. Agent lines 430-455 load both layers. | No for changes confined to a separate public framework tree. Yes if candidate configuration redirects the root or candidate files occupy it. |
 | Handbook enforcement guide | `.claude/agents/code-reviewer.md:468-479` applies both layers and reads `ENFORCEMENT: blocking`. | Yes when the agent or handbook body comes from the candidate tree. |
 | Agent reference guide | `docs/agents/code-reviewer-reference.md`, linked at `.claude/agents/code-reviewer.md:20`. The agent does not require reading it for every review. | Conditional. Candidate changes affect review only when the reviewer consults that copy. |
 | Review-copy guide | Ops-tree `docs/skills/review-copies.md:3-10`, required by `.claude/skills/code-review/SKILL.md:45`. | Yes if candidate instructions supply the procedure. This guide selects the test checkout, not a trusted policy revision. |
@@ -187,7 +187,7 @@ printf 'candidate exit=%s\n' "$?"
 ```
 
 The synthetic repo and PR are fixture values. The hook receives JSON. The shell never executes its embedded merge command.
-For baseline denial, use the mocked missing-marker fixture in `test_block_unreviewed_merge.sh:1-12`.
+For baseline denial, use the mocked missing-marker fixture in `test_block_unreviewed_merge.sh:296-304`.
 Repeat the candidate invocation for each executable named in the table.
 
 For merge gates, use the four corresponding regression suites listed under Validation.
@@ -201,24 +201,40 @@ Continue testing the candidate implementation separately. Fail closed when the t
 
 #### W2: candidate configuration can weaken gate coverage
 
-1. Prepare two disposable ops trees with identical hook code and mocked PR file lists.
-2. Choose a design document that matches `require-architecture-review.sh:214-221`.
-3. Leave the architecture marker absent. Confirm that the baseline gate blocks.
-4. Add candidate `design_paths` containing only `^never-match-this-pr$`.
-5. Run the candidate gate again. Its trigger no longer matches that design document.
-6. Repeat with the UI path override and a UI fixture.
-7. Repeat the posted-review fixture with `review_markers.require_posted_review` disabled.
+The architecture and UI gates read path settings from the current directory's git top folder, not necessarily the ops tree.
+In a managed-project clone, that folder is the project root.
+`require-architecture-review.sh:201,224-225,272-273` selects that configuration.
+`require-design-review-for-ui.sh:216-219,253,301-302` does likewise and distinguishes the project root from marker storage.
+Project configuration can therefore disable either trigger while ops hooks remain unchanged.
+Replacement keys are `design_paths` and `ui_paths`. Exclusion keys are `design_paths_exclude` and `ui_paths_exclude`.
+An exclusion matching every changed design or UI file removes that gate's approval requirement.
+
+1. Prepare an unchanged disposable ops tree and two disposable project clones with identical tracked files.
+2. Mock forge responses with a design document matching `require-architecture-review.sh:214-221` and a UI file matching default patterns.
+3. Leave architecture and design markers absent. Keep other approvals valid.
+4. Invoke both ops-tree hooks from each project clone with the same mocked merge payload.
+5. Confirm that both gates block before changing project configuration.
+6. Set candidate project `design_paths` and `ui_paths` to `["^never-match-this-pr$"]` in `.claude/project-config.json`.
+7. Repeat from that clone. Expect both unchanged hooks to return zero because neither trigger matches.
+8. Restore default path settings by removing both replacement keys.
+9. Set candidate project `design_paths_exclude` and `ui_paths_exclude` to `[".*"]`.
+10. Repeat from that clone. Expect both hooks to return zero because exclusions remove all matching files.
+11. Confirm that ops-tree hooks and configuration remain unchanged throughout both comparisons.
 
 Use the sandbox helpers in `test_require_architecture_review.sh:95,154` and `test_require_design_review_for_ui.sh:116,175`.
 The latter suite demonstrates replacement overrides at lines 260-266.
-`test_require_posted_review.sh:207-223` supplies enabled, disabled, missing-review, and forge-failure cases.
-Set `design_paths` and `ui_paths` in each sandbox's `.claude/project-config.json`.
-Set `.review_markers.require_posted_review` in the same file for the posted-review comparison.
-Keep other approvals valid so another gate does not mask the result.
+These proposed comparisons isolate project configuration from ops-tree enforcement code.
 
-`_lib-read-config.sh:287-330` reads local defaults and overrides. Those files do not come from the PR base automatically.
-Proposed fix: resolve enforcement configuration from the trusted baseline, including portfolio roots and path patterns.
+Separately, repeat the posted-review fixture with ops-tree `review_markers.require_posted_review` disabled.
+`test_require_posted_review.sh:207-223` supplies enabled, disabled, missing-review, and forge-failure cases.
+`_lib-read-config.sh:287-330` reads local defaults and overrides for that configuration path.
+That loader does not describe the two gates' direct project-root path reads.
+None of these configuration sources automatically selects the PR base.
+
+Proposed fix: resolve enforcement configuration from an independently approved baseline for the governed project and ops tree.
+Include `design_paths`, `ui_paths`, `design_paths_exclude`, `ui_paths_exclude`, portfolio roots, and posted-review requirements in that trust boundary.
 Require separate approval before weaker settings take effect. Preserve head-derived changed-file inputs.
+Keep marker storage separate from policy source selection. Fail closed when trusted configuration is unavailable.
 
 #### W3: candidate guides and handbooks can change review policy
 
@@ -292,7 +308,13 @@ Both invocations returned zero. The first took 185 seconds. The second took 36 s
 | `test_resolve_ops_root_pin.sh` | PASS |
 | `test_severity_reviews.sh` | PASS |
 
-Combined result: PASS=19, FAIL=0, SKIP=0.
+Original combined result: PASS=19, FAIL=0, SKIP=0.
+The review-fix rerun selected the same 19 suites and took 636 seconds.
+Its runner reported 17 passes and two 120-second timeouts, with no skips.
+Direct retries without that cap passed `test_protected_review_1839.sh` and `test_block_protected_target_writes.sh`.
+Those retries reported 362 and 747 passing cases, respectively, with zero failures.
+Markdownlint-cli2, the writing-profile check, and `git diff --check` passed after the corrections.
+Agent-file citations were checked against HEAD. The domain selector is at `.claude/agents/code-reviewer.md:450`.
 These regression suites test current behavior. They do not establish independence from candidate-controlled policy.
 No new test was added because this ticket changes only this investigation document.
 Hosted CI, live Rex behavior, and live session reload behavior remain unverified.
@@ -310,6 +332,8 @@ Hosted CI, live Rex behavior, and live session reload behavior remain unverified
 Confidence is high for local file selection and the documented policy paths.
 Confidence is conditional for actual harness loading and hosted event behavior.
 A separate, unchanged ops tree protects managed-project reviews from head-only hook edits.
+It does not protect architecture or UI triggers from project-clone path overrides or exclusions.
+`design_paths_exclude` and `ui_paths_exclude` can remove every matching file while ops hooks remain unchanged.
 A candidate ops tree does not provide that separation. The directory pin is not a revision pin.
 The trusted-base tier script provides a useful pattern, but it does not protect the entire review policy chain.
 
