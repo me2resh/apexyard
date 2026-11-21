@@ -37,7 +37,7 @@ mkrepo "$SB"
 : > "$SB/onboarding.yaml"
 printf 'projects:\n  - name: p1\n    repo: org/p1\n' > "$SB/apexyard.projects.yaml"
 mkdir -p "$SB/.claude/hooks" "$SB/.claude/skills/approve-merge" "$SB/workspace"
-for f in _lib-active-ticket.sh _lib-read-config.sh _lib-portfolio-paths.sh _lib-ops-root.sh _lib-resolution-cache.sh _lib-path-resolve.sh _lib-worktree-owner.sh; do
+for f in _lib-active-ticket.sh _lib-read-config.sh _lib-portfolio-paths.sh _lib-ops-root.sh _lib-resolution-cache.sh _lib-path-resolve.sh _lib-worktree-owner.sh _lib-exclusive-directory.sh; do
   cp "$HOOKS/$f" "$SB/.claude/hooks/$f"
 done
 cp "$SRC_ROOT/.claude/project-config.defaults.json" "$SB/.claude/project-config.defaults.json"
