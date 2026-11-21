@@ -60,7 +60,7 @@ Do not write a process transcript.
 ### Severity policy
 
 Follow [policy resolution](../../../docs/skills/drive-to-green.md#override-the-review-policy) before spawning Rex.
-Give Rex the resolved policy path. Overrides change no gate decision.
+Take policy from the PR base branch, not the PR head. Overrides change no gate decision.
 
 ### CI order and depth
 
