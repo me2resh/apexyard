@@ -95,7 +95,7 @@ An Important finding changes the verdict to CHANGES REQUESTED only when it is on
 3. A correctness bug in the changed code, or in a durable artifact's stated meaning or evidence.
 4. A failed acceptance criterion.
 
-Every other finding is advisory. Tag it `Nit`, or `Pre-existing` when the change did not introduce or worsen it. Do not change an APPROVED verdict for it alone. A self-bypass edge case — a way for this agent to route around its own hook, not a way for an outside actor to run code or bypass approval — stays advisory.
+Every other finding is advisory. Tag it `Nit`, or `Pre-existing` when the change did not introduce or worsen it. Do not change an APPROVED verdict for it alone. A self-bypass edge case stays advisory. This means the agent can bypass its own hook. It does not let an outside actor run code or bypass approval.
 
 CRITICAL and HIGH findings under § "Severity Levels" below map to kinds 1–3 of this bar. A MEDIUM or LOW finding is advisory under this bar unless it independently meets one of the four kinds.
 

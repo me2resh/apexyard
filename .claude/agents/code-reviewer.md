@@ -372,7 +372,7 @@ Per `.claude/rules/pr-quality.md` § "Summary bullets — narrative quality", ev
 
 Example that triggers the heuristic: `- CI pipeline changes` (3 words, no verb). Example that does not: `- Bumps lockfile to lodash 4.17.21 (CVE-2021-23337)` (verb and more than 6 words).
 
-**Verdict effect: NONE.** This is an **advisory** finding only. Surface it as a `Nit` or `Pre-existing` comment, cite `.claude/rules/pr-quality.md` § "Summary bullets — narrative quality", and do NOT downgrade the overall verdict from APPROVED to CHANGES REQUESTED on this finding alone.
+**Verdict effect: NONE.** This is an **advisory** finding only. Surface it as a `Nit` or `Pre-existing` comment. Cite `.claude/rules/pr-quality.md` § "Summary bullets — narrative quality". Do NOT downgrade APPROVED to CHANGES REQUESTED for this finding alone.
 
 **Skip condition.** If the diff is a pure dependency bump (touches only lockfiles + `package.json` / `requirements.txt` / `Cargo.toml` etc.) OR a pure rename refactor, skip the check entirely — the short-bullet shape is the right one for those PRs.
 
@@ -539,7 +539,7 @@ Fallow findings are **advisory** — surface them as `Nit` or `Pre-existing` not
 
 #### Output
 
-Add a `### Fallow Findings  *(advisory — JS/TS static analysis, changed scope)*` section between `### Handbook Findings` and `### Suggestions`: a compact table with the columns Tag, Category, Location, and Finding, then a fenced block with the dry-run fix preview, labelled "Proposed fixes (dry run — not applied)". Omit the whole section if `FALLOW_STATUS=unavailable` or the diff isn't JS/TS.
+Add a `### Fallow Findings  *(advisory — JS/TS static analysis, changed scope)*` section between `### Handbook Findings` and `### Suggestions`. Use a compact table with columns Tag, Category, Location, and Finding. Follow it with a fenced dry-run fix preview labelled "Proposed fixes (dry run — not applied)". Omit the whole section if `FALLOW_STATUS=unavailable` or the diff isn't JS/TS.
 
 ## Process
 
@@ -838,7 +838,7 @@ Not covered by the checks: [What CI and tests do not prove for this diff, includ
 6. **Glossary is mandatory** — request changes if missing
 7. **AgDR enforcement is BLOCKING** — a **material** technical decision (per `.claude/rules/agdr-decisions.md` § "The threshold") without an AgDR link means DO NOT approve; REQUEST CHANGES with the decisions you detected. The author runs `/decide` and links the AgDR before re-review. See § 7.
 8. **Approval marker format is BLOCKING** — on APPROVED verdicts, call `review_write_rex_approved "$REVIEW_BODY_FILE" "$SHA" "$REX_MARKER"` (AgDR-0161). Do not redirect the SHA onto the marker yourself.
-9. **Handbooks layer on top of framework rules** — discover and apply handbooks from BOTH layers (§ 8). Advisory handbooks generate `Nit` or `Pre-existing` comments; a handbook with `ENFORCEMENT: blocking` at the top of the file becomes a REQUEST CHANGES verdict in either layer.
+9. **Handbooks layer on top of framework rules** — discover and apply handbooks from BOTH layers (§ 8). Advisory handbooks generate `Nit` or `Pre-existing` comments. A handbook with `ENFORCEMENT: blocking` at the top of the file becomes a REQUEST CHANGES verdict in either layer.
 10. **Fallow is advisory and fail-soft** — on JS/TS diffs only (§ 9). Findings NEVER flip the verdict on their own. Never run `fallow fix --yes`.
 11. **Reduced-scope (Lean tier) changes DEPTH, never REQUIRED OUTPUTS or RAIL 1** — see § "Reduced-Scope Review — Lean-tier diffs". Only §§ 1–5 depth may be skipped, only when ALL FIVE eligibility conditions hold. `block-unreviewed-merge.sh` requires your marker regardless of scope.
 12. **Acceptance criteria are BLOCKING** — read every linked issue on every review. A Not met criterion means CHANGES REQUESTED and no approval marker. See § "Acceptance Criteria".
