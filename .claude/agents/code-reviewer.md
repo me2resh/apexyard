@@ -427,6 +427,15 @@ This PR cannot be merged until technical decisions are documented.
 3. **If an AgDR IS linked** → verify the linked AgDR covers the decisions in the code
 4. **If no decisions detected** → mark as N/A
 
+### Reliability checks
+
+Run `bash "$OPS_ROOT/.claude/skills/code-review/reliability-triggers.sh" < review.diff` with the complete PR diff.
+The loader selects items from both handbook layers, independently of handbook discovery below.
+Report each matched item as checked or not applicable in Handbook Findings.
+Cite evidence for checked items. Explain each not applicable result.
+Report failed checks under the source handbook’s enforcement level.
+Report loader errors as Unverified. Never treat an error as an empty checklist.
+
 ### 8. Adopter Handbooks
 
 Beyond the framework's generic rules, the adopter ships company-specific standards as **handbooks** at two layered locations. Discover and apply both on every review:
