@@ -46,7 +46,7 @@ make_sb() {
   printf 'projects:\n  - name: p1\n    repo: org/p1\n' > "$sb/apexyard.projects.yaml"
   mkdir -p "$sb/.claude/hooks" "$sb/.claude/skills/fan-out" "$sb/.claude/worktrees" "$sb/workspace"
   for f in require-active-ticket.sh _lib-awk-fallback.sh _lib-detect-bash-write.sh _lib-read-config.sh _lib-path-resolve.sh \
-           _lib-active-ticket.sh _lib-worktree-owner.sh _lib-mask-quoted.sh _lib-ticket-path-exemptions.sh _lib-portfolio-paths.sh _lib-ops-root.sh _lib-resolution-cache.sh; do
+           _lib-active-ticket.sh _lib-worktree-owner.sh _lib-exclusive-directory.sh _lib-mask-quoted.sh _lib-ticket-path-exemptions.sh _lib-portfolio-paths.sh _lib-ops-root.sh _lib-resolution-cache.sh; do
     cp "$HOOKS/$f" "$sb/.claude/hooks/$f" || exit 1
   done
   cp "$SRC_ROOT/.claude/project-config.defaults.json" "$sb/.claude/project-config.defaults.json"

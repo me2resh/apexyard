@@ -236,6 +236,12 @@ if command -v git_subcommand_re >/dev/null 2>&1; then
 fi
 if printf '%s\n' "$COMMAND" | LC_ALL=C grep -qE "$_fmt_heredoc_re"; then
   echo "INFO: heredoc-substitution detected in -m; skipping subject validation. Use 'git commit -F <file>' for validation on multi-line messages." >&2
+  # Inspect literal trailer text without changing the subject-validation exception.
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-verified.sh"
+  if _verified_body=$(printf '%s\n' "$COMMAND" | verified_heredoc_body); then
+    printf '%s\n' "$_verified_body" | verified_warn
+  fi
   exit 0
 fi
 
@@ -689,6 +695,40 @@ list in .claude/hooks/validate-commit-format.sh or file a ticket to add
 MSG_END
   exit 2
 fi
+
+# Advisory only. Keep every existing subject and command gate unchanged.
+# Collect repeated -m paragraphs after the existing parser validates the subject.
+_verified_message="$MSG"
+_verified_parts=""
+for ((i=commit_index; i < token_count; i++)); do
+  token="${COMMAND_TOKENS[i]}"
+  case "$token" in
+    ";"|"&&"|"||"|"|"|"&") break ;;
+    -m|--message)
+      i=$((i + 1))
+      _verified_parts+="${COMMAND_TOKENS[i]:-}"$'\n\n'
+      ;;
+    --message=*) _verified_parts+="${token#--message=}"$'\n\n' ;;
+    -[!-]?*)
+      rest="${token#-}"
+      while [ -n "$rest" ]; do
+        opt="${rest:0:1}"; rest="${rest:1}"
+        case "$opt" in
+          m)
+            if [ -z "$rest" ]; then i=$((i + 1)); rest="${COMMAND_TOKENS[i]:-}"; fi
+            _verified_parts+="$rest"$'\n\n'
+            break ;;
+          F|c|C|t|S|u) [ -n "$rest" ] || i=$((i + 1)); break ;;
+        esac
+      done
+      ;;
+    -F|--file) i=$((i + 1)) ;;
+  esac
+done
+[ -z "$_verified_parts" ] || _verified_message="$_verified_parts"
+# shellcheck source=/dev/null
+. "$HOOK_DIR/_lib-verified.sh"
+printf '%s\n' "$_verified_message" | verified_warn
 
 exit 0
 
