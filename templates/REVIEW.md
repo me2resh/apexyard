@@ -25,6 +25,7 @@ A Pre-existing finding never blocks the PR.
 Include base evidence and a suggested ticket title with each Pre-existing finding.
 Do not classify a new exposure or regression as Pre-existing.
 Keep independent CI, release, and security gates in effect.
+A Pre-existing security finding does not block the PR. It gets a ticket due on its first-seen date plus its SLA (`.security.remediation_sla_days`: CRITICAL 7 days, HIGH 30 days, MEDIUM 90 days, LOW no SLA). It blocks a release only after the SLA is breached. The review names the severity, the SLA and the due date.
 Report unknown provenance as unverified rather than claiming base evidence.
 
 Examples from 21 November 2026:

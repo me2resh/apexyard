@@ -166,7 +166,7 @@ Only `Important` findings can cause `CHANGES REQUESTED` under the applicable blo
 `Nit` and `Pre-existing` findings never block the PR.
 Each `Pre-existing` finding includes base evidence and a suggested ticket title.
 Follow [Review severity](../../../templates/REVIEW.md) and the agent's Output Format.
-Keep all existing security rules and independent gates in effect.
+Keep all other security rules and independent gates in effect.
 
 Posts a GitHub review comment with:
 

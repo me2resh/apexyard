@@ -172,12 +172,12 @@ refusal message — but the cheap fix is upstream of both: don't pass a path.
 
 Security levels describe risk separately from finding tags.
 CRITICAL and HIGH findings introduced or worsened by the change are Important and retain their blocking actions.
-Pre-existing vulnerabilities retain all existing release and escalation requirements.
+A Pre-existing security finding does not block the PR. It gets a ticket due on its first-seen date plus its SLA (`.security.remediation_sla_days`: CRITICAL 7 days, HIGH 30 days, MEDIUM 90 days, LOW no SLA). It blocks a release only after the SLA is breached. The review names the severity, the SLA and the due date.
 
 | Level | Action |
 |-------|--------|
-| CRITICAL | Block PR immediately |
-| HIGH | Block PR, require fix |
+| CRITICAL | Block PR immediately when the change introduced or worsened it |
+| HIGH | Block PR, require fix, when the change introduced or worsened it |
 | MEDIUM | Warn, recommend fix |
 | LOW | Informational |
 
@@ -188,7 +188,7 @@ Only `Important` findings can cause `CHANGES REQUESTED` under the applicable blo
 `Nit` and `Pre-existing` findings never block the PR.
 Each `Pre-existing` finding includes base evidence and a suggested ticket title.
 Follow [Review severity](../../../templates/REVIEW.md) and the agent's Output Format.
-Keep all existing security rules and independent gates in effect.
+Keep all other security rules and independent gates in effect.
 
 Posts a GitHub review with:
 

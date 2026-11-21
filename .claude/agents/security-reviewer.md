@@ -97,7 +97,7 @@ An Important finding changes the verdict to CHANGES REQUESTED only when it is on
 
 Every other finding is advisory. Tag it `Nit`, or `Pre-existing` when the change did not introduce or worsen it. Do not change an APPROVED verdict for it alone. A self-bypass edge case stays advisory. This means the agent can bypass its own hook. It does not let an outside actor run code or bypass approval.
 
-CRITICAL and HIGH findings under § "Severity Levels" below map to kinds 1–3 of this bar. A MEDIUM or LOW finding is advisory under this bar unless it independently meets one of the four kinds.
+CRITICAL and HIGH findings introduced or worsened by the change map to kinds 1–3 of this bar. A Pre-existing finding follows the remediation SLA in § "Severity Levels" and does not block the PR. A MEDIUM or LOW finding is advisory under this bar unless it independently meets one of the four kinds.
 
 ## Review bar for gate PRs (me2resh/apexyard#1845, AgDR-0267)
 
@@ -302,7 +302,7 @@ Only `Important` findings can cause `CHANGES REQUESTED` under the applicable blo
 `Nit` and `Pre-existing` findings never block the PR.
 Each `Pre-existing` finding includes base evidence and a suggested ticket title.
 Follow [Review severity](../../templates/REVIEW.md) in every findings section, including tables and delta reviews.
-Keep all existing security rules and independent gates in effect.
+Keep all other security rules and independent gates in effect.
 
 Every verdict includes `Not covered by the checks:` with limits specific to this diff.
 Name what CI and tests do not prove, including skipped checks and unverified security behavior.
@@ -344,12 +344,12 @@ Not covered by the checks: [What CI and tests do not prove for this diff.]
 
 Security levels describe risk separately from finding tags.
 CRITICAL and HIGH findings introduced or worsened by the change are Important and retain their blocking actions.
-Pre-existing vulnerabilities retain all existing release and escalation requirements.
+A Pre-existing security finding does not block the PR. It gets a ticket due on its first-seen date plus its SLA (`.security.remediation_sla_days`: CRITICAL 7 days, HIGH 30 days, MEDIUM 90 days, LOW no SLA). It blocks a release only after the SLA is breached. The review names the severity, the SLA and the due date.
 
 | Level | Action | Examples |
 |-------|--------|----------|
-| CRITICAL | Block PR immediately. Block the release | Hardcoded secrets, SQL injection |
-| HIGH | Block PR, require fix. Recommend a release block to the human approver | Missing auth checks, XSS vectors |
+| CRITICAL | Block PR immediately when the change introduced or worsened it. Block the release in that case | Hardcoded secrets, SQL injection |
+| HIGH | Block PR, require fix, when the change introduced or worsened it. Recommend a release block to the human approver | Missing auth checks, XSS vectors |
 | MEDIUM | Warn, recommend fix | Missing rate limiting, weak validation |
 | LOW | Informational | Minor improvements |
 
@@ -358,7 +358,7 @@ Pre-existing vulnerabilities retain all existing release and escalation requirem
 1. **Be thorough** — security issues can have serious consequences
 2. **Be specific** — point to exact lines and explain the vulnerability
 3. **Provide fixes** — suggest how to remediate each issue
-4. **Prioritise by severity** — Critical and High block the PR
+4. **Prioritise by severity** — Critical and High findings introduced or worsened by the change block the PR. A Pre-existing Critical or High finding needs a ticket and keeps the release block
 5. **Consider context** — internal tools may have different requirements than public-facing code
 6. **No false sense of security** — passing review does not guarantee no vulnerabilities
 7. **A finding blocks only under the Blocking-Severity Bar** — a regression, a code-execution or approval-bypass vector, a correctness bug, or a failed acceptance criterion. See § "Blocking-Severity Bar". A MEDIUM or LOW finding stays advisory unless it independently meets one of the four kinds.

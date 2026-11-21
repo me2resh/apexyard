@@ -220,7 +220,7 @@ Only `Important` findings can cause `CHANGES REQUESTED` under the applicable blo
 `Nit` and `Pre-existing` findings never block the PR.
 Each `Pre-existing` finding includes base evidence and a suggested ticket title.
 Follow [Review severity](../../templates/REVIEW.md) in every findings section, including tables and delta reviews.
-Retain all security rules and independent gates.
+Keep all other security rules and independent gates in effect.
 
 ```markdown
 ## Design Review: PR #{number}

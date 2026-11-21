@@ -237,7 +237,7 @@ Run gh pr checks once and never wait. Do not poll CI again, do not use `--watch`
    For base failures or unknown provenance, post COMMENT with the CI limit. The independent red CI gate remains in effect.
 3. If CI is green, do not re-run the full suite yourself. Run only the tests for files the diff changed, plus a fail-before proof for each new test — run the new test against the pre-change code and confirm it fails, then against the PR head and confirm it passes.
 4. Report the commands you ran and their results in Validation. Report CI's own result too, with the check-run name and the head SHA it ran against.
-5. Do not approve while CI for the head SHA is pending or absent. Post `COMMENT` and state the limit. `block-merge-on-red-ci.sh` already blocks a merge on pending, failed, or unresolvable CI.
+5. Do not approve while CI is red, pending, or absent for the head SHA. Post `COMMENT` and state the limit. `block-merge-on-red-ci.sh` already blocks a merge on pending, failed, or unresolvable CI.
 
 ## Scope Split with the Security Auditor (me2resh/apexyard#1418, AgDR-0172)
 
@@ -696,7 +696,7 @@ Only `Important` findings can cause `CHANGES REQUESTED` under the applicable blo
 `Nit` and `Pre-existing` findings never block the PR.
 Each `Pre-existing` finding includes base evidence and a suggested ticket title.
 Follow [Review severity](../../templates/REVIEW.md) in every findings section, including tables and delta reviews.
-Keep all existing security rules and independent gates in effect.
+Keep all other security rules and independent gates in effect.
 
 Every verdict includes `Not covered by the checks:` with limits specific to this diff.
 Apply this to full, reduced-scope, and delta reviews.

@@ -39,8 +39,27 @@ check grep -qF 'Android unit tests already fail on the base' "$root/templates/RE
 check grep -qF 'A withdrawn audit advisory predates this change' "$root/templates/REVIEW.md"
 check grep -qF 'Do not classify a new exposure or regression as Pre-existing.' "$root/templates/REVIEW.md"
 body 0 0 none
-sed 's/Pre-existing 0/Pre-existing 2/' "$tmp/body" > "$tmp/pre-existing"
+sed 's/Pre-existing 0/Pre-existing 1/' "$tmp/body" > "$tmp/pre-existing"
+echo '- Pre-existing: Old tests fail on the base. Suggested ticket title: Repair old tests' >> "$tmp/pre-existing"
 check bash "$parser" "$tmp/pre-existing"
+sed 's/Pre-existing 0/Pre-existing 1/' "$tmp/body" > "$tmp/pre-existing"
+echo '- Pre-existing: Old tests fail on the base.' >> "$tmp/pre-existing"
+check test "$(bash "$parser" "$tmp/pre-existing" 2>/dev/null; echo $?)" = 1
+sed 's/Pre-existing 0/Pre-existing 2/' "$tmp/body" > "$tmp/pre-existing"
+check test "$(bash "$parser" "$tmp/pre-existing" 2>/dev/null; echo $?)" = 1
+sla='A Pre-existing security finding does not block the PR. It gets a ticket due on its first-seen date plus its SLA (`.security.remediation_sla_days`: CRITICAL 7 days, HIGH 30 days, MEDIUM 90 days, LOW no SLA). It blocks a release only after the SLA is breached. The review names the severity, the SLA and the due date.'
+for file in .claude/agents/security-reviewer.md .claude/skills/security-review/SKILL.md templates/REVIEW.md; do
+  check grep -qF "$sla" "$root/$file"
+done
+check jq -e '.security.remediation_sla_days | .critical == 7 and .high == 30 and .medium == 90 and .low == null' "$root/.claude/project-config.defaults.json"
+# A Pre-existing security finding must state severity, SLA and due date.
+body 0 0 none
+sed 's/Pre-existing 0/Pre-existing 1/' "$tmp/body" > "$tmp/sec"
+echo '- Pre-existing: HIGH SQL injection on the base. Suggested ticket title: Fix SQL injection. Severity: HIGH. SLA: 30 days. Due: 2026-12-21' >> "$tmp/sec"
+check bash "$parser" "$tmp/sec"
+sed 's/Pre-existing 0/Pre-existing 1/' "$tmp/body" > "$tmp/sec"
+echo '- Pre-existing: HIGH SQL injection on the base. Suggested ticket title: Fix SQL injection.' >> "$tmp/sec"
+check test "$(bash "$parser" "$tmp/sec" 2>/dev/null; echo $?)" = 1
 preview="$root/.claude/skills/drive-to-green/dry-run.sh"
 printf 'changes\napproved\n' > "$tmp/state"
 bash "$preview" --dry-run "$tmp/state" > "$tmp/out"
