@@ -40,12 +40,13 @@ See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the ful
 
 ## Running tests in a scratch clone
 
-For tests and probes, use the scratch-clone pattern in `.claude/agents/code-reviewer.md` § "Running tests in a scratch clone". If a hook blocks a command, stop and report the command, hook, and message. Never disguise a command to bypass a hook.
+For tests and probes, use the scratch-clone pattern in `.claude/agents/code-reviewer.md` § "Running tests in a scratch clone". If a hook blocks a command, stop and report the command, hook, and message.
 
 The reviewer mutation lock blocks `git clone`, `git fetch`, and `git checkout` while the active-reviewer marker exists. Make the light copy (`docs/skills/review-copies.md`) before step 0 arms the marker.
 
 ## Process
 
+Read the PR's verify evidence first. Report missing evidence.
 Read .claude/rules/writing-standard.md before drafting or posting a review.
 Apply its controlled technical writing profile.
 Treat a writing-profile fault in the PR as advisory, per the Code Reviewer
@@ -272,8 +273,6 @@ Posts a GitHub review comment with:
 - Issues found
 - Fallow findings (advisory; JS/TS diffs only, when the `fallow` CLI is available)
 - Verdict: APPROVED / CHANGES REQUESTED / COMMENT
-
-Invokes: Code Reviewer Agent (Rex)
 
 ---
 

@@ -1639,7 +1639,8 @@ Use the normal ticket branch and PR workflow for the copy.
 Do not use the special `docs/agents-md` or `docs/apexyard-badge` branches.
 
 The copy task creates `.claude/skills/verify/` from the template after the ticket starts.
-Keep the web, mobile, desktop, or service sections that match the detected stack.
+Add the matching stack skeleton from `templates/skills/verify/` — `web.md`, `mobile.md`, `desktop.md`, or `service.md` — for the detected stack.
+Add more than one skeleton file when the project spans stacks.
 Replace setup fields with commands discovered in the target repo.
 Record unknown commands and missing tools as blockers.
 Do not claim the skeleton works until verify runs successfully.

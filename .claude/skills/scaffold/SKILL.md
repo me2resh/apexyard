@@ -196,10 +196,11 @@ A decline creates no verify files.
 On acceptance, preserve any existing `.claude/skills/verify/` directory.
 Create the directory only when absent.
 Copy the template from the ops repo.
-Keep the web section for a web app.
-Keep the service section for an API service or data pipeline.
-For an explicit mobile or desktop custom stack, keep its matching section.
-Retain multiple sections when the project spans stacks.
+Add `templates/skills/verify/web.md` for a web app.
+Add `templates/skills/verify/service.md` for an API service or data pipeline.
+For an explicit mobile custom stack, add `templates/skills/verify/mobile.md`.
+For an explicit desktop custom stack, add `templates/skills/verify/desktop.md`.
+Add more than one skeleton file when the project spans stacks.
 Replace setup fields with commands from the generated project.
 List unresolved commands as blockers.
 Do not claim the skeleton works until verify runs successfully.
