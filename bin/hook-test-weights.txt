@@ -23,6 +23,7 @@
 5 .claude/hooks/tests/test_awk_fallback.sh
 2 .claude/hooks/tests/test_awk_fallback_missing.sh
 140 .claude/hooks/tests/test_block_ambient_tracker_repo.sh
+12 .claude/hooks/tests/test_block_git_add_all.sh
 80 .claude/hooks/tests/test_block_main_push.sh
 17 .claude/hooks/tests/test_block_main_push_heredoc.sh
 171 .claude/hooks/tests/test_block_merge_on_red_ci.sh

@@ -1569,7 +1569,7 @@ assert d["unsupported_only"] is True
 assert d["ecosystems"] == []
 assert d["findings"] == []
 assert d["severity_totals"] == {"Critical": 0, "High": 0, "Medium": 0, "Low": 0, "Unknown": 0}
-assert d["helper_revision"] == "4"
+assert d["helper_revision"] == "5"
 rows = {(item["path"], item["ecosystem"]) for item in d["not_scanned"]}
 assert rows == {("App.csproj", "nuget"), ("libman.json", "libman")}, rows
 assert all(item["reason"] for item in d["not_scanned"])
@@ -1616,7 +1616,7 @@ md = open(sys.argv[3], encoding="utf-8").read()
 assert int(sys.argv[2]) == d["exit_code"] == 0
 assert d["unsupported_only"] is False
 assert d["ecosystems"] == ["npm"]
-assert d["helper_revision"] == "4"
+assert d["helper_revision"] == "5"
 assert d["findings"] == []
 npm = next(s for s in d["dependency_sets"] if s["ecosystem"] == "npm")
 assert npm["coverage"] == npm["check_status"] == "complete"
@@ -1688,7 +1688,7 @@ spec = importlib.util.spec_from_file_location("dep_audit_1744", os.environ["HELP
 mod = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = mod
 spec.loader.exec_module(mod)
-assert mod.HELPER_REVISION == "4"
+assert mod.HELPER_REVISION == "5"
 expected = (
     ("*.csproj", "nuget"),
     ("*.fsproj", "nuget"),
@@ -1719,13 +1719,13 @@ else
 fi
 
 if grep -qF 'not_scanned' "$FIXED_SKILL" \
-  && grep -qF 'The current helper revision is 4.' "$FIXED_SKILL" \
-  && grep -qF 'Helper revision 4' "$FIXED_PIPELINE" \
-  && grep -qF 'The framework helper revision is 4.' "$SRC_ROOT/golden-paths/pipelines/README.md" \
+  && grep -qF 'The current helper revision is 5.' "$FIXED_SKILL" \
+  && grep -qF 'Helper revision 5' "$FIXED_PIPELINE" \
+  && grep -qF 'The framework helper revision is 5.' "$SRC_ROOT/golden-paths/pipelines/README.md" \
   && grep -qF 'not_scanned' "$FIXED_DESIGN"; then
-  pass "GH1744-revision-4-pinned-in-docs"
+  pass "GH1744-revision-5-pinned-in-docs"
 else
-  fail "GH1744-revision-4-pinned-in-docs" "skill, workflow, README, or design missing revision 4"
+  fail "GH1744-revision-5-pinned-in-docs" "skill, workflow, README, or design missing revision 5"
 fi
 
 if python3 - "$FIXED_PIPELINE" <<'PY'
@@ -1743,6 +1743,48 @@ then
   pass "GH1744-workflow-not-scanned-note-only"
 else
   fail "GH1744-workflow-not-scanned-note-only" "not_scanned still marks the summary incomplete"
+fi
+
+# GH2086: Keep HTTP package names as pins and preserve URL coverage gaps.
+if HELPER_PATH="$HELPER" python3 - "$SB" <<'PYTEST'
+import importlib.util, os, sys
+from pathlib import Path
+
+spec = importlib.util.spec_from_file_location("dep_audit_2086", os.environ["HELPER_PATH"])
+mod = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = mod
+spec.loader.exec_module(mod)
+root = Path(sys.argv[1]) / "requirements-http-names"
+root.mkdir()
+manifest = root / "requirements.txt"
+for name in ("httpx", "httpcore", "httplib2", "httptools"):
+    manifest.write_text(f"{name}==0.28.1\n", encoding="utf-8")
+    pins, incomplete, reason = mod.parse_requirements_file(root, manifest)
+    assert [(pin.name, pin.version) for pin in pins] == [(name, "0.28.1")]
+    assert not incomplete and not reason, (name, reason)
+for requirement in (
+    "https://example.com/pkg.tar.gz",
+    "http://example.com/pkg.tar.gz",
+    "file:///tmp/pkg.tar.gz",
+    "pkg @ https://example.com/pkg.tar.gz",
+    "pkg[extra]@https://example.com/pkg.tar.gz",
+    "git+https://example.com/pkg.git",
+    "hg+https://example.com/pkg",
+    "svn+https://example.com/pkg",
+    "bzr+https://example.com/pkg",
+    "-e git+https://example.com/pkg.git#egg=pkg",
+    "--editable https://example.com/pkg.tar.gz",
+):
+    manifest.write_text(requirement + "\n", encoding="utf-8")
+    pins, incomplete, reason = mod.parse_requirements_file(root, manifest)
+    assert not pins and incomplete, (requirement, pins, reason)
+    expected = "unsupported or private requirement line" if requirement.startswith("-") else "VCS or URL dependency"
+    assert reason == expected + " in requirements.txt", (requirement, reason)
+PYTEST
+then
+  pass "GH2086-http-package-pins-and-url-dependencies"
+else
+  fail "GH2086-http-package-pins-and-url-dependencies" "requirement classification changed"
 fi
 
 echo ""

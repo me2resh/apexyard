@@ -78,8 +78,7 @@ The route column shows which Bash commands run the hook.
 
 | Route | Hooks that fail open |
 |-------|----------------------|
-| Every Bash call | `block-ambient-tracker-repo.sh`, `block-privileged-escalation.sh`, `require-skill-for-issue-create.sh`, `require-orbit-slice-for-ticket.sh`, `require-migration-ticket.sh`, `warn-review-marker-write.sh`, `warn-isolated-build-risk.sh`, `block-reviewer-repo-mutation.sh`, `block-reviewer-ci-wait.sh` (a cost guard, see the next section) |
-| `git add` | `block-git-add-all.sh` |
+| Every Bash call | `block-ambient-tracker-repo.sh`, `block-privileged-escalation.sh`, `require-skill-for-issue-create.sh`, `require-orbit-slice-for-ticket.sh`, `require-migration-ticket.sh`, `warn-review-marker-write.sh`, `warn-isolated-build-risk.sh`, `block-reviewer-repo-mutation.sh`, `block-reviewer-ci-wait.sh` (a cost guard, see the next section), `block-git-add-all.sh` |
 | `git push` | `block-main-push.sh`, `validate-branch-name.sh`, `pre-push-gate.sh`, `block-agent-routing-drift.sh` |
 | `git commit` | `check-secrets.sh`, `block-onboarding-in-git.sh`, `verify-commit-refs.sh`, `validate-commit-format.sh`, `require-agdr-for-arch-changes.sh`, `block-agent-routing-drift.sh`, `warn-bootstrap-scope.sh` |
 | `gh issue create` | `suggest-ticket-template.sh`, `validate-issue-structure.sh`, `block-private-refs-in-public-repos.sh` |

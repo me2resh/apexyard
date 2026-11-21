@@ -28,7 +28,7 @@ try:
 except ImportError:  # pragma: no cover — CI uses 3.12+
     tomllib = None  # type: ignore[assignment]
 
-HELPER_REVISION = "4"
+HELPER_REVISION = "5"
 HELPER_ID = "apexyard-dependency-audit"
 # Revision 4 records known unsupported manifests in not_scanned.
 # Exit 3 for those files only when both conditions are true.
@@ -776,7 +776,9 @@ def parse_requirements_file(
             line = line[: marker_m.start()].strip()
         if marker and not evaluate_marker(marker):
             continue
-        if "@" in line or "git+" in line or line.startswith("http"):
+        if re.match(r"(?:https?://|file://|(?:git|hg|svn|bzr)\+)", line) or re.match(
+            r"[A-Za-z0-9][A-Za-z0-9._-]*(?:\[[^]]+\])?\s*@\s*\S+", line
+        ):
             incomplete = True
             reasons.append(f"VCS or URL dependency in {rel}")
             continue

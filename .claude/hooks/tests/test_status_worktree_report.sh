@@ -307,7 +307,7 @@ printf 'repo=collision/newline\nnumber=62\n' > "$newline_gitdir/apexyard-ticket"
 # Trace owner calls before library rejection and all Git lookups.
 mkdir -p "$TMP/collision-report/.claude/skills/status" "$TMP/collision-report/.claude/hooks"
 cp "$REPORT" "$TMP/collision-report/.claude/skills/status/worktree-report.sh"
-cp "$ROOT/.claude/hooks/_lib-worktree-owner.sh" "$ROOT/.claude/hooks/_lib-active-ticket.sh" "$TMP/collision-report/.claude/hooks/"
+cp "$ROOT/.claude/hooks/_lib-exclusive-directory.sh" "$ROOT/.claude/hooks/_lib-worktree-owner.sh" "$ROOT/.claude/hooks/_lib-active-ticket.sh" "$TMP/collision-report/.claude/hooks/"
 cat >> "$TMP/collision-report/.claude/hooks/_lib-worktree-owner.sh" <<'TRACE'
 eval "$(declare -f worktree_owner_status | sed '1s/worktree_owner_status/collision_owner_status/')"
 worktree_owner_status() {
