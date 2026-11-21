@@ -441,6 +441,17 @@ run_wrapper "$A" PreToolUse "$(raw_payload '{"CommandLine":"git status","RunPers
 expect_decision "A24ue run_command with RunPersistent null gets deny" deny "RunPersistent runs in an existing terminal"
 run_wrapper "$A" PreToolUse "$(raw_payload '{"CommandLine":"git status","RunPersistent":false}' run_command)"
 expect_decision "A24uf run_command with RunPersistent false still reaches the gates" ask
+# The repo enforces, not agy: agy may not drop its terminal sandbox.
+for v in true '"true"' null 1; do
+  # Build the args outside "$(...)": bash 3.2 mangles escaped quotes there.
+  bypass_args=$(jq -cn --argjson b "$v" '{CommandLine: "git status", BypassSandbox: $b}')
+  run_wrapper "$A" PreToolUse "$(raw_payload "$bypass_args" run_command)"
+  expect_decision "A24ug run_command with BypassSandbox $v gets deny" deny "BypassSandbox asks agy to run outside its terminal sandbox; ApexYard does not allow agy to drop its sandbox"
+done
+run_wrapper "$A" PreToolUse "$(raw_payload '{"CommandLine":"git status","BypassSandbox":false}' run_command)"
+expect_decision "A24uh run_command with BypassSandbox false still reaches the gates" ask
+run_wrapper "$A" PreToolUse "$(raw_payload '{"CommandLine":"sh","IsDaemon":true}' run_command)"
+expect_decision "A24ui run_command with IsDaemon true still reaches the gates" ask
 # Keep the escaped literal outside "$(...)": bash 3.2 mangles backslashes
 # in single quotes inside a double-quoted command substitution.
 string_args='"{\"CommandLine\":\"git status\",\"CommandLine\":\"git add -A\"}"'
@@ -486,7 +497,11 @@ expect_decision "A25 args as a JSON string still reach the gate" deny "refuses d
 # settings.json would deny any gated tool.
 cp "$A/.claude/settings.json" "$A/settings.good"
 printf '{ not json' > "$A/.claude/settings.json"
-for t in read_file view_file list_dir find_by_name grep_search search_web read_url_content command_status read_terminal ask_question ask_permission list_permissions; do
+# grep_search reads file content under a folder, which a path rule cannot
+# see. So it is not read-only, and it gets the unrouted deny.
+run_wrapper "$A" PreToolUse "$(p_tool grep_search "$A")"
+expect_decision "A25a grep_search gets deny as an unrouted tool" deny "'grep_search' is not routed"
+for t in read_file view_file list_dir find_by_name search_web read_url_content command_status read_terminal ask_question ask_permission list_permissions; do
   run_wrapper "$A" PreToolUse "$(p_tool "$t" "$A")"
   expect_decision "A25b read-only $t gets ask without settings.json" ask
 done
@@ -913,11 +928,23 @@ read_case "P11 read_file .ENV gets deny (case-insensitive)" "$C/.ENV" deny 'Read
 printf 'SECRET=1\n' > "$C/.env"
 ln -s "$C/.env" "$C/innocent.txt"
 read_case "P12 read_file of a symlink to .env gets deny (physical form)" "$C/innocent.txt" deny 'Read\(//\*\*/\.env\)'
-rm -f "$C/innocent.txt" "$C/.env"
+rm -f "$C/innocent.txt"
+# A chain of symlinks resolves to its end. A loop fails closed.
+ln -s "$C/.env" "$C/link-two"
+ln -s "$C/link-two" "$C/link-one"
+read_case "P12b read_file of a two-level symlink chain to .env gets deny" "$C/link-one" deny 'Read\(//\*\*/\.env\)'
+ln -s "$C/loop-b" "$C/loop-a"
+ln -s "$C/loop-a" "$C/loop-b"
+read_case "P12c read_file of a symlink loop gets deny (fails closed)" "$C/loop-a" deny "symlink chain that loops"
+rm -f "$C/.env"
+read_case "P12d read_file of a dangling symlink chain to .env gets deny" "$C/link-one" deny 'Read\(//\*\*/\.env\)'
+ln -s "$C/no-such-dir/data.txt" "$C/dangling-plain"
+read_case "P12e read_file of a dangling symlink to a plain name gets ask" "$C/dangling-plain" ask
+rm -f "$C/link-one" "$C/link-two" "$C/loop-a" "$C/loop-b" "$C/dangling-plain"
 run_wrapper "$C" PreToolUse "$(p_args view_file "$(jq -cn --arg p "$C/.env" '{AbsolutePath:$p}')")"
 expect_decision "P13 view_file (IDE name) of .env gets deny" deny 'Read\(//\*\*/\.env\)'
-run_wrapper "$C" PreToolUse "$(p_args grep_search '{"Query":"KEY","SearchPath":".env"}')"
-expect_decision "P14 grep_search with an .env path argument gets deny" deny 'Read\(//\*\*/\.env\)'
+run_wrapper "$C" PreToolUse "$(p_args grep_search '{"Query":"SECRET","SearchPath":"."}')"
+expect_decision "P14 grep_search over the fork gets deny as unrouted (it reads .env content)" deny "'grep_search' is not routed"
 run_wrapper "$C" PreToolUse "$(p_args list_dir "$(jq -cn --arg p "$C/src" '{DirectoryPath:$p}')")"
 expect_decision "P15 list_dir of src gets ask" ask
 bash_case() { # <label> <command> <want> [rule ERE]

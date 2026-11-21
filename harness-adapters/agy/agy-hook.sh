@@ -234,6 +234,9 @@ build_pretooluse_payload() {
             error("run_command with RequestedTerminalID runs in an existing terminal whose directory the gates cannot see")
           elif ($a | has("RunPersistent")) and $a.RunPersistent != false then
             error("run_command with RunPersistent runs in an existing terminal whose directory the gates cannot see")
+          # The repo enforces, not agy: agy keeps its terminal sandbox.
+          elif ($a | has("BypassSandbox")) and $a.BypassSandbox != false then
+            error("run_command with BypassSandbox asks agy to run outside its terminal sandbox; ApexYard does not allow agy to drop its sandbox")
           else . end)
          | (if ($a.CommandLine | nonempty_string) then . else error("argument CommandLine is missing or empty") end)
          | (if ($a.Cwd != null and $a.Cwd != "") then [(check_dir($a.Cwd; "argument Cwd") | no_relative_when_cwd_differs(.; "Cwd")), "args"]
@@ -540,7 +543,13 @@ GATED_TOOLS="run_command write_to_file write_file replace_file_content multi_rep
 KEYSTROKE_TOOLS="send_command_input"
 # agy CLI 1.5.14: "Valid actions: list, kill, status, send_input".
 MANAGE_TASK_SAFE_ACTIONS="list kill status"
-READ_ONLY_TOOLS="read_file view_file list_dir find_by_name grep_search search_web read_url_content command_status read_terminal ask_question ask_permission list_permissions"
+# grep_search is not on the list: it reads the content of every file under a
+# folder, .env files included, so a path-based Read(...) rule cannot see what
+# it reads. agy CLI 1.5.14 does not declare it, so it is denied as unrouted.
+# view_file reads only the path it names, which check_read_denies checks.
+# read_terminal and command_status read the output of commands that the
+# gates already judged. find_by_name and list_dir return names, not content.
+READ_ONLY_TOOLS="read_file view_file list_dir find_by_name search_web read_url_content command_status read_terminal ask_question ask_permission list_permissions"
 
 # Argument-shape checks (AgDR-0314). jq keeps the last of two duplicate keys
 # and matches key case exactly. agy is a Go binary, and Go's encoding/json
@@ -706,15 +715,27 @@ perm_lexical() {
   printf '%s\n' "$1" | awk -F/ '{n=0; for(i=1;i<=NF;i++){if($i==""||$i==".")continue;if($i==".."){if(n)n--;continue} a[++n]=$i} p="";for(i=1;i<=n;i++)p=p "/" a[i];print (p==""?"/":p)}'
 }
 
-# perm_physical <path>: the path with its folder resolved through symlinks,
-# and one level of a symlink at the path itself. Nothing when the folder does
-# not exist.
+# PERM_LINK_DEPTH: the most symlinks perm_physical follows in one chain.
+PERM_LINK_DEPTH=40
+
+# perm_physical <path>: the path with every symlink in its chain followed,
+# and its folder resolved through symlinks. A loop, a chain longer than
+# PERM_LINK_DEPTH, or an unreadable link prints "!unresolvable", and the
+# caller fails closed. A dangling link resolves to its missing target. Nothing
+# is printed when the final folder does not exist. readlink without options
+# keeps this bash 3.2 and macOS safe.
 perm_physical() {
-  local p="$1" link dir
-  if [ -L "$p" ]; then
-    link=$(readlink "$p") || return 0
+  local p="$1" link dir n=0
+  while [ -L "$p" ]; do
+    n=$((n + 1))
+    if [ "$n" -gt "$PERM_LINK_DEPTH" ]; then
+      printf '%s\n' '!unresolvable'
+      return 0
+    fi
+    link=$(readlink "$p" 2>/dev/null) || { printf '%s\n' '!unresolvable'; return 0; }
+    [ -n "$link" ] || { printf '%s\n' '!unresolvable'; return 0; }
     case "$link" in /*) p="$link" ;; *) p="${p%/*}/$link" ;; esac
-  fi
+  done
   dir=$(CDPATH='' cd -- "${p%/*}/" 2>/dev/null && pwd -P) || return 0
   printf '%s/%s\n' "${dir%/}" "${p##*/}"
 }
@@ -732,6 +753,10 @@ perm_path_rule() {
       perm_physical "$p"
     } >> "$WORK/perm-paths"
   done
+  if grep -qx '!unresolvable' "$WORK/perm-paths" 2>/dev/null; then
+    printf '%s' '!unresolvable'
+    return 0
+  fi
   jq -R -s -r --slurpfile rules "$WORK/perm-rules.json" --arg kinds "$kinds" '
     (split("\n") | map(select(. != ""))) as $paths
     | [ $rules[0][] | select(.kind as $k | ($kinds | split(" ") | index($k)) != null)
@@ -770,6 +795,7 @@ check_read_denies() {
   load_perm_rules
   rule=$(perm_path_rule "Read" "${paths[@]}")
   [ "$rule" != "!error" ] || deny "ApexYard agy adapter: cannot match permissions.deny rules, so it fails closed."
+  [ "$rule" != "!unresolvable" ] || deny "ApexYard agy adapter: a path argument is a symlink chain that loops, runs longer than $PERM_LINK_DEPTH links, or cannot be read. The permissions.deny rules cannot judge it, so it fails closed."
   [ -z "$rule" ] || perm_deny "$rule"
   return 0
 }
@@ -795,6 +821,7 @@ check_gated_denies() {
     rule=$(perm_path_rule "$kinds" "$file")
   fi
   [ "$rule" != "!error" ] || deny "ApexYard agy adapter: cannot match permissions.deny rules, so it fails closed."
+  [ "$rule" != "!unresolvable" ] || deny "ApexYard agy adapter: a path argument is a symlink chain that loops, runs longer than $PERM_LINK_DEPTH links, or cannot be read. The permissions.deny rules cannot judge it, so it fails closed."
   [ -z "$rule" ] || perm_deny "$rule"
   return 0
 }

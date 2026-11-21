@@ -64,7 +64,7 @@ Claude Code applies the `permissions.deny` rules in `.claude/settings.json` itse
 
 | Rule type | Applied to | Match |
 |-----------|-----------|-------|
-| `Read(<glob>)` | Every string argument of a read-only tool, such as the `read_file` `Path` or a `view_file` path | The path, its lexical form, or its symlink-resolved form matches the glob |
+| `Read(<glob>)` | Every string argument of a read-only tool, such as the `read_file` `Path` or a `view_file` path | The path, its lexical form, or its symlink-resolved form matches the glob. The resolved form follows the whole chain, up to 40 links. A loop, a longer chain, or an unreadable link gets `deny`. |
 | `Edit(<glob>)` | The file path of `write_file`, `edit_file`, and the other write tools | The same |
 | `Write(<glob>)` | The file path of `write_file` and `write_to_file` | The same |
 | `Bash(<cmd>)` | `run_command` | The trimmed `CommandLine` is `<cmd>` |
@@ -111,7 +111,7 @@ The agy docs conflict on `allow`:
 | Class | Tools | Result |
 |-------|-------|--------|
 | Gated | `run_command`, `write_to_file`, `write_file`, `edit_file`, `replace_file_content`, `multi_replace_file_content` | The settings.json gates decide. A pass gives `ask`. |
-| Read-only allowlist | `read_file`, `view_file`, `list_dir`, `find_by_name`, `grep_search`, `search_web`, `read_url_content`, `command_status`, `read_terminal`, `ask_question`, `ask_permission`, `list_permissions` | `ask` after the `permissions.deny` `Read(...)` check, and before the fork, gate, and session-snapshot checks |
+| Read-only allowlist | `read_file`, `view_file`, `list_dir`, `find_by_name`, `search_web`, `read_url_content`, `command_status`, `read_terminal`, `ask_question`, `ask_permission`, `list_permissions` | `ask` after the `permissions.deny` `Read(...)` check, and before the fork, gate, and session-snapshot checks |
 | Keystrokes | `send_command_input` | Always `deny`. No gate can inspect keystrokes. |
 | Task control | `manage_task` | `Action` `list`, `kill`, or `status` gets `ask`. `send_input` gets the keystroke `deny`. A missing or unknown `Action` gets `deny`. |
 | Not routed | Every other tool, including subagent, schedule, browser, and `mcp_*` tools | `deny`, with a reason that names the tool |
@@ -121,12 +121,14 @@ Why the read-only tools get `ask` early:
 - They reach no ApexYard gate. So the fork, gate, and session-snapshot checks cannot change their result, and a broken fork still lets agy read under its own permission check.
 - `search_web` and `read_url_content` are allowed for parity with Claude Code, where no gate covers `WebSearch` or `WebFetch`. A URL can carry data out of the machine.
 - The `permissions.deny` `Read(...)` rules still apply first. They deny reads of `.env` files, private keys, and `.mcp.json`, which closes the main source for such an exfiltration.
+- Each allowed tool reads only what the `Read(...)` check can see. `read_file` and `view_file` read the one path they name. `command_status` and `read_terminal` read the output of a command that the gates already judged. `find_by_name` and `list_dir` return file names, not content.
+- `grep_search` is not on the list. It reads the content of every file under a folder, `.env` files included, and a path rule sees only the folder. agy CLI 1.5.14 does not declare it. So it gets the not-routed `deny`, and agy can search with `run_command` instead.
 
 Before the classes apply, the wrapper checks the argument shape. jq keeps the last of two duplicate keys, while agy's Go JSON decoder matches keys case-insensitively. So the wrapper denies a duplicate key in any payload object and a case-variant key in `toolCall` or its args. It also denies an args key outside the tool's key list:
 
 | Tool | Allowed args keys |
 |------|-------------------|
-| `run_command` | `CommandLine`, `Cwd`, `WaitMsBeforeAsync`, `IsDaemon`, `BypassSandbox`, `toolSummary`. A `RequestedTerminalID`, or a `RunPersistent` other than `false`, gets `deny`: the command runs in an existing terminal whose directory the gates cannot see. agy CLI 1.5.14 does not declare these two keys. |
+| `run_command` | `CommandLine`, `Cwd`, `WaitMsBeforeAsync`, `IsDaemon`, `BypassSandbox`, `toolSummary`. A `RequestedTerminalID`, or a `RunPersistent` other than `false`, gets `deny`: the command runs in an existing terminal whose directory the gates cannot see. agy CLI 1.5.14 does not declare these two keys. A `BypassSandbox` other than absent or `false` gets `deny`: ApexYard does not allow agy to drop its terminal sandbox. `IsDaemon` is allowed, and its `CommandLine` still goes through the gates. |
 | `write_file` | `Path`, `Content`, `Append`, `Overwrite`, `ArtifactMetadata`, `toolSummary` |
 | `edit_file` | `Path`, `Target`, `Replacement`, `ArtifactMetadata`, `toolSummary` |
 | `read_file` | `Path`, `StartLine`, `EndLine`, `ByteOffset`, `toolSummary` |
@@ -209,6 +211,7 @@ The wrapper prints its decision before it writes the line, and it ignores loggin
 ## Gaps + tracking
 
 - **Permission rules:** `permissions.deny` is applied literally under agy. A chained or wrapped command is not caught, and rule types other than `Read`, `Edit`, `Write`, and `Bash` are not applied. The other adapters do not apply these rules yet.
+- **Terminal sandbox:** a `run_command` with `BypassSandbox` gets `deny`, because the repo enforces the policy, not agy. The cost: in a linked worktree, agy's git can fail inside its sandbox with "not a git repository: (null)", and agy may retry with `BypassSandbox`. That retry is denied, so git inside a worktree may not work under agy. The fork root is not affected.
 - **Agent shell session id:** a PreToolUse hook cannot change the agent's command. So agy's `run_command` shell does not get `APEXYARD_SESSION_ID`.
 - **Network reads:** `search_web` and `read_url_content` are in the read-only allowlist. Claude Code has the same path, because no PreToolUse gate covers `WebFetch` or `WebSearch`.
 - **`if` predicates:** the wrapper matches a `Bash(<glob>)` predicate against the whole command. Claude Code matches each subcommand. No PreToolUse handler uses `if` today.
