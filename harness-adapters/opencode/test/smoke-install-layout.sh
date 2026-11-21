@@ -18,10 +18,11 @@
 # drift from what the script actually produces) into a scratch directory,
 # then:
 #
-#   1. Asserts the discovery directory (`.opencode/plugins/`) contains NO
-#      top-level `.ts` files — every adapter file lives one level down,
-#      inside the `apexyard/` subdirectory.
-#   2. Dynamically imports ONLY `.opencode/plugins/apexyard/index.ts` — the
+#   1. Asserts the discovery directory (`.opencode/plugins/`) contains exactly
+#      ONE top-level `.ts` file — the `apexyard.ts` shim — and NO `apexyard/`
+#      code subdirectory, because opencode 2.x discovers
+#      `<discovery>/<name>/index.ts` as well (#2072).
+#   2. Dynamically imports ONLY the code entry (`.opencode/apexyard/index.ts`) — the
 #      one file opencode's subdirectory discovery would actually load — and
 #      asserts the import succeeds (every relative import in the chain:
 #      index -> gate-dispatcher -> derive-gates -> derive-gates-core,
@@ -40,8 +41,9 @@
 #
 # This does NOT re-verify a live, model-driven opencode session (that gap is
 # already documented in docs/opencode-adapter.md's "honest breakdown" table
-# and is unrelated to install layout) — it verifies the install layout
-# itself never reproduces the #844 crash again.
+# and is unrelated to install layout) — it verifies the install layout itself
+# never reproduces the #844 crash again, and that the installer leaves exactly
+# one discovered entry (#2072).
 #
 # RUN
 # ---
@@ -74,29 +76,35 @@ bash "$FRAMEWORK_ROOT/bin/install-opencode-adapter.sh" \
 
 DISCOVERY_DIR="$FIXTURE_PROJECT/.opencode/plugins"
 ENTRY="$DISCOVERY_DIR/apexyard.ts"
-SUB_ENTRY="$DISCOVERY_DIR/apexyard/index.ts"
+CODE_DIR="$FIXTURE_PROJECT/.opencode/apexyard"
+SUB_ENTRY="$CODE_DIR/index.ts"
 
 FAIL=0
 
 echo ""
-echo "== Check 1: exactly one top-level .ts file (the apexyard.ts shim) under the discovery dir =="
-# opencode loads only top-level files (glob {plugin,plugins}/*.{ts,js}); a
-# subdirectory-only install is never loaded (me2resh/apexyard bug: gates inert).
+echo "== Check 1: exactly one top-level .ts file (the apexyard.ts shim) under the discovery dir, and no code subdirectory there =="
+# opencode 1.x loads only top-level files (glob {plugin,plugins}/*.{ts,js});
+# 2.x also loads <discovery>/<name>/index.ts. The code directory therefore
+# sits BESIDE the discovery dir: with it inside, opencode loads the adapter
+# twice and runs every gate twice (me2resh/apexyard#2072).
 TOP_LEVEL_TS=$(find "$DISCOVERY_DIR" -maxdepth 1 -type f -name '*.ts' | sort)
 EXPECTED_SHIM="$DISCOVERY_DIR/apexyard.ts"
 if [ "$TOP_LEVEL_TS" != "$EXPECTED_SHIM" ]; then
   echo "FAIL: expected exactly $EXPECTED_SHIM as the only top-level .ts file, found:" >&2
   echo "$TOP_LEVEL_TS" >&2
   FAIL=1
-elif [ "$(cat "$EXPECTED_SHIM")" != 'export { default } from "./apexyard/index.ts";' ]; then
+elif [ -d "$DISCOVERY_DIR/apexyard" ]; then
+  echo "FAIL: $DISCOVERY_DIR/apexyard still exists — opencode 2.x discovers its index.ts and loads the adapter twice" >&2
+  FAIL=1
+elif [ "$(cat "$EXPECTED_SHIM")" != 'export { default } from "../apexyard/index.ts";' ]; then
   echo "FAIL: unexpected shim content in $EXPECTED_SHIM" >&2
   FAIL=1
 else
-  echo "PASS: apexyard.ts is the only top-level .ts file and re-exports apexyard/index.ts."
+  echo "PASS: apexyard.ts is the only top-level .ts file, the code dir sits outside the discovery dir, and the shim re-exports it."
 fi
 
 echo ""
-echo "== Check 2: apexyard/index.ts exists =="
+echo "== Check 2: the code entry exists beside the discovery dir =="
 [ -f "$SUB_ENTRY" ] || { echo "FAIL: expected entry not found: $SUB_ENTRY" >&2; FAIL=1; }
 
 RUNNER="$TMPDIR/run-load-assertion.mjs"
@@ -209,22 +217,139 @@ if bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P4C/.opencode/plugi
 else
   echo "PASS: symlinked .opencode dir refused."
 fi
+# 4d: the code directory itself is a symlink.
+P4D="$TMPDIR/sym-code-dir"
+mkdir -p "$P4D/.opencode/plugins" "$TMPDIR/real-code-dir"
+printf 'user code\n' > "$TMPDIR/real-code-dir/user.ts"
+ln -s "$TMPDIR/real-code-dir" "$P4D/.opencode/apexyard"
+if bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P4D/.opencode/plugins" >/dev/null 2>&1; then
+  echo "FAIL: installer accepted a symlinked code directory" >&2; FAIL=1
+elif [ ! -f "$TMPDIR/real-code-dir/user.ts" ]; then
+  echo "FAIL: installer wrote through the code-directory symlink" >&2; FAIL=1
+else
+  echo "PASS: symlinked code directory refused, target untouched."
+fi
+# 4e: the shim path is a directory. mv would drop the temp shim inside it and
+# the run would end with no discovered entry.
+P4E="$TMPDIR/shim-is-dir"
+mkdir -p "$P4E/.opencode/plugins/apexyard.ts"
+printf 'operator\n' > "$P4E/.opencode/plugins/apexyard.ts/keep.txt"
+if bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P4E/.opencode/plugins" >/dev/null 2>&1; then
+  echo "FAIL: installer accepted a directory at the shim path" >&2; FAIL=1
+elif [ ! -f "$P4E/.opencode/plugins/apexyard.ts/keep.txt" ]; then
+  echo "FAIL: the refused run changed the operator's file in the shim directory" >&2; FAIL=1
+elif [ -e "$P4E/.opencode/apexyard" ]; then
+  echo "FAIL: the refused run wrote a code directory before checking the shim path" >&2; FAIL=1
+else
+  echo "PASS: a directory at the shim path is refused before any install writes."
+fi
 
 echo ""
-echo "== Check 5: re-running the installer on an older install (no shim) adds the shim =="
+echo "== Check 5: re-running the installer on a pre-#2072 install moves the code out and rewrites the shim =="
 P5="$TMPDIR/upgrade"
 mkdir -p "$P5/.opencode/plugins/apexyard"
 : > "$P5/.opencode/plugins/apexyard/index.ts"
+printf 'export { default } from "./apexyard/index.ts";\n' > "$P5/.opencode/plugins/apexyard.ts"
 bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P5/.opencode/plugins" >/dev/null
-if [ "$(cat "$P5/.opencode/plugins/apexyard.ts")" = 'export { default } from "./apexyard/index.ts";' ]; then
-  echo "PASS: upgrade run added the shim."
+if [ "$(cat "$P5/.opencode/plugins/apexyard.ts")" = 'export { default } from "../apexyard/index.ts";' ] \
+  && [ -f "$P5/.opencode/apexyard/index.ts" ] \
+  && [ ! -e "$P5/.opencode/plugins/apexyard" ]; then
+  echo "PASS: upgrade run moved the code directory out of the discovery dir and rewrote the shim."
 else
-  echo "FAIL: upgrade run did not add the shim" >&2; FAIL=1
+  echo "FAIL: upgrade run did not produce the single-entry layout" >&2; FAIL=1
+fi
+
+echo ""
+echo "== Check 6: inputs that would destroy the discovery dir or a neighbour are refused =="
+# --name equal to the discovery dir's own name makes the code path BE the
+# discovery dir, and the installer removes that path with rm -rf. It deleted
+# every plugin the operator had installed there (#2072 review).
+P6="$TMPDIR/name-collision"
+mkdir -p "$P6/.opencode/plugins"
+printf 'export const mine = 1;\n' > "$P6/.opencode/plugins/operator-plugin.ts"
+if bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P6/.opencode/plugins" --name plugins >/dev/null 2>&1; then
+  echo "FAIL: installer accepted --name plugins, which collides with the discovery dir" >&2; FAIL=1
+elif [ ! -f "$P6/.opencode/plugins/operator-plugin.ts" ]; then
+  echo "FAIL: the refused run still deleted the operator's plugin" >&2; FAIL=1
+else
+  echo "PASS: --name plugins refused and the operator's plugin is intact."
+fi
+# A target that is not a discovery directory is refused before the code path is
+# derived from its parent: `--target-dir .opencode` put the code at
+# <project>/apexyard and deleted the operator's own apexyard/ there.
+P6B="$TMPDIR/bad-target"
+mkdir -p "$P6B/.opencode" "$P6B/apexyard"
+printf 'notes\n' > "$P6B/apexyard/notes.md"
+if bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P6B/.opencode" >/dev/null 2>&1; then
+  echo "FAIL: installer accepted a --target-dir that is not a discovery directory" >&2; FAIL=1
+elif [ ! -f "$P6B/apexyard/notes.md" ]; then
+  echo "FAIL: the refused run still deleted the operator's apexyard/ directory" >&2; FAIL=1
+else
+  echo "PASS: a non-discovery --target-dir is refused and its neighbour is intact."
+fi
+# A name that names an opencode discovery directory is refused. With a singular
+# target-dir, `--name plugins` would make the code path the real plural
+# discovery dir and the installer would rm -rf every plugin inside it.
+P6A="$TMPDIR/reserved-name"
+mkdir -p "$P6A/.opencode/plugins"
+printf 'export const mine = 1;\n' > "$P6A/.opencode/plugins/operator-plugin.ts"
+if bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P6A/.opencode/plugins" --name plugin >/dev/null 2>&1; then
+  echo "FAIL: installer accepted --name plugin, which is a discovery directory name" >&2; FAIL=1
+elif [ ! -f "$P6A/.opencode/plugins/operator-plugin.ts" ]; then
+  echo "FAIL: the refused reserved-name run still deleted the operator's plugin" >&2; FAIL=1
+else
+  echo "PASS: --name plugin refused and the operator's plugin is intact."
+fi
+# A '..' segment is refused before any derived path is checked, so a symlinked
+# intermediate directory cannot redirect the code or legacy path.
+P6D="$TMPDIR/dotdot-target"
+mkdir -p "$P6D/.opencode/plugins"
+printf 'export const mine = 1;\n' > "$P6D/.opencode/plugins/operator-plugin.ts"
+if bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P6D/.opencode/plugins/../plugins" >/dev/null 2>&1; then
+  echo "FAIL: installer accepted a --target-dir with a '..' segment" >&2; FAIL=1
+elif [ ! -f "$P6D/.opencode/plugins/operator-plugin.ts" ]; then
+  echo "FAIL: the refused '..' run still deleted the operator's plugin" >&2; FAIL=1
+else
+  echo "PASS: a --target-dir with a '..' segment is refused and the operator's plugin is intact."
+fi
+# A trailing `/.` used to spell the code path two ways, so the legacy removal
+# deleted the copy the same run had just written and left a dangling shim.
+P6C="$TMPDIR/trailing-dot"
+mkdir -p "$P6C/.opencode/plugins"
+bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P6C/.opencode/plugins/." >/dev/null
+if [ -f "$P6C/.opencode/apexyard/index.ts" ] && [ ! -e "$P6C/.opencode/plugins/apexyard" ]; then
+  echo "PASS: a trailing '/.' target still produces the single-entry layout."
+else
+  echo "FAIL: a trailing '/.' target deleted the code directory or left a second entry" >&2; FAIL=1
+fi
+
+echo ""
+echo "== Check 7: the installer will not remove a directory it did not write =="
+P7="$TMPDIR/foreign-dest"
+mkdir -p "$P7/.opencode/plugins" "$P7/.opencode/custom"
+printf 'notes\n' > "$P7/.opencode/custom/notes.md"
+if bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P7/.opencode/plugins" --name custom >/dev/null 2>&1; then
+  echo "FAIL: installer removed a foreign directory at its code path" >&2; FAIL=1
+elif [ ! -f "$P7/.opencode/custom/notes.md" ]; then
+  echo "FAIL: the refused run still deleted the foreign directory" >&2; FAIL=1
+else
+  echo "PASS: a foreign directory at the code path is refused and left intact."
+fi
+
+echo ""
+echo "== Check 8: the installer verifies one discovered entry instead of claiming one =="
+P8="$TMPDIR/second-shim"
+mkdir -p "$P8/.opencode/plugins"
+printf 'export { default } from "../apexyard/index.ts";\n' > "$P8/.opencode/plugins/other.ts"
+if bash "$INSTALLER" --root "$FRAMEWORK_ROOT" --target-dir "$P8/.opencode/plugins" >/dev/null 2>&1; then
+  echo "FAIL: installer reported success with a second shim re-exporting the same code dir" >&2; FAIL=1
+else
+  echo "PASS: a second shim is refused instead of reported as a single entry."
 fi
 
 echo ""
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: the real, shipped install layout (bin/install-opencode-adapter.sh's output) loads cleanly — no top-level helper files in the discovery dir, and apexyard/index.ts default-exports a V2 definition whose setup registers the execute.before gate hook."
+  echo "PASS: the real, shipped install layout (bin/install-opencode-adapter.sh's output) loads cleanly — one discovered shim, the code directory outside the discovery dir, and apexyard/index.ts default-exports a V2 definition whose setup registers the execute.before gate hook."
   exit 0
 fi
 exit 1
