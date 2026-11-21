@@ -137,6 +137,7 @@ class ReliabilityTests(unittest.TestCase):
             'plus bullets': '+ Trigger: path: src/custom/*\n+ Check: x\n+ Source: y\n',
             'numbered list': '1. Trigger: path: src/custom/*\n2. Check: x\n3. Source: y\n',
             'table rows': '| Trigger | path: src/custom/* |\n| Check | x |\n| Source | y |\n',
+            'checkbox list': '- [ ] Trigger: path: src/custom/*\n- [ ] Check: x\n- [ ] Source: y\n',
         }.items():
             shapes[label + ' beside valid item'] = valid + '## Bad item\n' + lines
         for name, text in shapes.items():
