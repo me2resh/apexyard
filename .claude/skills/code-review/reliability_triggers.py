@@ -6,7 +6,8 @@ import sys
 
 LABELS = ("Trigger", "Check", "Source")
 VALID = re.compile(r"^(Trigger|Check|Source): (.*)$")
-LOOKS_LIKE_FIELD = re.compile(r"^[\s>*_`#-]*(trigger|check|source)[\s*_`]*:", re.I)
+LOOKS_LIKE_FIELD = re.compile(
+    r"^[\s>*+_`#|-]*(?:\d+[.)]\s*)?[\s*_`|]*(trigger|check|source)[\s*_`|]*[:|]", re.I)
 HEADING = re.compile(r"^#{2,6} ")
 SIMPLE = {"n": 10, "t": 9, "\\": 92, '"': 34, "a": 7, "b": 8, "f": 12, "r": 13, "v": 11}
 
@@ -93,7 +94,10 @@ def parse_diff(patch):
             explicit.append(unquote(line.split(" ", 2)[2]))
         elif not in_hunk and line.startswith(("--- ", "+++ ")):
             value = line[4:]
-            if not value.startswith('"'):
+            if value.startswith('"'):
+                parts = split_quoted(value)
+                value = parts[0] if parts else value.split("\t", 1)[0]
+            else:
                 value = value.split("\t", 1)[0]
             value = unquote(value)
             if value != "/dev/null":

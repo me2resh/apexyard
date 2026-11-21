@@ -132,6 +132,13 @@ class ReliabilityTests(unittest.TestCase):
             'empty path': '## Item one\nTrigger: path: \n' + good,
             'no items': '# Notes\nNothing here.\n',
         }
+        valid = '## Valid item\nTrigger: path: src/other/*\n' + good
+        for label, lines in {
+            'plus bullets': '+ Trigger: path: src/custom/*\n+ Check: x\n+ Source: y\n',
+            'numbered list': '1. Trigger: path: src/custom/*\n2. Check: x\n3. Source: y\n',
+            'table rows': '| Trigger | path: src/custom/* |\n| Check | x |\n| Source | y |\n',
+        }.items():
+            shapes[label + ' beside valid item'] = valid + '## Bad item\n' + lines
         for name, text in shapes.items():
             with self.subTest(shape=name), tempfile.TemporaryDirectory() as directory:
                 script, private = self.make_root(directory)
@@ -145,6 +152,28 @@ class ReliabilityTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn('reliability-team.md', result.stderr)
                 self.assertEqual(result.stdout, '')
+
+    def test_real_git_diff_spaced_quoted_name(self):
+        with tempfile.TemporaryDirectory() as directory:
+            def git(*args):
+                return subprocess.run(['git', '-C', directory, *args], text=True, check=True,
+                                      capture_output=True).stdout
+            git('init', '-q')
+            git('config', 'user.email', 't@example.com')
+            git('config', 'user.name', 't')
+            git('config', 'core.quotepath', 'true')
+            for filename in ('d e deploy.yml', 'd \u00e9 deploy.yml'):
+                target = pathlib.Path(directory) / '.github/workflows' / filename
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text('one\n')
+                git('add', '.')
+                git('commit', '-q', '-m', 'init')
+                target.write_text('two\n')
+                patch = git('diff')
+                self.assertIn('\t\n', patch)
+                output = self.run_loader(patch)
+                self.assertIn('## Deployment isolation', output, filename)
+                git('commit', '-q', '-am', 'edit')
 
     def test_diff_file_argument(self):
         with tempfile.NamedTemporaryFile(mode='w') as patch:
