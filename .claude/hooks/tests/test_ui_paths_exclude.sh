@@ -53,8 +53,11 @@ run_exclude_filter() {
 
   # Run the hook's OWN exclude block (extracted from the hook source), so a
   # change to the hook is exercised here. Unchanged config: CONFIG_IN_PR=0.
+  # The eval'd block reads and sets these variables, so shellcheck cannot see the use.
+  # shellcheck disable=SC2034
   local REPO_ROOT="$sb"
   local TOUCHED_UI="$touched"
+  # shellcheck disable=SC2034
   local CONFIG_IN_PR=0 BASE_CONFIG="" EXCLUDE FILTERED FILE block
   block=$(awk '/^EXCLUDE=""/{p=1} /^if \[ -z "\$TOUCHED_UI" \]/{p=0} p' "$HOOK_SRC")
   [ -n "$block" ] || { echo "FAIL: exclude block not found in hook" >&2; exit 1; }
