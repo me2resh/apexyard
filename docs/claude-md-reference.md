@@ -27,7 +27,7 @@ The per-clone `claudeMdExcludes` setting in `.claude/settings.local.json` keeps 
 
 See `docs/getting-started.md` for the integration model and for how to install the `.claude/` layer.
 
-### Available skills (72)
+### Available skills (73)
 
 Each row gives one line for a skill. The full text for each skill is in `.claude/skills/<name>/SKILL.md`.
 The count includes 3 deprecated aliases: `/spike-close`, `/prototype-close`, and `/tickets-batch` (me2resh/apexyard#2028).
@@ -58,6 +58,7 @@ Each alias passes its arguments to the new mode. The aliases ship deprecated in 
 | `/agdr` | Browses, searches, shows, and counts the AgDRs across the portfolio. |
 | `/drive-to-green` | Drives one PR through CI, review, fixes, and delta review. Stops before human approval. |
 | `/code-review` | Starts the Code Reviewer agent (Rex) on a PR. |
+| `/verify` | Runs framework hook regressions and a skill smoke test. Reports evidence and blockers for the PR. |
 | `/security-review` | Starts the Security Reviewer agent (Hakim) on a PR. |
 | `/design-review` | Starts the Solution Architect agent (Tariq) on a technical design, migration AgDR, or feature spec. |
 | `/design-sync` | Syncs a local component library to a claude.ai/design design-system project, one change at a time. |

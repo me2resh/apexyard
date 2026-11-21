@@ -112,6 +112,9 @@ Do not write a process transcript. Do not present an author self-check as Rex re
 - PR number or URL — `{number}` below
 - Repository (any repository the user authorises) — `{repo}` below, threaded in by the invoking skill (`/code-review <pr> [repo]`). Never re-derive this from an unscoped `gh pr view {number} --json headRepository` call — see the marker section's `#887` note.
 
+Read the PR's verify evidence first. Report missing evidence in the review's Validation section.
+When verify could not run, retain the stated reason and mark affected criteria Unverified.
+
 ## Codebase grounding
 
 Ground the review in the actual codebase, not the diff alone. Use `grep`, `Glob`, and `Read` to surface:
