@@ -138,6 +138,8 @@ class ReliabilityTests(unittest.TestCase):
             'numbered list': '1. Trigger: path: src/custom/*\n2. Check: x\n3. Source: y\n',
             'table rows': '| Trigger | path: src/custom/* |\n| Check | x |\n| Source | y |\n',
             'checkbox list': '- [ ] Trigger: path: src/custom/*\n- [ ] Check: x\n- [ ] Source: y\n',
+            'checked checkbox list': '- [x] Trigger: path: src/custom/*\n- [x] Check: x\n- [x] Source: y\n',
+            'underscore emphasis': '_Trigger:_ path: src/custom/*\n_Check:_ x\n_Source:_ y\n',
         }.items():
             shapes[label + ' beside valid item'] = valid + '## Bad item\n' + lines
         for name, text in shapes.items():
