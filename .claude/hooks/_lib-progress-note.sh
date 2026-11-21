@@ -1,5 +1,7 @@
 #!/bin/bash
 # Per-worktree progress notes. Bash 3.2. No gate decisions.
+# shellcheck source=.claude/hooks/_lib-exclusive-directory.sh
+. "$(dirname "${BASH_SOURCE[0]}")/_lib-exclusive-directory.sh"
 progress_note_path() {
   local dir
   # Outside a git tree there is no note; say nothing at SessionStart.
@@ -15,7 +17,7 @@ progress_note_write() (
   case "$field" in Task|Outputs|Completed|Decisions|'Open issues'|'Next action') ;; *) return 1 ;; esac
   progress_note_path "$tree" || return 1
   note=$REPLY
-  mkdir "$note.lock" || return 1
+  exclusive_directory_create "$note.lock" || return 1
   tmp=''
   trap 'rm -f -- "$tmp"; rmdir "$note.lock"' EXIT
   trap 'exit 1' HUP INT TERM
