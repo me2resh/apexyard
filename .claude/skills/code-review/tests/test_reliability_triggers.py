@@ -45,6 +45,7 @@ class ReliabilityTests(unittest.TestCase):
     def test_unrelated_and_context_only(self):
         self.assertEqual(self.run_loader(diff('README.md')), '')
         self.assertEqual(self.run_loader(diff('src/store.py', context='cached = cache.get(key)')), '')
+        self.assertEqual(self.run_loader(diff('src/ui.tsx', 'visible = enabled && !disabled')), '')
         self.assertEqual(self.run_loader(''), '')
 
     def test_removed_lines(self):
@@ -59,6 +60,92 @@ class ReliabilityTests(unittest.TestCase):
                   'rename to .github/workflows/release.yml\n')
         self.assertIn('Deployment isolation', self.run_loader(rename))
 
+    def test_rename_with_spaces_and_quotes(self):
+        names = [
+            ('.github/workflows/old deploy.yml', '.github/workflows/new deploy.yml'),
+            ('.github/workflows/it\'s deploy.yml', '.github/workflows/its deploy.yml'),
+            ('.github/workflows/deploy.yml', '.github/workflows/it\'s.yml'),
+        ]
+        for old, new in names:
+            with self.subTest(old=old, new=new):
+                rename = (f'diff --git a/{old} b/{new}\nsimilarity index 100%\n'
+                          f'rename from {old}\nrename to {new}\n')
+                self.assertIn('Deployment isolation', self.run_loader(rename))
+        quoted = ('diff --git "a/.github/workflows/it\'s deploy.yml" b/.github/workflows/its.yml\n'
+                  'similarity index 100%\nrename from ".github/workflows/it\'s deploy.yml"\n'
+                  'rename to .github/workflows/its.yml\n')
+        self.assertIn('Deployment isolation', self.run_loader(quoted))
+        binary = 'diff --git a/.github/workflows/my deploy.yml b/.github/workflows/my deploy.yml\nBinary files differ\n'
+        self.assertIn('Deployment isolation', self.run_loader(binary))
+        quoted_binary = ('diff --git "a/.github/workflows/caf\\303\\251 deploy.yml" '
+                         '"b/.github/workflows/caf\\303\\251 deploy.yml"\nBinary files differ\n')
+        self.assertIn('Deployment isolation', self.run_loader(quoted_binary))
+        copy = ('diff --git a/x.txt b/.github/workflows/a deploy.yml\nsimilarity index 100%\n'
+                'copy from x.txt\ncopy to .github/workflows/a deploy.yml\n')
+        self.assertIn('Deployment isolation', self.run_loader(copy))
+
+    def make_root(self, directory):
+        root = pathlib.Path(directory)
+        script = root / LOADER.relative_to(ROOT)
+        script.parent.mkdir(parents=True)
+        shutil.copy(LOADER, script)
+        shutil.copy(LOADER.with_name('reliability_triggers.py'), script.with_name('reliability_triggers.py'))
+        shutil.copytree(ROOT / '.claude/hooks', root / '.claude/hooks',
+                        ignore=shutil.ignore_patterns('tests', '__pycache__'))
+        shutil.copytree(ROOT / 'handbooks/architecture', root / 'handbooks/architecture')
+        (root / 'onboarding.yaml').touch()
+        (root / 'apexyard.projects.yaml').touch()
+        subprocess.run(['git', 'init', '-q', str(root)], check=True)
+        private = root / 'custom-handbooks/architecture/reliability-team.md'
+        private.parent.mkdir(parents=True)
+        return script, private
+
+    def test_private_layer_from_other_directory(self):
+        item = ('## Private check\nTrigger: path: src/custom/*\n'
+                'Check: Verify compatibility.\nSource: Incident 42.\n')
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as other:
+            script, private = self.make_root(directory)
+            private.write_text(item)
+            for cwd in (other, pathlib.Path(directory) / 'handbooks', '/'):
+                with self.subTest(cwd=str(cwd)):
+                    self.assertIn('## Private check',
+                                  self.run_loader(diff('src/custom/a.py'), script, cwd))
+
+    def test_missing_private_layer_warns(self):
+        with tempfile.TemporaryDirectory() as directory:
+            script, private = self.make_root(directory)
+            shutil.rmtree(private.parents[1])
+            result = subprocess.run(['bash', str(script)], input=diff('README.md'), text=True,
+                                    capture_output=True, cwd=directory)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('private handbook layer not found', result.stderr)
+
+    def test_malformed_adopter_items_fail(self):
+        good = 'Check: Verify compatibility.\nSource: Incident 42.\n'
+        shapes = {
+            'bold labels': '## Item one\n**Trigger:** path: src/custom/*\n' + good,
+            'list bullets': '## Item one\n- Trigger: path: src/custom/*\n' + good,
+            'two items under one heading': '## Group\n### Item one\nTrigger: path: src/custom/*\n' + good
+                + '### Item two\nTrigger: path: src/*\n' + good,
+            'repeated field': '## Item one\nTrigger: path: a/*\nTrigger: path: b/*\n' + good,
+            'empty regex': '## Item one\nTrigger: regex: ``\n' + good,
+            'empty path': '## Item one\nTrigger: path: \n' + good,
+            'no items': '# Notes\nNothing here.\n',
+        }
+        for name, text in shapes.items():
+            with self.subTest(shape=name), tempfile.TemporaryDirectory() as directory:
+                script, private = self.make_root(directory)
+                private.write_text(text)
+                result = subprocess.run(['bash', str(script)], input=diff('src/custom/a.py'),
+                                        text=True, capture_output=True, cwd=directory)
+                if name == 'two items under one heading':
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout.count('Trigger:'), 2)
+                    continue
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('reliability-team.md', result.stderr)
+                self.assertEqual(result.stdout, '')
+
     def test_diff_file_argument(self):
         with tempfile.NamedTemporaryFile(mode='w') as patch:
             patch.write(diff('src/db.py', 'schema_version = 2'))
@@ -70,19 +157,9 @@ class ReliabilityTests(unittest.TestCase):
 
     def test_adopter_layers_and_invalid_regex(self):
         with tempfile.TemporaryDirectory() as directory:
+            script, private = self.make_root(directory)
             root = pathlib.Path(directory)
-            script = root / LOADER.relative_to(ROOT)
-            script.parent.mkdir(parents=True)
-            shutil.copy(LOADER, script)
-            shutil.copytree(ROOT / '.claude/hooks', root / '.claude/hooks',
-                            ignore=shutil.ignore_patterns('tests', '__pycache__'))
-            shutil.copytree(ROOT / 'handbooks/architecture', root / 'handbooks/architecture')
-            (root / 'onboarding.yaml').touch()
-            (root / 'apexyard.projects.yaml').touch()
-            subprocess.run(['git', 'init', '-q', str(root)], check=True)
             public = root / 'handbooks/architecture/reliability-adopter.md'
-            private = root / 'custom-handbooks/architecture/reliability-team.md'
-            private.parent.mkdir(parents=True)
             item = ('## Adopter check\nTrigger: path: src/custom/*\n'
                     'Check: Verify compatibility.\nSource: Incident 42.\n')
             public.write_text(item)
@@ -100,7 +177,7 @@ class ReliabilityTests(unittest.TestCase):
             result = subprocess.run(['bash', str(script)], input='', text=True,
                                     capture_output=True, cwd=root)
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn('Invalid reliability regex', result.stderr)
+            self.assertIn('invalid regex', result.stderr)
             self.assertEqual(result.stdout, '')
 
 
