@@ -87,6 +87,11 @@ The split is documented here so adopters can rely on it.
 
 The main-thread row (**Hadi**) was added by me2resh/apexyard#2045.
 
+**Amended 21 Nov 2026 (me2resh/apexyard#2024).** A role marker names the main
+thread only on a hand-off. An ordinary reply stays unnamed. See
+[`.claude/rules/role-triggers.md`](../../.claude/rules/role-triggers.md) §
+"How to signal activation" for the marker form.
+
 ## Consequences
 
 - **Conversation idiom** — role activations can now use the short name. "Salim, verify ticket #42" is shorter and more conversational than "Act as the QA Engineer and verify ticket #42". Both forms remain valid; the trigger table in [`.claude/rules/role-triggers.md`](../../.claude/rules/role-triggers.md) is unchanged.
