@@ -142,6 +142,13 @@ case "\$args" in
   *"pr view"*"--json number"*)
     printf '%s\n' 77
     ;;
+  *"pr view"*baseRefName*)
+    printf '%s\n' main
+    ;;
+  *"contents/.claude/project-config.json"*)
+    # Base-branch config (#2104). Absent file means the base is unreadable.
+    if [ -f "$sb/base-config.json" ]; then cat "$sb/base-config.json"; else exit 1; fi
+    ;;
   *) exit 0 ;;
 esac
 EOF
@@ -514,6 +521,47 @@ approval_summary="Approve architecture review"
 EOF
 code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
 assert_eq "architecture menu record at other sha blocks" "2" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "B) #2104: head adds design_paths_exclude for a changed design file, base has none -> BLOCK"
+sb=$(make_sandbox)
+mkdir -p "$sb/.claude"
+printf '%s\n' '{"design_paths_exclude": [".*"]}' > "$sb/.claude/project-config.json"
+printf '%s\n' '{}' > "$sb/base-config.json"
+install_mock_gh "$sb" '"projects/foo/docs/technical-design-x.md"' "$SHA"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "head exclude does not un-gate design file" "2" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "B) #2104: head design_paths narrowing with unreadable base -> defaults -> BLOCK"
+sb=$(make_sandbox)
+mkdir -p "$sb/.claude"
+printf '%s\n' '{"design_paths": ["^never-match-this-pr$"]}' > "$sb/.claude/project-config.json"
+install_mock_gh "$sb" '"projects/foo/docs/technical-design-x.md"' "$SHA"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "base unreadable falls back to defaults" "2" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "B) #2104: base design_paths_exclude is honoured -> ALLOW"
+sb=$(make_sandbox)
+printf '%s\n' '{"design_paths_exclude": ["^projects/foo/"]}' > "$sb/base-config.json"
+install_mock_gh "$sb" '"projects/foo/docs/technical-design-x.md"' "$SHA"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "base exclude still carves out" "0" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "B) #2104: head widens coverage via design_paths -> BLOCK on the extra pattern"
+sb=$(make_sandbox)
+mkdir -p "$sb/.claude"
+printf '%s\n' '{"design_paths": ["\\.widen$"]}' > "$sb/.claude/project-config.json"
+printf '%s\n' '{}' > "$sb/base-config.json"
+install_mock_gh "$sb" '"docs/x.widen"' "$SHA"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "head-added pattern is honoured" "2" "$code"
 rm -rf "$sb"
 
 echo ""

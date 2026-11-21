@@ -166,6 +166,13 @@ case "\$args" in
   *"pr view"*"--json number"*)
     printf '%s\n' 77
     ;;
+  *"pr view"*baseRefName*)
+    printf '%s\n' main
+    ;;
+  *"contents/.claude/project-config.json"*)
+    # Base-branch config (#2104). Absent file means the base is unreadable.
+    if [ -f "$sb/base-config.json" ]; then cat "$sb/base-config.json"; else exit 1; fi
+    ;;
   *) exit 0 ;;
 esac
 EOF
@@ -261,9 +268,51 @@ echo "B) .ui_paths override still REPLACES the shared default list (#1390 refact
 sb=$(make_sandbox)
 mkdir -p "$sb/.claude"
 printf '%s\n' '{"ui_paths": ["\\.foo$"]}' > "$sb/.claude/project-config.json"
+printf '%s\n' '{"ui_paths": ["\\.foo$"]}' > "$sb/base-config.json"
 install_mock_gh "$sb" '"src/layouts/SiteMenu.astro"' "$SHA"
 code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
-assert_eq "overridden .ui_paths no longer matches .astro" "0" "$code"
+assert_eq "overridden .ui_paths (same on base) no longer matches .astro" "0" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "B) #2104: head-only .ui_paths narrowing is ignored (base unreadable -> defaults) -> BLOCK"
+sb=$(make_sandbox)
+mkdir -p "$sb/.claude"
+printf '%s\n' '{"ui_paths": ["\\.foo$"]}' > "$sb/.claude/project-config.json"
+install_mock_gh "$sb" '"src/layouts/SiteMenu.astro"' "$SHA"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "head narrowing with unreadable base still gated" "2" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "B) #2104: head adds ui_paths_exclude for a changed UI file, base has none -> BLOCK"
+sb=$(make_sandbox)
+mkdir -p "$sb/.claude"
+printf '%s\n' '{"ui_paths_exclude": [".*"]}' > "$sb/.claude/project-config.json"
+printf '%s\n' '{}' > "$sb/base-config.json"
+install_mock_gh "$sb" '"src/components/Button.tsx"' "$SHA"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "head exclude does not un-gate UI file" "2" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "B) #2104: base exclude is honoured -> ALLOW"
+sb=$(make_sandbox)
+printf '%s\n' '{"ui_paths_exclude": ["^src/components/"]}' > "$sb/base-config.json"
+install_mock_gh "$sb" '"src/components/Button.tsx"' "$SHA"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "base exclude still carves out" "0" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "B) #2104: head widens coverage via ui_paths -> BLOCK on the extra pattern"
+sb=$(make_sandbox)
+mkdir -p "$sb/.claude"
+printf '%s\n' '{"ui_paths": ["\\.foo$"]}' > "$sb/.claude/project-config.json"
+printf '%s\n' '{}' > "$sb/base-config.json"
+install_mock_gh "$sb" '"src/thing.foo"' "$SHA"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "head-added pattern is honoured" "2" "$code"
 rm -rf "$sb"
 
 echo ""
@@ -312,6 +361,7 @@ echo "B) a mix of malformed and valid .ui_paths entries keeps only the valid one
 sb=$(make_sandbox)
 mkdir -p "$sb/.claude"
 printf '%s\n' '{"ui_paths": [null, "\\.foo$", " "]}' > "$sb/.claude/project-config.json"
+printf '%s\n' '{"ui_paths": [null, "\\.foo$", " "]}' > "$sb/base-config.json"
 install_mock_gh "$sb" '"src/components/Button.tsx"' "$SHA"
 code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
 assert_eq "mixed override keeps only the valid entry, .tsx (not .foo) is a no-op" "0" "$code"

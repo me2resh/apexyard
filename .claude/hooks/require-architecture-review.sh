@@ -103,6 +103,7 @@ _require_lib "$(dirname "$0")/_lib-extract-pr.sh" \
   _run_awk_or_fallback join_shell_continuations _join_shell_continuations_fallback \
   _scrub_merge_command _has_split_merge_phrase _normalize_json_escapes \
   has_conflicting_repo_flags merge_command_uses_variable extract_pr_number resolve_merge_repo resolve_pr_head \
+  resolve_pr_base_ref resolve_pr_base_config \
   prmeta_get prmeta_file_list
 # Repo-qualified marker path helper (#485).
 _require_lib "$(dirname "$0")/_lib-review-markers.sh" \
@@ -220,11 +221,22 @@ tech-design.*\.md$
 prd.*\.md$
 feature-spec.*\.md$'
 
-# Allow project-config to override (REPLACE the default list).
+# Narrowing settings come from the PR's BASE branch, never from the PR's own
+# checkout (#2104, AgDR-0310). A PR must not switch off the gate that judges
+# it. An unreadable base config gives the broad defaults. The local
+# `.design_paths` may only ADD patterns to the base list.
+BASE_CONFIG=$(resolve_pr_base_config "$PR_NUMBER" "$CMD_REPO")
+if [ -n "$BASE_CONFIG" ]; then
+  BASE_CUSTOM=$(printf '%s' "$BASE_CONFIG" | jq -r '.design_paths // [] | join("|")' 2>/dev/null)
+  if [ -n "$BASE_CUSTOM" ] && [ "$BASE_CUSTOM" != "null" ]; then
+    DESIGN_GLOBS=$(printf '%s' "$BASE_CUSTOM" | tr '|' '\n')
+  fi
+fi
 if [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
   CUSTOM=$(jq -r '.design_paths // [] | join("|")' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
   if [ -n "$CUSTOM" ] && [ "$CUSTOM" != "null" ]; then
-    DESIGN_GLOBS=$(printf '%s' "$CUSTOM" | tr '|' '\n')
+    DESIGN_GLOBS="${DESIGN_GLOBS}
+$(printf '%s' "$CUSTOM" | tr '|' '\n')"
   fi
 fi
 
@@ -269,8 +281,9 @@ done <<< "$CHANGED"
 # Apply `.design_paths_exclude` — additive override that REMOVES paths from the
 # touched-design set even when DESIGN_GLOBS matched. Lets adopters keep the
 # broad defaults while carving out specific dirs (e.g. doc samples / fixtures).
-if [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
-  EXCLUDE=$(jq -r '.design_paths_exclude // [] | join("|")' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
+# Exclusions come from the base config only. A head exclusion would narrow the gate.
+if [ -n "$BASE_CONFIG" ]; then
+  EXCLUDE=$(printf '%s' "$BASE_CONFIG" | jq -r '.design_paths_exclude // [] | join("|")' 2>/dev/null)
   if [ -n "$EXCLUDE" ] && [ "$EXCLUDE" != "null" ] && [ -n "$TOUCHED_DESIGN" ]; then
     FILTERED=""
     for FILE in $TOUCHED_DESIGN; do

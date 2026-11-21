@@ -2020,6 +2020,34 @@ resolve_pr_base_ref() {
   echo "$base"
 }
 
+# Echoes the PR base branch's .claude/project-config.json, or nothing.
+#
+# The gates that judge a PR must not take their narrowing settings
+# (design_paths, design_paths_exclude, ui_paths, ui_paths_exclude) from that
+# PR's own checkout. A PR could then switch off the gate that judges it
+# (#2104). Callers read narrowing keys from this output. An empty result means
+# the base config is missing or unreadable. The caller then uses the broad
+# defaults. Output is valid JSON or empty. Only the GitHub forge is read.
+resolve_pr_base_config() {
+  local pr_number="${1:-}" cmd_repo="${2:-}" base="" json=""
+  if [ -z "$pr_number" ] || [ -z "$cmd_repo" ]; then
+    return 0
+  fi
+  if [ "$(_forge_kind_for "$cmd_repo")" = glab ]; then
+    return 0
+  fi
+  base=$(resolve_pr_base_ref "$pr_number" "$cmd_repo")
+  if [ -z "$base" ]; then
+    return 0
+  fi
+  json=$(apexyard_gh api -X GET -H 'Accept: application/vnd.github.raw' \
+    -f "ref=${base}" "repos/${cmd_repo}/contents/.claude/project-config.json" 2>/dev/null) || return 0
+  if printf '%s' "$json" | jq -e 'type == "object"' >/dev/null 2>&1; then
+    printf '%s\n' "$json"
+  fi
+  return 0
+}
+
 resolve_pr_head() {
   local pr_number="$1"
   local cmd_repo="$2"

@@ -118,6 +118,7 @@ _require_lib "$(dirname "$0")/_lib-extract-pr.sh" \
   _run_awk_or_fallback join_shell_continuations _join_shell_continuations_fallback \
   _scrub_merge_command _has_split_merge_phrase _normalize_json_escapes \
   has_conflicting_repo_flags merge_command_uses_variable extract_pr_number resolve_merge_repo resolve_pr_head \
+  resolve_pr_base_ref resolve_pr_base_config \
   prmeta_get prmeta_file_list
 # Repo-qualified marker path helper (#485).
 _require_lib "$(dirname "$0")/_lib-review-markers.sh" \
@@ -250,7 +251,21 @@ if [ ! -r "$HOOK_DIR/_lib-ui-paths.sh" ] || ! . "$HOOK_DIR/_lib-ui-paths.sh" 2>/
   echo "BLOCKED: design-review gate could not load its UI pattern list (_lib-ui-paths.sh). Refusing to merge until the list can be read." >&2
   exit 2
 fi
-UI_GLOBS=$(ui_effective_globs "$REPO_ROOT")
+# Narrowing settings come from the PR's BASE branch, never from the PR's own
+# checkout (#2104, AgDR-0310). The base list is the floor. The local
+# `.ui_paths` may only ADD patterns. An unreadable base gives the defaults.
+BASE_CONFIG=$(resolve_pr_base_config "$PR_NUMBER" "$CMD_REPO")
+BASE_CFG_DIR=$(mktemp -d 2>/dev/null)
+if [ -n "$BASE_CONFIG" ] && [ -n "$BASE_CFG_DIR" ]; then
+  mkdir -p "$BASE_CFG_DIR/.claude" \
+    && printf '%s\n' "$BASE_CONFIG" > "$BASE_CFG_DIR/.claude/project-config.json"
+fi
+UI_GLOBS=$(ui_effective_globs "${BASE_CFG_DIR:-}")
+if [ -n "$REPO_ROOT" ]; then
+  UI_GLOBS="${UI_GLOBS}
+$(ui_effective_globs "$REPO_ROOT")"
+fi
+[ -n "${BASE_CFG_DIR:-}" ] && rm -rf "$BASE_CFG_DIR"
 if [ -z "$(printf '%s' "$UI_GLOBS" | tr -d '[:space:]')" ]; then
   echo "BLOCKED: design-review gate resolved an empty UI pattern list. Refusing to merge until the list can be read." >&2
   exit 2
@@ -298,8 +313,9 @@ done <<< "$CHANGED"
 # touched-UI set even when UI_GLOBS matched. Lets adopters keep the broad
 # defaults while carving out specific directories (e.g. `^docs/examples/`,
 # `^wiki/artifacts/`) where `.jsx`/`.tsx` files are doc samples not UI (#275).
-if [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
-  EXCLUDE=$(jq -r '.ui_paths_exclude // [] | join("|")' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
+# Exclusions come from the base config only. A head exclusion would narrow the gate.
+if [ -n "$BASE_CONFIG" ]; then
+  EXCLUDE=$(printf '%s' "$BASE_CONFIG" | jq -r '.ui_paths_exclude // [] | join("|")' 2>/dev/null)
   if [ -n "$EXCLUDE" ] && [ "$EXCLUDE" != "null" ] && [ -n "$TOUCHED_UI" ]; then
     FILTERED=""
     for FILE in $TOUCHED_UI; do
