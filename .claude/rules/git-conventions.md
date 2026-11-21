@@ -52,9 +52,47 @@ type(scope)!: subject (breaking change with scope)
 - Detailed change 2
 
 Closes #123
+
+Verified: tests
 ```
 
 **Types**: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `style`, `perf`
+
+### Verification trailer
+
+Add one `Verified:` trailer to the final trailer block of each commit message.
+Use `e2e`, `tests`, `ci-only`, or `none`.
+These values mean end-to-end checks, other tests, CI checks only, or no verification.
+The commit-format hook warns for missing or invalid values. These warnings never block.
+
+The hook checks readable `-m`, `-F`, and supported cat-heredoc messages.
+Interactive messages retain their existing validation limits.
+List the latest 50 commits by value with `bash bin/verified-commits.sh`.
+Pass a positive commit count to change the limit.
+The report includes `missing` and `invalid` groups.
+
+### Modes for new gates
+
+Existing gates always enforce their checks. Config cannot change their modes.
+Only new gates can use `.claude/hooks/_lib-gate-mode.sh`.
+Add each new gate name to the library's literal allowlist before calling it.
+The allowlist starts empty. Config alone cannot register a gate.
+
+Declare the gate name and its default mode in the new gate's code.
+The default is `enforce` unless the new gate declares `observe`.
+Set `.gates.<name>.mode` to `off`, `observe`, or `enforce` in project config.
+Invalid modes use `enforce`. Unregistered gates refuse mode resolution and block.
+
+Call `gate_would_block NAME DEFAULT EVENT_CODE OPS_ROOT` only when the new check would block.
+Exit with its return code: `0` allows the action and `2` blocks it.
+Use a fixed event identifier. Never log command text or secrets.
+
+`off` allows without logging. `enforce` blocks. `observe` appends one JSON line and allows.
+The log is `.claude/session/gate-observe.log`. The session directory is already gitignored.
+Logging failures warn and allow in observe mode.
+
+`/status --briefing` appends the event count to its role line when the log contains entries.
+The count covers the retained log. Remove the local log to reset the count.
 
 ## File Staging
 
