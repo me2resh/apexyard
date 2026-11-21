@@ -80,6 +80,29 @@ check 2 "live git rm -r harness-adapters/agy" run_bash "$L" 'git rm -r harness-a
 check 2 "live redirect into the generator" run_bash "$L" 'echo "exit 0" > bin/sync-agy-adapter.sh'
 check 2 "absolute rm of the live wrapper from another folder" run_bash "$S" "rm -f $L/harness-adapters/agy/agy-hook.sh"
 
+# agy reads nested .agents/ hook config too, so the same files are protected
+# at any depth in the live root. A worktree is its own root.
+NESTED=(
+  docs/.agents/hooks.json
+  docs/.agents/plugins.json
+  docs/.agents/plugins/x/hooks.json
+  docs/.AGENTS/Hooks.JSON
+  workspace/proj/.agents/hooks.json
+)
+for rel in "${NESTED[@]}"; do
+  for tool in Write Edit MultiEdit; do
+    check 2 "live nested $tool $rel" run_edit "$tool" "$L/$rel"
+  done
+  check 2 "live nested Bash redirect into $rel" run_bash "$L" "echo {} > $rel"
+  check 2 "live nested Bash rm $rel" run_bash "$L" "rm -f $rel"
+done
+for rel in docs/agents/hooks.json docs/.agents/skills/x.md .claude/worktrees/wt/docs/.agents/hooks.json; do
+  for tool in Write Edit; do
+    check 0 "live nested control $tool $rel" run_edit "$tool" "$L/$rel"
+  done
+  check 0 "live nested control Bash redirect into $rel" run_bash "$L" "echo {} > $rel"
+done
+
 # Neighbours that are not agy gate wiring stay editable.
 check 0 "live .agents/skills stays editable" run_bash "$L" 'rm -rf .agents/skills'
 check 0 "live Write to another bin script stays allowed" run_edit Write "$L/bin/other-tool.sh"

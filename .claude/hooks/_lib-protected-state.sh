@@ -93,6 +93,14 @@ pt_protected_form_nocase() {
       case "$p" in "$root/$rel"|"$root/$rel/"*) return 0 ;; esac
       if [ "$ancestors" = 1 ]; then case "$root/$rel/" in "$p/"*) return 0 ;; esac; fi
     done
+    # agy also reads nested .agents/ hook config, so the same files are
+    # protected at any depth under the root. Direct form only: deleting a
+    # nested config is the remedy. A linked worktree under .claude/worktrees/
+    # is its own fork root, with its own wiring.
+    case "$p" in
+      "$root/.claude/worktrees/"*) ;;
+      "$root/"*/.agents/hooks.json|"$root/"*/.agents/plugins.json|"$root/"*/.agents/plugins|"$root/"*/.agents/plugins/*) return 0 ;;
+    esac
   done
   if [ "${#PT_ROOTS[@]}" = 0 ]; then
     case "$p" in */.claude/settings*.json|*/.claude/hooks*) return 0 ;; esac

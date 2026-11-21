@@ -182,7 +182,8 @@ The agy wiring is a protected target in the live fork root, as `.claude/hooks/` 
 - `.agents/hooks.json`,
 - the plugin folder `.agents/plugins/` and `.agents/plugins.json`, because agy runs each plugin's own `hooks.json`,
 - `harness-adapters/agy/`,
-- `bin/sync-agy-adapter.sh`.
+- `bin/sync-agy-adapter.sh`,
+- a nested `.agents/hooks.json`, `.agents/plugins.json`, or anything under `.agents/plugins/`, at any depth under the fork root and without case. This includes the `.agents/` config of a managed-project clone under `workspace/`, which matches the read-side check below. Anything under `.claude/worktrees/` is exempt, because a linked worktree is its own fork root.
 
 Write, Edit, MultiEdit, and Bash changes there get `deny`, under agy and Claude Code alike. Change these files in an isolated worktree. `bash bin/sync-agy-adapter.sh` still regenerates `.agents/hooks.json`, because the gate judges only the command text.
 
@@ -229,7 +230,7 @@ The wrapper prints its decision before it writes the line, and it ignores loggin
 - **Agent shell session id:** a PreToolUse hook cannot change the agent's command. So agy's `run_command` shell does not get `APEXYARD_SESSION_ID`.
 - **Network reads:** `search_web` and `read_url_content` are in the read-only allowlist. Claude Code has the same path, because no PreToolUse gate covers `WebFetch` or `WebSearch`.
 - **`if` predicates:** the wrapper matches a `Bash(<glob>)` predicate against the whole command. Claude Code matches each subcommand. No PreToolUse handler uses `if` today.
-- **Nested `.agents/` folders:** the wrapper denies every call while a nested `.agents/` hook or plugin config sits on the path from agy's directory to the fork root. It does not stop a person from creating one. The next call shows the deny.
+- **Nested `.agents/` folders:** agy itself could create a nested hook or plugin config. That write now gets `deny` from the wiring protection, under agy and Claude Code alike. A nested config made outside the gates, for example by a person, is not blocked when it is made. While it sits on the path from agy's directory to the fork root, the wrapper denies every call. The removal of a nested config is matched directly, with no ancestor check, so an `rm -rf` of a parent folder passes.
 - **Other adapters:** the Codex, opencode, and pi wiring is not a protected target yet.
 - **Conformance CI:** not planned. The terms of service forbid an automated agy run.
 

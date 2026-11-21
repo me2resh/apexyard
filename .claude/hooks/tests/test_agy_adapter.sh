@@ -953,6 +953,21 @@ run_wrapper "$C" PreToolUse "$(p_edit_file "$C/bin/sync-agy-adapter.sh" "set -eu
 expect_decision "C3h11 real gate: edit_file on the agy generator gets deny" deny "BLOCKED: the edit target is live hook state"
 run_wrapper "$C" PreToolUse "$(p_run_top "rm -rf .agents/plugins" "$C" "$(jq -n --arg d "$C" '$d')")"
 expect_decision "C3h12 real gate: run_command removing .agents/plugins gets deny" deny "BLOCKED"
+# agy reads nested .agents/ hook config, so agy must not create one.
+for rel in docs/.agents/hooks.json docs/.agents/plugins.json docs/.agents/plugins/x/hooks.json docs/.AGENTS/Hooks.JSON; do
+  run_wrapper "$C" PreToolUse "$(p_write_file "$C/$rel" '{}' "$C")"
+  expect_decision "C3h13 real gate: write_file to nested $rel gets deny" deny "BLOCKED: the edit target is live hook state"
+  run_wrapper "$C" PreToolUse "$(p_edit_file "$C/$rel" "a" "b" "$C")"
+  expect_decision "C3h14 real gate: edit_file on nested $rel gets deny" deny "BLOCKED: the edit target is live hook state"
+  run_wrapper "$C" PreToolUse "$(p_run_top "echo {} > $rel" "$C" "$(jq -n --arg d "$C" '$d')")"
+  expect_decision "C3h15 real gate: run_command redirect into nested $rel gets deny" deny "BLOCKED"
+done
+for rel in docs/agents/hooks.json docs/.agents/skills/x.md .claude/worktrees/wt/docs/.agents/hooks.json; do
+  run_wrapper "$C" PreToolUse "$(p_write_file "$C/$rel" '{}' "$C")"
+  expect_decision "C3h16 real gate: write_file to $rel stays ask" ask
+  run_wrapper "$C" PreToolUse "$(p_run_top "echo {} > $rel" "$C" "$(jq -n --arg d "$C" '$d')")"
+  expect_decision "C3h17 real gate: run_command redirect into $rel stays ask" ask
+done
 
 # permissions.deny from the real .claude/settings.json, applied literally.
 p_args() { # <tool> <args JSON>
