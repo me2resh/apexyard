@@ -430,6 +430,18 @@ This PR cannot be merged until technical decisions are documented.
 3. **If an AgDR IS linked** → verify the linked AgDR covers the decisions in the code
 4. **If no decisions detected** → mark as N/A
 
+### Reliability checks
+
+Pipe the complete PR diff into `bash "$OPS_ROOT/.claude/skills/code-review/reliability-triggers.sh"`. Do not write the diff to a file.
+The design record is AgDR-0309.
+The loader selects items from both handbook layers, independently of handbook discovery below.
+Report each matched item as checked or not applicable in Handbook Findings.
+Cite evidence for checked items. Explain each not applicable result.
+Report failed checks under the source handbook's enforcement level.
+Report loader errors as Unverified. Never treat an error as an empty checklist.
+A loader warning about a missing private layer is also Unverified for that layer.
+Report the result on a `Reliability checks` line in Checklist Results.
+
 ### 8. Adopter Handbooks
 
 Beyond the framework's generic rules, the adopter ships company-specific standards as **handbooks** at two layered locations. Discover and apply both on every review:
@@ -447,7 +459,7 @@ The path conventions below apply to **each** of the two source roots. Before rea
 
 | Path glob (relative to source root) | Load condition |
 |---|---|
-| `architecture/*.md` | Read when the PR diff includes architecture-bearing code, design artifacts, or migration/schema paths; migration safety remains applicable to migration/schema paths. |
+| `architecture/*.md` | Skip `reliability-*.md`; the loader in "Reliability checks" selects only matched items from those files. Read other files when the PR diff includes architecture-bearing code, design artifacts, or migration/schema paths; migration safety remains applicable to migration/schema paths. |
 | `general/*.md` | Read for substantive commits; skip for empty/docs-only bookkeeping changes and record as not applicable. |
 | `language/<lang>/*.md` | When the PR diff includes files matching `<lang>`'s extensions: `typescript/` → `**/*.{ts,tsx}`, `python/` → `**/*.py`, `go/` → `**/*.go`, `rust/` → `**/*.rs`. Other directories under `language/` follow the same `<lang>/` → matching-extension convention. |
 | `domain/<area>/*.md` | **Parse the YAML frontmatter** (a `---`-delimited block at the top of the file). If a `paths:` field is present and non-empty, load this handbook only when the PR diff matches at least one glob in the list. If `paths:` is absent or empty, **always load**. See § "Domain handbook frontmatter — `paths:` field" below and [`handbooks/domain/README.md`](../../handbooks/domain/README.md). |
@@ -753,6 +765,7 @@ Blocking 0 | Important 0 | Nits 0
 - Summary Bullet Narrative: [Pass / Advisory — reason (advisory only)]
 - Technical Decisions (AgDR): [Result — decision record or reason]
 - Adopter Handbooks: [Result — applicable standards or reason]
+- Reliability checks: [Matched items as checked or not applicable, or Unverified on a loader error]
 - Fallow Static Analysis (JS/TS): [Pass / Advisory / N/A — reason (advisory only)]
 
 [Use ✅ for Pass, ❌ for Fail, and ⚠ for Advisory or Unverified. Explain N/A without a success icon.]
