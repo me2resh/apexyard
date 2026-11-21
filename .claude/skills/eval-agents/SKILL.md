@@ -283,6 +283,22 @@ Report clean-control false alarms beside recall.
 List pending cases outside the denominator and report `n/a` when none can run.
 Do not imply that starter-corpus recall measures pending cases.
 
+Use `lib/subset_recall.py` to calculate this report block for Rex and Tariq.
+Keep the headline metric unchanged.
+Use the dated case IDs from the pending case table when promoting entries.
+Supply the version-1 corpus and a JSON array of per-entry scoring results:
+
+```bash
+python3 .claude/skills/eval-agents/lib/subset_recall.py --corpus CORPUS.json --results RESULTS.json
+```
+
+Each result contains `id`, `status`, `caught_defects`, and `false_alarms`.
+Set `status` to `SCORED` only after the contamination and resolution checks pass.
+Use defect IDs from the frozen key for `caught_defects`.
+Use an integer count for `false_alarms`.
+Missing, pending, contaminated, and unresolvable entries remain outside the denominator.
+The helper reports their combined count separately.
+
 `<reports_dir>/<agent>-<YYYY-MM-DD>.md` (default `docs/eval-agents/reports/`). Same-day reruns append `-NN` rather than clobber (mirrors `/mutation-test`).
 
 ````markdown
@@ -308,6 +324,12 @@ Do not imply that starter-corpus recall measures pending cases.
 | Catch rate — BLOCKING/HIGH | X% | ≥T% | PASS/WARN |
 | Catch rate — overall | X% | ≥T% | PASS/WARN |
 | False-positive rate | X% | ≤T% | PASS/WARN |
+
+## 21 November subset (Rex and Tariq)
+
+Miss recall: <caught/scored defects, or n/a>.
+Clean-control false alarms: <count> across <scored controls> controls.
+Pending or discarded cases: <count>.
 
 ## Advisory dimensions (0-4, informational — not part of the verdict above)
 
@@ -401,7 +423,27 @@ Override per-project in `.claude/project-config.json` (shallow-merge — overrid
 
 ## Implementation notes
 
-### Review rounds and reverts
+### Blocking review rounds and named reverts
+
+`lib/blocking_rounds.py` prints a plain table for merged PRs in the requested window.
+A blocking round means one review submission with `CHANGES_REQUESTED` state or a `Verdict: CHANGES REQUESTED` line.
+The script counts a submission once when both signals match.
+It excludes reviews submitted after merge.
+It detects later commits whose subjects start with `Revert` and name the PR as `#NUMBER`.
+It reads commits through capture time, including commits after a historical merge window.
+Zero matches do not prove that no manual reversal occurred.
+
+```bash
+python3 .claude/skills/eval-agents/lib/blocking_rounds.py --repo me2resh/apexyard --days 30
+python3 .claude/skills/eval-agents/lib/blocking_rounds.py --repo me2resh/apexyard --days 30 --input EXPORT.json --as-of 2026-11-22T00:00:00Z
+```
+
+Offline input contains `repo`, `prs`, and `commits`.
+PR objects contain `number`, `merged_at`, and `reviews` with GitHub API fields.
+Commit objects contain `commit.message` and `commit.committer.date`.
+The script uses read calls only and stops on API failures.
+
+### All review rounds and trailer-based reverts
 
 `lib/review_rounds.py` prints a 30-day report with one row per merged PR.
 It reads GitHub with GET calls and writes only stdout.
