@@ -245,7 +245,9 @@ lock_case() (
         _wto_lock "$directory" || return 1
       printf '%s\n' "$operation_identity" > "$before"; cmp -s "$before" "$lock/owner" || return 1
       for candidate in "$lock"/owner.*.tmp; do [ ! -e "$candidate" ] || return 1; done
-      mkdir() { [ "$#" -ne 1 ] || [ "$1" != "$lock" ] || printf '.\n' >> "$calls"; command mkdir "$@"; }; sleep() { printf '.\n' >> "$calls-sleeps"; }
+      original_create=$(declare -f exclusive_directory_create)
+      eval "${original_create/exclusive_directory_create/original_directory_create}"
+      exclusive_directory_create() { [ "$1" != "$lock" ] || printf '.\n' >> "$calls"; original_directory_create "$@"; }; sleep() { printf '.\n' >> "$calls-sleeps"; }
       ! _wto_lock "$directory" && [ "$(wc -l < "$calls" | tr -d ' ')" = 6 ] &&
         [ "$(wc -l < "$calls-sleeps" | tr -d ' ')" = 5 ] && cmp -s "$before" "$lock/owner" &&
         _wto_unlock "$directory" && [ ! -e "$lock" ] && _wto_lock "$directory" && _wto_unlock "$directory"

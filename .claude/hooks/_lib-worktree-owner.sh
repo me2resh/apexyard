@@ -1,5 +1,7 @@
 #!/bin/bash
 # Owner records and leases live beside worktree ticket markers (AgDR-0284).
+# shellcheck source=.claude/hooks/_lib-exclusive-directory.sh
+. "$(dirname "${BASH_SOURCE[0]}")/_lib-exclusive-directory.sh"
 # Unknown liveness and lease expiry never authorize takeover.
 
 _wto_host_boot_id() {
@@ -281,7 +283,7 @@ _wto_lock() {
   # Six attempts bound contention waits to five short sleeps.
   while [ "$attempts" -lt 6 ]; do
     [ ! -L "$lockdir" ] || return 1
-    if mkdir "$lockdir" 2>/dev/null; then
+    if exclusive_directory_create "$lockdir" 2>/dev/null; then
       tmp="$lockdir/owner.${identity%%|*}.tmp"
       if printf '%s\n' "$identity" > "$tmp" && mv -f "$tmp" "$lockdir/owner"; then
         return 0
@@ -297,7 +299,7 @@ _wto_lock() {
     if dead_identity=$(_wto_read_lock_owner "$lockdir"); then
       holder=$(_wto_lock_identity_state "$dead_identity") || :
     fi
-    if [ "$holder" = dead ] && [ "$reaped" -eq 0 ] && mkdir "$lockdir/reaping" 2>/dev/null; then
+    if [ "$holder" = dead ] && [ "$reaped" -eq 0 ] && exclusive_directory_create "$lockdir/reaping" 2>/dev/null; then
       # Reap only the exact identity proved dead, without another process probe.
       if current_identity=$(_wto_read_lock_owner "$lockdir") && [ "$current_identity" = "$dead_identity" ]; then
         rm -rf "$lockdir" || return 1

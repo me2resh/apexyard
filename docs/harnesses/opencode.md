@@ -41,10 +41,11 @@ A credentialed opencode session, run with `--auto`, issued `git add -A` during a
 bash bin/install-opencode-adapter.sh
 ```
 
-That writes the adapter into `.opencode/plugins/apexyard/`: a **subdirectory** shape, not a flat file copy. Both details are load-bearing and had live confirmation against opencode 1.17.16 (#844/#845):
+That writes the adapter into `.opencode/apexyard/`, with a single re-export shim at `.opencode/plugins/apexyard.ts` as the only discovered file. Three details are load-bearing:
 
 - The discovery directory is **plural**: `.opencode/plugins/`. V1's singular `.opencode/plugin/` silently loads nothing. V2 accepts both forms, and plural is its documented layout.
-- Every file must sit inside the one subdirectory behind a re-export `index.ts` shim. A flat `cp` of the adapter + its helper modules crashed opencode 1.x at startup. V1 treated every exported function of a discovered file as a candidate plugin factory. V2 validates only the `default` export, so that crash mode is gone. The layout stays anyway, so a closed export surface remains a structural invariant.
+- The adapter code sits **outside** the discovery directory. opencode 2.x discovers `<discovery>/<name>/index.ts` in addition to top-level files, so an in-tree code directory loaded the adapter twice and ran every gate twice ([#2072](https://github.com/me2resh/apexyard/issues/2072)). The shim lives in the discovery directory and the code beside it.
+- The shim's export surface is exactly `default`. A flat `cp` of the adapter plus its helper modules crashed opencode 1.x at startup. V1 treated every exported function of a discovered file as a candidate plugin factory. V2 validates only the `default` export, so that crash mode is gone. The shim stays anyway, so a closed export surface remains a structural invariant.
 
 Full reference: [`docs/opencode-adapter.md`](../opencode-adapter.md).
 
