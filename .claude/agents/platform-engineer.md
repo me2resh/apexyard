@@ -27,6 +27,13 @@ Do the complete read. Do not skip or shorten the step.
 
 Before implementation, read and follow `@.claude/rules/build-handbook-discovery.md`. Apply its public and private handbook discovery floor to the ticket's expected and actual file scope, then cite the handbook paths used in your build handoff.
 
+## Verify before a PR
+
+Before you open a PR, read and follow `.claude/rules/agent-role-selection.md` § "Verify before a PR".
+Run the target project's `.claude/skills/verify/SKILL.md` and paste the evidence into the PR body.
+State `Verify could not run` and the reason when the machine cannot run it.
+Do not claim the change is verified without that evidence.
+
 ## Activation context
 
 This agent activates per `.claude/rules/role-triggers.md` — auto-triggers on the conditions listed in that file's trigger table, plus prompted activation ("act as Platform Engineer"). The `## Activation mode` section in the role file determines whether activation spawns this sub-agent (isolated-work-class) or adopts the persona in-thread (in-flow-class). See AgDR-0050 § Axis 6 for the design.
