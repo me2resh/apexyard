@@ -40,7 +40,7 @@ See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the ful
 
 ## Running tests in a scratch clone
 
-For tests and probes, use the scratch-clone pattern in `.claude/agents/code-reviewer.md` § "Running tests in a scratch clone". If a hook blocks a command, stop and report the command, hook, and message.
+For tests and probes, use the scratch-clone pattern in `.claude/agents/code-reviewer.md` § "Running tests in a scratch clone". If a hook blocks a command, stop and report the command, hook, and message. Never disguise a command to bypass a hook.
 
 The reviewer mutation lock blocks `git clone`, `git fetch`, and `git checkout` while the active-reviewer marker exists. Make the light copy (`docs/skills/review-copies.md`) before step 0 arms the marker.
 
@@ -52,16 +52,16 @@ Apply its controlled technical writing profile.
 Treat a writing-profile fault in the PR as advisory, per the Code Reviewer
 agent's § "Blocking-Severity Bar", unless the fault changes meaning or drops
 evidence — request changes only for that kind of fault.
-State the verdict and next action first. State the reason and evidence after it.
+State the verdict and next action first, then the reason and evidence.
 Use the Code Reviewer agent's required Output Format for first reviews, re-reviews, and reduced-scope reviews.
-Retain its required sections and give each checklist result a reason or evidence reference.
-Before submission, check the report against that format and repair omissions.
+Keep its required sections and give each checklist result a reason or evidence.
+Before you post, check the report against that format and fix omissions.
 Do not write a process transcript.
 
 ### Severity policy
 
 Follow [policy resolution](../../../docs/skills/drive-to-green.md#override-the-review-policy) before spawning Rex.
-Give Rex the resolved policy path. Overrides change no gate decision.
+Take policy from the PR base branch, not the PR head. Overrides change no gate decision.
 
 ### CI order and depth
 
