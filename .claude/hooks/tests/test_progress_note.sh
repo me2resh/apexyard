@@ -44,12 +44,18 @@ if (mv() { return 1; }; progress_note_update "$TMP/tree" Decisions lost); then e
 cmp "$note" "$TMP/saved"
 [ ! -d "$note.lock" ]
 for leftover in "$note".tmp.*; do [ ! -e "$leftover" ]; done
-# #2097 removes only the concurrent-writer case after intermittent Linux failures.
-# The root cause remains unknown after library review and 600 passing macOS runs.
-# These include 200 serial runs and 200 runs at eight-way parallelism.
-# Another 200 runs used eight-way parallelism with GNU file tools and mawk.
-# Docker socket permissions blocked Linux verification.
-# The deterministic lock-conflict and failed-rename cases remain above.
+# Concurrent attempts either append their evidence or report a lock conflict.
+for i in 1 2 3 4 5 6; do
+  (
+    if progress_note_update "$TMP/tree" Completed "writer-$i" 2> "$TMP/error-$i"; then
+      touch "$TMP/success-$i"
+    fi
+  ) &
+done
+wait
+for i in 1 2 3 4 5 6; do
+  if [ -f "$TMP/success-$i" ]; then grep -q "writer-$i" "$note"; fi
+done
 for source in startup compact; do
   jq -cn --arg cwd "$TMP/tree" --arg source "$source" '{cwd:$cwd,source:$source}' |
     bash "$ROOT/.claude/hooks/print-progress-note.sh" > "$TMP/out"
