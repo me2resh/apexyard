@@ -161,6 +161,13 @@ refusal message — but the cheap fix is upstream of both: don't pass a path.
 
 ## Output
 
+Give each finding exactly one tag: `Important`, `Nit`, or `Pre-existing`.
+Only `Important` findings can cause `CHANGES REQUESTED` under the applicable blocking rules.
+`Nit` and `Pre-existing` findings never block the PR.
+Each `Pre-existing` finding includes base evidence and a suggested ticket title.
+Follow [Review severity](../../../templates/REVIEW.md) and the agent's Output Format.
+Keep all existing security rules and independent gates in effect.
+
 Posts a GitHub review comment with:
 
 - Commit SHA reviewed

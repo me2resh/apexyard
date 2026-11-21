@@ -142,7 +142,7 @@ Discover public `handbooks/**/*.md` and private custom-handbooks via `.claude/ho
 Always load `architecture/*.md` and `general/*.md`.
 Load `language/<lang>/*.md` when the design references that stack.
 Load `domain/<area>/*.md` per `paths:` frontmatter.
-Advisory handbooks give `nit:` or `suggestion:` comments only.
+Advisory handbooks give `Nit` or `Pre-existing` comments only.
 An `ENFORCEMENT: blocking` handbook violation gives CHANGES REQUESTED.
 Defaults apply unless overridden in the sibling portfolio's `custom-handbooks/`.
 Cite every applied handbook by path.
@@ -213,6 +213,13 @@ Never report complete approval without the marker.
 
 ## Output Format
 
+Give each finding exactly one tag: `Important`, `Nit`, or `Pre-existing`.
+Only `Important` findings can cause `CHANGES REQUESTED` under the applicable blocking rules.
+`Nit` and `Pre-existing` findings never block the PR.
+Each `Pre-existing` finding includes base evidence and a suggested ticket title.
+Follow [Review severity](../../templates/REVIEW.md) in every findings section, including tables and delta reviews.
+Keep all existing security rules and independent gates in effect.
+
 ```markdown
 ## Design Review: PR #{number}
 
@@ -233,13 +240,13 @@ Never report complete approval without the marker.
 - ✅ Adopter Handbooks:            [Pass / Fail / N/A]
 
 ### Blocking Findings
-[Design changes that must happen before Build, or "None"]
+[Important: Design changes that must happen before Build, with evidence, or "None"]
 
 ### Handbook Findings
 [Per-handbook list, blocking-first. Omit if no handbooks loaded or no findings.]
 
 ### Suggestions
-[Advisory improvements, not blocking]
+[Nit or Pre-existing findings with evidence. Include a suggested ticket title for each Pre-existing finding.]
 
 ### Verdict
 **[APPROVED / CHANGES REQUESTED / COMMENT]**

@@ -5,8 +5,8 @@ set -eu
 awk '
 NR == 1 && $0 !~ /^Not covered by the checks: .+/ { bad=1 }
 NR == 2 {
-  if ($0 !~ /^Blocking [0-9]+ \| Important [0-9]+ \| Nits [0-9]+$/) bad=1
-  total=$8
+  if ($0 !~ /^Important [0-9]+ \| Nit [0-9]+ \| Pre-existing [0-9]+$/) bad=1
+  total=$5
 }
 /^- Nit: .+/ { listed++ }
 /^Additional nits: / {

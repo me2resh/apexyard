@@ -170,6 +170,10 @@ refusal message — but the cheap fix is upstream of both: don't pass a path.
 
 ## Severity Levels
 
+Security levels describe risk separately from finding tags.
+CRITICAL and HIGH findings introduced or worsened by the change are Important and retain their blocking actions.
+Pre-existing vulnerabilities retain all existing release and escalation requirements.
+
 | Level | Action |
 |-------|--------|
 | CRITICAL | Block PR immediately |
@@ -178,6 +182,13 @@ refusal message — but the cheap fix is upstream of both: don't pass a path.
 | LOW | Informational |
 
 ## Output
+
+Give each finding exactly one tag: `Important`, `Nit`, or `Pre-existing`.
+Only `Important` findings can cause `CHANGES REQUESTED` under the applicable blocking rules.
+`Nit` and `Pre-existing` findings never block the PR.
+Each `Pre-existing` finding includes base evidence and a suggested ticket title.
+Follow [Review severity](../../../templates/REVIEW.md) and the agent's Output Format.
+Keep all existing security rules and independent gates in effect.
 
 Posts a GitHub review with:
 
@@ -204,7 +215,8 @@ Compute a single headline score from the severity distribution of the findings i
 score = max(0, 100 - 25*critical - 10*high - 3*medium - 1*low)
 ```
 
-Compute the verdict by the worst-severity rule:
+Compute the audit-history verdict by the worst-severity rule.
+This metric does not set the PR verdict. Apply the finding tags to the PR verdict.
 
 | Worst severity present | Verdict |
 |---|---|
@@ -240,10 +252,10 @@ PR <number>; reviewed `<branch>..main` (X files, Y +/- lines).
 
 ## Findings
 
-| # | Severity | OWASP class | Finding | File:Line | Status |
-|---|---|---|---|---|---|
-| F1 | critical | A03 Injection | Unsanitised user input concatenated into SQL | `src/users.ts:42` | open |
-| F2 | high | A07 Auth failure | JWT signature not verified | `src/auth.ts:18` | open |
+| # | Tag | Severity | OWASP class | Finding | File:Line | Status |
+|---|---|---|---|---|---|---|
+| F1 | Important | critical | A03 Injection | Unsanitised user input concatenated into SQL | `src/users.ts:42` | open |
+| F2 | Important | high | A07 Auth failure | JWT signature not verified | `src/auth.ts:18` | open |
 
 ## Dependency vulnerabilities
 

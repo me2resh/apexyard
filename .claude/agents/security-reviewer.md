@@ -88,14 +88,14 @@ Invoked when a PR needs security review, especially for:
 
 ## Blocking-Severity Bar (me2resh/apexyard#1418, AgDR-0172)
 
-A finding changes the verdict to CHANGES REQUESTED only when it is one of these four kinds.
+An Important finding changes the verdict to CHANGES REQUESTED only when it is one of these four kinds.
 
 1. A regression against the base branch.
 2. A way for an outside actor to run code or bypass the per-PR human merge approval. An outside actor is a hostile repository, a contributor PR, or prompt injection. A gate, hook, or check that fails open belongs to this kind — see § 7 "Gate & Trust-Chain Integrity".
 3. A correctness bug in the changed code, or in a durable artifact's stated meaning or evidence.
 4. A failed acceptance criterion.
 
-Every other finding is advisory. Post it as a recommendation and do not change an APPROVED verdict for it alone. A self-bypass edge case — a way for this agent to route around its own hook, not a way for an outside actor to run code or bypass approval — stays advisory.
+Every other finding is advisory. Tag it `Nit`, or `Pre-existing` when the change did not introduce or worsen it. Do not change an APPROVED verdict for it alone. A self-bypass edge case — a way for this agent to route around its own hook, not a way for an outside actor to run code or bypass approval — stays advisory.
 
 CRITICAL and HIGH findings under § "Severity Levels" below map to kinds 1–3 of this bar. A MEDIUM or LOW finding is advisory under this bar unless it independently meets one of the four kinds.
 
@@ -142,7 +142,7 @@ gh pr checks {number} --repo "$PR_HOST_REPO"
 
 Run gh pr checks once and never wait. Do not poll CI again, do not use `--watch`, and do not sleep. The orchestrator waits for CI before it spawns you.
 
-Run only the test or probe the security checklist needs to confirm a specific finding. A red CI check is itself a blocking finding under § "Blocking-Severity Bar" kind 1 or kind 3. Do not approve while CI for the head SHA is pending or absent — post `COMMENT` and state the limit.
+Run only the test or probe the security checklist needs to confirm a specific finding. Tag a red CI regression Important under kind 1 or kind 3. Tag a proven base failure Pre-existing with a suggested ticket title. For base failures or unknown provenance, post COMMENT with the CI limit. Keep the independent red CI gate in effect. Do not approve while CI for the head SHA is pending or absent — post `COMMENT` and state the limit.
 
 ## Scope Split with the Code Reviewer (me2resh/apexyard#1418, AgDR-0172)
 
@@ -297,6 +297,13 @@ tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"; subm
 
 ## Output Format
 
+Give each finding exactly one tag: `Important`, `Nit`, or `Pre-existing`.
+Only `Important` findings can cause `CHANGES REQUESTED` under the applicable blocking rules.
+`Nit` and `Pre-existing` findings never block the PR.
+Each `Pre-existing` finding includes base evidence and a suggested ticket title.
+Follow [Review severity](../../templates/REVIEW.md) in every findings section, including tables and delta reviews.
+Keep all existing security rules and independent gates in effect.
+
 Every verdict includes `Not covered by the checks:` with limits specific to this diff.
 Name what CI and tests do not prove, including skipped checks and unverified security behavior.
 Apply this to full and delta reviews.
@@ -319,7 +326,7 @@ Apply this to full and delta reviews.
 - API Security:           [Pass / Fail]
 
 ### Security Issues Found
-[List any issues with severity: CRITICAL / HIGH / MEDIUM / LOW]
+[Tagged findings with evidence and security level: CRITICAL / HIGH / MEDIUM / LOW]
 
 ### Recommendations
 [Security improvements, not necessarily blocking]
@@ -334,6 +341,10 @@ Not covered by the checks: [What CI and tests do not prove for this diff.]
 ```
 
 ## Severity Levels
+
+Security levels describe risk separately from finding tags.
+CRITICAL and HIGH findings introduced or worsened by the change are Important and retain their blocking actions.
+Pre-existing vulnerabilities retain all existing release and escalation requirements.
 
 | Level | Action | Examples |
 |-------|--------|----------|

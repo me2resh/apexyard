@@ -1,23 +1,42 @@
 # Review severity
 
-Use severity to order findings. Keep all current gate rules.
+Give each finding exactly one tag: `Important`, `Nit`, or `Pre-existing`.
+Apply these tags in every findings section, including tables and delta reviews.
 Write each finding in the controlled technical writing profile.
-
-## Blocking
-
-A Blocking finding meets the existing Blocking-Severity Bar.
-Example: A changed access check lets an unauthorised user read private data.
 
 ## Important
 
-An Important finding needs attention but does not meet the blocking bar.
-Example: A test omits a useful boundary case without evidence of a defect.
+An Important finding meets the applicable blocking rule.
+Only Important findings can cause `CHANGES REQUESTED`.
+Keep the Blocking-Severity Bar and all security rules in effect.
+Tag blocking acceptance criteria, AgDR, glossary, and handbook violations Important.
+Example: A changed access check lets an unauthorised user read private data.
 
 ## Nit
 
-A Nit suggests a small improvement. It does not block approval.
+A Nit suggests an improvement that does not meet a blocking rule.
+A Nit never blocks the PR.
 Example: A local variable name hides its purpose.
+
+## Pre-existing
+
+A Pre-existing finding describes a problem that the change did not introduce or worsen.
+A Pre-existing finding never blocks the PR.
+Include base evidence and a suggested ticket title with each Pre-existing finding.
+Do not classify a new exposure or regression as Pre-existing.
+Keep independent CI, release, and security gates in effect.
+Report unknown provenance as unverified rather than claiming base evidence.
+
+Examples from 21 November 2026:
+
+- Pre-existing: Android unit tests already fail on the base. Suggested ticket title: Repair existing Android unit tests.
+- Pre-existing: A withdrawn audit advisory predates this change. Suggested ticket title: Remove the withdrawn audit advisory.
+
+Verify the base failure or advisory withdrawal before using these examples as findings.
+An active security vulnerability still requires the existing security response.
 
 Count every finding. List at most five nits.
 Report other nits as `Additional nits: N`.
-Do not promote style faults to Blocking without evidence of harm.
+Use `- Important: <finding and evidence>` for a blocking finding.
+Use `- Nit: <finding and evidence>` for an advisory finding.
+Use `- Pre-existing: <finding and base evidence>. Suggested ticket title: <title>` for an existing problem.

@@ -11,7 +11,7 @@ check() {
   if ! "$@"; then echo "FAIL row $count"; exit 1; fi
 }
 body() {
-  printf 'Not covered by the checks: None\nBlocking 0 | Important 2 | Nits %s\n' "$1" > "$tmp/body"
+  printf 'Not covered by the checks: None\nImportant 2 | Nit %s | Pre-existing 0\n' "$1" > "$tmp/body"
   i=0
   while [ "$i" -lt "$2" ]; do echo '- Nit: name is unclear' >> "$tmp/body"; i=$((i+1)); done
   [ "$3" = none ] || echo "Additional nits: $3" >> "$tmp/body"
@@ -26,6 +26,21 @@ printf 'Blocking 0 | Important 0 | Nits 0\n' > "$tmp/body"
 check test "$(bash "$parser" "$tmp/body" 2>/dev/null; echo $?)" = 1
 body 7 5 2; echo 'Additional nits: 0' >> "$tmp/body"
 check test "$(bash "$parser" "$tmp/body" 2>/dev/null; echo $?)" = 1
+# Check the shared contract and all reviewer entry points.
+for file in .claude/agents/code-reviewer.md .claude/agents/security-reviewer.md \
+  .claude/agents/solution-architect.md .claude/skills/code-review/SKILL.md \
+  .claude/skills/security-review/SKILL.md .claude/skills/design-review/SKILL.md; do
+  check grep -qF 'Give each finding exactly one tag: `Important`, `Nit`, or `Pre-existing`.' "$root/$file"
+  check grep -qF 'Only `Important` findings can cause `CHANGES REQUESTED`' "$root/$file"
+  check grep -qF '`Nit` and `Pre-existing` findings never block the PR.' "$root/$file"
+  check grep -qF 'Each `Pre-existing` finding includes base evidence and a suggested ticket title.' "$root/$file"
+done
+check grep -qF 'Android unit tests already fail on the base' "$root/templates/REVIEW.md"
+check grep -qF 'A withdrawn audit advisory predates this change' "$root/templates/REVIEW.md"
+check grep -qF 'Do not classify a new exposure or regression as Pre-existing.' "$root/templates/REVIEW.md"
+body 0 0 none
+sed 's/Pre-existing 0/Pre-existing 2/' "$tmp/body" > "$tmp/pre-existing"
+check bash "$parser" "$tmp/pre-existing"
 preview="$root/.claude/skills/drive-to-green/dry-run.sh"
 printf 'changes\napproved\n' > "$tmp/state"
 bash "$preview" --dry-run "$tmp/state" > "$tmp/out"

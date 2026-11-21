@@ -1,10 +1,12 @@
 # Severity reviews and drive-to-green
 
 Rex reports severity before detail. The first line stays `Not covered by the checks: <limits or None>`.
-The next line uses this exact form: `Blocking 0 | Important 2 | Nits 7`.
+The next line uses this exact form: `Important 2 | Nit 7 | Pre-existing 0`.
 Rex lists at most five nits. For seven nits, Rex adds `Additional nits: 2`.
 Each listed nit starts with `- Nit:`. Other required sections remain unchanged.
-Severity changes presentation only. Existing gates retain their decisions.
+Use the finding tags in [Review severity](../../templates/REVIEW.md).
+Only Important findings can request changes. Pre-existing findings require a suggested ticket title.
+Independent CI and security gates retain their decisions.
 
 ## Override the review policy
 

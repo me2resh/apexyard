@@ -59,6 +59,13 @@ Do not write a process transcript.
 
 ### Severity policy
 
+Give each finding exactly one tag: `Important`, `Nit`, or `Pre-existing`.
+Only `Important` findings can cause `CHANGES REQUESTED` under the applicable blocking rules.
+`Nit` and `Pre-existing` findings never block the PR.
+Each `Pre-existing` finding includes base evidence and a suggested ticket title.
+Follow [Review severity](../../../templates/REVIEW.md) and the agent's Output Format.
+Keep all existing security rules and independent gates in effect.
+
 Follow [policy resolution](../../../docs/skills/drive-to-green.md#override-the-review-policy) before spawning Rex.
 Give Rex the resolved policy path. Overrides change no gate decision.
 
