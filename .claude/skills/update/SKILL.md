@@ -356,14 +356,8 @@ cleanup_bootstrap_marker() {
   rm -f "$skill_marker"
 }
 
-if ! reconcile_installed_codex_adapter; then
-  cleanup_bootstrap_marker
-  exit 1
-fi
-if ! reconcile_installed_opencode_commands; then
-  cleanup_bootstrap_marker
-  exit 1
-fi
+reconcile_installed_codex_adapter || { cleanup_bootstrap_marker; exit 1; }
+reconcile_installed_opencode_commands || { cleanup_bootstrap_marker; exit 1; }
 cleanup_bootstrap_marker
 
 echo "Fork is up to date with upstream/main. Nothing to sync."
