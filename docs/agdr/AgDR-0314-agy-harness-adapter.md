@@ -94,13 +94,13 @@ The match is literal. A chained or wrapped command, such as `x && printenv` or `
 
 ### Live check
 
-The contributor ran agy CLI 1.5.14 against the fork build of this adapter on 2026-11-21. This port onto dev has not yet run live, so the `permissions.deny` checks, the persistent-terminal deny, the sandbox deny, the `grep_search` deny, and the nested `.agents/` check are not live-checked. agy asked the person to trust each new workspace folder, records the choice in `trustedWorkspaces` in the user settings, and then loaded `.agents/hooks.json`. `git add -A` got `deny` from `dispatch-bash.sh`, and nothing was staged. A `write_file` and an `edit_file` to `.claude/settings.json` got `deny` from `block-protected-target-writes.sh`. Ordinary `write_file`, `edit_file`, and `read_file` calls got `ask` and succeeded. agy quoted the SessionStart text. No permission prompt appeared for any `ask` call.
+The contributor ran agy CLI 1.5.14 against the fork build of this adapter on 2026-11-21. This port onto dev has not yet run live. So these checks are not live-checked: the `permissions.deny` rules, the persistent-terminal deny, the sandbox deny, the `grep_search` deny, and the nested `.agents/` walk. agy asked the person to trust each new workspace folder, records the choice in `trustedWorkspaces` in the user settings, and then loaded `.agents/hooks.json`. `git add -A` got `deny` from `dispatch-bash.sh`, and nothing was staged. A `write_file` and an `edit_file` to `.claude/settings.json` got `deny` from `block-protected-target-writes.sh`. Ordinary `write_file`, `edit_file`, and `read_file` calls got `ask` and succeeded. agy quoted the SessionStart text. Calls that passed got `ask`, and no permission prompt appeared for them under the contributor's agy settings. In the fork root, an `edit_file` on `.agents/hooks.json` and a `run_command` of `rm .agents/hooks.json` both got `deny`. The fork build protects the agy wiring through a wider list that also covers other adapters. This port protects only the agy wiring, so the same deny comes from different code here.
 
 Open questions from the issue:
 
 - Crash or timeout: the wrapper's own watchdog and output guard fail closed, and the wrapper always exits 0 with one decision. A crash of the wrapper process itself under agy has not been observed live.
 - Workspace trust: agy asks the person to trust each new workspace folder, as above.
-- `agy -p`: not tested yet. TODO: a person runs one `agy -p` check and records the result here.
+- `agy -p`: the hooks run in non-interactive mode. The contributor ran agy CLI 1.5.14 headless against the fork build. SessionStart injected the context, and an `edit_file` on `.agents/hooks.json` in the fork root got `deny` from `block-protected-target-writes.sh` ("the edit target is live hook state. Use an isolated worktree."). This port onto dev has not yet run live.
 
 ## Consequences
 

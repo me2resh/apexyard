@@ -31,6 +31,12 @@ Google's terms forbid driving agy from another agent. So no agent, harness, or C
 | `read_file` | `ByteOffset` 0 | ask | the read succeeded |
 | `edit_file` | `.claude/settings.json` | deny | `block-protected-target-writes.sh`: "the edit target is live hook state" |
 | `manage_task` | `kill`, `list` | ask | ran |
+| `edit_file` | `.agents/hooks.json` in the fork root | deny | `block-protected-target-writes.sh`: "the edit target is live hook state" |
+| `run_command` | `rm .agents/hooks.json` in the fork root | deny | "protected target: .agents/hooks.json" |
+| SessionStart, `agy -p` | — | inject | the headless run injected the ApexYard text |
+| `edit_file`, `agy -p` | `.agents/hooks.json` in the fork root | deny | `block-protected-target-writes.sh`: "the edit target is live hook state. Use an isolated worktree." |
+
+The last two rows come from one headless `agy -p` run, so the hooks run in non-interactive mode too. agy printed the deny reason and did not change the file. The fork build protects the agy wiring through a wider list that also covers other adapters. This port protects only the agy wiring, so here the same deny comes from different code, and it is not live-checked on this port.
 
 agy asked the person to trust the workspace folder, and then loaded `.agents/hooks.json`. It showed no permission prompt for any `ask` call (see [`ask` and agy's permission check](#ask-and-agys-permission-check)).
 
@@ -184,7 +190,7 @@ agy also reads `.agents/` config in folders between its directory and the fork r
 
 - The walk starts at the top-level `cwd` and at `workspacePaths[0]`, in lexical and physical form. It stops before the fork root, whose `.agents/` is the real wiring.
 - It checks only the folders on that path, never a subfolder, so the cost is a few file checks per call.
-- A match gets `deny` for every tool, read-only tools included: "a nested .agents hook or plugin config at <dir> can override the fork's hooks; remove it from the live fork". At SessionStart, the same text is an error step.
+- A match gets `deny` for every tool, read-only tools included. The reason names the folder and says that the config can override the fork's hooks and must be removed from the live fork. At SessionStart, the same text is an error step.
 - A sibling folder is not on the path. A managed project under `workspace/` does not trip the check while agy runs in the fork root. When agy runs inside that project's folder, its `.agents/` config is on the path and gets `deny`.
 - A linked worktree is its own fork root, so its `.agents/` is its wiring, and the parent fork's `.agents/` is above the walk.
 
@@ -212,7 +218,7 @@ The wrapper prints its decision before it writes the line, and it ignores loggin
 
 - **Crash or timeout:** the wrapper's own watchdog and output guard fail closed. A gate that runs too long gets `deny` before agy's timeout, and any wrapper error or malformed output becomes `deny`. The wrapper always exits 0 with one decision. A crash of the wrapper process itself under agy has not been observed live.
 - **Workspace trust:** agy asked the person to trust each new workspace folder before it loaded `.agents/hooks.json`. agy records the choice in `trustedWorkspaces` in the user settings.
-- **`agy -p`:** not tested yet. TODO: a person runs one `agy -p` check and records the result here.
+- **`agy -p`:** the hooks run. The contributor ran agy CLI 1.5.14 headless against the fork build. SessionStart injected the context, and an `edit_file` on `.agents/hooks.json` in the fork root got `deny` from `block-protected-target-writes.sh`. This port onto dev has not yet run live.
 - Does a subagent's own `run_command` reach the workspace hook? Until a check shows it, the subagent tools stay denied.
 - Do `ask_permission` and `list_permissions` grant a permission without a user prompt?
 
