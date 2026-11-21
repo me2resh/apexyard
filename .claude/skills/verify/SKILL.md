@@ -19,23 +19,16 @@ Use Bash, Git, Python 3, and jq.
 Report missing dependencies as blockers.
 
 1. Record `git rev-parse HEAD` and `git status --short`.
-2. Run the focused hook regression suite:
+2. Run the focused hook regression suite. Run each test as its own command, so the protected-target gate can read each path. Record the command and its exit code for each line:
 
    ```bash
-   bash -c 'failed=0
-   for test_file in \
-     .claude/hooks/tests/test_verify_skill.sh \
-     .claude/hooks/tests/test_handover_clone_prompt.sh \
-     .claude/hooks/tests/test_scaffold_interview.sh \
-     .claude/hooks/tests/test_writing_standard.sh; do
-     printf "COMMAND: bash %s\n" "$test_file"
-     bash "$test_file"
-     result=$?
-     printf "EXIT: %s (%s)\n" "$result" "$test_file"
-     if [ "$result" -ne 0 ]; then failed=1; fi
-   done
-   exit "$failed"'
+   bash .claude/hooks/tests/test_verify_skill.sh
+   bash .claude/hooks/tests/test_handover_clone_prompt.sh
+   bash .claude/hooks/tests/test_scaffold_interview.sh
+   bash .claude/hooks/tests/test_writing_standard.sh
    ```
+
+   Any non-zero exit fails verify.
 
 3. Run one skill smoke test:
 
