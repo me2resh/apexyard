@@ -12,6 +12,16 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 
 Deep-dive analytics analysis. Checks that tracking is configured, events follow a naming convention, key user funnels are instrumented, and dashboards exist. Invoke when `/launch-check`'s analytics row shows WARN or FAIL.
 
+## Usage
+
+```
+/analytics-audit                       # audit the project in the current directory
+/analytics-audit workspace/my-app      # audit the project at this path
+```
+
+This audit runs on its own. It does not need a `/launch-check` run first.
+`/launch-check` names and offers this audit when its analytics row shows WARN or FAIL.
+
 ## Process
 
 ### Step 1: SDK detection

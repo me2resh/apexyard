@@ -14,6 +14,16 @@ Deep-dive regulatory compliance analysis. Checks cookie consent, privacy policy,
 
 **Consumes the DFD produced by [`/dfd`](../dfd/SKILL.md) for data-handling analysis (Step 4).** The DFD's classifications table at `projects/<project>/architecture/dfd.md` is the source of truth for which fields are PII / PCI / secrets, and the DFD's external-services list is the source of truth for cross-border transfers and third-party processors. If the DFD doesn't exist, this skill falls back to its own grep-based discovery (degraded mode — surface in the output banner). See AgDR-0026 for the single-source-of-truth rationale.
 
+## Usage
+
+```
+/compliance-check                       # audit the project in the current directory
+/compliance-check workspace/my-app      # audit the project at this path
+```
+
+This audit runs on its own. It does not need a `/launch-check` run first.
+`/launch-check` names and offers this audit when its compliance row shows WARN or FAIL.
+
 ## Compliance Areas
 
 | Area | Regulation | Key requirement |

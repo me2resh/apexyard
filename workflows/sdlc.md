@@ -42,14 +42,14 @@ Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 - Tickets created and prioritized
 - Work scheduled in sprint/cycle
 
-> **Sidebar — when to file a `/spike` instead of a `/feature`.** If reasoning can answer the technical question (for example, whether a library works or an approach scales), write the feature directly. If the answer is unknown, file a `[Spike]` with `/spike`. A spike is a 1–3 day, hypothesis-driven ticket whose default output is disposable learning, not production code. When the question is answered, run `/spike-close --promote` to file a fresh `[Feature]`, or `/spike-close --discard` to save a memo in `docs/spike-memos/<slug>.md`. Spike PRs do not require an AgDR or 80% coverage; Rex and the security auditor still review them. See `.claude/rules/workflow-gates.md` § Spike work and `templates/tickets/spike.md`.
+> **Sidebar — when to file a `/spike` instead of a `/feature`.** If reasoning can answer the technical question (for example, whether a library works or an approach scales), write the feature directly. If the answer is unknown, file a `[Spike]` with `/spike`. A spike is a 1–3 day, hypothesis-driven ticket whose default output is disposable learning, not production code. When the question is answered, run `/spike --close --promote` to file a fresh `[Feature]`, or `/spike --close --discard` to save a memo in `docs/spike-memos/<slug>.md`. Spike PRs do not require an AgDR or 80% coverage; Rex and the security auditor still review them. See `.claude/rules/workflow-gates.md` § Spike work and `templates/tickets/spike.md`.
 >
 > **Sidebar — the early-work taxonomy: `/spike` vs `/prototype` vs `/walking-skeleton`.** These three tools answer different questions and have different lifecycles:
 >
 > | Skill | Question | Lifecycle |
 > |-------|----------|-----------|
-> | `/spike` | "Will this **technically** work?" | THROWAWAY — `/spike-close` disposition |
-> | `/prototype` | "What should it **look and feel** like?" | THROWAWAY — `/prototype-close` disposition (same AgDR + coverage exemptions as `/spike`) |
+> | `/spike` | "Will this **technically** work?" | THROWAWAY — `/spike --close` disposition |
+> | `/prototype` | "What should it **look and feel** like?" | THROWAWAY — `/prototype --close` disposition (same AgDR + coverage exemptions as `/spike`) |
 > | `/walking-skeleton` | "Is the **whole architecture** wired end-to-end?" | **KEPT** — thinnest end-to-end slice through every layer; full SDLC, NO exemptions; you grow the product on top of it |
 >
 > Spikes and prototypes are disposable (the *learning* survives, the code doesn't). A walking skeleton is the production spine — minimal but kept. Don't accidentally promote a throwaway into production: that confusion is exactly what this taxonomy exists to prevent.
