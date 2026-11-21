@@ -1,0 +1,20 @@
+{
+  "toolCall": {
+    "id": "toolu_fixture_task_03",
+    "name": "manage_task",
+    "args": {
+      "Action": "status",
+      "TaskId": "task-7",
+      "toolSummary": "Check the background shell"
+    }
+  },
+  "stepIdx": 14,
+  "conversationId": "0f1e2d3c-4b5a-4968-8776-655443322110",
+  "workspacePaths": ["/work/fork"],
+  "transcriptPath": "/work/agy-data/conversations/transcript.jsonl",
+  "artifactDirectoryPath": "/work/agy-data/conversations/artifacts",
+  "modelName": "example-model",
+  "lastUserInput": "Is the shell still running?",
+  "hookEventName": "PreToolUse",
+  "cwd": "/work/fork"
+}

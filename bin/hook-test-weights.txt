@@ -14,6 +14,7 @@
 1 .claude/hooks/tests/test_agdr_skill.sh
 1 .claude/hooks/tests/test_agent_role_selection.sh
 34 .claude/hooks/tests/test_agent_routing_sync_and_drift.sh
+80 .claude/hooks/tests/test_agy_adapter.sh
 40 .claude/hooks/tests/test_apexyard_check.sh
 230 .claude/hooks/tests/test_apexyard_pr_status.sh
 38 .claude/hooks/tests/test_approve_merge_worktree.sh
@@ -139,6 +140,7 @@
 11 .claude/hooks/tests/test_private_refs_slug_and_runtime.sh
 1 .claude/hooks/tests/test_project_config_untracked.sh
 1 .claude/hooks/tests/test_proportionate_work.sh
+80 .claude/hooks/tests/test_protected_agy_wiring.sh
 387 .claude/hooks/tests/test_push_ref_redirect_1831.sh
 3 .claude/hooks/tests/test_quality_regression.sh
 27 .claude/hooks/tests/test_record_origin_verified_public.sh
