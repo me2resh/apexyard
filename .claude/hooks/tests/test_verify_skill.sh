@@ -2,6 +2,10 @@
 # Check the verify template and its prompt-driven adoption contracts.
 set -euo pipefail
 
+# Isolate from live session pins and caches.
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 python3 - "$ROOT" <<'PY'
 import pathlib
