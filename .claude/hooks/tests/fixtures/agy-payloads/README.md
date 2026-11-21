@@ -37,8 +37,8 @@ Every file carries the common fields of agy's bundled contract:
 | `edit_file.json` | `edit_file` | live: `Path`. Tool list: `Target`, `Replacement`, `ArtifactMetadata` | `ask` with an active ticket |
 | `edit_file-settings.json` | `edit_file` | live | `deny` from `block-protected-target-writes.sh` |
 | `read_file.json` | `read_file` | live: `Path`, `ByteOffset`. Tool list: `StartLine`, `EndLine` | `ask` |
-| `read_file-env.json` | `read_file` | live: `Path` | `deny` from the `permissions.deny` rule `Read(//**/.env)` |
-| `run_command-printenv.json` | `run_command` | live | `deny` from the `permissions.deny` rule `Bash(printenv)` |
+| `read_file-env.json` | `read_file` | synthetic call, `read_file` key shape | `deny` from the `permissions.deny` rule `Read(//**/.env)` |
+| `run_command-printenv.json` | `run_command` | synthetic call, `run_command` key shape | `deny` from the `permissions.deny` rule `Bash(printenv)` |
 | `manage_task-list.json` | `manage_task` | live: `Action` | `ask` |
 | `manage_task-kill.json` | `manage_task` | live: `Action`, `TaskId` | `ask` |
 | `manage_task-status.json` | `manage_task` | binary json tags: `Action`, `TaskId` | `ask` |
