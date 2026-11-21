@@ -39,25 +39,43 @@ fi
 # quote right after the flag is not a direct-pattern terminator. The `-c`
 # wrapper tail does accept a closing quote, so a wrapper mention inside prose
 # still blocks. AgDR-0262 accepts prose blocks; use `-F` / `--body-file`.
-# Not caught, by design: this is a regex guardrail, not a shell parser
-# (AgDR-0267). A bare `eval`, command substitution (`$(git add -A)`,
-# backticks), an opening `(`/`{` (above), wrapper options (`sudo -u …`,
-# `env -i …`), attached git options (`-Csub`, `--git-dir=.git`), an absolute
-# path to git, a backslash-escaped `git`, and a quoted assignment value with
-# spaces all pass. Chasing them adds false blocks on ordinary commands, the
-# kind-1 cost AgDR-0267 ranks first; epic #1846 is closed, so a new tracker
-# issue is needed before any future catch.
+# Triage of the shapes tracked in me2resh/apexyard#2087, against the AgDR-0267
+# bar: handle an ordinary command, or stay cheap without adding parser surface.
+#
+# Caught now:
+#   - wrapper options: `sudo -u root`, `sudo -E`, `env -i`.
+#   - attached git options: `git -Csub`, `git --git-dir=.git`, `git --work-tree=.`.
+#   - any other git global option, e.g. `git --no-pager add -A`.
+#   - an absolute path to git: `/usr/bin/git add -A`.
+#   - a backslash-escaped command name: `\git add -A`.
+#   - a quoted assignment value with spaces: `FOO="a b" git add -A`.
+#   - a `$( )` command substitution, through the `$(` command position.
+#   - a bare `eval 'git add -A'`, through the same wrapper rule as a `-c` shell.
+#
+# Accepted residuals, each with its one-line reason:
+#   - `(` and `{` openers. Treating them as command positions reopens the
+#     quoted-prose false blocks pinned below, which AgDR-0262 ranks first.
+#   - a backtick command substitution. A backtick is ordinary markdown prose
+#     punctuation, so a command position there blocks prose mentions.
+# The header stays aligned with the matrix in test_block_git_add_all.sh.
 _add_flag='(-A|--all|\.)'
 _add_tail='([[:space:];&|)}<>]|$)'
-_add_pos='(^[[:space:]]*|[;&|][[:space:]]*|[[:space:]](then|do|else)[[:space:]]+)'
-_add_prefix='((sudo|env|command|nohup|time|exec|builtin)[[:space:]]+)*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*'
-_add_git='git[[:space:]]+((-[Cc]|--git-dir|--work-tree)[[:space:]]+[^[:space:];&|]+[[:space:]]+)*add[[:space:]]+'"${_add_flag}${_add_tail}"
+_add_pos='(^[[:space:]]*|[;&|][[:space:]]*|[[:space:]](then|do|else)[[:space:]]+|\$\([[:space:]]*)'
+_add_prefix='((sudo|env|command|nohup|time|exec|builtin)([[:space:]]+-{1,2}[A-Za-z][A-Za-z0-9-]*([[:space:]]+[^[:space:]]+)?)*[[:space:]]+)*([A-Za-z_][A-Za-z0-9_]*=([^[:space:]]*|"[^"]*"|\x27[^\x27]*\x27)[[:space:]]+)*'
+# Any git global option, attached or separated: `-Csub`, `-C sub`,
+# `--git-dir=.git`, `--git-dir .git`, `--no-pager`.
+_add_gitopt='((-[A-Za-z]([A-Za-z0-9-]*|[[:space:]]+[^[:space:];&|]+)|--[a-z][a-z-]*([=][^[:space:];&|]+|[[:space:]]+[^[:space:];&|]+)?)[[:space:]]+)*'
+# An absolute path to git, or a backslash-escaped command name, is the same
+# command at a command position.
+_add_gitcore="([[:alnum:]_./\\\\-]+/)?[\\\\/]?git[[:space:]]+${_add_gitopt}add[[:space:]]+${_add_flag}"
+_add_git="${_add_gitcore}${_add_tail}"
 # The wrapper pattern needs its own tail: it ends inside the quoted `-c` body,
 # so the flag must be followed by a real terminator. Without it, `\.` matches
 # the first character of a dot path (`bash -c 'git add .gitignore'`) and
-# explicit-path staging is falsely blocked (#2073 review).
+# explicit-path staging is falsely blocked (#2073 review). `eval` takes the
+# script as a plain argument, so its `-c` token is optional.
 _add_wtail="([[:space:];&|)}<>'\"]|\$)"
-_add_wrapped="${_add_pos}${_add_prefix}(bash|sh|zsh|dash)([[:space:]]+-[A-Za-z-]+)*[[:space:]]+-[A-Za-z]*c[A-Za-z]*[[:space:]]+.*git[[:space:]]+add[[:space:]]+${_add_flag}${_add_wtail}"
+_add_wrapped="${_add_pos}${_add_prefix}(bash|sh|zsh|dash|eval)([[:space:]]+-[A-Za-z-]+)*[[:space:]]+(-[A-Za-z]*c[A-Za-z]*[[:space:]]+)?.*${_add_gitcore}${_add_wtail}"
 
 if printf '%s' "$COMMAND" | grep -qE "${_add_pos}${_add_prefix}${_add_git}" \
   || printf '%s' "$COMMAND" | grep -qE "${_add_wrapped}"; then

@@ -77,6 +77,27 @@ expect 2 "bash -c 'git add -A>/dev/null'"
 expect 2 'cd x
   git add -A'
 
+# --- #2087: shapes that met the AgDR-0267 bar --------------------------------
+# Wrapper options, attached and other git global options, an absolute or
+# escaped git path, a quoted assignment value (double-quoted only), a `$( )`
+# substitution, and a bare `eval` are ordinary commands, so the cheap catch
+# lands here. Single-quoted FOO values with spaces are accepted residuals
+# (they were not caught before #2073 either, and AgDR-0262 ranks the kind‑1
+# prose‑block cost first).
+expect 2 'sudo -u root git add -A'
+expect 2 'sudo -E git add -A'
+expect 2 'env -i git add -A'
+expect 2 'git -Csub add -A'
+expect 2 'git --git-dir=.git add -A'
+expect 2 'git --work-tree=. add -A'
+expect 2 'git --no-pager add -A'
+expect 2 '/usr/bin/git add -A'
+expect 2 '\git add -A'
+expect 2 'FOO="a b" git add -A'
+expect 0 "FOO='a b' git add -A"
+expect 2 'echo "$(git add -A)"'
+expect 2 "eval 'git add -A'"
+
 # --- allowed: an explicit path, or the words inside a quoted mention ---------
 expect 0 'git add path/to/file.txt'
 expect 0 'git add src/auth/ src/billing/'
@@ -106,12 +127,13 @@ expect 0 'gh pr comment 2073 --body "the guard blocks (git add -A) at command po
 expect 0 'printf "%s\n" "example: (git add -A)"'
 expect 0 'echo "note; (git add -A) is blocked"'
 
-# Deliberate residue, not a regression: `(` and `{` are not command positions
-# here, so a real subshell or brace group that stages the whole tree is missed.
-# `dev` missed it too; the class belongs to epic #1846. Known gap: flip these
-# to expect 2 when the catch lands.
+# Deliberate residue, accepted in #2087 with a one-line reason each: `(` and
+# `{` are not command positions here, and a backtick is prose punctuation as
+# often as a substitution. A real subshell, brace group, or backtick command
+# that stages the whole tree is therefore missed. `dev` missed them too.
 expect 0 '(git add -A)'
 expect 0 '{ git add -A; }'
+expect 0 'echo `git add -A`'
 
 # --- routing: the dispatcher must reach the gate without a prefix -----------
 # The gate table row carries no command predicate any more, and the hook is in
