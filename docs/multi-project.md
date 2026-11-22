@@ -179,7 +179,7 @@ Use this mode when any project name must stay private on GitHub Free. The framew
 ```
 ~/ops/
 ├── apexyard/                ← public fork of me2resh/apexyard (framework code + tooling)
-└── apexyard-portfolio/      ← private repo (registry + per-project docs — never goes public)
+└── apexyard-portfolio/      ← private repo (registry + per-project docs: never goes public)
 ```
 
 The default sibling-dir name is **`<fork>-portfolio`**, so the relationship between the two repos is self-documenting on disk and on GitHub. If you kept the fork name as `apexyard`, the sibling defaults to `apexyard-portfolio`. If you renamed the fork (e.g. `cos` for Chief-of-Staff), the sibling defaults to `cos-portfolio`. Pick something else if you would prefer: the framework only cares about the local path you point the config block at.
@@ -262,7 +262,7 @@ defaults:
 EOF
 
 # v2: onboarding.yaml lives here too. Seed from the framework template
-# OR run /setup later inside the public fork — /setup writes to the
+# OR run /setup later inside the public fork: /setup writes to the
 # resolved onboarding path.
 cp ~/ops/apexyard/onboarding.yaml.example onboarding.yaml 2>/dev/null \
   || cp ~/ops/apexyard/onboarding.yaml onboarding.yaml 2>/dev/null \
@@ -357,7 +357,7 @@ If you are on an older framework version that does not have the `portfolio:` con
 ```bash
 cd ~/ops/apexyard
 
-# Tell the fork to ignore the registry + projects/ — they live in the portfolio.
+# Tell the fork to ignore the registry + projects/: they live in the portfolio.
 cat >> .gitignore <<'EOF'
 
 # Portfolio data lives in a separate private repo (split-portfolio mode).
@@ -559,10 +559,10 @@ This pattern follows **Custom templates** (path-mirroring overrides, see AgDR-00
 Seed from the framework example. **`/setup --split-portfolio` does this automatically for split-portfolio adopters** (#351 PR 3). The skill copies the example into the private repo as part of Step 5 (private-repo init). Single-fork adopters do the `cp` manually when they want to start customising. The framework deliberately does not auto-seed for single-fork. The reason is that an empty override file accumulating in the fork root before any overrides exist is more ceremony than value.
 
 ```bash
-# Split-portfolio — `/setup --split-portfolio` does this for you. Manual fallback:
+# Split-portfolio: `/setup --split-portfolio` does this for you. Manual fallback:
 cp ~/ops/apexyard/agent-routing.yaml.example ~/ops/apexyard-portfolio/agent-routing.yaml
 
-# Single-fork — always manual (and only when you're ready to customise):
+# Single-fork: always manual (and only when you're ready to customise):
 cp ~/ops/apexyard/agent-routing.yaml.example ~/ops/apexyard/agent-routing.yaml
 ```
 
@@ -671,11 +671,11 @@ Migrate now? This will:
   - Add portfolio.{onboarding,workspace_dir} keys to .claude/project-config.json
 
 Per-file-class semantics: onboarding.yaml is COPIED (small text file, sibling is
-the canonical source of truth); workspace/ is MOVED (size constraint — clones
-are potentially gigabytes, doubling disk usage makes no sense). Idempotent — if
+the canonical source of truth); workspace/ is MOVED (size constraint: clones
+are potentially gigabytes, doubling disk usage makes no sense). Idempotent. If
 interrupted, re-run. Per AgDR-0021 § H.
 
-[Y / n / dry-run — show commands, don't execute]
+[Y / n / dry-run: show commands, don't execute]
 ```
 
 The migration is **per-file-class confirmable** (copy `onboarding.yaml`? Y/N; move `workspace/`? Y/N), so you can defer one and migrate the other. It is also **idempotent**: if you re-run `/update` later, the migration is a no-op. The mixed copy / move semantics are deliberate. See [AgDR-0021 § H](agdr/AgDR-0021-split-portfolio-v2-path-resolution.md) for the rationale. Small text files like `onboarding.yaml` benefit from a public-fork snapshot for legacy tooling. Large directories like `workspace/` would waste disk with duplicate copies.
@@ -685,11 +685,11 @@ The migration is **per-file-class confirmable** (copy `onboarding.yaml`? Y/N; mo
 The skill **does not commit**: staging is the contract. you own both the public-fork commit AND the sibling-repo commit. After accepting the migration:
 
 ```bash
-# Public fork — review what's staged + the marker + config-block additions
+# Public fork: review what's staged + the marker + config-block additions
 git diff --cached
 git commit -m "chore: migrate to split-portfolio v2"
 
-# Private sibling repo — onboarding + workspace landed here
+# Private sibling repo: onboarding + workspace landed here
 cd ../apexyard-portfolio
 git status        # see the moved files
 git add onboarding.yaml workspace
@@ -703,12 +703,12 @@ cd ~/ops/apexyard
 
 SIBLING=../apexyard-portfolio   # adjust to your sibling-dir name
 
-# Copy onboarding.yaml — sibling becomes canonical source of truth; public
+# Copy onboarding.yaml: sibling becomes canonical source of truth; public
 # fork keeps a gitignored snapshot for legacy tooling (per AgDR-0021 § H).
 cp -p onboarding.yaml "$SIBLING/onboarding.yaml"
 git rm --cached onboarding.yaml 2>/dev/null || true
 
-# Move workspace/<name>/ contents — size constraint (clones are potentially
+# Move workspace/<name>/ contents: size constraint (clones are potentially
 # gigabytes; duplicating wastes disk).
 mkdir -p "$SIBLING/workspace"
 for entry in workspace/*; do
@@ -731,14 +731,14 @@ IGNORE
 # Write the v2 anchor
 echo "# This file marks the directory as an ApexYard ops fork (split-portfolio v2)." > .apexyard-fork
 
-# Update the config block — add the v2 keys
+# Update the config block: add the v2 keys
 jq --arg onb "$SIBLING/onboarding.yaml" \
    --arg ws  "$SIBLING/workspace" \
    '.portfolio.onboarding = (.portfolio.onboarding // $onb)
     | .portfolio.workspace_dir = (.portfolio.workspace_dir // $ws)' \
    .claude/project-config.json > /tmp/pc.json && mv /tmp/pc.json .claude/project-config.json
 
-# .claude/project-config.json is deliberately NOT staged — see #1031.
+# .claude/project-config.json is deliberately NOT staged: see #1031.
 git add .gitignore .apexyard-fork
 ```
 
@@ -747,7 +747,7 @@ git add .gitignore .apexyard-fork
 If you have already started in single-fork mode and pushed private project names to your public fork, run the **`/split-portfolio`** skill (introduced #146). It automates the full destructive recovery flow with explicit operator-confirmation gates at each step:
 
 ```
-/split-portfolio              # full migration — 10 steps, all gated
+/split-portfolio              # full migration: 10 steps, all gated
 /split-portfolio --verify     # read-only state report, no destructive ops
 /split-portfolio --dry-run    # walk through each step printing the commands, execute none
 ```
@@ -838,7 +838,7 @@ Every portfolio skill reads `apexyard.projects.yaml` and iterates the registry.
 | `/roadmap` | Reads `projects/<name>/roadmap.md`; asks which project if ambiguous |
 | `/stakeholder-update` | Portfolio rollup with a section per project |
 | `/handover` | Writes to `projects/<name>/handover-assessment.md`, appends the project to the registry. Scores **harnessability** across 5 codebase dimensions (type safety, module boundaries, framework opinionation, test coverage signal, lint baseline). Includes a `low`-verdict warning about Rex blocking-handbook false positives so adopters know whether to run handbooks in advisory-only mode (see AgDR-0042). **Step 7.5** surfaces the assessment's derived Next Steps inline. Offers to file each as a tracker ticket (per-item y/n). Auto-routes by item shape to `/feature` / `/task` / `/bug` (default `/task`). Each filed ticket carries a `_Source: handover deep-dive on YYYY-MM-DD_` back-link to the assessment. This closes the recommendation-rot loop. Previously, static prose in the assessment needed manual translation to tickets one at a time. **Step 8** offers (default-no) to clone the project into `workspace/<name>/` for an LSP-aware deep-dive follow-up (`/code-review`, `/threat-model`, `/security-review`). The clone offer surfaces the cost (disk, gitignored status, `ENABLE_LSP_TOOL=1` + per-language plugin install) explicitly. **Step 8.5** (row 8 of the step 5.6 checklist) offers an opt-in, default-OFF option. This option generates an in-repo **`AGENTS.md`** derived from the live assessment (real build/test/run commands, layout, conventions, gotchas). It offers delivery into the **target repo via a branch + PR**. This is the single exception to the read-only-against-the-target-repo rule, never a direct commit and never via the ops-fork bootstrap path. **Role-split (no duplication, AgDR-0073):** `handover-assessment.md` (ops fork) is the **operator's** full analysis: risks, harnessability verdict, integration plan, next-step tickets. `AGENTS.md` (in the target repo) is the **agent's** concise operating manual: stable commands, layout, conventions, up-front gotchas. Any agent (Claude Code, Cursor, Codex) that works in the repo auto-loads it. `AGENTS.md` is canonical (the skill offers a one-line `CLAUDE.md → @AGENTS.md` shim only when no `CLAUDE.md` exists); an existing `AGENTS.md`/`CLAUDE.md` stays intact, never overwritten. **Step 8.6** (row 9 of the step 5.6 checklist) offers an opt-in, default-OFF option. This option adds a **"Governed by ApexYard" README badge** (or the `built_with` variant) to the target repo. This is the second and only other exception to the read-only rule. Delivery uses the same branch + PR as `AGENTS.md`. It is idempotent (skips if either badge variant is already present), never overwritten or swapped without the operator's say. AgDR-0090 records the growth-loop rationale and design axes. |
-| `/extract-features` | Scans a project's codebase across six discovery axes (HTTP routes, data models, async jobs, test names, UI screens, documented features). Writes a consolidated Feature Inventory at `projects/<name>/feature-inventory.md`. Pairs with `/handover` as the **greenfield-rewrite path**: `/handover` produces the high-level project assessment, `/extract-features` produces the granular "what we must preserve" catalogue. One-off scan, not a recurring audit; re-runs OFFER (default-no) to overwrite. Opt-in `--with-mockups` flag adds a `## Screens` section with AI-inferred ASCII wireframes per UI screen: boxed layouts, form-field bindings inferred from static analysis. Every wireframe carries a mandatory disclaimer header (`> AI-inferred sketch — verify before relying on`). See AgDR-0036 for the trust-contract rationale. |
+| `/extract-features` | Scans a project's codebase across six discovery axes (HTTP routes, data models, async jobs, test names, UI screens, documented features). Writes a consolidated Feature Inventory at `projects/<name>/feature-inventory.md`. Pairs with `/handover` as the **greenfield-rewrite path**: `/handover` produces the high-level project assessment, `/extract-features` produces the granular "what we must preserve" catalogue. One-off scan, not a recurring audit; re-runs OFFER (default-no) to overwrite. Opt-in `--with-mockups` flag adds a `## Screens` section with AI-inferred ASCII wireframes per UI screen: boxed layouts, form-field bindings inferred from static analysis. Every wireframe carries a mandatory disclaimer header (`> AI-inferred sketch: verify before relying on`). See AgDR-0036 for the trust-contract rationale. |
 | `/feature-diagram` | Slice the system by feature. Reads one row from `projects/<name>/feature-inventory.md` and emits a Mermaid `flowchart LR` at `projects/<name>/features/<slug>.md` for that feature. It shows the participating routes / models / jobs / screens. Sibling to `/c4` (system topology) and `/dfd` (data flows): different lens (per-feature slice) on the same codebase. Inventory is a hard dependency: run `/extract-features` first. Re-runs prompt to overwrite; `--force` bypasses. See AgDR-0035. |
 | `/process` | Anchor-scoped scan across **seven** process-discovery axes (explicit workflow definitions, queue/job chains, cron triggers, state-column transitions, API choreography, existing BPMN/Mermaid, documented steps), optionally cross-repo via `apexyard.projects.yaml`. Interviews only on the gaps the code could not answer, then emits a lint-clean BPMN 2.0 file at `projects/<name>/processes/<slug>.bpmn`. Sibling to `/c4` (static system topology) and `/extract-features` (exhaustive feature catalogue): same read-first-then-ask shape, BPMN as the output. Needs `python3` ≥ 3.9 for the grid layout (falls back to bare BPMN with a warning when it is missing) and Node + npm for `bpmnlint`. |
 | `/c4` | Reads a project's codebase and writes filled-in C4 L1 + L2 Mermaid diagrams (location depends on invocation context: see `.claude/skills/c4/SKILL.md`) |
@@ -921,7 +921,7 @@ Then from anywhere inside the fork or any `workspace/<name>/` clone:
 ```bash
 $ apexyard status
 Active workspace:  example-app
-Active ticket:     #42 — Add CSV export
+Active ticket:     #42: Add CSV export
 Branch:            feature/GH-42-csv-export
 Role set:          backend ; Waiting on you: 2 PRs, the oldest 5 hours
 ```
@@ -983,7 +983,7 @@ git log --oneline HEAD..upstream/main
 git checkout -b chore/sync-upstream
 git merge upstream/main
 
-# Resolve any conflicts (usually in files you haven't customised — role files, workflow files, CLAUDE.md imports)
+# Resolve any conflicts (usually in files you haven't customised: role files, workflow files, CLAUDE.md imports)
 # Then push and open a PR
 git push -u origin chore/sync-upstream
 gh pr create --title "chore: sync ops fork with upstream apexyard"

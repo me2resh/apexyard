@@ -196,7 +196,7 @@ All path patterns use the `(^|/)` anchor so they catch **monorepo layouts** (`ba
 
 **Not in the default list (known gap):** CDK / Pulumi / generic-IaC projects that use plain `.ts` / `.py` / `.go` files inside an `infrastructure/` directory. The original draft had a generic `(^|/)infrastructure/` pattern for this. But testing showed false positives on `docs/infrastructure/notes.md` and `src/types/infrastructure/foo.ts`: the word "infrastructure" is ambiguous as a directory name. Projects that want CDK-style coverage should add an explicit override like `(^|/)infrastructure/.*\.(ts|py|go)$` via `.architecture_paths`.
 
-**Enforces:** `.claude/rules/agdr-decisions.md § "Enforcement — and the honest limits of it"`: this hook is the mechanical, commit-time backstop for the materiality threshold defined in § "The threshold"; the rule was prose-only until this hook shipped.
+**Enforces:** `.claude/rules/agdr-decisions.md § "Enforcement: and the honest limits of it"`: this hook is the mechanical, commit-time backstop for the materiality threshold defined in § "The threshold"; the rule was prose-only until this hook shipped.
 
 ### 8. Design-review-for-UI merge gate: `require-design-review-for-ui.sh`
 
@@ -384,12 +384,12 @@ If a marker gets stale, delete the file and re-run the corresponding skill.
 Each hook reads a tool-call JSON blob from stdin. Simulate the harness with `printf` (avoid `echo -e` to keep escape handling portable):
 
 ```bash
-# require-active-ticket — should block
+# require-active-ticket: should block
 printf '%s' '{"tool_name":"Edit","tool_input":{"file_path":"/tmp/foo.ts"}}' \
   | .claude/hooks/require-active-ticket.sh
 echo "exit=$?"
 
-# auto-code-review — should emit reminder + exit 2
+# auto-code-review: should emit reminder + exit 2
 printf '%s' '{"tool_name":"Bash","tool_input":{"command":"gh pr create --title foo"},"tool_response":{"stdout":"https://github.com/acme/repo/pull/42"}}' \
   | .claude/hooks/auto-code-review.sh
 echo "exit=$?"

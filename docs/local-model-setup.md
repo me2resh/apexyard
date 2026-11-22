@@ -117,7 +117,7 @@ Caution: `data-engineer` is a build agent. It also runs schema migrations throug
 Restart Claude Code. The `apply-agent-routing.sh` SessionStart hook will:
 
 1. Probe `http://localhost:4000/v1/models` with a 2s timeout. If the proxy is down → emit a warning, skip the endpoint override, fall through to the model rewrite only.
-2. Query `http://localhost:4000/api/tags` for `qwen2.5-coder:14b`. If the model is not in local Ollama → emit `⚠ agent-routing: data-engineer — model qwen2.5-coder:14b not in local Ollama; run: ollama pull qwen2.5-coder:14b`. The override still applies; Ollama may pull on first call with the cold-start cost.
+2. Query `http://localhost:4000/api/tags` for `qwen2.5-coder:14b`. If the model is not in local Ollama → emit `⚠ agent-routing: data-engineer: model qwen2.5-coder:14b not in local Ollama; run: ollama pull qwen2.5-coder:14b`. The override still applies; Ollama may pull on first call with the cold-start cost.
 3. Rewrite `.claude/agents/data-engineer.md` frontmatter so `model: ollama/qwen2.5-coder:14b`.
 4. Write `.claude/session/agent-env/data-engineer.env` with `ANTHROPIC_BASE_URL=http://localhost:4000` (informational in v1: see constraints below).
 5. Write `.claude/session/agent-env/__session__.env` with the same `ANTHROPIC_BASE_URL`. This is the session-wide variable Claude Code reads at startup.
