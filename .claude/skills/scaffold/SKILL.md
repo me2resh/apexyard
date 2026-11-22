@@ -57,7 +57,7 @@ These keys can occur under `onboarding` or the existing `tech_stack` block.
 Only AWS, GCP, Google Cloud, and Azure name a company cloud.
 Only Netlify, Vercel, Render, Fly.io, Heroku, and Amplify name a hosting service.
 Keep a named hosting service in `hostService` with source `onboarding` or `owner`.
-Use that name in the setup sentence and manual steps. Default to Netlify when no service is named.
+Use that name in the setup sentence and manual steps. Default to Netlify when no source names a service.
 Unknown hosting values leave the host question open. Cloud names use the same exact cloud table.
 Database fills storage only. Language and CI system appear only as summary notes or clashes.
 No onboarding key fills data sensitivity, compliance, or sign-in.
@@ -89,7 +89,10 @@ Keep the other value, its source, and the field in `openQuestions`.
    Not sure selects that preset with source `recommendation` and its reason.
    `AskUserQuestion` supplies Other. Other selects the minimal custom setup.
 6. Use confirmed company cloud as the host recommendation when available.
-   Its reason is “Your company already runs and secures this cloud.”
+   Use this reason:
+
+   “Your company already runs and secures this cloud.”
+
    Use confirmed PRD hints for shape, scale, and data sensitivity when available.
    Keep each recommendation in the displayed presets.
 7. Record an explicit answer with source `owner`.
@@ -107,8 +110,12 @@ Never ask about cost, budget, currency, tests, coverage, language, database, sig
 1. Run `lib/next-questions.sh --derive` with the same inputs.
    The first matching rules row determines the setup.
 2. Show the setup as a short message before the final screen, not inside the question.
-   Start with the plain sentence on its own line, for example “This will run as a website on Netlify.”
-   Then use short labelled lines, one fact per item: You chose, Defaults, Checks and pipeline, You do by hand, Not set up yet.
+   Start with the plain sentence on its own line. Example:
+
+   “This will run as a website on Netlify.”
+
+   Then use short labelled lines with one fact per item.
+   Use these labels: You chose, Defaults, Checks and pipeline, You do by hand, Not set up yet.
    Show technical names after the plain words.
 3. Show each answer and its source.
    Display `owner` as “you”, `recommendation` as “recommended”, and `onboarding` as “company setup”.
@@ -136,8 +143,14 @@ Never ask about cost, budget, currency, tests, coverage, language, database, sig
    Recompute dependent values and show the summary again.
    Retain other answers. Clear a dependent answer only after the owner confirms the change.
 10. A custom start selects rules row 7.
-    Show “No golden path fits yet. You get the basic checks only.”
-    When language clashes, show “No golden path for your language yet.”
+    Show this message:
+
+    “No golden path fits yet. You get the basic checks only.”
+
+    When language clashes, show this message:
+
+    “No golden path for your language yet.”
+
     Explain that its placeholder test passes and reports that it is a placeholder.
     Keep “Choose a host before launch.” as an open question.
     Show the language clash in the custom option description when one exists.
@@ -172,8 +185,8 @@ Never ask about cost, budget, currency, tests, coverage, language, database, sig
 
 3. Show the resolved target path and the file list from the bootstrap scope below.
    Include the bundle version and each placeholder.
-   For typescript-nextjs, say that the starter source tree is copied.
-   For every other bundle, say that no source tree is included.
+   For typescript-nextjs, say that generation copies the starter source tree.
+   For every other bundle, say that generation includes no source tree.
 4. Ask one `AskUserQuestion`: "Generate these files at this path?" Offer Yes and No.
    No ends the skill after cleanup. Yes permits generation.
 5. Run `lib/generate.sh --spec "$spec" --name "$name"` beside this skill.

@@ -8,11 +8,13 @@ effort: medium
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /seo-audit — Technical SEO Analysis
+# /seo-audit: Technical SEO Analysis
 
 Deep-dive SEO audit against Google's best practices. Checks on-page SEO, technical SEO, and social sharing metadata. Invoke when `/launch-check`'s SEO row shows WARN or FAIL.
 
-> **See also**: `/geo-audit` for the LLM/agent-discoverability sibling check — `llms.txt`, `AGENTS.md`, AI-crawler directives in `robots.txt`, JSON-LD citation metadata, token economics. `/seo-audit` covers the Googlebot audience; `/geo-audit` covers the LLM-crawler and coding-agent audience. The two run independently. When `/launch-check` shows WARN or FAIL on the SEO or generative-engine row, it names and offers the matching audit.
+> **See also**: `/geo-audit` checks LLM and agent discovery.
+> It checks `llms.txt`, `AGENTS.md`, AI-crawler directives in `robots.txt`, JSON-LD citation metadata, and token economics.
+> `/seo-audit` covers the Googlebot audience. `/geo-audit` covers the LLM-crawler and coding-agent audience. The two run independently. When `/launch-check` shows WARN or FAIL on the SEO or generative-engine row, it names and offers the matching audit.
 
 ## Usage
 
@@ -57,7 +59,7 @@ Check each key page (index, about, pricing, blog, product pages) for:
 ### Step 4: Structured data
 
 - JSON-LD or Microdata for relevant schemas (Organization, Product, FAQ, BreadcrumbList, Article)
-- Check validity: are required properties present?
+- Check validity: does the data contain all required properties?
 
 ### Step 5: Output
 
@@ -75,7 +77,7 @@ SEO AUDIT — <project> @ <sha>
 | S7 | Mobile | PASS | Viewport meta tag present |
 | S8 | Canonical URLs | PASS | All pages have canonical links |
 
-SEO readiness: GOOD (1 fail, 2 warnings — fix sitemap before launch)
+SEO readiness: GOOD (1 fail, 2 warnings: fix sitemap before launch)
 ```
 
 ## Persist the run + render trend
@@ -93,7 +95,7 @@ Score: `score = max(0, 100 - 25*critical - 10*high - 3*medium - 1*low)`. Verdict
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-audit-history.sh"
 
-# Lowercase severity in the payload — the lib expects critical/high/medium/low/info.
+# Lowercase severity in the payload: the lib expects critical/high/medium/low/info.
 payload=$(mktemp); cat > "$payload" <<'EOF'
 {
   "schema_version": 1,
@@ -107,7 +109,7 @@ EOF
 
 # Body: per templates/audits/seo-audit.md
 body=$(mktemp); cat > "$body" <<'EOF'
-... (filled-in body — findings table + Recommended priority) ...
+... (filled-in body: findings table + Recommended priority) ...
 EOF
 
 ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -125,13 +127,13 @@ touch projects/<name>/audits/seo-audit/.audit-history-tracked
 
 ## Rules
 
-1. **Auto-PASS for non-web projects.** APIs, CLIs, libraries, backend-only services don't need SEO.
-2. **Focus on technical SEO**, not content strategy. Don't audit keyword targeting or content quality — that's a marketing call, not a technical check.
-3. **Check the built output** if available (`dist/`, `build/`, `.next/`), not just source — SSR frameworks may generate meta tags at build time.
+1. **Auto-PASS for non-web projects.** APIs, CLIs, libraries, and backend-only services do not need SEO.
+2. **Focus on technical SEO**, not content strategy. Do not audit keyword targeting or content quality. Marketing determines these properties, rather than a technical check.
+3. **Check the built output** if available (`dist/`, `build/`, `.next/`). Do not check only source. SSR frameworks may generate meta tags at build time.
 4. **Prioritize by indexing impact.** Missing sitemap > missing og:image > missing structured data.
 5. **Always persist via the lib.** The persist step runs regardless of opt-in commit state.
 6. **Severity vocabulary in the JSON is lowercase.** The lib expects `critical`/`high`/`medium`/`low`/`info`.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*
