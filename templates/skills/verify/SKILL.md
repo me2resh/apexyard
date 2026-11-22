@@ -13,7 +13,8 @@ A successful build alone does not prove an application flow works.
 
 ## Configure this skeleton
 
-During adoption, keep the stack sections this project needs.
+Keep one matching stack skeleton beside this skill for each project stack.
+Use the project-relative paths below.
 Replace the setup fields below with concrete project commands and expected results.
 Discover commands from project manifests, scripts, and operating documentation.
 Do not invent commands or credentials.
@@ -41,38 +42,19 @@ Report them rather than executing placeholders.
 
 ### Web
 
-Start the local web server and record its URL.
-Open that URL in an available browser automation tool.
-Drive the primary user journey through its visible controls.
-Check the changed screen and one relevant error path.
-Capture screenshots with file paths and observed results.
-Report a browser blocker when browser automation is unavailable.
+Use `.claude/skills/verify/web.md` for the start, flow, and evidence steps.
 
 ### Mobile
 
-Check the platform SDK and required runtime, including the JDK for Android.
-Build and launch the app on a named emulator, simulator, or attached test device.
-Record the device and operating system version.
-Drive the main flow through UI automation.
-Capture screenshots and relevant device logs.
-Report missing SDKs, devices, or automation tools as blockers.
+Use `.claude/skills/verify/mobile.md` for the start, flow, and evidence steps.
 
 ### Desktop
 
-Build and launch the local desktop app in an available graphical session.
-Record the operating system and application version.
-Drive the main window's primary flow through UI automation.
-Capture screenshots and relevant application logs.
-Report unavailable display sessions or automation tools as blockers.
+Use `.claude/skills/verify/desktop.md` for the start, flow, and evidence steps.
 
 ### Service
 
-Start the service and its required local dependencies.
-Wait for the documented health response within a bounded timeout.
-Send requests for the main success flow and one invalid input.
-Record request commands, status codes, and redacted response excerpts.
-Check expected state changes when the flow writes data.
-For a worker or pipeline, submit a fixture and inspect its output instead of inventing an HTTP endpoint.
+Use `.claude/skills/verify/service.md` for the start, flow, and evidence steps.
 
 ## Evidence for the PR
 
