@@ -387,6 +387,46 @@ if [ -z "$INNER_PATTERN" ]; then
   INNER_PATTERN='[A-Z]{2,10}-[0-9]+|GH-[0-9]+|#[0-9]+'
 fi
 
+# Accept extra branch shapes from `.branch.extra_patterns[]` (me2resh/apexyard#2083).
+#
+# Some trackers name branches themselves. Jira's "Create branch" action
+# produces `<KEY>-<number>-<summary-slug>` with no `type/` prefix, and Jira
+# uses that exact name to link the branch (and its PR) back to the ticket.
+# Renaming it to the `{type}/{TICKET-ID}-{description}` shape breaks the link,
+# so adopters either lose the integration or work around this gate.
+#
+# Each entry is an extended regex matched against the WHOLE branch name
+# (`grep -x`, not a substring match), and a match passes the gate. The list is
+# opt-in and empty by default, so every adopter that does not set it keeps
+# today's behaviour exactly. Branches no entry matches still go through the
+# `type/` rule below.
+#
+# An invalid regex fails CLOSED and names the bad pattern. Silently skipping a
+# malformed entry would block the adopter's tracker branches with no clue why;
+# treating it as a match would widen the gate by accident. Neither is right.
+if [ -n "$REPO_ROOT" ] && [ -n "$CURRENT_BRANCH" ] && command -v config_get >/dev/null 2>&1; then
+  while IFS= read -r _extra_pattern; do
+    [ -n "$_extra_pattern" ] || continue
+    printf '%s\n' "$CURRENT_BRANCH" | grep -qxE -- "$_extra_pattern" 2>/dev/null
+    _extra_rc=$?
+    if [ "$_extra_rc" -eq 2 ]; then
+      cat >&2 <<MSG
+BLOCKED: .branch.extra_patterns[] holds an invalid extended regex:
+  ${_extra_pattern}
+
+Fix or remove that entry in .claude/project-config.json. The branch-name gate
+fails closed while the config is invalid, so no branch can pass.
+MSG
+      exit 2
+    fi
+    if [ "$_extra_rc" -eq 0 ]; then
+      exit 0
+    fi
+  done <<EXTRA_PATTERNS
+$(config_get '.branch.extra_patterns[]')
+EXTRA_PATTERNS
+fi
+
 # Validate: type/<TICKET>-<description>
 # The TICKET pattern is sourced from tracker.id_pattern so Linear / Jira
 # / custom adopters get their own shape validation. Note: this pattern is
@@ -409,6 +449,11 @@ Examples:
   feature/ABC-123-add-auth
   fix/GH-45-login-bug
   docs/ENG-99-update-readme
+
+Tracker-native names (e.g. Jira's "Create branch" output) can be accepted
+without a type/ prefix:
+  .claude/project-config.json → .branch.extra_patterns[]
+  (extended regexes, each matched against the whole branch name)
 
 To unblock:
   1. Pick a ticket-ID (existing or new): /feature, /task, /bug

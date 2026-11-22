@@ -14,6 +14,27 @@ Examples:
 
 The `TICKET-ID` should reference an issue in the project's tracker. Default format: `#58` or `GH-58` (GitHub Issues). The validators in `.claude/hooks/` source the regex from `.tracker.id_pattern` in `.claude/project-config.{defaults,}.json`. The default pattern also matches any uppercase tracker prefix (e.g. `ABC-123`) for teams using Linear, Jira, or similar. See `_lib-tracker.sh` and AgDR-0033 for how to swap the active tracker. ApexYard's out-of-the-box default is per-project GitHub Issues, with one repo's issues never crossing into another repo's PRs.
 
+### Tracker-native branch names
+
+Some trackers create branches with their own shape and link the branch to the ticket by that exact name.
+Jira's **Create branch** action produces `<KEY>-<number>-<summary-slug>`, with no `type/` prefix.
+Renaming such a branch breaks the tracker link, so the gate accepts extra shapes from `.branch.extra_patterns` in `.claude/project-config.json`:
+
+```json
+{
+  "branch": {
+    "extra_patterns": ["^ABC-[0-9]+-[a-z0-9]+(-[a-z0-9]+)*$"]
+  }
+}
+```
+
+- Each entry is an extended regex matched against the whole branch name.
+- A match passes the branch-name gate. No match falls through to the normal `type/` rule.
+- The list is empty by default, so the default shape is unchanged.
+- An invalid regex fails closed and the hook names the bad entry.
+
+This relaxes the branch-name check only. Every other gate still applies. See `docs/project-config.md` and me2resh/apexyard#2083.
+
 ### ORBIT records branches
 
 Use `orbit/<initiative-id>-<description>` without a ticket only when every changed file is under `docs/orbit/`.
