@@ -45,15 +45,16 @@ The reviewer mutation lock blocks `git clone`, `git fetch`, and `git checkout` w
 
 ## Process
 
+Read the PR's verify evidence first. Report missing evidence.
 Read .claude/rules/writing-standard.md before drafting or posting a review.
 Apply its controlled technical writing profile.
 Treat a writing-profile fault in the PR as advisory, per the Code Reviewer
 agent's § "Blocking-Severity Bar", unless the fault changes meaning or drops
 evidence — request changes only for that kind of fault.
-State the verdict and next action first. State the reason and evidence after it.
+State the verdict and next action first, then the reason and evidence.
 Use the Code Reviewer agent's required Output Format for first reviews, re-reviews, and reduced-scope reviews.
-Retain its required sections and give each checklist result a reason or evidence reference.
-Before submission, check the report against that format and repair omissions.
+Keep its required sections and give each checklist result a reason or evidence.
+Before you post, check the report against that format and fix omissions.
 Omit process transcripts.
 
 ### Severity policy
@@ -62,12 +63,12 @@ Give each finding exactly one tag: `Important`, `Nit`, or `Pre-existing`.
 Only `Important` findings can cause `CHANGES REQUESTED` under the applicable blocking rules.
 `Nit` and `Pre-existing` findings never block the PR.
 Each `Pre-existing` finding includes base evidence and a suggested ticket title.
-Each `Important` line also carries a `Regression check:` field — see the agent's § "Regression check per blocker" (me2resh/apexyard#2091).
-Follow [Review severity](../../../templates/REVIEW.md) and the agent's Output Format.
+Each `Important` line also carries a `Regression check:` field. See the agent's § "Regression check per blocker" (me2resh/apexyard#2091).
+Follow [Review severity](../../../templates/REVIEW.md).
 Keep all other security rules and independent gates in effect.
 
 Follow [policy resolution](../../../docs/skills/drive-to-green.md#override-the-review-policy) before spawning Rex.
-Give Rex the resolved policy path. Overrides change no gate decision.
+Take policy from the PR base branch, not the PR head. Overrides change no gate decision.
 
 ### CI order and depth
 
@@ -269,8 +270,6 @@ Posts a GitHub review comment with:
 - Issues found
 - Fallow findings (advisory; JS/TS diffs only, when the `fallow` CLI is available)
 - Verdict: APPROVED / CHANGES REQUESTED / COMMENT
-
-Invokes: Code Reviewer Agent (Rex)
 
 ---
 

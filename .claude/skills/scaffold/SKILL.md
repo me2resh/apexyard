@@ -181,9 +181,32 @@ Never ask about cost, budget, currency, tests, coverage, language, database, sig
    Pass `--target` only to override that path.
    The override must end in the name.
    The target must be absent or empty. Stop on any fault.
-6. Remove the path from `active_bootstrap_marker_path` on completion or failure.
+6. Complete the optional verify offer below before cleanup.
+7. Remove the path from `active_bootstrap_marker_path` on completion or failure.
    SessionStart also clears an interrupted marker. See AgDR-0011.
    Remove all temporary inputs.
+
+## Offer a project verify skill
+
+After generation, offer to copy `templates/skills/verify/SKILL.md` to `<project>/.claude/skills/verify/SKILL.md`.
+Use `AskUserQuestion` with Copy skeleton and Skip options.
+Keep this offer separate from the interview questions.
+A decline creates no verify files.
+
+On acceptance, preserve any existing `.claude/skills/verify/` directory.
+Create the directory only when absent.
+Copy each matching stack skeleton from the ops repo to the target project:
+
+- For a web app, copy `templates/skills/verify/web.md` to `<project>/.claude/skills/verify/web.md`.
+- For an explicit mobile custom stack, copy `templates/skills/verify/mobile.md` to `<project>/.claude/skills/verify/mobile.md`.
+- For an explicit desktop custom stack, copy `templates/skills/verify/desktop.md` to `<project>/.claude/skills/verify/desktop.md`.
+- For an API service or data pipeline, copy `templates/skills/verify/service.md` to `<project>/.claude/skills/verify/service.md`.
+
+Add more than one skeleton file when the project spans stacks.
+Replace setup fields with commands from the generated project.
+List unresolved commands as blockers.
+Do not claim the skeleton works until verify runs successfully.
+Include the copy status and unresolved blockers in the final summary.
 
 ## Bootstrap scope
 
@@ -192,6 +215,7 @@ The exemption covers only these write targets:
 - the path from `active_bootstrap_marker_path`: the session marker.
 - Temporary `spec.json`, `prd-answers.json`, and `run-answers.json` files: the interview inputs and confirmed answers.
 - `workspace/<name>/.github/workflows/ci.yml`: the floor pipeline.
+- `workspace/<name>/.claude/skills/verify/SKILL.md`: the optional project verify skeleton.
 - `workspace/<name>/scripts/ci/{lint,typecheck,test,build,audit,coverage-gate,audit-gate}.sh`: the gate scripts.
 - `workspace/<name>/handbooks/general/`: the general handbook copies.
 - `workspace/<name>/handbooks/architecture/`: the architecture handbook copies.

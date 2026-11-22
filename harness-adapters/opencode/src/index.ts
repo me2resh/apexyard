@@ -36,14 +36,21 @@
  *
  * INSTALL LAYOUT
  * ----------------
- * Every file this adapter needs (this shim, `gate-dispatcher.ts`,
- * `derive-gates.ts`, `resolve-ops-root.ts`, and a sibling copy of the shared
- * `derive-gates-core.ts`) ships inside ONE subdirectory —
- * `.opencode/plugins/apexyard/` by convention, produced by
- * `bin/install-opencode-adapter.sh` rather than a hand-copy dance. Only
- * `.opencode/plugins/apexyard/index.ts` is discovered; the sibling helper
- * files sit there as ordinary relative imports the discovery scan never
- * independently visits, so their multiple named exports are never a problem.
+ * The adapter's code directory sits BESIDE the discovery directory, never
+ * inside it: `.opencode/apexyard/` by convention, produced by
+ * `bin/install-opencode-adapter.sh` rather than a hand-copy dance. Every file
+ * this adapter needs (this entry, `gate-dispatcher.ts`, `derive-gates.ts`,
+ * `resolve-ops-root.ts`, and a sibling copy of the shared
+ * `derive-gates-core.ts`) ships there, and the helpers are ordinary relative
+ * imports that no discovery scan visits.
+ *
+ * `.opencode/plugins/apexyard.ts` is the ONLY discovered file. It re-exports
+ * `../apexyard/index.ts`, so its own export surface is exactly `default`.
+ *
+ * The separation is load-bearing on opencode 2.x, which discovers
+ * `<discovery>/<name>/index.ts` as well as top-level files: with the code in
+ * tree, opencode loaded the adapter twice and ran every gate twice (#2072).
+ * opencode 1.x discovers top-level files only, so the shim is its entry too.
  *
  * The default export itself is a V2 plugin definition — `{ id, setup }`,
  * declared in `gate-dispatcher.ts` — because opencode 2.x rejects a bare

@@ -59,7 +59,7 @@ apexyard/
 │   ├── hooks/             # 55 shell scripts — ticket-first, ORBIT slice gate, migration gate, two-marker merge gate, red-CI block, secrets scan, branch/PR validation, leak protection, upstream-drift banner
 │   ├── rules/             # 23 modular rule files. CLAUDE.md indexes them by name.
 │   ├── agents/            # 15 sub-agents — Rex (Code Reviewer), Hakim (Security Auditor), Tariq (Solution Architect), the engineering / product / design / data / security personas, plus utility agents (dependency auditor, The Contrarian)
-│   └── skills/            # 72 slash commands (includes 3 deprecated aliases) — see docs/claude-md-reference.md for the full list
+│   └── skills/            # 73 slash commands (includes 3 deprecated aliases) — see docs/claude-md-reference.md for the full list
 │
 ├── workspace/             # Live local clones of managed projects — gitignored
 ├── projects/              # Per-project committed docs (README, roadmap, AgDRs, updates)
@@ -81,6 +81,15 @@ activates when its trigger matches the work. For example, a pull request that
 touches `**/auth/**` activates the Security Auditor. A ticket labelled `qa`
 activates the QA Engineer. See [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md)
 for the full trigger table.
+
+The main thread also carries a persona name, like Rex (the Code Reviewer) and
+Hakim (the Security Auditor). ApexYard names it Hadi, the guide. Hadi routes
+work to the roles and returns the results. A role marker names Hadi only on
+a hand-off, for example `▸ Hadi routes #42 to Rex (Code Reviewer)`. An
+ordinary reply stays unnamed. An adopter can rename Hadi, the same way it
+can rename any other persona. See
+[AgDR-0018](agdr/AgDR-0018-persona-naming-convention.md) for the naming
+convention.
 
 There are no department-head roles. Each former head and specialist role merged
 into one receiver, and head-level approvals go to the human approver. See
@@ -181,7 +190,7 @@ Code loads it when it is at the repository root.
 | **Hooks** | `.claude/hooks/` | 55 shell scripts that mechanically enforce SDLC rules. These cover ticket-first edits (Edit/Write/Bash), ORBIT slice before Feature/Task issues, migration-ticket-first, auto code review, merge gates (Rex + CEO + design + architecture review). They also cover red-CI block, commit-format, AgDR-for-arch-changes, branch/PR-title validation, secrets scanning, private-ref leak protection, upstream-drift banner |
 | **Rules** | `.claude/rules/` | 23 modular rule files. CLAUDE.md indexes them by name. |
 | **Agents** | `.claude/agents/` | 15 sub-agents: the department personas plus utility agents |
-| **Skills** | `.claude/skills/` | 72 slash commands, including 3 deprecated aliases: `/spike-close`, `/prototype-close`, `/tickets-batch`. |
+| **Skills** | `.claude/skills/` | 73 slash commands, including 3 deprecated aliases: `/spike-close`, `/prototype-close`, `/tickets-batch`. |
 | **Settings** | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
 ### The 23 rule files
@@ -192,7 +201,7 @@ Code loads it when it is at the repository root.
 
 Utility and review agents: **Rex** (`code-reviewer`), **Hakim** (`security-reviewer`), **Tariq** (`solution-architect`), **Naqid** (`contrarian`), plus **Munir** (`dependency-auditor`). The remaining 10 are the department-role agents: `tech-lead`, `backend-engineer`, `frontend-engineer`, `qa-engineer`, `platform-engineer`, `sre`, `product-manager`, `ui-designer`, `penetration-tester` and `data-engineer`. AgDR-0301 records the move from 23 agents to 15.
 
-### The 72 skills
+### The 73 skills
 
 The full skill list, with one line for each skill, is in [`docs/claude-md-reference.md`](claude-md-reference.md) under "Available skills". Highlights by category:
 

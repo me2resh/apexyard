@@ -54,3 +54,12 @@ Report other nits as `Additional nits: N`.
 Use `- Important: <finding and evidence> Regression check: <field>` for a blocking finding.
 Use `- Nit: <finding and evidence>` for an advisory finding.
 Use `- Pre-existing: <finding and base evidence>. Suggested ticket title: <title>` for an existing problem.
+
+## Security tracking fields
+
+Each Pre-existing CRITICAL, HIGH, or MEDIUM line includes `Fingerprint: <fp>` and `Base proof: <short evidence>`.
+Base proof identifies the base commit and the matching dependency advisory or code.
+Without this proof, treat the finding as new and block the PR.
+Hakim hands untracked findings to the orchestrator. Only the orchestrator files the SLA issue.
+Repeat findings reference the existing open issue and preserve its due date.
+See `.claude/hooks/_lib-sla.sh` and the security review instructions for the field format.

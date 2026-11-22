@@ -277,6 +277,28 @@ WARN  otherwise
 
 ### Step 7 — Write the report
 
+For Rex and Tariq, include the [21 November cases](../../../docs/eval-agents/pending/2026-11-21.md) as a separate subset.
+Report subset recall as caught defects divided by scored ground-truth defects.
+Report clean-control false alarms beside recall.
+List pending cases outside the denominator and report `n/a` when none can run.
+Do not imply that starter-corpus recall measures pending cases.
+
+Use `lib/subset_recall.py` to calculate this report block for Rex and Tariq.
+Keep the headline metric unchanged.
+Use the dated case IDs from the pending case table when promoting entries.
+Supply the version-1 corpus and a JSON array of per-entry scoring results:
+
+```bash
+python3 .claude/skills/eval-agents/lib/subset_recall.py --corpus CORPUS.json --results RESULTS.json
+```
+
+Each result contains `id`, `status`, `caught_defects`, and `false_alarms`.
+Set `status` to `SCORED` only after the contamination and resolution checks pass.
+Use defect IDs from the frozen key for `caught_defects`.
+Use an integer count for `false_alarms`.
+Missing, pending, contaminated, and unresolvable entries remain outside the denominator.
+The helper reports their combined count separately.
+
 `<reports_dir>/<agent>-<YYYY-MM-DD>.md` (default `docs/eval-agents/reports/`). Same-day reruns append `-NN` rather than clobber (mirrors `/mutation-test`).
 
 ````markdown
@@ -302,6 +324,12 @@ WARN  otherwise
 | Catch rate — BLOCKING/HIGH | X% | ≥T% | PASS/WARN |
 | Catch rate — overall | X% | ≥T% | PASS/WARN |
 | False-positive rate | X% | ≤T% | PASS/WARN |
+
+## 21 November subset (Rex and Tariq)
+
+Miss recall: <caught/scored defects, or n/a>.
+Clean-control false alarms: <count> across <scored controls> controls.
+Pending or discarded cases: <count>.
 
 ## Advisory dimensions (0-4, informational — not part of the verdict above)
 
@@ -394,6 +422,59 @@ Override per-project in `.claude/project-config.json` (shallow-merge — overrid
 11. **Every score is the output of non-deterministic LLM steps, not a fixed measurement.** Both the candidate spawn (Step 3d) and the defect-overlap match against the frozen key (Step 3g) are judgment calls made by an LLM — the frozen `ground_truth_defects` are fixed, but *matching a fresh run's findings against them* is not a byte-for-byte comparison, and re-running the exact same corpus against the exact same agent can produce a different verdict_justified call on a borderline entry. A score delta between two runs (this week's approve-precision vs. last month's) is **not automatically a real regression** — it can just as easily be run-to-run noise in the matching step. Treat a delta as a prompt to look at *which specific entries* flipped and re-read the agent's actual output for that entry, never as a number to trend-line on its own. This is the same caveat AgDR-0089 and spike #825 already carry for the starter corpus's small N — non-determinism compounds it, it doesn't replace it.
 
 ## Implementation notes
+
+### Blocking review rounds and named reverts
+
+`lib/blocking_rounds.py` prints a plain table for merged PRs in the requested window.
+A blocking round means one review submission with `CHANGES_REQUESTED` state or a `Verdict: CHANGES REQUESTED` line.
+The script counts a submission once when both signals match.
+It excludes reviews submitted after merge.
+It detects later commits whose subjects start with `Revert` and name the PR as `#NUMBER`.
+It reads commits through capture time, including commits after a historical merge window.
+Zero matches do not prove that no manual reversal occurred.
+
+```bash
+python3 .claude/skills/eval-agents/lib/blocking_rounds.py --repo me2resh/apexyard --days 30
+python3 .claude/skills/eval-agents/lib/blocking_rounds.py --repo me2resh/apexyard --days 30 --input EXPORT.json --as-of 2026-11-22T00:00:00Z
+```
+
+Offline input contains `repo`, `prs`, and `commits`.
+PR objects contain `number`, `merged_at`, and `reviews` with GitHub API fields.
+Commit objects contain `commit.message` and `commit.committer.date`.
+The script uses read calls only and stops on API failures.
+
+### All review rounds and trailer-based reverts
+
+`lib/review_rounds.py` prints a 30-day report with one row per merged PR.
+It reads GitHub with GET calls and writes only stdout.
+Use `--export` to save evidence outside the repository for an offline rerun.
+Saved exports can contain private review text.
+Keep private exports outside this public repository.
+
+```bash
+python3 .claude/skills/eval-agents/lib/review_rounds.py --repo OWNER/REPO
+python3 .claude/skills/eval-agents/lib/review_rounds.py --input EXPORT.json --as-of 2026-11-22T00:00:00Z
+```
+
+A round means one distinct reviewed commit per agent across reviews and conversation comments.
+Repeated submissions on that commit count once per agent.
+Exclude submissions after merge when their timestamps exist.
+The script uses the miner's reviewer, verdict, and reviewed-commit parsers.
+It reports agent submissions with missing verdicts or commits as unknown.
+It fetches every closed-PR page before filtering by merge time.
+API failures stop the report instead of producing partial counts.
+
+Reverts count explicit `This reverts commit FULL_SHA.` trailers in merge commits within the same window.
+The target must match the original PR's merge commit.
+Manual reversals, constituent-commit reversions, and reverts outside the window remain unmeasured.
+Zero means no matching trailer, rather than proof that no reversal occurred.
+The script does not measure reviewer recall.
+
+The export object contains `repo` and `prs`.
+Each PR contains `number`, `merged_at`, `merge_commit_sha`, `merge_message`, `reviews`, and `comments`.
+Review and comment objects retain their GitHub API fields.
+Use a fixed `--as-of` timestamp to reproduce the window.
+The window includes its start and excludes its end.
 
 | File | Purpose |
 |---|---|

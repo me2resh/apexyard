@@ -59,6 +59,19 @@ When the brief fixes a Rex blocker that carries a `Regression check:` field, the
 agent adds the named test or handbook rule in the same fix commit and shows the
 test failing on the old commit, per [`pr-workflow.md`](pr-workflow.md#add-the-regression-test-in-the-fix-commit-me2reshapexyard2091).
 
+## Verify before a PR
+
+Before opening a PR, run the target project's `.claude/skills/verify/SKILL.md` against the final changes.
+Include the result in the build hand-back.
+Paste the evidence into the PR body under `## Verify evidence`.
+Record commands, exit codes, exercised flows, and screenshot paths or response excerpts.
+State which acceptance criteria remain unverified.
+
+If verify cannot run, state `Verify could not run` and the concrete reason in the PR body.
+Name missing tools, unavailable devices, or startup failures.
+If the skill is absent, report that absence and the checks actually performed.
+Do not claim verification from a planned command or CI results.
+
 ## Backstop
 
 This rule is **primarily self-discipline** — the same shape as [`parallel-work.md`](parallel-work.md) and [`plan-mode.md`](plan-mode.md). Mechanical enforcement at the spawn boundary is not currently shipped: unlike `Edit`/`Write`/`Bash`, the `Agent`/`Task` tool call has no existing `PreToolUse` matcher anywhere in this framework's 40+ hooks, and [AgDR-0056](../../docs/agdr/AgDR-0056-subagent-mcp-first.md) already documents a closely related finding — the current hook plumbing cannot reliably see into a sub-agent boundary. An advisory guard was evaluated for this rule and deferred rather than shipped speculatively; see the tracking issue for the spawn-payload investigation before attempting one.

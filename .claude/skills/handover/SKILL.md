@@ -1624,6 +1624,34 @@ Notes:
 BADGE_STATUS="PR opened: <url> (<variant>)"   # or "preserved (already present)" | "declined" | "not selected" | "skipped (no clone)" | "skipped (no README)" | "failed: <reason>"
 ```
 
+### 8.7. Offer a project verify skill
+
+Offer to copy `templates/skills/verify/SKILL.md` to `<project>/.claude/skills/verify/SKILL.md`.
+Use `AskUserQuestion` with Copy through a project ticket and Skip options.
+Skip this offer in `--all` mode.
+Preserve any existing `.claude/skills/verify/` directory.
+If no local clone exists, report that blocker.
+
+On acceptance, offer `/task` to create a copy ticket in the target project.
+Then hand the copy task to `/start-ticket` for that ticket.
+This handoff does not extend handover's bootstrap exemption or target-write exceptions.
+Use the normal ticket branch and PR workflow for the copy.
+Do not use the special `docs/agents-md` or `docs/apexyard-badge` branches.
+
+The copy task creates `.claude/skills/verify/` from the template after the ticket starts.
+Copy each matching stack skeleton from the ops repo to the target project:
+
+- For a web app, copy `templates/skills/verify/web.md` to `<project>/.claude/skills/verify/web.md`.
+- For an explicit mobile custom stack, copy `templates/skills/verify/mobile.md` to `<project>/.claude/skills/verify/mobile.md`.
+- For an explicit desktop custom stack, copy `templates/skills/verify/desktop.md` to `<project>/.claude/skills/verify/desktop.md`.
+- For an API service or data pipeline, copy `templates/skills/verify/service.md` to `<project>/.claude/skills/verify/service.md`.
+
+Add more than one skeleton file when the project spans stacks.
+Replace setup fields with commands discovered in the target repo.
+Record unknown commands and missing tools as blockers.
+Do not claim the skeleton works until verify runs successfully.
+Include the offer outcome and any blockers in the handover summary.
+
 ### 9. Offer validation (conditional, default-no)
 
 If the project looks **dormant** by the heuristic — last commit > 90 days ago AND zero open PRs AND no recent issue activity (rough thresholds, the skill can probe `gh repo view` + `gh pr list` + `gh issue list` to compute) — ask:

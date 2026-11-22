@@ -36,6 +36,30 @@ Verify:
 - `dev` branch exists (`git rev-parse --verify upstream/dev`). Refuse if absent — adopt the dev/main model first.
 - `dev` is ahead of `main` by ≥ 1 commit. Refuse if equal — nothing to release.
 
+### 1a. Check security remediation SLAs (blocking)
+
+Run this check during pre-flight, including dry runs:
+
+```bash
+bash bin/check-security-sla.sh me2resh/apexyard me2resh
+```
+
+The second argument is the trusted owner's tracker login. Confirm it against the approved ownership record.
+For another repository, supply its repository and approved owner login.
+Stop on any non-zero exit. Tracker errors, incomplete lists, and malformed records block the release.
+The script lists open `sla` issues and their deadline status.
+An issue breaches its SLA after its due date, using UTC calendar dates.
+A fix closes the issue. Otherwise, the owner must comment on that issue with this exact marker line:
+
+```text
+Risk accepted by owner: <non-empty reason>
+```
+
+Only a comment authored by the supplied owner login counts. Quoted or embedded markers do not count.
+A review, issue body, or comment from another account cannot accept risk.
+Repeat the check immediately before the release merge. Stop if the result changes.
+See AgDR-0314 for the record format and failure rules.
+
 ### 2. Pick a version
 
 If `<version>` arg was passed, use it (must match `v\d+\.\d+\.\d+`).
