@@ -88,7 +88,7 @@ patterns.
 
 If the base copy is absent or unreadable, the gate uses the built-in default
 paths with no exclusions. It prints one `NOTE:` line to stderr.
-The sibling overlay restrictions below apply after the base copy is resolved.
+The sibling overlay restrictions below apply after the gate resolves the base copy.
 
 GitLab: the gates do not read the base copy for a GitLab merge request. A
 merge request that changes the config uses the built-in default paths with no
@@ -123,7 +123,7 @@ Production gates remain outside the mode allowlist until code registers them.
 
 When a PR changes project configuration, the gate still reads the base copy as
 described above. Head path lists can still add coverage. The overlay file is
-outside the PR repo and is always read from disk. The overlay comparison uses
+outside the PR repo, so the gate always reads it from disk. The overlay comparison uses
 that resolved base value, including any added head coverage.
 See [AgDR-0315](agdr/AgDR-0315-overlay-tighten-only.md).
 
