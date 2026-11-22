@@ -126,7 +126,7 @@ pt_is_dir() {
 # An unresolved operand that names protected state blocks.
 pt_unresolved_nocase() {
   case "$1" in *settings.json*|*settings.local.json*|*.claude/hooks*|*.claude/apexyard*|*ops-root-*|*gate-session-*|*session-env/*|*shell-snapshots/*) pt_block 'unresolved protected operand.' ;; esac
-  if [ "$2" = 1 ]; then case "$1" in */.claude) pt_block 'unresolved protected ancestor.' ;; esac; fi
+  if [ "$2" != 0 ]; then case "$1" in */.claude) pt_block 'unresolved protected ancestor.' ;; esac; fi
   return 0
 }
 pt_judge() {
@@ -291,7 +291,7 @@ pt_git() {
   return 0
 }
 pt_operands() {
-  local verb="$1" i="${2:-1}" arg target="" recursive=0 removing=0 dest moved=0 role=0 inputs=() extract=0 cdirs=0 absolute=0 output="" in_place=0 tar_file=""
+  local verb="$1" i="${2:-1}" arg target="" recursive=0 removing=0 dest moved=0 exact=1 fold=2 rel role=0 inputs=() extract=0 cdirs=0 absolute=0 output="" in_place=0 tar_file=""
   while [ "$i" -lt "${#words[@]}" ]; do
     arg=${words[$i]}; i=$((i+1))
     case "$arg" in
@@ -313,7 +313,12 @@ pt_operands() {
         i=$((i+1)); continue ;;
       of=*) pt_judge "${arg#of=}"; continue ;;
       if=*) continue ;;
+      # These flags land a source at a path that its name does not give, or
+      # read the sources from a file.
+      -T|--no-target-directory|--parents|--relative|--files-from=*) exact=0; continue ;;
+      --files-from) exact=0; i=$((i+1)); continue ;;
       -*)
+        case "$verb:$arg" in rsync:-[!-]*R*|cp:-[!-]*T*|mv:-[!-]*T*|ln:-[!-]*T*|install:-[!-]*T*) exact=0 ;; esac
         case "$arg" in -*[Rra]*) case "$verb" in cp|rsync) recursive=1 ;; esac ;; esac
         case "$arg" in -*f*) if [ "$verb" = tar ]; then tar_file=${words[$i]:-}; i=$((i+1)); fi ;; esac
         case "$arg" in -*P*) [ "$verb" != tar ] || absolute=1 ;; esac
@@ -336,17 +341,26 @@ pt_operands() {
       moved=0
       case "$verb" in mv|'git mv') moved=1 ;; esac
       [ "$recursive" = 0 ] || moved=1
+      # The folder that a source goes into is judged against the core state
+      # only (role 2), as before the agy wiring, when each source is a
+      # literal path. So a copy or link into bin/ still passes. A source that
+      # can land at another name is judged against the folder in full: a
+      # glob, a brace, a variable, a contents copy (a trailing / or /.), any
+      # ditto, or a flag such as -T, --parents or --relative.
+      fold=2
+      [ "$exact" = 1 ] || fold=1
+      [ "$verb" != ditto ] || fold=1
+      for arg in "${inputs[@]}"; do
+        case "$arg" in */|*/.|*/./*|*[*?[]*|*'{'*|*'$'*|*'`'*) fold=1 ;; esac
+      done
       if [ -n "$target" ] || pt_is_dir "$dest"; then
-        # The folder itself is judged against the core state only (role 2),
-        # as before the agy wiring. So a copy or link into bin/ still passes.
-        [ "$recursive" = 0 ] || pt_judge "$dest" 2
+        if [ "$recursive" = 1 ] || [ "$fold" = 1 ]; then pt_judge "$dest" "$fold"; fi
         for arg in "${inputs[@]}"; do
           pt_judge "$dest/$(basename "$arg")" "$moved"
-          # A source that ends in / or /. copies its contents into the folder
-          # itself, and ditto always does. Then the folder is judged in full.
-          if [ "$recursive" = 1 ]; then case "$verb:$arg" in ditto:*|*/|*/.) pt_judge "$dest" 1 ;; esac; fi
+          # --parents and --relative keep the source path under the folder.
+          if [ "$exact" = 0 ]; then rel=${arg#*/./}; pt_judge "$dest/${rel#/}" 1; fi
         done
-      elif [ "$recursive" = 1 ]; then
+      elif [ "$recursive" = 1 ] || [ "$exact" = 0 ]; then
         pt_judge "$dest" 1
       else
         # A move onto a target that is not an existing directory renames the

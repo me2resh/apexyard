@@ -166,6 +166,22 @@ check 2 "live cp -R of folder contents into bin/" run_bash "$L" "cp -R $S/build/
 check 2 "live ditto into bin" run_bash "$L" "ditto $S/build bin"
 check 2 "live cp -R of a plugins folder into the root .agents/" run_bash "$L" "cp -R $S/plugins .agents/"
 check 2 "live cp -R into .claude/ is still blocked" run_bash "$L" "cp -R $S/build .claude/"
+# A source that can land at another name judges the folder in full.
+check 2 "live cp -R of a glob into harness-adapters/" run_bash "$L" "cp -R $S/* harness-adapters/"
+check 2 "live rsync -a of a glob into bin/" run_bash "$L" "rsync -a $S/* bin/"
+check 2 "live ln -s of a glob into bin/" run_bash "$L" "ln -s $S/* bin/"
+check 2 "live mv of a glob into the root .agents/" run_bash "$L" "mv $S/* .agents/"
+check 2 "live plain cp of a glob into the root .agents/" run_bash "$L" "cp $S/* .agents/"
+check 2 "live cp -R of a brace into bin/" run_bash "$L" "cp -R $S/{a,b} bin/"
+check 2 "live cp -R of a variable into bin/" run_bash "$L" 'cp -R $X bin/'
+check 2 "live cp -RT onto the root .agents" run_bash "$L" "cp -RT $S/build .agents"
+check 2 "live mv -T onto the root .agents" run_bash "$L" "mv -T $S/build .agents"
+check 2 "live cp --parents of a nested config into docs/" run_bash "$L" "cp --parents $S/x/.agents/hooks.json docs/"
+check 2 "live rsync -aR of a nested .agents into docs/" run_bash "$L" "rsync -aR $S/./x/.agents docs/"
+check 2 "live cp --parents of a hooks.json into the root .agents/" run_bash "$L" "cp --parents hooks.json .agents/"
+check 2 "live cp -R -t an unresolved .claude folder" run_bash "$L" 'cp -R -t $X/.claude build'
+check 0 "live cp of a glob into docs/ stays allowed" run_bash "$L" "cp $S/*.txt docs/"
+check 0 "live cp -R of a glob into docs/ stays allowed" run_bash "$L" "cp -R $S/* docs/"
 rmdir "$L/bin" "$L/harness-adapters" "$L/.agents"
 # For truncate, -s still takes a value, so the next word is the target.
 check 2 "live truncate -s 0 of the settings file" run_bash "$L" 'truncate -s 0 .claude/settings.json'
