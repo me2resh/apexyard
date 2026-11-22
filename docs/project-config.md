@@ -106,7 +106,8 @@ exclusions.
   },
 
   "branch": {
-    "type_whitelist": ["feature", "fix", "refactor", "chore", "docs", "test", "spike", "ci", "build", "perf"]
+    "type_whitelist": ["feature", "fix", "refactor", "chore", "docs", "test", "spike", "ci", "build", "perf"],
+    "suggested_template": ""
   },
 
   "commit": {
@@ -130,6 +131,7 @@ exclusions.
 | `ticket.prefix_whitelist` | `/feature`, `/task`, `/bug`, (future) validate-issue-structure.sh | Bracketed title prefixes accepted for tickets (`[Feature]`, `[Chore]`, …). |
 | `ticket.label_priority_scheme` | `/feature`, `/bug`, `/task`, (future) batch skill | Comma-separated priority label scheme. Teams using `P0/P1/P2/P3` vs. `priority-p0/priority-p1/…` configure here. |
 | `branch.type_whitelist` | `validate-branch-name.sh` | Acceptable branch-name prefixes (`feature/`, `fix/`, …). |
+| `branch.suggested_template` | `/start-ticket` (`_lib-branch-suggest.sh`) | Template for the branch name `/start-ticket` suggests. Empty by default (today's `<type>/<TICKET-ID>-<slug>` shape). Tokens: `{type}`, `{id}`, `{title_slug}`. See [Suggested branch template](#suggested-branch-template-branchsuggested_template). |
 | `commit.type_whitelist` | `validate-commit-format.sh` | Conventional-commit types for commit subjects. |
 | `pr.title_type_whitelist` | `validate-pr-create.sh`, `pr-title-check.yml` (CI) | Conventional-commit types for PR titles. |
 | `external_contributions` | `validate-pr-create.sh` | Repositories you contribute to but do **not** govern. See below. |
@@ -140,6 +142,42 @@ exclusions.
 | `merge.approval_quiz` | `/approve-merge` | When `true`, runs the opt-in comprehension check before the CEO marker write. Default: `false`. Pass `--quiz` for one run. See [Approval quiz](#approval-quiz-mergeapproval_quiz). |
 | `leak_protection.public_framework_repos` | `check-private-refs-*.sh`, `block-private-refs-in-public-repos.sh` | Known-public `owner/repo` slugs. Origin identity is exempt when origin matches an entry. |
 | `leak_protection.origin_verified_public` | `check-private-refs-staged.sh`, `check-private-refs-runtime.sh` | Exact origin `owner/repo` slug recorded by `/setup` or `/update` after `gh` confirms visibility is PUBLIC. Hooks stay offline and fail closed when this key is missing or does not match origin. See AgDR-0190. |
+
+### Suggested branch template (`branch.suggested_template`)
+
+`/start-ticket` writes a `suggested_branch` into the ticket marker. By default
+it is `<type>/<TICKET-ID>-<slug>`, with the slug capped at 40 characters.
+Some trackers name branches themselves: Jira's **Create branch** action
+produces `<KEY>-<number>-<summary-slug>`, and that exact name is what keeps the
+branch linked to the ticket. Set a template to suggest that shape instead:
+
+```json
+{
+  "branch": {
+    "suggested_template": "{id}-{title_slug}"
+  }
+}
+```
+
+Tokens:
+
+| Token | Value |
+| --- | --- |
+| `{type}` | Branch type, guessed from the title prefix (`[Feature]` → `feature`, `[Bug]` → `fix`, …; default `feature`). |
+| `{id}` | The TICKET-ID the skill resolved (`GH-123`, `ABC-123`, …). |
+| `{title_slug}` | Kebab-case slug of the **full** title, stopwords trimmed from the edges, no length cap. |
+
+- The key is empty by default, so the built-in shape is unchanged.
+- `{title_slug}` is not capped. The 40-character cap belongs to the built-in
+  default only, because the point of a tracker-native name is to match the
+  tracker's own slug.
+- An unknown token is reported on stderr and the built-in shape is returned.
+  `suggested_branch` is a suggestion, not a gate, so a template typo must not
+  stop a ticket from starting.
+- A template that produces a tracker-native shape also needs a matching
+  `.branch.extra_patterns` entry, or `validate-branch-name.sh` blocks the push.
+
+See me2resh/apexyard#2083.
 
 ### `external_contributions`: repos you contribute to but do not govern
 

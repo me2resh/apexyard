@@ -89,13 +89,21 @@ missing. A missing or unreadable issue body also produces the warning.
 
 ### 3. Derive a Branch Suggestion
 
-From the issue title and number, generate: `<type>/<TICKET-ID>-<slug>` where:
+Call the helper. Do not assemble the name by hand.
 
-- `<type>` guessed from title prefix: `[Feat]` → `feature`, `[Fix]` → `fix`, `[Docs]` → `docs`, `[Chore]` → `chore`, default `feature`
-- `<TICKET-ID>` is `GH-<number>` for GitHub Issues, or matches the project's configured `ticket_prefix` from `apexyard.projects.yaml` if set
-- `<slug>` = lowercase title, kebab-case, max 40 chars, stopwords trimmed from the edges
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-branch-suggest.sh"
+suggested_branch=$(branch_suggest "<TICKET-ID>" "<issue title>")
+```
 
-Match the convention in `.claude/rules/git-conventions.md`.
+- `<TICKET-ID>` is `GH-<number>` for GitHub Issues, or the project's configured `ticket_prefix` from `apexyard.projects.yaml` when set.
+- The helper guesses `<type>` from the title prefix. `[Feature]`/`[Feat]` → `feature`, `[Bug]`/`[Fix]` → `fix`, `[Docs]` → `docs`, `[Chore]` → `chore`, `[Refactor]` → `refactor`, `[Test]`/`[Testing]` → `test`, `[CI]` → `ci`, `[Spike]` → `spike`, `[Prototype]` → `prototype`, `[Perf]` → `perf`. Anything else → `feature`. Pass a third argument to force a type.
+- With `.branch.suggested_template` unset, it returns `<type>/<TICKET-ID>-<slug>`, with the slug capped at 40 characters. That is today's shape, unchanged.
+- With `.branch.suggested_template` set, it renders that template instead. Tokens: `{type}`, `{id}`, `{title_slug}` (the full summary slug, no 40-character cap). Example for a tracker that names its own branches: `"{id}-{title_slug}"` returns `ABC-123-add-login`.
+- An unknown token is reported on stderr and the built-in shape is returned, so a template typo cannot stop a ticket from starting. Show the warning to the operator.
+
+Match the convention in `.claude/rules/git-conventions.md`. When the template produces a tracker-native shape, also set `.branch.extra_patterns` so `validate-branch-name.sh` accepts it. See me2resh/apexyard#2083.
 
 ### 4. Resolve the target marker
 
