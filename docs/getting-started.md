@@ -651,3 +651,55 @@ Use `--json` for these JSON shapes:
 - Read the [workflows](../workflows/) to understand the development process.
 - Check the [templates](../templates/) for document formats.
 - Star the [GitHub repo](https://github.com/me2resh/apexyard) for updates.
+
+## Check and rescue framework drift
+
+Drift means a framework-owned file differs from the installed release.
+The release pin is `.claude/framework-version`, written by the release update flow.
+Keep the pinned release tag available locally.
+The checker does not fetch tags or branches.
+
+```bash
+apexyard doctor --drift
+```
+
+Use this command in CI.
+Exit codes are `0` for clean, `1` for drift, and `2` for an error.
+A missing pin counts as drift.
+Explicit config file references with absent targets also count as drift.
+The report separates your change from upstream change against locally available `upstream/main`.
+SessionStart prints one advisory line when the check finds drift or cannot compare the pin.
+
+An overlay stores your custom file outside the framework copy.
+Rescue plans supported overlay copies without changing files:
+
+```bash
+apexyard doctor --drift --rescue
+apexyard doctor --drift --rescue --apply
+```
+
+Application copies skill, template, and handbook edits into their matching custom directories.
+Skill copies include supporting files because the overlay replaces the complete skill directory.
+It then restores each in-place framework file from the pin.
+Split portfolios use configured sibling skill and handbook directories.
+Templates use `custom-templates/` beside the portfolio registry.
+Existing overlay files or destination links stop application before any planned copy.
+Hooks, settings, missing files, and files without an overlay home require manual review.
+Run the drift check again after application.
+Application reports the initial findings and returns `1` when findings existed.
+
+Import a product repository's copied `.claude` directory:
+
+```bash
+apexyard doctor --drift --rescue --from /path/to/product/.claude
+apexyard doctor --drift --rescue --from /path/to/product/.claude --apply
+```
+
+Shared files have paths in the pinned framework.
+Shared edits can enter overlays.
+Repo-only files have no pinned counterpart and stay in the product repository.
+Duplicate candidates have conflicting names and descriptions, or repeat an agent role through matching metadata.
+Review duplicate candidates and hooks manually.
+Role detection uses exact metadata and canonical framework role names.
+It cannot establish semantic equivalence.
+Import preserves every source file, including shared edits.

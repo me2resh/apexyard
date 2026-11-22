@@ -52,16 +52,16 @@ apexyard/
 │   ├── adr.md             # Architecture Decision Record
 │   ├── agdr.md            # Agent Decision Record (AI-specific)
 │   ├── agdr-migration.md  # Migration-specific AgDR (rollback, downtime, consumers)
-│   └── architecture/      # C4 diagram templates — Context (L1) + Container (L2), Mermaid
+│   └── architecture/      # C4 diagram templates: Context (L1) + Container (L2), Mermaid
 │
 ├── .claude/               # Claude Code primitives (the runnable layer)
 │   ├── settings.json      # Hook wiring (PreToolUse, PostToolUse, SessionStart)
-│   ├── hooks/             # 55 shell scripts — ticket-first, ORBIT slice gate, migration gate, two-marker merge gate, red-CI block, secrets scan, branch/PR validation, leak protection, upstream-drift banner
+│   ├── hooks/             # 55 shell scripts: ticket-first, ORBIT slice gate, migration gate, two-marker merge gate, red-CI block, secrets scan, branch/PR validation, leak protection, upstream-drift banner
 │   ├── rules/             # 23 modular rule files. CLAUDE.md indexes them by name.
-│   ├── agents/            # 15 sub-agents — Rex (Code Reviewer), Hakim (Security Auditor), Tariq (Solution Architect), the engineering / product / design / data / security personas, plus utility agents (dependency auditor, The Contrarian)
-│   └── skills/            # 73 slash commands (includes 3 deprecated aliases) — see docs/claude-md-reference.md for the full list
+│   ├── agents/            # 15 sub-agents: Rex (Code Reviewer), Hakim (Security Auditor), Tariq (Solution Architect), the engineering / product / design / data / security personas, plus utility agents (dependency auditor, The Contrarian)
+│   └── skills/            # 73 slash commands (includes 3 deprecated aliases): see docs/claude-md-reference.md for the full list
 │
-├── workspace/             # Live local clones of managed projects — gitignored
+├── workspace/             # Live local clones of managed projects: gitignored
 ├── projects/              # Per-project committed docs (README, roadmap, AgDRs, updates)
 ├── apexyard.projects.yaml.example  # Portfolio registry template
 │
@@ -71,7 +71,7 @@ apexyard/
 └── docs/                  # Documentation
     ├── getting-started.md # Setup guide
     ├── multi-project.md   # Full setup guide (fork flow, directory layout, daily workflow, FAQ)
-    └── whats-inside.md    # This file — the full component breakdown
+    └── whats-inside.md    # This file: the full component breakdown
 ```
 
 ## Roles
