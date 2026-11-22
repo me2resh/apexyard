@@ -126,7 +126,10 @@ pt_is_dir() {
 # An unresolved operand that names protected state blocks.
 pt_unresolved_nocase() {
   case "$1" in *settings.json*|*settings.local.json*|*.claude/hooks*|*.claude/apexyard*|*ops-root-*|*gate-session-*|*session-env/*|*shell-snapshots/*) pt_block 'unresolved protected operand.' ;; esac
+  # The agy wiring (AgDR-0314). Its ancestors count at role 1 only, as in the lib.
+  case "$1" in *.agents/hooks.json*|*.agents/plugins*|*harness-adapters/agy*|*sync-agy-adapter.sh*) pt_block 'unresolved protected operand.' ;; esac
   if [ "$2" != 0 ]; then case "$1" in */.claude) pt_block 'unresolved protected ancestor.' ;; esac; fi
+  if [ "$2" = 1 ]; then case "$1" in */.agents|*/harness-adapters) pt_block 'unresolved protected ancestor.' ;; esac; fi
   return 0
 }
 pt_judge() {
@@ -318,7 +321,17 @@ pt_operands() {
       -T|--no-target-directory|--parents|--relative|--files-from=*) exact=0; continue ;;
       --files-from) exact=0; i=$((i+1)); continue ;;
       -*)
-        case "$verb:$arg" in rsync:-[!-]*R*|cp:-[!-]*T*|mv:-[!-]*T*|ln:-[!-]*T*|install:-[!-]*T*) exact=0 ;; esac
+        # A short-flag group can hold the letter in any place. -R* and -T*
+        # cannot be long options, which start with --.
+        case "$verb:$arg" in rsync:-R*|rsync:-[!-]*R*|cp:-T*|cp:-[!-]*T*|mv:-T*|mv:-[!-]*T*|ln:-T*|ln:-[!-]*T*|install:-T*|install:-[!-]*T*) exact=0 ;; esac
+        # GNU tools take any unambiguous prefix of a long option. Match the
+        # prefixes for each command, so rsync --partial and --no-times pass.
+        case "$verb:$arg" in
+          cp:--ta*=*|mv:--ta*=*|ln:--ta*=*|install:--ta*=*) target=${arg#*=}; continue ;;
+          cp:--ta*|mv:--ta*|ln:--ta*|install:--ta*) target=${words[$i]:-}; i=$((i+1)); continue ;;
+          cp:--par*|cp:--no-t*|mv:--no-t*|ln:--no-t*|install:--no-t*|rsync:--rel*|rsync:--files-f*=*) exact=0; continue ;;
+          rsync:--files-f*) exact=0; i=$((i+1)); continue ;;
+        esac
         case "$arg" in -*[Rra]*) case "$verb" in cp|rsync) recursive=1 ;; esac ;; esac
         case "$arg" in -*f*) if [ "$verb" = tar ]; then tar_file=${words[$i]:-}; i=$((i+1)); fi ;; esac
         case "$arg" in -*P*) [ "$verb" != tar ] || absolute=1 ;; esac

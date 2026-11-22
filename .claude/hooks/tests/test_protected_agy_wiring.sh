@@ -180,6 +180,30 @@ check 2 "live cp --parents of a nested config into docs/" run_bash "$L" "cp --pa
 check 2 "live rsync -aR of a nested .agents into docs/" run_bash "$L" "rsync -aR $S/./x/.agents docs/"
 check 2 "live cp --parents of a hooks.json into the root .agents/" run_bash "$L" "cp --parents hooks.json .agents/"
 check 2 "live cp -R -t an unresolved .claude folder" run_bash "$L" 'cp -R -t $X/.claude build'
+# A short-flag group can hold -R or -T in any place.
+check 2 "live cp -TR onto the root .agents" run_bash "$L" "cp -TR $S/build .agents"
+check 2 "live mv -Tf onto the root .agents" run_bash "$L" "mv -Tf $S/build .agents"
+check 2 "live rsync -R of a nested config into docs/" run_bash "$L" "rsync -R $S/./x/.agents/hooks.json docs/"
+check 2 "live rsync -Ra of a nested config into docs/" run_bash "$L" "rsync -Ra $S/./x/.agents/hooks.json docs/"
+# GNU tools take an unambiguous prefix of a long option.
+check 2 "live cp --par of a nested config into docs/" run_bash "$L" "cp --par $S/x/.agents/hooks.json docs/"
+check 2 "live mv --no-t onto the root .agents" run_bash "$L" "mv --no-t $S/build .agents"
+check 2 "live rsync -a --rel of a nested .agents into docs/" run_bash "$L" "rsync -a --rel $S/./x/.agents docs/"
+check 2 "live cp -R --targ= of a plugins folder" run_bash "$L" "cp -R --targ=.agents $S/plugins"
+check 2 "live cp -R --targ of a plugins folder" run_bash "$L" "cp -R --targ .agents $S/plugins"
+check 0 "live rsync -a --partial into bin/ stays allowed" run_bash "$L" "rsync -a --partial $S/build bin/"
+check 0 "live rsync -a --no-times into bin/ stays allowed" run_bash "$L" "rsync -a --no-times $S/build bin/"
+# An unresolved operand that names the agy wiring blocks, as one that names
+# the settings files does.
+check 2 "unresolved write to .agents/hooks.json" run_bash "$L" 'cp x $D/.agents/hooks.json'
+check 2 "unresolved write under .agents/plugins" run_bash "$L" 'cp x $D/.agents/plugins/p/hooks.json'
+check 2 "unresolved write to the wrapper" run_bash "$L" 'cp x $D/harness-adapters/agy/agy-hook.sh'
+check 2 "unresolved write to the generator" run_bash "$L" 'cp x $D/bin/sync-agy-adapter.sh'
+check 2 "unresolved removal of an .agents folder" run_bash "$L" 'rm -rf $D/.agents'
+check 2 "unresolved removal of harness-adapters" run_bash "$L" 'rm -rf $D/harness-adapters'
+check 0 "unresolved removal of a bin folder stays allowed" run_bash "$L" 'rm -rf $BUILD/bin'
+check 0 "unresolved copy into .agents/skills stays allowed" run_bash "$L" 'cp -R x $D/.agents/skills'
+check 0 "unresolved write to a plain file stays allowed" run_bash "$L" 'cp x $D/docs/notes.txt'
 check 0 "live cp of a glob into docs/ stays allowed" run_bash "$L" "cp $S/*.txt docs/"
 check 0 "live cp -R of a glob into docs/ stays allowed" run_bash "$L" "cp -R $S/* docs/"
 rmdir "$L/bin" "$L/harness-adapters" "$L/.agents"
