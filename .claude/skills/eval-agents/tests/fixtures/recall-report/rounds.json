@@ -1,0 +1,77 @@
+{
+  "repo": "me2resh/apexyard",
+  "prs": [
+    {
+      "number": 7,
+      "merged_at": "2026-11-20T12:00:00Z",
+      "reviews": [
+        {
+          "state": "CHANGES_REQUESTED"
+        },
+        {
+          "state": "COMMENTED",
+          "body": "Verdict: CHANGES REQUESTED"
+        },
+        {
+          "state": "APPROVED"
+        },
+        {
+          "state": "COMMENTED",
+          "body": "Prior review said CHANGES REQUESTED"
+        },
+        {
+          "state": "CHANGES_REQUESTED",
+          "submitted_at": "2026-11-21T00:00:00Z"
+        },
+        {
+          "state": "COMMENTED",
+          "body": "### Verdict\n\n**CHANGES REQUESTED**"
+        },
+        {
+          "state": "COMMENTED",
+          "body": "# Verdict **changes requested**"
+        },
+        {
+          "state": "COMMENTED",
+          "body": "**Verdict: CHANGES REQUESTED**"
+        },
+        {
+          "state": "COMMENTED",
+          "body": "### Verdict\n**APPROVED**"
+        },
+        {
+          "state": "COMMENTED",
+          "body": "## Verdict\n**COMMENT**"
+        }
+      ]
+    },
+    {
+      "number": 70,
+      "merged_at": "2026-11-20T12:00:00Z",
+      "reviews": []
+    },
+    {
+      "number": 8,
+      "merged_at": "2026-10-01T00:00:00Z",
+      "reviews": []
+    }
+  ],
+  "commits": [
+    {
+      "commit": {
+        "message": "Revert \"change (#7)\"",
+        "committer": {
+          "date": "2026-11-21T00:00:00Z"
+        }
+      }
+    },
+    {
+      "commit": {
+        "message": "Change #70",
+        "committer": {
+          "date": "2026-11-21T00:00:00Z"
+        }
+      }
+    }
+  ]
+}

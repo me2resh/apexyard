@@ -118,6 +118,12 @@ else:
             if field not in e:
                 errors.append(f"{where}: missing '{field}'")
 
+        if "control_for" in e:
+            if not isinstance(e["control_for"], str) or not e["control_for"].strip():
+                errors.append(f"{where}: control_for must be a non-empty miss identifier")
+            if e.get("ground_truth_defects") != []:
+                errors.append(f"{where}: controls must have an empty defect set")
+
         oracle = e.get("oracle")
         if not isinstance(oracle, dict):
             errors.append(f"{where}: missing/invalid 'oracle' object")
