@@ -69,7 +69,7 @@ When set, the inventory file gains a new `## Screens` section after the existing
 The wireframes are **model-inferred from static analysis**: route component imports, form-field bindings, data-model field types. They're not lifts from real DOM. Two design constraints follow:
 
 1. **ASCII format only.** No PNG/SVG/HTML. ASCII boxes keep the fidelity honest: a reader sees a sketch and treats it as a sketch.
-2. **Mandatory disclaimer header per wireframe.** Every screen wireframe carries `> AI-inferred sketch: verify before relying on. Source: <route-or-component-path>` on its own line above the box.
+2. **Mandatory disclaimer header per wireframe.** Every screen wireframe carries `> AI-inferred sketch — verify before relying on. Source: <route-or-component-path>` on its own line above the box.
 
 Backward-compat: running `/extract-features` without `--with-mockups` produces today's inventory exactly: the flag adds the `## Screens` section; nothing else changes.
 
@@ -359,7 +359,7 @@ Grouped by file or feature cluster:
 | ... | ... | ... |
 
 {IF --with-mockups, INSERT the `## Screens` section here. Each wireframe carries
-the mandatory disclaimer header `> AI-inferred sketch: verify before relying
+the mandatory disclaimer header `> AI-inferred sketch — verify before relying
 on. Source: <path>` on its own line above the ASCII box. See step 4b.}
 
 ## Coverage gaps
@@ -398,7 +398,7 @@ For each UI screen captured in axis 2e, build a low-fidelity ASCII wireframe. Ap
 Every wireframe carries this exact one-line header on its own line **above** the box:
 
 ```
-> AI-inferred sketch: verify before relying on. Source: <route or component path>
+> AI-inferred sketch — verify before relying on. Source: <route or component path>
 ```
 
 The `<route or component path>` is the source detection result from the rules below: the file (or route) the wireframe was inferred from. No exceptions. A wireframe without a disclaimer is a broken artefact.
@@ -535,7 +535,7 @@ Count the UI screens from axis 2e:
   ```markdown
   ## Screens
 
-  > AI-inferred sketches: each linked file carries its own disclaimer.
+  > AI-inferred sketches — each linked file carries its own disclaimer.
 
   | # | Screen | Source | Wireframe |
   |---|--------|--------|-----------|
@@ -570,7 +570,7 @@ When `--with-mockups` is set, append a second line:
 
 ```
 ASCII wireframes emitted: {N} screen(s) {inline | under projects/<name>/screens/}.
-All wireframes carry the AI-inferred disclaimer: verify before relying on.
+All wireframes carry the AI-inferred disclaimer — verify before relying on.
 ```
 
 ## Why this skill exists
@@ -589,7 +589,7 @@ The inventory is the single artefact that cuts both. It's not a spec, it's not a
 - **Don't run this every sprint.** It's a pre-rewrite scan, not a recurring audit. Run once, treat the artefact as a baseline, update only when the source codebase has changed substantially.
 - **Don't substitute this for `/code-review` or `/launch-check`.** The inventory says what features exist; it doesn't say whether they're well-implemented, secure, or production-ready. Use the audit skills for quality signals.
 - **Don't skip the human review step.** Prior-art bias is real: the matrix can feel authoritative even when it's missing 20% of the picture. Always reconcile with the previous owner / stakeholders before treating the inventory as canonical.
-- **Don't strip the disclaimer header from `--with-mockups` wireframes.** The header is the trust contract for the artefact. The reader sees `AI-inferred sketch: verify before relying on` and treats it as a sketch. Without the header, an ASCII box looks more authoritative than it should. See [`AgDR-0036`](../../../docs/agdr/AgDR-0036-inferred-mockups-honesty.md).
+- **Don't strip the disclaimer header from `--with-mockups` wireframes.** The header is the trust contract for the artefact. The reader sees `AI-inferred sketch — verify before relying on` and treats it as a sketch. Without the header, an ASCII box looks more authoritative than it should. See [`AgDR-0036`](../../../docs/agdr/AgDR-0036-inferred-mockups-honesty.md).
 - **Don't upgrade `--with-mockups` to PNG/SVG.** The format is ASCII by design: visual fidelity should match epistemic confidence. A pixel-perfect render of a model's guess at a screen is exactly the failure mode the flag was designed to avoid.
 
 ---
