@@ -43,8 +43,6 @@ apexyard init
 
 **For scripts and CI.** With no terminal, `apexyard init` never asks. It needs `--org` and `--name`, and it exits with status 2 and names each missing flag if you leave one out. Pass the values as options, for example `apexyard init --org ACME --name ops --private --yes`. `--yes` accepts the defaults for the other questions.
 
-Before launch, testers with Cockpit access can set `APEXYARD_COCKPIT=1` to enable an optional install after repository setup. The wizard asks first and defaults to no. With `--yes` or no terminal, add `--cockpit` to install. This requires pipx, access to the Cockpit package, and two settings from your ApexYard contact: `APEXYARD_COCKPIT_SOURCE` and `APEXYARD_COCKPIT_CMD`. With either one unset, init skips the Cockpit. If installation fails, init continues to `/onboard`.
-
 At the end, `apexyard init` offers to open the new repo in Claude Code with `/onboard`. `/onboard` asks about your company, your stack and your first project. With another agent, open the folder and run `/onboard` yourself.
 
 A piped install cannot ask questions, so it installs no tools. Run `apexyard doctor` in a terminal to install a missing jq or gh, with your consent.
@@ -520,7 +518,7 @@ Cargo workspaces with many crates take a long time to index initially. See the c
 
 For JavaScript / TypeScript projects, the Code Reviewer agent (Rex) can run [Fallow](https://docs.fallow.tools) static analysis during every code review. The analysis finds dead code, unused exports and dependencies, duplication, circular dependencies, and high complexity in changed code. It also previews fixes with a dry run. See `.claude/agents/code-reviewer.md` section 9 and [AgDR-0069](agdr/AgDR-0069-fallow-in-code-review.md).
 
-You must enable this optional analysis. Rex runs it only when the diff touches `**/*.{js,jsx,mjs,cjs,ts,tsx}` AND the `fallow` CLI exists on `PATH`. If the CLI is absent, Rex silently skips the step. Reviews work without Fallow and give more information with it. Findings are advisory (`nit:` / `suggestion:`). They never change a verdict on their own. The review only previews fixes (`fallow fix --dry-run`). It never changes your tree.
+You must enable this optional analysis. Rex runs it only when the diff touches `**/*.{js,jsx,mjs,cjs,ts,tsx}` AND the `fallow` CLI exists on `PATH`. If the CLI is absent, Rex silently skips the step. Reviews work without Fallow and give more information with it. Findings are advisory (`Nit` or `Pre-existing`). They never change a verdict on their own. The review only previews fixes (`fallow fix --dry-run`). It never changes your tree.
 
 To enable it on a JS/TS project:
 

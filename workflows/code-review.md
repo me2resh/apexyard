@@ -48,7 +48,7 @@ Closes #[ticket-id]
 | [Term] | [What it means in this context] |
 ```
 
-**Summary bullets must be narrative, not label-only.** Every bullet should answer *what changed* AND *why it matters to the person reading this*. Label-only bullets ("State fix", "CI pipeline changes") force reviewers into diff archaeology and waste their judgment time. See [`.claude/rules/pr-quality.md`](../.claude/rules/pr-quality.md) § "Summary bullets — narrative quality" for the rule, a worked bad/good pair, and the legitimate-exceptions list. Rex flags label-only bullets as an advisory finding (`nit:` / `suggestion:`, non-blocking).
+**Summary bullets must be narrative, not label-only.** Every bullet should answer *what changed* AND *why it matters to the person reading this*. Label-only bullets ("State fix", "CI pipeline changes") force reviewers into diff archaeology and waste their judgment time. See [`.claude/rules/pr-quality.md`](../.claude/rules/pr-quality.md) § "Summary bullets — narrative quality" for the rule, a worked bad/good pair, and the legitimate-exceptions list. Rex flags label-only bullets as an advisory finding (a `Nit`, non-blocking).
 
 **Why a Glossary?** A glossary makes a PR useful to more than the people who wrote it. Clear definitions help:
 
