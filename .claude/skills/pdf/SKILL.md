@@ -7,22 +7,22 @@ allowed-tools: Bash, Read, Write, AskUserQuestion
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /pdf — Export Any Doc to PDF
+# /pdf: Export Any Doc to PDF
 
 Convert a framework-generated document (markdown, HTML, BPMN) to PDF for sharing with non-technical stakeholders, board members, customers, or auditors.
 
-Sits alongside `/c4` (Mermaid markdown), `/dfd` (Mermaid markdown), `/tech-vision` (markdown), `/write-spec` (PRD markdown), `/journey` (self-contained HTML), `/process` (BPMN XML), and the audit family (`/threat-model`, `/launch-check`, etc., all of which write dated markdown audits). Those skills emit a single source-of-truth artefact in its native format; `/pdf` is the dedicated bridge to PDF for the moments when prose isn't enough.
+This skill complements `/c4` and `/dfd` (Mermaid markdown), `/tech-vision` (markdown), and `/write-spec` (PRD markdown). It also complements `/journey` (self-contained HTML), `/process` (BPMN XML), and audit skills such as `/threat-model` and `/launch-check` (dated markdown audits). Those skills emit one source-of-truth artefact in its native format. `/pdf` provides PDF output when prose is not enough.
 
 ## The destination question
 
-A PDF can land in one of two places, and the answer depends on whether the doc should **travel with the code** if the project spun out tomorrow. This mirrors the existing rule in `docs/multi-project.md`:
+A PDF can go in one of two places. The destination depends on whether the document should **travel with the code** if the project separates tomorrow. This mirrors the existing rule in `docs/multi-project.md`:
 
 | If YES (travels with the code) | If NO (ApexYard's view) |
 |---|---|
 | Project's own repo: `workspace/<name>/docs/` | Ops fork: `projects/<name>/pdfs/` |
 | Examples: API spec, deployment runbook, internal sequence | Examples: handover assessment, stakeholder update, launch-check verdict |
 
-The skill **asks**, doesn't guess. The 4-option prompt below covers every common case.
+The skill **asks**, does not guess. The 4-option prompt below covers every common case.
 
 ## Usage
 
@@ -52,7 +52,7 @@ projects_dir=$(portfolio_projects_dir)
 workspace_dir=$(portfolio_workspace_dir)
 ```
 
-Defaults to single-fork (`./projects`, `./workspace`). Don't hardcode literal `projects/` or `workspace/` paths in the bash blocks below — let the helper resolve whichever mode the adopter is in.
+Defaults to single-fork (`./projects`, `./workspace`). Do not hardcode literal `projects/` or `workspace/` paths in the bash blocks below. Let the helper resolve whichever mode the adopter is in.
 
 ## Process
 
@@ -89,14 +89,14 @@ Anything else → exit 2 with a clear "unsupported input format" message + the s
 
 The destination prompt needs a project name to fill in. Inference order:
 
-1. If `--project=<name>` was passed → use it.
+1. If the operator passed `--project=<name>` → use it.
 2. If `ABS_INPUT` is under `<projects_dir>/<name>/...` → `name` is the path segment after `projects_dir`.
 3. If `ABS_INPUT` is under `<workspace_dir>/<name>/...` → `name` is the path segment after `workspace_dir`.
-4. If neither matched (e.g. cwd is ops-fork root and input is `docs/foo.md`) → `name` is **unresolved**. The prompt will show "(no project — supply via --project)" in slots 1 + 2, and slots 3 + 4 remain valid.
+4. If neither matches, `name` remains **unresolved** (for example, ops-fork cwd with input `docs/foo.md`). Slots 1 + 2 show `(no project: supply via --project)`. Slots 3 + 4 remain valid.
 
 ### 4. Show the destination prompt
 
-Use `AskUserQuestion` for the destination unless `--no-prompt` or `--destination=...` was passed.
+Use `AskUserQuestion` for the destination unless the operator passed `--no-prompt` or `--destination=...`.
 Recommend the path that fits the document's readers. Use the prompt below only when the harness lacks the tool.
 
 ```
@@ -114,7 +114,7 @@ Where should the PDF land?
 > 
 ```
 
-When `<name>` couldn't be resolved, slots (1) and (2) print as `(no project — supply via --project)` and accepting them prompts for a name.
+When you cannot resolve `<name>`, slots (1) and (2) print as `(no project: supply via --project)`. Accepting either prompts for a name.
 
 ### 5. Compute the output path
 
@@ -126,7 +126,7 @@ STEM="${STEM%.*}"   # strip the extension
 Filename rule:
 
 - Default → `<stem>.pdf`
-- **Audit-class outputs**: if `ABS_INPUT` matches `<projects_dir>/<name>/audits/<dim>/<YYYY-MM-DD>.md` (the dated-subdir convention from AgDR-0019), keep the date in the filename — the stem already contains it, so `<stem>.pdf` is correct as-is. No special case needed.
+- **Audit-class outputs**: keep the date when `ABS_INPUT` matches `<projects_dir>/<name>/audits/<dim>/<YYYY-MM-DD>.md` (the AgDR-0019 dated-subdir convention). The stem already contains the date, so `<stem>.pdf` needs no special case.
 
 By destination:
 
@@ -137,7 +137,7 @@ By destination:
 | `3` / `<path>` | the operator-supplied path (relative to cwd, or absolute) |
 | `k` / `keep` | `<dir-of-input>/<stem>.pdf` |
 
-If the parent dir doesn't exist, `mkdir -p` it.
+If the parent dir does not exist, `mkdir -p` it.
 
 If the output file already exists, ask the operator: overwrite (`o`), pick a new path (`n`), or quit (`q`). No silent overwrite.
 
@@ -157,10 +157,10 @@ RC=$?
 
 `convert.sh` exit codes:
 
-- `0` — converted cleanly
-- `1` — conversion failed (offending converter output streamed to stderr)
-- `2` — bad input / unsupported format
-- `3` — no converter available; advisory printed to stderr naming each install option. The skill propagates this exit code.
+- `0`: converted cleanly
+- `1`: conversion failed (offending converter output streamed to stderr)
+- `2`: bad input / unsupported format
+- `3`: no converter available. Advisory printed to stderr naming each install option. The skill propagates this exit code.
 
 ### 7. Report
 
@@ -180,13 +180,13 @@ On exit 3:
 ✗ No PDF converter is installed.
 
 Markdown inputs can use:
-  • pandoc           — brew install pandoc (or apt-get install pandoc)
+  • pandoc          : brew install pandoc (or apt-get install pandoc)
                        For best output also install xelatex (mactex / texlive-xetex)
-  • md-to-pdf (npm)  — npm install -g md-to-pdf  (or run via npx, no install)
+  • md-to-pdf (npm) : npm install -g md-to-pdf  (or run via npx, no install)
 
 HTML inputs can use:
-  • wkhtmltopdf      — brew install --cask wkhtmltopdf
-  • pandoc           — same as above (uses its HTML reader)
+  • wkhtmltopdf     : brew install --cask wkhtmltopdf
+  • pandoc          : same as above (uses its HTML reader)
 
 BPMN inputs need a two-step pipeline:
   • bpmn-to-image (npm) → SVG → pandoc → PDF
@@ -194,7 +194,7 @@ BPMN inputs need a two-step pipeline:
 Install at least one of the above and re-run /pdf.
 ```
 
-The skill **does not silently fall back** to leaving you without a PDF — it explicitly exits 3 so the operator knows the gap and can fix it.
+The skill **does not silently fall back** to leaving you without a PDF. It explicitly exits 3 so the operator knows the gap and can fix it.
 
 ## Config
 
@@ -208,9 +208,9 @@ The skill **does not silently fall back** to leaving you without a PDF — it ex
 }
 ```
 
-- `preferred_converter` — when both pandoc and a fallback are installed, prefer this one. `null` means "first one found in the dispatch order".
-- `pdf_engine` — passed to pandoc as `--pdf-engine=<engine>`. Common values: `xelatex` (best Unicode), `pdflatex` (smaller install), `wkhtmltopdf` (no LaTeX needed but degraded typography).
-- `default_destination` — used when `--no-prompt` is passed. Must be one of `workspace`, `projects`, `keep`, or `ask`. `ask` with `--no-prompt` is an error (the skill exits 2 — operator must change config or drop `--no-prompt`).
+- `preferred_converter`: when installation includes both pandoc and a fallback, prefer this converter. `null` means "first one found in the dispatch order".
+- `pdf_engine`: passed to pandoc as `--pdf-engine=<engine>`. Common values: `xelatex` (best Unicode), `pdflatex` (smaller install), `wkhtmltopdf` (no LaTeX needed but degraded typography).
+- `default_destination`: use this value with `--no-prompt`. It must be `workspace`, `projects`, `keep`, or `ask`. Combining `ask` and `--no-prompt` causes exit 2. The operator must change config or remove `--no-prompt`.
 
 Adopters override in `.claude/project-config.json`:
 
@@ -225,11 +225,11 @@ Adopters override in `.claude/project-config.json`:
 
 ## Rules
 
-1. **Always ask about destination** unless `--no-prompt` or `--destination=...` was passed. The "would it follow the code?" question is genuinely contextual; guessing wrong creates landed-in-the-wrong-repo cleanup work.
+1. **Always ask about destination** unless the operator passed `--no-prompt` or `--destination=...`. The "would it follow the code?" question depends on context. An incorrect guess creates cleanup work in the wrong repo.
 2. **Never silently overwrite** an existing PDF. Always prompt or require `--destination=<explicit-path>` which the operator owns.
 3. **Graceful degrade only on missing dep, not on conversion failure**. Missing converter → exit 3 + advisory. Converter installed but threw an error → exit 1 + propagate the converter's stderr. The two are different failure modes with different fixes.
-4. **Source format detection by extension only**. We don't sniff content (would add complexity for marginal value — operators know what they're converting).
-5. **No special-case templates**. v1 uses the converter's defaults. Custom LaTeX templates, branded header/footer, etc. are out of scope (separate ticket).
+4. **Source format detection by extension only**. We do not sniff content (would add complexity for marginal value: operators know what they are converting).
+5. **No special-case templates**. V1 uses the converter's defaults. Custom LaTeX templates, branded header/footer, other applicable items are out of scope (separate ticket).
 6. **No batch mode**. One input → one PDF. If the operator needs ten, they loop in shell. Keeps the skill's destination-prompt logic single-purpose.
 
 ## When to use this
@@ -241,24 +241,24 @@ Adopters override in `.claude/project-config.json`:
 | Customer-facing API documentation | Yes (write to `workspace/<name>/docs/`) |
 | Internal stakeholder update | Yes (write to `projects/<name>/pdfs/`) |
 | Quick-share a diagram from `/c4` for a meeting | Yes (use `keep` to drop next to the source) |
-| Replace the source markdown with the PDF | No — the source stays canonical; PDF is a render |
-| Batch-converting 50 audit reports | No — loop `/pdf` in shell, the skill stays single-input |
+| Replace the source markdown with the PDF | No: the source stays canonical. PDF is a render |
+| Batch-converting 50 audit reports | No: loop `/pdf` in shell, the skill stays single-input |
 
 ## Out of scope (v1)
 
-- **`--pdf` flag on each doc-emitting skill** that converts at write-time. Cleaner one-command UX but couples every doc skill to the converter dep. Standalone `/pdf` is v1; per-skill integration can land in v1.5 if operator usage demands it.
+- **`--pdf` flag on each doc-emitting skill** that converts at write-time. Cleaner one-command UX but couples every doc skill to the converter dep. Standalone `/pdf` is v1. Per-skill integration can land in v1.5 if operator usage demands it.
 - **Custom LaTeX templates / branding / headers / footers**. Use system pandoc defaults for v1.
 - **Batch export across multiple inputs**. Loop in shell.
 - **Auto-watch + regenerate on source change**. Out of scope.
-- **PDF accessibility audit** (tagged structure, alt-text propagation). The accessibility-audit skill covers the source markdown; PDF accessibility is a downstream concern.
+- **PDF accessibility audit** (tagged structure, alt-text propagation). The accessibility-audit skill covers the source markdown. PDF accessibility is a downstream concern.
 
 ## See also
 
-- AgDR-0034 — converter dispatch + destination prompt rationale + standalone-skill vs flag-on-each-skill decision
-- `docs/multi-project.md` § "Architecture diagrams" — the "would it follow the code?" rule extended to PDF outputs
-- `.claude/skills/process/lint.sh` — graceful-degrade-on-missing-dep pattern that this skill mirrors for converter detection
-- `.claude/skills/_lib-mermaid-lint.sh` — same pattern, npx-fallback case
+- AgDR-0034: converter dispatch + destination prompt rationale + standalone-skill vs flag-on-each-skill decision
+- `docs/multi-project.md` § "Architecture diagrams": the "would it follow the code?" rule extended to PDF outputs
+- `.claude/skills/process/lint.sh`: graceful-degrade-on-missing-dep pattern that this skill mirrors for converter detection
+- `.claude/skills/_lib-mermaid-lint.sh`: same pattern, npx-fallback case
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

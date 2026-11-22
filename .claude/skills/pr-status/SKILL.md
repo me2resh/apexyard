@@ -7,7 +7,7 @@ allowed-tools: Bash
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /pr-status — Show a pull request's gate state
+# /pr-status: Show a pull request's gate state
 
 Read-only. This skill runs `bin/apexyard-pr-status` and shows its output.
 The operator, a developer and an agent then read the same state before they act.
@@ -22,7 +22,7 @@ The operator, a developer and an agent then read the same state before they act.
 - On the last line: the next missing action.
 
 Each item has one status: `satisfied`, `stale`, `missing`, `not required` or `not verified`.
-An item that cannot be checked is `not verified`. It is never `satisfied`.
+If a check cannot verify an item, report `not verified`. Never report `satisfied`.
 "CI gate" is the merge hook result. "CI green" is the forge check result. They are separate rows.
 
 The records use the same code as the merge gate: `review_marker_path`, `rex_approval_carries_over`, `resolve_pr_head` and the gate hooks themselves.

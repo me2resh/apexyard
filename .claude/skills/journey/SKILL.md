@@ -9,28 +9,28 @@ effort: medium
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /journey — User-Journey HTML with Modal-Per-Page Design Preview
+# /journey: User-Journey HTML with Modal-Per-Page Design Preview
 
-Generate a single self-contained HTML file at `projects/<name>/journeys/<feature-slug>.html` mapping the user journey as clickable boxes (each opening a modal with the page's content). Companion skill to `/c4` (architecture preview) and `/threat-model` (security preview) — closes the gap on **flow-level** preview before any implementation.
+Generate a single self-contained HTML file at `projects/<name>/journeys/<feature-slug>.html` mapping the user journey as clickable boxes (each opening a modal with the page's content). Companion skill to `/c4` (architecture preview) and `/threat-model` (security preview). Closes the gap on **flow-level** preview before any implementation.
 
 ## When to use
 
 | Trigger | Use `/journey`? |
 |---------|----------------|
-| PRD approved, about to start tech design | Yes — visualises the flow the PRD describes, surfaces missing states |
-| Stakeholder review of a new feature flow | Yes — single-file HTML, opens in any browser, shareable as an attachment |
-| Quick "what does this look like as a flow?" sketch | Yes — conversational mode is 5 questions |
-| Per-page visual design (high-fidelity mockups) | No — `/journey` is flow-first; per-page mockups are designer territory |
-| Architecture diagrams | No — use `/c4` for L1/L2 architecture |
-| Production deliverable HTML | No — the artifact is a draft preview, not production code |
+| PRD approved, about to start tech design | Yes: visualises the flow the PRD describes, surfaces missing states |
+| Stakeholder review of a new feature flow | Yes: single-file HTML, opens in any browser, shareable as an attachment |
+| Quick "what does this look like as a flow?" sketch | Yes: conversational mode is 5 questions |
+| Per-page visual design (high-fidelity mockups) | No: `/journey` is flow-first. Per-page mockups are designer territory |
+| Architecture diagrams | No: use `/c4` for L1/L2 architecture |
+| Production deliverable HTML | No: the artifact is a draft preview, not production code |
 
 ## Activated role
 
-When `/journey` runs, activate the **[UI Designer](../../../roles/design/ui-designer.md)** role — they own user flows and information architecture (AgDR-0301). For PRD parsing in mode (a), the **[Product Manager](../../../roles/product/product-manager.md)** is the supporting role (they wrote the PRD). See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the full activation protocol.
+When `/journey` runs, activate the **[UI Designer](../../../roles/design/ui-designer.md)** role. They own user flows and information architecture (AgDR-0301). For PRD parsing in mode (a), the **[Product Manager](../../../roles/product/product-manager.md)** is the supporting role (they wrote the PRD). See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the full activation protocol.
 
 ## Path resolution
 
-Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog`, all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -38,25 +38,25 @@ source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
 projects_dir=$(portfolio_projects_dir)
 ```
 
-Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir}` keys in `.claude/project-config.json`. Don't hardcode literal `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir}` keys in `.claude/project-config.json`. Do not hardcode literal `projects/` paths in bash blocks. The helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
 
-**Write targets** (see me2resh/apexyard#373 + #443): paths documented as `projects/<name>/X` in this skill are canonical adopter-facing forms — implement them in bash as `"${projects_dir}/<name>/X"`. Never construct from `"${PWD}/projects/..."`, `"$(git rev-parse --show-toplevel)/projects/..."`, or a literal `./projects/...` — those break in split-portfolio v2 mode where `projects_dir` resolves to a sibling repo.
+**Write targets** (see me2resh/apexyard#373 + #443): paths documented as `projects/<name>/X` in this skill are canonical adopter-facing forms. Implement them in bash as `"${projects_dir}/<name>/X"`. Never construct from `"${PWD}/projects/..."`, `"$(git rev-parse --show-toplevel)/projects/..."`, or a literal `./projects/...`. Those break in split-portfolio v2 mode where `projects_dir` resolves to a sibling repo.
 
-**REQUIRED per-block preamble** (see #443): Claude executes each ```bash``` block as a separate shell invocation. The `projects_dir` assignment from the Path resolution section above does NOT carry into later blocks. Every bash block that writes to a `projects/<name>/X` path MUST start with this three-line preamble so it's self-contained:
+**REQUIRED per-block preamble** (see #443): Claude executes each ```bash``` block as a separate shell invocation. The `projects_dir` assignment from the Path resolution section above does NOT carry into later blocks. Every bash block that writes to a `projects/<name>/X` path MUST start with this three-line preamble so it is self-contained:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
 projects_dir=$(portfolio_projects_dir)
-# ... now write to "${projects_dir}/<name>/X"
+# ... Now write to "${projects_dir}/<name>/X"
 ```
 
-The Path resolution section's example sources the helper *once* for documentation purposes; it does not absolve later blocks from sourcing it themselves. Treat each ```bash``` fence as a fresh process.
+The Path resolution section's example sources the helper *once* for documentation purposes. It does not absolve later blocks from sourcing it themselves. Treat each ```bash``` fence as a fresh process.
 
 ## Usage
 
 ```
-/journey                                        # conversational — asks for project, feature, pages, transitions
+/journey                                        # conversational: asks for project, feature, pages, transitions
 /journey checkout-v2                            # conversational, feature pre-named
 /journey checkout-v2 --from-prd projects/example-app/prds/checkout.md
 /journey checkout-v2 --from-yaml projects/example-app/journeys/checkout-v2.yaml
@@ -68,25 +68,25 @@ Argument shape:
 
 | Form | Behaviour |
 |------|-----------|
-| No args | Conversational mode; ask for the project + feature first |
+| No args | Conversational mode. Ask for the project + feature first |
 | `<feature-slug>` only | Conversational mode for that feature (slug becomes the filename) |
 | `--from-prd <path>` | Parse pages + transitions from a PRD file |
 | `--from-yaml <path>` | Load structured journey data from a YAML file |
 | `--update` | Re-render the HTML from `<feature-slug>.yaml` without re-asking |
 | `--wireframe` | (Default OFF) ask the agent to sketch HTML wireframes inline in each page's modal |
 
-`--from-prd` and `--from-yaml` are mutually exclusive. `--update` is mutually exclusive with both — it always reads from the existing YAML.
+`--from-prd` and `--from-yaml` are mutually exclusive. `--update` is mutually exclusive with both. It always reads from the existing YAML.
 
 ## Output location
 
-Files are written under the **per-project docs dir** (resolved via `portfolio_projects_dir`):
+Write files under the **per-project docs dir** (resolved via `portfolio_projects_dir`):
 
 | File | Path | Purpose |
 |------|------|---------|
 | YAML source-of-truth | `<projects_dir>/<name>/journeys/<feature-slug>.yaml` | Editable, diff-reviewable, regenerable input |
-| HTML build artifact | `<projects_dir>/<name>/journeys/<feature-slug>.html` | Single self-contained file — no external deps |
+| HTML build artifact | `<projects_dir>/<name>/journeys/<feature-slug>.html` | Single self-contained file: no external deps |
 
-Both are committed. The YAML so reviewers can diff flow changes across PRs; the HTML so reviewers don't need to re-render to see it.
+Commit both files. The YAML lets reviewers compare flow changes across PRs. The HTML lets reviewers view the result without rendering it again.
 
 ## Process
 
@@ -96,22 +96,22 @@ Same pattern as `/feature`, `/bug`, `/c4`:
 
 - If invoked from `workspace/<name>/` → `<name>` is the project.
 - If invoked from the ops-fork root → ask which project this journey is for (list registered projects from `apexyard.projects.yaml`).
-- If exactly one project is registered → use it without asking.
-- If a `<feature-slug>` argument was passed and a journey already exists at `<projects_dir>/<name>/journeys/<feature-slug>.yaml`, infer the project from that path.
+- If the registry contains exactly one project → use it without asking.
+- If the operator passed `<feature-slug>` and `<projects_dir>/<name>/journeys/<feature-slug>.yaml` already exists, infer the project from that path.
 
 ### 2. Resolve the feature slug
 
 The slug becomes the filename (without extension). Prefer kebab-case, max 40 chars.
 
-- If `<feature-slug>` was passed as the first positional arg → use it.
+- If the operator passed `<feature-slug>` as the first positional arg → use it.
 - If `--from-prd <path>` and the PRD has a clear title → derive a slug from the title.
-- Otherwise → ask: "What's the feature name? (used as the filename)".
+- Otherwise → ask: "What is the feature name? (used as the filename)".
 
 ### 3. Source the journey data
 
-Three input modes — pick whichever the operator's flags imply, or ask if ambiguous.
+Three input modes. Pick whichever the operator's flags imply, or ask if ambiguous.
 
-#### Mode (a) — From a PRD
+#### Mode (a): From a PRD
 
 Triggered by `--from-prd <path>` (relative to the ops-fork root or absolute).
 
@@ -126,36 +126,36 @@ Read the PRD. Look for these structural cues to extract pages and transitions:
 | `## Acceptance Criteria` with Given/When/Then | Pre-conditions / post-conditions = transitions |
 | Mermaid `graph` or `flowchart` blocks | Direct edge list |
 
-If the PRD is too prose-heavy to parse mechanically, fall back to mode (b) but pre-fill the conversation with the PRD's title, problem statement, and any explicit flow notes.
+If prose prevents mechanical PRD parsing, use mode (b). Pre-fill the conversation with the PRD's title, problem statement, and any explicit flow notes.
 
-#### Mode (b) — Conversational
+#### Mode (b): Conversational
 
-Default mode when no `--from-*` flag is given. A 5-question micro-interview:
+Use this default mode when the operator gives no `--from-*` flag. Conduct a 5-question micro-interview:
 
-1. **Pages** — "What pages / screens / states are in this flow? (one per line, name + 1-line description)"
-2. **Entry point** — "Which page does the user land on first?"
-3. **Transitions** — "What are the transitions? Format: `<from> -> <to> on <trigger>` (e.g. `Login -> Dashboard on submit`). One per line."
-4. **Personas** — "Are there multiple personas (e.g. user / admin / system)? Optional — leave blank for single-persona."
-5. **Notes** — "Any global notes about the flow? (e.g. 'all pages require auth except Login')"
+1. **Pages**: "What pages / screens / states are in this flow? (one per line, name + 1-line description)"
+2. **Entry point**: "Which page does the user land on first?"
+3. **Transitions**: "What are the transitions? Format: `<from> -> <to> on <trigger>` (e.g. `Login -> Dashboard on submit`). One per line."
+4. **Personas**: "Are there multiple personas (e.g. User / admin / system)? Optional: leave blank for single-persona."
+5. **Notes**: "Any global notes about the flow? (e.g. 'all pages require auth except Login')"
 
 Capture answers verbatim into the YAML structure below.
 
-#### Mode (c) — From YAML
+#### Mode (c): From YAML
 
 Triggered by `--from-yaml <path>` or `--update` (which uses the canonical path `<projects_dir>/<name>/journeys/<feature-slug>.yaml`).
 
-Load the YAML as-is. Validate it has the required top-level keys; if not, surface what's missing and stop.
+Load the YAML as-is. Validate it has the required top-level keys. If not, surface what is missing and stop.
 
 ### 4. Validate the journey graph
 
 Before writing files, sanity-check:
 
-- **Every page is reachable.** Walk transitions from the entry page; flag any unreachable page.
+- **Every page is reachable.** Walk transitions from the entry page. Flag any unreachable page.
 - **Every `to:` and `from:` references a page that exists.** Typos here are the most common mistake.
-- **Hard cap at 12 pages.** A v1 journey with more than 12 pages is almost certainly two journeys; ask the operator to split.
-- **Hard cap at 30 transitions.** Same reasoning — too dense to render readably.
+- **Hard cap at 12 pages.** A v1 journey with more than 12 pages is almost certainly two journeys. Ask the operator to split.
+- **Hard cap at 30 transitions.** Same reasoning: too dense to render readably.
 
-If validation fails, list the issues and ask the operator how to fix (the conversation is cheap; rendering an unreadable graph is expensive).
+If validation fails, list the issues and ask the operator how to fix (the conversation is cheap. Rendering an unreadable graph is expensive).
 
 ### 5. Persist the YAML
 
@@ -201,11 +201,11 @@ notes: |
   Multi-line notes about the flow, prerequisites, etc.
 ```
 
-Write the file. If it already exists and `--update` was NOT passed, ask before overwriting (the YAML may have hand edits the operator wants to keep).
+Write the file. If it exists without `--update`, ask before overwriting. The YAML may have hand edits the operator wants to keep.
 
 ### 6. Render the HTML
 
-Generate `<projects_dir>/<name>/journeys/<feature-slug>.html` — a **single self-contained file** with all CSS and JS inline. No `<script src=…>`, no `<link rel="stylesheet" href=…>`, no CDN references.
+Generate `<projects_dir>/<name>/journeys/<feature-slug>.html`. A **single self-contained file** with all CSS and JS inline. No `<script src=…>`, no `<link rel="stylesheet" href=…>`, no CDN references.
 
 The HTML structure:
 
@@ -215,8 +215,8 @@ The HTML structure:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{title} — User Journey</title>
-  <style>/* inline CSS — see § "Inline CSS" below */</style>
+  <title>{title}: User Journey</title>
+  <style>/* inline CSS: see § "Inline CSS" below */</style>
 </head>
 <body>
   <header>
@@ -246,7 +246,7 @@ The HTML structure:
     <div>Regenerate: <code>/journey {feature-slug} --update</code></div>
   </footer>
 
-  <script>/* inline JS — see § "Inline JS" below */</script>
+  <script>/* inline JS: see § "Inline JS" below */</script>
 </body>
 </html>
 ```
@@ -259,10 +259,10 @@ Compute box positions before emitting SVG:
 2. Topologically sort pages by BFS distance from entry. Pages at the same BFS depth are in the same row.
 3. Within a row, distribute boxes evenly across the canvas width.
 4. Box dimensions: width 220px, height 80px. Row spacing: 140px. Column spacing: 40px (between boxes in the same row).
-5. Cycles → break the cycle at the longest back-edge for layout purposes; the back-edge is still drawn as an arrow with a curved path.
+5. Cycles → break the cycle at the longest back-edge for layout purposes. Still draw that back-edge as a curved arrow.
 6. Total canvas: `width = max(rowWidths)`, `height = (numRows - 1) * rowSpacing + boxHeight + 80px` (top + bottom padding).
 
-For v1, this layout is intentionally simple. A page with 8 outgoing transitions will look messy — that's an acceptable v1 trade-off; complex graphs are a v2 concern.
+For v1, this layout is intentionally simple. A page with 8 outgoing transitions will look messy. That is an acceptable v1 trade-off. Complex graphs are a v2 concern.
 
 #### Boxes
 
@@ -278,7 +278,7 @@ Each page renders as an SVG `<g>` with a `<rect>` and centered `<text>`:
 </g>
 ```
 
-Persona styling: if the page has a `persona` field, give the `<g>` a `data-persona="{persona}"` attribute and use CSS to colour-code (one colour per distinct persona, picked deterministically from a small palette). Without persona, all boxes use the default neutral fill.
+Persona styling: if the page has a `persona` field, give the `<g>` a `data-persona="{persona}"` attribute. Use CSS to colour-code each distinct persona. Select colours deterministically from a small palette. Without persona, all boxes use the default neutral fill.
 
 #### Arrows
 
@@ -334,12 +334,12 @@ One modal per page, hidden by default:
       </ul>
     </section>
     {modal-image section if image set}
-    {modal-wireframe section if wireframe_html set — inline HTML wrapped in a sandboxed wireframe container}
+    {modal-wireframe section if wireframe_html set: inline HTML wrapped in a sandboxed wireframe container}
   </div>
 </div>
 ```
 
-#### Inline CSS (sketch — keep under ~100 lines)
+#### Inline CSS (sketch: keep under ~100 lines)
 
 ```css
 * { box-sizing: border-box; }
@@ -385,9 +385,9 @@ footer { padding: 24px 32px; font-size: 0.8rem; color: #6b7280;
 footer code { background: #f3f4f6; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; }
 ```
 
-Persona colour rotation (only when `personas` is non-empty): cycle through `#6366f1`, `#10b981`, `#f59e0b`, `#ec4899`, `#8b5cf6` — apply via attribute selector `.page-box[data-persona="X"] rect { stroke: ...; }`.
+Persona colour rotation (only when `personas` is non-empty): cycle through `#6366f1`, `#10b981`, `#f59e0b`, `#ec4899`, `#8b5cf6`. Apply via attribute selector `.page-box[data-persona="X"] rect { stroke: ...; }`.
 
-#### Inline JS (sketch — keep under ~50 lines)
+#### Inline JS (sketch: keep under ~50 lines)
 
 ```js
 (function () {
@@ -454,33 +454,33 @@ If this was a `--from-prd` run, append a one-line tip:
 
 ## Rules
 
-1. **Single self-contained HTML** — no external CSS, JS, or font references. Everything inline. The whole point is "open the file, see the journey" — a fetch failure on a CDN should never break the artifact.
-2. **YAML is the source of truth** — never hand-edit the HTML. `--update` regenerates from YAML; the HTML is replaced entirely on each run.
-3. **Hard cap at 12 pages, 30 transitions** — bigger journeys are usually two journeys. Ask the operator to split.
-4. **Modal-per-page is mandatory** — even if the modal only has a one-line description. The interaction model is "click a box, see the detail"; without modals the artifact is just an unstyled flowchart.
-5. **Don't fabricate page contents** — in mode (b), if the operator didn't list contents for a page, the modal shows the description only. Don't invent bullets the operator didn't specify.
-6. **`--wireframe` is opt-in (v1)** — default to prose-only modals. Wireframe sketches are bounded by what the agent can produce in plain HTML; document this in the modal so reviewers don't mistake a sketch for a real design.
-7. **Disclaimer banner is mandatory** — every generated HTML carries the "DRAFT — preview before implementation" line. The artifact is a flow-mapping tool, not a design deliverable.
-8. **No JS frameworks, no build step** — vanilla DOM API only. The reader must be able to open the HTML in any browser without a server.
+1. **Single self-contained HTML**: use no external CSS, JS, or font references. Keep everything inline. The reader must open the file and see the journey. A CDN fetch failure must never break the artifact.
+2. **YAML is the source of truth**: never hand-edit the HTML. `--update` regenerates from YAML. Each run replaces the entire HTML.
+3. **Hard cap at 12 pages, 30 transitions**: bigger journeys are usually two journeys. Ask the operator to split.
+4. **Modal-per-page is mandatory**: even if the modal only has a one-line description. The interaction model is "click a box, see the detail". Without modals the artifact is only an unstyled flowchart.
+5. **Do not fabricate page contents**. In mode (b), show only the description if the operator listed no page contents. Do not invent bullets the operator did not specify.
+6. **`--wireframe` is opt-in (v1)**: default to prose-only modals. Limit sketches to what the agent can produce in plain HTML. Document this in the modal so reviewers do not mistake a sketch for a real design.
+7. **Disclaimer banner is mandatory**: every generated HTML carries the `DRAFT — preview before implementation` line. The artifact is a flow-mapping tool, not a design deliverable.
+8. **No JS frameworks, no build step**: vanilla DOM API only. The reader must be able to open the HTML in any browser without a server.
 
 ## Out of scope (v1)
 
-- **Swimlane layout** — single-persona flowchart only. Multi-persona swimlanes are a v2 question (gated on the `personas:` field).
-- **Live preview / hot-reload** — `--update` is the only regen path.
-- **Cross-project journeys** — one project per invocation. Portfolio-spanning flows (e.g. shared auth across projects) are a v2 concern.
-- **Real designtool integration** (Figma API, Sketch export) — v1 takes paths or URLs only; deeper integration is v3.
-- **A11y / responsive testing of the generated HTML** — the journey is a preview artifact, not a production deliverable; basic keyboard + ARIA is provided but not exhaustively tested.
-- **Image embedding via base64** — v1 references images by relative path or URL only. Base64 inflates the file size; if the operator wants a self-contained build, they reference images on the same disk and copy both files together.
+- **Swimlane layout**: single-persona flowchart only. Multi-persona swimlanes are a v2 question (gated on the `personas:` field).
+- **Live preview / hot-reload**: `--update` is the only regen path.
+- **Cross-project journeys**: one project per invocation. Portfolio-spanning flows (e.g. Shared auth across projects) are a v2 concern.
+- **Real designtool integration** (Figma API, Sketch export): v1 takes paths or URLs only. Deeper integration is v3.
+- **A11y / responsive testing of the generated HTML**: the journey is a preview artifact, not a production deliverable. Include basic keyboard support and ARIA. Exhaustive testing remains outside scope.
+- **Image embedding via base64**: v1 references images by relative path or URL only. Base64 inflates the file size. If the operator wants a self-contained build, they reference images on the same disk and copy both files together.
 
 ## Relationship to other skills
 
 | Skill | Relationship |
 |-------|-------------|
 | `/write-spec` | Produces the PRD that feeds `/journey --from-prd`. Sequential pair. |
-| `/c4` | Sibling preview-before-build skill. `/c4` shows architecture; `/journey` shows user flow. |
-| `/threat-model` | Sibling skill. `/threat-model` shows attack surface; `/journey` shows user flow. |
+| `/c4` | Sibling preview-before-build skill. `/c4` shows architecture. `/journey` shows user flow. |
+| `/threat-model` | Sibling skill. `/threat-model` shows attack surface. `/journey` shows user flow. |
 | `/feature` / `/bug` / `/task` | Tracker creation. `/journey` is sometimes attached to a feature ticket as a flow preview. |
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

@@ -5,18 +5,18 @@ argument-hint: "[short-slug-or-incident-id]"
 allowed-tools: Bash, Read, Write
 ---
 
-# /investigation — Create an Investigation Ticket + Live-Doc
+# /investigation: Create an Investigation Ticket + Live-Doc
 
 Read `.claude/rules/writing-standard.md`. Use the **controlled technical writing profile** for the
 ticket and live document: state the outcome and next action first, then evidence.
 
-Creates a structured GitHub Issue + a sibling live-doc markdown file for an **investigation** — sustained root-cause work whose deliverable is a *written artefact* of what was observed, what we concluded, and what's next. Distinct from `/spike` (forward-looking hypothesis with a budget) and `/bug` (immediate-fix) — see the comparison block at the top of `templates/tickets/investigation.md`.
+Create a structured GitHub Issue and a sibling live-doc markdown file for an **investigation**. This sustained root-cause work produces a *written artefact*: observations, conclusions, and next actions. It differs from `/spike` (forward-looking hypothesis with a budget) and `/bug` (immediate-fix). See the comparison block at the top of `templates/tickets/investigation.md`.
 
-> **When to use an investigation vs a bug vs a spike.** A `/bug` is filed when you already know what's broken and need to coordinate the fix. A `/spike` is filed when you want to test a forward-looking hypothesis ("will this approach work?") inside a time budget. An `/investigation` is filed when the *question itself* is the unknown — "why did this happen?", "what's actually going on with the metric drift?", "how does competitor X handle this?". The investigation produces a written record; the bug fix that may follow is a downstream artefact.
+> **When to use an investigation vs a bug vs a spike.** File a `/bug` when you know the broken behaviour and need to coordinate the fix. File a `/spike` to test a forward-looking hypothesis ("will this approach work?") inside a time budget. File an `/investigation` when the *question itself* is unknown. Examples: "why did this happen?", "what is going on with the metric drift?", "how does competitor X handle this?". The investigation produces a written record. A subsequent bug fix is a downstream artefact.
 
 ## Path resolution
 
-Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog`, all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -25,7 +25,7 @@ registry=$(portfolio_registry)
 projects_dir=$(portfolio_projects_dir)
 ```
 
-Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Do not hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks. The helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
 
 ## Usage
 
@@ -37,7 +37,7 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 
 ## Process
 
-### 0. Write the active-issue-skill marker (REQUIRED — me2resh/apexyard#268)
+### 0. Write the active-issue-skill marker (REQUIRED: me2resh/apexyard#268)
 
 Before any `gh issue create` (or other tracker CLI), write this skill's name to the active-issue-skill marker so `require-skill-for-issue-create.sh` lets the command through. At skill entry:
 
@@ -74,15 +74,15 @@ projects_dir=$(portfolio_projects_dir)
 ```
 
 - If the active ticket is on a managed project's repo → use that project's name + repo.
-- Else if exactly one project is registered → use it.
-- Else if multiple projects are registered → ask:
+- Else if the registry contains exactly one project → use it.
+- Else if the registry contains multiple projects → ask:
 
   ```
   Which project is this investigation for?
   (Or 'framework' if it's about the apexyard framework itself.)
   ```
 
-- If no projects are registered, ask for the repo in `owner/repo` format. The live-doc lands at `docs/investigations/<YYYY-MM-DD>-<slug>.md` in the ops fork root (the framework's own investigations live there).
+- If the registry contains no projects, ask for the repo in `owner/repo` format. The live-doc lands at `docs/investigations/<YYYY-MM-DD>-<slug>.md` in the ops fork root (the framework's own investigations live there).
 
 ### 2. Verify the prefix is on the whitelist
 
@@ -94,7 +94,7 @@ Either add it to .claude/project-config.json → .ticket.prefix_whitelist, or
 file the ticket using whichever prefix the fork uses for root-cause work.
 ```
 
-(The shipped default in `.claude/project-config.defaults.json` includes `Investigation`. This check exists for forks that have customised the whitelist — see apexyard#109.)
+(The shipped default in `.claude/project-config.defaults.json` includes `Investigation`. This check exists for forks that have customised the whitelist. See apexyard#109.)
 
 ### 3. Parse or ask for the slug
 
@@ -105,26 +105,26 @@ What's a short slug for this investigation? (3-5 words, kebab-case)
 Example: "order-api-spike-may-12" or "PD-4471".
 ```
 
-The slug becomes part of the live-doc filename: `<YYYY-MM-DD>-<slug>.md`. Today's date prefixes automatically (so the same slug can be reused for a follow-up investigation next month without colliding).
+The slug becomes part of the live-doc filename: `<YYYY-MM-DD>-<slug>.md`. The filename automatically starts with today's date. Thus, a follow-up investigation next month can reuse the slug without a collision.
 
 ### 4. Gather details (one section at a time)
 
-Ask conversationally — do NOT batch all questions. Wait for each answer before asking the next. Mirror the section structure of `templates/tickets/investigation.md` so the user sees their answers slot into the artefact directly.
+Ask conversationally. Do NOT batch all questions. Wait for each answer before asking the next. Mirror the section structure of `templates/tickets/investigation.md` so the user sees their answers slot into the artefact directly.
 
 **a) Trigger (required)**
 
 ```
 What kicked this off? One paragraph.
 Examples:
-  - "Production incident PD-4471 at 14:03 UTC on 2026-05-12 — error rate
+  - "Production incident PD-4471 at 14:03 UTC on 2026-05-12: error rate
     on /api/orders spiked from 0.2% to 11% for 22 minutes."
-  - "Customer report from #cs-tickets-3471 — exports >100k rows always fail."
+  - "Customer report from #cs-tickets-3471: exports >100k rows always fail."
   - "Reviewing why we picked Auth0 in 2024 vs Cognito today."
 
 Include the link / incident ID / date if you have it.
 ```
 
-**b) Hypothesis being tested (required)**
+**b) Hypothesis to test (required)**
 
 ```
 What did you think was happening BEFORE starting? List 2–4 hypotheses
@@ -136,16 +136,16 @@ Example:
   - Recent deploy regressed something
 ```
 
-Push back if the user offers only one hypothesis — investigations exist precisely because the answer isn't obvious; entertaining multiple causes upfront is the methodology. If the user genuinely has one hypothesis only, that's usually a sign they should file a `/bug` instead. Surface that gently:
+Push back if the user offers only one hypothesis. Investigations exist precisely because the answer is not obvious. Entertaining multiple causes upfront is the methodology. If the user genuinely has one hypothesis only, that is usually a sign they should file a `/bug` instead. Surface that gently:
 
 ```
-Only one hypothesis? An investigation usually entertains 2–4 — that's
+Only one hypothesis? An investigation usually entertains 2–4: that's
 what distinguishes it from a /bug (where you already know what's broken).
 Are you sure /bug isn't the right call here? If yes to investigation,
 I'll proceed with the one hypothesis.
 ```
 
-**c) Evidence sources you'll consult (required)**
+**c) Evidence sources you will consult (required)**
 
 ```
 Where will you gather evidence? List the sources.
@@ -156,7 +156,7 @@ Examples:
   - Last 4 deploys to OrderService
   - Staging replay of failed payloads
 
-These become the "Method" section — the path a reader follows.
+These become the "Method" section: the path a reader follows.
 ```
 
 **d) Initial method sketch (optional)**
@@ -180,9 +180,9 @@ template=$(portfolio_resolve_template tickets/investigation.md)   # → custom-t
 
 Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/tickets/investigation.md`. Adopters who want a customised investigation shape (e.g. Five Whys instead of Hypothesis Tree) drop their version at `<private_repo>/custom-templates/tickets/investigation.md`. See `templates/README.md` for the path-mirroring convention.
 
-**Backward-compat fallback**: if `portfolio_resolve_template` returns empty (template file missing — partial adopter setup or pre-#281 layout where the file lived at `templates/investigation.md`), fall back to the inline heredoc body below (the live-doc bootstrap structure mirroring the resolved template's sections) and print a one-line WARN on stderr (`WARN: tickets/investigation.md template missing — using inline fallback`).
+**Backward-compat fallback**: if `portfolio_resolve_template` returns empty, use the inline heredoc body below. This covers a missing template from partial setup or a pre-#281 layout with `templates/investigation.md`. The live-doc bootstrap structure mirrors the resolved template's sections. Print a one-line WARN on stderr (`WARN: tickets/investigation.md template missing: using inline fallback`).
 
-Read the resolved template and substitute the gathered inputs into the four sections that have inputs (Trigger, Hypothesis being tested, Method sketch, plus the placeholder Findings / Conclusion / Follow-up actions sections to fill in as the investigation progresses).
+Read the resolved template. Substitute inputs into Trigger, the hypothesis section, and Method sketch. Retain placeholder Findings / Conclusion / Follow-up actions sections to complete as the investigation progresses.
 
 Display the full ticket + the live-doc path:
 
@@ -193,7 +193,7 @@ GitHub Issue:
   Title:  [Investigation] {slug}
   Labels: investigation
   Repo:   {owner/repo}
-  Body:   (template-rendered — Trigger + Hypothesis + Method sketch
+  Body:   (template-rendered: Trigger + Hypothesis + Method sketch
            pre-filled; Findings / Conclusion / Follow-up actions empty
            for now)
 
@@ -202,7 +202,7 @@ Live-doc:
           (or docs/investigations/{YYYY-MM-DD}-{slug}.md for framework
            investigations)
 
-The live-doc IS the working surface — update it as evidence comes in.
+The live-doc IS the working surface: update it as evidence comes in.
 The GitHub issue tracks visibility + close state (closes when every
 Follow-up action lands or is explicitly dropped).
 
@@ -230,13 +230,13 @@ mkdir -p "$livedoc_dir"
 livedoc_path="$livedoc_dir/${date_prefix}-${slug}.md"
 ```
 
-Substitute the gathered values into the resolved template and write the file via the `Write` tool. The Metadata block at the bottom of the file references the GitHub issue number — leave it as `#{NNN}` until step 8, then patch it.
+Substitute the gathered values into the resolved template and write the file via the `Write` tool. The Metadata block at the bottom of the file references the GitHub issue number. Leave it as `#{NNN}` until step 8, then patch it.
 
 ### 8. Create the issue (via the tracker abstraction)
 
-Dispatch creation through `tracker_create` (#670 / AgDR-0072, extended by
-the #709 creator sweep) so the investigation lands in **this project's** tracker —
-GitHub, GitLab, or a `custom` CLI — per its `tracker:` block in
+Dispatch creation through `tracker_create` (#670 / AgDR-0072, extended by the #709 creator sweep).
+The investigation lands in **this project's** tracker:
+GitHub, GitLab, or a `custom` CLI, per its `tracker:` block in
 `apexyard.projects.yaml`. For a GitHub adopter this runs `gh issue create`
 exactly as before.
 
@@ -253,7 +253,7 @@ tracker_lib="$(r="$PWD"; while [ -n "$r" ] && [ "$r" != / ]; do \
 # Best-effort (tracker_label_ensure always exits 0).
 tracker_label_ensure "{owner/repo}" "investigation" "5319E7" "Sustained root-cause work — closes when Follow-up actions land, not on PR merge"
 
-# Pass the body via a file (arbitrary markdown — never inline-interpolated).
+# Pass the body via a file (arbitrary markdown: never inline-interpolated).
 body_file="$(mktemp)"
 cat > "$body_file" <<'BODY'
 {rendered template body, with the Metadata block pointing at the live-doc path}
@@ -278,13 +278,13 @@ ref="$(printf '%s' "$result" | jq -r '.ref')"
 url="$(printf '%s' "$result" | jq -r '.url')"
 ```
 
-Use `$ref` to patch the live-doc's Metadata block — replace the `#{NNN}`
+Use `$ref` to patch the live-doc's Metadata block. Replace the `#{NNN}`
 placeholder with the real reference.
 
 ### 9. Return paths + next steps
 
 ```
-Created: {owner/repo}#${ref} — [Investigation] {slug}
+Created: {owner/repo}#${ref}: [Investigation] {slug}
 ${url}
 
 Live-doc: {livedoc_path}
@@ -292,18 +292,18 @@ Live-doc: {livedoc_path}
 Next steps:
   1. Open the live-doc and update Findings as evidence comes in.
   2. Each hypothesis in the tree gets evidence-for / evidence-against
-     bullets underneath — prune as you rule things out.
+     bullets underneath: prune as you rule things out.
   3. When you reach a conclusion, fill in the Conclusion section.
   4. List Follow-up actions, each linked to a tracker ticket
      (`/bug`, `/feature`, `/spike`, `/decide`) or marked `(no follow-up)`.
   5. Close the GitHub issue when every Follow-up action is resolved
-     — NOT on PR merge.
+     NOT on PR merge.
 
 Suggested follow-up skills depending on what the investigation surfaces:
-  /bug    — file an immediate-fix bug
-  /spike  — file a hypothesis-driven exploration
-  /decide — record a technical decision that fell out
-  /feature — propose a new feature the investigation revealed a need for
+  /bug: file an immediate-fix bug
+  /spike: file a hypothesis-driven exploration
+  /decide: record a technical decision that fell out
+  /feature: propose a new feature the investigation revealed a need for
 ```
 
 ## Rules
@@ -312,25 +312,25 @@ Suggested follow-up skills depending on what the investigation surfaces:
 2. **Always confirm before creating.** Show the full plan (issue + live-doc path) and get explicit "yes".
 3. **At least 2 hypotheses by default.** If only one, gently surface that `/bug` might be the right tool. Allow the user to override.
 4. **Trigger + Hypothesis + Evidence sources are mandatory.** Method sketch is optional (fills in as you go).
-5. **Live-doc is the working surface.** The GitHub issue tracks visibility + close state; the live-doc holds the evolving evidence + findings.
-6. **Close semantics are different from every other ticket type.** Investigations close when every Follow-up action is resolved or explicitly dropped — NOT on PR merge. The `investigation` label is the signal that downstream automation (if any) should treat the ticket as long-running.
-7. **Labels.** `investigation` always. Priority labels (P0 / P1 / etc.) are NOT applied by default — investigations are scoped by *the question*, not prioritised by P-class. If the investigation is incident-driven and the operator wants a P-label, they can add one manually.
+5. **Live-doc is the working surface.** The GitHub issue tracks visibility + close state. The live-doc holds the evolving evidence + findings.
+6. **Close semantics are different from every other ticket type.** Close investigations when you resolve or explicitly drop every Follow-up action. Do NOT close them on PR merge. The `investigation` label tells downstream automation (if any) to treat the ticket as long-running.
+7. **Labels.** Always apply `investigation`. Do NOT apply priority labels (such as P0 / P1) by default. The question defines an investigation's scope, rather than P-class priority. For incident-driven investigations, operators who want a P-label can add one manually.
 8. **No close gate (no `/investigation-close` skill).** The Follow-up actions section IS the close gate. Operators close the issue when actions land. Different from `/spike --close` because investigations have an open-ended action list, not a binary disposition. See AgDR-0027 for the rationale.
-9. **Template override.** Adopters who prefer Five Whys / Fishbone over the default Hypothesis Tree drop a replacement at `<private_repo>/custom-templates/tickets/investigation.md`. The skill resolves via `portfolio_resolve_template tickets/investigation.md` — no skill changes needed.
+9. **Template override.** Adopters who prefer Five Whys / Fishbone over the default Hypothesis Tree drop a replacement at `<private_repo>/custom-templates/tickets/investigation.md`. The skill resolves via `portfolio_resolve_template tickets/investigation.md`: no skill changes needed.
 
 ## How investigations relate to other skills
 
 | Skill | Purpose | When to chain into `/investigation` |
 |-------|---------|-------------------------------------|
-| `/bug` | Immediate-fix scenario, known broken behaviour | Rare — investigations usually file bugs as follow-up actions, not the other way around |
-| `/spike` | Forward-looking hypothesis with a budget | An investigation may conclude "we need a spike to test the fix approach" — file via `/spike` as a follow-up action |
+| `/bug` | Immediate-fix scenario, known broken behaviour | Rare: investigations usually file bugs as follow-up actions, not the other way around |
+| `/spike` | Forward-looking hypothesis with a budget | An investigation may conclude "we need a spike to test the fix approach": file via `/spike` as a follow-up action |
 | `/debug` | Live debugging session (process helper) | A `/debug` session that surfaces a deeper "why did this happen" question naturally promotes to `/investigation` for the written artefact |
-| `/decide` | Record a technical decision (AgDR) | An investigation often concludes with a decision — record it via `/decide` as a follow-up action; cite the investigation from the AgDR |
+| `/decide` | Record a technical decision (AgDR) | An investigation often concludes with a decision: record it via `/decide` as a follow-up action. Cite the investigation from the AgDR |
 | `/feature` | Propose a new user-facing feature | An investigation that reveals a missing capability files a `/feature` as a follow-up action |
 | `/migration` | Migration ticket + AgDR | If the investigation's remediation is a migration, file via `/migration` (which itself produces a ticket + AgDR pair) |
 
-The bidirectional summary: investigations are usually **upstream** of other ticket types (they reveal what needs to happen); they're rarely downstream of them.
+The bidirectional summary: investigations are usually **upstream** of other ticket types (they reveal what needs to happen). They are rarely downstream of them.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

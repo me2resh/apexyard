@@ -5,14 +5,13 @@ argument-hint: "<short description of the framework feature>"
 allowed-tools: Bash, Read, Write
 ---
 
-# /request-apexyard-feature — Request a Framework Feature Upstream
+# /request-apexyard-feature: Request a Framework Feature Upstream
 
 Read `.claude/rules/writing-standard.md`. Use the **controlled technical writing profile** for the
 upstream feature request: state the outcome and reason before detail.
 
-Files a structured GitHub Issue **proposing a feature or enhancement for the
-apexyard framework itself** to the canonical upstream **`me2resh/apexyard`** —
-for a new skill, a new hook, a rule improvement, a better workflow, etc.
+File a structured GitHub Issue **proposing a feature or enhancement for the apexyard framework itself** to the canonical upstream **`me2resh/apexyard`**.
+Examples include a new skill, a new hook, a rule improvement, or a better workflow.
 
 This is the framework-feedback sibling of `/feature`. The difference is the target:
 
@@ -25,8 +24,7 @@ This is the framework-feedback sibling of `/feature`. The difference is the targ
 > NEVER include a registered private project's name, repo slug, or workspace path.
 > Per `.claude/rules/leak-protection.md`, describe the motivating context
 > generically ("while onboarding a project", "during bulk ticket filing"). The
-> `block-private-refs-in-public-repos.sh` hook is the backstop; scrub at authoring
-> time.
+> `block-private-refs-in-public-repos.sh` hook provides enforcement. Scrub the request as you write it.
 
 ## Usage
 
@@ -38,7 +36,7 @@ This is the framework-feedback sibling of `/feature`. The difference is the targ
 
 ## Process
 
-### 0. Write the active-issue-skill marker (REQUIRED — me2resh/apexyard#268)
+### 0. Write the active-issue-skill marker (REQUIRED: me2resh/apexyard#268)
 
 ```bash
 # Ops root through the session pin (docs/skills/shared/ops-root.md).
@@ -69,17 +67,18 @@ UPSTREAM=$(git remote get-url upstream 2>/dev/null \
 UPSTREAM="${UPSTREAM:-me2resh/apexyard}"
 ```
 
-If `$UPSTREAM` doesn't resolve to `me2resh/apexyard`, confirm with the user or
+If `$UPSTREAM` does not resolve to `me2resh/apexyard`, confirm with the user or
 default to the canonical slug before filing.
 
 ### 2. Capture the framework version
 
-**Do NOT use `git describe --tags --abbrev=0`.** Under the release-cut branch
-model, release tags (`vX.Y.Z`) are created on `main` and are NOT ancestors of
-`dev`, so `git describe` from a `dev` checkout reports a stale version (observed:
-`v1.1.0` when the line is actually `v2.2.0`) — every issue filed from `dev` would
-be mislabeled (#503). Derive from `CHANGELOG.md` instead, which `/release-sync`
-carries `main → dev`, so it is always current on `dev`:
+**Do NOT use `git describe --tags --abbrev=0`.** The release-cut branch model creates release tags (`vX.Y.Z`) on `main`.
+These tags are NOT ancestors of `dev`.
+Thus, `git describe` from a `dev` checkout reports a stale version.
+It reported `v1.1.0` when the current line was `v2.2.0`.
+This would mislabel every issue from `dev` (#503).
+Derive the version from `CHANGELOG.md` instead.
+`/release-sync` carries this file `main → dev`, so it is always current on `dev`:
 
 ```bash
 # Primary: top-most `## [X.Y.Z]` heading in CHANGELOG.md (carried main→dev by
@@ -99,17 +98,17 @@ fi
 
 ### 3. Gather details (one question at a time)
 
-Ask conversationally — do NOT batch. Wait for each answer.
+Ask conversationally. Do NOT batch questions. Wait for each answer.
 
-**a) The problem / friction** — what's awkward or missing in the framework today? (the *why*, not the solution)
+**a) The problem / friction**: what is awkward or missing in the framework today? (the *why*, not the solution)
 
-**b) Proposed behaviour** — what should the framework do? (new skill / hook / rule / agent / workflow change — name it concretely)
+**b) Proposed behaviour**: what should the framework do? (new skill / hook / rule / agent / workflow change: name it concretely)
 
-**c) Why it helps adopters** — who benefits and how; what they do instead today.
+**c) Why it helps adopters**: who benefits and how. Ask what they do instead today.
 
-**d) Scope hint** (optional) — anything explicitly out of scope, or a rough size.
+**d) Scope hint** (optional): anything explicitly out of scope, or a rough size.
 
-**e) Related** (optional) — existing skills/hooks it touches, related issue numbers.
+**e) Related** (optional): existing skills/hooks it touches, related issue numbers.
 
 ### 4. Show the formatted issue for confirmation
 
@@ -167,7 +166,7 @@ gh issue create --repo "$UPSTREAM" \
   --body "{formatted body}"
 ```
 
-If the `enhancement` label doesn't exist upstream, drop `--label` and note it.
+If the `enhancement` label does not exist upstream, drop `--label` and note it.
 
 ### 7. Return the URL
 
@@ -180,11 +179,11 @@ Filed upstream: <UPSTREAM>#{number} — {title}
 
 1. **One question at a time.** Never batch. Wait for each answer.
 2. **Always confirm before filing.** Show the full issue, get explicit "yes".
-3. **Scrub private project names** — this writes to a PUBLIC repo. See `.claude/rules/leak-protection.md`. Use the `<!-- private-refs: allow -->` marker ONLY on explicit user confirmation.
-4. **Always file upstream** — `me2resh/apexyard`.
-5. **Lead with the problem, not the solution** — the "why" makes a feature request actionable.
+3. **Scrub private project names**: this writes to a PUBLIC repo. See `.claude/rules/leak-protection.md`. Use the `<!-- private-refs: allow -->` marker ONLY on explicit user confirmation.
+4. **Always file upstream**: `me2resh/apexyard`.
+5. **Lead with the problem, not the solution**: the "why" makes a feature request actionable.
 6. **Label `enhancement`.** Title prefix `[Feature]`.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*
