@@ -24,8 +24,11 @@ tracker_list_to() {
   else echo '[]' > "$1"; fi
   echo "${LIST_STATUS:-COMPLETE}"
 }
+tracker_label_ensure() { echo "$2" >> "$fixture_dir/labels"; }
 tracker_create() {
   [ "$4" = security,HIGH,sla ] || return 1
+  # The forge refuses an issue with a missing label (Rex review 6011581971).
+  for label in security HIGH sla; do grep -qx "$label" "$fixture_dir/labels" 2>/dev/null || return 1; done
   echo create >> "$fixture_dir/creates"
   jq -n --rawfile body "$3" '{number:42, html_url:"https://example.invalid/issues/42",body:$body,created_at:"2026-01-01T23:59:59Z",state:"open"}' > "$fixture_dir/issue"
   echo '{"ref":"42","url":"https://example.invalid/issues/42"}'
@@ -58,6 +61,11 @@ check test "$(wc -l < "$fixture_dir/creates" | tr -d ' ')" = 1
 check jq -e '.body | contains("Due: 2026-01-31") and contains("SLA days: 30")' "$fixture_dir/first"
 DAYS_OVERRIDE=99 sla_track example/repo "$fp" HIGH 'Another PR' 'base def lockfile ADV-1' > "$fixture_dir/repeat"
 check cmp "$fixture_dir/first" "$fixture_dir/repeat"
+check test "$(wc -l < "$fixture_dir/creates" | tr -d ' ')" = 1
+# A body edited on the web has CRLF line endings; the lookup still finds it
+# and files no second issue (Hakim review 6011570709).
+jq '.body |= gsub("\n"; "\r\n")' "$fixture_dir/issue" > "$fixture_dir/crlf" && mv "$fixture_dir/crlf" "$fixture_dir/issue"
+sla_track example/repo "$fp" HIGH 'CRLF PR' 'base ghi lockfile ADV-1' > /dev/null
 check test "$(wc -l < "$fixture_dir/creates" | tr -d ' ')" = 1
 check sla_release_check example/repo owner 2026-01-31
 check reject sla_release_check example/repo owner 2026-02-01

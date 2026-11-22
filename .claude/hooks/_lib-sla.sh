@@ -77,7 +77,7 @@ sla_find_open() {
   for ref in $(printf '%s' "$issues" | jq -r '.[].ref'); do
     detail=$(sla_details "$1" "$ref") || return 1
     if printf '%s' "$detail" | jq -e --arg line "Fingerprint: $2" \
-      '.body | split("\n") | index($line) != null' >/dev/null; then
+      '.body | gsub("\r"; "") | split("\n") | index($line) != null' >/dev/null; then
       matches=$(jq -cn --argjson a "$matches" --argjson b "$detail" '$a+[$b]') || return 1
     fi
   done
@@ -108,11 +108,15 @@ sla_track() (
   printf 'Fingerprint: %s\nSeverity: %s\nSLA days: %s\nDue: pending\n\nBase proof: %s\n' \
     "$fp" "$severity" "$days" "$proof" > "$tmp"
   [ "$(tracker_issue_kind "$repo")" = gh ] || return 1
+  # The forge refuses an issue with a missing label, so create each one first.
+  tracker_label_ensure "$repo" security || return 1
+  tracker_label_ensure "$repo" "$severity" || return 1
+  tracker_label_ensure "$repo" sla || return 1
   created=$(tracker_create "$repo" "Security SLA: $title" "$tmp" "security,$severity,sla") || return 1
   ref=$(printf '%s' "$created" | jq -er '.ref | select(type=="string" and length>0)') || return 1
   record=$(sla_details "$repo" "$ref") || return 1
   printf '%s' "$record" | jq -e --arg line "Fingerprint: $fp" \
-    '.body | split("\n") | index($line) != null' >/dev/null || return 1
+    '.body | gsub("\r"; "") | split("\n") | index($line) != null' >/dev/null || return 1
   first=$(printf '%s' "$record" | jq -er '.createdAt') || return 1
   due=$(sla_due_date "$first" "$days") || return 1
   printf 'Fingerprint: %s\nSeverity: %s\nSLA days: %s\nDue: %s\n\nBase proof: %s\n' \
