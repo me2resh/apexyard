@@ -188,15 +188,18 @@ test("a custom gate hook that exits 0 allows the call", async () => {
 
 test("FAILS CLOSED: a hook whose output exceeds maxBuffer (execution-layer error, no numeric exit status) is BLOCKED, not silently allowed", () => {
   const opsRoot = makeIsolatedOpsRoot();
-  // A hook that emits well more output than a deliberately tiny maxBuffer,
-  // simulating the ENOBUFS class of failure Rex flagged: execFileSync
-  // throws with no `status` field at all (not exit code 0, not exit code
-  // 2 — an execution-layer failure). Fixed semantics must BLOCK this,
-  // not treat the "no status" case as an implicit allow.
-  writeFileSync(join(opsRoot, ".claude", "hooks", "noisy.sh"), "#!/bin/bash\nyes | head -c 100000\nexit 0\n", { mode: 0o755 });
+  const maxBufferBytes = 1024;
+  // A small producer can exit before Node detects overflow, leaving status 0.
+  // Write 4 MiB synchronously, well above both maxBuffer and pipe capacity.
+  // The producer must still be writing when Node detects ENOBUFS and kills it.
+  // exec replaces bash so no successful shell exit can race with that kill.
+  const hook = `#!/bin/bash
+exec ${JSON.stringify(process.execPath)} -e 'require("node:fs").writeFileSync(1, Buffer.alloc(${maxBufferBytes * 4096}))'
+`;
+  writeFileSync(join(opsRoot, ".claude", "hooks", "noisy.sh"), hook, { mode: 0o755 });
   const gate: GateDefinition = { name: "noisy", hookRelativePath: ".claude/hooks/noisy.sh", wires: [{ tool: "bash", commandGlob: null }] };
 
-  const result = runGateHook(opsRoot, gate, { command: "anything" }, "Bash", /* maxBufferBytes */ 1024);
+  const result = runGateHook(opsRoot, gate, { command: "anything" }, "Bash", maxBufferBytes);
   assert.equal(result?.block, true, "an execution-layer failure (ENOBUFS) must fail CLOSED, not open");
   assert.match(result?.reason ?? "", /could not be evaluated/);
   assert.match(result?.reason ?? "", /noisy/);
