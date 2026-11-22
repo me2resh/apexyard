@@ -129,6 +129,13 @@ check 2 "live mv onto a new docs/.agents" run_bash "$L" 'mv x docs/.agents'
 check 2 "live git mv onto a new docs/.agents" run_bash "$L" 'git mv x docs/.agents'
 check 2 "live mv onto a worktree's new docs/.agents" run_bash "$L" 'mv x .claude/worktrees/wt/docs/.agents'
 check 2 "live mv onto a new root .agents" run_bash "$L" 'mv x .agents'
+# The hook's own working directory can differ from the command's directory.
+# A folder there must not make a new target look like an existing folder.
+in_dir() { local d="$1"; shift; ( cd "$d" && "$@" ); }
+mkdir -p "$TMP/hookcwd/.agents" "$TMP/hookcwd/docs/.agents"
+check 2 "live mv onto a new root .agents, with .agents in the hook's directory" in_dir "$TMP/hookcwd" run_bash "$L" 'mv x .agents'
+check 2 "live mv onto a new docs/.agents, with docs/.agents in the hook's directory" in_dir "$TMP/hookcwd" run_bash "$L" 'mv x docs/.agents'
+rm -rf "$TMP/hookcwd"
 check 0 "live mv to a new plain name stays allowed" run_bash "$L" 'mv x newname'
 check 0 "live mv inside docs stays allowed" run_bash "$L/docs" 'mv a b'
 check 0 "live mv into an existing docs/ stays allowed" run_bash "$L" 'mv x docs/'

@@ -116,6 +116,13 @@ pt_expand() {
   done
   printf '%s' "$value"
 }
+# A relative operand is a path under the command's directory, PT_CWD. It is
+# never a path under this hook's own working directory, which can differ.
+pt_is_dir() {
+  local value
+  value=$(pt_expand "$1")
+  case "$value" in /*) [ -d "$value" ] ;; *) [ -d "$PT_CWD/$value" ] ;; esac
+}
 # An unresolved operand that names protected state blocks.
 pt_unresolved_nocase() {
   case "$1" in *settings.json*|*settings.local.json*|*.claude/hooks*|*.claude/apexyard*|*ops-root-*|*gate-session-*|*session-env/*|*shell-snapshots/*) pt_block 'unresolved protected operand.' ;; esac
@@ -320,7 +327,7 @@ pt_operands() {
       if [ -n "$target" ]; then dest="$target"; else dest=${inputs[${#inputs[@]}-1]}; unset 'inputs[${#inputs[@]}-1]'; fi
       case "$verb" in rsync|ditto) recursive=1 ;; ln|link) recursive=1 ;; esac
       if [ "$recursive" = 1 ]; then pt_judge "$dest" 1
-      elif [ -n "$target" ] || [ -d "$(pt_expand "$dest")" ] || [ -d "$PT_CWD/$(pt_expand "$dest")" ]; then
+      elif [ -n "$target" ] || pt_is_dir "$dest"; then
         for arg in "${inputs[@]}"; do pt_judge "$dest/$(basename "$arg")"; done
       else
         # A move onto a target that is not an existing directory renames the
