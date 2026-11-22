@@ -123,6 +123,19 @@ pt_is_dir() {
   value=$(pt_expand "$1")
   case "$value" in /*) [ -d "$value" ] ;; *) [ -d "$PT_CWD/$value" ] ;; esac
 }
+# Judge each protected name as a direct child of folder $1. The names are
+# the core state, the pin files and the last part of each agy wiring path.
+pt_judge_children() {
+  local c rel
+  # An unresolved folder is the AgDR-0267 residual; a child name built from
+  # it would only trip the unresolved-name check.
+  case "$1" in *'$'*|*'`'*) return 0 ;; esac
+  for c in settings.json settings.local.json hooks hooks.json plugins.json plugins session-env shell-snapshots ops-root-x gate-session-x resolve-cache-x projctx; do
+    pt_judge "$1/$c"
+  done
+  for rel in "${PT_ADAPTER_WIRING[@]}"; do pt_judge "$1/${rel##*/}"; done
+  [ -z "${CLAUDE_ENV_FILE:-}" ] || pt_judge "$1/${CLAUDE_ENV_FILE##*/}"
+}
 # An unresolved operand that names protected state blocks.
 pt_unresolved_nocase() {
   case "$1" in *settings.json*|*settings.local.json*|*.claude/hooks*|*.claude/apexyard*|*ops-root-*|*gate-session-*|*session-env/*|*shell-snapshots/*) pt_block 'unresolved protected operand.' ;; esac
@@ -294,7 +307,7 @@ pt_git() {
   return 0
 }
 pt_operands() {
-  local verb="$1" i="${2:-1}" arg target="" recursive=0 removing=0 dest moved=0 exact=1 fold=2 rel role=0 inputs=() extract=0 cdirs=0 absolute=0 output="" in_place=0 tar_file=""
+  local verb="$1" i="${2:-1}" arg target="" recursive=0 removing=0 dest moved=0 exact=1 fold=2 loose=0 rel role=0 inputs=() extract=0 cdirs=0 absolute=0 output="" in_place=0 tar_file=""
   while [ "$i" -lt "${#words[@]}" ]; do
     arg=${words[$i]}; i=$((i+1))
     case "$arg" in
@@ -358,16 +371,22 @@ pt_operands() {
       # only (role 2), as before the agy wiring, when each source is a
       # literal path. So a copy or link into bin/ still passes. A source that
       # can land at another name is judged against the folder in full: a
-      # glob, a brace, a variable, a contents copy (a trailing / or /.), any
-      # ditto, or a flag such as -T, --parents or --relative.
-      fold=2
+      # contents copy (a trailing / or /.), any ditto, a flag such as -T,
+      # --parents or --relative, and a recursive glob, brace or variable.
+      fold=2 loose=0
       [ "$exact" = 1 ] || fold=1
       [ "$verb" != ditto ] || fold=1
       for arg in "${inputs[@]}"; do
-        case "$arg" in */|*/.|*/./*|*[*?[]*|*'{'*|*'$'*|*'`'*) fold=1 ;; esac
+        case "$arg" in *[*?[]*|*'{'*|*'$'*|*'`'*) loose=1 ;; esac
+        if [ "$recursive" = 1 ]; then case "$arg" in */|*/.|*/./*) fold=1 ;; esac; fi
       done
+      [ "$recursive" = 0 ] || [ "$loose" = 0 ] || fold=1
       if [ -n "$target" ] || pt_is_dir "$dest"; then
         if [ "$recursive" = 1 ] || [ "$fold" = 1 ]; then pt_judge "$dest" "$fold"; fi
+        # A plain copy, or a move into a folder, replaces direct children of
+        # the folder only. With a glob or a variable source, each protected
+        # name is judged as a child of the folder, so cp x/* . still passes.
+        if [ "$recursive" = 0 ] && [ "$loose" = 1 ]; then pt_judge_children "$dest"; fi
         for arg in "${inputs[@]}"; do
           pt_judge "$dest/$(basename "$arg")" "$moved"
           # --parents and --relative keep the source path under the folder.

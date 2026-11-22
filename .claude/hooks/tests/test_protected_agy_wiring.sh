@@ -204,6 +204,15 @@ check 2 "unresolved removal of harness-adapters" run_bash "$L" 'rm -rf $D/harnes
 check 0 "unresolved removal of a bin folder stays allowed" run_bash "$L" 'rm -rf $BUILD/bin'
 check 0 "unresolved copy into .agents/skills stays allowed" run_bash "$L" 'cp -R x $D/.agents/skills'
 check 0 "unresolved write to a plain file stays allowed" run_bash "$L" 'cp x $D/docs/notes.txt'
+# A plain copy or move replaces direct children of the folder only.
+check 0 "live cp of a glob into the fork root stays allowed" run_bash "$L" "cp $S/*.json ."
+check 0 "live cp of a variable into the fork root stays allowed" run_bash "$L" 'cp $X .'
+check 0 "live mv of a glob into the fork root stays allowed" run_bash "$L" "mv $S/* ."
+check 0 "live mv of a glob into docs/ stays allowed" run_bash "$L" "mv $S/*.md docs/"
+check 0 "live cp -t of an unresolved folder with a glob stays allowed" run_bash "$L" 'cp -t $OUT x/*'
+check 2 "live cp of a glob into bin/" run_bash "$L" "cp $S/* bin/"
+check 2 "live cp of a variable into bin/" run_bash "$L" 'cp $X bin/'
+check 2 "live cp of a glob into .claude/" run_bash "$L" "cp $S/* .claude/"
 check 0 "live cp of a glob into docs/ stays allowed" run_bash "$L" "cp $S/*.txt docs/"
 check 0 "live cp -R of a glob into docs/ stays allowed" run_bash "$L" "cp -R $S/* docs/"
 rmdir "$L/bin" "$L/harness-adapters" "$L/.agents"
