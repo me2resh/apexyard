@@ -13,7 +13,7 @@ Reusable GitHub Actions workflows that integrate ApexYard's automated agents int
 | `swift-ci.yml` | Rex | Swift Package Manager build + guarded test (macOS runner) | Every PR, push to default branch |
 | `terraform-ci.yml` | Platform | Terraform/Terramate AWS mono-repo: fmt/validate/tflint/tfsec → per-stack plan (PR comment) → apply on main (OIDC) | Every PR, push to main |
 | `macos-release.yml` | Platform | macOS desktop app: build → Developer-ID sign → notarize + staple → package `.dmg` → GitHub Release | Version tag (`v*`), manual dispatch |
-| `review-check.yml` | Rex (verification) | Block merge if Rex hasn't reviewed the latest commit | Every PR + review event |
+| `review-check.yml` | Rex (verification) | Block merge if Rex has not reviewed the latest commit | Every PR + review event |
 | `seo-check.yml` | SEO Check | SEO analysis for content files | Content changes |
 | `auto-tag-on-release-pr-merge.yml` | CI | Auto-tag squash commit + create GitHub Release when a `release/v*` PR merges | PR closed (merged) |
 | `refresh-ready-prs.yml` | Rex | Refresh the oldest eligible behind PR and remove stale readiness labels | Integration push, PR synchronize |
@@ -50,7 +50,7 @@ cp ~/apexyard/golden-paths/pipelines/ci.yml .github/workflows/
 
 ### PR Title Check (`pr-title-check.yml`)
 
-**Purpose**: Governance — enforce ticket tracking.
+**Purpose**: Governance: enforce ticket tracking.
 
 **Checks performed**:
 
@@ -96,7 +96,7 @@ cp ~/apexyard/golden-paths/pipelines/ci.yml .github/workflows/
 
 **Agent**: Guardian (Dependency Auditor)
 
-**Ecosystems** (AgDR-0176 / issue #1359): npm and Python via a finite runner map. Other ecosystems stay out of scope for this first pass. Helper revision 4 lists known unsupported manifests in `not_scanned`. The helper exits 3 for those files only when no npm or Python dependency set is selected for checks and no `--ecosystem` filter is set. A Critical finding still exits 1. Every other case keeps the normal exit code.
+**Ecosystems** (AgDR-0176 / issue #1359): npm and Python via a finite runner map. Other ecosystems stay out of scope for this first pass. Helper revision 4 lists known unsupported manifests in `not_scanned`. The helper exits 3 for those files only under both conditions: no selected npm or Python dependency set, and no `--ecosystem` filter. A Critical finding still exits 1. Every other case keeps the normal exit code.
 
 **Checks performed**:
 
@@ -169,7 +169,7 @@ uv pip compile --python-version 3.12 --python-platform x86_64-unknown-linux-gnu 
 
 **Agent**: Rex (verification)
 
-**Purpose**: prevent merging code that was pushed *after* Rex's last review.
+**Purpose**: prevent merging code that an author pushed *after* Rex's last review.
 
 **Checks performed**:
 
@@ -185,7 +185,7 @@ uv pip compile --python-version 3.12 --python-platform x86_64-unknown-linux-gnu 
 
 ### SEO Check (`seo-check.yml`)
 
-**Pipeline**: SEO Check (no agent — pure CI workflow)
+**Pipeline**: SEO Check (no agent, CI workflow only)
 
 **Checks performed**:
 
@@ -214,7 +214,7 @@ uv pip compile --python-version 3.12 --python-platform x86_64-unknown-linux-gnu 
 
 **Role**: Platform Engineer (Adel)
 
-**For**: an AWS Terraform mono-repo orchestrated with [Terramate](https://terramate.io/), with per-stack remote state and keyless OIDC auth to AWS. It is a **copy-and-customize** template — unlike the Node pipelines, it has `# CUSTOMIZE` markers you must edit before it runs.
+**For**: an AWS Terraform mono-repo orchestrated with [Terramate](https://terramate.io/), with per-stack remote state and keyless OIDC auth to AWS. It is a **copy-and-customize** template. Unlike the Node pipelines, it has `# CUSTOMIZE` markers. Edit these before you run it.
 
 **Pipeline shape**:
 
@@ -230,35 +230,35 @@ tfsec       ┘                              • plan-only on branches   • OID
 - `terraform fmt -check -recursive`
 - `terraform validate` on changed stacks (`terramate run --changed`)
 - `tflint` on changed stacks
-- `tfsec` on changed stacks (soft-fail by default — see customize note)
+- `tfsec` on changed stacks (soft-fail by default, see customize note)
 - Change-detection via `terramate list --changed`, fanned out to a per-stack plan/apply matrix with isolated state + retry-on-lock-contention
 
 **Branch behaviour**:
 
-- **Feature branches / PRs** — plan only; the rendered plan is posted as a PR comment per stack. Nothing is applied.
-- **`main`** — plan, then `terraform apply -auto-approve` per changed stack.
+- **Feature branches / PRs**: plan only. The workflow posts the rendered plan as a PR comment per stack. It applies no changes.
+- **`main`**: plan, then `terraform apply -auto-approve` per changed stack.
 
 **Required secrets / vars** (set in the consuming repo):
 
 | Name | What |
 |------|------|
 | `AWS_CI_ROLE_ARN` (secret) | Full ARN of the IAM role GitHub Actions assumes via OIDC. **Never hardcode an account ID in the workflow.** |
-| `AWS_REGION` (env in file) | Your AWS region — edit the `env:` block. |
-| Provider tokens (secrets) | Any provider/`TF_VAR_*` your stacks need (e.g. a DNS provider token) — wire them in the commented `env:` of the plan/apply steps. |
+| `AWS_REGION` (env in file) | Your AWS region. Edit the `env:` block. |
+| Provider tokens (secrets) | Any provider/`TF_VAR_*` your stacks need (e.g. a DNS provider token). Add them to the commented `env:` of the plan/apply steps. |
 
 **Prerequisites (NOT provisioned by this template)**:
 
-- The OIDC IAM role itself must already exist in your AWS account, with a trust policy scoped to your repo. The pipeline *assumes* the role; it does not create it.
+- The OIDC IAM role itself must already exist in your AWS account, with a trust policy scoped to your repo. The pipeline *assumes* the role. It does not create it.
 - A Terraform backend (e.g. S3 + DynamoDB lock) configured per stack.
 - Terramate stacks defined in the repo.
 
 **`# CUSTOMIZE` points** (search the file):
 
 - Tool versions (`TERRAMATE_VERSION`, `TF_VERSION`), `AWS_REGION`, `AWS_CI_ROLE_ARN`.
-- The matrix-JSON `jq` block — adjust to your stack-path layout (the default assumes `<root>/<environment>/<account-slug>/<stack>`).
+- The matrix-JSON `jq` block: adjust to your stack-path layout (the default assumes `<root>/<environment>/<account-slug>/<stack>`).
 - The optional **stack-exclusion** filter in `detect-stacks` (`EXCLUDE` grep pattern).
-- The optional **pre-plan/apply build hook** (e.g. building Lambda bundles) — commented out; delete if unused.
-- `tfsec --soft-fail` — drop the flag to make security findings block.
+- The optional **pre-plan/apply build hook** (e.g. building Lambda bundles) appears in comments. Delete it if unused.
+- `tfsec --soft-fail`: remove the flag to make security findings block.
 
 ---
 
@@ -266,7 +266,7 @@ tfsec       ┘                              • plan-only on branches   • OID
 
 **Role**: Platform Engineer (Adel)
 
-**For**: shipping a signed, notarized macOS desktop app. It is the **release** half of the macOS golden path — pair it with `swift-ci.yml`, which handles PR-time build + test. Copy-and-customize (it has `# CUSTOMIZE` markers you must edit before it runs).
+**For**: shipping a signed, notarized macOS desktop app. It is the **release** half of the macOS golden path. Pair it with `swift-ci.yml`, which builds and tests PRs. Copy-and-customize (it has `# CUSTOMIZE` markers you must edit before it runs).
 
 **Pipeline shape**:
 
@@ -275,7 +275,7 @@ tag v* ─► import Developer-ID cert (ephemeral keychain) ─► build .app �
           (hardened runtime) ─► notarize + staple (notarytool) ─► package .dmg ─► GitHub Release
 ```
 
-**Trigger**: a version tag push (`v*`); also `workflow_dispatch` with a `publish` toggle (build without releasing, e.g. to smoke-test signing).
+**Trigger**: a version tag push (`v*`). Also supports `workflow_dispatch` with a `publish` toggle to build without releasing, for example to smoke-test signing.
 
 **Required secrets** (set in the consuming repo):
 
@@ -283,7 +283,7 @@ tag v* ─► import Developer-ID cert (ephemeral keychain) ─► build .app �
 |------|------|
 | `MACOS_CERTIFICATE_P12_BASE64` | base64 of your **Developer ID Application** cert exported as `.p12`. |
 | `MACOS_CERTIFICATE_PASSWORD` | the `.p12` export password. |
-| `KEYCHAIN_PASSWORD` | any random string — the ephemeral keychain's password. |
+| `KEYCHAIN_PASSWORD` | Any random string for the ephemeral keychain's password. |
 | `AC_API_KEY_ID` / `AC_API_ISSUER_ID` / `AC_API_KEY_P8_BASE64` | App Store Connect **API key** used by `notarytool` (Key ID, Issuer ID, and base64 of the `.p8`). The app-specific-password path is the documented alternative. |
 
 **Prerequisites (NOT provisioned by this template)**:
@@ -295,11 +295,11 @@ tag v* ─► import Developer-ID cert (ephemeral keychain) ─► build .app �
 **`# CUSTOMIZE` points** (search the file):
 
 - `APP_NAME` / `SCHEME` / `BUNDLE_ID` / `CONFIGURATION` / `XCODE_VERSION`.
-- The **build step** — `xcodebuild` (shown) vs `swift build` + assembling a `.app`.
-- The **packaging step** — `.dmg` via `create-dmg` (shown) vs a plain `.zip`.
+- The **build step**: `xcodebuild` (shown) vs `swift build` + assembling a `.app`.
+- The **packaging step**: `.dmg` via `create-dmg` (shown) vs a plain `.zip`.
 - The release-tag pattern in `on.push.tags`.
 
-**Security notes**: the signing identity is imported into an **ephemeral keychain** that's deleted in an `always()` cleanup step; secrets are never echoed; `permissions:` is `contents: read` except the release step which gets `contents: write`. Out of scope (documented extension points): Sparkle auto-update feeds, Mac App Store submission, and DMG background/layout design.
+**Security notes**: the workflow imports the signing identity into an **ephemeral keychain**. An `always()` cleanup step deletes the keychain. The workflow never echoes secrets. `permissions:` is `contents: read` except for the release step, which gets `contents: write`. Out of scope (documented extension points): Sparkle auto-update feeds, Mac App Store submission, and DMG background/layout design.
 
 ---
 
@@ -356,11 +356,11 @@ Ensure your `package.json` has these scripts:
 
 ## Best Practices
 
-1. **Start with `code-quality.yml`** — basic quality gates
-2. **Add `security.yml` early** — catch vulnerabilities before production
-3. **Enable `dependency-audit.yml`** — weekly health checks
-4. **Add `review-check.yml`** — once you have agents reviewing PRs
-5. **Add `seo-check.yml` for content sites** — optimise discoverability
+1. **Start with `code-quality.yml`** for basic quality gates.
+2. **Add `security.yml` early** to detect vulnerabilities before production.
+3. **Enable `dependency-audit.yml`** for weekly health checks.
+4. **Add `review-check.yml`** once agents review your PRs.
+5. **Add `seo-check.yml` for content sites** to improve discoverability.
 
 ### Refresh Ready PRs (`refresh-ready-prs.yml`)
 
@@ -376,7 +376,7 @@ Configure `APEXYARD_BOT_TOKEN` with repository contents and pull-request write a
 Without this secret, the workflow uses `GITHUB_TOKEN` and logs the CI limitation.
 GitHub suppresses new workflow runs for pushes made with `GITHUB_TOKEN`.
 Refresh failures produce one comment per head SHA. The orchestrator resolves conflicts.
-The workflow skips fork PRs. It does not refresh them, and it does not remove their label after a new commit, because a fork run has a read-only token.
+The workflow skips fork PRs because a fork run has a read-only token. It does not refresh them. It does not remove their label after a new commit.
 Treat the Rex marker SHA as the reviewed head for a fork PR. Update a fork branch only with the user's approval.
 The workflow never grants merge approval. Existing carry-over checks and per-PR human approval still apply.
 

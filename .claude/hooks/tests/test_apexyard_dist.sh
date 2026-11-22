@@ -115,6 +115,11 @@ check exact-archive cmp "$sb/expected" "$sb/actual"
 /bin/bash "$root/bin/build-release-assets.sh" "$APEXYARD_VERSION" "$sb/rebuild"
 check reproducible cmp "$archive" "$sb/rebuild/apexyard-$APEXYARD_VERSION.tar.gz"
 workflow="$root/.github/workflows/release-cli.yml"
+# The release ships the tested CLI archive from build-release-assets.sh.
+# A second step must never rebuild it from the whole repository (#2120,
+# Rex review 6012429279): that archive grew to 5.1 MB with .apexyard-fork.
+check release-keeps-tested-archive bash -c '! grep -Eq "git archive|> \"?dist/apexyard-" "$1"' _ "$workflow"
+check archive-has-no-fork-anchor bash -c '! tar -tzf "$1" | grep -q "\.apexyard-fork$"' _ "$archive"
 sed -n '/^on:/,/^permissions:/p' "$workflow" > "$sb/trigger"
 check reusable grep -q '^  workflow_call:' "$sb/trigger"
 check no-tag-push bash -c '! grep -Eq "^  push:|pull_request" "$1"' _ "$sb/trigger"

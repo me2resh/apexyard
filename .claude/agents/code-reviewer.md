@@ -173,6 +173,29 @@ Advisory findings include a self-bypass edge case, a pre-existing gap the diff d
 
 This bar governs the checklist sections below (§§ 1–5), an advisory Handbook Finding, and the Fallow Findings. It does not narrow the Acceptance Criteria check, the Technical Decisions (AgDR) check, the mandatory Glossary requirement in § 6, a handbook marked `ENFORCEMENT: blocking` (§ 8), or rail 1 of `.claude/rules/right-size-ceremony.md` — each of those already states its own BLOCKING rule and stays blocking under it.
 
+## Regression check per blocker (me2resh/apexyard#2091)
+
+For each `Important` finding, state whether a test or a codified rule can
+catch this blocker again. Add a `Regression check:` field to that finding's
+line, in the exact form `templates/REVIEW.md` § "Important" states. Use one
+of these three forms:
+
+- `Regression check: test <path or name> must fail on <short sha>` — a test must fail against the reviewed commit.
+- `Regression check: rule <handbook path>` — a `/codify-rule` handbook entry covers it instead.
+- `Regression check: none possible — <reason>` — no test or rule can catch this class of blocker.
+
+Use the reviewed commit's short SHA (7 characters) in the test form. A
+finding that a test can catch gets the test form, not the rule form — pick
+the rule form only when a handbook entry, not a test, is the right catch.
+
+On a delta re-review of the fix, confirm the regression check before you
+treat the finding as resolved:
+
+1. Run the named test against the prior reviewed SHA (the old commit). Confirm it fails.
+2. Run the same test against the current HEAD. Confirm it passes.
+3. Report both results in Validation, with the commands and their output. A missing or unconfirmed regression test keeps the finding open — do not approve on the author's unverified claim that it fails on the old commit.
+4. For a `rule` form, confirm the handbook file exists at the stated path instead of running a test.
+
 ## Review bar for gate PRs (me2resh/apexyard#1845, AgDR-0267)
 
 The shell-text gates are guardrails against honest mistakes. They are not a security boundary against a hostile or prompt-injected actor. See [AgDR-0267](../../docs/agdr/AgDR-0267-shell-text-gates-are-guardrails.md) and AgDR-0115.
@@ -869,6 +892,7 @@ Not covered by the checks: [What CI and tests do not prove for this diff, includ
 12. **Acceptance criteria are BLOCKING** — read every linked issue on every review. A Not met criterion means CHANGES REQUESTED and no approval marker. See § "Acceptance Criteria".
 13. **A finding blocks only under the Blocking-Severity Bar** — see § "Blocking-Severity Bar". The Acceptance Criteria check, the AgDR check, the mandatory Glossary (§ 6), and a handbook marked `ENFORCEMENT: blocking` each stay blocking under their own rule.
 14. **A re-review is a delta re-review by default** — per § "Delta Re-Reviews". Read CI's own check-run result once, per § "CI Ownership of the Test Suite". The two-round cap stops a NEW round only for a non-blocking finding.
+15. **Every Important finding carries a Regression check field** — see § "Regression check per blocker". On re-review, confirm the test fails on the old commit and passes at head before closing the finding.
 
 ## Example Invocation
 

@@ -12,6 +12,17 @@ Keep the Blocking-Severity Bar and all security rules in effect.
 Tag blocking acceptance criteria, AgDR, glossary, and handbook violations Important.
 Example: A changed access check lets an unauthorised user read private data.
 
+Each Important finding carries a `Regression check:` field (me2resh/apexyard#2091).
+State whether a test or a codified rule can catch this blocker again. Use one
+of these three forms:
+
+- `Regression check: test <path or name> must fail on <short sha>` — a test must fail against the reviewed commit.
+- `Regression check: rule <handbook path>` — a `/codify-rule` handbook entry covers it instead.
+- `Regression check: none possible — <reason>` — no test or rule can catch this class of blocker.
+
+On a re-review, confirm the regression test fails on the old commit and
+passes at the new head before you treat the finding as resolved.
+
 ## Nit
 
 A Nit suggests an improvement that does not meet a blocking rule.
@@ -40,6 +51,15 @@ An active security vulnerability still requires the existing security response.
 
 Count every finding. List at most five nits.
 Report other nits as `Additional nits: N`.
-Use `- Important: <finding and evidence>` for a blocking finding.
+Use `- Important: <finding and evidence> Regression check: <field>` for a blocking finding.
 Use `- Nit: <finding and evidence>` for an advisory finding.
 Use `- Pre-existing: <finding and base evidence>. Suggested ticket title: <title>` for an existing problem.
+
+## Security tracking fields
+
+Each Pre-existing CRITICAL, HIGH, or MEDIUM line includes `Fingerprint: <fp>` and `Base proof: <short evidence>`.
+Base proof identifies the base commit and the matching dependency advisory or code.
+Without this proof, treat the finding as new and block the PR.
+Hakim hands untracked findings to the orchestrator. Only the orchestrator files the SLA issue.
+Repeat findings reference the existing open issue and preserve its due date.
+See `.claude/hooks/_lib-sla.sh` and the security review instructions for the field format.

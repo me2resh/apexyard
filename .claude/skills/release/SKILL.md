@@ -36,6 +36,30 @@ Verify:
 - `dev` branch exists (`git rev-parse --verify upstream/dev`). Refuse if absent — adopt the dev/main model first.
 - `dev` is ahead of `main` by ≥ 1 commit. Refuse if equal — nothing to release.
 
+### 1a. Check security remediation SLAs (blocking)
+
+Run this check during pre-flight, including dry runs:
+
+```bash
+bash bin/check-security-sla.sh me2resh/apexyard me2resh
+```
+
+The second argument is the trusted owner's tracker login. Confirm it against the approved ownership record.
+For another repository, supply its repository and approved owner login.
+Stop on any non-zero exit. Tracker errors, incomplete lists, and malformed records block the release.
+The script lists open `sla` issues and their deadline status.
+An issue breaches its SLA after its due date, using UTC calendar dates.
+A fix closes the issue. Otherwise, the owner must comment on that issue with this exact marker line:
+
+```text
+Risk accepted by owner: <non-empty reason>
+```
+
+Only a comment authored by the supplied owner login counts. Quoted or embedded markers do not count.
+A review, issue body, or comment from another account cannot accept risk.
+Repeat the check immediately before the release merge. Stop if the result changes.
+See AgDR-0314 for the record format and failure rules.
+
 ### 2. Pick a version
 
 If `<version>` arg was passed, use it (must match `v\d+\.\d+\.\d+`).
@@ -361,6 +385,9 @@ When the release PR is squash-merged to `main`, the `.github/workflows/auto-tag-
 3. Runs the ancestry guard: `git merge-base --is-ancestor <sha> main`.
 4. Creates an annotated tag and pushes it with `git push origin --tags`.
 5. Creates a GitHub Release entry from the CHANGELOG section in the PR body (in the same job — a tag pushed via GITHUB_TOKEN does not trigger a secondary release workflow).
+6. Calls `release-cli.yml` to attach the tested CLI archive `apexyard-<tag>.tar.gz` from `bin/build-release-assets.sh`.
+   A retry uploads only missing assets, so download counts survive (AgDR-0318).
+   Retries preserve existing assets and their download counts.
 
 **No manual tagging required** after merge. The workflow handles it.
 
@@ -386,12 +413,19 @@ fi
 git push upstream --tags
 ```
 
+The manual fallback must also run `release-cli.yml` with the existing tag:
+
+```bash
+gh workflow run release-cli.yml --repo me2resh/apexyard -f tag=vA.B.C
+```
+
 #### Post-tag release checklist
 
 Verify all four assertions hold (the first three: CI workflow also checks these; the fourth: step 6's verification above, repeated here so it isn't lost if step 6 was skipped):
 
 - [ ] `git merge-base --is-ancestor vA.B.C upstream/main` exits 0
 - [ ] `git describe --tags --abbrev=0 upstream/main` returns `vA.B.C`
+- [ ] The release contains `apexyard-vA.B.C.tar.gz` and its checksum.
 - [ ] GitHub Release entry exists at `https://github.com/me2resh/apexyard/releases/tag/vA.B.C`
 - [ ] `git log -1 --pretty=format:'%(trailers:key=Released-From,valueonly)' vA.B.C` is **non-empty** (#1004) — if empty, STOP before running `/release-sync`; the next release's changelog range will silently degrade to the sync-boundary heuristic
 
