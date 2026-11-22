@@ -129,6 +129,9 @@ printf 'repo-only attachment\n' > "$tmp/product/.claude/skills/example/local.txt
 printf 'imported edit\n' >> "$tmp/product/.claude/skills/example/SKILL.md"
 run --rescue --from "$tmp/product/.claude" --apply
 check 'import shared edit copied' 'grep -q "imported edit" "$repo/custom-skills/example/SKILL.md"'
+# The overlay replaces the whole skill folder, so an import keeps the pinned
+# supporting files (Hakim review 6012275255).
+check 'import keeps pinned supporting files' '[ -f "$repo/custom-skills/example/helper.sh" ] && grep -q "supporting file" "$repo/custom-skills/example/helper.sh"'
 check 'import copies only planned files' '[ ! -e "$repo/custom-skills/example/local.txt" ] && grep -q "repo-only.*example/local.txt.*stay" "$tmp/out"'
 check 'import source preserved' 'grep -q "imported edit" "$tmp/product/.claude/skills/example/SKILL.md"'
 reset

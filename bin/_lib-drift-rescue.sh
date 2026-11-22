@@ -212,6 +212,13 @@ drift_report() {
       mkdir -p "$(dirname "$dest")" || return 2
       if [ -z "$import_from" ]; then
         cp -Rp "$source/$path" "$dest" || return 2
+      else
+        # Import: start from the complete pinned framework folder, so the
+        # overlay keeps the skill's supporting files. The changed files are
+        # copied over it below (Hakim review 6012275255).
+        rm -rf "$scratch/pinned-skill" && mkdir -p "$scratch/pinned-skill" "$dest" || return 2
+        git -C "$repo" archive "$base" "$path" | tar -x -C "$scratch/pinned-skill" || return 2
+        cp -Rp "$scratch/pinned-skill/$path/." "$dest/" || return 2
       fi
     done < "$scratch/rescue-skills"
     while IFS=$'\t' read -r path dest b; do
