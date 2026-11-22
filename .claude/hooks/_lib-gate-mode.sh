@@ -34,7 +34,8 @@ gate_mode_resolve() {
         break
       fi
       if [ -e "$file" ] || [ -L "$file" ]; then
-        if [ ! -f "$file" ] || [ ! -r "$file" ] || ! jq empty "$file" >/dev/null 2>&1; then
+        # An empty, null, array or scalar file is broken too: require one object.
+        if [ ! -f "$file" ] || [ ! -r "$file" ] || ! jq -e 'type == "object"' "$file" >/dev/null 2>&1; then
           failed=1
           break
         fi

@@ -41,6 +41,14 @@ printf '{}\n' > "$TMP/.claude/project-config.json"
 printf '{broken\n' > "$TMP/.claude/project-config.defaults.json"
 check 'broken defaults JSON' enforce 1
 printf '{}\n' > "$TMP/.claude/project-config.defaults.json"
+# A file that parses but is not one object is broken too (Rex review 6011064781).
+: > "$TMP/.claude/project-config.json"
+check 'empty override file' enforce 1
+for bad in 'null' '[]' '"observe"' '42'; do
+  printf '%s\n' "$bad" > "$TMP/.claude/project-config.json"
+  check "override file holding $bad" enforce 1
+done
+printf '{}\n' > "$TMP/.claude/project-config.json"
 chmod 000 "$TMP/.claude/project-config.json"
 check 'unreadable config' enforce 1
 chmod 600 "$TMP/.claude/project-config.json"
