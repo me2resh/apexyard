@@ -1,6 +1,6 @@
 # Harness support: agy (Antigravity CLI)
 
-**Status:** ✅ **Live-checked on the fork build (2026-11-21) and on this port (2026-11-22)** for `run_command`, `write_file`, `edit_file`, `read_file`, and SessionStart. The contributor ran agy CLI 1.5.14 against both. In each check, a real turn's `git add -A` got `deny` from the unmodified `dispatch-bash.sh`, and nothing was staged. Edits to `.claude/settings.json` got `deny` from `block-protected-target-writes.sh`. Decision record: [AgDR-0314](../agdr/AgDR-0314-agy-harness-adapter.md).
+**Status:** ✅ **Live-checked on the fork build (2026-11-21) and on this port (2026-11-22)** for `run_command`, `write_file`, `edit_file`, `read_file`, and SessionStart. The contributor ran agy CLI 1.5.14 against both. In each check, a real turn's `git add -A` got `deny` from the unmodified `dispatch-bash.sh`, and the index stayed empty. Edits to `.claude/settings.json` got `deny` from `block-protected-target-writes.sh`. Decision record: [AgDR-0314](../agdr/AgDR-0314-agy-harness-adapter.md).
 
 **Contract checked against:** agy CLI 1.5.14, bundled hooks reference `~/.gemini/antigravity-cli/builtin/skills/agy-customizations/docs/hooks.md`. That file is more current than the public web page. Check this page again after an agy upgrade.
 
@@ -8,7 +8,7 @@ agy is the Google Antigravity CLI, a terminal coding agent. agy loads the fork's
 
 ## Terms of service limit
 
-Google's terms forbid driving agy from another agent. So no agent, harness, or CI job runs agy. A person, not an agent, runs agy for every live check. The live checks on this page were run by hand.
+Google's terms forbid driving agy from another agent. So no agent, harness, or CI job runs agy. A person, not an agent, runs agy for every live check on this page.
 
 ## Verification
 
@@ -23,7 +23,7 @@ Google's terms forbid driving agy from another agent. So no agent, harness, or C
 
 | agy tool | Call | Decision | Gate or result |
 |----------|------|----------|----------------|
-| SessionStart | — | inject | agy quoted the injected ApexYard text |
+| SessionStart | none | inject | agy quoted the injected ApexYard text |
 | `run_command` | `git status` | ask | ran |
 | `run_command` | `git add -A` | deny | `dispatch-bash.sh` |
 | `write_file` | create a file in `src/` | ask | the write succeeded |
@@ -33,18 +33,18 @@ Google's terms forbid driving agy from another agent. So no agent, harness, or C
 | `manage_task` | `kill`, `list` | ask | ran |
 | `edit_file` | `.agents/hooks.json` in the fork root | deny | `block-protected-target-writes.sh`: "the edit target is live hook state" |
 | `run_command` | `rm .agents/hooks.json` in the fork root | deny | "protected target: .agents/hooks.json" |
-| SessionStart, `agy -p` | — | inject | the headless run injected the ApexYard text |
+| SessionStart, `agy -p` | none | inject | the headless run injected the ApexYard text |
 | `edit_file`, `agy -p` | `.agents/hooks.json` in the fork root | deny | `block-protected-target-writes.sh`: "the edit target is live hook state. Use an isolated worktree." |
 
 The last two rows come from one headless `agy -p` run, so the hooks run in non-interactive mode too. agy printed the deny reason and did not change the file. The fork build protects the agy wiring through a wider list that also covers other adapters. This port protects only the agy wiring, so here the same deny comes from different code.
 
-In the fork root, agy loaded `.agents/hooks.json` with no trust step. A parent folder was already trusted (see the workspace-trust open question below). agy showed no permission prompt for any `ask` call (see [`ask` and agy's permission check](#ask-and-agys-permission-check)).
+In the fork root, agy loaded `.agents/hooks.json` with no trust step. agy already trusted a parent folder (see the workspace-trust open question below). agy showed no permission prompt for any `ask` call (see [`ask` and agy's permission check](#ask-and-agys-permission-check)).
 
 - **Live, this port (2026-11-22, agy CLI 1.5.14):** the contributor ran agy in a linked worktree that holds this branch. `bin/sync-agy-adapter.sh` wired that worktree, so agy used it as the fork root. These calls come from the decision log:
 
 | agy tool | Call | Decision | Gate or result |
 |----------|------|----------|----------------|
-| SessionStart | — | inject | agy quoted the injected ApexYard text |
+| SessionStart | none | inject | agy quoted the injected ApexYard text |
 | `run_command` | `git add -A` | deny | `dispatch-bash.sh` |
 | `read_file` | `.claude/settings.json` | ask | the read succeeded |
 | `edit_file` | `.claude/settings.json` | deny | `block-protected-target-writes.sh`: "the edit target is live hook state" |
@@ -53,12 +53,12 @@ In the fork root, agy loaded `.agents/hooks.json` with no trust step. A parent f
 | `run_command` | `pwd` with `BypassSandbox: true` | deny | the wrapper's sandbox check |
 | `write_file` | a nested `sub/.agents/hooks.json` | deny | `block-protected-target-writes.sh`: "the edit target is live hook state" |
 | `run_command` | `ls` | ask | ran |
-| SessionStart, `agy -p` | — | inject | the headless run injected the ApexYard text |
+| SessionStart, `agy -p` | none | inject | the headless run injected the ApexYard text |
 | `run_command`, `read_file`, `agy -p` | the model's first two calls | ask | agy denied the `read_file` itself, because headless mode cannot prompt, and the run ended with no output |
 
-The nested write was denied, so the nested `.agents/` walk found no config, and its deny was not exercised. An earlier run in the same worktree, before it was wired, ran no hook. So agy did not read the `.agents/hooks.json` of the main checkout, which is a parent folder. In that run, `git` failed under agy's default sandbox with "not a git repository", which is the known cost of the sandbox deny.
+The gate denied the nested write, so the nested `.agents/` walk found no config, and the live check did not exercise its deny. An earlier run in the same worktree, before the setup script wired it, ran no hook. So agy did not read the `.agents/hooks.json` of the main checkout, which is a parent folder. In that run, `git` failed under agy's default sandbox with "not a git repository", which is the known cost of the sandbox deny.
 
-**Not verified live on this port:** an edit of the root `.agents/hooks.json` and the persistent-terminal deny. The `Bash` rules of `permissions.deny` and the nested `.agents/` walk with an existing nested config are not verified either. The `Bash` rules name secret-printing commands, so the live check did not run them. agy CLI 1.5.14 did not use `replace_file_content`, `multi_replace_file_content`, or `write_to_file`, so they are not verified.
+**Not verified live on this port:** an edit of the root `.agents/hooks.json` and the persistent-terminal deny. The live check also did not verify the `Bash` rules of `permissions.deny`, or the nested `.agents/` walk with an existing nested config. The `Bash` rules name secret-printing commands, so the live check did not run them. agy CLI 1.5.14 did not use `replace_file_content`, `multi_replace_file_content`, or `write_to_file`, so the live check did not verify them.
 
 ## Enforcement vs advisory today
 
@@ -84,7 +84,7 @@ The wildcard PreToolUse group, `dispatch-bash.sh --shell-alias-only`, runs for e
 
 ## `permissions.deny` under agy
 
-Claude Code applies the `permissions.deny` rules in `.claude/settings.json` itself. agy does not read them. So the wrapper applies them literally, read at run time like the gates. A matching call gets `deny`, and the reason quotes the rule.
+Claude Code applies the `permissions.deny` rules in `.claude/settings.json` itself. agy does not read them. So the wrapper applies them as written. It reads them at run time, as the gates do. A matching call gets `deny`, and the reason quotes the rule.
 
 | Rule type | Applied to | Match |
 |-----------|-----------|-------|
@@ -94,7 +94,7 @@ Claude Code applies the `permissions.deny` rules in `.claude/settings.json` itse
 | `Bash(<cmd>)` | `run_command` | The normalized `CommandLine` is `<cmd>` |
 | `Bash(<prefix>:*)` | `run_command` | The normalized `CommandLine` is `<prefix>`, or starts with `<prefix>` and a space |
 
-The normalized `CommandLine` is trimmed, and each run of spaces and tabs in it becomes one space.
+The wrapper trims the normalized `CommandLine`, and turns each run of spaces and tabs in it into one space.
 
 The `Read(...)` check judges every string argument of a read-only tool, not only a path field, as a path. So a `search_web` query whose last path segment is `.env`, such as `config/.env`, gets `deny`. This over-match fails closed. A query that only mentions `.env` in other words does not match.
 
@@ -110,15 +110,15 @@ With the current rules, agy gets `deny` for these calls:
 
 Limits:
 
-- Matching is literal, with no shell parser. Pipes, chains, wrapped commands, and absolute command paths are not caught. This is the same limit as the shell-text gates (AgDR-0267).
+- Matching is literal, with no shell parser. The match does not catch pipes, chains, wrapped commands, or absolute command paths. This is the same limit as the shell-text gates (AgDR-0267).
 - A rule never matches a word in the middle of a command, so a search for the word passes.
-- Other rule types, such as `WebFetch(...)`, are not applied.
-- When the rules cannot be read, a call that names a path or a command gets `deny`.
+- The wrapper does not apply other rule types, such as `WebFetch(...)`.
+- When the wrapper cannot read the rules, a call that names a path or a command gets `deny`.
 - The other adapters (Codex, opencode, pi, and Cursor) do not apply these rules yet.
 
 ## `ask` and agy's permission check
 
-When every gate passes, the wrapper prints `ask`, never `allow`. `ask` requests agy's own permission check and never auto-approves. Whether agy actually prompts depends on agy's own settings, not on the hook:
+When every gate passes, the wrapper prints `ask`, never `allow`. `ask` requests agy's own permission check and never auto-approves. Whether agy prompts depends on agy's own settings, not on the hook:
 
 - `toolPermission`: `request-review`, which the public reference names as the default, `proceed-in-sandbox`, `always-proceed`, or `strict`,
 - `agentMode`,
@@ -150,7 +150,7 @@ The agy docs conflict on `allow`:
 Why the read-only tools get `ask` early:
 
 - They reach no ApexYard gate. So the fork, gate, and session-snapshot checks cannot change their result, and a broken fork still lets agy read under its own permission check.
-- `search_web` and `read_url_content` are allowed for parity with Claude Code, where no gate covers `WebSearch` or `WebFetch`. A URL can carry data out of the machine.
+- The wrapper allows `search_web` and `read_url_content` for parity with Claude Code, where no gate covers `WebSearch` or `WebFetch`. A URL can carry data out of the machine.
 - The `permissions.deny` `Read(...)` rules still apply first. They deny reads of `.env` files, private keys, and `.mcp.json`, which closes the main source for such an exfiltration.
 - Each allowed tool reads only what the `Read(...)` check can see. `read_file` and `view_file` read the one path they name. `command_status` and `read_terminal` read the output of a command that the gates already judged. `find_by_name` and `list_dir` return file names, not content.
 - `grep_search` is not on the list. It reads the content of every file under a folder, `.env` files included, and a path rule sees only the folder. agy CLI 1.5.14 does not declare it. So it gets the not-routed `deny`, and agy can search with `run_command` instead.
@@ -159,7 +159,7 @@ Before the classes apply, the wrapper checks the argument shape. jq keeps the la
 
 | Tool | Allowed args keys |
 |------|-------------------|
-| `run_command` | `CommandLine`, `Cwd`, `WaitMsBeforeAsync`, `IsDaemon`, `BypassSandbox`, `toolSummary`. A `RequestedTerminalID`, or a `RunPersistent` other than `false`, gets `deny`: the command runs in an existing terminal whose directory the gates cannot see. agy CLI 1.5.14 does not declare these two keys. A `BypassSandbox` other than absent or `false` gets `deny`: ApexYard does not allow agy to drop its terminal sandbox. `IsDaemon` is allowed, and its `CommandLine` still goes through the gates. |
+| `run_command` | `CommandLine`, `Cwd`, `WaitMsBeforeAsync`, `IsDaemon`, `BypassSandbox`, `toolSummary`. A `RequestedTerminalID`, or a `RunPersistent` other than `false`, gets `deny`: the command runs in an existing terminal whose directory the gates cannot see. agy CLI 1.5.14 does not declare these two keys. A `BypassSandbox` other than absent or `false` gets `deny`: ApexYard does not allow agy to drop its terminal sandbox. The wrapper allows `IsDaemon`, and its `CommandLine` still goes through the gates. |
 | `write_file` | `Path`, `Content`, `Append`, `Overwrite`, `ArtifactMetadata`, `toolSummary` |
 | `edit_file` | `Path`, `Target`, `Replacement`, `ArtifactMetadata`, `toolSummary` |
 | `read_file` | `Path`, `StartLine`, `EndLine`, `ByteOffset`, `toolSummary` |
@@ -170,7 +170,7 @@ Before the classes apply, the wrapper checks the argument shape. jq keeps the la
 
 `ArtifactMetadata` must be an object with only `Summary`, `UserFacing`, and `RequestFeedback`.
 
-To extend the policy, edit `harness-adapters/agy/agy-hook.sh`. The lists are hardcoded there, with no config key.
+To extend the policy, edit `harness-adapters/agy/agy-hook.sh`. The wrapper holds the lists there, with no config key.
 
 - Add a tool to `READ_ONLY_TOOLS` only after you confirm that it cannot run a command or write a file.
 - To gate a tool that runs a command or writes a file, make three changes:
@@ -198,7 +198,7 @@ Run this once in each clone of the fork:
 bash bin/sync-agy-adapter.sh
 ```
 
-The command writes `.agents/hooks.json`. The file is gitignored, because it holds this clone's absolute path to the wrapper. Check it for drift with `bash bin/sync-agy-adapter.sh --check`.
+The command writes `.agents/hooks.json`. Git ignores the file, because it holds this clone's absolute path to the wrapper. Check it for drift with `bash bin/sync-agy-adapter.sh --check`.
 
 The catch-all timeout is the largest gated-tool budget: the sum of that tool's gate timeouts, plus 15 seconds. It is above agy's 30 second default. The generator never changes `.agents/skills/`, which `bin/sync-codex-adapter.sh` owns, and a Codex `--clean` keeps `.agents/hooks.json`.
 
@@ -208,8 +208,8 @@ The agy wiring is a protected target in the live fork root, as `.claude/hooks/` 
 - the plugin folder `.agents/plugins/` and `.agents/plugins.json`, because agy runs each plugin's own `hooks.json`,
 - `harness-adapters/agy/`,
 - `bin/sync-agy-adapter.sh`,
-- a nested `.agents/hooks.json`, `.agents/plugins.json`, or anything under `.agents/plugins/`, at any depth under the fork root and without case. This includes the `.agents/` config of a managed-project clone under `workspace/`, which matches the read-side check below. Under `.claude/worktrees/<name>/`, only that worktree's own root wiring is exempt, because a linked worktree is its own fork root. A nested form deeper inside the worktree is protected. The exemption goes by the path, so it also covers a folder there that is not a real worktree. If agy starts in such a folder, agy runs the hook config there, and the wrapper denies every tool call.
-- a nested `.agents` folder as the target of a recursive copy, a link, or a removal. The same holds for a move whose target is not an existing directory. A move, a link, or a recursive copy into an existing folder is judged at its new path, `<folder>/<name>`. So an `.agents` folder from outside the fork gets `deny`. The folder itself is judged only for the core protected state, such as `.claude/hooks/` and the user config. So a copy or link into `bin/` still passes. A contents copy, from `src/`, from `src/.` or by `ditto`, is judged against the folder in full. So is a source that can land at another name. That covers a flag such as `-T`, `--parents`, `--relative` or `--files-from`. It also covers a glob, a brace or a variable in a recursive copy or link. A plain copy or move with a glob or a variable replaces only direct children of the folder. So each protected name is judged as a child of it: `cp x/* .` passes, and `cp x/* bin/` gets `deny`. A move with a dot glob, such as `mv x/.* .`, also judges `.agents` and `.claude` as children. A move whose source is a variable or a brace can still bring an `.agents` folder into a folder that has none (AgDR-0267). A live root that agy uses already has a non-empty `.agents/`, which `mv` does not replace. The gate also matches these flags inside a short-flag group and as GNU abbreviations, such as `--par`. An unresolved operand that names the agy wiring, such as `$D/.agents/hooks.json`, gets `deny`, as one that names a settings file does. So does an unresolved removal that ends in `.agents` or `harness-adapters`, such as `rm -rf "$TMPDIR/.agents"`, as one that ends in `.claude` does on `dev`. A plain `mkdir` of it stays allowed. A tree that already holds an `.agents/` config, moved, copied, or extracted into place, is not caught.
+- a nested `.agents/hooks.json`, `.agents/plugins.json`, or anything under `.agents/plugins/`, at any depth under the fork root and without case. This includes the `.agents/` config of a managed-project clone under `workspace/`, which matches the read-side check below. Under `.claude/worktrees/<name>/`, only that worktree's own root wiring is exempt, because a linked worktree is its own fork root. The gate protects a nested form deeper inside the worktree. The exemption goes by the path, so it also covers a folder there that is not a real worktree. If agy starts in such a folder, agy runs the hook config there, and the wrapper denies every tool call.
+- a nested `.agents` folder as the target of a recursive copy, a link, or a removal. The same holds for a move whose target is not an existing directory. A plain `mkdir` of it stays allowed. For a move, a link, or a recursive copy into an existing folder, the gate judges each source at its new path, `<folder>/<name>`. So an `.agents` folder from outside the fork gets `deny`. The gate judges the folder itself only for the core protected state, such as `.claude/hooks/` and the user config. So a copy or link into `bin/` still passes. The gate judges the whole folder for a contents copy, from `src/`, from `src/.` or by `ditto`. It does the same for a source that can land at another name. That covers a flag such as `-T`, `--parents`, `--relative` or `--files-from`. It also covers a glob, a brace or a variable in a recursive copy or link. The gate also matches these flags inside a short-flag group and as GNU abbreviations, such as `--par`. A plain copy or move with a glob or a variable replaces only direct children of the folder. So the gate judges each protected name as a child of it: `cp x/* .` passes, and `cp x/* bin/` gets `deny`. For a move with a dot glob, such as `mv x/.* .`, the gate also judges `.agents` and `.claude` as children. A move whose source is a variable or a brace can still bring an `.agents` folder into a folder that has none (AgDR-0267). A live root that agy uses already has a non-empty `.agents/`, which `mv` does not replace. An unresolved operand that names the agy wiring, such as `$D/.agents/hooks.json`, gets `deny`, as one that names a settings file does. So does an unresolved removal that ends in `.agents` or `harness-adapters`, such as `rm -rf "$TMPDIR/.agents"`, as one that ends in `.claude` does on `dev`. The gate does not catch a tree that already holds an `.agents/` config when a command moves, copies, or extracts it into place.
 
 Write, Edit, MultiEdit, and Bash changes there get `deny`, under agy and Claude Code alike. Change these files in an isolated worktree. `bash bin/sync-agy-adapter.sh` still regenerates `.agents/hooks.json`, because the gate judges only the command text.
 
@@ -221,7 +221,7 @@ agy also reads `.agents/` config in folders between its directory and the fork r
 - A sibling folder is not on the path. A managed project under `workspace/` does not trip the check while agy runs in the fork root. When agy runs inside that project's folder, its `.agents/` config is on the path and gets `deny`.
 - A linked worktree is its own fork root, so its `.agents/` is its wiring, and the parent fork's `.agents/` is above the walk.
 
-The Bash check reads the command text, as the other shell-text gates do. A write through an interpreter or an unknown verb, for example a script that a command runs, is not caught (AgDR-0267).
+The Bash check reads the command text, as the other shell-text gates do. The check does not catch a write through an interpreter or an unknown verb, for example a script that a command runs (AgDR-0267).
 
 ## Decision log
 
@@ -243,24 +243,24 @@ The wrapper prints its decision before it writes the line, and it ignores loggin
 
 ## Open questions
 
-- **Crash or timeout:** the wrapper's own watchdog and output guard fail closed. A gate that runs too long gets `deny` before agy's timeout, and any wrapper error or malformed output becomes `deny`. The wrapper always exits 0 with one decision. A crash of the wrapper process itself under agy has not been observed live.
-- **Workspace trust:** only these facts are observed:
+- **Crash or timeout:** the wrapper's own watchdog and output guard fail closed. A gate that runs too long gets `deny` before agy's timeout, and any wrapper error or malformed output becomes `deny`. The wrapper always exits 0 with one decision. No live check has seen a crash of the wrapper process itself under agy.
+- **Workspace trust:** the live checks show only these facts:
   - agy keeps trusted folders in `trustedWorkspaces` in its user settings.
   - In the fork root, agy loaded `.agents/hooks.json` with no trust step. A parent folder was already in that list.
   - That parent entry did not cover a new linked worktree under the same parent. agy asked the person to trust the worktree before the session started, and then added it to the list. Each earlier linked worktree also has its own entry.
-  - agy's bundled docs do not describe workspace trust. A refused trust prompt was not tested.
-- **`agy -p`:** the hooks run. Against the fork build, SessionStart injected the context, and an `edit_file` on `.agents/hooks.json` in the fork root got `deny` from `block-protected-target-writes.sh`. Against this port, SessionStart injected the context, and the first calls got `ask`. agy then denied a `read_file` itself, because headless mode cannot prompt. So under `agy -p`, a gate `deny` still applies, and an `ask` call runs only when agy's own settings allow it. agy's message suggests an allow rule under `permissions.allow` in agy's `settings.json`, or a re-run with `--dangerously-skip-permissions`. Neither was tested, and it is not known whether that flag also skips the hooks.
+  - agy's bundled docs do not describe workspace trust. No live check refused a trust prompt.
+- **`agy -p`:** the hooks run. Against the fork build, SessionStart injected the context, and an `edit_file` on `.agents/hooks.json` in the fork root got `deny` from `block-protected-target-writes.sh`. Against this port, SessionStart injected the context, and the first calls got `ask`. agy then denied a `read_file` itself, because headless mode cannot prompt. So under `agy -p`, a gate `deny` still applies, and an `ask` call runs only when agy's own settings allow it. agy's message suggests an allow rule under `permissions.allow` in agy's `settings.json`, or a re-run with `--dangerously-skip-permissions`. No live check tried either, and nobody knows yet whether that flag also skips the hooks.
 - Does a subagent's own `run_command` reach the workspace hook? Until a check shows it, the subagent tools stay denied.
 - Do `ask_permission` and `list_permissions` grant a permission without a user prompt?
 
 ## Gaps + tracking
 
-- **Permission rules:** `permissions.deny` is applied literally under agy. Pipes, chains, wrapped commands, and absolute command paths are not caught. Rule types other than `Read`, `Edit`, `Write`, and `Bash` are not applied. The other adapters do not apply these rules yet.
-- **Terminal sandbox:** a `run_command` with `BypassSandbox` gets `deny`, because the repo enforces the policy, not agy. The cost: in a linked worktree, agy's git can fail inside its sandbox with "not a git repository: (null)", and agy may retry with `BypassSandbox`. That retry is denied, so git inside a worktree may not work under agy. The fork root is not affected.
+- **Permission rules:** under agy, the wrapper applies `permissions.deny` as written. The match does not catch pipes, chains, wrapped commands, or absolute command paths. The wrapper does not apply rule types other than `Read`, `Edit`, `Write`, and `Bash`. The other adapters do not apply these rules yet.
+- **Terminal sandbox:** a `run_command` with `BypassSandbox` gets `deny`, because the repo enforces the policy, not agy. The cost: in a linked worktree, agy's git can fail inside its sandbox with "not a git repository: (null)", and agy may retry with `BypassSandbox`. The wrapper denies that retry too, so git inside a worktree may not work under agy. This cost does not apply in the fork root.
 - **Agent shell session id:** a PreToolUse hook cannot change the agent's command. So agy's `run_command` shell does not get `APEXYARD_SESSION_ID`.
 - **Network reads:** `search_web` and `read_url_content` are in the read-only allowlist. Claude Code has the same path, because no PreToolUse gate covers `WebFetch` or `WebSearch`.
 - **`if` predicates:** the wrapper matches a `Bash(<glob>)` predicate against the whole command. Claude Code matches each subcommand. No PreToolUse handler uses `if` today.
-- **Nested `.agents/` folders:** agy itself could create a nested hook or plugin config. That write now gets `deny` from the wiring protection, under agy and Claude Code alike. A nested config made outside the gates, for example by a person, is not blocked when it is made. While it sits on the path from agy's directory to the fork root, the wrapper denies every call. The removal of a nested config is matched directly, with no ancestor check, so an `rm -rf` of a parent folder passes.
+- **Nested `.agents/` folders:** agy itself could create a nested hook or plugin config. That write now gets `deny` from the wiring protection, under agy and Claude Code alike. The gates do not block a nested config that someone creates outside them, for example a person. While it sits on the path from agy's directory to the fork root, the wrapper denies every call. The gate matches the removal of a nested config directly, with no ancestor check, so an `rm -rf` of a parent folder passes.
 - **Other adapters:** the Codex, opencode, and pi wiring is not a protected target yet.
 - **Conformance CI:** not planned. The terms of service forbid an automated agy run.
 
