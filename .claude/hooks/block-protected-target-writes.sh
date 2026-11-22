@@ -360,11 +360,17 @@ pt_operands() {
         # cannot be long options, which start with --.
         case "$verb:$arg" in rsync:-R*|rsync:-[!-]*R*|cp:-T*|cp:-[!-]*T*|mv:-T*|mv:-[!-]*T*|ln:-T*|ln:-[!-]*T*|install:-T*|install:-[!-]*T*) exact=0 ;; esac
         # In a short-flag group, -t takes the rest of the group as the
-        # target folder, or the next word when t is the last letter.
-        case "$verb:$arg" in
-          cp:-[!-]*t|mv:-[!-]*t|ln:-[!-]*t|install:-[!-]*t) target=${words[$i]:-}; i=$((i+1)) ;;
-          cp:-[!-]*t?*|mv:-[!-]*t?*|ln:-[!-]*t?*|install:-[!-]*t?*) target=${arg#*t} ;;
-          cp:-t?*|mv:-t?*|ln:-t?*|install:-t?*) target=${arg#-t} ;;
+        # target folder, or the next word when t is the last letter. As in
+        # getopt, a letter that takes a value before t (S, and m, o or g for
+        # install) takes the rest of the group, so that t is not an option.
+        case "$verb:${arg%%t*}" in
+          cp:*S*|mv:*S*|ln:*S*|install:*[Smog]*) ;;
+          *)
+            case "$verb:$arg" in
+              cp:-[!-]*t|mv:-[!-]*t|ln:-[!-]*t|install:-[!-]*t) target=${words[$i]:-}; i=$((i+1)) ;;
+              cp:-[!-]*t?*|mv:-[!-]*t?*|ln:-[!-]*t?*|install:-[!-]*t?*) target=${arg#*t} ;;
+              cp:-t?*|mv:-t?*|ln:-t?*|install:-t?*) target=${arg#-t} ;;
+            esac ;;
         esac
         # GNU tools take any unambiguous prefix of a long option. Match each
         # option by its full name for its command only, so rsync --partial

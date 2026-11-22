@@ -199,6 +199,10 @@ check 2 "live install --n onto the root .agents" run_bash "$L" "install --n $S/x
 check 2 "live cp -Rt .agents of a plugins folder" run_bash "$L" "cp -Rt .agents $S/plugins"
 check 2 "live cp -Rt.agents of a plugins folder" run_bash "$L" "cp -Rt.agents $S/plugins"
 check 2 "live cp -t.agents of a hooks.json" run_bash "$L" "cp -t.agents $S/hooks.json"
+# A letter that takes a value before t takes the rest of the group.
+check 2 "live cp -St with the settings file into .claude/" run_bash "$L" "cp -St x $S/settings.json .claude/"
+check 2 "live install -mt with a hooks.json into .agents/" run_bash "$L" "install -mt x $S/hooks.json .agents/"
+check 0 "live cp -St into docs/ stays allowed" run_bash "$L" "cp -St x $S/a.txt docs/"
 check 0 "live cp -Rt docs stays allowed" run_bash "$L" "cp -Rt docs $S/build"
 check 0 "live cp -vt docs stays allowed" run_bash "$L" "cp -vt docs $S/a.txt"
 # A move with a dot glob can bring an .agents or .claude folder.
