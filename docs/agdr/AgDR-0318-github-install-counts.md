@@ -25,10 +25,8 @@ Scheduled runs execute weekly on Ubuntu with a five-minute timeout.
 Manual runs append additional observations.
 A concurrency group serializes writes, and normal pushes reject conflicting updates.
 
-The release workflow builds the formula archive with `git archive` from the release tag.
-One root directory contains the tagged files, including `bin` and `.claude`.
-The build stamps the CLI version and `VERSION` file before compression, preserving the existing installation contract.
-Packaging uses the resulting archive checksum.
+The release workflow keeps the tested CLI archive that `bin/build-release-assets.sh` builds.
+The Homebrew formula and the npm package already use that archive, so this decision adds no second archive.
 Uploads preserve existing assets because replacing an asset resets its download counter.
 
 The collector uses the default `GITHUB_TOKEN` for this repository's releases.

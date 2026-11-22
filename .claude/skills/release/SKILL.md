@@ -385,8 +385,8 @@ When the release PR is squash-merged to `main`, the `.github/workflows/auto-tag-
 3. Runs the ancestry guard: `git merge-base --is-ancestor <sha> main`.
 4. Creates an annotated tag and pushes it with `git push origin --tags`.
 5. Creates a GitHub Release entry from the CHANGELOG section in the PR body (in the same job — a tag pushed via GITHUB_TOKEN does not trigger a secondary release workflow).
-6. Calls `release-cli.yml` to attach `apexyard-<tag>.tar.gz`, built with `git archive` from the tag (AgDR-0318).
-   The archive contains `bin` and `.claude` beneath one root directory, as the Homebrew formula requires.
+6. Calls `release-cli.yml` to attach the tested CLI archive `apexyard-<tag>.tar.gz` from `bin/build-release-assets.sh`.
+   A retry uploads only missing assets, so download counts survive (AgDR-0318).
    Retries preserve existing assets and their download counts.
 
 **No manual tagging required** after merge. The workflow handles it.

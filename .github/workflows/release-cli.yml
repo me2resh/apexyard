@@ -43,20 +43,6 @@ jobs:
           VERSION: ${{ inputs.tag }}
         run: |
           bash bin/build-release-assets.sh "$VERSION" dist
-          # AgDR-0318: archive the tag with the root Homebrew expects.
-          archive_dir=$(mktemp -d)
-          git archive --format=tar --prefix="apexyard-$VERSION/" "refs/tags/$VERSION" | tar -xf - -C "$archive_dir"
-          # Keep the existing installed CLI version contract.
-          cli="$archive_dir/apexyard-$VERSION/bin/apexyard"
-          sed "s/^APEXYARD_CLI_VERSION=.*/APEXYARD_CLI_VERSION=\"${VERSION#v}\"/" "$cli" > "$archive_dir/cli"
-          cat "$archive_dir/cli" > "$cli"
-          printf '%s\n' "$VERSION" > "$archive_dir/apexyard-$VERSION/VERSION"
-          # Stable timestamps and ordering keep retry checksums consistent.
-          (cd "$archive_dir" && find "apexyard-$VERSION" -exec env TZ=UTC touch -t 200001010000 {} +)
-          (cd "$archive_dir" && LC_ALL=C find "apexyard-$VERSION" ! -type d | LC_ALL=C sort > files)
-          tar -C "$archive_dir" -cf - -T "$archive_dir/files" | gzip -n > "dist/apexyard-$VERSION.tar.gz"
-          rm -rf "$archive_dir"
-          (cd dist && sha256sum "apexyard-$VERSION.tar.gz" > "apexyard-$VERSION.tar.gz.sha256")
           bash bin/stamp-packaging.sh "$VERSION" dist
       - name: Pack and test the npm tarball once
         # npm-publish publishes these exact bytes. It checks the SHA-256 below.
