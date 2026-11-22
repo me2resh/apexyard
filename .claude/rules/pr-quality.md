@@ -122,7 +122,7 @@ Some bullets are genuinely short by nature:
 - **Pure mechanical refactors with no behaviour change** — `Renames Foo → Bar across 17 files` self-explains
 - **Single-line bug fixes whose fix is the rationale** — `Fixes off-by-one in pagination guard (issue #42)` self-explains
 
-Rex's advisory check (see `.claude/agents/code-reviewer.md`) flags label-only bullets as a `nit:` / `suggestion:` finding, not a blocking verdict, so legitimate short bullets don't churn the merge gate.
+Rex's advisory check (see `.claude/agents/code-reviewer.md`) flags label-only bullets as a `Nit` finding, not a blocking verdict, so legitimate short bullets don't churn the merge gate.
 
 ## Commit SHA Verification
 
