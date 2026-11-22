@@ -55,7 +55,7 @@ run_gate() {
   TEST_FILES="$file"
   if [ "$base" = 1 ]; then
     cp "$TMP/.claude/project-config.json" "$TEST_BASE_CONFIG"
-    jq 'del(.[$k])' --arg k "$key" "$TEST_BASE_CONFIG" > "$TMP/.claude/project-config.json"
+    jq 'if $head == null then del(.[$k]) else .[$k] = $head end' --arg k "$key" --argjson head "${9:-null}" "$TEST_BASE_CONFIG" > "$TMP/.claude/project-config.json"
     TEST_FILES="$TEST_FILES"$'\n.claude/project-config.json'
   fi
   (cd "$TMP" || exit; bash ".claude/hooks/$hook" <<<'{"tool_input":{"command":"gh pr merge 77 --repo o/r"}}') > "$TMP/out" 2> "$TMP/err" || rc=$?
@@ -75,6 +75,12 @@ for base in 0 1; do
     run_gate "$hook" "$key" '[".*"]' '[]' "$file" 2 0 "$base"
     run_gate "$hook" "$key" '[".*"]' absent "$file" 0 0 "$base"
   done
+done
+# Head additions must retain paths that the sibling overlay adds to the base list.
+for kind in design ui; do
+  if [ "$kind" = design ]; then hook=require-architecture-review.sh; else hook=require-design-review-for-ui.sh; fi
+  run_gate "$hook" "${kind}_paths" '["^custom/"]' '["^custom/","^overlay/"]' \
+    overlay/artifact.custom 2 0 1 '["^custom/","^head/"]'
 done
 # Exercise registered gate modes with the real config reader.
 sed 's/# Opted-in gate names go here. No production gate is opted in yet./fixture-new) return 0 ;;/' \

@@ -275,13 +275,6 @@ if printf '%s\n' "$CHANGED" | grep -qxF '.claude/project-config.json'; then
   if [ -n "$BASE_CUSTOM" ] && [ "$BASE_CUSTOM" != "null" ]; then
     DESIGN_GLOBS=$(printf '%s' "$BASE_CUSTOM" | tr '|' '\n')
   fi
-  if [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
-    CUSTOM=$(jq -r '.design_paths // [] | join("|")' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
-    if [ -n "$CUSTOM" ] && [ "$CUSTOM" != "null" ]; then
-      DESIGN_GLOBS="${DESIGN_GLOBS}
-$(printf '%s' "$CUSTOM" | tr '|' '\n')"
-    fi
-  fi
 fi
 
 # The sibling overlay can only tighten the resolved project value.
@@ -289,6 +282,17 @@ if [ -r "$HOOK_DIR/_lib-config-guard.sh" ]; then
   # shellcheck source=/dev/null
   . "$HOOK_DIR/_lib-config-guard.sh"
   DESIGN_GLOBS=$(config_overlay_lines design_paths "$DESIGN_GLOBS" paths "$REPO_ROOT")
+fi
+
+# Add head paths after the overlay guard compares against the base list.
+if [ "$CONFIG_IN_PR" = 1 ]; then
+  if [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
+    CUSTOM=$(jq -r '.design_paths // [] | join("|")' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
+    if [ -n "$CUSTOM" ] && [ "$CUSTOM" != "null" ]; then
+      DESIGN_GLOBS="${DESIGN_GLOBS}
+$(printf '%s' "$CUSTOM" | tr '|' '\n')"
+    fi
+  fi
 fi
 
 TOUCHED_DESIGN=""

@@ -304,8 +304,7 @@ if printf '%s\n' "$CHANGED" | grep -qxF '.claude/project-config.json'; then
   if [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
     HEAD_UI=$(jq -r '.ui_paths // [] | map(select(type == "string" and test("\\S"))) | .[]' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
   fi
-  UI_GLOBS="${BASE_UI}
-${HEAD_UI}"
+  UI_GLOBS=$BASE_UI
 fi
 
 # The sibling overlay can only tighten the resolved project value.
@@ -313,6 +312,12 @@ if [ -r "$HOOK_DIR/_lib-config-guard.sh" ]; then
   # shellcheck source=/dev/null
   . "$HOOK_DIR/_lib-config-guard.sh"
   UI_GLOBS=$(config_overlay_lines ui_paths "$UI_GLOBS" paths "$REPO_ROOT")
+fi
+
+# Add head paths after the overlay guard compares against the base list.
+if [ "$CONFIG_IN_PR" = 1 ] && [ -n "$HEAD_UI" ]; then
+  UI_GLOBS="${UI_GLOBS}
+${HEAD_UI}"
 fi
 
 TOUCHED_UI=""
