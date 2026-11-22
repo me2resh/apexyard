@@ -1,6 +1,6 @@
 # Harness support: agy (Antigravity CLI)
 
-**Status:** ✅ **Live-checked on the fork build (2026-11-21)** for `run_command`, `write_file`, `edit_file`, and SessionStart. The contributor ran agy CLI 1.5.14 against the fork build of this adapter. This port onto dev has not yet run live. In that check, a real turn's `git add -A` got `deny` from the unmodified `dispatch-bash.sh`, and nothing was staged. A `write_file` and an `edit_file` to `.claude/settings.json` got `deny` from `block-protected-target-writes.sh`. Decision record: [AgDR-0314](../agdr/AgDR-0314-agy-harness-adapter.md).
+**Status:** ✅ **Live-checked on the fork build (2026-11-21) and on this port (2026-11-22)** for `run_command`, `write_file`, `edit_file`, `read_file`, and SessionStart. The contributor ran agy CLI 1.5.14 against both. In each check, a real turn's `git add -A` got `deny` from the unmodified `dispatch-bash.sh`, and nothing was staged. Edits to `.claude/settings.json` got `deny` from `block-protected-target-writes.sh`. Decision record: [AgDR-0314](../agdr/AgDR-0314-agy-harness-adapter.md).
 
 **Contract checked against:** agy CLI 1.5.14, bundled hooks reference `~/.gemini/antigravity-cli/builtin/skills/agy-customizations/docs/hooks.md`. That file is more current than the public web page. Check this page again after an agy upgrade.
 
@@ -19,7 +19,7 @@ Google's terms forbid driving agy from another agent. So no agent, harness, or C
   - Malformed stdin, a missing `jq`, a missing gate, a gate timeout, an unrouted tool, and a duplicate or case-variant argument key each get `deny`.
   - No output is `allow`, `force_ask`, or `auto_approve`. A test checks that every decision emit path in the wrapper source is `ask` or `deny`.
 - **Wiring test:** `.claude/hooks/tests/test_protected_agy_wiring.sh` checks that the agy wiring is a protected target in the live fork root and editable in a worktree.
-- **Live (2026-11-21, agy CLI 1.5.14):** the contributor ran agy CLI 1.5.14 against the fork build of this adapter. This port onto dev has not yet run live. These calls come from the decision log:
+- **Live, fork build (2026-11-21, agy CLI 1.5.14):** the contributor ran agy CLI 1.5.14 against the fork build of this adapter. These calls come from the decision log:
 
 | agy tool | Call | Decision | Gate or result |
 |----------|------|----------|----------------|
@@ -36,11 +36,29 @@ Google's terms forbid driving agy from another agent. So no agent, harness, or C
 | SessionStart, `agy -p` | — | inject | the headless run injected the ApexYard text |
 | `edit_file`, `agy -p` | `.agents/hooks.json` in the fork root | deny | `block-protected-target-writes.sh`: "the edit target is live hook state. Use an isolated worktree." |
 
-The last two rows come from one headless `agy -p` run, so the hooks run in non-interactive mode too. agy printed the deny reason and did not change the file. The fork build protects the agy wiring through a wider list that also covers other adapters. This port protects only the agy wiring, so here the same deny comes from different code, and it is not live-checked on this port.
+The last two rows come from one headless `agy -p` run, so the hooks run in non-interactive mode too. agy printed the deny reason and did not change the file. The fork build protects the agy wiring through a wider list that also covers other adapters. This port protects only the agy wiring, so here the same deny comes from different code.
 
-In the fork root, agy loaded `.agents/hooks.json` with no trust step, because a parent folder was already trusted (see the workspace-trust open question below). agy showed no permission prompt for any `ask` call (see [`ask` and agy's permission check](#ask-and-agys-permission-check)).
+In the fork root, agy loaded `.agents/hooks.json` with no trust step. A parent folder was already trusted (see the workspace-trust open question below). agy showed no permission prompt for any `ask` call (see [`ask` and agy's permission check](#ask-and-agys-permission-check)).
 
-**Not verified live:** this port onto dev, including the `permissions.deny` checks and the persistent-terminal deny. `replace_file_content`, `multi_replace_file_content`, and `write_to_file` are not verified either, because agy CLI 1.5.14 did not use them.
+- **Live, this port (2026-11-22, agy CLI 1.5.14):** the contributor ran agy in a linked worktree that holds this branch. `bin/sync-agy-adapter.sh` wired that worktree, so agy used it as the fork root. These calls come from the decision log:
+
+| agy tool | Call | Decision | Gate or result |
+|----------|------|----------|----------------|
+| SessionStart | — | inject | agy quoted the injected ApexYard text |
+| `run_command` | `git add -A` | deny | `dispatch-bash.sh` |
+| `read_file` | `.claude/settings.json` | ask | the read succeeded |
+| `edit_file` | `.claude/settings.json` | deny | `block-protected-target-writes.sh`: "the edit target is live hook state" |
+| `write_file`, `read_file` | a new file, then a read of it | ask | both succeeded |
+| `read_file` | a test file named `*.private-key.pem` | deny | the `permissions.deny` rule `Read(//**/*.private-key.pem)` |
+| `run_command` | `pwd` with `BypassSandbox: true` | deny | the wrapper's sandbox check |
+| `write_file` | a nested `sub/.agents/hooks.json` | deny | `block-protected-target-writes.sh`: "the edit target is live hook state" |
+| `run_command` | `ls` | ask | ran |
+| SessionStart, `agy -p` | — | inject | the headless run injected the ApexYard text |
+| `run_command`, `read_file`, `agy -p` | the model's first two calls | ask | agy denied the `read_file` itself, because headless mode cannot prompt, and the run ended with no output |
+
+The nested write was denied, so the nested `.agents/` walk found no config, and its deny was not exercised. An earlier run in the same worktree, before it was wired, ran no hook. So agy did not read the `.agents/hooks.json` of the main checkout, which is a parent folder. In that run, `git` failed under agy's default sandbox with "not a git repository", which is the known cost of the sandbox deny.
+
+**Not verified live on this port:** an edit of the root `.agents/hooks.json` and the persistent-terminal deny. The `Bash` rules of `permissions.deny` and the nested `.agents/` walk with an existing nested config are not verified either. The `Bash` rules name secret-printing commands, so the live check did not run them. agy CLI 1.5.14 did not use `replace_file_content`, `multi_replace_file_content`, or `write_to_file`, so they are not verified.
 
 ## Enforcement vs advisory today
 
@@ -107,6 +125,8 @@ When every gate passes, the wrapper prints `ask`, never `allow`. `ask` requests 
 - the terminal sandbox.
 
 In the contributor's live check of the fork build, no prompt appeared for any `ask` call. So the adapter guarantees the gate denies, and prompting is agy's job.
+
+In headless mode (`agy -p`), agy cannot prompt. In the live check of this port, agy denied a `read_file` that got `ask` (see the `agy -p` open question).
 
 The agy docs conflict on `allow`:
 
@@ -226,10 +246,10 @@ The wrapper prints its decision before it writes the line, and it ignores loggin
 - **Crash or timeout:** the wrapper's own watchdog and output guard fail closed. A gate that runs too long gets `deny` before agy's timeout, and any wrapper error or malformed output becomes `deny`. The wrapper always exits 0 with one decision. A crash of the wrapper process itself under agy has not been observed live.
 - **Workspace trust:** only these facts are observed:
   - agy keeps trusted folders in `trustedWorkspaces` in its user settings.
-  - In the fork root, agy loaded `.agents/hooks.json` with no trust step, because a parent folder was already trusted.
-  - Each linked worktree that agy opened later has its own entry in that list.
-  - agy's bundled docs do not describe workspace trust. An untrusted folder was not tested.
-- **`agy -p`:** the hooks run. The contributor ran agy CLI 1.5.14 headless against the fork build. SessionStart injected the context, and an `edit_file` on `.agents/hooks.json` in the fork root got `deny` from `block-protected-target-writes.sh`. This port onto dev has not yet run live.
+  - In the fork root, agy loaded `.agents/hooks.json` with no trust step. A parent folder was already in that list.
+  - That parent entry did not cover a new linked worktree under the same parent. agy asked the person to trust the worktree before the session started, and then added it to the list. Each earlier linked worktree also has its own entry.
+  - agy's bundled docs do not describe workspace trust. A refused trust prompt was not tested.
+- **`agy -p`:** the hooks run. Against the fork build, SessionStart injected the context, and an `edit_file` on `.agents/hooks.json` in the fork root got `deny` from `block-protected-target-writes.sh`. Against this port, SessionStart injected the context, and the first calls got `ask`. agy then denied a `read_file` itself, because headless mode cannot prompt. So under `agy -p`, a gate `deny` still applies, and an `ask` call runs only when agy's own settings allow it. agy's message suggests an allow rule under `permissions.allow` in agy's `settings.json`, or a re-run with `--dangerously-skip-permissions`. Neither was tested, and it is not known whether that flag also skips the hooks.
 - Does a subagent's own `run_command` reach the workspace hook? Until a check shows it, the subagent tools stay denied.
 - Do `ask_permission` and `list_permissions` grant a permission without a user prompt?
 
