@@ -60,4 +60,4 @@ agent, runs agy for every live check.
 ## Reference
 
 - Full reference: [`docs/harnesses/agy.md`](../../docs/harnesses/agy.md)
-- Decision record: [AgDR-0314](../../docs/agdr/AgDR-0314-agy-harness-adapter.md)
+- Decision record: [AgDR-0320](../../docs/agdr/AgDR-0320-agy-harness-adapter.md)

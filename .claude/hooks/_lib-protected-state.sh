@@ -74,7 +74,7 @@ pt_init() {
   PT_USER=$(pt_physical "${CLAUDE_CONFIG_DIR:-$HOME/.claude}") || return 2
   PT_HOME_CONFIG=$(pt_physical "$HOME/.claude") || return 2
 }
-# agy hook wiring, relative to a protected root (AgDR-0314). Each path can
+# agy hook wiring, relative to a protected root (AgDR-0320). Each path can
 # switch the gates off under agy, or run another hook beside them:
 #   .agents/hooks.json      the wiring that bin/sync-agy-adapter.sh writes
 #   .agents/plugins/        plugin discovery; each plugin runs its own hooks.json

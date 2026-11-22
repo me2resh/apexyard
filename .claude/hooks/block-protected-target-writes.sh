@@ -151,7 +151,7 @@ pt_unresolved_nocase() {
 }
 pt_unresolved_match() {
   case "$1" in *settings.json*|*settings.local.json*|*.claude/hooks*|*.claude/apexyard*|*ops-root-*|*gate-session-*|*session-env/*|*shell-snapshots/*) pt_block 'unresolved protected operand.' ;; esac
-  # The agy wiring (AgDR-0314). Its ancestors count at role 1 only, as in the lib.
+  # The agy wiring (AgDR-0320). Its ancestors count at role 1 only, as in the lib.
   case "$1" in *.agents/hooks.json*|*.agents/plugins*|*harness-adapters/agy*|*sync-agy-adapter.sh*) pt_block 'unresolved protected operand.' ;; esac
   if [ "$2" != 0 ]; then case "$1" in */.claude) pt_block 'unresolved protected ancestor.' ;; esac; fi
   # An unresolved bin folder is not tied to the fork's own bin/, and

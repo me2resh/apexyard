@@ -341,7 +341,7 @@ fi
 
 if [ "$CLEAN" = "1" ]; then
   # Remove only the Codex-owned path under .agents/. Other harnesses keep
-  # files there, for example agy's .agents/hooks.json (AgDR-0314).
+  # files there, for example agy's .agents/hooks.json (AgDR-0320).
   rm -rf "$TARGET_ROOT/.agents/skills" "$TARGET_ROOT/.codex"
 fi
 

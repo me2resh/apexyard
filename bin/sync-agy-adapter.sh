@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Generate .agents/hooks.json for the Google Antigravity CLI (agy).
-# Decision record: AgDR-0314.
+# Decision record: AgDR-0320.
 #
 # .claude/settings.json stays the source of truth. The generated file holds
 # one catch-all agy PreToolUse entry (matcher ".*") and one SessionStart
