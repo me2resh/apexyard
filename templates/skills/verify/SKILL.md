@@ -13,7 +13,8 @@ A successful build alone does not prove an application flow works.
 
 ## Configure this skeleton
 
-During adoption, add the matching stack skeleton file or files from `templates/skills/verify/` — `web.md`, `mobile.md`, `desktop.md`, or `service.md`.
+Keep one matching stack skeleton beside this skill for each project stack.
+Use the project-relative paths below.
 Replace the setup fields below with concrete project commands and expected results.
 Discover commands from project manifests, scripts, and operating documentation.
 Do not invent commands or credentials.
@@ -41,19 +42,19 @@ Report them rather than executing placeholders.
 
 ### Web
 
-Use `templates/skills/verify/web.md` for the start, flow, and evidence steps.
+Use `.claude/skills/verify/web.md` for the start, flow, and evidence steps.
 
 ### Mobile
 
-Use `templates/skills/verify/mobile.md` for the start, flow, and evidence steps.
+Use `.claude/skills/verify/mobile.md` for the start, flow, and evidence steps.
 
 ### Desktop
 
-Use `templates/skills/verify/desktop.md` for the start, flow, and evidence steps.
+Use `.claude/skills/verify/desktop.md` for the start, flow, and evidence steps.
 
 ### Service
 
-Use `templates/skills/verify/service.md` for the start, flow, and evidence steps.
+Use `.claude/skills/verify/service.md` for the start, flow, and evidence steps.
 
 ## Evidence for the PR
 

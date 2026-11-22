@@ -188,18 +188,20 @@ Never ask about cost, budget, currency, tests, coverage, language, database, sig
 
 ## Offer a project verify skill
 
-After generation, offer to copy `templates/skills/verify/SKILL.md` into the target's `.claude/skills/verify/SKILL.md`.
+After generation, offer to copy `templates/skills/verify/SKILL.md` to `<project>/.claude/skills/verify/SKILL.md`.
 Use `AskUserQuestion` with Copy skeleton and Skip options.
 Keep this offer separate from the interview questions.
 A decline creates no verify files.
 
 On acceptance, preserve any existing `.claude/skills/verify/` directory.
 Create the directory only when absent.
-Copy the template from the ops repo.
-Add `templates/skills/verify/web.md` for a web app.
-Add `templates/skills/verify/service.md` for an API service or data pipeline.
-For an explicit mobile custom stack, add `templates/skills/verify/mobile.md`.
-For an explicit desktop custom stack, add `templates/skills/verify/desktop.md`.
+Copy each matching stack skeleton from the ops repo to the target project:
+
+- For a web app, copy `templates/skills/verify/web.md` to `<project>/.claude/skills/verify/web.md`.
+- For an explicit mobile custom stack, copy `templates/skills/verify/mobile.md` to `<project>/.claude/skills/verify/mobile.md`.
+- For an explicit desktop custom stack, copy `templates/skills/verify/desktop.md` to `<project>/.claude/skills/verify/desktop.md`.
+- For an API service or data pipeline, copy `templates/skills/verify/service.md` to `<project>/.claude/skills/verify/service.md`.
+
 Add more than one skeleton file when the project spans stacks.
 Replace setup fields with commands from the generated project.
 List unresolved commands as blockers.

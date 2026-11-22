@@ -25,19 +25,23 @@ print('PASS: four stack skeletons exist with start, drive, and evidence steps')
 
 template = (root / 'templates/skills/verify/SKILL.md').read_text()
 for stack in stacks:
-    assert f'templates/skills/verify/{stack}.md' in template, f'Template does not reference {stack}.md'
-print('PASS: the shared template references all four stack skeletons')
+    assert f'.claude/skills/verify/{stack}.md' in template, f'Template does not reference {stack}.md'
+assert 'templates/skills/verify/' not in template, 'Template references an ops-repo path'
+print('PASS: the shared template references all four project-local stack skeletons')
 
 for name in ('handover', 'scaffold'):
     skill = (root / f'.claude/skills/{name}/SKILL.md').read_text()
     start = skill.index('Offer a project verify skill')
     offer = skill[start:]
-    next_section = offer.find('\n## ', 1)
+    next_section = offer.find('\n##', 1)
     if next_section >= 0:
         offer = offer[:next_section]
-    for stack in stacks:
-        assert f'{stack}.md' in offer, f'{name} does not reference {stack}.md'
-    print(f'PASS: {name} references the four stack skeletons')
+    for filename in ('SKILL.md', *(f'{stack}.md' for stack in stacks)):
+        source = f'templates/skills/verify/{filename}'
+        target = f'<project>/.claude/skills/verify/{filename}'
+        assert source in offer, f'{name} does not name source {source}'
+        assert target in offer, f'{name} does not name target {target}'
+    print(f'PASS: {name} names source and target paths for the skill and four stack skeletons')
 
 for agent in ('backend-engineer', 'frontend-engineer', 'platform-engineer'):
     body = (root / f'.claude/agents/{agent}.md').read_text()
