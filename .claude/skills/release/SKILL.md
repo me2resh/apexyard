@@ -385,6 +385,9 @@ When the release PR is squash-merged to `main`, the `.github/workflows/auto-tag-
 3. Runs the ancestry guard: `git merge-base --is-ancestor <sha> main`.
 4. Creates an annotated tag and pushes it with `git push origin --tags`.
 5. Creates a GitHub Release entry from the CHANGELOG section in the PR body (in the same job — a tag pushed via GITHUB_TOKEN does not trigger a secondary release workflow).
+6. Calls `release-cli.yml` to attach `apexyard-<tag>.tar.gz`, built with `git archive` from the tag (AgDR-0318).
+   The archive contains `bin` and `.claude` beneath one root directory, as the Homebrew formula requires.
+   Retries preserve existing assets and their download counts.
 
 **No manual tagging required** after merge. The workflow handles it.
 
@@ -410,12 +413,19 @@ fi
 git push upstream --tags
 ```
 
+The manual fallback must also run `release-cli.yml` with the existing tag:
+
+```bash
+gh workflow run release-cli.yml --repo me2resh/apexyard -f tag=vA.B.C
+```
+
 #### Post-tag release checklist
 
 Verify all four assertions hold (the first three: CI workflow also checks these; the fourth: step 6's verification above, repeated here so it isn't lost if step 6 was skipped):
 
 - [ ] `git merge-base --is-ancestor vA.B.C upstream/main` exits 0
 - [ ] `git describe --tags --abbrev=0 upstream/main` returns `vA.B.C`
+- [ ] The release contains `apexyard-vA.B.C.tar.gz` and its checksum.
 - [ ] GitHub Release entry exists at `https://github.com/me2resh/apexyard/releases/tag/vA.B.C`
 - [ ] `git log -1 --pretty=format:'%(trailers:key=Released-From,valueonly)' vA.B.C` is **non-empty** (#1004) — if empty, STOP before running `/release-sync`; the next release's changelog range will silently degrade to the sync-boundary heuristic
 
