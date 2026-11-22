@@ -227,6 +227,7 @@ Missing markers mean ordinary records, including legacy records.
 Print `Back-filled: N` after the category table and include `"backfilled": N` in JSON.
 This count is a subset of `total`. Keep category counts and totals unchanged.
 Recompute this count from collected files, even when category metadata comes from an older cache.
+Then run `bash .claude/skills/agdr/scripts/stats-gaps.sh <repo> <agdr-dir>`. Print its gap lines: proposed or superseded AgDRs still used in code, and runtime dependencies that only tests import.
 
 ```
 | Category       | Count |
