@@ -97,6 +97,12 @@ expect 2 'FOO="a b" git add -A'
 expect 0 "FOO='a b' git add -A"
 expect 2 'echo "$(git add -A)"'
 expect 2 "eval 'git add -A'"
+expect 2 'eval "git add -A"'
+expect 2 'eval git add -A'
+expect 2 'eval "git add ."'
+# The eval branch stays narrow: the previous word must not be `eval` alone.
+expect 0 "eval 'cd x && git add -A'"
+expect 0 'eval "$(fnm env)"'
 
 # --- allowed: an explicit path, or the words inside a quoted mention ---------
 expect 0 'git add path/to/file.txt'
@@ -113,6 +119,25 @@ expect 0 "bash -c 'git add .gitignore'"
 expect 0 "bash -c 'make' && git add .github/workflows/ci.yml"
 expect 0 "bash -c 'git add ./src'"
 expect 0 "printf '%s' '{\"tool_input\":{\"command\":\"git add -A\"}}'"
+
+# --- #2110: allow pins for the widened patterns -----------------------------
+# The `-c` wrapper token stays mandatory and `eval` stays narrow, so ordinary
+# commands that merely mention the shape stay allowed. These are the exact
+# commands Rex and Hakim found blocked at ff241414 (kind-1 regression). Pin
+# them so a later widening cannot bring the false block back.
+expect 0 'bash run.sh | grep "git add -A"'
+expect 0 'bash .claude/hooks/tests/test_block_git_add_all.sh 2>&1 | grep -c "git add -A"'
+expect 0 "bash -n hook.sh && grep -n 'git add -A' hook.sh"
+expect 0 "sh -e x.sh; rg 'git add --all' docs/"
+expect 0 'eval "$(ssh-agent -s)" && echo "never git add -A"'
+expect 0 'eval "$(fnm env)"; grep -n "git add ." README.md'
+# Absolute/escaped git paths and git global options stay allowed for a real
+# explicit path, and so does a `-C` subdirectory.
+expect 0 '/usr/bin/git add .gitignore'
+expect 0 'git -C sub add src/'
+expect 0 'git --no-pager log'
+expect 0 "bash build.sh"
+expect 0 'zsh -l'
 # A closing quote right after the flag is not a terminator, so this prose
 # mention stays allowed (the header names this shape; #2073 delta review).
 expect 0 'git commit -m "x && git add -A"'

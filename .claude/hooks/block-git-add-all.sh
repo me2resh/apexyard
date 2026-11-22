@@ -48,20 +48,28 @@ fi
 #   - any other git global option, e.g. `git --no-pager add -A`.
 #   - an absolute path to git: `/usr/bin/git add -A`.
 #   - a backslash-escaped command name: `\git add -A`.
-#   - a quoted assignment value with spaces: `FOO="a b" git add -A`.
+#   - a double-quoted assignment value with spaces: `FOO="a b" git add -A`.
 #   - a `$( )` command substitution, through the `$(` command position.
-#   - a bare `eval 'git add -A'`, through the same wrapper rule as a `-c` shell.
+#   - a bare `eval 'git add -A'`, through its own narrow branch: the staging
+#     command must be the first word of the eval argument.
 #
 # Accepted residuals, each with its one-line reason:
 #   - `(` and `{` openers. Treating them as command positions reopens the
 #     quoted-prose false blocks pinned below, which AgDR-0262 ranks first.
 #   - a backtick command substitution. A backtick is ordinary markdown prose
 #     punctuation, so a command position there blocks prose mentions.
+#   - a single-quoted assignment value with spaces (`FOO='a b' git add -A`).
+#     A portable single-quote match needs a shell-built pattern; the hex
+#     escape for a quote is not portable: BSD grep reads it as a quote, GNU
+#     grep as literal text (#2110 review, kind 3). `dev` missed the shape too.
+#   - `eval` whose argument does not begin with the staging command, e.g.
+#     `eval 'cd x && git add -A'`. `dev` missed it; widening re-blocks ordinary
+#     `eval` lines that merely mention the shape (#2110 review, kind 1).
 # The header stays aligned with the matrix in test_block_git_add_all.sh.
 _add_flag='(-A|--all|\.)'
 _add_tail='([[:space:];&|)}<>]|$)'
 _add_pos='(^[[:space:]]*|[;&|][[:space:]]*|[[:space:]](then|do|else)[[:space:]]+|\$\([[:space:]]*)'
-_add_prefix='((sudo|env|command|nohup|time|exec|builtin)([[:space:]]+-{1,2}[A-Za-z][A-Za-z0-9-]*([[:space:]]+[^[:space:]]+)?)*[[:space:]]+)*([A-Za-z_][A-Za-z0-9_]*=([^[:space:]]*|"[^"]*"|\x27[^\x27]*\x27)[[:space:]]+)*'
+_add_prefix='((sudo|env|command|nohup|time|exec|builtin)([[:space:]]+-{1,2}[A-Za-z][A-Za-z0-9-]*([[:space:]]+[^[:space:]]+)?)*[[:space:]]+)*([A-Za-z_][A-Za-z0-9_]*=([^[:space:]]*|"[^"]*")[[:space:]]+)*'
 # Any git global option, attached or separated: `-Csub`, `-C sub`,
 # `--git-dir=.git`, `--git-dir .git`, `--no-pager`.
 _add_gitopt='((-[A-Za-z]([A-Za-z0-9-]*|[[:space:]]+[^[:space:];&|]+)|--[a-z][a-z-]*([=][^[:space:];&|]+|[[:space:]]+[^[:space:];&|]+)?)[[:space:]]+)*'
@@ -72,13 +80,20 @@ _add_git="${_add_gitcore}${_add_tail}"
 # The wrapper pattern needs its own tail: it ends inside the quoted `-c` body,
 # so the flag must be followed by a real terminator. Without it, `\.` matches
 # the first character of a dot path (`bash -c 'git add .gitignore'`) and
-# explicit-path staging is falsely blocked (#2073 review). `eval` takes the
-# script as a plain argument, so its `-c` token is optional.
+# explicit-path staging is falsely blocked (#2073 review). `-c` stays MANDATORY
+# for the shells: making it optional blocked ordinary commands such as
+# `bash run.sh | grep "git add -A"` (#2110 review, kind 1).
 _add_wtail="([[:space:];&|)}<>'\"]|\$)"
-_add_wrapped="${_add_pos}${_add_prefix}(bash|sh|zsh|dash|eval)([[:space:]]+-[A-Za-z-]+)*[[:space:]]+(-[A-Za-z]*c[A-Za-z]*[[:space:]]+)?.*${_add_gitcore}${_add_wtail}"
+_add_wrapped="${_add_pos}${_add_prefix}(bash|sh|zsh|dash)([[:space:]]+-[A-Za-z-]+)*[[:space:]]+-[A-Za-z]*c[A-Za-z]*[[:space:]]+.*${_add_gitcore}${_add_wtail}"
+# `eval` has no `-c`: its script is a plain argument. Stay narrow — the staging
+# command must be the FIRST word of that argument, optionally quoted. A `.*`
+# here would re-block ordinary commands that merely mention the shape later
+# in the line (#2110 review, kind 1).
+_add_eval="${_add_pos}${_add_prefix}eval[[:space:]]+['\"]?[[:space:]]*${_add_gitcore}${_add_wtail}"
 
 if printf '%s' "$COMMAND" | grep -qE "${_add_pos}${_add_prefix}${_add_git}" \
-  || printf '%s' "$COMMAND" | grep -qE "${_add_wrapped}"; then
+  || printf '%s' "$COMMAND" | grep -qE "${_add_wrapped}" \
+  || printf '%s' "$COMMAND" | grep -qE "${_add_eval}"; then
   cat >&2 <<MSG
 BLOCKED: 'git add -A', 'git add --all', and 'git add .' are forbidden.
 
