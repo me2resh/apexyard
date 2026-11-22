@@ -1,6 +1,7 @@
 # PR 2085 audit evidence, captured 2026-11-22T19:57:53Z
 
 ## Head job 136676362203 (1783ccab), policy step
+
 2026-11-21T01:17:28.5639410Z   --trusted-python "$trusted_python" \
 2026-11-21T01:17:28.5639762Z   --json-out "$RUNNER_TEMP/dep-audit-report.json" \
 2026-11-21T01:17:28.5640106Z   --md-out "$RUNNER_TEMP/dep-audit-report.md"
@@ -29,6 +30,7 @@
 2026-11-21T01:18:13.6333381Z   echo '## Dependency audit: FAILED - no report was produced.' >> "$GITHUB_STEP_SUMMARY"
 
 ## Base job 134624010252 (ca8de8c0), policy step
+
 2026-11-18T06:30:30.2433727Z   --trusted-python "$trusted_python" \
 2026-11-18T06:30:30.2434025Z   --json-out "$RUNNER_TEMP/dep-audit-report.json" \
 2026-11-18T06:30:30.2434328Z   --md-out "$RUNNER_TEMP/dep-audit-report.md"
@@ -72,4 +74,5 @@
 2026-11-18T06:31:26.0690421Z   } >> "$GITHUB_STEP_SUMMARY"
 
 ## Advisory record
+
 {'ghsa_id': 'GHSA-fc5q-39xc-vjpf', 'summary': 'Withdrawn Advisory: picomatch vulnerable to ReDoS through single-branch repeated extglobs', 'published_at': '2026-10-19T18:32:12Z', 'withdrawn_at': '2026-11-18T15:38:56Z', 'updated_at': '2026-11-19T16:07:41Z'}
