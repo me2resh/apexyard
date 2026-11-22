@@ -6,13 +6,13 @@ allowed-tools: Bash, Read, Grep, Glob
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /tasks — Actionable Task List
+# /tasks: Actionable Task List
 
 A single ordered list of "things to click on right now". Where `/inbox` groups items by category, `/tasks` flattens everything into a prioritised TODO with one URL per line. Optimised for "I have 30 minutes, what should I do?".
 
 ## Path resolution
 
-Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+Use `.claude/hooks/_lib-portfolio-paths.sh` to resolve these paths. Read the registry path with `portfolio_registry`. Read the per-project docs directory with `portfolio_projects_dir`. Read the ideas backlog with `portfolio_ideas_backlog`. Source the helper at the top of any bash block that touches those paths:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -21,7 +21,7 @@ source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-tracker.sh"
 registry=$(portfolio_registry)
 ```
 
-Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Do not hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks. The helper resolves the paths for the adopter's mode. See `docs/multi-project.md`.
 
 ## Tracker-agnostic issue listing (#710 / AgDR-0093)
 
@@ -68,7 +68,7 @@ on a custom tracker.
 Do not write `items=$(tracker_list …)` and then read `TRACKER_LIST_STATUS`. A subshell cannot pass
 that variable back, so you would read a stale verdict from an earlier project.
 
-> **Scope caveat (forge axis, #711).** The **PR** sources still call `gh pr list` / `gh api …/pulls`. The PR/MR forge abstraction is #711; until it lands, those sources are GitHub-only, so `/tasks` is *issue-axis* tracker-agnostic, not fully tracker-agnostic. Filters GitHub expresses but GitLab can't (`mentions:`, `commenter:`, `assignee=none` on glab) degrade to a gh-only path or empty, noted per source.
+> **Scope caveat (forge axis, #711).** The **PR** sources still call `gh pr list` / `gh api …/pulls`. The PR/MR forge abstraction is #711; until it lands, those sources are GitHub-only, so `/tasks` is *issue-axis* tracker-agnostic, not fully tracker-agnostic. Filters GitHub expresses but GitLab cannot (`mentions:`, `commenter:`, `assignee=none` on glab) degrade to a gh-only path or empty, noted per source.
 
 ## Usage
 
@@ -94,11 +94,11 @@ The task list is the union of:
 | Issues assigned to you with high priority | `tracker_list "$repo" assignee=@me labels=priority-high,priority-critical` | issue ✓ |
 | Issues you opened with new comments | `tracker_list "$repo" state=open author=@me` + client-side comment-recency filter (`commenter:` is gh-only) | issue ✓ |
 | Mentions in unresolved threads | gh-only: `gh search issues "mentions:@me is:open"` (empty on non-gh trackers) | issue (gh-only) |
-| PR comments awaiting your response | `gh api repos/{repo}/pulls/{n}/comments` filtered to threads where you were mentioned and the last reply isn't yours | forge (#711) |
+| PR comments awaiting your response | `gh api repos/{repo}/pulls/{n}/comments` filtered to threads where you were mentioned and the last reply is not yours | forge (#711) |
 | Open Critical/High issues with no assignee in projects you own | `tracker_list "$repo" labels=priority-critical assignee=none` (`assignee=none` degrades on glab) | issue ✓ |
 | Failing CI on your authored open PRs | from `statusCheckRollup` | forge (#711) |
 
-Label semantics note: `labels=priority-high,priority-critical` is passed to each CLI's native `--label` handling, which is **AND** on both gh and glab. The intent here (high **OR** critical) is a pre-existing GitHub-search limitation carried over unchanged — call the two labels in separate `tracker_list` passes and union the results if strict OR is needed.
+Label semantics note: `labels=priority-high,priority-critical` is passed to each CLI's native `--label` handling, which is **AND** on both gh and glab. The intended high **OR** critical search retains a pre-existing GitHub-search limitation. If strict OR is needed, call each label in a separate `tracker_list` pass and union the results.
 
 ## Prioritisation
 
@@ -107,10 +107,10 @@ Tasks are scored and sorted. Higher score = closer to the top.
 | Signal | Score |
 |--------|-------|
 | Failing CI on your own PR | +100 |
-| PR ready to merge (approved, CI green) — yours | +90 |
+| PR ready to merge (approved, CI green): yours | +90 |
 | Critical issue assigned to you | +80 |
 | PR review requested by name on you | +70 |
-| PR review requested on a team you're in | +60 |
+| PR review requested on a team you are in | +60 |
 | Changes requested on your PR | +50 |
 | High-priority issue assigned to you | +40 |
 | New comment on an issue you opened | +30 |
@@ -181,7 +181,7 @@ JSON (`--json`):
 
 | Type | Meaning |
 |------|---------|
-| `MERGE` | Approved + CI green — click merge |
+| `MERGE` | Approved + CI green: click merge |
 | `FIX-CI` | Your PR has a failing check |
 | `REVIEW` | A PR is waiting on your review |
 | `FIX` | Your PR has changes requested |
@@ -203,21 +203,21 @@ JSON (`--json`):
 
 ## Rules
 
-1. **Always include the URL on every line** — the user needs to click
-2. **One action per line** — don't bundle "review and merge" as one task
-3. **Always sort by score, then staleness** — never alphabetical by default
-4. **Multi-project aware** — iterate the registry, not the org
-5. **Never modify anything** — read-only
-6. **Skip resolved items** — if a PR is merged or an issue is closed mid-run, drop it
-7. **Cap at 50 items by default** — if there are more, show count and suggest filters
-8. **Prefer actionable over informational** — "11 PRs reviewed by others" is not a task
+1. **Always include the URL on every line**. The user needs to click
+2. **One action per line**. Do not bundle "review and merge" as one task
+3. **Always sort by score, then staleness**. Never alphabetical by default
+4. **Multi-project aware**: iterate the registry, not the org
+5. **Never modify anything**. Read-only
+6. **Skip resolved items**: if a PR is merged or an issue is closed mid-run, drop it
+7. **Cap at 50 items by default**: if there are more, show count and suggest filters
+8. **Prefer actionable over informational**: "11 PRs reviewed by others" is not a task
 
 ## Related skills
 
-- `/inbox` — same data, grouped by category instead of flattened
-- `/status` — current project state
-- `/projects` — portfolio table
+- `/inbox`: same data, grouped by category instead of flattened
+- `/status`: current project state
+- `/projects`: portfolio table
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

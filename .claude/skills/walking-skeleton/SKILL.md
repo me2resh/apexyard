@@ -5,26 +5,26 @@ argument-hint: "<feature or service the skeleton proves>"
 allowed-tools: Bash, Read, Write
 ---
 
-# /walking-skeleton — Scaffold the Thin End-to-End Slice
+# /walking-skeleton: Scaffold the Thin End-to-End Slice
 
 Read `.claude/rules/writing-standard.md`. Use the **controlled technical writing profile** for the
 walking-skeleton ticket and documentation. Remove empty sections.
 
-Creates a structured GitHub Issue for a **walking skeleton** — the thinnest possible end-to-end slice of a new feature or service: one trivial happy path wired through **every** architectural layer (UI → API → domain → store → deploy → back), with **no business logic beyond the thinnest happy path**. The skeleton actually runs and deploys, so integration and architecture are proven early. You then build the real product on top of it.
+Create a structured GitHub Issue for a **walking skeleton**: the thinnest possible end-to-end slice of a new feature or service. Connect one trivial happy path through **every** architectural layer (UI → API → domain → store → deploy → back). Include **no business logic beyond the thinnest happy path**. The skeleton actually runs and deploys, so integration and architecture are proven early. You then build the real product on top of it.
 
-> **The taxonomy — three skills, two axes (throwaway vs kept, technical vs UX).**
+> **The taxonomy: three skills, two axes (throwaway vs kept, technical vs UX).**
 >
 > | Skill | Question it answers | Lifecycle |
 > |-------|---------------------|-----------|
-> | `/spike` | "Will this **technically** work?" | **THROWAWAY** — discarded after the answer is in (`/spike --close`). |
-> | `/prototype` | "What should this **look and feel** like?" | **THROWAWAY** — discarded after the direction is chosen (`/prototype --close`). |
-> | **`/walking-skeleton`** | "Is the **whole architecture** wired and deployable end-to-end?" | **KEPT** — the production spine you flesh out. Full SDLC. |
+> | `/spike` | "Will this **technically** work?" | **THROWAWAY**: discarded after the answer is in (`/spike --close`). |
+> | `/prototype` | "What should this **look and feel** like?" | **THROWAWAY**: discarded after the direction is chosen (`/prototype --close`). |
+> | **`/walking-skeleton`** | "Is the **whole architecture** wired and deployable end-to-end?" | **KEPT**: the production spine you flesh out. Full SDLC. |
 >
-> The walking skeleton is the **opposite** of a spike/prototype: minimal but **production-shaped and kept**. This distinction prevents the common, expensive confusion where a throwaway exploration gets accidentally promoted into production. A walking skeleton is held to the full bar from day one *because* it stays — it is **NOT** exempt from the AgDR + coverage gates the way `/spike` and `/prototype` are. See `workflows/sdlc.md` § Phase 1 and `.claude/rules/workflow-gates.md`.
+> The walking skeleton is the **opposite** of a spike/prototype: minimal but **production-shaped and kept**. This distinction prevents the common, expensive confusion where a throwaway exploration gets accidentally promoted into production. A walking skeleton is held to the full bar from day one *because* it stays. It is **NOT** exempt from the AgDR + coverage gates the way `/spike` and `/prototype` are. See `workflows/sdlc.md` § Phase 1 and `.claude/rules/workflow-gates.md`.
 
 ## Path resolution
 
-Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+Use `.claude/hooks/_lib-portfolio-paths.sh` to resolve these paths. Read the registry path with `portfolio_registry`. Read the per-project docs directory with `portfolio_projects_dir`. Read the ideas backlog with `portfolio_ideas_backlog`. Source the helper at the top of any bash block that touches those paths:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -32,7 +32,7 @@ source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
 registry=$(portfolio_registry)
 ```
 
-Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Do not hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks. The helper resolves the paths for the adopter's mode. See `docs/multi-project.md`.
 
 ## Usage
 
@@ -44,7 +44,7 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 
 ## Process
 
-### 0. Write the active-issue-skill marker (REQUIRED — me2resh/apexyard#268)
+### 0. Write the active-issue-skill marker (REQUIRED: me2resh/apexyard#268)
 
 Before any `gh issue create` (or other tracker CLI), write this skill's name to the active-issue-skill marker so `require-skill-for-issue-create.sh` lets the command through. At skill entry:
 
@@ -71,7 +71,7 @@ The `clear-issue-skill-marker.sh` SessionStart hook clears only the current sess
 
 ### 1. Resolve the target repo
 
-Read the active-ticket marker of the working tree you are in to determine which repo we're working in. The marker is the `apexyard-ticket` file in the git dir of that tree. See `/start-ticket` "Read the active ticket". If no active ticket, check `apexyard.projects.yaml` for managed projects. If only one project, use it. If multiple, ask:
+Read the active-ticket marker of the working tree you are in to determine which repo we are working in. The marker is the `apexyard-ticket` file in the git dir of that tree. See `/start-ticket` "Read the active ticket". If no active ticket, check `apexyard.projects.yaml` for managed projects. If only one project, use it. If multiple, ask:
 
 ```
 Which project is this walking skeleton for?
@@ -81,7 +81,7 @@ If no projects are registered, ask for the repo in `owner/repo` format.
 
 ### 2. Verify the prefix is on the whitelist
 
-Read `.ticket.prefix_whitelist` from `.claude/project-config.*.json`. A walking skeleton is filed as a **[Feature]**-class ticket — it is kept and goes through the full SDLC. If `Feature` (case-insensitive) is not in the list, warn and stop:
+Read `.ticket.prefix_whitelist` from `.claude/project-config.*.json`. A walking skeleton is filed as a **[Feature]**-class ticket. It is kept and goes through the full SDLC. If `Feature` (case-insensitive) is not in the list, warn and stop:
 
 ```
 This fork's ticket schema doesn't include 'Feature' as a valid prefix.
@@ -102,7 +102,7 @@ Give me a short name.
 
 ### 4. Gather details (one question at a time)
 
-Ask conversationally — do NOT batch all questions. Wait for each answer before asking the next. Fields a–d are required; e is optional.
+Ask conversationally. Do NOT batch all questions. Wait for each answer before asking the next. Fields a–d are required; e is optional.
 
 **a) Layers crossed (required)**
 
@@ -118,7 +118,7 @@ What are yours? (If you can't name the layers, the architecture isn't
 defined enough for a skeleton yet — push back.)
 ```
 
-If the user can't enumerate the layers, the skeleton isn't ready — say so and help them name the architecture first.
+If the user cannot enumerate the layers, the skeleton is not ready: say so and help them name the architecture first.
 
 **b) The thinnest happy path (required)**
 
@@ -135,9 +135,9 @@ What's the single thin path?
 ```
 
 Reject anything with branching logic, validation rules, or multiple
-features — that belongs in the features built ON TOP of the skeleton.
+features. That belongs in the features built ON TOP of the skeleton.
 
-**c) Definition of done — runs AND deploys (required)**
+**c) Definition of done: runs AND deploys (required)**
 
 ```
 How do we prove the skeleton is alive? A walking skeleton is not done
@@ -150,7 +150,7 @@ What's the proof-of-life?
 ```
 
 The "actually deploys / runs in the real environment" bar is the whole
-point — a skeleton that only runs on localhost hasn't proven the
+point: a skeleton that only runs on localhost has not proven the
 architecture. Push for a deploy/run check.
 
 **d) In scope vs out of scope (required)**
@@ -166,10 +166,10 @@ later). This boundary is what keeps a skeleton from quietly growing into
 a half-built feature.
 ```
 
-This in/out boundary is load-bearing — it is the AC that keeps the
-skeleton thin. Don't skip it.
+This in/out boundary is load-bearing. It is the AC that keeps the
+skeleton thin. Do not skip it.
 
-**e) Acceptance criteria (optional — derived if skipped)**
+**e) Acceptance criteria (optional: derived if skipped)**
 
 ```
 Any specific acceptance criteria beyond "every layer is wired, the thin
@@ -177,11 +177,11 @@ path runs, and it deploys"? (or press Enter to derive them from the
 answers above)
 ```
 
-If skipped, derive ACs from a–d. Every walking-skeleton ticket MUST carry, at minimum, these three ACs (kept work — full SDLC applies):
+If skipped, derive ACs from a–d. Every walking-skeleton ticket MUST carry, at minimum, these three ACs (kept work: full SDLC applies):
 
 - [ ] Every named layer is exercised by the slice (integration proven, not mocked end-to-end)
 - [ ] The slice actually runs/deploys in the target environment (proof-of-life check passes)
-- [ ] The slice's domain logic has tests with **> 80% coverage** (this is KEPT code — NOT spike-exempt) and passes Rex code review + the security gate
+- [ ] The slice's domain logic has tests with **> 80% coverage** (this is KEPT code: NOT spike-exempt) and passes Rex code review + the security gate
 
 ### 5. Show the formatted ticket for confirmation
 
@@ -246,8 +246,8 @@ Create this ticket? (yes / edit / cancel)
 ### 7. Create the issue (via the tracker abstraction)
 
 Dispatch creation through `tracker_create` (#670 / AgDR-0072, extended by
-the #709 creator sweep) so the skeleton lands in **this project's** tracker —
-GitHub, GitLab, or a `custom` CLI — per its `tracker:` block in
+the #709 creator sweep) so the skeleton lands in **this project's** tracker:
+GitHub, GitLab, or a `custom` CLI: per its `tracker:` block in
 `apexyard.projects.yaml`. For a GitHub adopter this runs `gh issue create`
 exactly as before.
 
@@ -286,10 +286,10 @@ url="$(printf '%s' "$result" | jq -r '.url')"
 ```
 
 Note: a walking skeleton is filed under the normal feature label (`enhancement`
-by default) — **NOT** under `spike`. The label matters: there is **no**
+by default): **NOT** under `spike`. The label matters: there is **no**
 `walking-skeleton` exemption label, because the skeleton is held to the full
 SDLC. If your fork uses a different feature label, pass that instead. (No
-`tracker_label_ensure` step here — `enhancement` is a default tracker label, so
+`tracker_label_ensure` step here: `enhancement` is a default tracker label, so
 unlike the `spike` / `prototype` / `investigation` trigger labels it does not
 need to be created.)
 
@@ -306,7 +306,7 @@ When you start work:
   git checkout -b feature/GH-${ref}-{slug}-skeleton
 ```
 
-### 9. Remind the operator this is KEPT — full SDLC
+### 9. Remind the operator this is KEPT: full SDLC
 
 ```
 This is a KEPT walking skeleton, not a throwaway. It goes through the
@@ -325,22 +325,22 @@ throwaway.
 
 1. **One question at a time.** Never batch questions. Wait for each answer.
 2. **Always confirm before creating.** Show the full ticket and get explicit "yes".
-3. **Required fields are mandatory.** Layers crossed, the thinnest happy path, the runs-AND-deploys definition of done, and the in/out scope boundary — none can be skipped.
+3. **Required fields are mandatory.** Layers crossed, the thinnest happy path, the runs-AND-deploys definition of done, and the in/out scope boundary: none can be skipped.
 4. **KEPT, not throwaway.** A walking skeleton is filed as a `[Feature]` and held to the full SDLC. It is explicitly **NOT** exempt from the AgDR or > 80% coverage gates the way `/spike` and `/prototype` are. Do not apply the `spike` label or any exemption label.
 5. **No business logic beyond the thinnest happy path.** The skeleton proves wiring, not behaviour. Branching, validation, edge cases, additional features → Out of Scope, built later on top.
-6. **Actually runs/deploys.** The definition of done includes a real run/deploy check. A skeleton that only compiles, or only runs on localhost, hasn't proven the architecture.
+6. **Actually runs/deploys.** The definition of done includes a real run/deploy check. A skeleton that only compiles, or only runs on localhost, has not proven the architecture.
 7. **Branch suggestion.** Always `feature/<TICKET-ID>-<slug>-skeleton`.
 8. **Cross-reference the taxonomy.** If the user really wanted a throwaway technical answer, redirect to `/spike`; if they wanted a throwaway UX/demo direction, redirect to `/prototype`.
 
 ## Where this sits in the SDLC
 
-A walking skeleton is **Build-phase work like any feature** — it just happens to be the *first* feature, and its purpose is to prove the architecture rather than deliver user value. It carries no exemptions:
+A walking skeleton is **Build-phase work like any feature**. It just happens to be the *first* feature, and its purpose is to prove the architecture rather than deliver user value. It carries no exemptions:
 
 | Gate | Walking-skeleton work |
 |------|------------------------|
-| Pre-Build (ticket, ACs) | Required — the skeleton ticket carries the wiring ACs |
-| AgDR for technical decisions | Required — the skeleton usually MAKES the architecture decisions (it's the first place they're committed); record them with `/decide` |
-| Test coverage > 80% | Required — KEPT code; the slice's domain logic is tested |
+| Pre-Build (ticket, ACs) | Required: the skeleton ticket carries the wiring ACs |
+| AgDR for technical decisions | Required: the skeleton usually MAKES the architecture decisions (it is the first place they are committed); record them with `/decide` |
+| Test coverage > 80% | Required: KEPT code; the slice's domain logic is tested |
 | Code Reviewer agent (Rex) | Required |
 | Security Auditor (auth/crypto/secrets diff) | Required |
 | Glossary in PR body | Required |
@@ -350,4 +350,4 @@ See `.claude/rules/workflow-gates.md`, `.claude/skills/spike/SKILL.md` (the thro
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

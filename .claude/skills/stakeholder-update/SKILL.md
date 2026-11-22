@@ -5,7 +5,7 @@ argument-hint: "weekly | monthly | launch"
 allowed-tools: Bash, Read, Grep, Glob
 ---
 
-# /stakeholder-update — Stakeholder Update Generator
+# /stakeholder-update: Stakeholder Update Generator
 
 Read `.claude/rules/writing-standard.md`. Use the **controlled technical writing profile** for the
 stakeholder update: open with the outcome, impact, and next action.
@@ -14,7 +14,7 @@ Synthesises recent activity into a stakeholder-facing update. The skill is audie
 
 ## Path resolution
 
-Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+Use `.claude/hooks/_lib-portfolio-paths.sh` to resolve these paths. Read the registry path with `portfolio_registry`. Read the per-project docs directory with `portfolio_projects_dir`. Read the ideas backlog with `portfolio_ideas_backlog`. Source the helper at the top of any bash block that touches those paths:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -24,11 +24,11 @@ projects_dir=$(portfolio_projects_dir)
 registry=$(portfolio_registry)
 ```
 
-Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Do not hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks. The helper resolves the paths for the adopter's mode. See `docs/multi-project.md`.
 
-**Write targets** (see me2resh/apexyard#373 + #443): paths documented as `projects/<name>/X` in this skill are canonical adopter-facing forms — implement them in bash as `"${projects_dir}/<name>/X"`. Never construct from `"${PWD}/projects/..."`, `"$(git rev-parse --show-toplevel)/projects/..."`, or a literal `./projects/...` — those break in split-portfolio v2 mode where `projects_dir` resolves to a sibling repo.
+**Write targets** (see me2resh/apexyard#373 + #443): paths documented as `projects/<name>/X` in this skill are canonical adopter-facing forms: implement them in bash as `"${projects_dir}/<name>/X"`. Never construct from `"${PWD}/projects/..."`, `"$(git rev-parse --show-toplevel)/projects/..."`, or a literal `./projects/...`. Those break in split-portfolio v2 mode where `projects_dir` resolves to a sibling repo.
 
-**REQUIRED per-block preamble** (see #443): Claude executes each ```bash``` block as a separate shell invocation. The `projects_dir` assignment from the Path resolution section above does NOT carry into later blocks. Every bash block that writes to a `projects/<name>/X` path MUST start with this three-line preamble so it's self-contained:
+**REQUIRED per-block preamble** (see #443): Claude executes each ```bash``` block as a separate shell invocation. The `projects_dir` assignment from the Path resolution section above does NOT carry into later blocks. Every bash block that writes to a `projects/<name>/X` path MUST start with this three-line preamble so it is self-contained:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -63,7 +63,7 @@ The skill pulls from:
 | `git log --since=<since> --oneline` | Commit volume / themes | — |
 | `docs/agdr/AgDR-*.md` (in this period, inside each project) | Decisions made | — |
 | `projects/<name>/roadmap.md` | Strategic direction | — |
-| `gh pr list --state open` | What's in flight | forge (#711) |
+| `gh pr list --state open` | What is in flight | forge (#711) |
 | `projects/ideas-backlog.md` | Ideas captured | — |
 
 The `tracker_list` row passes no `limit`, so it takes the configured default
@@ -74,7 +74,7 @@ non-zero status means the period could not be read, and a zero status means the 
 their completeness is unknown, which is what a custom tracker returns when no `limit` is passed.
 Never report zero resolved issues from a failed read (#1441).
 
-> **Scope caveat (forge axis, #711).** The **PR** rows still call `gh pr list` (the PR/MR forge abstraction is a separate ticket), so `/stakeholder-update` is *issue-axis* tracker-agnostic — the "resolved issues" row works on GitLab-tracked projects; the "shipped / in-flight PRs" rows are GitHub-only until #711. The `since` filter on non-GitHub trackers is applied client-side on `updatedAt` (gh applies it server-side via the `closed:>=` search qualifier).
+> **Scope caveat (forge axis, #711).** The **PR** rows still call `gh pr list`. A separate ticket covers the PR/MR forge abstraction. Thus, `/stakeholder-update` supports different trackers only for issues. The "resolved issues" row works on GitLab-tracked projects. The "shipped / in-flight PRs" rows remain GitHub-only until #711. The `since` filter on non-GitHub trackers is applied client-side on `updatedAt` (gh applies it server-side via the `closed:>=` search qualifier).
 
 `<since>` is computed from the update type:
 
@@ -231,7 +231,7 @@ Never report zero resolved issues from a failed read (#1441).
 4. Pull all inputs in parallel
 5. Synthesise the update using the matching template
 6. Print to stdout, **and** offer to write it to `projects/<name>/updates/{type}-{YYYY-MM-DD}.md`
-7. Offer to post to the team's communication channel (Slack/Discord) — only as a follow-up suggestion, never automatic
+7. Offer to post to the team's communication channel (Slack/Discord): only as a follow-up suggestion, never automatic
 
 ## Portfolio rollup
 
@@ -260,22 +260,22 @@ marketing-site — Weekly
 
 ## Rules
 
-1. **Audience-aware** — never use weekly format for a launch update
-2. **Always include the period** — start and end dates explicit
-3. **Never invent metrics** — if a metric can't be computed, omit it
-4. **Use real PR/issue numbers** — every claim links to evidence
-5. **AgDRs are first-class** — decisions belong in updates, not just code
-6. **Don't auto-publish** — write the file, suggest the channel, but never post on the user's behalf
-7. **Scope-aware** — one section per project, portfolio rollup when no `--project` flag
-8. **Tone matches type** — terse (weekly), narrative (monthly), celebratory (launch)
+1. **Audience-aware**. Never use weekly format for a launch update
+2. **Always include the period**: start and end dates explicit
+3. **Never invent metrics**: if a metric cannot be computed, omit it
+4. **Use real PR/issue numbers**: every claim links to evidence
+5. **AgDRs are first-class**: decisions belong in updates, not just code
+6. **Do not auto-publish**: write the file, suggest the channel, but never post on the user's behalf
+7. **Scope-aware**: one section per project, portfolio rollup when no `--project` flag
+8. **Tone matches type**: terse (weekly), narrative (monthly), celebratory (launch)
 
 ## Related skills
 
-- `/status` — what's currently in flight
-- `/projects` — portfolio table
-- `/roadmap` — what's planned
-- `/decide` — produces AgDRs that this skill cites
+- `/status`: what is currently in flight
+- `/projects`: portfolio table
+- `/roadmap`: what is planned
+- `/decide`: produces AgDRs that this skill cites
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

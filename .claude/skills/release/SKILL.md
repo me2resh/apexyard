@@ -5,16 +5,16 @@ argument-hint: "[--dry-run] [<version, e.g. v1.2.0>]"
 allowed-tools: Bash, Read, Write
 ---
 
-# /release — Cut an apexyard release
+# /release: Cut an apexyard release
 
 Generated release PR descriptions and release notes are durable, human-facing
 artefacts. Read `.claude/rules/writing-standard.md`. Use the **controlled technical writing profile**:
 lead with the outcome and next action, use plain concise prose, and remove empty
 sections.
 
-Standardises the `dev` → `main` release flow introduced by AgDR-0007. Reads the conventional-commit log between `main` and `dev`, proposes a semver bump, **generates and writes the CHANGELOG entry**, **opens the release PR** (dev→main), and triggers the `auto-tag-on-release-pr-merge` GitHub Actions workflow that tags the squash commit and creates a GitHub Release after merge. One command drives the operator from "nothing" to "PR open, ready for Rex + CEO". The tag and GitHub Release entry are created automatically by CI when the PR merges. The release PR also records a `Released-From` trailer with the exact `dev` cut-point SHA, and the changelog step warns loudly if commits inside the resolved changelog range aren't all making it into entries — both guard against the #872 changelog-truncation failure mode. Design rationale: AgDR-0076, AgDR-0094.
+Use the `dev` → `main` release flow from AgDR-0007. Read the conventional-commit log between `main` and `dev`. Propose a semver bump. **Generate and write the CHANGELOG entry**. **Open the release PR** (dev→main). Trigger the `auto-tag-on-release-pr-merge` GitHub Actions workflow. After merge, this workflow tags the squash commit and creates a GitHub Release. One command drives the operator from "nothing" to "PR open, ready for Rex + CEO". CI automatically creates the tag and GitHub Release entry when the PR merges. The release PR also records a `Released-From` trailer with the exact `dev` cut-point SHA. The changelog step gives a clear warning if any commits in the resolved changelog range lack entries. Both guard against the #872 changelog-truncation failure mode. Design rationale: AgDR-0076, AgDR-0094.
 
-This skill is **framework-only** — it's for cutting apexyard releases, not for releasing managed projects under governance. Managed projects stay trunk-based and don't have a release-cut flow.
+This skill is **framework-only**. It is for cutting apexyard releases, not for releasing managed projects under governance. Managed projects stay trunk-based and do not have a release-cut flow.
 
 ## Usage
 
@@ -31,10 +31,10 @@ This skill is **framework-only** — it's for cutting apexyard releases, not for
 
 Verify:
 
-- Current repo IS the apexyard framework (origin or upstream is `me2resh/apexyard`). Refuse otherwise — this skill is framework-only.
+- Current repo IS the apexyard framework (origin or upstream is `me2resh/apexyard`). Refuse otherwise. This skill is framework-only.
 - Working tree is clean. Refuse if uncommitted changes.
-- `dev` branch exists (`git rev-parse --verify upstream/dev`). Refuse if absent — adopt the dev/main model first.
-- `dev` is ahead of `main` by ≥ 1 commit. Refuse if equal — nothing to release.
+- `dev` branch exists (`git rev-parse --verify upstream/dev`). Refuse if absent: adopt the dev/main model first.
+- `dev` is ahead of `main` by ≥ 1 commit. Refuse if equal: nothing to release.
 
 ### 1a. Check security remediation SLAs (blocking)
 
@@ -90,7 +90,7 @@ Override? [Enter to accept, or type a version like v1.3.0]
 
 ### 3. Generate the CHANGELOG draft
 
-Call the helper script `bin/release-changelog.sh`, which encapsulates the `git log` + conventional-commit grouping + PR-number extraction logic and is independently tested. Capture both its stdout (the changelog) and stderr (the resolved commit range) — the count-mismatch guard below needs both:
+Call the helper script `bin/release-changelog.sh`, which encapsulates the `git log` + conventional-commit grouping + PR-number extraction logic and is independently tested. Capture both its stdout (the changelog) and stderr (the resolved commit range): the count-mismatch guard below needs both:
 
 ```bash
 CHANGELOG_DRAFT=$(PREV_TAG="vX.Y.Z" \
@@ -117,7 +117,7 @@ if [ -z "$LOG_RANGE" ]; then
 fi
 ```
 
-**#1076 + #1490 — a `Closes` bullet requires a same-repo scope AND a closing keyword in the real PR body.** `bin/release-changelog.sh` emits `- Closes #N` only when the commit subject carries a recognised same-repo conventional-commit scope (`fix(#1042): ...`) **and** the PR body fetched with `$RELEASE_GH pr view <PR> --repo <repo> --json body --jq .body` (for subjects ending in `(#<PR>)`) contains a GitHub closing keyword for that same number (`Closes #1042`, `Fixes #1042`, or `Resolves #1042`). Do not read the squash commit body (`%b`): this repo uses `squash_merge_commit_message=COMMIT_MESSAGES`, so `%b` holds branch commit messages, not the PR description. A title reference alone is not enough when the fetch succeeds: a PR titled `feat(#N)` whose body says only `Refs #N` must produce no close line (#1490 — that nearly closed partially-fixed issues in v5.7.0). If `gh` fails for a PR, keep the pre-#1490 / `dev` behaviour for that commit (scoped title closes) and print a warning naming the PR — never silently drop a close because of a fetch failure. Unscoped commits, cross-repo scopes (`docs(owner/repo#N): ...`), and revert commits still emit no `Closes` line at all (#1076). Governing rule: prefer a MISSING close over a WRONG close when the PR body is readable.
+**#1076 + #1490: a `Closes` bullet requires a same-repo scope AND a closing keyword in the real PR body.** `bin/release-changelog.sh` emits `- Closes #N` only when the commit subject carries a recognised same-repo conventional-commit scope (`fix(#1042): ...`) **and** the PR body fetched with `$RELEASE_GH pr view <PR> --repo <repo> --json body --jq .body` (for subjects ending in `(#<PR>)`) contains a GitHub closing keyword for that same number (`Closes #1042`, `Fixes #1042`, or `Resolves #1042`). Do not read the squash commit body (`%b`). This repo uses `squash_merge_commit_message=COMMIT_MESSAGES`, so `%b` holds branch commit messages, not the PR description. A title reference alone is not enough when the fetch succeeds: a PR titled `feat(#N)` whose body says only `Refs #N` must produce no close line (#1490. That nearly closed partially-fixed issues in v5.7.0). If `gh` fails for a PR, keep the pre-#1490 / `dev` behaviour for that commit (scoped title closes) and print a warning naming the PR. Never silently drop a close because of a fetch failure. Unscoped commits, cross-repo scopes (`docs(owner/repo#N): ...`), and revert commits still emit no `Closes` line at all (#1076). Governing rule: prefer a MISSING close over a WRONG close when the PR body is readable.
 
 The helper emits markdown to stdout in the format:
 
@@ -145,15 +145,15 @@ Minor release — N features, M fixes.
 ...
 ```
 
-**#1056 — one bullet per reference, not a comma list.** GitHub's `Closes` keyword only auto-closes the reference *immediately following* it — a single `Closes #N, #M, #P` line only ever closed `#N`; everything after the first was silently inert. The generator now emits one `- Closes #N` bullet per reference so every one of them actually fires. **#1076 + #1490 narrowed which numbers are eligible:** a same-repo scoped commit whose **PR body** (via `gh pr view`) closes that number (`fix(#1042): ... (#PR)` + `Closes #1042` in the PR body) is eligible; a scoped title with only `Refs #N` in the PR body is not; an unscoped commit, a cross-repo scope, and a revert commit are not. On a `gh` fetch failure the scoped title still closes, with a warning. A release with fewer `Closes` bullets than a title-only generator is expected when titles scoped issues that the PR bodies only referenced.
+**#1056: one bullet per reference, not a comma list.** GitHub's `Closes` keyword only auto-closes the reference *immediately following* it: a single `Closes #N, #M, #P` line only ever closed `#N`; everything after the first was silently inert. The generator now emits one `- Closes #N` bullet per reference so every one of them actually fires. **#1076 + #1490 narrowed which numbers are eligible:** a same-repo scoped commit whose **PR body** (via `gh pr view`) closes that number (`fix(#1042): ... (#PR)` + `Closes #1042` in the PR body) is eligible; a scoped title with only `Refs #N` in the PR body is not; an unscoped commit, a cross-repo scope, and a revert commit are not. On a `gh` fetch failure the scoped title still closes, with a warning. A release with fewer `Closes` bullets than a title-only generator is expected when titles scoped issues that the PR bodies only referenced.
 
 #### Count-mismatch guard (AgDR-0094, option D)
 
-Immediately after generating the draft, sanity-check its entry count against the raw commit count in `$LOG_RANGE` — the **same range `bin/release-changelog.sh` actually built the changelog from**, captured in step 3 above. This is the cheap, always-on backstop behind the `Released-From` trailer (step 4) — it's what caught the v5.0.0 under-count by hand, and it stays even after the trailer exists as defence in depth against a mangled trailer or a trailer-less pre-AgDR-0094 tag.
+Immediately after generating the draft, sanity-check its entry count against the raw commit count in `$LOG_RANGE`: the **same range `bin/release-changelog.sh` actually built the changelog from**, captured in step 3 above. This is the cheap, always-on backstop behind the `Released-From` trailer (step 4). It is what caught the v5.0.0 under-count by hand, and it stays even after the trailer exists as defence in depth against a mangled trailer or a trailer-less pre-AgDR-0094 tag.
 
-**#1002 — do not compare against `upstream/main..upstream/dev`.** Under the release-cut model `main` only ever receives squash merges, so every individual `dev` commit stays permanently unreachable from `main` — `main..dev` grows monotonically with every release and can never shrink. Comparing the changelog's entry count against that raw, ever-growing number always false-positives (v5.2.0 cut: 402 raw commits vs. ~1-2 real entries, a "gap" of 400 on a perfectly correct changelog). `$LOG_RANGE` is anchored on the actual cut point (the `Released-From` trailer, or the #737 sync-boundary fallback) and is the range that matters:
+**#1002. Do not compare against `upstream/main..upstream/dev`.** Under the release-cut model `main` only ever receives squash merges, so every individual `dev` commit stays permanently unreachable from `main`: `main..dev` grows monotonically with every release and can never shrink. Comparing the changelog's entry count against that raw, ever-growing number always false-positives (v5.2.0 cut: 402 raw commits vs. ~1-2 real entries, a "gap" of 400 on a perfectly correct changelog). `$LOG_RANGE` is anchored on the actual cut point (the `Released-From` trailer, or the #737 sync-boundary fallback) and is the range that matters:
 
-**#1017 — what this guard can (and can't) still see.** `RAW_COUNT` and `ENTRY_COUNT` are now *both* derived from the same `$LOG_RANGE`, so the guard can no longer catch a truncated *range* the way it originally did — if `$LOG_RANGE` itself were too narrow, both counts would shrink together and the gap would stay small. That's an acceptable trade, not a silent regression: `$LOG_RANGE`'s anchor is exact by construction once a `Released-From` trailer exists (AgDR-0094), and step 6's post-merge check now makes a missing trailer a hard failure — so the truncated-range case is closed at its source. What the guard genuinely still catches is **classification drop-out inside a correct range**: a commit that really is inside `$LOG_RANGE` but that `bin/release-changelog.sh` didn't turn into a changelog bullet (a subject it failed to classify, a filtering bug, etc.). The warning text below describes that condition, not the old truncated-range one — say what's actually being detected, not what the guard detected before #1012 re-anchored it.
+**#1017: what this guard can (and cannot) still see.** `RAW_COUNT` and `ENTRY_COUNT` are now *both* derived from the same `$LOG_RANGE`, so the guard can no longer catch a truncated *range* the way it originally did: if `$LOG_RANGE` itself were too narrow, both counts would shrink together and the gap would stay small. That is an acceptable trade, not a silent regression: `$LOG_RANGE`'s anchor is exact by construction once a `Released-From` trailer exists (AgDR-0094), and step 6's post-merge check now makes a missing trailer a hard failure: so the truncated-range case is closed at its source. What the guard genuinely still catches is **classification drop-out inside a correct range**: a commit that really is inside `$LOG_RANGE` but that `bin/release-changelog.sh` did not turn into a changelog bullet (a subject it failed to classify, a filtering bug, etc.). The warning text below describes that condition, not the old truncated-range one: say what is actually being detected, not what the guard detected before #1012 re-anchored it.
 
 ```bash
 RAW_COUNT=$(git rev-list --count "$LOG_RANGE") || {
@@ -188,7 +188,7 @@ fi
 
 #### Migration script check (soft, #1105)
 
-Immediately after the changelog draft, check whether this release carries a per-adopter migration script. This is the check `docs/upgrading.md` and `.claude/skills/update/SKILL.md` § 8b have documented since AgDR-0032 but that never actually existed here until #1105 — for 21 consecutive releases nothing flagged the omission, which is exactly how `.claude/migrations/` ended up with scripts for only two of the ~30 release hops it should cover. **This check is advisory only — it warns, it does not block the release.** Making it a hard gate is a larger design decision than this fix covers (see Rule 13 below for why it's deliberately left as a follow-up, not shipped here).
+Immediately after the changelog draft, check whether this release carries a per-adopter migration script. This is the check `docs/upgrading.md` and `.claude/skills/update/SKILL.md` § 8b have documented since AgDR-0032 but that never actually existed here until #1105: for 21 consecutive releases nothing flagged the omission, which is exactly how `.claude/migrations/` ended up with scripts for only two of the ~30 release hops it should cover. **This check is advisory only. It warns, it does not block the release.** Making it a hard gate is a larger design decision than this fix covers (see Rule 13 below for why it is deliberately left as a follow-up, not shipped here).
 
 ```bash
 MIGRATION_SCRIPT=".claude/migrations/${PREV_TAG}-to-vA.B.C.sh"
@@ -209,7 +209,7 @@ fi
 
 #### Lines this release removes from main (#1490)
 
-After the changelog draft (and on `--dry-run` against `upstream/dev`; after step 4 against the release branch), list every line the release tip deletes from `main`. A release cut from `dev` can drop content that is still on `main` — the v5.6.3 sync removed two contributor rows from `README.md` on `dev`, and the v5.7.0 release then removed them from `main` (#1393). Call the helper, show the listing, and **ask before continuing** when it is non-empty:
+After the changelog draft (and on `--dry-run` against `upstream/dev`; after step 4 against the release branch), list every line the release tip deletes from `main`. A release cut from `dev` can drop content that is still on `main`: the v5.6.3 sync removed two contributor rows from `README.md` on `dev`, and the v5.7.0 release then removed them from `main` (#1393). Call the helper, show the listing, and **ask before continuing** when it is non-empty:
 
 ```bash
 # On --dry-run use upstream/dev. After step 4 use the release branch tip.
@@ -267,9 +267,9 @@ Released-From: $DEV_SHA"
 git push upstream "release/vA.B.C"
 ```
 
-**#1004 — the trailer belongs in this commit message, not only the PR body.** The release branch has exactly one commit, so this is the message a squash carries forward by construction — independent of how the merge is invoked. See step 6 for why the PR body copy alone used to silently lose the trailer.
+**#1004: the trailer belongs in this commit message, not only the PR body.** The release branch has exactly one commit, so this is the message a squash carries forward by construction: independent of how the merge is invoked. See step 6 for why the PR body copy alone used to silently lose the trailer.
 
-**#1490 — re-run the removed-lines check against the release branch** before opening the PR (step 5). Step 3's dry-run compared `upstream/main..upstream/dev`. The release branch now also carries the CHANGELOG commit, so re-check with `HEAD_REF=release/vA.B.C`. If new removals appear, show them and ask again before `gh pr create`.
+**#1490: re-run the removed-lines check against the release branch** before opening the PR (step 5). Step 3's dry-run compared `upstream/main..upstream/dev`. The release branch now also carries the CHANGELOG commit, so re-check with `HEAD_REF=release/vA.B.C`. If new removals appear, show them and ask again before `gh pr create`.
 
 ### 5. Open the release PR
 
@@ -282,7 +282,7 @@ gh pr create \
   --body-file /tmp/release-pr-body.md
 ```
 
-**PR body template** (write to `/tmp/release-pr-body.md` before the `gh pr create` call). Interpolate `$DEV_SHA` (captured above) into the final line, matching the trailer already written into the branch commit in step 4. This copy is for **human visibility** on the PR page — this repo's `squash_merge_commit_message` setting is `COMMIT_MESSAGES`, so GitHub builds the squash commit's body from the branch's own commit messages, not this PR body, at merge time (#1004). The step-4 commit message is the authoritative copy the squash carries forward; keep this one in sync so a reviewer reading the PR sees the same trailer without having to check the branch commit:
+**PR body template** (write to `/tmp/release-pr-body.md` before the `gh pr create` call). Interpolate `$DEV_SHA` (captured above) into the final line, matching the trailer already written into the branch commit in step 4. This copy is for **human visibility** on the PR page. This repo's `squash_merge_commit_message` setting is `COMMIT_MESSAGES`, so GitHub builds the squash commit's body from the branch's own commit messages, not this PR body, at merge time (#1004). The step-4 commit message is the authoritative copy the squash carries forward. Keep this one in sync so a reviewer reading the PR sees the same trailer without having to check the branch commit:
 
 ```markdown
 <!-- multi-close: approved -->
@@ -326,7 +326,7 @@ Refs #<release-ticket>
 Released-From: $DEV_SHA
 ```
 
-**Why the trailer sits after the Glossary, as its own final paragraph:** `git interpret-trailers` (and the `%(trailers:...)` pretty-format used by `bin/release-changelog.sh`) only recognises a trailer block when it is the LAST paragraph of the message — a blank line before it, nothing but `Key: value` lines after it. Putting `Released-From:` anywhere earlier (e.g. inside the Summary or Testing sections) would make it invisible to the reader on the next release cut. Do not add anything below the trailer line.
+**Why the trailer sits after the Glossary, as its own final paragraph:** `git interpret-trailers` (and the `%(trailers:...)` pretty-format used by `bin/release-changelog.sh`) only recognises a trailer block when it is the LAST paragraph of the message: a blank line before it, nothing but `Key: value` lines after it. Putting `Released-From:` anywhere earlier (for example, Inside the Summary or Testing sections) would make it invisible to the reader on the next release cut. Do not add anything below the trailer line.
 
 **PR title format** (`release` is whitelisted in `pr.title_type_whitelist` since #168):
 
@@ -345,7 +345,7 @@ The release PR runs through the normal flow:
 
 `/release` does **not** auto-merge. The CEO retains the discrete moment. The tag and GitHub Release are created automatically by the `auto-tag-on-release-pr-merge.yml` CI workflow **after** the merge.
 
-**#1004 — merge with an explicit subject + body, not a bare `gh pr merge --squash`.** This repo has `squash_merge_commit_message=COMMIT_MESSAGES` (`gh api repos/me2resh/apexyard --jq '.squash_merge_commit_message'`), so GitHub's *default* squash body is built from the release branch's own commit messages, not the PR body. Step 4 already writes the `Released-From` trailer into the branch's sole commit, so a bare `gh pr merge --squash` would, in the common case, still carry the trailer through by construction. Don't rely on that alone — pass the reviewed PR body explicitly instead, so the merged commit is guaranteed to match what Rex and the CEO actually reviewed, independent of repo settings, a stray fixup commit changing the branch's commit count, or a future change to `squash_merge_commit_message`:
+**#1004: merge with an explicit subject + body, not a bare `gh pr merge --squash`.** This repo has `squash_merge_commit_message=COMMIT_MESSAGES` (`gh api repos/me2resh/apexyard --jq '.squash_merge_commit_message'`), so GitHub's *default* squash body is built from the release branch's own commit messages, not the PR body. Step 4 already writes the `Released-From` trailer into the branch's sole commit, so a bare `gh pr merge --squash` would, in the common case, still carry the trailer through by construction. Do not rely on that alone: pass the reviewed PR body explicitly instead, so the merged commit is guaranteed to match what Rex and the CEO actually reviewed, independent of repo settings, a stray fixup commit changing the branch's commit count, or a future change to `squash_merge_commit_message`:
 
 ```bash
 gh pr merge <pr-number> --repo me2resh/apexyard --squash \
@@ -353,13 +353,13 @@ gh pr merge <pr-number> --repo me2resh/apexyard --squash \
   --body-file /tmp/release-pr-body.md
 ```
 
-`/tmp/release-pr-body.md` is the same file written in step 5 — its final paragraph is already the `Released-From` trailer, so this is the one merge command that keeps the trailer, the changelog, and the reviewed content all in sync on the squash commit.
+`/tmp/release-pr-body.md` is the same file written in step 5: its final paragraph is already the `Released-From` trailer, so this is the one merge command that keeps the trailer, the changelog, and the reviewed content all in sync on the squash commit.
 
-**Merging through `/approve-merge` instead of this raw command (#1136, `AgDR-0132`):** `/approve-merge` is the mandated human-only merge path (#1042) — in practice this step's merge almost always runs there, not as the raw `gh pr merge` shown above. `/approve-merge` now detects a release-class PR (head branch `release/vA.B.C`, or title starting `release(`) the same way it already detects a sync-class PR, and automatically passes `--subject`/`--body-file` built from the PR's own title/body — so it produces the same trailer-preserving squash this rule describes, without the operator needing to run the raw command by hand. See `.claude/skills/approve-merge/SKILL.md` step 6. The raw command above stays documented as the fallback for a manual merge outside `/approve-merge` (e.g. `tracker.kind=none`, or the CEO merging directly on the GitHub UI/CLI).
+**Merging through `/approve-merge` instead of this raw command (#1136, `AgDR-0132`):** `/approve-merge` is the mandated human-only merge path (#1042): in practice this step's merge almost always runs there, not as the raw `gh pr merge` shown above. `/approve-merge` now detects a release-class PR (head branch `release/vA.B.C`, or title starting `release(`) the same way it already detects a sync-class PR, and automatically passes `--subject`/`--body-file` built from the PR's own title/body: so it produces the same trailer-preserving squash this rule describes, without the operator needing to run the raw command by hand. See `.claude/skills/approve-merge/SKILL.md` step 6. The raw command above stays documented as the fallback for a manual merge outside `/approve-merge` (for example, `tracker.kind=none`, or the CEO merging directly on the GitHub UI/CLI).
 
-**Why not just change the repo's `squash_merge_commit_message` setting to `PR_BODY`?** Considered and rejected: that's a repo-wide default that would change the squash body of *every* PR merged to this repo, not just releases — the least-targeted option from #1004's own candidate list. The explicit `--subject`/`--body-file` flags above override the default only for this one merge call, which is exactly the blast radius this fix needs.
+**Why not just change the repo's `squash_merge_commit_message` setting to `PR_BODY`?** Considered and rejected. That is a repo-wide default that would change the squash body of *every* PR merged to this repo, not just releases: the least-targeted option from #1004's own candidate list. The explicit `--subject`/`--body-file` flags above override the default only for this one merge call, which is exactly the blast radius this fix needs.
 
-**Verify immediately after merge — do not skip:**
+**Verify immediately after merge. Do not skip:**
 
 ```bash
 git fetch upstream main
@@ -374,17 +374,17 @@ fi
 echo "Released-From trailer confirmed: $TRAILER"
 ```
 
-This is the loud-failure the trailer mechanism needs (#1004) — a missing trailer is otherwise invisible until the *next* release cut mis-anchors its range.
+This is the loud-failure the trailer mechanism needs (#1004): a missing trailer is otherwise invisible until the *next* release cut mis-anchors its range.
 
 ### 7. Tag + GitHub Release (automated via CI)
 
 When the release PR is squash-merged to `main`, the `.github/workflows/auto-tag-on-release-pr-merge.yml` workflow fires automatically:
 
 1. Extracts the version from the branch name (`release/vA.B.C` → `vA.B.C`).
-2. Uses `github.sha` (the squash commit SHA — already the correct commit on `main`).
+2. Uses `github.sha` (the squash commit SHA: already the correct commit on `main`).
 3. Runs the ancestry guard: `git merge-base --is-ancestor <sha> main`.
 4. Creates an annotated tag and pushes it with `git push origin --tags`.
-5. Creates a GitHub Release entry from the CHANGELOG section in the PR body (in the same job — a tag pushed via GITHUB_TOKEN does not trigger a secondary release workflow).
+5. Creates a GitHub Release entry from the CHANGELOG section in the PR body (in the same job: a tag pushed via GITHUB_TOKEN does not trigger a secondary release workflow).
 6. Calls `release-cli.yml` to attach the tested CLI archive `apexyard-<tag>.tar.gz` from `bin/build-release-assets.sh`.
    A retry uploads only missing assets, so download counts survive (AgDR-0318).
    Retries preserve existing assets and their download counts.
@@ -421,13 +421,13 @@ gh workflow run release-cli.yml --repo me2resh/apexyard -f tag=vA.B.C
 
 #### Post-tag release checklist
 
-Verify all four assertions hold (the first three: CI workflow also checks these; the fourth: step 6's verification above, repeated here so it isn't lost if step 6 was skipped):
+Verify all four assertions hold (the first three: CI workflow also checks these; the fourth: step 6's verification above, repeated here so it is not lost if step 6 was skipped):
 
 - [ ] `git merge-base --is-ancestor vA.B.C upstream/main` exits 0
 - [ ] `git describe --tags --abbrev=0 upstream/main` returns `vA.B.C`
 - [ ] The release contains `apexyard-vA.B.C.tar.gz` and its checksum.
 - [ ] GitHub Release entry exists at `https://github.com/me2resh/apexyard/releases/tag/vA.B.C`
-- [ ] `git log -1 --pretty=format:'%(trailers:key=Released-From,valueonly)' vA.B.C` is **non-empty** (#1004) — if empty, STOP before running `/release-sync`; the next release's changelog range will silently degrade to the sync-boundary heuristic
+- [ ] `git log -1 --pretty=format:'%(trailers:key=Released-From,valueonly)' vA.B.C` is **non-empty** (#1004): if empty, STOP before running `/release-sync`; the next release's changelog range will silently degrade to the sync-boundary heuristic
 
 ### 8. Confirm
 
@@ -448,7 +448,7 @@ Invoke:
 /release-sync vA.B.C
 ```
 
-This files a `sync/main-to-dev-after-vA.B.C → dev` PR that merges `upstream/main` into `upstream/dev` with `-X ours`, making the squash commit an ancestor of `dev`. The skill is idempotent — if main and dev are already in sync it exits 0 without creating a PR.
+This files a `sync/main-to-dev-after-vA.B.C → dev` PR that merges `upstream/main` into `upstream/dev` with `-X ours`, making the squash commit an ancestor of `dev`. The skill is idempotent: if main and dev are already in sync it exits 0 without creating a PR.
 
 **Do not skip this step.** The v2.0.0 release suffered 99 merge conflicts because accumulated sync-back skips were not addressed for multiple release cycles (#403).
 
@@ -468,34 +468,34 @@ Step 4 matters. The v5.10.0 release left the site on v5.6.3.
 ## Rules
 
 1. **Framework-only.** Refuse to run on a managed project. The dev/main split is apexyard-the-framework's pattern, not the portfolio's.
-2. **Pre-flight every check** in step 1 — never proceed past a dirty tree, missing dev branch, or zero-commit delta.
-3. **Always show the bump for confirmation** — auto-detection is a proposal, not a fait accompli. The CEO's eyes are the final check on semver intent.
-4. **CHANGELOG is editable** before the release PR opens. Don't auto-file what hasn't been reviewed.
+2. **Pre-flight every check** in step 1. Never proceed past a dirty tree, missing dev branch, or zero-commit delta.
+3. **Always show the bump for confirmation**: auto-detection is a proposal, not a fait accompli. The CEO's eyes are the final check on semver intent.
+4. **CHANGELOG is editable** before the release PR opens. Do not auto-file what has not been reviewed.
 5. **Never auto-merge the release PR.** Rex + CEO approval applies as for any PR. The skill stops at "PR opened."
 6. **Never tag before merge, and never tag the release-branch HEAD.** The auto-tag workflow handles tagging after merge, always using `github.sha` (the squash commit). The manual fallback similarly tags `upstream/main`. See step 7 for the full guard.
-7. **`<!-- multi-close: approved -->`** in the release PR body is required — release PRs legitimately close many tickets at once.
+7. **`<!-- multi-close: approved -->`** in the release PR body is required: release PRs legitimately close many tickets at once.
 8. **`--dry-run` stops before writing any files.** The draft CHANGELOG section and PR body are shown; nothing is committed, branched, pushed, or filed.
-9. **The `Released-From` trailer must be its own final paragraph** in BOTH the step-4 branch commit and the step-5 PR body (AgDR-0094). It is what makes the next release's changelog range deterministic — a trailer that lands mid-body (or gets pushed off the end by later edits) silently degrades back to the pre-AgDR-0094 sync-boundary heuristic, with all its known failure modes (#737, #872).
-10. **Show the count-mismatch warning if it fires** — a loud gap between `$LOG_RANGE`'s raw commit count and the changelog's entry count means commits inside that range didn't make it into changelog entries (#1017 — not a truncated range; both counts derive from the same `$LOG_RANGE`, so a truncated range can no longer produce this gap). Don't proceed past it without the operator explicitly confirming the range is correct. **Never compare against `upstream/main..upstream/dev`** (#1002) — under the release-cut squash model that range only ever grows, so it always false-positives; `$LOG_RANGE` (captured in step 3) is the range the changelog was actually built from. **A `$LOG_RANGE` that fails to resolve or fails `git rev-list` must halt the release (`exit 1`), never pass silently** (#1017) — see step 3's guard.
-11. **Merge the release PR with an explicit `--subject`/`--body-file`, never a bare `gh pr merge --squash`** (#1004) — this repo's `squash_merge_commit_message=COMMIT_MESSAGES` setting silently drops a trailer that lives only in the PR body. See step 6. **`/approve-merge` — the actual merge path for #1042 — applies this automatically for a release-class PR** (#1136, `AgDR-0132`); the raw command in step 6 is the fallback for a manual merge outside `/approve-merge`.
-12. **Verify the `Released-From` trailer landed on the squash commit immediately after merge, and stop before `/release-sync` if it didn't** (#1004) — a missing trailer is invisible until the *next* release cut silently mis-anchors its changelog range. See step 6's verification block and the post-tag checklist in step 7.
-13. **Surface, but don't block on, a missing migration script** (#1105) — step 3's migration-script check and the PR body's "Migration script" checkbox are both **advisory**. This is deliberate, not an oversight: whether a release needs an adopter-facing migration is a judgement call (does this release actually change anything an adopter's fork needs to react to?), and a hard-blocking gate would force every doc-only or internal-tooling release to manufacture a no-op script just to pass CI. Making it a blocking gate (a pre-push hook, or a required PR-create check) is a larger design decision — deliberately left as a follow-up, not bundled into #1105's fix. Until then, the discipline is: read the warning, decide honestly, and don't skip past it out of habit — that's exactly the discipline gap that let 21 consecutive releases ship with no migration script at all.
-14. **List every line the release removes from main, and ask before continuing** (#1490) — run `bin/release-list-removed-lines.sh` against `upstream/main..$COMPARE_REF` (dev on dry-run, the release branch after step 4). A non-empty listing is a stop-and-ask, not a silent proceed: that is how the v5.7.0 cut dropped contributor rows that still lived on main.
+9. **The `Released-From` trailer must be its own final paragraph** in BOTH the step-4 branch commit and the step-5 PR body (AgDR-0094). It is what makes the next release's changelog range deterministic: a trailer that lands mid-body (or gets pushed off the end by later edits) silently degrades back to the pre-AgDR-0094 sync-boundary heuristic, with all its known failure modes (#737, #872).
+10. **Show the count-mismatch warning if it fires**: a loud gap between `$LOG_RANGE`'s raw commit count and the changelog's entry count means commits inside that range did not make it into changelog entries (#1017: not a truncated range. Both counts derive from the same `$LOG_RANGE`, so a truncated range can no longer produce this gap). Do not proceed past it without the operator explicitly confirming the range is correct. **Never compare against `upstream/main..upstream/dev`** (#1002): under the release-cut squash model that range only ever grows, so it always false-positives; `$LOG_RANGE` (captured in step 3) is the range the changelog was actually built from. **A `$LOG_RANGE` that fails to resolve or fails `git rev-list` must halt the release (`exit 1`), never pass silently** (#1017). See step 3's guard.
+11. **Merge the release PR with an explicit `--subject`/`--body-file`, never a bare `gh pr merge --squash`** (#1004). This repo's `squash_merge_commit_message=COMMIT_MESSAGES` setting silently drops a trailer that lives only in the PR body. See step 6. **`/approve-merge`: the actual merge path for #1042: applies this automatically for a release-class PR** (#1136, `AgDR-0132`); the raw command in step 6 is the fallback for a manual merge outside `/approve-merge`.
+12. **Verify the `Released-From` trailer landed on the squash commit immediately after merge, and stop before `/release-sync` if it did not** (#1004): a missing trailer is invisible until the *next* release cut silently mis-anchors its changelog range. See step 6's verification block and the post-tag checklist in step 7.
+13. **Surface, but do not block on, a missing migration script** (#1105): step 3's migration-script check and the PR body's "Migration script" checkbox are both **advisory**. This is deliberate, not an oversight: whether a release needs an adopter-facing migration is a judgement call (does this release actually change anything an adopter's fork needs to react to?), and a hard-blocking gate would force every doc-only or internal-tooling release to manufacture a no-op script just to pass CI. Making it a blocking gate (a pre-push hook, or a required PR-create check) is a larger design decision: deliberately left as a follow-up, not bundled into #1105's fix. Until then, the discipline is. Read the warning, decide honestly, and do not skip past it out of habit. That is exactly the discipline gap that let 21 consecutive releases ship with no migration script at all.
+14. **List every line the release removes from main, and ask before continuing** (#1490). Run `bin/release-list-removed-lines.sh` against `upstream/main..$COMPARE_REF` (dev on dry-run, the release branch after step 4). A non-empty listing is a stop-and-ask, not a silent proceed. That is how the v5.7.0 cut dropped contributor rows that still lived on main.
 
 ## Related
 
-- `AgDR-0007` — the release-cut branch model this skill enacts
-- `AgDR-0076` — the automation design record (this enhancement)
-- `AgDR-0094` — release provenance via the `Released-From` trailer + count-mismatch guard (#872)
-- `AgDR-0197` — close only from PR-body keywords + list lines a release removes from main (#1490)
-- `bin/release-changelog.sh` — the changelog generation helper script, independently tested
-- `bin/release-list-removed-lines.sh` — lists lines the release tip deletes from main (#1490)
-- `docs/release-process.md` — the prose runbook (this skill is the automation; the doc is the manual fallback)
-- `.github/workflows/auto-tag-on-release-pr-merge.yml` — the CI workflow that tags the squash commit after merge
-- `golden-paths/pipelines/auto-tag-on-release-pr-merge.yml` — the reusable template for managed projects
-- `.claude/skills/update/SKILL.md` — the inverse skill, used by adopters pulling new releases into their fork
-- `.claude/skills/release-sync/SKILL.md` — the mandatory follow-up skill that syncs main back to dev after every release, preventing squash-divergence accumulation
+- `AgDR-0007`: the release-cut branch model this skill enacts
+- `AgDR-0076`: the automation design record (this enhancement)
+- `AgDR-0094`: release provenance via the `Released-From` trailer + count-mismatch guard (#872)
+- `AgDR-0197`: close only from PR-body keywords + list lines a release removes from main (#1490)
+- `bin/release-changelog.sh`: the changelog generation helper script, independently tested
+- `bin/release-list-removed-lines.sh`: lists lines the release tip deletes from main (#1490)
+- `docs/release-process.md`: the prose runbook (this skill is the automation; the doc is the manual fallback)
+- `.github/workflows/auto-tag-on-release-pr-merge.yml`: the CI workflow that tags the squash commit after merge
+- `golden-paths/pipelines/auto-tag-on-release-pr-merge.yml`: the reusable template for managed projects
+- `.claude/skills/update/SKILL.md`: the inverse skill, used by adopters pulling new releases into their fork
+- `.claude/skills/release-sync/SKILL.md`: the mandatory follow-up skill that syncs main back to dev after every release, preventing squash-divergence accumulation
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*
