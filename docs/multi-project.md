@@ -179,7 +179,7 @@ Use this mode when any project name must stay private on GitHub Free. The framew
 ```
 ~/ops/
 ├── apexyard/                ← public fork of me2resh/apexyard (framework code + tooling)
-└── apexyard-portfolio/      ← private repo (registry + per-project docs — never goes public)
+└── apexyard-portfolio/      ← private repo (registry + per-project docs: never goes public)
 ```
 
 The default sibling-dir name is **`<fork>-portfolio`**, so the relationship between the two repos is self-documenting on disk and on GitHub. If you kept the fork name as `apexyard`, the sibling defaults to `apexyard-portfolio`. If you renamed the fork (e.g. `cos` for Chief-of-Staff), the sibling defaults to `cos-portfolio`. Pick something else if you would prefer: the framework only cares about the local path you point the config block at.
@@ -262,7 +262,7 @@ defaults:
 EOF
 
 # v2: onboarding.yaml lives here too. Seed from the framework template
-# OR run /setup later inside the public fork — /setup writes to the
+# OR run /setup later inside the public fork: /setup writes to the
 # resolved onboarding path.
 cp ~/ops/apexyard/onboarding.yaml.example onboarding.yaml 2>/dev/null \
   || cp ~/ops/apexyard/onboarding.yaml onboarding.yaml 2>/dev/null \
@@ -357,7 +357,7 @@ If you are on an older framework version that does not have the `portfolio:` con
 ```bash
 cd ~/ops/apexyard
 
-# Tell the fork to ignore the registry + projects/ — they live in the portfolio.
+# Tell the fork to ignore the registry + projects/: they live in the portfolio.
 cat >> .gitignore <<'EOF'
 
 # Portfolio data lives in a separate private repo (split-portfolio mode).
@@ -559,10 +559,10 @@ This pattern follows **Custom templates** (path-mirroring overrides, see AgDR-00
 Seed from the framework example. **`/setup --split-portfolio` does this automatically for split-portfolio adopters** (#351 PR 3). The skill copies the example into the private repo as part of Step 5 (private-repo init). Single-fork adopters do the `cp` manually when they want to start customising. The framework deliberately does not auto-seed for single-fork. The reason is that an empty override file accumulating in the fork root before any overrides exist is more ceremony than value.
 
 ```bash
-# Split-portfolio — `/setup --split-portfolio` does this for you. Manual fallback:
+# Split-portfolio: `/setup --split-portfolio` does this for you. Manual fallback:
 cp ~/ops/apexyard/agent-routing.yaml.example ~/ops/apexyard-portfolio/agent-routing.yaml
 
-# Single-fork — always manual (and only when you're ready to customise):
+# Single-fork: always manual (and only when you're ready to customise):
 cp ~/ops/apexyard/agent-routing.yaml.example ~/ops/apexyard/agent-routing.yaml
 ```
 
@@ -671,8 +671,8 @@ Migrate now? This will:
   - Add portfolio.{onboarding,workspace_dir} keys to .claude/project-config.json
 
 Per-file-class semantics: onboarding.yaml is COPIED (small text file, sibling is
-the canonical source of truth); workspace/ is MOVED (size constraint — clones
-are potentially gigabytes, doubling disk usage makes no sense). Idempotent — if
+the canonical source of truth); workspace/ is MOVED (size constraint: clones
+are potentially gigabytes, doubling disk usage makes no sense). Idempotent. If
 interrupted, re-run. Per AgDR-0021 § H.
 
 [Y / n / dry-run — show commands, don't execute]
@@ -685,11 +685,11 @@ The migration is **per-file-class confirmable** (copy `onboarding.yaml`? Y/N; mo
 The skill **does not commit**: staging is the contract. you own both the public-fork commit AND the sibling-repo commit. After accepting the migration:
 
 ```bash
-# Public fork — review what's staged + the marker + config-block additions
+# Public fork: review what's staged + the marker + config-block additions
 git diff --cached
 git commit -m "chore: migrate to split-portfolio v2"
 
-# Private sibling repo — onboarding + workspace landed here
+# Private sibling repo: onboarding + workspace landed here
 cd ../apexyard-portfolio
 git status        # see the moved files
 git add onboarding.yaml workspace
@@ -703,12 +703,12 @@ cd ~/ops/apexyard
 
 SIBLING=../apexyard-portfolio   # adjust to your sibling-dir name
 
-# Copy onboarding.yaml — sibling becomes canonical source of truth; public
+# Copy onboarding.yaml: sibling becomes canonical source of truth; public
 # fork keeps a gitignored snapshot for legacy tooling (per AgDR-0021 § H).
 cp -p onboarding.yaml "$SIBLING/onboarding.yaml"
 git rm --cached onboarding.yaml 2>/dev/null || true
 
-# Move workspace/<name>/ contents — size constraint (clones are potentially
+# Move workspace/<name>/ contents: size constraint (clones are potentially
 # gigabytes; duplicating wastes disk).
 mkdir -p "$SIBLING/workspace"
 for entry in workspace/*; do
@@ -731,14 +731,14 @@ IGNORE
 # Write the v2 anchor
 echo "# This file marks the directory as an ApexYard ops fork (split-portfolio v2)." > .apexyard-fork
 
-# Update the config block — add the v2 keys
+# Update the config block: add the v2 keys
 jq --arg onb "$SIBLING/onboarding.yaml" \
    --arg ws  "$SIBLING/workspace" \
    '.portfolio.onboarding = (.portfolio.onboarding // $onb)
     | .portfolio.workspace_dir = (.portfolio.workspace_dir // $ws)' \
    .claude/project-config.json > /tmp/pc.json && mv /tmp/pc.json .claude/project-config.json
 
-# .claude/project-config.json is deliberately NOT staged — see #1031.
+# .claude/project-config.json is deliberately NOT staged: see #1031.
 git add .gitignore .apexyard-fork
 ```
 
@@ -747,7 +747,7 @@ git add .gitignore .apexyard-fork
 If you have already started in single-fork mode and pushed private project names to your public fork, run the **`/split-portfolio`** skill (introduced #146). It automates the full destructive recovery flow with explicit operator-confirmation gates at each step:
 
 ```
-/split-portfolio              # full migration — 10 steps, all gated
+/split-portfolio              # full migration: 10 steps, all gated
 /split-portfolio --verify     # read-only state report, no destructive ops
 /split-portfolio --dry-run    # walk through each step printing the commands, execute none
 ```
@@ -983,7 +983,7 @@ git log --oneline HEAD..upstream/main
 git checkout -b chore/sync-upstream
 git merge upstream/main
 
-# Resolve any conflicts (usually in files you haven't customised — role files, workflow files, CLAUDE.md imports)
+# Resolve any conflicts (usually in files you haven't customised: role files, workflow files, CLAUDE.md imports)
 # Then push and open a PR
 git push -u origin chore/sync-upstream
 gh pr create --title "chore: sync ops fork with upstream apexyard"

@@ -224,7 +224,7 @@ You: *runs gh pr merge 10*   ← FAILURE: "go" was plan-level, not merge-level.
 You: "Here's the 6-step plan: 1. merge PR #10, 2. close PR #105, ..."
 CEO: "go"
 You: *executes steps 2–6, stops before step 1*
-You: "Steps 2–6 done. PR #10 is ready to merge — run /approve-merge 10 when you're happy."
+You: "Steps 2–6 done. PR #10 is ready to merge: run /approve-merge 10 when you're happy."
 CEO: /approve-merge 10          ← CORRECT: the CEO invokes it. The skill is
                                    human-only (#1042), so the model cannot.
 ```
