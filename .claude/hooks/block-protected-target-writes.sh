@@ -335,10 +335,20 @@ pt_operands() {
       # as an ancestor too. A plain cp or install copies files only.
       moved=0
       case "$verb" in mv|'git mv') moved=1 ;; esac
-      if [ "$recursive" = 1 ]; then moved=1; pt_judge "$dest" 1; fi
+      [ "$recursive" = 0 ] || moved=1
       if [ -n "$target" ] || pt_is_dir "$dest"; then
-        for arg in "${inputs[@]}"; do pt_judge "$dest/$(basename "$arg")" "$moved"; done
-      elif [ "$recursive" = 0 ]; then
+        # The folder itself is judged against the core state only (role 2),
+        # as before the agy wiring. So a copy or link into bin/ still passes.
+        [ "$recursive" = 0 ] || pt_judge "$dest" 2
+        for arg in "${inputs[@]}"; do
+          pt_judge "$dest/$(basename "$arg")" "$moved"
+          # A source that ends in / or /. copies its contents into the folder
+          # itself, and ditto always does. Then the folder is judged in full.
+          if [ "$recursive" = 1 ]; then case "$verb:$arg" in ditto:*|*/|*/.) pt_judge "$dest" 1 ;; esac; fi
+        done
+      elif [ "$recursive" = 1 ]; then
+        pt_judge "$dest" 1
+      else
         # A move onto a target that is not an existing directory renames the
         # source to it. If the source is a folder, the target becomes a
         # folder that can hold protected wiring, such as a new .agents. So

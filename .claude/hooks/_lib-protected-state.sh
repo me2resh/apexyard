@@ -82,13 +82,16 @@ pt_init() {
 #   harness-adapters/agy/   the wrapper that the wiring runs
 #   bin/sync-agy-adapter.sh the generator; the gate passes its plain run
 PT_ADAPTER_WIRING=(.agents/hooks.json .agents/plugins .agents/plugins.json harness-adapters/agy bin/sync-agy-adapter.sh)
-# $2 enables ancestor checks for removal and recursive writes.
+# $2 is the role. 0 checks the path itself. 1 also blocks an ancestor of
+# protected state, for removal and recursive writes. 2 blocks an ancestor of
+# the core state only, not of the agy wiring: it judges the folder that a
+# copy or link goes into, whose new entries are judged on their own.
 pt_protected_form() { pt_nocase pt_protected_form_nocase "$@"; }
 pt_protected_form_nocase() {
   local p="$1" ancestors="${2:-0}" root base env_path rel wt rest sub
   for root in ${PT_ROOTS[@]+"${PT_ROOTS[@]}"}; do
     case "$p" in "$root/.claude/settings.json"|"$root/.claude/settings.local.json"|"$root/.claude/hooks"|"$root/.claude/hooks/"*) return 0 ;; esac
-    if [ "$ancestors" = 1 ]; then case "$root/.claude/hooks/" in "$p/"*) return 0 ;; esac; fi
+    if [ "$ancestors" != 0 ]; then case "$root/.claude/hooks/" in "$p/"*) return 0 ;; esac; fi
     for rel in "${PT_ADAPTER_WIRING[@]}"; do
       case "$p" in "$root/$rel"|"$root/$rel/"*) return 0 ;; esac
       if [ "$ancestors" = 1 ]; then case "$root/$rel/" in "$p/"*) return 0 ;; esac; fi
@@ -125,14 +128,14 @@ pt_protected_form_nocase() {
   fi
   for base in "$PT_USER" "$PT_HOME_CONFIG"; do
     case "$p" in "$base/settings.json"|"$base/session-env"|"$base/session-env/"*|"$base/shell-snapshots"|"$base/shell-snapshots/"*) return 0 ;; esac
-    if [ "$ancestors" = 1 ]; then case "$base/" in "$p/"*) return 0 ;; esac; fi
+    if [ "$ancestors" != 0 ]; then case "$base/" in "$p/"*) return 0 ;; esac; fi
   done
   case "$p" in "$PT_PIN_DIR"/ops-root-*|"$PT_PIN_DIR"/gate-session-*|"$PT_PIN_DIR"/resolve-cache-*|"$PT_PIN_DIR"/projctx|"$PT_PIN_DIR"/projctx/*) return 0 ;; esac
-  if [ "$ancestors" = 1 ]; then case "$PT_PIN_DIR/" in "$p/"*) return 0 ;; esac; fi
+  if [ "$ancestors" != 0 ]; then case "$PT_PIN_DIR/" in "$p/"*) return 0 ;; esac; fi
   if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
     env_path=$(pt_physical "$CLAUDE_ENV_FILE") || pt_block 'cannot resolve the harness environment file.'
     [[ "$p" != "$env_path" ]] || return 0
-    if [ "$ancestors" = 1 ]; then case "$env_path" in "$p/"*) return 0 ;; esac; fi
+    if [ "$ancestors" != 0 ]; then case "$env_path" in "$p/"*) return 0 ;; esac; fi
   fi
   return 1
 }

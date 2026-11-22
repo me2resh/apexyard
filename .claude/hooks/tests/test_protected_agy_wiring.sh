@@ -151,6 +151,22 @@ check 0 "live mv of an outside folder into an existing docs/ stays allowed" run_
 check 0 "live cp -R of an outside folder into an existing docs/ stays allowed" run_bash "$L" "cp -R $S/build docs/"
 check 0 "live ln -s of an outside file into an existing docs/ stays allowed" run_bash "$L" "ln -s $S/tool docs/"
 check 0 "live plain cp of a file named .agents into an existing docs/ stays allowed" run_bash "$L" "cp $S/.agents docs/"
+# A copy or link into a folder that holds agy wiring passes, as before the
+# wiring. Its new entry is judged on its own. A contents copy, which lands
+# directly in the folder, is judged against the folder itself.
+mkdir -p "$L/bin" "$L/harness-adapters" "$L/.agents"
+check 0 "live ln -s into an existing bin/ stays allowed" run_bash "$L" "ln -s $S/tool bin/"
+check 0 "live ln -s into an existing bin stays allowed" run_bash "$L" "ln -s $S/tool bin"
+check 0 "live cp -R into an existing bin/ stays allowed" run_bash "$L" "cp -R $S/build bin/"
+check 0 "live rsync -a into an existing bin/ stays allowed" run_bash "$L" "rsync -a $S/build bin/"
+check 0 "live cp -R into an existing harness-adapters/ stays allowed" run_bash "$L" "cp -R $S/build harness-adapters/"
+check 0 "live ln -s into an existing root .agents/ stays allowed" run_bash "$L" "ln -s $S/skills .agents/"
+check 2 "live rsync -a of folder contents into bin/" run_bash "$L" "rsync -a $S/build/ bin/"
+check 2 "live cp -R of folder contents into bin/" run_bash "$L" "cp -R $S/build/. bin/"
+check 2 "live ditto into bin" run_bash "$L" "ditto $S/build bin"
+check 2 "live cp -R of a plugins folder into the root .agents/" run_bash "$L" "cp -R $S/plugins .agents/"
+check 2 "live cp -R into .claude/ is still blocked" run_bash "$L" "cp -R $S/build .claude/"
+rmdir "$L/bin" "$L/harness-adapters" "$L/.agents"
 # For truncate, -s still takes a value, so the next word is the target.
 check 2 "live truncate -s 0 of the settings file" run_bash "$L" 'truncate -s 0 .claude/settings.json'
 check 0 "live truncate -s 0 of a plain file stays allowed" run_bash "$L" 'truncate -s 0 docs/notes.txt'
