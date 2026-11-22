@@ -102,6 +102,52 @@ agdr AgDR-0005-redis.md proposed "AgDR-0005: Use Redis" "Chosen: **Redis**."
 GAPS2=$(bash "$SC/stats-gaps.sh" "$R" "$AG" 2>/dev/null || true)
 check lacks "$GAPS2" "AgDR-0005"
 
+# Review regressions (#2143): manifest shapes.
+M="$SB/manifests"
+mkdir -p "$M"
+cat > "$M/package.json" <<'JSON'
+{
+  "peerDependencies": { "reactlib": ">=16" },
+  "dependencies": {},
+  "scripts": { "build": "tsc" }
+}
+JSON
+printf '[project]\ndependencies = [\n  "pydantic[email]>=2",\n  "httpx>=0.2",\n  "sqlalchemy",\n]\n' > "$M/pyproject.toml"
+printf "gem 'rails'\ngroup :test do\n  gem 'capybara'\nend\ngem 'puma'\n" > "$M/Gemfile"
+printf 'module x\n\nrequire (\n\tgithub.com/direct/lib v1.0.0\n\tgolang.org/x/sysx v0.1.0 // indirect\n)\n' > "$M/go.mod"
+MS=$(bash "$SC/list-subjects.sh" "$M" 2>/dev/null || true)
+check grep -q "^runtime	reactlib	" <<< "$MS"
+check lacks "$MS" "	scripts	"
+check lacks "$MS" "	build	"
+check grep -q "^runtime	pydantic	" <<< "$MS"
+check grep -q "^runtime	httpx	" <<< "$MS"
+check grep -q "^runtime	sqlalchemy	" <<< "$MS"
+check grep -q "^dev	capybara	Gemfile" <<< "$MS"
+check grep -q "^runtime	puma	Gemfile" <<< "$MS"
+check grep -q "^runtime	github.com/direct/lib	" <<< "$MS"
+check lacks "$MS" "sysx"
+
+# Review regressions (#2143): lockfile and parent path.
+P="$SB/test_area/app"
+mkdir -p "$P/src" "$P/tests"
+printf '{"dependencies":{"expressly":"1","leftpadx":"1"}}\n' > "$P/package.json"
+printf "require('expressly');\n" > "$P/src/app.js"
+printf "require('leftpadx');\n" > "$P/tests/a.test.js"
+printf 'packages:\n  expressly: 1\n  leftpadx: 1\n' > "$P/pnpm-lock.yaml"
+PG=$(bash "$SC/stats-gaps.sh" "$P" "$AG" 2>/dev/null || true)
+check has "$PG" "$(printf 'test-only-runtime\tleftpadx\t-')"
+check lacks "$PG" "test-only-runtime	expressly"
+
+# Fail closed on a missing repository.
+rc=0
+bash "$SC/stats-gaps.sh" "$SB/nope" "$AG" >/dev/null 2>&1 || rc=$?
+check test "$rc" -eq 2
+# A symlinked manifest outside the repo is ignored.
+L="$SB/linked"
+mkdir -p "$L"
+ln -s "$R/package.json" "$L/package.json"
+check test -z "$(bash "$SC/list-subjects.sh" "$L" 2>/dev/null | grep -v '^host' || true)"
+
 # Skill pointers stay short and name the scripts.
 check grep -Fq 'scripts/stats-gaps.sh' "$ROOT/.claude/skills/agdr/SKILL.md"
 check grep -Fq 'scripts/coverage.sh' "$ROOT/.claude/skills/handover/SKILL.md"

@@ -7,7 +7,8 @@ set -eu
 repo=${1:?usage: coverage-check.sh <repo> <agdr-dir>}
 dir=${2:?usage: coverage-check.sh <repo> <agdr-dir>}
 here=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
-bash "$here/list-subjects.sh" "$repo" | while IFS=$'\t' read -r kind name _src; do
+subjects=$(bash "$here/list-subjects.sh" "$repo")
+printf "%s\n" "$subjects" | grep . | while IFS=$'\t' read -r kind name _src; do
   hint=unnamed
   for f in "$dir"/*.md; do
     [ -f "$f" ] || continue

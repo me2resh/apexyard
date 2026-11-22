@@ -11,7 +11,7 @@ subjects=$(bash "$here/list-subjects.sh" "$repo")
 files_naming() {
   grep -rFilw --binary-files=without-match \
     --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=vendor --exclude-dir=docs \
-    --exclude='*.md' --exclude='*.lock' --exclude='package*.json' --exclude='requirements*.txt' \
+    --exclude='*.md' --exclude='*.lock' --exclude='*.lockb' --exclude='pnpm-lock.yaml' --exclude='npm-shrinkwrap.json' --exclude='package*.json' --exclude='requirements*.txt' \
     --exclude='pyproject.toml' --exclude='go.mod' --exclude='go.sum' --exclude='Gemfile*' \
     --exclude='Cargo.toml' -- "$1" "$repo" 2>/dev/null || true
 }
@@ -34,7 +34,7 @@ printf '%s\n' "$subjects" | while IFS=$'\t' read -r kind name _src; do
   [ "$kind" = runtime ] || continue
   hits=$(files_naming "$name")
   [ -n "$hits" ] || continue
-  if ! printf '%s\n' "$hits" | grep -Evq '(^|/)(tests?|__tests__|spec|specs)/|(\.test\.|\.spec\.|/test_|_test\.)'; then
+  if ! printf '%s\n' "$hits" | sed "s|^${repo%/}/||" | grep -Evq '(^|/)(tests?|__tests__|spec|specs)/|(\.test\.|\.spec\.|(^|/)test_|_test\.)'; then
     printf 'test-only-runtime\t%s\t-\n' "$name"
   fi
 done
