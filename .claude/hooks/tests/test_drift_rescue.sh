@@ -33,6 +33,8 @@ paths:
     owner: adopter
   - glob: .claude/project-config.json
     owner: adopter
+  - glob: .claude/settings*.json
+    owner: shared
   - glob: .claude/**
     owner: framework
   - glob: templates/**
@@ -44,6 +46,15 @@ printf 'v1.0.0\n' > "$tmp/framework/.claude/framework-version"
 printf -- '---\nname: example\ndescription: Write reports\n---\nOriginal\n' > "$tmp/framework/.claude/skills/example/SKILL.md"
 printf -- '---\nname: reviewer\ndescription: Review code\n---\nOriginal\n' > "$tmp/framework/.claude/agents/reviewer.md"
 printf 'supporting file\n' > "$tmp/framework/.claude/skills/example/helper.sh"
+mkdir -p "$tmp/framework/.claude/skills/_lib-helper" "$tmp/framework/.claude/skills/no-entry"
+printf 'helper\n' > "$tmp/framework/.claude/skills/_lib-helper/helper.sh"
+printf 'helper\n' > "$tmp/framework/.claude/skills/no-entry/helper.sh"
+for settings in settings.json settings.team.json; do
+  printf '{"hooks":{}}\n' > "$tmp/framework/.claude/$settings"
+done
+for number in 1 2 3 4 5 6; do
+  printf -- '---\nname: helper-%s\ndescription: Support the reviewer\n---\nOriginal\n' "$number" > "$tmp/framework/.claude/agents/helper-$number.md"
+done
 printf 'original hook\n' > "$tmp/framework/.claude/hooks/gate.sh"
 printf 'original template\n' > "$tmp/framework/templates/report.md"
 printf 'original handbook\n' > "$tmp/framework/handbooks/standard.md"
@@ -57,6 +68,30 @@ check 'clean tree' '[ "$rc" -eq 0 ]'
 rm "$repo/.claude/framework-version"
 run
 check 'missing pin is drift' '[ "$rc" -eq 1 ] && grep -q "no pinned version" "$tmp/out"'
+reset
+for settings in settings.json settings.team.json; do
+  printf '{"hooks":{"SessionStart":[{"command":"echo local"}]}}\n' > "$repo/.claude/$settings"
+done
+before=$(cksum "$repo/.claude/"settings*.json)
+run
+check 'shared tracked settings detected as drift' '[ "$rc" -eq 1 ] && grep -q "drift.*.claude/settings.json" "$tmp/out" && grep -q "drift.*.claude/settings.team.json" "$tmp/out"'
+run --rescue --apply
+after=$(cksum "$repo/.claude/"settings*.json)
+check 'added settings hook listed for person and never moved' '[ "$before" = "$after" ] && grep -q "manual review.*.claude/settings.json" "$tmp/out" && grep -q "manual review.*.claude/settings.team.json" "$tmp/out" && ! grep -q "rescue plan.*settings" "$tmp/out"'
+reset
+for folder in _lib-helper no-entry; do
+  printf 'edited\n' >> "$repo/.claude/skills/$folder/helper.sh"
+done
+run --rescue --apply
+check 'helper folders without overlay homes stay for person' 'grep -q "manual review.*_lib-helper/helper.sh" "$tmp/out" && grep -q "manual review.*no-entry/helper.sh" "$tmp/out" && grep -q edited "$repo/.claude/skills/_lib-helper/helper.sh" && grep -q edited "$repo/.claude/skills/no-entry/helper.sh" && [ ! -e "$repo/custom-skills" ]'
+reset
+mkdir -p "$tmp/product"
+cp -R "$repo/.claude" "$tmp/product/"
+run --rescue --from "$tmp/product/.claude"
+check 'unedited framework agents give zero duplicates' '! grep -q "^duplicate" "$tmp/out" && [ "$(grep -c "^shared.*agents/" "$tmp/out")" -eq 7 ]'
+printf 'body-only edit\n' >> "$tmp/product/.claude/agents/helper-1.md"
+run --rescue --from "$tmp/product/.claude"
+check 'matching name and description remain shared' '! grep -q "^duplicate" "$tmp/out" && grep -q "^shared.*agents/helper-1.md" "$tmp/out"'
 reset
 printf '{"portfolio":{"agent_routing":"./absent.yaml"}}\n' > "$repo/.claude/project-config.json"
 run
@@ -90,9 +125,11 @@ check 'role phrase identifies second agent' 'grep -q "duplicate.*agents/extra.md
 check 'repo-only stays' 'grep -q "repo-only.*skills/new/SKILL.md.*stay" "$tmp/out" && [ -f "$tmp/product/.claude/skills/new/SKILL.md" ]'
 check 'unchanged shared classified' 'grep -q "shared.*agents/reviewer.md" "$tmp/out"'
 cp "$repo/.claude/skills/example/SKILL.md" "$tmp/product/.claude/skills/example/SKILL.md"
+printf 'repo-only attachment\n' > "$tmp/product/.claude/skills/example/local.txt"
 printf 'imported edit\n' >> "$tmp/product/.claude/skills/example/SKILL.md"
 run --rescue --from "$tmp/product/.claude" --apply
 check 'import shared edit copied' 'grep -q "imported edit" "$repo/custom-skills/example/SKILL.md"'
+check 'import copies only planned files' '[ ! -e "$repo/custom-skills/example/local.txt" ] && grep -q "repo-only.*example/local.txt.*stay" "$tmp/out"'
 check 'import source preserved' 'grep -q "imported edit" "$tmp/product/.claude/skills/example/SKILL.md"'
 reset
 mkdir -p "$tmp/private"

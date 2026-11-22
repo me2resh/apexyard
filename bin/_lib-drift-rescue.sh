@@ -46,6 +46,14 @@ drift_duplicate() {
   [ -f "$source/$meta" ] || return 1
   name=$(drift_metadata "$source/$meta" name)
   description=$(drift_metadata "$source/$meta" description)
+  # Recognize the pinned item before comparing it with other framework roles.
+  # A second agent at another path must still undergo the role checks.
+  if git -C "$repo" show "$base:$meta" > "$scratch/pinned-meta" 2>/dev/null; then
+    if cmp -s "$source/$meta" "$scratch/pinned-meta" || {
+      [ "$name" = "$(drift_metadata "$scratch/pinned-meta" name)" ] &&
+      [ "$description" = "$(drift_metadata "$scratch/pinned-meta" description)" ];
+    }; then return 1; fi
+  fi
   while IFS=$'\t' read -r candidate bn bd; do
     case "$meta:$candidate" in
       .claude/skills/*:.claude/skills/*|.claude/agents/*:.claude/agents/*) ;;
@@ -71,7 +79,12 @@ drift_duplicate() {
 
 drift_destination() {
   case "$1" in
-    .claude/skills/*/*) printf '%s/%s' "$skills" "${1#.claude/skills/}" ;;
+    .claude/skills/*/*)
+      local skill=${1#.claude/skills/}
+      skill=${skill%%/*}
+      case "$skill" in _lib-*) return 1 ;; esac
+      [ -f "$source/.claude/skills/$skill/SKILL.md" ] || return 1
+      printf '%s/%s' "$skills" "${1#.claude/skills/}" ;;
     templates/*) printf '%s/%s' "$templates" "${1#templates/}" ;;
     handbooks/*) printf '%s/%s' "$handbooks" "${1#handbooks/}" ;;
     *) return 1 ;;
@@ -149,6 +162,7 @@ drift_report() {
     while IFS=$'\t' read -r _ _ class sec edit b _ _ _ note path; do
       case "$class:$path" in
         framework:*) ;;
+        shared:.claude/settings*.json) ;;
         shared:handbooks/*) [ "$rescue" = true ] || continue ;;
         *) continue ;;
       esac
@@ -196,11 +210,16 @@ drift_report() {
     done < "$scratch/rescue-plan"
     while IFS=$'\t' read -r path dest; do
       mkdir -p "$(dirname "$dest")" || return 2
-      cp -Rp "$source/$path" "$dest" || return 2
+      if [ -z "$import_from" ]; then
+        cp -Rp "$source/$path" "$dest" || return 2
+      fi
     done < "$scratch/rescue-skills"
     while IFS=$'\t' read -r path dest b; do
       mkdir -p "$(dirname "$dest")" || return 2
-      case "$path" in .claude/skills/*/*) ;; *) cp -p "$source/$path" "$dest" || return 2 ;; esac
+      case "$path" in
+        .claude/skills/*/*) [ -z "$import_from" ] || cp -p "$source/$path" "$dest" || return 2 ;;
+        *) cp -p "$source/$path" "$dest" || return 2 ;;
+      esac
       # Import preserves the product repository. Only in-place rescue restores.
       if [ -z "$import_from" ]; then
         blob "$b" > "$source/$path" || return 2
