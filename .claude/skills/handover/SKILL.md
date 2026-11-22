@@ -365,6 +365,12 @@ Look at:
 - `.github/workflows/` → existing CI; how mature?
 - `tsconfig.json` strictness, presence of tests, presence of linters
 
+#### 3.1 Decision record coverage
+
+Run `bash .claude/skills/handover/scripts/coverage.sh <repo>`. It lists direct dependencies and outside hosts. It matches them, as whole words, against AgDR titles, `Chosen` lines, and bodies. It skips names of 3 characters or fewer.
+Ask a person to classify each row: choice recorded, usage recorded only, or not named. Ask about outside hosts that receive user data first.
+For each "not named" item, point to `/decide --backfill`. Do not write records here.
+
 ### 4. Try a build (optional, ask first)
 
 ```
