@@ -291,7 +291,7 @@ pt_git() {
   return 0
 }
 pt_operands() {
-  local verb="$1" i="${2:-1}" arg target="" recursive=0 removing=0 dest role=0 inputs=() extract=0 cdirs=0 absolute=0 output="" in_place=0 tar_file=""
+  local verb="$1" i="${2:-1}" arg target="" recursive=0 removing=0 dest moved=0 role=0 inputs=() extract=0 cdirs=0 absolute=0 output="" in_place=0 tar_file=""
   while [ "$i" -lt "${#words[@]}" ]; do
     arg=${words[$i]}; i=$((i+1))
     case "$arg" in
@@ -306,7 +306,10 @@ pt_operands() {
       --file=*) [ "$verb" != tar ] || tar_file=${arg#*=}; continue ;;
       # Only tar takes a value after -f. For rm, cp and mv it is a plain flag.
       -f) if [ "$verb" = tar ]; then tar_file=${words[$i]:-}; i=$((i+1)); fi; continue ;;
-      -e|--expression|-s|--size|-m|--mode|-in|-from|-to|-encoding|-name|-type)
+      # For ln, cp, install and rsync, -s is a plain flag. ln -s and cp -s
+      # make a link, so the next word is a source, not a value.
+      -s) case "$verb" in ln|link|cp|install|rsync) ;; *) i=$((i+1)) ;; esac; continue ;;
+      -e|--expression|--size|-m|--mode|-in|-from|-to|-encoding|-name|-type)
         i=$((i+1)); continue ;;
       of=*) pt_judge "${arg#of=}"; continue ;;
       if=*) continue ;;
@@ -326,10 +329,16 @@ pt_operands() {
       [ "${#inputs[@]}" -gt 0 ] || return 0
       if [ -n "$target" ]; then dest="$target"; else dest=${inputs[${#inputs[@]}-1]}; unset 'inputs[${#inputs[@]}-1]'; fi
       case "$verb" in rsync|ditto) recursive=1 ;; ln|link) recursive=1 ;; esac
-      if [ "$recursive" = 1 ]; then pt_judge "$dest" 1
-      elif [ -n "$target" ] || pt_is_dir "$dest"; then
-        for arg in "${inputs[@]}"; do pt_judge "$dest/$(basename "$arg")"; done
-      else
+      # Into an existing folder, each source lands at <dest>/<its name>. A
+      # moved, linked or recursively copied source can be a folder, such as
+      # an .agents folder from outside the fork. So that new path is judged
+      # as an ancestor too. A plain cp or install copies files only.
+      moved=0
+      case "$verb" in mv|'git mv') moved=1 ;; esac
+      if [ "$recursive" = 1 ]; then moved=1; pt_judge "$dest" 1; fi
+      if [ -n "$target" ] || pt_is_dir "$dest"; then
+        for arg in "${inputs[@]}"; do pt_judge "$dest/$(basename "$arg")" "$moved"; done
+      elif [ "$recursive" = 0 ]; then
         # A move onto a target that is not an existing directory renames the
         # source to it. If the source is a folder, the target becomes a
         # folder that can hold protected wiring, such as a new .agents. So

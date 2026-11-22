@@ -140,6 +140,20 @@ check 0 "live mv to a new plain name stays allowed" run_bash "$L" 'mv x newname'
 check 0 "live mv inside docs stays allowed" run_bash "$L/docs" 'mv a b'
 check 0 "live mv into an existing docs/ stays allowed" run_bash "$L" 'mv x docs/'
 check 0 "live git mv a b stays allowed" run_bash "$L" 'git mv a b'
+# Into an existing folder, a moved, linked or recursively copied source
+# lands at docs/<its name>. A source named .agents from outside the fork
+# creates a nested config folder there.
+check 2 "live mv of an outside .agents into an existing docs/" run_bash "$L" "mv $S/.agents docs/"
+check 2 "live mv -t docs of an outside .agents" run_bash "$L" "mv -t docs $S/.agents"
+check 2 "live cp -R of an outside .agents into an existing docs/" run_bash "$L" "cp -R $S/.agents docs/"
+check 2 "live ln -s of an outside .agents into an existing docs/" run_bash "$L" "ln -s $S/.agents docs/"
+check 0 "live mv of an outside folder into an existing docs/ stays allowed" run_bash "$L" "mv $S/notes docs/"
+check 0 "live cp -R of an outside folder into an existing docs/ stays allowed" run_bash "$L" "cp -R $S/build docs/"
+check 0 "live ln -s of an outside file into an existing docs/ stays allowed" run_bash "$L" "ln -s $S/tool docs/"
+check 0 "live plain cp of a file named .agents into an existing docs/ stays allowed" run_bash "$L" "cp $S/.agents docs/"
+# For truncate, -s still takes a value, so the next word is the target.
+check 2 "live truncate -s 0 of the settings file" run_bash "$L" 'truncate -s 0 .claude/settings.json'
+check 0 "live truncate -s 0 of a plain file stays allowed" run_bash "$L" 'truncate -s 0 docs/notes.txt'
 rmdir "$L/docs"
 check 0 "live rm -rf docs with no nested config stays allowed" run_bash "$L" 'rm -rf docs'
 check 0 "live mkdir docs/.agents stays allowed" run_bash "$L" 'mkdir -p docs/.agents'

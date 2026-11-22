@@ -982,6 +982,12 @@ for cmd in "mv x newname" "mv x docs/agents" "mv x docs/" "git mv a b" "mv x .cl
   run_wrapper "$C" PreToolUse "$(p_run_top "$cmd" "$C" "$(jq -n --arg d "$C" '$d')")"
   expect_decision "C3h21 real gate: run_command $cmd stays ask" ask
 done
+# Into an existing folder, an .agents folder from outside the fork lands at
+# docs/.agents, a nested config folder.
+for cmd in "mv $TMPROOT/outside/.agents docs/" "cp -R $TMPROOT/outside/.agents docs/" "ln -s $TMPROOT/outside/.agents docs/"; do
+  run_wrapper "$C" PreToolUse "$(p_run_top "$cmd" "$C" "$(jq -n --arg d "$C" '$d')")"
+  expect_decision "C3h22 real gate: run_command $cmd gets deny" deny "BLOCKED"
+done
 for cmd in "cp -R x docs/agents" "cp -R x .claude/worktrees/wt/.agents" "mkdir -p docs/.agents"; do
   run_wrapper "$C" PreToolUse "$(p_run_top "$cmd" "$C" "$(jq -n --arg d "$C" '$d')")"
   expect_decision "C3h19 real gate: run_command $cmd stays ask" ask
