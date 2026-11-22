@@ -505,7 +505,7 @@ The per-dimension marker (`.audit-history-tracked`) is in the dimension's audit 
 touch projects/<name>/audits/launch-check/.audit-history-tracked
 ```
 
-The library checks the marker on every save. You can change it at any time. Commit the MD artefact at `<dim_dir>/<ts>.md` regardless of the marker. It is the durable human-readable artefact.
+The library checks the marker on every save. You can change it at any time. The MD artefact at `<dim_dir>/<ts>.md` is committed regardless of the marker. It is the durable human-readable artefact.
 
 **Migration note for adopters with existing history:** the legacy marker at `projects/<name>/launch-check/.launch-check-history-tracked` continues to apply to that path's `runs/`. To consolidate trees, create a backup first. Then run `mv projects/<name>/launch-check/* projects/<name>/audits/launch-check/`. The library's renderer reads the consolidated tree on the next run. Consolidation is optional. If you retain both trees, the library reads and merges them automatically.
 
@@ -530,7 +530,7 @@ Do NOT run the 9-dimension sweep in this mode. Do NOT write any new JSON. This m
 5. **Advisory, not blocking.** The user decides go/no-go based on the findings. The skill does NOT block deploys mechanically.
 6. **Do not create tickets unprompted.** Offer them as a separate option in the "Next steps" question. Let the user decide.
 7. **Run from the project directory.** The skill checks `workspace/<project>/`, not the ops repo.
-8. **Persist every run via the lib.** Step 6 always calls `audit_run_persist`, regardless of opt-in commit state. The `.audit-history-tracked` marker only controls whether you commit the JSON files. Always commit the MD artefacts. Save every run.
+8. **Persist every run via the lib.** Step 6 always calls `audit_run_persist`, regardless of opt-in commit state. The `.audit-history-tracked` marker only controls whether the JSON files are committed. The MD artefacts are committed unconditionally. The library saves every run.
 9. **Resolve paths via the lib.** `audit_resolve_dir` (inside `_lib-audit-history.sh`) calls `portfolio_projects_dir` for you. The SKILL no longer needs to source the portfolio helper directly.
 
 ## Implementation notes
