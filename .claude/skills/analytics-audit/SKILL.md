@@ -8,7 +8,7 @@ effort: medium
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /analytics-audit — Event Taxonomy & Coverage
+# /analytics-audit: Event Taxonomy & Coverage
 
 Deep-dive analytics analysis. Checks that tracking is configured, events follow a naming convention, key user funnels are instrumented, and dashboards exist. Invoke when `/launch-check`'s analytics row shows WARN or FAIL.
 
@@ -59,7 +59,7 @@ Identify the core user funnels and check if each step is tracked:
 ### Step 4: Output
 
 ```
-ANALYTICS AUDIT — <project> @ <sha>
+ANALYTICS AUDIT: <project> @ <sha>
 
 SDK: <GA4 / Mixpanel / PostHog / none>
 Total events found: <N>
@@ -94,13 +94,13 @@ Score: `score = max(0, 100 - 25*critical - 10*high - 3*medium - 1*low)`. Verdict
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-audit-history.sh"
 
-# Lowercase severity in the payload — the lib expects critical/high/medium/low/info.
+# Lowercase severity in the payload: the lib expects critical/high/medium/low/info.
 payload=$(mktemp); cat > "$payload" <<'EOF'
 {
   "schema_version": 1,
   "findings": [
     {"id": "E2", "severity": "medium", "status": "open", "summary": "Mixed event-naming conventions (snake_case + camelCase + Title Case)"},
-    {"id": "E3", "severity": "high",   "status": "open", "summary": "signup_complete event missing — can't measure conversion"},
+    {"id": "E3", "severity": "high",   "status": "open", "summary": "signup_complete event missing: can't measure conversion"},
     {"id": "E4", "severity": "medium", "status": "open", "summary": "No dashboard URL found in config or docs"}
   ]
 }
@@ -108,7 +108,7 @@ EOF
 
 # Body: per templates/audits/analytics-audit.md
 body=$(mktemp); cat > "$body" <<'EOF'
-... (filled-in body — findings table + Event taxonomy gap + Recommended priority) ...
+... (filled-in body: findings table + Event taxonomy gap + Recommended priority) ...
 EOF
 
 ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -128,11 +128,11 @@ touch projects/<name>/audits/analytics-audit/.audit-history-tracked
 
 1. **Auto-PASS for non-user-facing projects.** CLIs, libraries, and internal tools don't need analytics.
 2. **Don't prescribe a specific SDK.** Note what's configured, check coverage, suggest improvements.
-3. **Flag inconsistent naming** — mixed conventions make dashboard queries painful.
+3. **Flag inconsistent naming**: mixed conventions make dashboard queries painful.
 4. **Privacy-aware.** Flag if PII (email, name, IP) is being sent in event properties.
 5. **Always persist via the lib.** The persist step runs regardless of opt-in commit state.
 6. **Severity vocabulary in the JSON is lowercase.** The lib expects `critical`/`high`/`medium`/`low`/`info`.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

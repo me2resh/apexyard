@@ -5,16 +5,16 @@ argument-hint: "<short title of the idea>"
 allowed-tools: Bash, Read, Edit, Write, AskUserQuestion
 ---
 
-# /idea — Submit a New Product Idea
+# /idea: Submit a New Product Idea
 
 Read `.claude/rules/writing-standard.md`. Use the **controlled technical writing profile** for the idea
 record: state the opportunity plainly and preserve uncertainty.
 
-Capture a new product, feature, or internal-tool idea so it lands somewhere durable instead of evaporating in chat. This skill is intentionally lightweight: it adds an entry to the ideas backlog and (optionally) creates a tracking GitHub Issue. It does **not** replace `/write-spec` — that comes later, after the idea has been triaged.
+Capture a new product, feature, or internal-tool idea so it lands somewhere durable instead of evaporating in chat. This skill is intentionally lightweight: it adds an entry to the ideas backlog and (optionally) creates a tracking GitHub Issue. It does **not** replace `/write-spec`: that comes later, after the idea has been triaged.
 
 ## Path resolution
 
-Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog`: all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -22,7 +22,7 @@ source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
 registry=$(portfolio_registry)
 ```
 
-Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks: the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
 
 ## Usage
 
@@ -34,7 +34,7 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 
 ## Where the entry goes
 
-Every idea lands in `projects/ideas-backlog.md` at the root of your ops repo (your fork of apexyard). One shared backlog for every project — triage decides which project ends up owning a given idea.
+Every idea lands in `projects/ideas-backlog.md` at the root of your ops repo (your fork of apexyard). One shared backlog for every project: triage decides which project ends up owning a given idea.
 
 If the file doesn't exist yet, create it with a header and a table.
 
@@ -45,7 +45,7 @@ Preserve multiple selections where the menu permits them. Split menus with more 
 Keep single yes/no and ticket confirmation prompts as written.
 The prose menus below are fallbacks only when the harness lacks `AskUserQuestion`.
 
-### 0. Write the active-issue-skill marker (REQUIRED — me2resh/apexyard#268)
+### 0. Write the active-issue-skill marker (REQUIRED, me2resh/apexyard#268)
 
 Before any `gh issue create` (or other tracker CLI), write this skill's name to the active-issue-skill marker so `require-skill-for-issue-create.sh` lets the command through. At skill entry:
 
@@ -82,7 +82,7 @@ What's the idea? Give me a short title (1 line).
 
 Ask conversationally (one question at a time, don't batch):
 
-**Category** — must be one of four values. Use `AskUserQuestion` and recommend the best fit first.
+**Category**: must be one of four values. Use `AskUserQuestion` and recommend the best fit first.
 Give each category a one-line effect. Present the numbered menu below only when the harness lacks the tool. **Re-prompt on invalid input**:
 
 ```
@@ -94,13 +94,13 @@ Category?
 >
 ```
 
-Accept `1`, `2`, `3`, `4` or the corresponding word (case-insensitive). On anything else, say `Please pick 1-4 or type the category name.` and re-ask. Loop until valid — do **not** silently accept garbage.
+Accept `1`, `2`, `3`, `4` or the corresponding word (case-insensitive). On anything else, say `Please pick 1-4 or type the category name.` and re-ask. Loop until valid: do **not** silently accept garbage.
 
-**Submitter** — who's proposing it. Default to the current git user (`git config user.name`). If the user wants to override, accept their input as-is.
+**Submitter**: who's proposing it. Default to the current git user (`git config user.name`). If the user wants to override, accept their input as-is.
 
-**One-line description** — what would it do? Who's it for? If empty, re-prompt: `Give me one sentence about what this idea does.` Loop until non-empty.
+**One-line description**: what would it do? Who's it for? If empty, re-prompt: `Give me one sentence about what this idea does.` Loop until non-empty.
 
-Don't go deeper than that — this is a lightweight capture, not a spec.
+Don't go deeper than that: this is a lightweight capture, not a spec.
 
 ### 3. Check for duplicates
 
@@ -122,7 +122,7 @@ If a potential match is found:
 
 ```
 ⚠ Similar idea already in the backlog:
-  IDEA-025 — {existing title} (status: {status})
+  IDEA-025: {existing title} (status: {status})
 
 Is this a duplicate? (y = skip, n = add anyway)
 >
@@ -169,7 +169,7 @@ After the entry is appended, ask:
 Would you like me to create a tracking GitHub Issue for IDEA-NNN? (y/n)
 ```
 
-If the user says no, skip this step entirely — the backlog entry is already saved, and that's enough.
+If the user says no, skip this step entirely: the backlog entry is already saved, and that's enough.
 
 If yes, resolve the idea body template via the portfolio helper so adopter overrides win when present:
 
@@ -181,7 +181,7 @@ template=$(portfolio_resolve_template tickets/idea.md)   # → custom-templates/
 
 Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/tickets/idea.md`. Adopters who want a customised idea-tracking-issue shape drop their version at `<private_repo>/custom-templates/tickets/idea.md`. See `templates/README.md` for the path-mirroring convention.
 
-**Backward-compat fallback**: if `portfolio_resolve_template` returns empty (template file missing — partial adopter setup), fall back to the inline heredoc body below and print a one-line WARN on stderr (`WARN: tickets/idea.md template missing — using inline fallback`).
+**Backward-compat fallback**: if `portfolio_resolve_template` returns empty (template file missing, partial adopter setup), fall back to the inline heredoc body below and print a one-line WARN on stderr (`WARN: tickets/idea.md template missing, using inline fallback`).
 
 Substitute the gathered values into the resolved template (or the fallback heredoc below), then create with the `enhancement` and `idea` labels (creating the labels if needed):
 
@@ -199,7 +199,7 @@ gh issue create \
 {submitter}
 
 ## Backlog Entry
-IDEA-NNN — see backlog file.
+IDEA-NNN: see backlog file.
 
 ## Next Step
 Triage. Decide whether to spec, schedule, or close.
@@ -213,7 +213,7 @@ EOF
   --label "idea,needs-triage"
 ```
 
-**Error handling** — if `gh issue create` fails for any reason (missing auth, labels don't exist, network error, rate limit), catch the error and fall back gracefully:
+**Error handling**: if `gh issue create` fails for any reason (missing auth, labels don't exist, network error, rate limit), catch the error and fall back gracefully:
 
 ```
 ⚠ Couldn't create the tracking issue: {reason}
@@ -243,7 +243,7 @@ If the issue is created successfully, append the issue URL to the backlog row's 
 After the GitHub Issue step (whether the user accepted or skipped it), ask:
 
 ```
-Validate now? Run /validate-idea IDEA-NNN — y/n (default n)
+Validate now? Run /validate-idea IDEA-NNN, y/n (default n)
 ```
 
 Default-no respects the lightweight-capture intent of `/idea`. Most users batch-validate later. If the user accepts, hand off to `/validate-idea IDEA-NNN`; if they skip, proceed to step 8.
@@ -251,27 +251,27 @@ Default-no respects the lightweight-capture intent of `/idea`. Most users batch-
 ## Output
 
 ```
-Captured: IDEA-NNN — {title}
+Captured: IDEA-NNN, {title}
 Backlog: {file path}
 Status: NEW
 Tracking issue: {url or "skipped"}
-Validation: {"completed — verdict <GREEN|YELLOW|RED>" | "skipped (run /validate-idea IDEA-NNN later)"}
+Validation: {"completed: verdict <GREEN|YELLOW|RED>" | "skipped (run /validate-idea IDEA-NNN later)"}
 
 Next: triage with the team, then `/write-spec` if it survives.
 ```
 
 ## Rules
 
-1. **Lightweight only** — `/idea` captures, it does not spec. Don't ask for goals, metrics, or requirements here.
-2. **Always assign an ID** — `IDEA-NNN`, zero-padded to 3 digits.
-3. **One row per idea** — never edit existing rows from this skill; new ideas always append.
-4. **Status starts at NEW** — triage changes it later.
-5. **Single backlog** — every idea goes into `projects/ideas-backlog.md` at the root of the ops repo; triage assigns it to a project later.
-6. **Validate before accepting** — category must be 1-4; description must be non-empty. Loop until valid; never silently accept garbage.
-7. **Dedup before appending** — fuzzy-match the title against existing entries; flag and confirm before creating a second entry for the same idea.
-8. **The backlog is the primary artefact** — if the tracking issue fails to create, the backlog entry still stands. Never lose data because GitHub was flaky.
-9. **Don't create the issue silently** — always ask first.
-10. **Never delete** — superseded ideas get status `SUPERSEDED`, not removal.
+1. **Lightweight only**: `/idea` captures, it does not spec. Don't ask for goals, metrics, or requirements here.
+2. **Always assign an ID**: `IDEA-NNN`, zero-padded to 3 digits.
+3. **One row per idea**: never edit existing rows from this skill; new ideas always append.
+4. **Status starts at NEW**: triage changes it later.
+5. **Single backlog**: every idea goes into `projects/ideas-backlog.md` at the root of the ops repo; triage assigns it to a project later.
+6. **Validate before accepting**: category must be 1-4; description must be non-empty. Loop until valid; never silently accept garbage.
+7. **Dedup before appending**: fuzzy-match the title against existing entries; flag and confirm before creating a second entry for the same idea.
+8. **The backlog is the primary artefact**: if the tracking issue fails to create, the backlog entry still stands. Never lose data because GitHub was flaky.
+9. **Don't create the issue silently**: always ask first.
+10. **Never delete**: superseded ideas get status `SUPERSEDED`, not removal.
 
 ## Status values
 
@@ -281,9 +281,9 @@ Next: triage with the team, then `/write-spec` if it survives.
 | TRIAGED | Reviewed, awaiting decision |
 | SPECCED | `/write-spec` produced a PRD |
 | SHIPPED | Built and released |
-| WONTDO | Triaged out — not pursuing |
+| WONTDO | Triaged out, not pursuing |
 | SUPERSEDED | Replaced by a different idea |
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard), multi-project SDLC framework for Claude Code · MIT.*

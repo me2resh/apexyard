@@ -5,22 +5,22 @@ argument-hint: "[project-name | . | --scope-all] [--format=mermaid|dragon|all] [
 allowed-tools: Bash, Read, Grep, Glob, Write, AskUserQuestion
 ---
 
-# /dfd — Data Flow Diagram Extractor
+# /dfd: Data Flow Diagram Extractor
 
 Read `.claude/rules/writing-standard.md`. Use the **controlled technical writing profile** for the DFD
 and accompanying explanation. Keep classifications and uncertainty explicit.
 
 Reads a codebase (or a portfolio of codebases for system-wide DFDs) and produces a Data Flow Diagram showing external actors, processes, data stores, data flows, trust boundaries, and per-element data classifications. The DFD is the **input to STRIDE threat modelling** and to GDPR cross-border / DPA-coverage analysis.
 
-This skill is the **canonical DFD producer** in the apexyard family. `/threat-model` and `/compliance-check` consume the DFD it writes instead of regenerating their own — see AgDR-0026 for the design rationale.
+This skill is the **canonical DFD producer** in the apexyard family. `/threat-model` and `/compliance-check` consume the DFD it writes instead of regenerating their own: see AgDR-0026 for the design rationale.
 
 | Skill | Role |
 |-------|------|
-| `/dfd` (this skill) | Produces the DFD — six-axis discovery + classifications + cross-repo trace |
-| `/threat-model` | Consumes the DFD — STRIDE walk over each trust-boundary crossing |
-| `/compliance-check` | Consumes the DFD's classifications — cross-border transfers + DPA coverage |
-| `/c4` | Static topology (different shape — system + containers, no data-flow semantics) |
-| `/process` (#256) | Dynamic control flow — BPMN, anchor-scoped multi-repo trace (shares the `_lib-multi-repo-trace.sh` helper) |
+| `/dfd` (this skill) | Produces the DFD: six-axis discovery + classifications + cross-repo trace |
+| `/threat-model` | Consumes the DFD: STRIDE walk over each trust-boundary crossing |
+| `/compliance-check` | Consumes the DFD's classifications: cross-border transfers + DPA coverage |
+| `/c4` | Static topology (different shape: system + containers, no data-flow semantics) |
+| `/process` (#256) | Dynamic control flow: BPMN, anchor-scoped multi-repo trace (shares the `_lib-multi-repo-trace.sh` helper) |
 
 ## Path resolution
 
@@ -33,27 +33,27 @@ source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-multi-repo-trace.sh"
 projects_dir=$(portfolio_projects_dir)
 ```
 
-Defaults match today's single-fork layout. Adopters in split-portfolio mode override the `portfolio.*` keys in `.claude/project-config.json` — the helper resolves whichever mode they're in. See `docs/multi-project.md`.
+Defaults match today's single-fork layout. Adopters in split-portfolio mode override the `portfolio.*` keys in `.claude/project-config.json`. The helper resolves whichever mode they're in. See `docs/multi-project.md`.
 
 ## Usage
 
 ```
-/dfd                                   # interactive — asks for scope (single service or system-wide)
-/dfd billing-api                       # registered project — single-service DFD
+/dfd                                   # interactive: asks for scope (single service or system-wide)
+/dfd billing-api                       # registered project: single-service DFD
 /dfd .                                  # treat cwd as the project root
-/dfd --scope-all                       # walk the whole registry — system-wide DFD with per-service sub-models
+/dfd --scope-all                       # walk the whole registry: system-wide DFD with per-service sub-models
 /dfd billing-api --format=dragon       # also emit Threat Dragon v2 JSON
 /dfd billing-api --format=all          # Mermaid + Threat Dragon + (future) PlantUML
 ```
 
-Re-running on the same scope OFFERS (default-no) to overwrite — same UX as `/extract-features` and `/c4`. Existing edits are preserved unless the operator explicitly accepts.
+Re-running on the same scope OFFERS (default-no) to overwrite, same UX as `/extract-features` and `/c4`. Existing edits are preserved unless the operator explicitly accepts.
 
 ## Output location
 
 ```
 projects/<project-name>/architecture/dfd.md            ← Mermaid markdown (primary, source of truth)
 projects/<project-name>/architecture/dfd.json          ← Threat Dragon v2 JSON (on --format=dragon)
-projects/<project-name>/architecture/dfd-source.yaml   ← discovery report — supports "what changed since last run"
+projects/<project-name>/architecture/dfd-source.yaml   ← discovery report: supports "what changed since last run"
 ```
 
 For `--scope-all`:
@@ -83,7 +83,7 @@ Stop with `Python 3.9 or later is required for --html.` if this check fails.
 Without `--html`, skip this check.
 
 - If the argument is `.` → use cwd as the target.
-- If the argument names a registered project → resolve to `workspace/<name>/`. If the workspace clone doesn't exist, stop and ask the operator to clone first (do not auto-clone — same convention as `/handover` and `/extract-features`).
+- If the argument names a registered project → resolve to `workspace/<name>/`. If the workspace clone doesn't exist, stop and ask the operator to clone first (do not auto-clone: same convention as `/handover` and `/extract-features`).
 - If no argument and cwd is inside `workspace/<name>/` → use that project.
 - If no argument and cwd is the ops fork root → ask: *"Scope this DFD to one service, or the whole system?"*
 - If `--scope-all` → walk every registered project; each becomes a trust-boundary box in the composed system DFD.
@@ -97,9 +97,9 @@ Discovery is anchored on the target and reachability-bounded. **No files written
 | **1. External actors** | Users, auth providers, third-party SaaS, admin consoles | HTTP route scope (anonymous / authenticated / admin); SDK imports (`stripe`, `@sendgrid/mail`, `@anthropic-ai/sdk`); auth provider imports (`@auth0`, `@clerk/`, Cognito); webhook signature handlers |
 | **2. Processes** | HTTP handlers, queue consumers, scheduled jobs, message-broker subscribers, gRPC methods | Framework signatures (Express / Fastify / NestJS / FastAPI / Flask / Django / Rails / Gin / Spring / Lambda); job-framework signatures (BullMQ, Celery, Sidekiq, Active Job, Temporal); cron / EventBridge schedules |
 | **3. Data stores** | RDBMSes, document stores, caches, object storage, file systems, data warehouses, search indexes | Schema files (`schema.prisma`, `models.py`, `*.rb` Active Record, `*.sql` migrations); SDK imports (`@aws-sdk/client-*`, `ioredis`, `mongoose`); connection-string env vars |
-| **4. Data flows** | What crosses what — payload + arrow direction | Reachability — handler reads/writes which store, calls which external API, enqueues to which worker. LSP-aware path uses call-graph; grep fallback uses imports + usage co-location |
+| **4. Data flows** | What crosses what: payload + arrow direction | Reachability: handler reads/writes which store, calls which external API, enqueues to which worker. LSP-aware path uses call-graph; grep fallback uses imports + usage co-location |
 | **5. Trust boundaries** | Network / auth / org / classification boundaries | Inferred from code + env config: public ↔ backend (HTTP scope), backend ↔ data (DB credentials gating), user ↔ admin (route prefix), us ↔ third-party (external SDKs). **Note**: IaC reading is out of scope for v1 |
-| **6. Data classifications** | PII, PCI, secrets, internal, public — per detected element | Three pathways: code annotations (`@PII`, `// CLASSIFIED: <label>`), env-var heuristics (`*_SECRET`, `*_TOKEN`), schema-column heuristics (`email`, `phone`, `card_number`). Optional explicit registry at `docs/data-classification.{md,yaml}` overrides heuristics |
+| **6. Data classifications** | PII, PCI, secrets, internal, public: per detected element | Three pathways: code annotations (`@PII`, `// CLASSIFIED: <label>`), env-var heuristics (`*_SECRET`, `*_TOKEN`), schema-column heuristics (`email`, `phone`, `card_number`). Optional explicit registry at `docs/data-classification.{md,yaml}` overrides heuristics |
 
 The grep-fallback signatures live in `.claude/skills/dfd/discover.sh` (axes 1–5) and `.claude/skills/dfd/classify.sh` (axis 6). When LSP is enabled (`ENABLE_LSP_TOOL=1` + per-language plugin per `docs/getting-started.md`), the skill prefers semantic-index queries over grep for axes 1, 2, 3, and 4. Discovery is identical in shape; LSP just makes it cheaper.
 
@@ -117,11 +117,11 @@ Render the discovery output in a compact table grouped by axis:
 For billing-api:
 
 External actors:
-  [Human]   Authenticated customer — POST /api/charges
-  [Human]   Admin — /admin/* routes
-  [Ext SaaS] Stripe — payment processing (charges, customers)
-  [Ext SaaS] SendGrid — transactional email
-  [Ext]     Auth0 — authentication provider
+  [Human]   Authenticated customer: POST /api/charges
+  [Human]   Admin: /admin/* routes
+  [Ext SaaS] Stripe: payment processing (charges, customers)
+  [Ext SaaS] SendGrid: transactional email
+  [Ext]     Auth0: authentication provider
 
 Processes:
   HTTP API (12 routes)
@@ -130,9 +130,9 @@ Processes:
   Scheduled jobs (1: nightly reconciliation)
 
 Data stores:
-  Postgres (via Prisma) — primary data store
-  Redis — session cache + queue backend
-  S3 — invoice PDF storage
+  Postgres (via Prisma): primary data store
+  Redis: session cache + queue backend
+  S3: invoice PDF storage
 
 Inferred trust boundaries:
   Public Internet ↔ Backend (HTTP scope)
@@ -142,12 +142,12 @@ Inferred trust boundaries:
   Us ↔ SendGrid (org boundary)
 
 Data classifications (detected):
-  user.email                          [PII]    via schema column     — prisma/schema.prisma:42
-  user.phone_number                   [PII]    via schema column     — prisma/schema.prisma:44
-  charge.card_number                  [PCI]    via schema column     — prisma/schema.prisma:118
-  STRIPE_SECRET_KEY                   [secrets] via env-var heuristic — .env.example:3
-  SENDGRID_API_KEY                    [secrets] via env-var heuristic — .env.example:5
-  user.profile @PII                   [pii]    via annotation         — src/models/user.ts:12
+  user.email                          [PII]    via schema column:     prisma/schema.prisma:42
+  user.phone_number                   [PII]    via schema column:     prisma/schema.prisma:44
+  charge.card_number                  [PCI]    via schema column:     prisma/schema.prisma:118
+  STRIPE_SECRET_KEY                   [secrets] via env-var heuristic: .env.example:3
+  SENDGRID_API_KEY                    [secrets] via env-var heuristic: .env.example:5
+  user.profile @PII                   [pii]    via annotation:         src/models/user.ts:12
 
 (d) describe in more detail
 (e) edit the model (add/remove element, change classification, reword trust boundary)
@@ -156,14 +156,14 @@ Data classifications (detected):
 >
 ```
 
-### 4. Interview — gap-fill only
+### 4. Interview: gap-fill only
 
 Ask the operator ONLY where the code is silent:
 
-- *"this field `user.identifier` — is this an email, a UUID, or something else? Classification?"*
-- *"placing a trust boundary between the public API gateway and the internal services — confirm or override?"*
+- *"this field `user.identifier`, is this an email, a UUID, or something else? Classification?"*
+- *"placing a trust boundary between the public API gateway and the internal services, confirm or override?"*
 - *"any human admin actors who interact via a console / runbook outside this codebase?"*
-- *"the `messaging` queue — is the consumer in this repo, or in another registered service?"* (only when cross-repo traversal is ambiguous)
+- *"the `messaging` queue, is the consumer in this repo, or in another registered service?"* (only when cross-repo traversal is ambiguous)
 
 Don't ask questions whose answer is already in the discovery report.
 
@@ -179,7 +179,7 @@ Keep the assembled markdown in memory until those checks pass.
 Build the in-memory DFD model (actors / processes / stores / flows / boundaries / classifications) from the approved candidate. Pipe through `generate-mermaid.sh` to assemble the markdown file:
 
 ```bash
-# Helper preamble — REQUIRED in every bash block that writes to a
+# Helper preamble: REQUIRED in every bash block that writes to a
 # projects/<name>/ path. The Path resolution section above shows the
 # pattern at file scope, but Claude executes each ```bash``` block as
 # a separate shell invocation, so the variable assignment from the top
@@ -252,7 +252,7 @@ Edit the model and regenerate both views to correct drift.
 Build a JSON document with the in-memory model and pipe through `generate-dragon.sh`:
 
 ```bash
-# Helper preamble — REQUIRED per block. See me2resh/apexyard#443.
+# Helper preamble: REQUIRED per block. See me2resh/apexyard#443.
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
 projects_dir=$(portfolio_projects_dir)
@@ -262,7 +262,7 @@ echo "$model_json" \
   > "${projects_dir}/${PROJECT}/architecture/dfd.json"
 ```
 
-`generate-dragon.sh` is a **pure function over the in-memory model** — `/threat-model --format=dragon` (#255) will import the same serialiser when it lands. If `#255` ships first with the serialiser inside `/threat-model`, switch this skill to import from there during code review.
+`generate-dragon.sh` is a **pure function over the in-memory model**. `/threat-model --format=dragon` (#255) will import the same serialiser when it lands. If `#255` ships first with the serialiser inside `/threat-model`, switch this skill to import from there during code review.
 
 Schema reference: [OWASP Threat Dragon repository](https://github.com/OWASP/threat-dragon) (see `td.vue/src/service/migration/schema/` for the published v2 JSON schema).
 
@@ -270,7 +270,7 @@ Schema reference: [OWASP Threat Dragon repository](https://github.com/OWASP/thre
 
 ### Mermaid lint gate (after every write)
 
-After every `dfd.md` write, run `lint.sh` against the output file. The lint wraps the shared `_lib-mermaid-lint.sh` — extracts the `` ```mermaid `` flowchart block and validates via `mmdc` so broken trust-boundary diagrams are caught at write time, not when a human opens the file on GitHub. Graceful-degrades when Node / npx is unavailable (exit 3, advisory only).
+After every `dfd.md` write, run `lint.sh` against the output file. The lint wraps the shared `_lib-mermaid-lint.sh`: extracts the `` ```mermaid `` flowchart block and validates via `mmdc` so broken trust-boundary diagrams are caught at write time, not when a human opens the file on GitHub. Graceful-degrades when Node / npx is unavailable (exit 3, advisory only).
 
 ```bash
 SKILL_DIR="$(dirname "$(realpath "$0")")"
@@ -285,7 +285,7 @@ For each registered project, run discovery → render per-service sub-model. Com
 
 1. Each service becomes a **dashed trust-boundary subgraph** in the composed Mermaid
 2. Every cross-service flow (detected via `mrt_resolve_target` from `_lib-multi-repo-trace.sh`) becomes an arrow crossing the boundary
-3. Unmanaged third parties (Stripe, SendGrid, Salesforce — detected via `mrt_is_third_party`) render as external entities with their own trust-boundary marker
+3. Unmanaged third parties (Stripe, SendGrid, Salesforce, detected via `mrt_is_third_party`) render as external entities with their own trust-boundary marker
 4. Each cross-repo handoff is labelled with the broker + topic / endpoint URL / etc.
 
 Output lands at `docs/architecture/system-dfd.md` (framework-wide view).
@@ -308,7 +308,7 @@ DFD drift since last run:
   + new flow: http_api → ext_twilio
   + new classification: phone_number [pii] (./prisma/schema.prisma:44)
 
-These changes may warrant a fresh /threat-model run — newly-introduced data flows
+These changes may warrant a fresh /threat-model run. Newly-introduced data flows
 are exactly the surface security review should focus on.
 ```
 
@@ -317,7 +317,7 @@ are exactly the surface security review should focus on.
 If `projects/<name>/architecture/README.md` exists, ensure it lists the DFD alongside any C4 diagrams. If it doesn't exist, create it with a minimal index:
 
 ```markdown
-# {project-name} — Architecture
+# {project-name}: Architecture
 
 | Diagram | Source | Last generated |
 |---------|--------|----------------|
@@ -366,7 +366,7 @@ Run `/dfd billing-api` against a small Express + Prisma + BullMQ service that in
 
 **Operator review** confirms the model, classifies one ambiguous `user.identifier` as PII (UUID, but used as a join key), and overrides the trust boundary between worker and Stripe to also include the email worker (single "outbound integrations" boundary).
 
-**Output**: `projects/billing-api/architecture/dfd.md` with the Mermaid diagram, trust-boundaries table, classifications table, and full provenance YAML. Subsequent `/threat-model billing-api` reads from this file and produces the STRIDE catalogue against the boundary crossings — no DFD regeneration.
+**Output**: `projects/billing-api/architecture/dfd.md` with the Mermaid diagram, trust-boundaries table, classifications table, and full provenance YAML. Subsequent `/threat-model billing-api` reads from this file and produces the STRIDE catalogue against the boundary crossings: no DFD regeneration.
 
 ## Rules
 
@@ -378,29 +378,29 @@ Run `/dfd billing-api` against a small Express + Prisma + BullMQ service that in
 6. **Don't invent third-party integrations.** Every `External Service` actor must trace to a concrete SDK import, API key env var, or webhook handler. No guessing.
 7. **Footer signature is mandatory.** Every generated `dfd.md` ends with `Generated by /dfd on YYYY-MM-DD` so re-runners know the file is regenerable.
 8. **Refuse if there's nothing to scan.** No `package.json`, no `pyproject.toml`, no `Gemfile`, no schema → stop with an error rather than producing an empty DFD.
-9. **The live DFD evolves freely (#270).** `/threat-model` and `/compliance-check` snapshot this DFD into their own outputs at audit time — they read the file once and inline the Mermaid + trust-boundaries + classifications sections into the audit artefact. So editing this file does **not** invalidate previously-written audits; their snapshots are frozen in time. Re-run the audit to refresh against the current DFD.
-10. **Heading contract with `/threat-model` (#1358).** A `dfd.md` — whether written by `generate-mermaid.sh` or hand-authored from `templates/architecture/dfd.md` — MUST use these three exact headings, because `/threat-model`'s Step 1b extractor keys on them verbatim: `## Diagram` (the Mermaid block), `## Trust boundaries` (the per-hop table), and `## Data classifications` (the classification table). Don't rename, merge, or drop one of the three without updating `.claude/skills/threat-model/SKILL.md`'s extractor and anti-pattern list in the same change — `.claude/skills/dfd/tests/test_dfd_heading_contract.sh` fails the build if the two drift apart.
+9. **The live DFD evolves freely (#270).** `/threat-model` and `/compliance-check` snapshot this DFD into their own outputs at audit time. They read the file once and inline the Mermaid + trust-boundaries + classifications sections into the audit artefact. So editing this file does **not** invalidate previously-written audits; their snapshots are frozen in time. Re-run the audit to refresh against the current DFD.
+10. **Heading contract with `/threat-model` (#1358).** A `dfd.md`, whether written by `generate-mermaid.sh` or hand-authored from `templates/architecture/dfd.md`, MUST use these three exact headings, because `/threat-model`'s Step 1b extractor keys on them verbatim: `## Diagram` (the Mermaid block), `## Trust boundaries` (the per-hop table), and `## Data classifications` (the classification table). Don't rename, merge, or drop one of the three without updating `.claude/skills/threat-model/SKILL.md`'s extractor and anti-pattern list in the same change. `.claude/skills/dfd/tests/test_dfd_heading_contract.sh` fails the build if the two drift apart.
 
 ## When to use this
 
 | Trigger | Use `/dfd`? |
 |---------|-------------|
-| Preparing for a security review | YES — produces the DFD `/threat-model` needs |
-| Preparing for GDPR / ePrivacy launch check | YES — produces the classifications `/compliance-check` needs |
-| Adopting a new project via `/handover` | OFFER after `/c4` — sequence: `/handover` → `/c4` (static topology) → `/dfd` (data flows) → `/threat-model` (security analysis) |
-| Major architecture change (new DB, new third party) | YES — re-run; the drift summary surfaces the delta |
-| Pure UI / styling work | NO — no data-flow change, DFD stable |
-| Spike / throwaway POC | NO — the surface isn't stable enough to be worth modelling |
+| Preparing for a security review | YES: produces the DFD `/threat-model` needs |
+| Preparing for GDPR / ePrivacy launch check | YES: produces the classifications `/compliance-check` needs |
+| Adopting a new project via `/handover` | OFFER after `/c4`, sequence: `/handover` → `/c4` (static topology) → `/dfd` (data flows) → `/threat-model` (security analysis) |
+| Major architecture change (new DB, new third party) | YES: re-run; the drift summary surfaces the delta |
+| Pure UI / styling work | NO: no data-flow change, DFD stable |
+| Spike / throwaway POC | NO: the surface isn't stable enough to be worth modelling |
 
 ## Out of scope (v1)
 
-- **IaC reading** (Terraform / CloudFormation / SAM) for trust-boundary inference — code + env config only in v1
-- **SAST / DAST substitution** — `/dfd` informs threat modelling and compliance, doesn't substitute for actual security scans
-- **Pretty SVG/PNG export** — Threat Dragon does that after JSON import
-- **PlantUML DFD format** (`--format=plantuml-dfd`) — listed in the AC as v2 follow-up
-- **Round-trip import** — hand-edited `dfd.md` → re-parsed back into discovery model
-- **Continuous / real-time DFD updates** — one-shot, same as siblings
-- **L3 / L4 detail** — single DFD per scope; per-service component-level DFDs are out-of-scope (use multiple `/dfd <subscope>` runs if needed)
+- **IaC reading** (Terraform / CloudFormation / SAM) for trust-boundary inference: code + env config only in v1
+- **SAST / DAST substitution**: `/dfd` informs threat modelling and compliance, doesn't substitute for actual security scans
+- **Pretty SVG/PNG export**: Threat Dragon does that after JSON import
+- **PlantUML DFD format** (`--format=plantuml-dfd`): listed in the AC as v2 follow-up
+- **Round-trip import**: hand-edited `dfd.md` → re-parsed back into discovery model
+- **Continuous / real-time DFD updates**: one-shot, same as siblings
+- **L3 / L4 detail**: single DFD per scope; per-service component-level DFDs are out-of-scope (use multiple `/dfd <subscope>` runs if needed)
 
 ## Anti-patterns
 
@@ -411,4 +411,4 @@ Run `/dfd billing-api` against a small Express + Prisma + BullMQ service that in
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

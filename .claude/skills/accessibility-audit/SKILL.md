@@ -8,7 +8,7 @@ effort: high
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /accessibility-audit — WCAG 2.2 AA Compliance
+# /accessibility-audit: WCAG 2.2 AA Compliance
 
 Deep-dive accessibility analysis against the Web Content Accessibility Guidelines 2.2 Level AA. Produces a prioritized findings list with fix instructions. Invoke when `/launch-check`'s accessibility row shows WARN or FAIL, or proactively for any user-facing app.
 
@@ -60,7 +60,7 @@ Grep the codebase for common accessibility failures:
 ### Step 3: Output findings
 
 ```
-ACCESSIBILITY AUDIT — <project> @ <sha>
+ACCESSIBILITY AUDIT: <project> @ <sha>
 
 | # | WCAG | Criterion | Severity | Finding | Fix |
 |----|------|-----------|----------|---------|-----|
@@ -88,7 +88,7 @@ Score: `score = max(0, 100 - 25*critical - 10*high - 3*medium - 1*low)`. Verdict
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-audit-history.sh"
 
-# Lowercase severity in the payload — the lib expects critical/high/medium/low/info.
+# Lowercase severity in the payload. The lib expects critical/high/medium/low/info.
 payload=$(mktemp); cat > "$payload" <<'EOF'
 {
   "schema_version": 1,
@@ -102,7 +102,7 @@ EOF
 
 # Body: per templates/audits/accessibility-audit.md (POUR-grouped table)
 body=$(mktemp); cat > "$body" <<'EOF'
-... (filled-in body — POUR groupings + Recommended priority) ...
+... (filled-in body: POUR groupings + Recommended priority) ...
 EOF
 
 ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -129,4 +129,4 @@ touch projects/<name>/audits/accessibility-audit/.audit-history-tracked
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard), multi-project SDLC framework for Claude Code · MIT.*
