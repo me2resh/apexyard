@@ -65,6 +65,9 @@ mode == "full" && NR == 2 {
   if ($0 !~ /Suggested ticket title: [^ ]/) bad=1
   checksla($0)
 }
+mode == "full" && /^- Important: / {
+  if ($0 !~ /Regression check: [^ ]/) bad=1
+}
 /^- Nit: .+/ { listed++ }
 /^Additional nits: / {
   if ($0 !~ /^Additional nits: [0-9]+$/) bad=1

@@ -103,4 +103,28 @@ for state in pending failed carry unknown; do
   esac
 done
 check test "$(bash "$preview" --dry-run "$tmp/state" invalid 2>/dev/null; echo $?)" = 2
+
+# A regression check names the catch for each Important finding (#2091).
+for file in .claude/agents/code-reviewer.md .claude/skills/code-review/SKILL.md templates/REVIEW.md; do
+  check grep -qF 'Regression check:' "$root/$file"
+done
+check grep -qF 'Regression check: test <path or name> must fail on <short sha>' "$root/templates/REVIEW.md"
+check grep -qF 'Regression check: rule <handbook path>' "$root/templates/REVIEW.md"
+check grep -qF 'Regression check: none possible' "$root/templates/REVIEW.md"
+body 0 0 none
+sed 's/Important 2/Important 1/' "$tmp/body" > "$tmp/important"
+echo '- Important: Unguarded SQL concatenation.' >> "$tmp/important"
+check test "$(bash "$parser" "$tmp/important" 2>/dev/null; echo $?)" = 1
+sed 's/Important 2/Important 1/' "$tmp/body" > "$tmp/important"
+echo '- Important: Unguarded SQL concatenation. Regression check: test tests/sql_test.py::test_no_concat must fail on a1b2c3d' >> "$tmp/important"
+check bash "$parser" "$tmp/important"
+
+# After two blocking rounds, the dry run stops and offers the owner a choice
+# instead of starting a third round (me2resh/apexyard#2091).
+printf 'changes\nchanges\n' > "$tmp/state"
+bash "$preview" --dry-run "$tmp/state" > "$tmp/out"
+check grep -q 'Blocker: review-round cap' "$tmp/out"
+check grep -q 'split the PR, narrow the PR, or accept the remaining items on record' "$tmp/out"
+check test "$(grep -c '^Round' "$tmp/out")" = 2
+
 echo "PASS: $count rows"
