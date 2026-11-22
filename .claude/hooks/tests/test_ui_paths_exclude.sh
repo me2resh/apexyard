@@ -51,21 +51,17 @@ run_exclude_filter() {
   mkdir -p "$(dirname "$cfg")"
   printf '%s\n' "$exclude_json" > "$cfg"
 
-  # Inline replay of the hook's EXCLUDE block.
+  # Run the hook's OWN exclude block (extracted from the hook source), so a
+  # change to the hook is exercised here. Unchanged config: CONFIG_IN_PR=0.
+  # The eval'd block reads and sets these variables, so shellcheck cannot see the use.
+  # shellcheck disable=SC2034
   local REPO_ROOT="$sb"
   local TOUCHED_UI="$touched"
-  local EXCLUDE
-  EXCLUDE=$(jq -r '.ui_paths_exclude // [] | join("|")' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
-  if [ -n "$EXCLUDE" ] && [ "$EXCLUDE" != "null" ] && [ -n "$TOUCHED_UI" ]; then
-    local FILTERED=""
-    local FILE
-    for FILE in $TOUCHED_UI; do
-      if ! echo "$FILE" | grep -qE "$EXCLUDE"; then
-        FILTERED="${FILTERED}${FILE} "
-      fi
-    done
-    TOUCHED_UI="$FILTERED"
-  fi
+  # shellcheck disable=SC2034
+  local CONFIG_IN_PR=0 BASE_CONFIG="" EXCLUDE FILTERED FILE block
+  block=$(awk '/^EXCLUDE=""/{p=1} /^if \[ -z "\$TOUCHED_UI" \]/{p=0} p' "$HOOK_SRC")
+  [ -n "$block" ] || { echo "FAIL: exclude block not found in hook" >&2; exit 1; }
+  eval "$block"
 
   rm -rf "$sb"
   # Trim trailing whitespace for stable assert.

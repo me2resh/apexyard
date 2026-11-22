@@ -26,7 +26,10 @@ function installerStderr(versionOutput: string): string {
   mkdirSync(bin);
   writeFileSync(join(bin, "opencode"), `#!/bin/sh\nprintf '%s\\n' '${versionOutput}'\n`, { mode: 0o755 });
 
-  const result = spawnSync("bash", [INSTALLER, "--target-dir", join(root, "target"), "--root", REPO_ROOT], {
+  // The installer accepts only a discovery directory named `plugins` (or the
+  // singular `plugin`, which it warns about), so the fixture has to use that
+  // shape. This test only reads the version-guard output.
+  const result = spawnSync("bash", [INSTALLER, "--target-dir", join(root, ".opencode", "plugins"), "--root", REPO_ROOT], {
     env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ""}` },
     encoding: "utf-8",
   });

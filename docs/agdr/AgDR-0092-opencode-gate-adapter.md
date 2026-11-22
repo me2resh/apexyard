@@ -1,6 +1,6 @@
 # opencode Gate Adapter — Settings.json-Derived Dispatcher Over the Bash Hooks
 
-> **Partly superseded by [AgDR-0299](AgDR-0299-opencode-top-level-shim.md):** the install layout (subfolder entry only) never loaded. A top-level shim is now required.
+> **Install layout superseded by [AgDR-0308](AgDR-0308-opencode-single-plugin-entry.md):** the code directory now sits beside the discovery directory, and one top-level shim is the only discovered entry. [AgDR-0299](AgDR-0299-opencode-top-level-shim.md) first added that shim.
 >
 > In the context of making apexyard's governance gates enforceable inside opencode (opencode.ai) as well as Claude Code and pi, facing the choice between reproducing the pi adapter's hand-maintained `DEFAULT_GATES` table or deriving the gate list directly from `.claude/settings.json`, I decided to build a single dispatcher plugin that parses `.claude/settings.json` at plugin-load time and shells out to the existing, unmodified bash hooks to achieve zero logic duplication AND zero gate-table drift, accepting the ongoing cost of every derived hook running as a real subprocess per matching tool call (more hooks run per call than pi's curated table would run) and the residual, currently-unverified risk that this build's shipped, settings.json-derived dispatcher was not itself re-verified live against a real, credentialed opencode session (spike #816 proved the pattern live against a throwaway prototype, not this code).
 

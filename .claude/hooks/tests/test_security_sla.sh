@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # shellcheck source=/dev/null
-. "$(cd "$(dirname "$0")" && pwd)/_test-session-isolation.sh"
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
 root=$(cd "$(dirname "$0")/../../.." && pwd)
 fixture_dir=$(mktemp -d)
 trap 'rm -rf "$fixture_dir"' EXIT

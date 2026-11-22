@@ -62,11 +62,11 @@ Give each finding exactly one tag: `Important`, `Nit`, or `Pre-existing`.
 Only `Important` findings can cause `CHANGES REQUESTED` under the applicable blocking rules.
 `Nit` and `Pre-existing` findings never block the PR.
 Each `Pre-existing` finding includes base evidence and a suggested ticket title.
-Follow [Review severity](../../../templates/REVIEW.md) and the agent's Output Format.
+Follow [Review severity](../../../templates/REVIEW.md).
 Keep all other security rules and independent gates in effect.
 
 Follow [policy resolution](../../../docs/skills/drive-to-green.md#override-the-review-policy) before spawning Rex.
-Give Rex the resolved policy path. Overrides change no gate decision.
+Take policy from the PR base branch, not the PR head. Overrides change no gate decision.
 
 ### CI order and depth
 

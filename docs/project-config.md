@@ -75,6 +75,25 @@ the built-in default in code, not JSON. A drop against one of those produces
 no warning today. See AgDR-0167 for why, and #1401 for the follow-up that
 tracks closing this gap for those seven keys.
 
+### Path keys in a PR that changes the config (AgDR-0310)
+
+The merge gates for UI and design artifacts read `ui_paths`, `ui_paths_exclude`,
+`design_paths` and `design_paths_exclude` from your local config. This stays
+true for a PR that does not change `.claude/project-config.json`.
+
+A PR may change that file. The gates then read the narrowing settings from the
+base branch copy, not from the PR. The base copy sets the exclusions and the
+path lists. A `ui_paths` or `design_paths` list in the PR can only add
+patterns.
+
+If the base copy is absent or unreadable, the gate uses the built-in default
+paths with no exclusions. It prints one `NOTE:` line to stderr. Merge the
+config change by itself first to make the new exclusion take effect.
+
+GitLab: the gates do not read the base copy for a GitLab merge request. A
+merge request that changes the config uses the built-in default paths with no
+exclusions.
+
 ## Schema (v1)
 
 ```json
