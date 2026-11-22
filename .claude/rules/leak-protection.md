@@ -12,17 +12,17 @@ Private project identifiers (names, repo slugs, workspace paths) belong in your 
 - Whatever `git remote get-url upstream` resolves to in the current fork
 - Future: overridable via `.claude/project-config.json` → `leak_protection.public_framework_repos`
 
-*Registered project* = any entry in your fork's `apexyard.projects.yaml`. The registry is — by convention — the fork owner's private portfolio.
+*Registered project* = any entry in your fork's `apexyard.projects.yaml`. The registry is, by convention, the fork owner's private portfolio.
 
 ## What gets scrubbed
 
-- `.projects[].name` — whole-word match, case-insensitive. Skipped entirely when the name is the target repo's own bare name (mentioning "apexyard" in an apexyard upstream ticket is fine). Also skipped when the name equals the target repo's **owner login** (me2resh/apexyard#1387). This owner exemption applies only inside the `@owner` or `owner/<repo-slug>` forms. A bare, standalone mention of the owner's name still blocks, like any other registered private project's name.
-- `.projects[].repo` — exact `owner/repo` match, optionally followed by `#<N>` to catch ticket references. Skipped when equal to the target repo.
-- `.projects[].workspace` — whole-word match on the workspace path.
+- `.projects[].name`: whole-word match, case-insensitive. Skipped entirely when the name is the target repo's own bare name (mentioning "apexyard" in an apexyard upstream ticket is fine). Also skipped when the name equals the target repo's **owner login** (me2resh/apexyard#1387). This owner exemption applies only inside the `@owner` or `owner/<repo-slug>` forms. A bare, standalone mention of the owner's name still blocks, like any other registered private project's name.
+- `.projects[].repo`: exact `owner/repo` match, optionally followed by `#<N>` to catch ticket references. Skipped when equal to the target repo.
+- `.projects[].workspace`: whole-word match on the workspace path.
 
 ## Public registry entries — `public: true`
 
-A registered project whose repo is public — a public marketing site, say —
+A registered project whose repo is public, a public marketing site, say,
 is not a private identifier. Add `public: true` to that entry in
 `apexyard.projects.yaml`:
 
@@ -37,20 +37,20 @@ Every leak hook (`check-private-refs-staged.sh`, `check-private-refs-runtime.sh`
 parser at `.claude/hooks/_lib-registry-parser.sh` and skips that entry's
 `name`, `repo`/`repos`, and `workspace` when scanning for a leak
 (me2resh/apexyard#1455). Omitting the field, or setting it to anything other
-than `true`, keeps the entry private — the hooks fail closed by default.
+than `true`, keeps the entry private, the hooks fail closed by default.
 
 `public: true` is per-entry, not global: an unrelated private project two
 entries down in the same registry still blocks normally.
 
 ## What does NOT get scrubbed
 
-- The fork owner's git identity (name / email) — that's signed on every commit anyway.
+- The fork owner's git identity (name / email): that is signed on every commit anyway.
 - Generic class descriptions: *"a registered project"*, *"one of the managed project workspaces"*, *"during bulk ticket filing"*. This is the recommended rewrite shape.
-- Timeline phrases (*"on 2026-04-24"*, *"during the Q2 cleanup"*) — dates and sprint labels don't carry attribution.
+- Timeline phrases (*"on 2026-04-24"*, *"during the Q2 cleanup"*): dates and sprint labels do not carry attribution.
 
 ## Escape hatch — skip marker
 
-When an upstream ticket legitimately needs to reference a registered project by name — the rare case where the framework has to name a managed-project's tracker, for example an AgDR about a specific migration handled in a managed project — add this HTML comment to the body:
+An upstream ticket can legitimately need to reference a registered project by name. This is the rare case where the framework has to name a managed-project's tracker. An example is an AgDR about a specific migration handled in a managed project. In this case, add this HTML comment to the body:
 
 ```html
 <!-- private-refs: allow -->
@@ -132,9 +132,9 @@ bodies through `_tracker_review_glab`. That function pipes the body into
 
 The hook silently exits 0 in three no-op cases:
 
-1. **Target not public-class** — the command points at a private registered repo (your own project); the concern doesn't apply inside your own org.
-2. **`apexyard.projects.yaml` missing** — no registry = no scrub list. The hook has nothing to enforce.
-3. **Empty title + empty body + no body-file** — `gh ... comment <n>` without a `-b` / `-F` opens the editor; the hook has nothing to scan.
+1. **Target not public-class**, the command points at a private registered repo (your own project); the concern does not apply inside your own org.
+2. **`apexyard.projects.yaml` missing**, no registry = no scrub list. The hook has nothing to enforce.
+3. **Empty title + empty body + no body-file**: `gh ... comment <n>` without a `-b` / `-F` opens the editor. The hook has nothing to scan.
 
 ## Remediation — when a private reference reaches a public repo anyway
 
@@ -194,13 +194,13 @@ purge your own repository's objects. It cannot reach a fork.
 
 If a project's `name` collides with a generic word (a project literally named `auth`, or `core`), the hook will block any upstream ticket that uses that word. Mitigations:
 
-1. **Don't register a private project under a generic one-word name.** `sample-app` is fine; `auth` is not. This is a good principle independent of leak protection — it also stops `/projects` and `/tasks` from colliding.
+1. **Do not register a private project under a generic one-word name.** `sample-app` is fine; `auth` is not. This is a good principle independent of leak protection. It also stops `/projects` and `/tasks` from colliding.
 2. **Use the skip marker** when you've confirmed the match is incidental. The warning that accompanies the bypass is visible and auditable.
-3. **Omit the `name` field temporarily** — the hook reads only registered fields, so redacting one project's name in the registry removes it from the scrub list. Least-preferred option; you lose discovery in `/projects` for that project.
+3. **Omit the `name` field temporarily**: the hook reads only registered fields, so redacting one project's name in the registry removes it from the scrub list. Least-preferred option; you lose discovery in `/projects` for that project.
 
 ## Relationship to other hooks
 
-The leak-protection hook is a **sibling to `check-secrets.sh`** — both scan outgoing content for identifiers that should never leave the local environment. The difference is scope:
+The leak-protection hook is a **sibling to `check-secrets.sh`**, both scan outgoing content for identifiers that should never leave the local environment. The difference is scope:
 
 | Hook | Protects | When |
 |------|----------|------|
@@ -213,8 +213,8 @@ Both are backstops against routine-but-damaging leaks. Self-discipline is the pr
 
 ## Rationale for mechanical enforcement
 
-Self-discipline doesn't prevent this class of leak. The private project's name is *right there* in the working context while the agent is writing the upstream ticket — not referencing it takes active suppression. Mechanical enforcement is the right shape, same pattern as `check-secrets.sh` and the commit-format hooks.
+Self-discipline does not prevent this class of leak. The private project's name is *right there* in the working context while the agent is writing the upstream ticket. Avoiding a reference to it takes active suppression. Mechanical enforcement is the right shape, same pattern as `check-secrets.sh` and the commit-format hooks.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

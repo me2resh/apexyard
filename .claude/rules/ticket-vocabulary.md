@@ -33,7 +33,7 @@ The problem is not the number 1. The problem is the combination of the word "Tic
 
 ## The boundary-crossing rule
 
-If your plan includes items that need **tracker properties** — blocking relationships that persist across sessions, assignment to a specific owner, QA state transitions, cross-session tracking, merge-time auto-closing — then that's the moment to **stop planning in prose and call `gh issue create` for each**.
+If your plan includes items that need **tracker properties**, **stop planning in prose and call `gh issue create` for each**. These properties are blocking relationships that persist across sessions, assignment to a specific owner, QA state transitions, cross-session tracking, merge-time auto-closing.
 
 You cannot present a plan as a tracker view of work that is not in the tracker. Call the tool or call it planning. There is no middle ground.
 
@@ -41,11 +41,11 @@ You cannot present a plan as a tracker view of work that is not in the tracker. 
 
 Any time you catch yourself about to type `Ticket N:` or `#N` or `blocked by #N` in a plan response, STOP and ask:
 
-1. **Does this reference an issue that already exists in a tracker?** If yes, you already fetched or created it — fine to use tracker notation. Otherwise:
+1. **Does this reference an issue that already exists in a tracker?** If yes, you already fetched or created it. Tracker notation is fine. Otherwise:
 2. **Does this plan item need tracker properties?** If yes, run `gh issue create` now for each item that needs one, collect the real numbers, and use those in your response. Otherwise:
 3. **Rewrite with safe vocabulary** (`Step N`, `Item A`, plain bullets).
 
-The cost of asking the user "do you want me to create these as real issues first?" is one message. The cost of a fabricated tracker view that the user takes as real is much higher — they act on it, assign people, plan sprints, and only discover later that none of the tickets exist.
+The cost of asking the user "do you want me to create these as real issues first?" is one message. The cost of a fabricated tracker view that the user takes as real is much higher. They act on it, assign people, plan sprints, and only discover later that none of the tickets exist.
 
 ## Anti-pattern (2026-04-11 incident)
 
@@ -91,8 +91,8 @@ can link and track.
 
 Differences from the anti-pattern:
 
-1. `Step N` instead of `Ticket N` — clearly a prose decomposition, not a tracker list
-2. "needs Step N" instead of "blocked by #N" — prose dependency, not tracker semantics
+1. `Step N` instead of `Ticket N`, clearly a prose decomposition, not a tracker list
+2. "needs Step N" instead of "blocked by #N", prose dependency, not tracker semantics
 3. **Explicit disclaimer** at the top: "None of these exist as GitHub issues yet"
 4. **Explicit checkpoint** at the bottom: asks the user whether to cross the boundary into real issues
 5. **Commits to re-posting with real `#N`** once the tickets exist
@@ -107,27 +107,27 @@ This rule is primarily self-discipline. It is also backed up by two mechanical h
 |------|-------|-----------------|
 | `validate-pr-create.sh` | `PreToolUse` on `gh pr create` | PR titles that reference an issue number which doesn't exist in the tracker repo |
 | `verify-commit-refs.sh` | `PreToolUse` on `git commit -m / -F` | Commit messages with `Closes #N` / `Refs #N` / `Fixes #N` / `Resolves #N` pointing at issues that don't exist |
-| `require-skill-for-issue-create.sh` (#268) | `PreToolUse` on `Bash` | Raw ticket-create CLI calls (`gh issue create`, `gh api repos/...`, `linear issue create`, `jira issue create`, `asana task create`, custom) that bypass the structured skills (`/task`, `/feature`, `/bug`, `/spike`, `/migration`, `/investigation`, `/idea`). Tracker-agnostic — extend the matcher list via `.claude/project-config.json → ticket.create_command_patterns` for Linear, Jira, Asana, or your own tracker. Operator escape hatch: `APEXYARD_ALLOW_RAW_TICKET_CREATE=1`. See AgDR-0030. |
+| `require-skill-for-issue-create.sh` (#268) | `PreToolUse` on `Bash` | Raw ticket-create CLI calls (`gh issue create`, `gh api repos/...`, `linear issue create`, `jira issue create`, `asana task create`, custom) that bypass the structured skills (`/task`, `/feature`, `/bug`, `/spike`, `/migration`, `/investigation`, `/idea`). Tracker-agnostic: extend the matcher list via `.claude/project-config.json → ticket.create_command_patterns` for Linear, Jira, Asana, or your own tracker. Operator escape hatch: `APEXYARD_ALLOW_RAW_TICKET_CREATE=1`. See AgDR-0030. |
 
-Both hooks block at the moment the fabricated reference would be committed to a durable artifact (PR title, commit message). They cannot see conversation prose — that's why the rule comes first and the hooks are labeled **backstops**, not the primary fix.
+Both hooks block at the moment the fabricated reference would be committed to a durable artifact (PR title, commit message). They cannot see conversation prose. That is why the rule comes first and the hooks are labeled **backstops**, not the primary fix.
 
 ### Fork → upstream PRs: bare `#N` is the right notation (since me2resh/apexyard#207)
 
-When you're working in a fork (e.g. `your-org/apexyard`) with `origin` = the fork and `upstream` = `me2resh/apexyard`, and the issue you're closing lives in **upstream**, use bare `#N` notation — not cross-repo `owner/repo#N`.
+This case applies when you work in a fork (for example, `your-org/apexyard`) with `origin` = the fork and `upstream` = `me2resh/apexyard`. In this case, if the issue you are closing lives in **upstream**, use bare `#N` notation, not cross-repo `owner/repo#N`.
 
 | Notation | Hook check | Auto-close on merge |
 |----------|-----------|---------------------|
-| `Closes #150` (issue in upstream) | passes — both hooks consult `upstream` after origin misses | fires (GitHub auto-closes on bare `#N` when PR target = issue host) |
-| `Closes me2resh/apexyard#150` | passes (no #N extracted from the cross-repo form) | does NOT fire — cross-repo references don't trigger auto-close |
-| `Closes #99999` (nowhere) | BLOCKED — neither tracker has it | n/a |
+| `Closes #150` (issue in upstream) | passes: both hooks consult `upstream` after origin misses | fires (GitHub auto-closes on bare `#N` when PR target = issue host) |
+| `Closes me2resh/apexyard#150` | passes (no #N extracted from the cross-repo form) | does NOT fire: cross-repo references do not trigger auto-close |
+| `Closes #99999` (nowhere) | BLOCKED. Neither tracker has it | n/a |
 
-Earlier versions of these hooks were origin-only, which forced the cross-repo workaround for fork → upstream PRs and silently broke GitHub's auto-close — leaving every cross-fork PR's issue OPEN forever. After #207, bare `#N` is the supported pattern and the cross-repo workaround is no longer needed (it still passes the hook for backwards compat, but you lose auto-close).
+Earlier versions of these hooks were origin-only. This forced the cross-repo workaround for fork → upstream PRs and silently broke GitHub's auto-close. Every cross-fork PR's issue stayed OPEN forever. After #207, bare `#N` is the supported pattern and the cross-repo workaround is no longer needed (it still passes the hook for backwards compat, but you lose auto-close).
 
 ## Repo targeting — always pass an explicit `--repo` (me2resh/apexyard#809)
 
-The reserved-vocabulary rule above assumes you already know **which repo** a `#N` lives in. Across a portfolio that assumption is dangerous: numeric issue IDs collide freely across repos — `me2resh/apexyard#92`, a managed project's `#92`, and any other repo's `#92` are three unrelated issues. If you run a tracker command that omits the target repo, `gh` (and the equivalent Linear / Jira / Asana CLIs) resolves it against the **ambient (cwd) repo** — whichever repo the current directory happens to belong to. When the working directory isn't the one you meant, that silently reads or writes the *wrong* `#92`.
+The reserved-vocabulary rule above assumes you already know **which repo** a `#N` lives in. Across a portfolio that assumption is dangerous: numeric issue IDs collide freely across repos. `me2resh/apexyard#92`, a managed project's `#92`, and any other repo's `#92` are three unrelated issues. If you run a tracker command that omits the target repo, `gh` resolves it against the **ambient (cwd) repo**. The equivalent Linear / Jira / Asana CLIs do the same. This is whichever repo the current directory happens to belong to. When the working directory is not the one you meant, that silently reads or writes the *wrong* `#92`.
 
-**The rule: always pass an explicit `--repo <owner/repo>` on `gh issue` / `gh pr` (and equivalent tracker) commands. Never rely on ambient cwd resolution across a portfolio.** This matters most on bare **reads** — `gh issue view <N>`, `gh issue view <N> --json state` — where nothing downstream flags the mistake: the command succeeds, returns a real issue's state, and quietly feeds the wrong data into your reasoning. A wrong read is worse than a wrong write, because the write path has a human approval step in front of it and the read path does not.
+**The rule: always pass an explicit `--repo <owner/repo>` on `gh issue` / `gh pr` (and equivalent tracker) commands. Never rely on ambient cwd resolution across a portfolio.** This matters most on bare **reads**: `gh issue view <N>`, `gh issue view <N> --json state`. Nothing downstream flags the mistake. The command succeeds, returns a real issue's state, and quietly feeds the wrong data into your reasoning. A wrong read is worse than a wrong write, because the write path has a human approval step in front of it and the read path does not.
 
 ```bash
 # WRONG — resolves against whatever repo the cwd belongs to
@@ -141,30 +141,30 @@ The same discipline is what `/start-ticket` already bakes in: it records the tic
 
 ### The write side is already mechanically guarded
 
-Two shipped hooks already close the *write* half of this gap — you don't need to remember them, but knowing they're there tells you where the residual risk actually is (reads):
+Two shipped hooks already close the *write* half of this gap. You do not need to remember them, but knowing they are there tells you where the residual risk actually is (reads):
 
 | Hook | Guards | How it helps repo-targeting |
 |------|--------|-----------------------------|
-| `require-skill-for-issue-create.sh` (#268) | Issue **creation** | Blocks a bare `gh issue create` / `gh api repos/.../issues` POST unless a structured skill (`/task`, `/feature`, `/bug`, `/spike`, `/migration`, `/investigation`, `/idea`) is in flight. Those skills resolve the target from the registry and pass an explicit `--repo` — so ambient-repo creation is already off the table. See [`leak-protection.md`](leak-protection.md) for the sibling concern. |
-| `block-private-refs-in-public-repos.sh` | Public-repo **writes** (issue / PR / comment) | Scrubs registered private-project names, repo slugs, and workspace paths out of anything written to a public framework repo — the privacy-boundary half of "wrong repo". Full rule: [`leak-protection.md`](leak-protection.md). |
+| `require-skill-for-issue-create.sh` (#268) | Issue **creation** | Blocks a bare `gh issue create` / `gh api repos/.../issues` POST unless a structured skill (`/task`, `/feature`, `/bug`, `/spike`, `/migration`, `/investigation`, `/idea`) is in flight. Those skills resolve the target from the registry and pass an explicit `--repo`, so ambient-repo creation is already off the table. See [`leak-protection.md`](leak-protection.md) for the sibling concern. |
+| `block-private-refs-in-public-repos.sh` | Public-repo **writes** (issue / PR / comment) | Scrubs registered private-project names, repo slugs, and workspace paths out of anything written to a public framework repo: the privacy-boundary half of "wrong repo". Full rule: [`leak-protection.md`](leak-protection.md). |
 
-So the genuine residual gap is narrow: a bare `gh issue view <N>` with no `--repo`, when IDs collide **and** the working directory isn't the intended repo **and** `--repo` was omitted. Real, but read-only — and closed by the discipline above, not by a gate.
+So the genuine residual gap is narrow: a bare `gh issue view <N>` with no `--repo`. This occurs when IDs collide **and** the working directory is not the intended repo **and** `--repo` was omitted. Real, but read-only, and closed by the discipline above, not by a gate.
 
 ### Why a convention, not a hook
 
-A `PreToolUse` hook sees a **number, not intent**. When the command is `gh issue view 92`, the hook cannot tell a *wrong-repo* access from a *legitimate cross-repo* one — and the framework reads and writes `me2resh/apexyard` **by design** (`/report-apexyard-bug`, `/request-apexyard-feature`, upstream framework PRs, reading issues like #809 itself). So:
+A `PreToolUse` hook sees a **number, not intent**. When the command is `gh issue view 92`, the hook cannot tell a *wrong-repo* access from a *legitimate cross-repo* one. The framework reads and writes `me2resh/apexyard` **by design** (`/report-apexyard-bug`, `/request-apexyard-feature`, upstream framework PRs, reading issues like #809 itself). So:
 
 - A **blocking** hook that allowed only registered private projects would break every one of those legitimate upstream paths.
-- An **advisory** hook that fired on every bare read would be almost all noise — the bare-read pattern is overwhelmingly correct in a single-repo cwd.
+- An **advisory** hook that fired on every bare read would be almost all noise: the bare-read pattern is overwhelmingly correct in a single-repo cwd.
 
 That's why this is self-discipline plus the two write-side backstops above, not a new gate. Same shape as the "why not lint Claude's prose output?" reasoning below: the shell can't infer the intended repo any more than it can lint prose. This section encodes the maintainer resolution posted on me2resh/apexyard#809.
 
 ## Why not lint Claude's prose output?
 
-Considered and rejected. Hooks run on tool calls, not on assistant text output. The only way to catch a fabricated `#N` in prose would be a self-discipline check Claude runs at the end of every response — which is exactly the failure mode this rule is trying to prevent. If Claude could reliably remember to check itself, the vocabulary collision wouldn't happen in the first place.
+Considered and rejected. Hooks run on tool calls, not on assistant text output. The only way to catch a fabricated `#N` in prose would be a self-discipline check Claude runs at the end of every response. This is exactly the failure mode this rule is trying to prevent. If Claude could reliably remember to check itself, the vocabulary collision would not happen in the first place.
 
-For adversarial trust beyond self-discipline, rely on GitHub branch protection, CODEOWNERS, and required status checks — those are a separate layer this rule does not replace.
+For adversarial trust beyond self-discipline, rely on GitHub branch protection, CODEOWNERS, and required status checks. Those are a separate layer this rule does not replace.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*
