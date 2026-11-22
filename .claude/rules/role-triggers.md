@@ -88,7 +88,7 @@ When you activate, hand off, or exit a role, print a single-line marker at the t
 **Main thread route** — Hadi prints a marker only when it routes work to a role. Hadi does not print a marker for ordinary work.
 
 ```
-▸ Hadi routes #42 to Rex (code review)
+▸ Hadi routes #42 to Rex (Code Reviewer)
 ▸ Hadi routes #42 to Salim (QA Engineer) (trigger: ticket labeled qa)
 ```
 
