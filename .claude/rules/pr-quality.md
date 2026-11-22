@@ -18,7 +18,7 @@ Run, and paste the commands and their results into a `## Testing` section:
 
 1. Shellcheck on every changed shell script.
 2. The tests for every changed file.
-3. A fail-before proof for each new test — run the new test against the
+3. A fail-before proof for each new test: run the new test against the
    pre-change code and confirm it fails, then against the changed code and
    confirm it passes.
 4. The sentence checker (`bin/check-writing-profile.sh`) on every changed
@@ -118,9 +118,9 @@ If any box fails, expand the bullet before submitting. Two well-written bullets 
 
 Some bullets are genuinely short by nature:
 
-- **Dependency bumps** — `Bumps lockfile` / `Updates eslint to 9.x` is fine when paired with the *why* on the next line or in the PR body
-- **Pure mechanical refactors with no behaviour change** — `Renames Foo → Bar across 17 files` self-explains
-- **Single-line bug fixes whose fix is the rationale** — `Fixes off-by-one in pagination guard (issue #42)` self-explains
+- **Dependency bumps**: `Bumps lockfile` / `Updates eslint to 9.x` is fine when paired with the *why* on the next line or in the PR body
+- **Pure mechanical refactors with no behaviour change**: `Renames Foo → Bar across 17 files` self-explains
+- **Single-line bug fixes whose fix is the rationale**: `Fixes off-by-one in pagination guard (issue #42)` self-explains
 
 Rex's advisory check (see `.claude/agents/code-reviewer.md`) flags label-only bullets as a `Nit` finding, not a blocking verdict, so legitimate short bullets don't churn the merge gate.
 
@@ -145,7 +145,7 @@ If the PR touches user-facing UI → design review is required before merge. Mec
 | Key | Behaviour | When to use |
 |-----|-----------|-------------|
 | `.ui_paths` | **REPLACE** the default regex list entirely (JSON array of patterns). | Full control over the UI definition; you accept the maintenance cost of keeping the list in sync with framework defaults. |
-| `.ui_paths_exclude` (#275) | **ADDITIVE** carve-out: paths matching any pattern here are removed from the touched-UI set *after* `.ui_paths` matching. | Keep the broad defaults but skip specific dirs where `.jsx`/`.tsx` are doc samples (e.g. `["^docs/examples/", "^wiki/artifacts/"]`) — non-breaking, doesn't drift from upstream. |
+| `.ui_paths_exclude` (#275) | **ADDITIVE** carve-out: paths matching any pattern here are removed from the touched-UI set *after* `.ui_paths` matching. | Keep the broad defaults but skip specific dirs where `.jsx`/`.tsx` are doc samples (for example, `["^docs/examples/", "^wiki/artifacts/"]`): non-breaking, does not drift from upstream. |
 
 Prefer `ui_paths_exclude` for the common case of "the default is right except for these few dirs"; reach for `ui_paths` only when the framework's UI definition genuinely doesn't fit your repo layout.
 
@@ -165,8 +165,8 @@ Before moving a ticket to Done:
 
 ## No Red CI Before Merge
 
-**Never** merge with red CI — even if the failure is pre-existing or unrelated. Fix the pre-existing issue first (separate commit), rebase the PR so all checks are green, and only then merge.
+**Never** merge with red CI, even if the failure is pre-existing or unrelated. Fix the pre-existing issue first (separate commit), rebase the PR so all checks are green, and only then merge.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*
