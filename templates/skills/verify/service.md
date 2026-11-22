@@ -1,7 +1,7 @@
 # Verify skeleton — Service
 
 Use the controlled technical writing profile for evidence.
-Use this file with `templates/skills/verify/SKILL.md`. Fill in its setup fields first.
+Use this file with `.claude/skills/verify/SKILL.md`. Fill in its setup fields first.
 
 ## Start the app
 

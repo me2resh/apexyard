@@ -21,6 +21,9 @@ for stack in stacks:
     for heading in ('## Start the app', '## Drive the main flows', '## Print evidence'):
         assert heading in body, f'{stack}.md is missing {heading}'
     assert 'controlled technical writing profile' in body, f'{stack}.md is missing the writing profile line'
+    # The skeleton ships into a project, so it must not name an ops-repo path.
+    assert 'templates/skills/verify/' not in body, f'{stack}.md references an ops-repo path'
+    assert '.claude/skills/verify/SKILL.md' in body, f'{stack}.md does not point at the project verify skill'
 print('PASS: four stack skeletons exist with start, drive, and evidence steps')
 
 template = (root / 'templates/skills/verify/SKILL.md').read_text()
