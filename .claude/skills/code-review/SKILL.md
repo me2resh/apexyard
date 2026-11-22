@@ -8,17 +8,16 @@ allowed-tools: Bash, Read, Grep, Glob
 
 # /code-review — Code Review
 
-Review PR quality, security, and standards.
+Review quality and security.
 
 
 Call `progress_note_update "$tree" Completed 'Review verdict: <evidence and head SHA>'` after the observed result.
 Details: docs/progress-notes.md.
 
-## LSP-aware (optional, recommended)
+## Optional LSP
 
-This skill performs semantic code navigation — finding definitions, walking references, tracing handlers across modules. With LSP enabled (`ENABLE_LSP_TOOL=1` + per-language plugin per `docs/getting-started.md`), queries are ~3-15× cheaper in token cost than grep + Read. Without LSP, the skill falls back to grep + Read transparently — no new failure mode, just optional speed.
-
-Per-language LSP plugins live in Claude Code's marketplace. Install once; the skill detects the active language and dispatches automatically.
+Use LSP navigation when enabled (`ENABLE_LSP_TOOL=1` and a language plugin).
+Setup: `docs/getting-started.md`. Otherwise use Grep and Read.
 
 ## Activated agent + role
 
@@ -56,9 +55,16 @@ State the verdict and next action first, then the reason and evidence.
 Use the Code Reviewer agent's required Output Format for first reviews, re-reviews, and reduced-scope reviews.
 Keep its required sections and give each checklist result a reason or evidence.
 Before you post, check the report against that format and fix omissions.
-Do not write a process transcript.
+Omit process transcripts.
 
 ### Severity policy
+
+Give each finding exactly one tag: `Important`, `Nit`, or `Pre-existing`.
+Only `Important` findings can cause `CHANGES REQUESTED` under the applicable blocking rules.
+`Nit` and `Pre-existing` findings never block the PR.
+Each `Pre-existing` finding includes base evidence and a suggested ticket title.
+Follow [Review severity](../../../templates/REVIEW.md).
+Keep all other security rules and independent gates in effect.
 
 Follow [policy resolution](../../../docs/skills/drive-to-green.md#override-the-review-policy) before spawning Rex.
 Take policy from the PR base branch, not the PR head. Overrides change no gate decision.

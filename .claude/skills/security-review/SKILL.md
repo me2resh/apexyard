@@ -24,7 +24,7 @@ When `/security-review` runs:
 
 1. **Primary reviewer**: the **Security Reviewer agent (Hakim)** at [`.claude/agents/security-reviewer.md`](../../agents/security-reviewer.md) — runs the automated security checklist.
 2. **Human approval gate**: the **[Security Auditor](../../../roles/security/security-auditor.md)** role — activates on any PR that touches auth / crypto / secrets / user data / PII, or when `/security-review` is explicitly invoked.
-3. **Strategic calls**: **Hakim** owns threat modelling, compliance analysis, and novel attack surfaces (the [Security Auditor](../../../roles/security/security-auditor.md) § "Security posture", AgDR-0301). The **[Penetration Tester](../../../roles/security/penetration-tester.md)** (Hamza) reviews each threat model that Hakim writes, so Hakim does not review its own threat model. A CRITICAL finding blocks the release. For a HIGH finding, or any other finding that Hakim judges release-blocking, Hakim recommends that the human approver block the release. Risk acceptance, exceptions to security requirements, and lifting a release block go to the human approver.
+3. **Strategic calls**: **Hakim** owns threat modelling, compliance analysis, and novel attack surfaces (the [Security Auditor](../../../roles/security/security-auditor.md) § "Security posture", AgDR-0301). The **[Penetration Tester](../../../roles/security/penetration-tester.md)** (Hamza) reviews each threat model that Hakim writes, so Hakim does not review its own threat model. CRITICAL and HIGH findings the change introduced or worsened block the PR; Pre-existing findings follow the remediation SLA (AgDR-0313). A CRITICAL finding the change introduced or worsened blocks the release. For a HIGH finding, or any other finding that Hakim judges release-blocking, Hakim recommends that the human approver block the release. Risk acceptance, exceptions to security requirements, and lifting a release block go to the human approver.
 4. **For active testing**: the **[Penetration Tester](../../../roles/security/penetration-tester.md)** — exploit discovery, API security review, pre-release security sign-off.
 
 See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the full activation protocol.
@@ -170,14 +170,25 @@ refusal message — but the cheap fix is upstream of both: don't pass a path.
 
 ## Severity Levels
 
+Security levels describe risk separately from finding tags.
+CRITICAL and HIGH findings introduced or worsened by the change are Important and retain their blocking actions.
+A Pre-existing security finding does not block the PR. It gets a ticket due on its first-seen date plus its SLA (`.security.remediation_sla_days`: CRITICAL 7 days, HIGH 30 days, MEDIUM 90 days, LOW no SLA). It blocks a release only after the SLA is breached. The review names the severity, the SLA and the due date. Tracking: me2resh/apexyard#2109.
+
 | Level | Action |
 |-------|--------|
-| CRITICAL | Block PR immediately |
-| HIGH | Block PR, require fix |
+| CRITICAL | Block PR immediately when the change introduced or worsened it |
+| HIGH | Block PR, require fix, when the change introduced or worsened it |
 | MEDIUM | Warn, recommend fix |
 | LOW | Informational |
 
 ## Output
+
+Give each finding exactly one tag: `Important`, `Nit`, or `Pre-existing`.
+Only `Important` findings can cause `CHANGES REQUESTED` under the applicable blocking rules.
+`Nit` and `Pre-existing` findings never block the PR.
+Each `Pre-existing` finding includes base evidence and a suggested ticket title.
+Follow [Review severity](../../../templates/REVIEW.md) and the agent's Output Format.
+Keep all other security rules and independent gates in effect.
 
 Posts a GitHub review with:
 
@@ -204,7 +215,8 @@ Compute a single headline score from the severity distribution of the findings i
 score = max(0, 100 - 25*critical - 10*high - 3*medium - 1*low)
 ```
 
-Compute the verdict by the worst-severity rule:
+Compute the audit-history verdict by the worst-severity rule.
+This metric does not set the PR verdict. Apply the finding tags to the PR verdict.
 
 | Worst severity present | Verdict |
 |---|---|
@@ -240,10 +252,10 @@ PR <number>; reviewed `<branch>..main` (X files, Y +/- lines).
 
 ## Findings
 
-| # | Severity | OWASP class | Finding | File:Line | Status |
-|---|---|---|---|---|---|
-| F1 | critical | A03 Injection | Unsanitised user input concatenated into SQL | `src/users.ts:42` | open |
-| F2 | high | A07 Auth failure | JWT signature not verified | `src/auth.ts:18` | open |
+| # | Tag | Severity | OWASP class | Finding | File:Line | Status |
+|---|---|---|---|---|---|---|
+| F1 | Important | critical | A03 Injection | Unsanitised user input concatenated into SQL | `src/users.ts:42` | open |
+| F2 | Important | high | A07 Auth failure | JWT signature not verified | `src/auth.ts:18` | open |
 
 ## Dependency vulnerabilities
 

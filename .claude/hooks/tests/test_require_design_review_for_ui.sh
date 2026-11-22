@@ -166,6 +166,13 @@ case "\$args" in
   *"pr view"*"--json number"*)
     printf '%s\n' 77
     ;;
+  *"pr view"*baseRefName*)
+    printf '%s\n' main
+    ;;
+  *"contents/.claude/project-config.json"*)
+    # Base-branch config (#2104). Absent file means the base is unreadable.
+    if [ -f "$sb/base-config.json" ]; then cat "$sb/base-config.json"; else exit 1; fi
+    ;;
   *) exit 0 ;;
 esac
 EOF
@@ -264,6 +271,59 @@ printf '%s\n' '{"ui_paths": ["\\.foo$"]}' > "$sb/.claude/project-config.json"
 install_mock_gh "$sb" '"src/layouts/SiteMenu.astro"' "$SHA"
 code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
 assert_eq "overridden .ui_paths no longer matches .astro" "0" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "B) #2104: config NOT in the PR diff, local ui_paths_exclude -> ALLOW (same as before the change)"
+sb=$(make_sandbox)
+mkdir -p "$sb/.claude"
+printf '%s\n' '{"ui_paths_exclude": ["^src/components/"]}' > "$sb/.claude/project-config.json"
+install_mock_gh "$sb" '"src/components/Button.tsx"' "$SHA"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "unchanged config, local exclude honoured" "0" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "B) #2104: PR changes the tracked config to add an exclude, base has none -> BLOCK"
+sb=$(make_sandbox)
+mkdir -p "$sb/.claude"
+printf '%s\n' '{"ui_paths_exclude": [".*"]}' > "$sb/.claude/project-config.json"
+printf '%s\n' '{}' > "$sb/base-config.json"
+install_mock_gh "$sb" '".claude/project-config.json" "src/components/Button.tsx"' "$SHA"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "head exclude does not un-gate UI file" "2" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "B) #2104: PR changes the config, base copy absent (404) -> defaults, no exclusions -> BLOCK"
+sb=$(make_sandbox)
+mkdir -p "$sb/.claude"
+printf '%s\n' '{"ui_paths": ["\\.foo$"], "ui_paths_exclude": [".*"]}' > "$sb/.claude/project-config.json"
+install_mock_gh "$sb" '".claude/project-config.json" "src/layouts/SiteMenu.astro"' "$SHA"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "base 404 with changed config falls back to defaults" "2" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "B) #2104: PR changes the config, base exclude is honoured -> ALLOW"
+sb=$(make_sandbox)
+mkdir -p "$sb/.claude"
+printf '%s\n' '{}' > "$sb/.claude/project-config.json"
+printf '%s\n' '{"ui_paths_exclude": ["^src/components/"]}' > "$sb/base-config.json"
+install_mock_gh "$sb" '".claude/project-config.json" "src/components/Button.tsx"' "$SHA"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "base exclude still carves out" "0" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "B) #2104: PR changes the config and widens coverage via ui_paths -> BLOCK on the extra pattern"
+sb=$(make_sandbox)
+mkdir -p "$sb/.claude"
+printf '%s\n' '{"ui_paths": ["\\.foo$"]}' > "$sb/.claude/project-config.json"
+printf '%s\n' '{}' > "$sb/base-config.json"
+install_mock_gh "$sb" '".claude/project-config.json" "src/thing.foo"' "$SHA"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "head-added pattern is honoured" "2" "$code"
 rm -rf "$sb"
 
 echo ""

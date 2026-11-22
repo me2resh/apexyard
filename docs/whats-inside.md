@@ -82,6 +82,15 @@ touches `**/auth/**` activates the Security Auditor. A ticket labelled `qa`
 activates the QA Engineer. See [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md)
 for the full trigger table.
 
+The main thread also carries a persona name, like Rex (the Code Reviewer) and
+Hakim (the Security Auditor). ApexYard names it Hadi, the guide. Hadi routes
+work to the roles and returns the results. A role marker names Hadi only on
+a hand-off, for example `▸ Hadi routes #42 to Rex (Code Reviewer)`. An
+ordinary reply stays unnamed. An adopter can rename Hadi, the same way it
+can rename any other persona. See
+[AgDR-0018](agdr/AgDR-0018-persona-naming-convention.md) for the naming
+convention.
+
 There are no department-head roles. Each former head and specialist role merged
 into one receiver, and head-level approvals go to the human approver. See
 [AgDR-0301](agdr/AgDR-0301-agent-roster-15.md).

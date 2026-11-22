@@ -11,6 +11,8 @@ category: architecture
 
 # Reduce the agent roster from 23 to 15 without losing expertise
 
+**Superseded in part by AgDR-0313 § Decision.** The CRITICAL and HIGH blocks below apply to findings the change introduced or worsened. A Pre-existing finding follows the remediation SLA.
+
 > The framework keeps 15 agents.
 > Eight agents merge into five receivers, and no section of their role files is dropped.
 > Head-level approvals move to the human approver, so that no agent approves its own work.

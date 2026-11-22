@@ -88,7 +88,7 @@ When you activate, hand off, or exit a role, print a single-line marker at the t
 **Main thread route** — Hadi prints a marker only when it routes work to a role. Hadi does not print a marker for ordinary work.
 
 ```
-▸ Hadi routes #42 to Rex (code review)
+▸ Hadi routes #42 to Rex (Code Reviewer)
 ▸ Hadi routes #42 to Salim (QA Engineer) (trigger: ticket labeled qa)
 ```
 
@@ -161,7 +161,7 @@ Roles deliver concrete artefacts at each handoff point. These are the contracts 
 Two of the rows above encode a **practitioner-reviews / human-decides** split. AgDR-0301 supersedes the earlier head-escalates split of AgDR-0106:
 
 - **UI design gate.** The **UI Designer (Nour)** owns the routine per-PR design gate. She reviews the implementation diff, and a person records the verdict with `/approve-design` (gated by `require-design-review-for-ui.sh`). A design-system change, a brand change, a cross-product visual standard, or a design disagreement goes to the human approver.
-- **Security escalation.** A **Security Auditor's findings + required fixes go to the Tech Lead** — remediation is engineering work. Hakim also owns the security posture: strategy, threat models, and compliance. The Penetration Tester (Hamza) reviews each threat model that Hakim writes, so no agent reviews its own security work. A CRITICAL finding blocks the release, and only the human approver can lift that block. For a HIGH finding, or any other finding that Hakim judges release-blocking, Hakim recommends that the human approver block the release. Risk acceptance and exceptions to security requirements go to the human approver. Hakim keeps read-only tools.
+- **Security escalation.** A **Security Auditor's findings + required fixes go to the Tech Lead** — remediation is engineering work. Hakim also owns the security posture: strategy, threat models, and compliance. The Penetration Tester (Hamza) reviews each threat model that Hakim writes, so no agent reviews its own security work. CRITICAL and HIGH findings the change introduced or worsened block the PR; Pre-existing findings follow the remediation SLA (AgDR-0313). A CRITICAL finding the change introduced or worsened blocks the release, and only the human approver can lift that block. For a HIGH finding, or any other finding that Hakim judges release-blocking, Hakim recommends that the human approver block the release. Risk acceptance and exceptions to security requirements go to the human approver. Hakim keeps read-only tools.
 
 ## Aspirational → Real
 

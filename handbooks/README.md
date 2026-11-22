@@ -73,7 +73,7 @@ Other shapes are fine: Rex reads as prose. The shape above keeps the four sample
 
 ## Enforcement: advisory vs blocking
 
-**Default: advisory.** Rex surfaces the finding as a `nit:` / `suggestion:` comment in the review. The PR can still merge if other gates pass.
+**Default: advisory.** Rex surfaces the finding as a `Nit` (or `Pre-existing`) finding in the review. The PR can still merge if other gates pass.
 
 **Opt in to blocking** by adding the literal phrase `ENFORCEMENT: blocking`. Put it on the first line after the front matter block. When there is no front matter, put it at the top of the file. Example:
 

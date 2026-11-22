@@ -118,6 +118,7 @@ _require_lib "$(dirname "$0")/_lib-extract-pr.sh" \
   _run_awk_or_fallback join_shell_continuations _join_shell_continuations_fallback \
   _scrub_merge_command _has_split_merge_phrase _normalize_json_escapes \
   has_conflicting_repo_flags merge_command_uses_variable extract_pr_number resolve_merge_repo resolve_pr_head \
+  resolve_pr_base_ref resolve_pr_base_config \
   prmeta_get prmeta_file_list
 # Repo-qualified marker path helper (#485).
 _require_lib "$(dirname "$0")/_lib-review-markers.sh" \
@@ -282,6 +283,31 @@ if [ "$CHANGED_RC" -ne 0 ] || [ -z "$CHANGED" ] || [ "$TOTAL_FILES" -gt 3000 ]; 
   exit 2
 fi
 
+# A PR that changes the tracked project config must not narrow the gate that
+# judges it (#2104, AgDR-0310). Only then, read the narrowing settings from
+# the base branch. An absent or unreadable base copy gives the built-in
+# defaults and no exclusions. A local `.ui_paths` may still add patterns.
+# A PR that leaves the config alone keeps the local config unchanged.
+CONFIG_IN_PR=0
+BASE_CONFIG=""
+if printf '%s\n' "$CHANGED" | grep -qxF '.claude/project-config.json'; then
+  CONFIG_IN_PR=1
+  BASE_CONFIG=$(resolve_pr_base_config "$PR_NUMBER" "$CMD_REPO")
+  if [ -z "$BASE_CONFIG" ]; then
+    echo "NOTE: design-review gate could not read the base branch project config. Using the default UI paths and no exclusions." >&2
+  fi
+  BASE_UI=$(printf '%s' "$BASE_CONFIG" | jq -r '.ui_paths // [] | map(select(type == "string" and test("\\S"))) | .[]' 2>/dev/null)
+  if [ -z "$BASE_UI" ]; then
+    BASE_UI=$(ui_default_globs)
+  fi
+  HEAD_UI=""
+  if [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
+    HEAD_UI=$(jq -r '.ui_paths // [] | map(select(type == "string" and test("\\S"))) | .[]' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
+  fi
+  UI_GLOBS="${BASE_UI}
+${HEAD_UI}"
+fi
+
 TOUCHED_UI=""
 while IFS= read -r FILE; do
   [ -z "$FILE" ] && continue
@@ -298,8 +324,16 @@ done <<< "$CHANGED"
 # touched-UI set even when UI_GLOBS matched. Lets adopters keep the broad
 # defaults while carving out specific directories (e.g. `^docs/examples/`,
 # `^wiki/artifacts/`) where `.jsx`/`.tsx` files are doc samples not UI (#275).
-if [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
+# When the PR changes the project config, exclusions come from the base copy only.
+EXCLUDE=""
+if [ "$CONFIG_IN_PR" = 1 ]; then
+  if [ -n "$BASE_CONFIG" ]; then
+    EXCLUDE=$(printf '%s' "$BASE_CONFIG" | jq -r '.ui_paths_exclude // [] | join("|")' 2>/dev/null)
+  fi
+elif [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
   EXCLUDE=$(jq -r '.ui_paths_exclude // [] | join("|")' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
+fi
+if true; then
   if [ -n "$EXCLUDE" ] && [ "$EXCLUDE" != "null" ] && [ -n "$TOUCHED_UI" ]; then
     FILTERED=""
     for FILE in $TOUCHED_UI; do
