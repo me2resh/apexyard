@@ -14,7 +14,9 @@ def report(corpus, results):
     runs = {run["id"]: run for run in results}
     caught = total = alarms = scored_controls = pending = 0
     for case in CASES[agent]:
-        for entry_id in (case, case + "-clean"):
+        controls = [entry["id"] for entry in corpus["entries"]
+                    if entry.get("control_for") == case]
+        for entry_id in [case, *(controls or [None])]:
             entry, run = entries.get(entry_id), runs.get(entry_id)
             if entry is None or run is None or run["status"] != "SCORED":
                 pending += 1
@@ -23,7 +25,7 @@ def report(corpus, results):
             found = set(run["caught_defects"])
             if not found <= defects:
                 raise ValueError("caught defects must belong to the frozen key")
-            if entry_id.endswith("-clean"):
+            if entry_id in controls:
                 if defects:
                     raise ValueError("controls must have an empty defect set")
                 scored_controls += 1

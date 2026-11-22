@@ -22,6 +22,26 @@
         {
           "state": "CHANGES_REQUESTED",
           "submitted_at": "2026-11-21T00:00:00Z"
+        },
+        {
+          "state": "COMMENTED",
+          "body": "### Verdict\n\n**CHANGES REQUESTED**"
+        },
+        {
+          "state": "COMMENTED",
+          "body": "# Verdict **changes requested**"
+        },
+        {
+          "state": "COMMENTED",
+          "body": "**Verdict: CHANGES REQUESTED**"
+        },
+        {
+          "state": "COMMENTED",
+          "body": "### Verdict\n**APPROVED**"
+        },
+        {
+          "state": "COMMENTED",
+          "body": "## Verdict\n**COMMENT**"
         }
       ]
     },

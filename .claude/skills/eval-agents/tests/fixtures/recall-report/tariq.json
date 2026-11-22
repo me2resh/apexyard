@@ -33,7 +33,7 @@
       "notes": "Synthetic test fixture. This entry is not corpus evidence."
     },
     {
-      "id": "20261121-threat-count-clean",
+      "id": "fixture-control",
       "pr": 7,
       "repo": "me2resh/apexyard",
       "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -47,7 +47,8 @@
         "verdict": "APPROVED",
         "was_justified": true
       },
-      "notes": "Synthetic test fixture. This entry is not corpus evidence."
+      "notes": "Synthetic test fixture. This entry is not corpus evidence.",
+      "control_for": "20261121-threat-count"
     }
   ]
 }

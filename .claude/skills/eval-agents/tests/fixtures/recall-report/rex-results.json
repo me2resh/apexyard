@@ -8,7 +8,7 @@
     "false_alarms": 0
   },
   {
-    "id": "20261121-filter-clean",
+    "id": "fixture-control",
     "status": "SCORED",
     "caught_defects": [],
     "false_alarms": 1

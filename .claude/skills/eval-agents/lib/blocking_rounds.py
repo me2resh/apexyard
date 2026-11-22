@@ -10,6 +10,26 @@ import sys
 from review_rounds import ForgeError, _run_gh, fetch, in_window, parse_paginated, timestamp
 
 
+def is_blocking(review):
+    if review.get("state") == "CHANGES_REQUESTED":
+        return True
+    heading = False
+    for line in (review.get("body") or "").splitlines():
+        text = re.sub(r"[*_`]+", "", line).strip().upper()
+        if not text:
+            continue
+        if heading and text == "CHANGES REQUESTED":
+            return True
+        text = re.sub(r"^#{1,6}\s+", "", text)
+        text = re.sub(r"\s+#+$", "", text).strip()
+        if re.fullmatch(r"VERDICT\s*:\s*CHANGES REQUESTED", text):
+            return True
+        if re.fullmatch(r"VERDICT\s+CHANGES REQUESTED", text) and re.match(r"^\s*#{1,6}\s", line):
+            return True
+        heading = text == "VERDICT" and bool(re.match(r"^\s*#{1,6}\s", line))
+    return False
+
+
 def report(data, start, end):
     lines = ["PR  Blocking rounds  Reverted"]
     for pr in sorted(data["prs"], key=lambda item: item["number"]):
@@ -17,9 +37,7 @@ def report(data, start, end):
             continue
         merged = timestamp(pr["merged_at"])
         rounds = sum(
-            (review.get("state") == "CHANGES_REQUESTED" or bool(re.search(
-                r"(?im)^\s*(?:\*\*)?Verdict(?:\*\*)?\s*:\s*(?:\*\*)?CHANGES REQUESTED\b",
-                review.get("body") or "")))
+            is_blocking(review)
             and (not review.get("submitted_at") or timestamp(review["submitted_at"]) <= merged)
             for review in pr["reviews"]
         )

@@ -14,7 +14,7 @@ tmp="$(mktemp -d "${TMPDIR:-/tmp}/eval-recall-XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT
 python3 "$LIB/blocking_rounds.py" --repo me2resh/apexyard --days 30 \
   --input "$FIXTURE/rounds.json" --as-of 2026-11-22T00:00:00Z >"$tmp/rounds"
-printf 'PR  Blocking rounds  Reverted\n#7  2  yes\n#70  0  no\n' >"$tmp/expected"
+printf 'PR  Blocking rounds  Reverted\n#7  5  yes\n#70  0  no\n' >"$tmp/expected"
 diff -u "$tmp/expected" "$tmp/rounds"
 echo 'PASS: blocking submissions, post-merge exclusion, window, and named revert'
 python3 "$LIB/blocking_rounds.py" --repo me2resh/apexyard --days 1 \
@@ -34,3 +34,23 @@ python3 "$LIB/subset_recall.py" --corpus "$FIXTURE/rex.json" \
 grep -qF 'n/a (0/0)' "$tmp/discarded"
 grep -qF 'Pending or discarded cases: 4' "$tmp/discarded"
 echo 'PASS: pending and contaminated cases do not enter recall'
+
+python3 - "$ROOT" <<'PYTEST'
+import json
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+sys.path.insert(0, str(root / ".claude/skills/eval-agents/lib"))
+from subset_recall import report
+
+corpus = json.loads((root / "docs/eval-agents/corpus/rex.json").read_text())
+controls = [entry for entry in corpus["entries"]
+            if entry.get("control_for") == "20261121-filter"]
+assert controls, "The filter miss must have a linked control"
+results = [{"id": entry["id"], "status": "SCORED", "caught_defects": [],
+            "false_alarms": 1} for entry in controls]
+expected = f"Clean-control false alarms: {len(controls)} ({len(controls)} controls scored)"
+assert expected in report(corpus, results)
+print("PASS: linked corpus controls enter scoring")
+PYTEST
