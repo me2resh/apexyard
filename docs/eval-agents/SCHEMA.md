@@ -63,6 +63,7 @@ One file per agent (`rex.json`, `hakim.json`, `tariq.json`, …). Each file is a
 | `ground_truth_defects[].location` | string | File path (± line) the defect lives in. Used for the diff-engagement mechanical check. |
 | `recorded_verdict.verdict` | enum | `APPROVED` \| `CHANGES REQUESTED` \| `COMMENT`. What the real reviewer actually said, historically — **not** what the agent-under-test says on this run (that's computed fresh each run). |
 | `recorded_verdict.was_justified` | boolean | Ground truth: given `ground_truth_defects`, was that verdict the right call? `false` for `APPROVED` entries that shipped with an undiscovered BLOCKING/HIGH defect. |
+| `control_for` | string | Optional pending miss identifier. Links a clean control to its miss. Controls must have an empty defect set. |
 | `notes` | string | Optional free text — context for a human reading the corpus. |
 
 ## Why the PR number never reaches the agent-under-test

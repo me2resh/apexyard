@@ -348,6 +348,25 @@
         "was_justified": true
       },
       "notes": "Real delta round recovered from the local posted-review artifacts. See reports/rex-delta-corpus-2026-10-19.md. Historical verdicts are not fresh eval results."
+    },
+    {
+      "id": "rex-1651-06c08cc",
+      "control_for": "20261121-filter",
+      "pr": 1651,
+      "repo": "me2resh/apexyard",
+      "commit": "06c08cc47d7b",
+      "diff_range": "7d314c0457f0..06c08cc47d7b",
+      "oracle": {
+        "source": "no_contradiction",
+        "established_by": "Clean control: the PR merged with an approving review at this head, no later fix PR references it, and no revert exists (checked 21 Nov 2026).",
+        "reference": "me2resh/apexyard#1651"
+      },
+      "ground_truth_defects": [],
+      "recorded_verdict": {
+        "verdict": "APPROVED",
+        "was_justified": true
+      },
+      "notes": "Size-matched clean control for pending case 20261121-filter (me2resh/apexyard-site PR 201, reviewed head 6309c8ae0). Miss: 37 files, 1104 changed lines. Control: 31 files, 943 changed lines (ratio 0.85 lines, 0.84 files)."
     }
   ]
 }
