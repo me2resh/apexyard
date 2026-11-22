@@ -299,3 +299,47 @@ The MD artefacts at `<dim_dir>/<ts>.md` are committed regardless — they are th
 ---
 
 *Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+
+
+### SLA tracker handoff
+
+The tracker issue is the record. Its creation date is the first-seen date.
+A fingerprint identifies the same finding across reviews.
+Use `.claude/hooks/_lib-sla.sh` to compute fingerprints:
+
+```bash
+source .claude/hooks/_lib-sla.sh
+sla_fingerprint dependency '<package>' '<advisory ID>'
+sla_fingerprint code '<rule>' '<repository-relative file>' '<function>'
+```
+
+Use exact scanner identifiers and case. Exclude versions, line numbers, and PR identifiers.
+Use repository-relative paths without `./`. Use `<module>` for code outside a function.
+The helper hashes a compact JSON array with SHA-256.
+
+1. Reproduce each finding on the PR base commit.
+2. Record the base SHA, path, and matching advisory or code evidence.
+3. Without base proof, treat the finding as new and block the PR.
+4. Include `Fingerprint: <fp>` and `Base proof: <short evidence>` on each Pre-existing line.
+5. Search with `sla_find_open <repo> <fp>`.
+6. On a match, report `tracked in #N, due YYYY-MM-DD` from the issue.
+7. Preserve the issue's severity, SLA, first-seen date, and due date.
+8. On no match, hand the fingerprint, severity, title, and proof to the orchestrator.
+
+Only the orchestrator calls `sla_track <repo> <fp> <severity> <title> <base-proof>`.
+Hakim and the PR author never file the SLA issue.
+The orchestrator serializes calls per repository and returns the issue reference before the final review.
+Never retry a failed create automatically. Search the tracker and reconcile the result first.
+A pending due date indicates incomplete creation. Finalize that issue from its creation date without creating another issue.
+Tracker errors leave the handoff unresolved. Do not report a successful search or completed tracking.
+LOW records use `SLA days: none` and `Due: none`.
+
+Write CRITICAL, HIGH, and MEDIUM findings on one line:
+
+```text
+- Pre-existing: <finding>. Suggested ticket title: <title>. Severity: HIGH. SLA: 30 days. Due: YYYY-MM-DD. Fingerprint: <fp> | Base proof: <base SHA, path, matching evidence> | tracked in #N, due YYYY-MM-DD
+```
+
+Run `check-review-body.sh --security` before submitting the review.
+The validator checks fields. Hakim must verify that the base evidence supports the classification.
+An overdue proven finding remains Pre-existing. The release check enforces its deadline.
