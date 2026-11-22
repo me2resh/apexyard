@@ -2,7 +2,7 @@
 name: decide
 description: Make a technical decision with structured reasoning and create an Agent Decision Record (AgDR).
 disable-model-invocation: false
-argument-hint: "<what you're deciding>"
+argument-hint: "[--backfill] <decision topic>"
 ---
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
@@ -28,6 +28,26 @@ Extract the decision topic from `$ARGUMENTS`. If unclear, ask:
 ```
 What technical decision do you need to make?
 ```
+
+### Backfill mode
+
+For `/decide --backfill <topic>`, document an existing choice instead of making a new choice.
+Skip steps 2–4 and the options-table rule below.
+Ask the person for the chosen tool, remembered reasons, and known limits.
+Ask what would make the team change tools.
+Ask when the original choice happened and whether anyone compared options then.
+Record unknown dates and missing recollections as unknown.
+Never claim options were compared unless the person confirms they were.
+Separate any present-day comparison from the historical account.
+
+Use the resolved `agdr.md` template and its backfill instructions in step 5.
+Add `recording: back-filled` and `original_decision_date:` to frontmatter.
+Set `timestamp` to the actual writing time, never the original choice date.
+Mark the title **back-filled** and keep the record short.
+Keep all required headings, using brief statements instead of an invented options table.
+The summary describes the earlier choice, not a decision made today.
+Continue through ID allocation and local validation as usual.
+In step 8, report that the existing choice was recorded, without promising implementation.
 
 ### 2. Gather Context
 
@@ -170,8 +190,8 @@ Proceeding with: {brief action}
 
 1. **Always create an AgDR** — no decision without a record
 2. **Y-statement required** — one-line summary at the top
-3. **Options table required** — at least 2 options compared
-4. **Justification required** — `because` clause is mandatory
+3. **Options table required**: compare at least 2 options, except in backfill mode.
+4. **Justification required**: use a `because` clause. For backfill mode, state unknown reasons explicitly instead of inventing justification.
 5. **Timestamp precise** — full ISO-8601 with time
 6. **Slug from title** — lowercase, hyphens, max 50 chars
 7. **Offer a challenge** — after drafting the AgDR, offer `/challenge` (opt-in,
