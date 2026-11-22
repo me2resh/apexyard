@@ -197,7 +197,7 @@ agy also reads `.agents/` config in folders between its directory and the fork r
 
 - The walk starts at the top-level `cwd` and at `workspacePaths[0]`, in lexical and physical form. It stops before the fork root, whose `.agents/` is the real wiring.
 - It checks only the folders on that path, never a subfolder, so the cost is a few file checks per call.
-- A match gets `deny` for every tool, read-only tools included. The reason names the folder and says that the config can override the fork's hooks and must be removed from the live fork. At SessionStart, the same text is an error step.
+- A match gets `deny` for every tool, read-only tools included. The reason names the folder and says that the config can override the fork's hooks. It also says that a person must remove it from the live fork, because the gates block an agent's removal. At SessionStart, the same text is an error step.
 - A sibling folder is not on the path. A managed project under `workspace/` does not trip the check while agy runs in the fork root. When agy runs inside that project's folder, its `.agents/` config is on the path and gets `deny`.
 - A linked worktree is its own fork root, so its `.agents/` is its wiring, and the parent fork's `.agents/` is above the walk.
 

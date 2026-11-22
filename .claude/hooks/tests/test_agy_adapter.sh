@@ -549,7 +549,7 @@ rm -rf "$N" "$A/plain-dir"
 
 # A nested .agents hook or plugin config between agy's directory and the
 # fork root could override the fork's hooks. Every call gets deny.
-NA_RX="nested \.agents hook or plugin config at $A/sub/\.agents can override the fork's hooks; remove it from the live fork"
+NA_RX="nested \.agents hook or plugin config at $A/sub/\.agents can override the fork's hooks\. A person must remove it from the live fork, because the gates block an agent's removal"
 mkdir -p "$A/sub/deeper/.agents" "$A/sub/.agents" "$A/other/.agents"
 for kind in hooks.json plugins.json plugins; do
   if [ "$kind" = plugins ]; then mkdir -p "$A/sub/.agents/plugins"; else printf '{}' > "$A/sub/.agents/$kind"; fi

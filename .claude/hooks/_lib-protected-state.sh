@@ -94,8 +94,9 @@ pt_protected_form_nocase() {
       if [ "$ancestors" = 1 ]; then case "$root/$rel/" in "$p/"*) return 0 ;; esac; fi
     done
     # agy also reads nested .agents/ hook config, so the same files are
-    # protected at any depth under the root. Direct form only: deleting a
-    # nested config is the remedy. A linked worktree under .claude/worktrees/
+    # protected at any depth under the root. Direct form only, so an rm -rf
+    # of a parent folder still passes. An agent's rm of the nested file is
+    # blocked, so a person removes it. A linked worktree under .claude/worktrees/
     # is its own fork root, so only its own root wiring is exempt. A case
     # pattern * also matches /, so the worktree name is split off by hand:
     # the prefix is cut by length, then the first path component.

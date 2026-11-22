@@ -932,7 +932,7 @@ check_nested_agents() {
         if [ -e "$d/.agents/hooks.json" ] || [ -L "$d/.agents/hooks.json" ] \
           || [ -e "$d/.agents/plugins.json" ] || [ -L "$d/.agents/plugins.json" ] \
           || [ -e "$d/.agents/plugins" ] || [ -L "$d/.agents/plugins" ]; then
-          fail "ApexYard agy adapter: a nested .agents hook or plugin config at $d/.agents can override the fork's hooks; remove it from the live fork."
+          fail "ApexYard agy adapter: a nested .agents hook or plugin config at $d/.agents can override the fork's hooks. A person must remove it from the live fork, because the gates block an agent's removal."
         fi
         d=${d%/*}
       done
