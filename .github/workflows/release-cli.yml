@@ -71,7 +71,13 @@ jobs:
           if ! gh release view "$VERSION" > /dev/null 2>&1; then
             gh release create "$VERSION" --verify-tag --title "$VERSION" --generate-notes
           fi
-          gh release upload "$VERSION" dist/*.tar.gz dist/*.sha256 dist/install.sh dist/apexyard.rb dist/*.tgz --clobber
+          # Preserve asset IDs and download counts on retries.
+          gh release view "$VERSION" --json assets --jq '.assets[].name' > "$RUNNER_TEMP/release-assets.txt"
+          for asset in dist/*.tar.gz dist/*.sha256 dist/install.sh dist/apexyard.rb dist/*.tgz; do
+            if ! grep -Fxq "${asset##*/}" "$RUNNER_TEMP/release-assets.txt"; then
+              gh release upload "$VERSION" "$asset"
+            fi
+          done
 
   npm-publish:
     # Publish the tarball that the release job built and tested, from the

@@ -19,7 +19,7 @@ For the daily-sync UX, see `.claude/skills/update/SKILL.md`. For the design rati
 
 ```bash
 cd ~/ops/apexyard          # your fork
-/update                    # interactive sync — walks intermediate-release migrations
+/update                    # interactive sync: walks intermediate-release migrations
 ```
 
 On a fork that is three releases behind, `/update`:
@@ -263,7 +263,7 @@ The framework fork thus becomes throwaway: re-fork or upgrade it anytime and you
 data never moves.
 
 ```bash
-/split-portfolio            # one-time migration — every step asks first
+/split-portfolio            # one-time migration: every step asks first
 /split-portfolio --dry-run  # preview the steps without running them
 ```
 

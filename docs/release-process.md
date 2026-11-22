@@ -97,10 +97,10 @@ PREV_TAG=$(git describe --tags --abbrev=0 upstream/main)
 # e.g. PREV_TAG=v3.2.0, so next is v3.3.0 (minor bump because of feat: commits)
 VERSION=v3.3.0
 
-# 3. Generate the CHANGELOG section — capture stderr too: it carries the
+# 3. Generate the CHANGELOG section: capture stderr too: it carries the
 #    exact commit range the script used (trailer-anchored, or the #737
 #    sync-boundary fallback). The count-mismatch guard below needs it (#1002)
-#    — DO NOT substitute `git rev-list --count upstream/main..upstream/dev`;
+#   : DO NOT substitute `git rev-list --count upstream/main..upstream/dev`;
 #    under the release-cut squash model that range only ever grows and always
 #    false-positives the guard (v5.2.0 cut: 402 raw commits vs. ~1 real entry).
 PREV_TAG="$PREV_TAG" HEAD_REF="upstream/dev" VERSION="$VERSION" DATE="$(date +%F)" \
@@ -111,14 +111,14 @@ LOG_RANGE=$(grep -oE 'RELEASE_CHANGELOG_RANGE=.*' /tmp/release-changelog-range.t
 # #1017: fail CLOSED on a missing/unparseable range instead of letting an
 # empty $LOG_RANGE silently flow into `git rev-list --count ""` below (its
 # stderr never reaches $RAW_COUNT, so the guard would otherwise read a
-# "0 commits" pass — AgDR-0104: a gate that can't evaluate its precondition
+# "0 commits" pass: AgDR-0104: a gate that can't evaluate its precondition
 # must block, not allow).
 if [ -z "$LOG_RANGE" ]; then
-  echo "ERROR: RELEASE_CHANGELOG_RANGE missing from /tmp/release-changelog-range.txt — the count-mismatch guard has nothing to check. Do not proceed." >&2
+  echo "ERROR: RELEASE_CHANGELOG_RANGE missing from /tmp/release-changelog-range.txt: the count-mismatch guard has nothing to check. Do not proceed." >&2
   exit 1
 fi
 RAW_COUNT=$(git rev-list --count "$LOG_RANGE") || {
-  echo "ERROR: 'git rev-list --count $LOG_RANGE' failed — cannot evaluate the count-mismatch guard. Do not proceed." >&2
+  echo "ERROR: 'git rev-list --count $LOG_RANGE' failed: cannot evaluate the count-mismatch guard. Do not proceed." >&2
   exit 1
 }
 ENTRY_COUNT=$(grep -E '^- ' /tmp/changelog-section.md | grep -vcE '^- Closes ' || true)
@@ -127,7 +127,7 @@ GAP=$(( RAW_COUNT - ENTRY_COUNT ))
 if [ "$GAP" -gt 5 ]; then
   # #1017: RAW_COUNT and ENTRY_COUNT both derive from $LOG_RANGE now, so this
   # gap means commits genuinely inside the range aren't classifying into
-  # changelog entries — not a truncated range (that failure mode is closed at
+  # changelog entries: not a truncated range (that failure mode is closed at
   # the trailer-anchoring source; see AgDR-0094 and step 7b below).
   echo "WARNING: $LOG_RANGE has $RAW_COUNT commits but the changelog lists only $ENTRY_COUNT entries (some commits inside the range didn't classify into an entry)." >&2
 fi
@@ -136,7 +136,7 @@ fi
 cat /tmp/changelog-section.md CHANGELOG.md > /tmp/cl_new.md
 mv /tmp/cl_new.md CHANGELOG.md
 
-# 5. Cut release branch from dev — the Released-From trailer goes in THIS
+# 5. Cut release branch from dev: the Released-From trailer goes in THIS
 #    commit message, as its own final paragraph. It is the sole commit on
 #    the branch, so it is what a squash merge carries forward (see step 7).
 DEV_SHA=$(git rev-parse upstream/dev)
@@ -149,7 +149,7 @@ Refs #<release-ticket>
 Released-From: $DEV_SHA"
 git push upstream "release/$VERSION"
 
-# 6. Open release PR — the PR body ALSO carries the trailer as its own final
+# 6. Open release PR: the PR body ALSO carries the trailer as its own final
 #    line (human visibility on the PR page), matching the commit above.
 gh pr create \
   --repo me2resh/apexyard \
@@ -162,17 +162,17 @@ gh pr create \
 # 7. Run normal review flow on the PR
 #    - /code-review
 #    - /approve-merge <pr>
-#    - Merge with an EXPLICIT subject + body — never a bare `gh pr merge
+#    - Merge with an EXPLICIT subject + body: never a bare `gh pr merge
 #      --squash` (#1004). This repo has squash_merge_commit_message=
 #      COMMIT_MESSAGES, which builds the squash body from the branch's own
-#      commits, not the PR body — so relying on the PR body alone silently
+#      commits, not the PR body: so relying on the PR body alone silently
 #      drops the trailer. Passing --body-file guarantees the merged commit
 #      matches exactly what was reviewed, independent of that repo setting:
 gh pr merge <pr> --repo me2resh/apexyard --squash \
   --subject "release(#<ticket>): $VERSION" \
   --body-file /tmp/release-pr-body.md
 
-# 7b. Verify the trailer landed — do not skip, do not proceed to step 9 if empty:
+# 7b. Verify the trailer landed: do not skip, do not proceed to step 9 if empty:
 git fetch upstream main
 TRAILER=$(git log -1 --pretty=format:'%(trailers:key=Released-From,valueonly)' upstream/main)
 [ -n "$TRAILER" ] || { echo "ERROR: Released-From trailer missing on main." >&2; exit 1; }

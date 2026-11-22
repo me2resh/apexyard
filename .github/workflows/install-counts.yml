@@ -1,0 +1,44 @@
+name: Install counts
+# AgDR-0318: retain weekly snapshots outside main and dev.
+on:
+  schedule:
+    - cron: '23 6 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: install-counts
+  cancel-in-progress: false
+jobs:
+  collect:
+    if: github.repository == 'me2resh/apexyard'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Collect counters
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAP_TRAFFIC_TOKEN: ${{ secrets.TAP_TRAFFIC_TOKEN }}
+        run: bash bin/install-counts-collect.sh > "$RUNNER_TEMP/snapshot.jsonl"
+      - name: Append snapshot on the stats branch
+        run: |
+          branch=stats/install-counts
+          # ls-remote must succeed before an absent branch permits creation.
+          git ls-remote --heads origin "refs/heads/$branch" > "$RUNNER_TEMP/stats-ref"
+          if [ -s "$RUNNER_TEMP/stats-ref" ]; then
+            git fetch origin "$branch"
+            git checkout -B "$branch" FETCH_HEAD
+          else
+            git checkout --orphan "$branch"
+            git rm -rf -- .
+          fi
+          cat "$RUNNER_TEMP/snapshot.jsonl" >> install-counts.jsonl
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add -- install-counts.jsonl
+          git -c core.hooksPath=/dev/null commit -m 'chore: record weekly install counts'
+          git push origin "HEAD:refs/heads/$branch"

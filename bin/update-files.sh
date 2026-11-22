@@ -50,12 +50,15 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd) || exit 2
 
 fail() { echo "$*" >&2; exit 2; }
 usage() { fail 'Usage: bin/update-files.sh --plan|--apply [--repo DIR] [--base REF] [--target REF] [--confirm-security]
-       bin/update-files.sh --drift [--repo DIR] [--base REF]'; }
+       bin/update-files.sh --drift [--repo DIR] [--base REF] [--rescue [--apply] [--from PATH]]'; }
 
-mode='' repo='' base='' target=upstream/main confirm=false target_set=false
+mode='' repo='' base='' target=upstream/main confirm=false target_set=false rescue=false rescue_apply=false import_from=''
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --plan|--apply|--drift) [ -z "$mode" ] || usage; mode=${1#--}; shift ;;
+    --rescue) rescue=true; shift ;;
+    --from) [ "$#" -ge 2 ] || usage; import_from=$2; shift 2 ;;
+    --apply) if [ "$mode" = drift ]; then rescue_apply=true; shift; else [ -z "$mode" ] || usage; mode=apply; shift; fi ;;
+    --plan|--drift) [ -z "$mode" ] || usage; mode=${1#--}; shift ;;
     --repo|--base|--target)
       [ "$#" -ge 2 ] && [ -n "$2" ] || usage
       case "$1" in --repo) repo=$2 ;; --base) base=$2 ;; --target) target=$2; target_set=true ;; esac
@@ -65,6 +68,9 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 [ -n "$mode" ] || usage
+if [ "$rescue" = true ] || [ -n "$import_from" ] || [ "$rescue_apply" = true ]; then
+  [ "$mode" = drift ] && [ "$rescue" = true ] || usage
+fi
 if [ "$mode" = drift ]; then
   [ "$target_set" = false ] && [ "$confirm" = false ] || usage
 fi
@@ -88,6 +94,9 @@ semver() { printf '%s\n' "$1" | LC_ALL=C grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; }
 if [ -z "$base" ]; then
   anchor="$repo/.claude/framework-version"
   overlay .claude/framework-version && fail 'Cannot read .claude/framework-version through a link. Use --base.'
+  if [ ! -f "$anchor" ] && [ "$mode" = drift ]; then
+    echo 'drift: no pinned version (.claude/framework-version)'; exit 1
+  fi
   [ -f "$anchor" ] || fail 'Missing .claude/framework-version. Use --base <tag>. Run git fetch upstream --tags.'
   base=$(cat "$anchor") || exit 2
   semver "$base" && [ "$(awk 'END { print NR }' "$anchor")" = 1 ] ||
@@ -338,21 +347,10 @@ suggest() {
 }
 
 if [ "$mode" = drift ]; then
-  drift=0
-  while IFS=$'\t' read -r _ _ class sec edit _ _ _ _ note path; do
-    [ "$class" = framework ] && [ "$edit" = true ] && [ "$note" != overlay ] || continue
-    drift=$((drift + 1))
-    printf 'drift\t%s' "$path"
-    [ "$sec" != true ] || printf '\tsecurity'
-    printf '\n  '
-    suggest "$class" "$path"
-  done < "$scratch/records"
-  if [ "$drift" -eq 0 ]; then
-    echo 'drift: no local edits to framework-owned files'
-    exit 0
-  fi
-  printf 'drift: %s local edit(s) to framework-owned files\n' "$drift"
-  exit 1
+  # shellcheck source=bin/_lib-drift-rescue.sh
+  . "$root/bin/_lib-drift-rescue.sh"
+  drift_report
+  exit $?
 fi
 
 if [ "$mode" = plan ]; then

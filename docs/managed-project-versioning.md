@@ -68,8 +68,8 @@ Conventions:
 
 ## v1.4.0 - 2026-06-28
 
-- feat(#43): redesign PR4 — themes, a11y, polish (#48)
-- feat(#43): redesign PR3b — AI-assist + Stop/Re-run (#47)
+- feat(#43): redesign PR4: themes, a11y, polish (#48)
+- feat(#43): redesign PR3b: AI-assist + Stop/Re-run (#47)
 - feat: per-item persistent logs (#45)
 
 ## v1.3.0 - 2026-06-10

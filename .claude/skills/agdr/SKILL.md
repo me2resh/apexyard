@@ -18,8 +18,6 @@ Walks `apexyard.projects.yaml`, collects every `docs/agdr/*.md` from every manag
 | `/agdr show <id>` | Print a specific AgDR (`AgDR-0007` or `<project>/AgDR-0007`) regardless of which project it lives in |
 | `/agdr stats` | Counts per category — the "AgDR Library" tile from the marketing slides, but real |
 
-This is the data layer behind "AgDR Library" in the marketing slides. Before this skill, AgDRs were loose markdown files searchable only by `grep` per project. Now they're a portfolio-wide index with category metadata.
-
 ## Path resolution
 
 Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
@@ -78,7 +76,7 @@ projects: [example-app, billing-api]   # optional — defaults to the AgDR's con
 ---
 ```
 
-The skill reads only `category` and `projects`. Everything else (id, timestamp, agent, etc.) is descriptive and not used for retrieval. Missing frontmatter or missing `category:` → categorise as `other`.
+The skill reads `category`, `projects`, and `recording`. Everything else (id, timestamp, agent, etc.) is descriptive and not used for retrieval. Missing frontmatter or missing `category:` → categorise as `other`.
 
 ## Process
 
@@ -221,6 +219,15 @@ Output is the raw markdown — frontmatter included so the reader sees the full 
 
 #### `/agdr stats [--json]`
 
+Count `recording: back-filled` records separately within the selected project and category filters.
+Run `bash .claude/skills/agdr/scripts/count-backfilled.sh <selected-file>...` against the collected files.
+For remote records, supply their downloaded local files.
+The helper counts only exact markers inside closed frontmatter blocks.
+Missing markers mean ordinary records, including legacy records.
+Print `Back-filled: N` after the category table and include `"backfilled": N` in JSON.
+This count is a subset of `total`. Keep category counts and totals unchanged.
+Recompute this count from collected files, even when category metadata comes from an older cache.
+
 ```
 | Category       | Count |
 |----------------|-------|
@@ -286,13 +293,6 @@ The cache stores enough metadata for browse/stats but not full bodies — search
 | AgDR file has malformed frontmatter (unclosed `---`) | Treat as no-frontmatter (category=other); print one-line warning to stderr |
 | Two AgDRs share the same id within one project | Index both; flag in `/agdr browse` as a duplicate row |
 | `<id>` passed to `/agdr show` doesn't exist | List the closest matches by Levenshtein-ish prefix; exit 1 |
-
-## Performance notes
-
-- Typical portfolio: 5–20 projects × 5–30 AgDRs = 25–600 files. ~1 ms per file to read + parse → 25–600 ms total.
-- Network reads via `gh api` add ~100 ms per non-cloned project (one directory listing + N small file fetches). Cache aggressively.
-- Cache hit path is ~10 ms (read JSON, filter, render). Cold-start without cache and without local clones is ~3–5 s for a 10-project portfolio.
-- v2 (out of scope of this skill): a `projects/agdr-index.md` rebuilt by a post-commit hook would make even cold starts ~10 ms. Left for a follow-up if the cache-per-session approach proves too slow.
 
 ## Rules
 

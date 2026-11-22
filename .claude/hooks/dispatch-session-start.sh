@@ -9,6 +9,7 @@ INPUT=$(cat)
 # APEXYARD_SESSION_START_HOOK: write-rule-excludes.sh
 # APEXYARD_SESSION_START_HOOK: onboarding-check.sh
 # APEXYARD_SESSION_START_HOOK: check-upstream-drift.sh
+# APEXYARD_SESSION_START_HOOK: check-framework-drift.sh
 # APEXYARD_SESSION_START_HOOK: check-jq-installed.sh
 # APEXYARD_SESSION_START_HOOK: check-git-hooks-installed.sh
 # APEXYARD_SESSION_START_HOOK: check-portfolio-config.sh
@@ -41,6 +42,7 @@ scripts=(
   write-rule-excludes.sh
   onboarding-check.sh
   check-upstream-drift.sh
+  check-framework-drift.sh
   check-jq-installed.sh
   check-git-hooks-installed.sh
   check-portfolio-config.sh
