@@ -125,25 +125,47 @@ pt_is_dir() {
 }
 # Judge each protected name as a direct child of folder $1. The names are
 # the core state, the pin files and the last part of each agy wiring path.
+# $2 is the role for each child: 1 for a move, which can bring a folder.
+# $3 set to 1 adds the dot folders .agents and .claude as children, for a
+# move whose glob can match a dot name.
 pt_judge_children() {
   local c rel
   # An unresolved folder is the AgDR-0267 residual; a child name built from
   # it would only trip the unresolved-name check.
   case "$1" in *'$'*|*'`'*) return 0 ;; esac
   for c in settings.json settings.local.json hooks hooks.json plugins.json plugins session-env shell-snapshots ops-root-x gate-session-x resolve-cache-x projctx; do
-    pt_judge "$1/$c"
+    pt_judge "$1/$c" "${2:-0}"
   done
-  for rel in "${PT_ADAPTER_WIRING[@]}"; do pt_judge "$1/${rel##*/}"; done
-  [ -z "${CLAUDE_ENV_FILE:-}" ] || pt_judge "$1/${CLAUDE_ENV_FILE##*/}"
+  for rel in "${PT_ADAPTER_WIRING[@]}"; do pt_judge "$1/${rel##*/}" "${2:-0}"; done
+  [ -z "${CLAUDE_ENV_FILE:-}" ] || pt_judge "$1/${CLAUDE_ENV_FILE##*/}" "${2:-0}"
+  if [ "${3:-0}" = 1 ]; then pt_judge "$1/.agents" 1; pt_judge "$1/.claude" 1; fi
 }
 # An unresolved operand that names protected state blocks.
 pt_unresolved_nocase() {
+  local v
+  # Normalize first, so // and /./ and a trailing / or /. cannot split a name.
+  v=$(pt_lexical "$1") || pt_block 'cannot normalize an unresolved operand.'
+  pt_unresolved_match "$1" "$2"
+  pt_unresolved_match "$v" "$2"
+  return 0
+}
+pt_unresolved_match() {
   case "$1" in *settings.json*|*settings.local.json*|*.claude/hooks*|*.claude/apexyard*|*ops-root-*|*gate-session-*|*session-env/*|*shell-snapshots/*) pt_block 'unresolved protected operand.' ;; esac
   # The agy wiring (AgDR-0314). Its ancestors count at role 1 only, as in the lib.
   case "$1" in *.agents/hooks.json*|*.agents/plugins*|*harness-adapters/agy*|*sync-agy-adapter.sh*) pt_block 'unresolved protected operand.' ;; esac
   if [ "$2" != 0 ]; then case "$1" in */.claude) pt_block 'unresolved protected ancestor.' ;; esac; fi
+  # An unresolved bin folder is not tied to the fork's own bin/, and
+  # rm -rf $BUILD/bin is ordinary, so only the distinct names block here.
   if [ "$2" = 1 ]; then case "$1" in */.agents|*/harness-adapters) pt_block 'unresolved protected ancestor.' ;; esac; fi
   return 0
+}
+# True when $1 is a GNU long option that is a prefix of the full name $2.
+# GNU tools take any unambiguous prefix, and reject an ambiguous one.
+pt_opt_is() {
+  local name=${1%%=*}
+  [ "${#name}" -gt 2 ] || return 1
+  case "$2" in "$name"*) return 0 ;; esac
+  return 1
 }
 pt_judge() {
   local value role="${2:-0}" index name
@@ -307,7 +329,7 @@ pt_git() {
   return 0
 }
 pt_operands() {
-  local verb="$1" i="${2:-1}" arg target="" recursive=0 removing=0 dest moved=0 exact=1 fold=2 loose=0 rel role=0 inputs=() extract=0 cdirs=0 absolute=0 output="" in_place=0 tar_file=""
+  local verb="$1" i="${2:-1}" arg target="" recursive=0 removing=0 dest moved=0 exact=1 fold=2 loose=0 dotglob=0 rel role=0 inputs=() extract=0 cdirs=0 absolute=0 output="" in_place=0 tar_file=""
   while [ "$i" -lt "${#words[@]}" ]; do
     arg=${words[$i]}; i=$((i+1))
     case "$arg" in
@@ -337,13 +359,31 @@ pt_operands() {
         # A short-flag group can hold the letter in any place. -R* and -T*
         # cannot be long options, which start with --.
         case "$verb:$arg" in rsync:-R*|rsync:-[!-]*R*|cp:-T*|cp:-[!-]*T*|mv:-T*|mv:-[!-]*T*|ln:-T*|ln:-[!-]*T*|install:-T*|install:-[!-]*T*) exact=0 ;; esac
-        # GNU tools take any unambiguous prefix of a long option. Match the
-        # prefixes for each command, so rsync --partial and --no-times pass.
+        # In a short-flag group, -t takes the rest of the group as the
+        # target folder, or the next word when t is the last letter.
         case "$verb:$arg" in
-          cp:--ta*=*|mv:--ta*=*|ln:--ta*=*|install:--ta*=*) target=${arg#*=}; continue ;;
-          cp:--ta*|mv:--ta*|ln:--ta*|install:--ta*) target=${words[$i]:-}; i=$((i+1)); continue ;;
-          cp:--par*|cp:--no-t*|mv:--no-t*|ln:--no-t*|install:--no-t*|rsync:--rel*|rsync:--files-f*=*) exact=0; continue ;;
-          rsync:--files-f*) exact=0; i=$((i+1)); continue ;;
+          cp:-[!-]*t|mv:-[!-]*t|ln:-[!-]*t|install:-[!-]*t) target=${words[$i]:-}; i=$((i+1)) ;;
+          cp:-[!-]*t?*|mv:-[!-]*t?*|ln:-[!-]*t?*|install:-[!-]*t?*) target=${arg#*t} ;;
+          cp:-t?*|mv:-t?*|ln:-t?*|install:-t?*) target=${arg#-t} ;;
+        esac
+        # GNU tools take any unambiguous prefix of a long option. Match each
+        # option by its full name for its command only, so rsync --partial
+        # and --no-times still pass.
+        case "$verb:$arg" in
+          cp:--*|mv:--*|ln:--*|install:--*)
+            if pt_opt_is "$arg" --target-directory; then
+              case "$arg" in *=*) target=${arg#*=} ;; *) target=${words[$i]:-}; i=$((i+1)) ;; esac
+              continue
+            fi
+            if pt_opt_is "$arg" --no-target-directory; then exact=0; continue; fi
+            if [ "$verb" = cp ] && pt_opt_is "$arg" --parents; then exact=0; continue; fi ;;
+          rsync:--*)
+            if pt_opt_is "$arg" --relative; then exact=0; continue; fi
+            if pt_opt_is "$arg" --files-from; then
+              exact=0
+              case "$arg" in *=*) ;; *) i=$((i+1)) ;; esac
+              continue
+            fi ;;
         esac
         case "$arg" in -*[Rra]*) case "$verb" in cp|rsync) recursive=1 ;; esac ;; esac
         case "$arg" in -*f*) if [ "$verb" = tar ]; then tar_file=${words[$i]:-}; i=$((i+1)); fi ;; esac
@@ -373,11 +413,13 @@ pt_operands() {
       # can land at another name is judged against the folder in full: a
       # contents copy (a trailing / or /.), any ditto, a flag such as -T,
       # --parents or --relative, and a recursive glob, brace or variable.
-      fold=2 loose=0
+      fold=2 loose=0 dotglob=0
       [ "$exact" = 1 ] || fold=1
       [ "$verb" != ditto ] || fold=1
       for arg in "${inputs[@]}"; do
         case "$arg" in *[*?[]*|*'{'*|*'$'*|*'`'*) loose=1 ;; esac
+        # A glob whose last part starts with a dot can match .agents.
+        case "/$arg" in */.*[*?[]*|*/.*'{'*) dotglob=1 ;; esac
         if [ "$recursive" = 1 ]; then case "$arg" in */|*/.|*/./*) fold=1 ;; esac; fi
       done
       [ "$recursive" = 0 ] || [ "$loose" = 0 ] || fold=1
@@ -386,7 +428,7 @@ pt_operands() {
         # A plain copy, or a move into a folder, replaces direct children of
         # the folder only. With a glob or a variable source, each protected
         # name is judged as a child of the folder, so cp x/* . still passes.
-        if [ "$recursive" = 0 ] && [ "$loose" = 1 ]; then pt_judge_children "$dest"; fi
+        if [ "$recursive" = 0 ] && [ "$loose" = 1 ]; then pt_judge_children "$dest" "$moved" "$((moved * dotglob))"; fi
         for arg in "${inputs[@]}"; do
           pt_judge "$dest/$(basename "$arg")" "$moved"
           # --parents and --relative keep the source path under the folder.

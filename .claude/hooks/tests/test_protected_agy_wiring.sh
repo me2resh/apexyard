@@ -191,6 +191,20 @@ check 2 "live mv --no-t onto the root .agents" run_bash "$L" "mv --no-t $S/build
 check 2 "live rsync -a --rel of a nested .agents into docs/" run_bash "$L" "rsync -a --rel $S/./x/.agents docs/"
 check 2 "live cp -R --targ= of a plugins folder" run_bash "$L" "cp -R --targ=.agents $S/plugins"
 check 2 "live cp -R --targ of a plugins folder" run_bash "$L" "cp -R --targ .agents $S/plugins"
+check 2 "live cp -R --t= of a plugins folder" run_bash "$L" "cp -R --t=.agents $S/plugins"
+check 2 "live cp -R --t of a plugins folder" run_bash "$L" "cp -R --t .agents $S/plugins"
+check 2 "live cp --pa of a nested config into docs/" run_bash "$L" "cp --pa $S/x/.agents/hooks.json docs/"
+check 2 "live install --n onto the root .agents" run_bash "$L" "install --n $S/x .agents"
+# In a short-flag group, -t takes the rest of the group or the next word.
+check 2 "live cp -Rt .agents of a plugins folder" run_bash "$L" "cp -Rt .agents $S/plugins"
+check 2 "live cp -Rt.agents of a plugins folder" run_bash "$L" "cp -Rt.agents $S/plugins"
+check 2 "live cp -t.agents of a hooks.json" run_bash "$L" "cp -t.agents $S/hooks.json"
+check 0 "live cp -Rt docs stays allowed" run_bash "$L" "cp -Rt docs $S/build"
+check 0 "live cp -vt docs stays allowed" run_bash "$L" "cp -vt docs $S/a.txt"
+# A move with a dot glob can bring an .agents or .claude folder.
+check 2 "live mv of a dot glob into the fork root" run_bash "$L" "mv $S/.* ."
+check 0 "live mv of a variable into the fork root stays allowed" run_bash "$L" 'mv "$f" .'
+check 0 "live rsync -a --recursive into bin/ stays allowed" run_bash "$L" "rsync -a --recursive $S/build bin/"
 check 0 "live rsync -a --partial into bin/ stays allowed" run_bash "$L" "rsync -a --partial $S/build bin/"
 check 0 "live rsync -a --no-times into bin/ stays allowed" run_bash "$L" "rsync -a --no-times $S/build bin/"
 # An unresolved operand that names the agy wiring blocks, as one that names
@@ -201,6 +215,10 @@ check 2 "unresolved write to the wrapper" run_bash "$L" 'cp x $D/harness-adapter
 check 2 "unresolved write to the generator" run_bash "$L" 'cp x $D/bin/sync-agy-adapter.sh'
 check 2 "unresolved removal of an .agents folder" run_bash "$L" 'rm -rf $D/.agents'
 check 2 "unresolved removal of harness-adapters" run_bash "$L" 'rm -rf $D/harness-adapters'
+check 2 "unresolved write to .agents//hooks.json" run_bash "$L" 'cp x $D/.agents//hooks.json'
+check 2 "unresolved write to .agents/./hooks.json" run_bash "$L" 'cp x $D/.agents/./hooks.json'
+check 2 "unresolved removal of an .agents/ folder" run_bash "$L" 'rm -rf $D/.agents/'
+check 2 "unresolved removal of a .claude/. folder" run_bash "$L" 'rm -rf $D/.claude/.'
 check 0 "unresolved removal of a bin folder stays allowed" run_bash "$L" 'rm -rf $BUILD/bin'
 check 0 "unresolved copy into .agents/skills stays allowed" run_bash "$L" 'cp -R x $D/.agents/skills'
 check 0 "unresolved write to a plain file stays allowed" run_bash "$L" 'cp x $D/docs/notes.txt'
