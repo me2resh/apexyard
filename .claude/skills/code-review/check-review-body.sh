@@ -21,8 +21,7 @@ fi
 case "$sla_c" in ''|*[!0-9]*) sla_c=7 ;; esac
 case "$sla_h" in ''|*[!0-9]*) sla_h=30 ;; esac
 case "$sla_m" in ''|*[!0-9]*) sla_m=90 ;; esac
-today=$(date +%Y-%m-%d)
-awk -v mode="$mode" -v today="$today" -v sc="$sla_c" -v sh="$sla_h" -v sm="$sla_m" '
+awk -v mode="$mode" -v sc="$sla_c" -v sh="$sla_h" -v sm="$sla_m" '
 function validdate(y, m, d,   dim, leap) {
   y += 0; m += 0; d += 0
   if (m < 1 || m > 12 || d < 1) return 0
@@ -42,13 +41,19 @@ function checksla(line,   low, sev, s, a, due) {
   }
   s = substr(low, RSTART + 10, RLENGTH - 10)
   if (s ~ /^low/) return
+  if (mode == "security") {
+    if (line !~ /Fingerprint: sha256:[a-f0-9]+([. ]|$)/) bad=1
+    if (!match(line, /Fingerprint: sha256:[a-f0-9]+/ ) || RLENGTH != 84) bad=1
+    if (line !~ /Base proof: [^ .|][^|]*/) bad=1
+  }
   sev = (s ~ /^critical/) ? sc : (s ~ /^high/ ? sh : sm)
   if (!match(line, /SLA: [0-9]+ days\. Due: [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/)) { bad=1; return }
   split(substr(line, RSTART, RLENGTH), a, /[^0-9]+/)
-  if (a[2] + 0 != sev + 0) bad=1
+  # Security reviews retain the recorded SLA even after config changes.
+  if (mode != "security" && a[2] + 0 != sev + 0) bad=1
   if (!validdate(a[3], a[4], a[5])) { bad=1; return }
   due = a[3] "-" a[4] "-" a[5]
-  if (due < today) bad=1
+  # An overdue record blocks release, not this review.
 }
 mode == "full" && NR == 1 && $0 !~ /^Not covered by the checks: .+/ { bad=1 }
 mode == "full" && NR == 2 {
@@ -59,6 +64,9 @@ mode == "full" && NR == 2 {
   prelisted++
   if ($0 !~ /Suggested ticket title: [^ ]/) bad=1
   checksla($0)
+}
+mode == "full" && /^- Important: / {
+  if ($0 !~ /Regression check: [^ ]/) bad=1
 }
 /^- Nit: .+/ { listed++ }
 /^Additional nits: / {

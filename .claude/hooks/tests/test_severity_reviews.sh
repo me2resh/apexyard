@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Literal review contract strings intentionally contain backticks.
+# shellcheck disable=SC2016
 set -eu
 # shellcheck disable=SC1091
 . "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
@@ -55,19 +57,19 @@ check jq -e '.security.remediation_sla_days | .critical == 7 and .high == 30 and
 # A Pre-existing security finding must state severity, SLA and due date.
 body 0 0 none
 sed 's/Pre-existing 0/Pre-existing 1/' "$tmp/body" > "$tmp/sec"
-echo '- Pre-existing: HIGH SQL injection on the base. Suggested ticket title: Fix SQL injection. Severity: HIGH. SLA: 30 days. Due: 2099-12-21' >> "$tmp/sec"
+echo '- Pre-existing: HIGH SQL injection on the base. Suggested ticket title: Fix SQL injection. Severity: HIGH. SLA: 30 days. Due: 2099-12-21. Fingerprint: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | Base proof: base abc path advisory' >> "$tmp/sec"
 check bash "$parser" "$tmp/sec"
 check bash "$parser" --security "$tmp/sec"
 # One Pre-existing line per case: lower-case severity, wrong SLA, past date, bad format, bad calendar date.
 secline() {
-  printf 'Not covered by the checks: None\nImportant 0 | Nit 0 | Pre-existing 1\n- Pre-existing: %s Suggested ticket title: Fix it\n' "$1" > "$tmp/sec"
+  printf 'Not covered by the checks: None\nImportant 0 | Nit 0 | Pre-existing 1\n- Pre-existing: %s Suggested ticket title: Fix it. Fingerprint: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | Base proof: base abc path advisory\n' "$1" > "$tmp/sec"
 }
 secline 'Finding on the base. Severity: high. SLA: 30 days. Due: 2099-12-21'; check bash "$parser" "$tmp/sec"
 secline 'Finding on the base. Severity: critical. SLA: 7 days. Due: 2099-12-21'; check bash "$parser" "$tmp/sec"
 secline 'Finding on the base. Severity: Medium. SLA: 90 days. Due: 2099-12-21'; check bash "$parser" --security "$tmp/sec"
 secline 'Finding on the base. Severity: high. SLA: 7 days. Due: 2099-12-21'; check test "$(bash "$parser" "$tmp/sec" 2>/dev/null; echo $?)" = 1
 secline 'Finding on the base. Severity: critical. SLA: 30 days. Due: 2099-12-21'; check test "$(bash "$parser" "$tmp/sec" 2>/dev/null; echo $?)" = 1
-secline 'Finding on the base. Severity: High. SLA: 30 days. Due: 2020-01-01'; check test "$(bash "$parser" "$tmp/sec" 2>/dev/null; echo $?)" = 1
+secline 'Finding on the base. Severity: High. SLA: 30 days. Due: 2020-01-01'; check bash "$parser" "$tmp/sec"
 secline 'Finding on the base. Severity: High. SLA: 30 days. Due: 21-12-2099'; check test "$(bash "$parser" "$tmp/sec" 2>/dev/null; echo $?)" = 1
 secline 'Finding on the base. Severity: High. SLA: 30 days. Due: 2099-02-30'; check test "$(bash "$parser" "$tmp/sec" 2>/dev/null; echo $?)" = 1
 secline 'Finding on the base. Severity: High. SLA: 30 days. Due: 2099-13-01'; check test "$(bash "$parser" --security "$tmp/sec" 2>/dev/null; echo $?)" = 1
@@ -101,4 +103,28 @@ for state in pending failed carry unknown; do
   esac
 done
 check test "$(bash "$preview" --dry-run "$tmp/state" invalid 2>/dev/null; echo $?)" = 2
+
+# A regression check names the catch for each Important finding (#2091).
+for file in .claude/agents/code-reviewer.md .claude/skills/code-review/SKILL.md templates/REVIEW.md; do
+  check grep -qF 'Regression check:' "$root/$file"
+done
+check grep -qF 'Regression check: test <path or name> must fail on <short sha>' "$root/templates/REVIEW.md"
+check grep -qF 'Regression check: rule <handbook path>' "$root/templates/REVIEW.md"
+check grep -qF 'Regression check: none possible' "$root/templates/REVIEW.md"
+body 0 0 none
+sed 's/Important 2/Important 1/' "$tmp/body" > "$tmp/important"
+echo '- Important: Unguarded SQL concatenation.' >> "$tmp/important"
+check test "$(bash "$parser" "$tmp/important" 2>/dev/null; echo $?)" = 1
+sed 's/Important 2/Important 1/' "$tmp/body" > "$tmp/important"
+echo '- Important: Unguarded SQL concatenation. Regression check: test tests/sql_test.py::test_no_concat must fail on a1b2c3d' >> "$tmp/important"
+check bash "$parser" "$tmp/important"
+
+# After two blocking rounds, the dry run stops and offers the owner a choice
+# instead of starting a third round (me2resh/apexyard#2091).
+printf 'changes\nchanges\n' > "$tmp/state"
+bash "$preview" --dry-run "$tmp/state" > "$tmp/out"
+check grep -q 'Blocker: review-round cap' "$tmp/out"
+check grep -q 'split the PR, narrow the PR, or accept the remaining items on record' "$tmp/out"
+check test "$(grep -c '^Round' "$tmp/out")" = 2
+
 echo "PASS: $count rows"

@@ -1626,7 +1626,7 @@ BADGE_STATUS="PR opened: <url> (<variant>)"   # or "preserved (already present)"
 
 ### 8.7. Offer a project verify skill
 
-Offer to copy `templates/skills/verify/SKILL.md` into the target's `.claude/skills/verify/SKILL.md`.
+Offer to copy `templates/skills/verify/SKILL.md` to `<project>/.claude/skills/verify/SKILL.md`.
 Use `AskUserQuestion` with Copy through a project ticket and Skip options.
 Skip this offer in `--all` mode.
 Preserve any existing `.claude/skills/verify/` directory.
@@ -1639,7 +1639,14 @@ Use the normal ticket branch and PR workflow for the copy.
 Do not use the special `docs/agents-md` or `docs/apexyard-badge` branches.
 
 The copy task creates `.claude/skills/verify/` from the template after the ticket starts.
-Keep the web, mobile, desktop, or service sections that match the detected stack.
+Copy each matching stack skeleton from the ops repo to the target project:
+
+- For a web app, copy `templates/skills/verify/web.md` to `<project>/.claude/skills/verify/web.md`.
+- For an explicit mobile custom stack, copy `templates/skills/verify/mobile.md` to `<project>/.claude/skills/verify/mobile.md`.
+- For an explicit desktop custom stack, copy `templates/skills/verify/desktop.md` to `<project>/.claude/skills/verify/desktop.md`.
+- For an API service or data pipeline, copy `templates/skills/verify/service.md` to `<project>/.claude/skills/verify/service.md`.
+
+Add more than one skeleton file when the project spans stacks.
 Replace setup fields with commands discovered in the target repo.
 Record unknown commands and missing tools as blockers.
 Do not claim the skeleton works until verify runs successfully.

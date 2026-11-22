@@ -21,7 +21,8 @@ Read [the procedure](../../../docs/skills/drive-to-green.md) before execution.
 6. Run `/code-review` for an independent review of the current head.
 7. Give required fixes to a role-appropriate build agent. Require tests and the new head SHA.
 8. Request a delta review through `/code-review`. Repeat within the round cap.
-9. Report the remaining blocker or the pending human approval.
+9. After round two, when a blocking finding is still open, stop. Ask the owner to split the PR, narrow it, or accept the remaining items on record.
+10. Report the remaining blocker or the pending human approval.
 
 Never write, copy, move, or refresh an approval marker.
 Never merge. Never invoke `/approve-merge`.

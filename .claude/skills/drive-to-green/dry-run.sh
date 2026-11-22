@@ -19,7 +19,11 @@ while IFS= read -r state || [ -n "$state" ]; do
     changes|unknown)
       [ "$state" != unknown ] || echo 'Plan: rex_approval_carries_over -> unknown'
       echo 'Plan: /code-review reviewer spawn'
-      if [ "$round" -ge "$cap" ]; then echo 'Blocker: review-round cap'; exit 0; fi
+      if [ "$round" -ge "$cap" ]; then
+        echo 'Blocker: review-round cap'
+        echo 'Stop: ask the owner to split the PR, narrow the PR, or accept the remaining items on record'
+        exit 0
+      fi
       echo 'Plan: build agent fixes and tests'
       echo 'Plan: /code-review delta review after green CI'
       ;;
