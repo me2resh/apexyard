@@ -194,7 +194,7 @@ The title prefix is derived from the content, and must come from the project's c
 - Documentation-only change → `[Docs]`
 - Everything else → `[Chore]`
 
-A fork that extends the whitelist (for example, Adds `[Security]`, `[Perf]`, `[Scaffold]`) automatically gains the option here. The skill reads the live config, it does not hardcode the list. See apexyard#109 for the schema and how to extend.
+A fork that extends the whitelist (for example, adds `[Security]`, `[Perf]`, `[Scaffold]`) automatically gains the option here. The skill reads the live config, it does not hardcode the list. See apexyard#109 for the schema and how to extend.
 
 ### 6. Handle response
 

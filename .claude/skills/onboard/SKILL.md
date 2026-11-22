@@ -278,7 +278,7 @@ states the current mode plus how to switch. Answering this question is a
 ### Just-in-time glossary asides (#913: design § D3)
 
 From Step 3.5 onward, any time you are about to use one of the five core
-terms: **issue/ticket, PR, merge, branch, CI**: toward the adopter for
+terms (**issue/ticket, PR, merge, branch, CI**) toward the adopter for
 the first time this session, check whether a short plain-language aside
 is due and, if so, weave it into your sentence as a single parenthetical.
 This can fire at any later step: most commonly Step 4 (the branch talks
