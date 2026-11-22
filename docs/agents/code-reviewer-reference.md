@@ -193,16 +193,16 @@ main()
 ```markdown
 ### Handbook Findings
 
-⛔ **Migration Safety (blocking)** — `handbooks/architecture/migration-safety.md`
+⛔ **Important: Migration Safety (blocking)** — `handbooks/architecture/migration-safety.md`
 - `prisma/migrations/20260514_drop_role/migration.sql:3` drops `users.role_v1` which the previous release reads in `src/auth/role-resolver.ts:42`. Split into a deprecate-then-drop pair across two releases. (See handbook § "What Rex flags" #1.)
 
-⚠ **Clean Architecture Layers** — `handbooks/architecture/clean-architecture-layers.md`
+⚠ **Nit: Clean Architecture Layers** — `handbooks/architecture/clean-architecture-layers.md`
 - `src/domain/order.ts:8` imports `@aws-sdk/client-dynamodb`. Move persistence to `src/infrastructure/`. (See handbook § "Sample finding".)
 
-⚠ **TypeScript Strict Mode** — `handbooks/language/typescript/strict-mode.md`
+⚠ **Nit: TypeScript Strict Mode** — `handbooks/language/typescript/strict-mode.md`
 - `src/handlers/user.ts:42` declares `function fetchUser(id: any)` — replace with `string` or a domain value object.
 
-⚠ **Payment Idempotency** — `handbooks/domain/payments/idempotency-keys.md`
+⚠ **Nit: Payment Idempotency** — `handbooks/domain/payments/idempotency-keys.md`
 - `src/handlers/stripe-webhook.ts:88` retries a `charges.create` call without supplying the `Idempotency-Key` header. Add the request UUID per handbook § "What Rex flags" #2.
 ```
 
@@ -231,11 +231,11 @@ A legitimate one-line bug fix or dependency bump would otherwise churn the merge
 ````markdown
 ### Fallow Findings  *(advisory — JS/TS static analysis, changed scope)*
 
-| Category | Location | Finding |
-|----------|----------|---------|
-| Unused export | `src/lib/format.ts:14` | `formatLegacyDate` is exported but unreferenced |
-| Duplication | `src/a.ts:30` ↔ `src/b.ts:51` | 18-line clone (`dup:1a2b3c4d`) |
-| Complexity | `src/handlers/order.ts:88` | `processOrder` cyclomatic 24 — refactor candidate |
+| Tag | Category | Location | Finding |
+|-----|----------|----------|---------|
+| Nit | Unused export | `src/lib/format.ts:14` | `formatLegacyDate` is exported but unreferenced |
+| Nit | Duplication | `src/a.ts:30` ↔ `src/b.ts:51` | 18-line clone (`dup:1a2b3c4d`) |
+| Nit | Complexity | `src/handlers/order.ts:88` | `processOrder` cyclomatic 24 — refactor candidate |
 
 **Proposed fixes (dry run — not applied):**
 

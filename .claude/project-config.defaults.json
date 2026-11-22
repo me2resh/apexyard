@@ -21,6 +21,15 @@
     "baseline_timeout_seconds": 600
   },
 
+  "security": {
+    "remediation_sla_days": {
+      "critical": 7,
+      "high": 30,
+      "medium": 90,
+      "low": null
+    }
+  },
+
   "orbit": {
     "default_planning": false,
     "governed_prefixes": ["Feature", "Task", "Slice"]
