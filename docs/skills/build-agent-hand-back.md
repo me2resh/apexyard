@@ -28,6 +28,19 @@ Surface unresolved conflicts explicitly instead of silently choosing a requireme
 [Remaining work and unresolved conflicts, or None with a reason.]
 ```
 
+## Regression check requirement (me2resh/apexyard#2091)
+
+When the brief carries a Rex `Regression check: test <path or name> must
+fail on <short sha>` line, add that test in the same commit as the fix. Run
+it against the reviewed SHA and confirm it fails. Run it again at the new
+head and confirm it passes. Report both commands and their results under
+`## Validation`, and repeat the pass/fail evidence in the PR comment that
+announces the fix.
+
+When the line reads `Regression check: rule <handbook path>` instead, run
+`/codify-rule` against the finding and add the resulting handbook entry in
+the same commit.
+
 ## Orchestrator responsibilities
 
 Copy each agent's decision list into `## Decisions made for you` in the PR body.

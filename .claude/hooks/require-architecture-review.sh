@@ -103,6 +103,7 @@ _require_lib "$(dirname "$0")/_lib-extract-pr.sh" \
   _run_awk_or_fallback join_shell_continuations _join_shell_continuations_fallback \
   _scrub_merge_command _has_split_merge_phrase _normalize_json_escapes \
   has_conflicting_repo_flags merge_command_uses_variable extract_pr_number resolve_merge_repo resolve_pr_head \
+  resolve_pr_base_ref resolve_pr_base_config \
   prmeta_get prmeta_file_list
 # Repo-qualified marker path helper (#485).
 _require_lib "$(dirname "$0")/_lib-review-markers.sh" \
@@ -220,6 +221,8 @@ tech-design.*\.md$
 prd.*\.md$
 feature-spec.*\.md$'
 
+DESIGN_GLOBS_DEFAULT=$DESIGN_GLOBS
+
 # Allow project-config to override (REPLACE the default list).
 if [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
   CUSTOM=$(jq -r '.design_paths // [] | join("|")' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
@@ -254,6 +257,44 @@ if [ "$CHANGED_RC" -ne 0 ] || [ -z "$CHANGED" ] || [ "$TOTAL_FILES" -gt 3000 ]; 
   exit 2
 fi
 
+# A PR that changes the tracked project config must not narrow the gate that
+# judges it (#2104, AgDR-0310). Only then, read the narrowing settings from
+# the base branch. An absent or unreadable base copy gives the built-in
+# defaults and no exclusions. A local `.design_paths` may still add patterns.
+# A PR that leaves the config alone keeps the local config unchanged.
+CONFIG_IN_PR=0
+BASE_CONFIG=""
+if printf '%s\n' "$CHANGED" | grep -qxF '.claude/project-config.json'; then
+  CONFIG_IN_PR=1
+  BASE_CONFIG=$(resolve_pr_base_config "$PR_NUMBER" "$CMD_REPO")
+  if [ -z "$BASE_CONFIG" ]; then
+    echo "NOTE: architecture-review gate could not read the base branch project config. Using the default design paths and no exclusions." >&2
+  fi
+  DESIGN_GLOBS=$DESIGN_GLOBS_DEFAULT
+  BASE_CUSTOM=$(printf '%s' "$BASE_CONFIG" | jq -r '.design_paths // [] | join("|")' 2>/dev/null)
+  if [ -n "$BASE_CUSTOM" ] && [ "$BASE_CUSTOM" != "null" ]; then
+    DESIGN_GLOBS=$(printf '%s' "$BASE_CUSTOM" | tr '|' '\n')
+  fi
+fi
+
+# The sibling overlay can only tighten the resolved project value.
+if [ -r "$HOOK_DIR/_lib-config-guard.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-config-guard.sh"
+  DESIGN_GLOBS=$(config_overlay_lines design_paths "$DESIGN_GLOBS" paths "$REPO_ROOT")
+fi
+
+# Add head paths after the overlay guard compares against the base list.
+if [ "$CONFIG_IN_PR" = 1 ]; then
+  if [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
+    CUSTOM=$(jq -r '.design_paths // [] | join("|")' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
+    if [ -n "$CUSTOM" ] && [ "$CUSTOM" != "null" ]; then
+      DESIGN_GLOBS="${DESIGN_GLOBS}
+$(printf '%s' "$CUSTOM" | tr '|' '\n')"
+    fi
+  fi
+fi
+
 TOUCHED_DESIGN=""
 while IFS= read -r FILE; do
   [ -z "$FILE" ] && continue
@@ -269,8 +310,25 @@ done <<< "$CHANGED"
 # Apply `.design_paths_exclude` — additive override that REMOVES paths from the
 # touched-design set even when DESIGN_GLOBS matched. Lets adopters keep the
 # broad defaults while carving out specific dirs (e.g. doc samples / fixtures).
-if [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
+# When the PR changes the project config, exclusions come from the base copy only.
+EXCLUDE=""
+if [ "$CONFIG_IN_PR" = 1 ]; then
+  if [ -n "$BASE_CONFIG" ]; then
+    EXCLUDE=$(printf '%s' "$BASE_CONFIG" | jq -r '.design_paths_exclude // [] | join("|")' 2>/dev/null)
+  fi
+elif [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
   EXCLUDE=$(jq -r '.design_paths_exclude // [] | join("|")' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
+fi
+if command -v config_overlay_lines >/dev/null 2>&1; then
+  OVERLAY_BASE='[]'
+  if [ "$CONFIG_IN_PR" = 1 ]; then
+    OVERLAY_BASE=$(printf '%s' "${BASE_CONFIG:-}" | jq -c '.design_paths_exclude // []' 2>/dev/null)
+  elif [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
+    OVERLAY_BASE=$(jq -c '.design_paths_exclude // []' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
+  fi
+  EXCLUDE=$(config_overlay design_paths_exclude "${OVERLAY_BASE:-[]}" excludes "$REPO_ROOT" | jq -r 'join("|")')
+fi
+if true; then
   if [ -n "$EXCLUDE" ] && [ "$EXCLUDE" != "null" ] && [ -n "$TOUCHED_DESIGN" ]; then
     FILTERED=""
     for FILE in $TOUCHED_DESIGN; do

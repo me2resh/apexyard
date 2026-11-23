@@ -1,0 +1,16 @@
+[
+  {
+    "id": "20261121-filter",
+    "status": "SCORED",
+    "caught_defects": [
+      "D1"
+    ],
+    "false_alarms": 0
+  },
+  {
+    "id": "fixture-control",
+    "status": "SCORED",
+    "caught_defects": [],
+    "false_alarms": 1
+  }
+]

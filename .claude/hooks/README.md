@@ -384,12 +384,12 @@ If a marker gets stale, delete the file and re-run the corresponding skill.
 Each hook reads a tool-call JSON blob from stdin. Simulate the harness with `printf` (avoid `echo -e` to keep escape handling portable):
 
 ```bash
-# require-active-ticket — should block
+# require-active-ticket: should block
 printf '%s' '{"tool_name":"Edit","tool_input":{"file_path":"/tmp/foo.ts"}}' \
   | .claude/hooks/require-active-ticket.sh
 echo "exit=$?"
 
-# auto-code-review — should emit reminder + exit 2
+# auto-code-review: should emit reminder + exit 2
 printf '%s' '{"tool_name":"Bash","tool_input":{"command":"gh pr create --title foo"},"tool_response":{"stdout":"https://github.com/acme/repo/pull/42"}}' \
   | .claude/hooks/auto-code-review.sh
 echo "exit=$?"

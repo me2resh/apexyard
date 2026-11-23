@@ -27,7 +27,7 @@ The per-clone `claudeMdExcludes` setting in `.claude/settings.local.json` keeps 
 
 See `docs/getting-started.md` for the integration model and for how to install the `.claude/` layer.
 
-### Available skills (72)
+### Available skills (74)
 
 Each row gives one line for a skill. The full text for each skill is in `.claude/skills/<name>/SKILL.md`.
 The count includes 3 deprecated aliases: `/spike-close`, `/prototype-close`, and `/tickets-batch` (me2resh/apexyard#2028).
@@ -58,6 +58,7 @@ Each alias passes its arguments to the new mode. The aliases ship deprecated in 
 | `/agdr` | Browses, searches, shows, and counts the AgDRs across the portfolio. |
 | `/drive-to-green` | Drives one PR through CI, review, fixes, and delta review. Stops before human approval. |
 | `/code-review` | Starts the Code Reviewer agent (Rex) on a PR. |
+| `/verify` | Runs framework hook regressions and a skill smoke test. Reports evidence and blockers for the PR. |
 | `/security-review` | Starts the Security Reviewer agent (Hakim) on a PR. |
 | `/design-review` | Starts the Solution Architect agent (Tariq) on a technical design, migration AgDR, or feature spec. |
 | `/design-sync` | Syncs a local component library to a claude.ai/design design-system project, one change at a time. |
@@ -91,7 +92,8 @@ Each alias passes its arguments to the new mode. The aliases ship deprecated in 
 | `/process` | Extracts a business process from registered repos and writes lint-clean BPMN 2.0. |
 | `/c4` | Generates C4 L1 and L2 Mermaid diagrams from the codebase of a project. |
 | `/dfd` | Extracts a Data Flow Diagram with trust boundaries, as Mermaid and optional Threat Dragon JSON. |
-| `/tech-vision` | Interactive author for the architecture vision template: target, gap, migration, and anti-scope. |
+| `/approach` | Guide a Heavy change design from standards, record decisions through `/decide`, and transfer it to `/design-review`. |
+| `/tech-vision` | Interactive author for the architecture vision template: one-page drivers, NFRs, principles, reuse, and what we will not build. |
 | `/journey` | One self-contained user-journey HTML page with boxes, arrows, and a modal for each page. |
 | `/pdf` | Converts markdown, HTML, or BPMN to PDF. Asks for the destination. |
 | `/debug` | Structured debugging with hypotheses for issues that resisted the first fixes. |
@@ -120,7 +122,7 @@ Each alias passes its arguments to the new mode. The aliases ship deprecated in 
 | Investigation | Long root-cause work: incident retros, bug history, regressions, and performance problems. Uses a hypothesis tree and a live document. `/investigation` uses it. | `templates/tickets/investigation.md` |
 | C4 Context (L1) | The system and its external actors, one for each project | `templates/architecture/c4-context.md` |
 | C4 Container (L2) | The deployable units inside the system | `templates/architecture/c4-container.md` |
-| Architecture Vision | Target-state architecture, a migration path over several quarters, and explicit anti-scope. Write it with `/tech-vision <project>`. | `templates/architecture/vision.md` |
+| Architecture Vision | One page: ranked drivers, NFRs with sources, principles, reuse and vendors, and what we will not build. An optional Heavy appendix holds the long form. Write it with `/tech-vision <project>`. | `templates/architecture/vision.md` |
 | Data Flow Diagram (DFD) | Trust boundaries and data crossings. The STRIDE threat model uses it. | `templates/architecture/dfd.md` |
 | Sequence Diagram | A request flow in time order, for example an auth handshake or a payment flow | `templates/architecture/sequence.md` |
 
@@ -164,6 +166,7 @@ See `golden-paths/pipelines/README.md` for the full details.
 | CI pipelines | `golden-paths/pipelines/` |
 | Getting started | `docs/getting-started.md` |
 | Full setup guide | `docs/multi-project.md` |
+| Run next to another PR agent (what counts as the human approval) | `docs/running-next-to-another-pr-agent.md` |
 | Rule audit (each MUST and its hook, advisory, or deferred status) | `docs/rule-audit.md` |
 | LSP-aware navigation (optional) | Set `ENABLE_LSP_TOOL=1` and install the plugin for each language. See `docs/getting-started.md` § "Optional: LSP-aware code navigation". |
 

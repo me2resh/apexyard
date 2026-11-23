@@ -1,10 +1,12 @@
 # Severity reviews and drive-to-green
 
 Rex reports severity before detail. The first line stays `Not covered by the checks: <limits or None>`.
-The next line uses this exact form: `Blocking 0 | Important 2 | Nits 7`.
+The next line uses this exact form: `Important 2 | Nit 7 | Pre-existing 0`.
 Rex lists at most five nits. For seven nits, Rex adds `Additional nits: 2`.
 Each listed nit starts with `- Nit:`. Other required sections remain unchanged.
-Severity changes presentation only. Existing gates retain their decisions.
+Use the finding tags in [Review severity](../../templates/REVIEW.md).
+Only Important findings can request changes. Pre-existing findings require a suggested ticket title.
+Independent CI and security gates retain their decisions.
 
 ## Override the review policy
 
@@ -20,6 +22,12 @@ Without that file, it resolves `REVIEW.md`.
 A shared `custom-templates/REVIEW.md` overrides the framework default.
 The helper preserves its existing override order.
 An override cannot weaken the blocking bar or any approval gate.
+
+Upgrade note: the tags changed from Blocking / Important / Nit to Important / Nit / Pre-existing.
+The tally line is now `Important N | Nit N | Pre-existing N`, and the validator rejects the old form.
+If your custom `REVIEW.md` uses the old labels, rename them to the new tags.
+Each `- Pre-existing:` line must contain `Suggested ticket title: <title>`, and the Pre-existing count must match the lines.
+A Pre-existing CRITICAL, HIGH or MEDIUM line must also contain `SLA: N days. Due: YYYY-MM-DD` (see AgDR-0313).
 
 ## Run one PR
 
@@ -37,6 +45,9 @@ One round includes a CI wait and one independent review.
 The first review counts as round one. Each delta review consumes another round.
 Do not start fixes after the final review round.
 Report open findings, failed checks, or missing evidence when the cap prevents progress.
+When round two still has a blocking finding open, stop and ask the owner to
+split the PR, narrow it, or accept the remaining items on record — see
+[`pr-workflow.md`](../../.claude/rules/pr-workflow.md#two-blocking-rounds-stop-and-ask-the-owner-me2reshapexyard2091).
 
 Give fixes to a role-appropriate build agent under the existing ticket and isolation rules.
 Give the agent finding IDs, evidence, scope, and required checks.

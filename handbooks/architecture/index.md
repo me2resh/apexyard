@@ -5,6 +5,7 @@
 | --- | --- | --- | --- | --- | --- |
 | Handbook: Clean Architecture Layering | atlas-apex | 2026-05-24 | 2026-11-20 | active | [clean-architecture-layers.md](clean-architecture-layers.md) |
 | Handbook: Migration Safety | atlas-apex | 2026-05-24 | 2026-11-20 | active | [migration-safety.md](migration-safety.md) |
+| Handbook: Reliability checklist | atlas-apex | 2026-11-21 | 2027-05-21 | active | [reliability-checklist.md](reliability-checklist.md) |
 
 ## Sub-folders
 

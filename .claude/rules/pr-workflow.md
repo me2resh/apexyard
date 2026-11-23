@@ -224,7 +224,7 @@ You: *runs gh pr merge 10*   ← FAILURE: "go" was plan-level, not merge-level.
 You: "Here's the 6-step plan: 1. merge PR #10, 2. close PR #105, ..."
 CEO: "go"
 You: *executes steps 2–6, stops before step 1*
-You: "Steps 2–6 done. PR #10 is ready to merge — run /approve-merge 10 when you're happy."
+You: "Steps 2–6 done. PR #10 is ready to merge: run /approve-merge 10 when you're happy."
 CEO: /approve-merge 10          ← CORRECT: the CEO invokes it. The skill is
                                    human-only (#1042), so the model cannot.
 ```
@@ -438,11 +438,42 @@ start a new round to chase a remaining non-blocking finding: file it as a
 follow-up ticket instead.
 
 A blocking finding under `.claude/agents/code-reviewer.md` § "Blocking-Severity
-Bar" still blocks in round two, and in any round after it. Its fix always
-gets a delta re-review, whatever the round count. The merge gate needs a
-fresh Rex marker at the new HEAD, and only a review can write one. The cap
-limits how many rounds chase non-blocking findings. It never blocks the one
-path a blocking finding needs to clear.
+Bar" still blocks in round two. Its fix always gets a delta re-review within
+that round. The merge gate needs a fresh Rex marker at the new HEAD, and only
+a review can write one.
+
+### Two blocking rounds: stop and ask the owner (me2resh/apexyard#2091)
+
+Round one is the first review with a blocking finding on this PR. Round two
+is the delta re-review of its fix. When round two still has a blocking
+finding open, the orchestrator stops. It does not start a third round on its
+own. It asks the owner to pick one of three paths:
+
+1. Split the PR: move the blocked part into its own PR and merge the rest.
+2. Narrow the PR: drop the part that keeps failing review, and file it as a
+   follow-up ticket.
+3. Accept the remaining items on record: the owner takes the risk in
+   writing. Rex's finding stays open in the PR history.
+
+`.claude/skills/drive-to-green/dry-run.sh` models this stop under its
+existing `Blocker: review-round cap` line. See
+[`drive-to-green`](../../docs/skills/drive-to-green.md).
+
+### Add the regression test in the fix commit (me2resh/apexyard#2091)
+
+When Rex's finding carries `Regression check: test <path or name> must fail
+on <short sha>`, the build agent fixing it adds that test in the same commit
+as the fix. Before the fix, run the test against the prior reviewed SHA and
+confirm it fails. After the fix, run it at the new head and confirm it
+passes. Report both commands and their results under `## Validation` in the
+hand-back (see
+[`build-agent-hand-back.md`](../../docs/skills/build-agent-hand-back.md))
+and in the PR comment that announces the fix.
+
+When the finding carries `Regression check: rule <handbook path>` instead,
+run `/codify-rule` against the finding and add the resulting handbook entry
+in the same commit. A `Regression check: none possible` finding needs no
+test or rule; fix it and say so in the hand-back.
 
 ## Resuming PR Sessions
 

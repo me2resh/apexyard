@@ -348,6 +348,50 @@
         "was_justified": true
       },
       "notes": "Real delta round recovered from the local posted-review artifacts. See reports/rex-delta-corpus-2026-10-19.md. Historical verdicts are not fresh eval results."
+    },
+    {
+      "id": "rex-1651-06c08cc",
+      "control_for": "20261121-filter",
+      "pr": 1651,
+      "repo": "me2resh/apexyard",
+      "commit": "06c08cc47d7b",
+      "diff_range": "7d314c0457f0..06c08cc47d7b",
+      "oracle": {
+        "source": "no_contradiction",
+        "established_by": "Clean control: the PR merged with an approving review at this head, no later fix PR references it, and no revert exists (checked 21 Nov 2026).",
+        "reference": "me2resh/apexyard#1651"
+      },
+      "ground_truth_defects": [],
+      "recorded_verdict": {
+        "verdict": "APPROVED",
+        "was_justified": true
+      },
+      "notes": "Size-matched clean control for pending case 20261121-filter (me2resh/apexyard-site PR 201, reviewed head 6309c8ae0). Miss: 37 files, 1104 changed lines. Control: 31 files, 943 changed lines (ratio 0.85 lines, 0.84 files)."
+    },
+    {
+      "id": "20261121-audit-ignore",
+      "pr": 2085,
+      "repo": "me2resh/apexyard",
+      "commit": "1783ccabb0666ed2c5c1454d8ebf47cb3ebfa43d",
+      "diff_range": "ca8de8c032dc4ed6de3a8765d0a093f46b27de37~1..1783ccabb0666ed2c5c1454d8ebf47cb3ebfa43d",
+      "oracle": {
+        "source": "human",
+        "established_by": "The GitHub advisory record for GHSA-fc5q-39xc-vjpf has withdrawn_at 2026-11-18T15:38:56Z, the head Dependency Audit job 136676362203 printed no policy finding while the base job 134624010252 printed 16 Blocking lines, and the owner closed the PR unmerged for that reason (comment 7055856677).",
+        "reference": "me2resh/apexyard#2085"
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "The PR claims that its own audit run tests the GHSA-fc5q-39xc-vjpf ignore, but the advisory was withdrawn before this head, so the audit produced no finding and the ignore was never exercised; AgDR-0307 also still says the advisory fails every PR and cites 7 tests where the head has 16.",
+          "severity": "BLOCKING",
+          "location": "docs/agdr/AgDR-0307-dependency-audit-expiring-ignores.md"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "CHANGES REQUESTED",
+        "was_justified": true
+      },
+      "notes": "Public reproduction of the 21 Nov audit-ignore miss from a private project. Same defect class: a claimed test of an audit ignore against a withdrawn advisory. The real reviewer caught it here (review 6002159626, finding 2), so this entry is a GOOD_CATCH, not a MISS. The diff alone cannot expose D1. Supply the PR body Testing section, the policy-step output of both jobs and the advisory record as sanitized review context, per reports/2096/. Finding 1 of that review (a second advisory on the ignored package passes) has no independent oracle and is not scored. Size: 5 files, 413 changed lines."
     }
   ]
 }

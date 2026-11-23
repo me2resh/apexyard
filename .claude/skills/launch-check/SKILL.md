@@ -6,12 +6,12 @@ argument-hint: "[project-path] | trend [project-path] | --workflow [project-path
 effort: high
 ---
 
-# /launch-check — Production Readiness Audit
+# /launch-check: Production Readiness Audit
 
 Read `.claude/rules/writing-standard.md`. Use the **controlled technical writing profile** for the audit
-report. Lead with the verdict and next action; keep findings below it.
+report. Lead with the verdict and next action. Keep findings below it.
 
-Runs a 10-dimension sweep against a project and outputs a one-page verdict. Designed for milestone boundaries — epic completion, release cuts, launch prep — not per-PR use.
+Run a 10-dimension audit of a project to produce a one-page verdict. Use it at milestone boundaries: epic completion, release cuts, or launch preparation. Do not use it for each PR.
 
 **Invoke from** the project's workspace directory (`cd workspace/<project>/`) or pass the path as an argument: `/launch-check workspace/my-app`.
 
@@ -26,26 +26,26 @@ Runs a 10-dimension sweep against a project and outputs a one-page verdict. Desi
 
 **Three modes:**
 
-- `/launch-check [project-path]` — full audit (default). Runs all 10 dimensions **serially**, persists results to the per-project history store, and renders a "Trend (last 5 runs)" section when ≥ 2 prior runs exist.
-- `/launch-check trend [project-path]` — read-only trend report. Renders just the trend section from existing run files. Useful for "are we trending up?" without burning the audit cost. See § "Trend-only mode" below.
-- `/launch-check --workflow [project-path]` — **opt-in** parallel + adversarially-verified audit. Fans the 10 dimensions out concurrently (one agent each), independently verifies every FAIL/WARN finding before it lands in the verdict, then synthesizes the **same** table and persists via the **same** history store. Faster wall-clock and fewer false positives; costs more tokens (spawns ~10–20 agents). Same output, same trend continuity — see § "Workflow mode" below.
+- `/launch-check [project-path]`: full audit (default). Runs all 10 dimensions **serially**. Saves results to the project history store. Renders a "Trend (last 5 runs)" section when ≥ 2 prior runs exist.
+- `/launch-check trend [project-path]`: read-only trend report. Renders only the trend section from existing run files. Shows whether results improve without the audit cost. See § "Trend-only mode" below.
+- `/launch-check --workflow [project-path]`: **opt-in** parallel audit with independent verification. Runs the 10 dimensions concurrently with one agent each. Independently verifies every FAIL/WARN finding before adding it to the verdict. Produces the **same** table and uses the **same** history store. It takes less time and produces fewer false positives. It costs more tokens and starts ~10–20 agents. Output and trend continuity stay the same. See § "Workflow mode" below.
 
 ## Deep-dive companions
 
-Each dimension has a dedicated expert skill for when you need to go deeper than the one-line summary. The launch check is the overview; the expert skills are the investigation.
+Each dimension has an expert skill to investigate beyond the one-line summary. The launch check gives an overview. The expert skills investigate details.
 
 | Dimension | Quick check | Deep dive |
 |-----------|------------|-----------|
-| Security | `/launch-check` row 1 | **`/threat-model`** — full STRIDE threat modelling exercise. Also **`/audit-deps`** for dependency findings, and **`/security-review`** when the project has an open PR |
-| Accessibility | `/launch-check` row 2 | **`/accessibility-audit`** — WCAG 2.1 AA compliance audit |
-| Compliance | `/launch-check` row 3 | **`/compliance-check`** — GDPR + ePrivacy analysis |
-| Analytics | `/launch-check` row 4 | **`/analytics-audit`** — event taxonomy and funnel coverage |
-| SEO | `/launch-check` row 5 | **`/seo-audit`** — technical SEO against Google best practices |
-| Generative-engine | `/launch-check` row 6 | **`/geo-audit`** — LLM/agent discoverability (GEO + AEO), `llms.txt`, `AGENTS.md`, AI-crawler directives, JSON-LD citation grounding |
-| Performance | `/launch-check` row 7 | **`/performance-audit`** — bundle, images, Core Web Vitals |
-| Monitoring | `/launch-check` row 8 | **`/monitoring-audit`** — observability and incident readiness |
-| Documentation | `/launch-check` row 9 | **`/docs-audit`** — Diataxis framework completeness |
-| Behaviour quality | `/launch-check` row 10 | **`/mutation-test`** — mutation-testing sensor; measures whether the test suite constrains behaviour, not just executes lines |
+| Security | `/launch-check` row 1 | **`/threat-model`**: full STRIDE threat modelling exercise. Also **`/audit-deps`** for dependency findings, and **`/security-review`** when the project has an open PR |
+| Accessibility | `/launch-check` row 2 | **`/accessibility-audit`**: WCAG 2.1 AA compliance audit |
+| Compliance | `/launch-check` row 3 | **`/compliance-check`**: GDPR + ePrivacy analysis |
+| Analytics | `/launch-check` row 4 | **`/analytics-audit`**: event taxonomy and funnel coverage |
+| SEO | `/launch-check` row 5 | **`/seo-audit`**: technical SEO against Google best practices |
+| Generative-engine | `/launch-check` row 6 | **`/geo-audit`**: LLM/agent discoverability (GEO + AEO), `llms.txt`, `AGENTS.md`, AI-crawler directives, JSON-LD citation grounding |
+| Performance | `/launch-check` row 7 | **`/performance-audit`**: bundle, images, Core Web Vitals |
+| Monitoring | `/launch-check` row 8 | **`/monitoring-audit`**: observability and incident readiness |
+| Documentation | `/launch-check` row 9 | **`/docs-audit`**: Diataxis framework completeness |
+| Behaviour quality | `/launch-check` row 10 | **`/mutation-test`**: Mutation-testing sensor. Measures whether the test suite constrains behaviour beyond executing lines. |
 
 ## Routing to full audits
 
@@ -86,7 +86,7 @@ fi
 ```
 
 The lookup prints a JSON list. An empty list (`[]`) means that the branch has no open PR. Offer `/security-review <number> <owner/repo>` only when the list has an entry. Always pass the repository, so the review does not resolve the number in the ops repo.
-Do not offer `/security-review` when the list is empty, when the command fails, or when `gh` is not installed. Do not use `gh pr view` with `--repo` and no PR argument. That form always fails.
+Do not offer `/security-review` when the list is empty, when the command fails, or when no `gh` installation exists. Do not use `gh pr view` with `--repo` and no PR argument. That form always fails.
 A PASS row gets no offer. A row with more than one match gets every match, for example `/threat-model` and `/audit-deps`.
 
 ## Output format
@@ -94,7 +94,7 @@ A PASS row gets no offer. A row with more than one match gets every match, for e
 The output should be **scannable in 10 seconds**. One table, one verdict, one blockers list:
 
 ```
-LAUNCH CHECK — <project> @ <sha> (<date>)
+LAUNCH CHECK: <project> @ <sha> (<date>)
 
 | #  | Dimension          | Status | Finding                              |
 |----|--------------------|--------|--------------------------------------|
@@ -130,16 +130,16 @@ Next steps. Pick any, for example "1 3 7", or "8" for none:
   8. None for now
 ```
 
-**Do NOT dump hundreds of lines.** Each dimension gets ONE row in the table. Details go in follow-up messages only if the user asks "tell me more about the security findings" — not upfront.
+**Do NOT print hundreds of lines.** Give each dimension ONE row in the table. Provide details in later messages only when the user requests them, for example "tell me more about the security findings".
 
 ## Verdict logic
 
 | Condition | Verdict |
 |-----------|---------|
-| All dimensions PASS | **GO** — ready to launch |
-| Some WARN, zero FAIL | **GO with warnings** — launch is safe, address warnings before next milestone |
-| Any FAIL | **CONDITIONAL GO** — resolve the blocking items before launch |
-| 3+ FAIL or any critical security finding | **NO-GO** — significant gaps, not launch-ready |
+| All dimensions PASS | **GO**: ready to launch |
+| Some WARN, zero FAIL | **GO with warnings**: launch is safe. Address warnings before the next milestone |
+| Any FAIL | **CONDITIONAL GO**: resolve the blocking items before launch |
+| 3+ FAIL or any critical security finding | **NO-GO**: significant gaps, not launch-ready |
 
 ## The 9 dimensions
 
@@ -148,8 +148,8 @@ Next steps. Pick any, for example "1 3 7", or "8" for none:
 **What to check:**
 
 - Run `npm audit` / `pip audit` / equivalent for dependency vulnerabilities
-- Grep for hardcoded secrets, API keys, tokens (same patterns as `check-secrets.sh` but against the full codebase, not just staged files)
-- Check auth flow: is there authentication? Is it using a reputable provider (Cognito, Auth0, Firebase Auth)? Are tokens stored securely (httpOnly cookies, not localStorage)?
+- Grep for hardcoded secrets, API keys, and tokens. Use the patterns from `check-secrets.sh` against the full codebase, including unstaged files.
+- Check the authentication flow. Confirm that authentication exists. Check for a reputable provider (Cognito, Auth0, Firebase Auth). Check token storage: use httpOnly cookies, not localStorage.
 - Check for common OWASP risks: SQL/NoSQL injection surfaces, XSS vectors (dangerouslySetInnerHTML, v-html), CSRF protection
 - Check HTTPS enforcement, CORS configuration, security headers
 
@@ -164,7 +164,7 @@ Next steps. Pick any, for example "1 3 7", or "8" for none:
 - Grep for `<img` tags without `alt` attributes
 - Check for semantic HTML: `<main>`, `<nav>`, `<header>`, `<footer>`, heading hierarchy (h1 → h2 → h3)
 - Check for `aria-label` on interactive elements without visible text
-- Check color contrast: look for low-contrast color combinations in CSS/theme files
+- Check color contrast: check for low-contrast color combinations in CSS/theme files
 - Check keyboard navigation: are there `onClick` handlers without corresponding `onKeyDown`?
 - Check for `<html lang="...">` attribute
 
@@ -176,7 +176,7 @@ Next steps. Pick any, for example "1 3 7", or "8" for none:
 
 **What to check:**
 
-- Cookie consent: grep for cookie-consent libraries (cookieconsent, react-cookie-consent, etc.) or a consent banner component
+- Check cookie consent. Search for libraries such as cookieconsent or react-cookie-consent, or a consent banner component.
 - Privacy policy: check for a `/privacy` route or `privacy-policy` page
 - Terms of service: check for a `/terms` route
 - GDPR: if the app collects user data, is there a data deletion mechanism? Check for a "delete account" route or endpoint
@@ -191,11 +191,11 @@ Next steps. Pick any, for example "1 3 7", or "8" for none:
 **What to check:**
 
 - Grep for analytics SDK initialization (Google Analytics/GA4, Mixpanel, Amplitude, PostHog, Plausible)
-- Check for event tracking calls (gtag, track, capture, etc.)
+- Check for event tracking calls, such as gtag, track, and capture.
 - Check for a config file or environment variable pointing to an analytics dashboard
-- If no analytics at all and the project is user-facing: that's a finding
+- Record a finding if a user-facing project has no analytics.
 
-**PASS if:** analytics SDK configured and events are being tracked.
+**PASS if:** the app configures an analytics SDK and tracks events.
 **WARN if:** SDK configured but few/no custom events (only page views).
 **FAIL if:** user-facing app with zero analytics. (Non-user-facing like CLIs/libraries: auto-PASS.)
 
@@ -216,15 +216,15 @@ Next steps. Pick any, for example "1 3 7", or "8" for none:
 
 ### 6. Generative-engine (LLM/agent discoverability)
 
-**What to check** (quick scan — full deep-dive lives in `/geo-audit`):
+**What to check** (quick scan, full investigation in `/geo-audit`):
 
 - `llms.txt` and `llms-full.txt` at the site root
 - `AGENTS.md` at the repo root
-- AI-crawler directives in `robots.txt` (does it name `GPTBot`, `ClaudeBot`, `PerplexityBot`, etc.?)
+- AI-crawler directives in `robots.txt`, including names such as `GPTBot`, `ClaudeBot`, and `PerplexityBot`
 - JSON-LD citation metadata on article-shaped pages (`author`, `dateModified`, `datePublished`, `publisher`)
-- Per-page token count for the largest docs page (heuristic: `char_count / 4` — flag pages over 25K)
+- Estimate the token count of the largest docs page with `char_count / 4`. Flag pages over 25K.
 
-Covers two related sub-scopes: **GEO** (LLM citations — ChatGPT, Claude, Perplexity, Gemini) and **AEO** (coding-agent consumption — Claude Code, Cursor, Aider, Cline). Both consume the same artefacts, so they share one row at the milestone-boundary level. For the bucket-by-bucket breakdown, run `/geo-audit`.
+This dimension covers two related areas. **GEO** concerns LLM citations from ChatGPT, Claude, Perplexity, and Gemini. **AEO** concerns coding-agent use by Claude Code, Cursor, Aider, and Cline. Both use the same artefacts, so they share one row at each milestone boundary. For the separate results in each area, run `/geo-audit`.
 
 **PASS if:** `llms.txt` present, `AGENTS.md` present with sandbox + MCP sections, JSON-LD citation metadata on key pages.
 **WARN if:** some artefacts missing (e.g. `AGENTS.md` exists but lacks sandbox links).
@@ -234,11 +234,11 @@ Covers two related sub-scopes: **GEO** (LLM citations — ChatGPT, Claude, Perpl
 
 **What to check:**
 
-- If there's a build output: check bundle size (look for `dist/`, `build/`, `.next/`)
-- Check for image optimization: are images served as WebP/AVIF? Are there large unoptimized images (> 500KB)?
+- If build output exists, check the bundle size. Look for `dist/`, `build/`, and `.next/`.
+- Check image optimization. Check whether the app serves images as WebP/AVIF. Check for large unoptimized images (> 500KB).
 - Check for lazy loading on below-the-fold images (`loading="lazy"`)
 - Check for code splitting (dynamic imports, React.lazy)
-- If there's a Lighthouse config or Web Vitals tracking: check the targets
+- If a Lighthouse config or Web Vitals tracking exists, check the targets.
 
 **PASS if:** bundle under 300KB gzipped, images optimized, lazy loading present.
 **WARN if:** bundle 300-500KB, or a few large images.
@@ -264,36 +264,36 @@ Covers two related sub-scopes: **GEO** (LLM citations — ChatGPT, Claude, Perpl
 
 - README.md exists and is not the default template
 - README has: project description, setup instructions, how to run locally, how to deploy
-- API documentation: if there's an API, is it documented? (OpenAPI spec, Swagger, or doc comments)
+- If an API exists, check its documentation: an OpenAPI spec, Swagger, or doc comments.
 - Deployment guide: how to deploy to staging/production
 - Changelog: is there a CHANGELOG.md or are releases documented?
 - Check for staleness: compare README last-modified date with recent code changes
 
-**PASS if:** README has setup + run + deploy instructions, and was updated recently.
+**PASS if:** README has setup, run, and deploy instructions, and its author updated it recently.
 **WARN if:** README exists but is stale (> 30 days behind code changes), or API undocumented.
 **FAIL if:** no README, or README is the default GitHub template.
 
 ### 10. Behaviour quality (mutation testing)
 
-**What to check** (quick gate — full deep-dive lives in `/mutation-test`):
+**What to check** (quick check, full investigation in `/mutation-test`):
 
 - Read `.claude/project-config.json → mutation.threshold` (default 60% from `.claude/project-config.defaults.json`)
 - Check whether a recent mutation report exists at `projects/<name>/quality/mutation-<YYYY-MM-DD>.md` (within the last 30 days)
-- If the latest report's score < threshold → **WARN** (not FAIL — mutation is a leading indicator, not a launch blocker)
-- If **no recent report exists**, *offer* to dispatch to `/mutation-test` for a fresh run, but do **NOT** auto-run it during `/launch-check`. A mutation audit takes 20–40 minutes on a medium codebase — too slow to fold into the milestone-boundary sweep silently. The dimension reports **WARN** with the finding "no recent mutation report (run `/mutation-test` for a fresh number)".
-- If `mutation.runner` is `null` or the project's primary language has no recognised mutation runner installed: **auto-PASS** (the audit doesn't apply — same shape as SEO auto-PASS for non-web projects). Surface the gap as `INFO` in the finding column.
+- If the latest report's score < threshold, report **WARN**. Do not report FAIL. Mutation predicts future quality problems but does not block launch.
+- If **no recent report exists**, *offer* a fresh `/mutation-test` run. Do **NOT** run it automatically during `/launch-check`. A mutation audit takes 20–40 minutes on a medium codebase. That takes too long for an unannounced milestone audit. Report **WARN** with the finding "no recent mutation report (run `/mutation-test` for a fresh number)".
+- Report **auto-PASS** if `mutation.runner` is `null`. Also report **auto-PASS** if the project has no recognised mutation runner installed for its primary language. The audit does not apply, as with SEO for non-web projects. Report the gap as `INFO` in the finding column.
 
 **PASS if:** recent mutation report exists AND score ≥ threshold.
 **WARN if:** recent mutation report exists BUT score < threshold, OR no recent report (operator should run `/mutation-test`).
-**FAIL if:** never — mutation testing is advisory, not a launch blocker. See AgDR-0045 for the rationale.
+**FAIL if:** never. Mutation testing is advisory and does not block launch. See AgDR-0045 for the rationale.
 
-Auto-PASS for projects without a mutation runner installed (or where the language has no recognised dispatch — e.g. Rust at v1).
+Report auto-PASS for projects without an installed mutation runner or a recognised language dispatch, for example Rust at v1.
 
 ## Process
 
 ### Step 1: Determine the project
 
-If invoked with an argument, use that path. Otherwise, use the current working directory. Verify it's a git repo with source code (not the ops repo itself — the launch check is for managed projects, not for apexyard).
+If the invocation has an argument, use that path. Otherwise, use the current working directory. Verify that the path contains a git repo with source code. The launch check applies to managed projects, not the apexyard ops repo itself.
 
 ### Step 2: Quick scan
 
@@ -306,17 +306,17 @@ Read the project's structure to determine what checks apply:
 
 ### Step 3: Run each applicable dimension
 
-Go through each dimension in order. For each:
+Check each dimension in order. For each:
 
 1. Run the checks listed above (grep, file existence, SDK detection)
 2. Classify as PASS / WARN / FAIL based on the criteria
 3. Write a one-line finding for the table
 
-**Do NOT spend more than 30 seconds per dimension.** The checks should be quick grepping and file scanning, not deep code review. Deep dives happen in the dedicated companion skill (`/seo-audit`, `/geo-audit`, `/threat-model`, etc.) — not inside the initial sweep.
+**Do NOT spend more than 30 seconds per dimension.** Use quick text searches and file scans. Use the dedicated companion skills for detailed investigations, such as `/seo-audit`, `/geo-audit`, and `/threat-model`. Do not perform those investigations during the initial audit.
 
 ### Step 4: Compile the verdict
 
-Count PASS/WARN/FAIL, apply the verdict logic, format the output table.
+Count PASS/WARN/FAIL. Apply the verdict logic. Format the output table.
 
 ### Step 5: Output
 
@@ -324,19 +324,19 @@ Print the table exactly as shown in the "Output format" section above. Add the f
 
 **Do NOT auto-create tickets for the findings.** The ticket option is part of the "Next steps" question in § "Routing to full audits". Create tickets only when the operator selects it. The launch check is advisory.
 
-## Workflow mode (`--workflow`) — opt-in parallel + adversarial verify
+## Workflow mode (`--workflow`): opt-in parallel + adversarial verify
 
-When invoked as `/launch-check --workflow [project-path]`, replace the serial Steps 3–5 with a single `Workflow` tool invocation that fans the 10 dimensions out concurrently and adversarially verifies the findings, then resume at **Step 6 (persist) unchanged**. Steps 1–2 (resolve project + detect stack) and Step 6 (persist + trend) are identical to the default path — only the *evaluation* of the 10 dimensions changes from serial to fanned-out.
+For `/launch-check --workflow [project-path]`, replace serial Steps 3–5 with one `Workflow` tool invocation. Run the 10 dimensions concurrently. Independently verify the findings. Then resume at **Step 6 (persist) unchanged**. Keep Steps 1–2 (resolve project + detect stack) and Step 6 (persist + trend) identical to the default procedure. Only the evaluation of the 10 dimensions changes from serial to parallel.
 
 ### Why a Workflow here (and why opt-in)
 
-The 10 dimensions are **independent and read-only** — no shared writes, no cross-dimension data dependency, no human gate. That's the canonical fan-out shape: evaluate all 10 in parallel, then have an independent skeptic try to refute each FAIL/WARN before it reaches the verdict (the false-positive killer). The trade-off is token cost — a workflow run spawns ~10–20 agents versus one serial pass — so this is **opt-in**, never the default. Rationale: AgDR-0055.
+The 10 dimensions are **independent and read-only**. They have no shared writes, dependencies between dimensions, or human gate. Evaluate all 10 in parallel. Then use an independent skeptic to try to refute each FAIL/WARN before the verdict. This removes false positives. A workflow run starts ~10–20 agents instead of one serial pass, which costs more tokens. Therefore this mode is **opt-in**, never the default. Rationale: AgDR-0055.
 
-**Prerequisite:** the `Workflow` tool requires explicit opt-in to multi-agent orchestration. The `--workflow` flag *is* that opt-in — when the operator passes it, author and run the workflow below. Without the flag, run the serial path and do NOT invoke `Workflow`.
+**Prerequisite:** the `Workflow` tool requires explicit opt-in to multi-agent orchestration. The `--workflow` flag supplies that opt-in. When the operator passes it, author and run the workflow below. Without the flag, run the serial procedure. Do NOT invoke `Workflow`.
 
 ### The canonical workflow script
 
-Author and run this via the `Workflow` tool (adapt the project name / stack-skip set from Steps 1–2). The dimension prompts reuse the **exact PASS/WARN/FAIL criteria** from "The 9 dimensions" / row-10 below — do not invent new criteria. Auto-PASS the not-applicable dimensions per the existing rules (e.g. SEO/GEO/perf auto-PASS for a non-web project, analytics auto-PASS for a CLI/library) by passing them as already-resolved rather than spawning an agent.
+Author and run this via the `Workflow` tool. Adapt the project name and stack-skip set from Steps 1–2. Reuse the **exact PASS/WARN/FAIL criteria** from "The 9 dimensions" / row-10 below in the dimension prompts. Do not invent new criteria. Apply the existing auto-PASS rules to dimensions that do not apply. Examples include SEO/GEO/performance for non-web projects and analytics for a CLI/library. Pass these as already-resolved results instead of starting an agent.
 
 ```javascript
 export const meta = {
@@ -385,7 +385,7 @@ const evaluated = await pipeline(
   (res, d) => {
     if (!res) return null
     if (res.status === 'PASS') return res            // nothing to refute
-    // Adversarially verify only WARN/FAIL — the findings that move the verdict.
+    // Adversarially verify only WARN/FAIL: the findings that move the verdict.
     return agent(
       `Adversarially REFUTE this ${d.label} finding for ${args.projectName}: "${res.finding}" ` +
       `(evidence: ${res.evidence || 'none'}). Default upheld=false if you cannot independently confirm it. ` +
@@ -405,29 +405,29 @@ return { results: [...preResolved, ...evaluated.filter(Boolean)] }
 ### After the workflow returns
 
 1. Take `results[]` (one row per dimension, each with `status` / `score` / `finding`).
-2. Count PASS/WARN/FAIL, apply the **same verdict logic** ("Verdict logic" table above) — go / go-with-warnings / conditional-go / no-go.
-3. Print the **same verdict table** as the serial path (Step 5 "Output format"), with the same full-audit offers (§ "Routing to full audits").
-4. **Persist via Step 6 unchanged** — build the same superset payload (`scores{}` from each row's `score`, `findings[]` from the WARN/FAIL rows), call `audit_run_persist`, then `audit_render_trend`. The history store, schema, and `render-trend.sh` chart are identical to a serial run, so trend continuity is preserved across serial↔workflow runs.
+2. Count PASS/WARN/FAIL. Apply the **same verdict logic** ("Verdict logic" table above): go / go-with-warnings / conditional-go / no-go.
+3. Print the **same verdict table** as the serial procedure (Step 5 "Output format"). Include the same full-audit offers (§ "Routing to full audits").
+4. **Persist via Step 6 unchanged**. Build the same superset payload: `scores{}` from each row's `score`, and `findings[]` from WARN/FAIL rows. Call `audit_run_persist`. Then call `audit_render_trend`. Keep the history store, schema, and `render-trend.sh` chart identical to a serial run. This retains trend continuity across serial↔workflow runs.
 
 ### Degrade gracefully
 
-If the `Workflow` tool is unavailable in the current Claude Code installation, say so in one line and fall back to the serial Steps 3–5. The audit must still complete — `--workflow` is an optimisation, not a hard dependency.
+If the `Workflow` tool is unavailable in Claude Code, state this in one line. Use serial Steps 3–5 instead. Complete the audit. `--workflow` is an optimisation, not a required dependency.
 
 ### Step 6: Persist the run + render the trend
 
-After the verdict table, persist this run to the project's history store via the shared audit-history lib and append a trend section if there are ≥ 2 prior runs.
+After the verdict table, save this run to the project's history store via the shared audit-history library. Append a trend section if ≥ 2 prior runs exist.
 
-This step was refactored as part of #218 to consume `_lib-audit-history.sh` (the same lib that powers `/threat-model`, `/security-review`, and the other audit skills). Behaviour is preserved: the JSON schema is the same superset shape, the chart is rendered by the same `render-trend.sh` (dispatched from inside the lib), and adopters' existing run-history at the legacy path is still picked up by the trend renderer.
+The #218 refactor changed this step to use `_lib-audit-history.sh`. The same library supports `/threat-model`, `/security-review`, and the other audit skills. Behaviour stays the same. The JSON schema keeps the same superset structure. The library dispatches to the same `render-trend.sh` to render the chart. The trend renderer still reads adopters' existing run history at the legacy path.
 
 #### 6a. Resolve project name + score + verdict
 
-`<project-name>` is the project's registered name in `apexyard.projects.yaml`. If the project isn't registered (e.g. someone runs `/launch-check` on a directory that's never been onboarded), use the basename of the project path; tell the operator to `/handover` it for cross-machine trend continuity.
+`<project-name>` is the project's registered name in `apexyard.projects.yaml`. If the project has no registration, use the basename of the project path. This can occur when someone runs `/launch-check` on a directory without prior onboarding. Tell the operator to run `/handover` for cross-machine trend continuity.
 
 The headline score is the unweighted mean of `scores.*`, rounded to int. The verdict is one of `go` / `go-with-warnings` / `conditional-go` / `no-go` (launch-check-specific four-state vocabulary, preserved from the existing skill).
 
 #### 6b. Build payload + body, persist via the lib
 
-The lib's `audit_run_persist` accepts arbitrary stdin JSON and augments it with top-level `ts` / `dimension` / `verdict` / `score` fields, then writes both a JSON file and an MD file. For launch-check the JSON payload is a SUPERSET — it includes the legacy `scores{}` map (for `render-trend.sh` to plot) AND a derived `findings[]` array (for the canonical schema):
+The library's `audit_run_persist` accepts arbitrary stdin JSON. It adds top-level `ts` / `dimension` / `verdict` / `score` fields. Then it writes a JSON file and an MD file. For launch-check, the JSON payload is a SUPERSET. It includes the legacy `scores{}` map for `render-trend.sh` to plot. It also includes a derived `findings[]` array for the canonical schema:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-audit-history.sh"
@@ -446,8 +446,8 @@ payload=$(mktemp); cat > "$payload" <<'EOF'
   },
   "top_risks": ["No cookie consent banner", "Missing /health endpoint"],
   "findings": [
-    {"id": "compliance",  "severity": "low",    "status": "open", "summary": "compliance score 76 — cookie consent banner missing"},
-    {"id": "performance", "severity": "medium", "status": "open", "summary": "performance score 68 — bundle > 250KB"}
+    {"id": "compliance",  "severity": "low",    "status": "open", "summary": "compliance score 76: cookie consent banner missing"},
+    {"id": "performance", "severity": "medium", "status": "open", "summary": "performance score 68: bundle > 250KB"}
   ]
 }
 EOF
@@ -480,9 +480,9 @@ rm -f "$payload" "$body"
 
 `audit_run_persist` writes:
 
-- `projects/<name>/audits/launch-check/runs/<ts>.json` — JSON with everything the lib added on top of the payload (top-level `ts`, `dimension: launch-check`, `verdict`, `score`, `schema_version`) AND everything in the original payload (`scores{}`, `branch`, `commit`, `top_risks[]`, `findings[]`, derived `stats{}`)
-- `projects/<name>/audits/launch-check/<ts>.md` — frontmatter + the body above
-- `projects/<name>/audits/launch-check/.gitignore` — driven by the per-dim `.audit-history-tracked` marker presence
+- `projects/<name>/audits/launch-check/runs/<ts>.json`: JSON with all library additions and the original payload. Library additions include top-level `ts`, `dimension: launch-check`, `verdict`, `score`, and `schema_version`. The original payload includes `scores{}`, `branch`, `commit`, `top_risks[]`, `findings[]`, and derived `stats{}`.
+- `projects/<name>/audits/launch-check/<ts>.md`: frontmatter and the body above
+- `projects/<name>/audits/launch-check/.gitignore`: depends on the presence of the dimension's `.audit-history-tracked` marker
 
 **JSON schema is a SUPERSET.** The canonical fields (`ts`, `dimension`, `verdict`, `score`, `findings[]`, `stats{}`, `schema_version`) coexist with the launch-check-specific fields (`scores{}`, `branch`, `commit`, `top_risks[]`). The legacy `render-trend.sh` reads `ts` / `scores` / `verdict` and works unchanged. The new generic `audit_render_trend` reads `ts` / `score` / `verdict` and works for the rest of the audit family.
 
@@ -492,31 +492,31 @@ rm -f "$payload" "$body"
 audit_render_trend "<project-name>" "launch-check" 5
 ```
 
-- The lib internally dispatches to `render-trend.sh` for the `launch-check` dimension — byte-equal output to the pre-#218 chart (mean of `scores.*` on Y-axis, score-delta notes, ASCII chart).
-- Crucially, the lib's `audit_run_list` merges JSON from the canonical path (`projects/<name>/audits/launch-check/runs/`) AND the legacy path (`projects/<name>/launch-check/runs/`) — so adopters' existing history continues to render across the migration. No `mv` required.
+- The library dispatches to `render-trend.sh` for the `launch-check` dimension. Its output exactly matches the pre-#218 chart: mean of `scores.*` on the Y-axis, score-delta notes, and ASCII chart.
+- The library's `audit_run_list` merges JSON from the canonical path (`projects/<name>/audits/launch-check/runs/`) and the legacy path (`projects/<name>/launch-check/runs/`). Adopters' existing history therefore continues to render across the migration. No `mv` is necessary.
 - Output is a markdown trend block (heading + table + ASCII chart). Append it to this run's MD artefact and to the chat output.
 
 #### 6d. Opt-in commit (history-tracked marker)
 
-The per-dimension marker (`.audit-history-tracked`) sits inside the dimension's audit dir and controls whether `runs/*.json` files are gitignored:
+The per-dimension marker (`.audit-history-tracked`) is in the dimension's audit directory. It controls whether git ignores `runs/*.json` files:
 
 ```bash
 # Opt in to commit launch-check history
 touch projects/<name>/audits/launch-check/.audit-history-tracked
 ```
 
-The lib re-evaluates the marker on every persist; toggling is free. The MD artefact at `<dim_dir>/<ts>.md` is committed regardless — that's the durable human-readable artefact.
+The library checks the marker on every save. You can change it at any time. The MD artefact at `<dim_dir>/<ts>.md` is committed regardless of the marker. It is the durable human-readable artefact.
 
-**Migration note for adopters with existing history:** the legacy marker at `projects/<name>/launch-check/.launch-check-history-tracked` continues to apply to that path's `runs/`. To consolidate trees, `mv projects/<name>/launch-check/* projects/<name>/audits/launch-check/` after backing up; the lib's renderer will read the consolidated tree on the next run. Consolidation is optional — the read-merge happens transparently if you leave both trees in place.
+**Migration note for adopters with existing history:** the legacy marker at `projects/<name>/launch-check/.launch-check-history-tracked` continues to apply to that path's `runs/`. To consolidate trees, create a backup first. Then run `mv projects/<name>/launch-check/* projects/<name>/audits/launch-check/`. The library's renderer reads the consolidated tree on the next run. Consolidation is optional. If you retain both trees, the library reads and merges them automatically.
 
-## Trend-only mode — `/launch-check trend [project-path]`
+## Trend-only mode: `/launch-check trend [project-path]`
 
-Read-only mode that produces just the trend section (no full audit, no per-dimension grep). Useful for "are we trending up?" without re-running the costly sweep.
+This read-only mode produces only the trend section. It runs no full audit or searches for each dimension. It shows whether results improve without repeating the costly audit.
 
 Process:
 
 1. Source `_lib-audit-history.sh` (same as Step 6).
-2. Call `audit_render_trend "<project-name>" "launch-check" 5`. The lib reads both the canonical path AND the legacy path; if the merged set has < 2 runs the call is silent and you tell the operator there's no trend yet.
+2. Call `audit_render_trend "<project-name>" "launch-check" 5`. The library reads both the canonical and legacy paths. If the merged set has < 2 runs, the call prints nothing. Tell the operator that no trend exists yet.
 3. Print the renderer's output.
 
 Do NOT run the 9-dimension sweep in this mode. Do NOT write any new JSON. This mode is purely for reviewing existing history.
@@ -526,12 +526,12 @@ Do NOT run the 9-dimension sweep in this mode. Do NOT write any new JSON. This m
 1. **Scannable in 10 seconds.** One table, one verdict, one blockers list. No walls of text.
 2. **One row per dimension.** Details on demand, not upfront.
 3. **30 seconds per dimension.** Quick grep and file scanning, not deep code review.
-4. **Auto-PASS non-applicable dimensions.** A CLI doesn't need a cookie banner.
+4. **Auto-PASS non-applicable dimensions.** A CLI does not need a cookie banner.
 5. **Advisory, not blocking.** The user decides go/no-go based on the findings. The skill does NOT block deploys mechanically.
-6. **Don't create tickets unprompted.** Offer them as a separate option in the "Next steps" question. Let the user decide.
+6. **Do not create tickets unprompted.** Offer them as a separate option in the "Next steps" question. Let the user decide.
 7. **Run from the project directory.** The skill checks `workspace/<project>/`, not the ops repo.
-8. **Persist every run via the lib.** Step 6 always calls `audit_run_persist`, regardless of opt-in commit state. The `.audit-history-tracked` marker only controls whether the JSON files are committed; the MD artefacts are committed unconditionally and persistence happens on every run.
-9. **Resolve paths via the lib.** `audit_resolve_dir` (inside `_lib-audit-history.sh`) calls `portfolio_projects_dir` for you — the SKILL doesn't need to source the portfolio helper directly any more.
+8. **Persist every run via the lib.** Step 6 always calls `audit_run_persist`, regardless of opt-in commit state. The `.audit-history-tracked` marker only controls whether the JSON files are committed. The MD artefacts are committed unconditionally. The library saves every run.
+9. **Resolve paths via the lib.** `audit_resolve_dir` (inside `_lib-audit-history.sh`) calls `portfolio_projects_dir` for you. The SKILL no longer needs to source the portfolio helper directly.
 
 ## Implementation notes
 
@@ -539,8 +539,8 @@ Persistence + trend logic ships as a shared shell helper that all audit skills c
 
 | File | Purpose |
 |------|---------|
-| `.claude/hooks/_lib-audit-history.sh` | Audit-history library shared with /threat-model, /security-review, etc. (4 functions: `audit_resolve_dir`, `audit_run_persist`, `audit_run_list`, `audit_render_trend`) |
-| `render-trend.sh` (this skill's dir) | Legacy chart renderer for the launch-check dimension; the lib's `audit_render_trend` dispatches to it when the dimension is `launch-check` so the chart shape stays byte-equal across the #218 refactor |
+| `.claude/hooks/_lib-audit-history.sh` | Audit-history library shared with /threat-model, /security-review, and other audit skills. Four functions: `audit_resolve_dir`, `audit_run_persist`, `audit_run_list`, `audit_render_trend`. |
+| `render-trend.sh` (this skill's dir) | Legacy chart renderer for the launch-check dimension. The library's `audit_render_trend` dispatches to it when the dimension is `launch-check`. The chart stays identical across the #218 refactor. |
 
 Design rationale:
 
@@ -549,4 +549,4 @@ Design rationale:
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

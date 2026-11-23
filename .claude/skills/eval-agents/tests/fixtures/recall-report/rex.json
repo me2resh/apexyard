@@ -1,0 +1,54 @@
+{
+  "agent": "rex",
+  "schema_version": 1,
+  "entries": [
+    {
+      "id": "20261121-filter",
+      "pr": 7,
+      "repo": "me2resh/apexyard",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "diff_range": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa~1..aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "oracle": {
+        "source": "human",
+        "established_by": "Synthetic fixture for scoring tests. This is not historical evidence."
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "Synthetic test defect.",
+          "severity": "HIGH",
+          "location": "fixture.txt"
+        },
+        {
+          "id": "D2",
+          "description": "Second synthetic test defect.",
+          "severity": "HIGH",
+          "location": "fixture.txt"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "APPROVED",
+        "was_justified": false
+      },
+      "notes": "Synthetic test fixture. This entry is not corpus evidence."
+    },
+    {
+      "id": "fixture-control",
+      "pr": 7,
+      "repo": "me2resh/apexyard",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "diff_range": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa~1..aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "oracle": {
+        "source": "human",
+        "established_by": "Synthetic fixture for scoring tests. This is not historical evidence."
+      },
+      "ground_truth_defects": [],
+      "recorded_verdict": {
+        "verdict": "APPROVED",
+        "was_justified": true
+      },
+      "notes": "Synthetic test fixture. This entry is not corpus evidence.",
+      "control_for": "20261121-filter"
+    }
+  ]
+}

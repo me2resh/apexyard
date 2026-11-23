@@ -8,13 +8,13 @@ effort: medium
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /setup — ApexYard First-Run Bootstrap
+# /setup: ApexYard First-Run Bootstrap
 
 Configures `onboarding.yaml` for a new ApexYard fork in three exchanges instead of eight sequential questions. The "describe, propose, confirm" pattern gets most users from fork to working in under 2 minutes.
 
 ## Path resolution
 
-Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+Use `.claude/hooks/_lib-portfolio-paths.sh` to resolve these paths. Read the registry path with `portfolio_registry`. Read the per-project docs directory with `portfolio_projects_dir`. Read the ideas backlog with `portfolio_ideas_backlog`. Source the helper at the top of any bash block that touches those paths:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -22,11 +22,11 @@ source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
 registry=$(portfolio_registry)
 ```
 
-Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Do not hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks. The helper resolves the paths for the adopter's mode. See `docs/multi-project.md`.
 
 ## When this runs
 
-The `onboarding-check.sh` SessionStart hook prompts the user to run `/setup` when the fork isn't configured — either there's no real `onboarding.yaml` yet (a fresh clone ships only the tracked `onboarding.example.yaml` placeholder), or `onboarding.yaml` still has the `company.name: "Your Company Name"` placeholder. After `/setup` fills in real values, the hook goes silent on this machine. Note (#517): in single-fork mode `onboarding.yaml` is GITIGNORED — real config stays local — so each fresh clone runs `/setup` once (it copies the example and fills it in). In split-portfolio v2 mode the real config is committed in the private sibling repo, so it carries across clones.
+The `onboarding-check.sh` SessionStart hook prompts the user to run `/setup` when the fork is not configured. This means either no real `onboarding.yaml` exists, or it still has the `company.name: "Your Company Name"` placeholder. A fresh clone ships only the tracked `onboarding.example.yaml` placeholder. After `/setup` fills in real values, the hook goes silent on this machine. Note (#517): in single-fork mode, `onboarding.yaml` is GITIGNORED. Real config stays local. Thus, each fresh clone runs `/setup` once to copy the example and complete it. In split-portfolio v2 mode the real config is committed in the private sibling repo, so it carries across clones.
 
 Re-running `/setup` on an already-configured fork shows the current config and asks what to update. Use `--reset` to clear everything and start from scratch.
 
@@ -37,11 +37,11 @@ Preserve multiple selections where the menu permits them. Split menus with more 
 Keep single yes/no and ticket confirmation prompts as written.
 The prose menus below are fallbacks only when the harness lacks `AskUserQuestion`.
 
-> **Tip for the agent driving setup**: `docs/multi-project.md` is the canonical reference for portfolio modes, v1→v2 migration, custom-templates path-mirroring, the FAQ, and trade-offs. As of #372 it is **not** auto-imported into the session context (the 70k-char file was loading ~18k tokens into every session, even for adopters who never re-run setup). The steps below are self-contained for the mechanical setup. If a first-timer asks a question mid-setup that this SKILL doesn't answer directly, `Read docs/multi-project.md` on demand rather than guessing.
+> **Tip for the agent driving setup**: `docs/multi-project.md` is the canonical reference for portfolio modes, v1→v2 migration, custom-templates path-mirroring, the FAQ, and trade-offs. As of #372 it is **not** auto-imported into the session context (the 70k-char file was loading ~18k tokens into every session, even for adopters who never re-run setup). The steps below are self-contained for the mechanical setup. If a first-timer asks a question mid-setup that this SKILL does not answer directly, `Read docs/multi-project.md` on demand rather than guessing.
 
-### Step −1: Pre-flight — refuse if `jq` is missing (REQUIRED)
+### Step −1: Pre-flight: refuse if `jq` is missing (REQUIRED)
 
-`/setup` (and every framework hook that reads `.claude/project-config.json` overrides) depends on `jq`. Without it, override reads silently fall back to defaults — the adopter's `.ui_paths`, `.tracker.*`, `.migration_paths`, etc. have zero effect and there's no error to debug. Refuse to proceed until jq is on PATH so the operator never sees the silently-degraded state.
+`/setup` (and every framework hook that reads `.claude/project-config.json` overrides) depends on `jq`. Without it, override reads silently use defaults. The adopter's `.ui_paths`, `.tracker.*`, `.migration_paths`, and similar keys have zero effect. No error identifies the problem. Refuse to proceed until jq is on PATH so the operator never sees the silently-degraded state.
 
 Run this **before any other tool call** in the skill:
 
@@ -62,11 +62,11 @@ MSG
 fi
 ```
 
-The sibling `check-jq-installed.sh` SessionStart hook surfaces the same gap as a one-line banner outside `/setup` so a fork that's already configured (and never re-runs `/setup`) still sees the warning. See AgDR-0038 for the design rationale.
+The sibling `check-jq-installed.sh` SessionStart hook surfaces the same gap as a one-line banner outside `/setup` so a fork that is already configured (and never re-runs `/setup`) still sees the warning. See AgDR-0038 for the design rationale.
 
 ### Step 0: Mark this session as bootstrap (REQUIRED)
 
-`/setup` runs BEFORE any portfolio is configured, so no project tickets can exist yet. The `require-active-ticket.sh` PreToolUse hook would otherwise block every Edit / Write / Bash-write the skill needs to make. To stay coherent with the ticket-first rule without forcing adopters to file a placeholder ticket against nothing, the skill writes a one-line marker at the path from `active_bootstrap_marker_path` containing the skill name. The hook reads the marker and exempts skills listed in `ticket.bootstrap_skills` (in `.claude/project-config.defaults.json` — `setup` is on the default list).
+`/setup` runs BEFORE any portfolio is configured, so no project tickets can exist yet. The `require-active-ticket.sh` PreToolUse hook would otherwise block every Edit / Write / Bash-write the skill needs to make. To stay coherent with the ticket-first rule without forcing adopters to file a placeholder ticket against nothing, the skill writes a one-line marker at the path from `active_bootstrap_marker_path` containing the skill name. The hook reads the marker and exempts skills listed in `ticket.bootstrap_skills` (in `.claude/project-config.defaults.json`: `setup` is on the default list).
 
 Run this **before any tool calls that edit files**:
 
@@ -83,13 +83,13 @@ See AgDR-0011 + me2resh/apexyard#150 for the design rationale.
 
 ### Step 0.5: Install the tracked git hooks (REQUIRED)
 
-`core.hooksPath` is a **per-clone** git config value — it lives in `.git/config`, never committed, so every fresh clone of the ops fork starts unset regardless of how many sibling clones already have it configured. Left unset, `.githooks/pre-push` (tracked, but inert without this) never runs — not on a terminal `git push`, and not on a Claude Code-driven one either, since git invokes the same hook the same way regardless of which process ran the push. There is no equivalent Claude Code path anymore: `pre-push-gate.sh` only reminds a session to install this hook when a clone hasn't (#1366, AgDR-0173); it does not run this repo's configured `.pre_push.commands` itself. Run the installer once per fork, here, so a fresh `/setup` always leaves the clone actually protected:
+`core.hooksPath` is a **per-clone** git config value. It lives in `.git/config`, never committed, so every fresh clone of the ops fork starts unset regardless of how many sibling clones already have it configured. Left unset, `.githooks/pre-push` (tracked, but inert without this) never runs: not on a terminal `git push`, and not on a Claude Code-driven one either, since git invokes the same hook the same way regardless of which process ran the push. There is no equivalent Claude Code path anymore: `pre-push-gate.sh` only reminds a session to install this hook when a clone has not (#1366, AgDR-0173). It does not run this repo's configured `.pre_push.commands` itself. Run the installer once per fork, here, so a fresh `/setup` always leaves the clone actually protected:
 
 ```bash
 bash bin/install-git-hooks.sh
 ```
 
-Idempotent — a re-run on an already-configured clone reports "no change" and exits 0. If it exits 1 (a real, different `core.hooksPath` the operator configured on purpose), report that plainly and move on without `--force` — overriding a deliberate adopter choice isn't this step's call to make silently. **If it exits 4, treat this as a hard failure of the step, not a warning**: exit 4 means the `git config core.hooksPath` write did not take effect (a stale `.git/config.lock`, a multi-valued key) and the installer is refusing to report success on an unverified write — this clone is **NOT** protected. Show the operator the installer's own error output verbatim and ask them to retry (`bash bin/install-git-hooks.sh`) before continuing `/setup`; do not silently proceed as if the clone were covered. See `bin/install-git-hooks.sh --help` and me2resh/apexyard#1086 for the full state machine (fresh / idempotent / stale-repair / deliberate-third-party / write-failed).
+Idempotent: a re-run on an already-configured clone reports "no change" and exits 0. If it exits 1 (a real, different `core.hooksPath` the operator configured on purpose), report that plainly and move on without `--force`: overriding a deliberate adopter choice is not this step's call to make silently. **If it exits 4, treat this as a hard failure of the step, not a warning**: exit 4 means the `git config core.hooksPath` write did not take effect (a stale `.git/config.lock`, a multi-valued key) and the installer is refusing to report success on an unverified write. This clone is **NOT** protected. Show the operator the installer's own error output verbatim and ask them to retry (`bash bin/install-git-hooks.sh`) before continuing `/setup`. Do not silently proceed as if the clone were covered. See `bin/install-git-hooks.sh --help` and me2resh/apexyard#1086 for the full state machine (fresh / idempotent / stale-repair / deliberate-third-party / write-failed).
 
 ### Step 0.6: Write this clone's rule exclude (REQUIRED)
 
@@ -109,14 +109,14 @@ SessionStart repairs missing or relocated entries. See AgDR-0233.
 
 Read `onboarding.yaml`. Four modes:
 
-- **First run** (`onboarding.yaml` absent, or placeholder values detected): proceed to Step 2. The real file is gitignored (#517), so an absent `onboarding.yaml` with a present `onboarding.example.yaml` is the normal fresh-fork state — Step 6 copies the example before editing.
-- **Already configured** (real values): show a summary of the current config and ask "What would you like to update?" — then jump to the specific section. Don't re-ask everything.
+- **First run** (`onboarding.yaml` absent, or placeholder values detected): proceed to Step 2. The real file is gitignored (#517), so an absent `onboarding.yaml` with a present `onboarding.example.yaml` is the normal fresh-fork state: Step 6 copies the example before editing.
+- **Already configured** (real values): show a summary of the current config and ask "What would you like to update?": then jump to the specific section. Do not re-ask everything.
 - **`--reset` flag**: restore `onboarding.yaml` to the template defaults (`cp onboarding.example.yaml onboarding.yaml`) and proceed as first run.
-- **`--enable-lsp` flag** (retrofit mode): skip Steps 2 / 2a / 2b / 3-7 entirely and jump straight to Step 2c (LSP enablement). Use this when an existing adopter has a fully-configured fork and only wants to turn on LSP without re-running the whole bootstrap. The flag honours the same idempotence rules as a first-run pass through Step 2c — if LSP is already enabled, the step reports "already enabled" and exits cleanly. Step 0 (bootstrap marker) and Step 8 (clear marker) still run so the ticket gate stays coherent.
+- **`--enable-lsp` flag** (retrofit mode): skip Steps 2 / 2a / 2b / 3-7 entirely and jump straight to Step 2c (LSP enablement). Use this when an existing adopter has a fully-configured fork and only wants to turn on LSP without re-running the whole bootstrap. The flag honours the same idempotence rules as a first-run pass through Step 2c: if LSP is already enabled, the step reports "already enabled" and exits cleanly. Step 0 (bootstrap marker) and Step 8 (clear marker) still run so the ticket gate stays coherent.
 
-Detection: `[ ! -f onboarding.yaml ]` (fresh fork — only the example is present) OR `grep -q '"Your Company Name"' onboarding.yaml` (file present but still a template) → treat as first run.
+Detection: `[ ! -f onboarding.yaml ]` (fresh fork: only the example is present) OR `grep -q '"Your Company Name"' onboarding.yaml` (file present but still a template) → treat as first run.
 
-### Step 2: One question — describe your world
+### Step 2: One question: describe your world
 
 Ask a single open-ended question:
 
@@ -129,9 +129,9 @@ GitHub Issues for tracking, 1-week sprints."
 
 **Do NOT ask sequential questions.** The whole point of this skill is to collapse the discovery into one natural-language exchange. The user describes their world; you parse it.
 
-### Step 2a: Privacy gate — ask if any projects are private
+### Step 2a: Privacy gate: ask if any projects are private
 
-Before parsing the description into config, ask one privacy question — this determines whether the adopter needs single-fork or split-portfolio mode (see `docs/multi-project.md`):
+Before parsing the description into config, ask one privacy question. This determines whether the adopter needs single-fork or split-portfolio mode (see `docs/multi-project.md`):
 
 ```
 Quick one before I propose your config: are any of the projects you'll
@@ -155,17 +155,17 @@ Branch on the answer:
 - **paid plan** (Pro / Team / Enterprise) → continue with **single-fork mode**, but mention that the registry will be on the (private-fork-eligible) fork and is fine.
 - **y** (any private projects on GitHub Free) → switch to **split-portfolio mode** (Step 2b below).
 
-Detection of an existing setup. Either form counts as "already in split-portfolio mode" — skip Step 2b:
+Detection of an existing setup. Either form counts as "already in split-portfolio mode". Skip Step 2b:
 
 - `.claude/project-config.json` has a `portfolio:` block pointing at a sibling repo (config-block mode, recommended; introduced #145), OR
 - `apexyard.projects.yaml` is a symlink (`test -L apexyard.projects.yaml`; legacy mode, framework-version < #145).
 
 ### Step 2b: Walk through split-portfolio mode (only if Step 2a triggered)
 
-The full setup lives in `docs/multi-project.md` § "Split-portfolio mode: public framework + private portfolio". This skill walks through it interactively. The recommended path uses the **`portfolio:` config block** (introduced in #145) rather than symlinks — both work, but the config block is the first-class option:
+The full setup lives in `docs/multi-project.md` § "Split-portfolio mode: public framework + private portfolio". This skill walks through it interactively. The recommended path uses the **`portfolio:` config block** (introduced in #145) rather than symlinks. Both work, but the config block is the first-class option:
 
 1. **Confirm the layout**: "Two repos in your account: `your-org/apexyard` (public, this fork) + `your-org/<private-name>` (new private repo for the portfolio). Both clones sit side-by-side on disk. OK?"
-2. **Pick the private repo name**: default suggestion **`your-org/<fork>-portfolio`** (e.g. `your-org/apexyard-portfolio` if you kept the fork name; `your-org/cos-portfolio` if you renamed the fork to `cos`). Compute the `<fork>` part from the public-fork repo name (`gh repo view --json name -q .name`) so the suggestion is correct even when the fork was renamed. Operator confirms or overrides — any name works, the framework only cares about the local path.
+2. **Pick the private repo name**: default suggestion **`your-org/<fork>-portfolio`** (for example, `your-org/apexyard-portfolio` if you kept the fork name; `your-org/cos-portfolio` if you renamed the fork to `cos`). Compute the `<fork>` part from the public-fork repo name (`gh repo view --json name -q .name`) so the suggestion is correct even when the fork was renamed. Operator confirms or overrides: any name works, the framework only cares about the local path.
 
 Record `<owner>` and `<name>` when the operator confirms the name. Later checks use that pair. Do not derive `<owner>/<name>` from the remote URL. The reuse path skips item 3 and still uses this pair.
 
@@ -197,12 +197,12 @@ Before item 4, run `git rev-parse --show-toplevel` in the ops fork. Record the p
 5. **Initialise the portfolio (v2 layout).** Create these files under `<abs-path>`:
    - `apexyard.projects.yaml` with `version: 1`, `projects: []`, `defaults: {status: active, ticket_prefix: GH}`
    - empty `projects/` dir (with a `.gitkeep` so the dir survives the initial commit)
-   - empty `workspace/` dir (with a `.gitkeep`) — managed-project clones land here
-   - **`onboarding.yaml`** seeded from the framework template — split-portfolio v2 (#242) moves company/team/stack config to the private repo too, so the public fork stays slim
+   - empty `workspace/` dir (with a `.gitkeep`): managed-project clones land here
+   - **`onboarding.yaml`** seeded from the framework template: split-portfolio v2 (#242) moves company/team/stack config to the private repo too, so the public fork stays slim
    - empty **`custom-skills/`** dir + a one-paragraph `custom-skills/README.md` explaining the convention. Company-specific proprietary skills (`/file-internal-bug`, `/check-policy`, etc.) live as `custom-skills/<name>/SKILL.md` here; the public fork's `link-custom-skills.sh` SessionStart hook symlinks each into `.claude/skills/<name>/` so Claude Code discovers them. Custom skill names override framework skills of the same name (warning printed at SessionStart). See `docs/multi-project.md` § "Private custom skills + handbooks" for the full convention. (Added in #243.)
    - empty **`custom-handbooks/`** dir + a one-paragraph `custom-handbooks/README.md` explaining the convention. Company-confidential coding standards live as `custom-handbooks/{architecture,general,language/<lang>}/*.md` here, mirroring the public `handbooks/` path-convention. Rex consumes both layers during code review (advisory by default, blocking with `ENFORCEMENT: blocking` at the top of the file). See `handbooks/README.md` for the format. (Added in #243.)
-   - **`agent-routing.yaml`** seeded from `<fork>/agent-routing.yaml.example` (the framework's worked-examples file). This is the adopter-routing source-of-truth for split-portfolio mode — every adopter override (per-agent model, endpoint, env, timeout) lives here. The seeded file starts as the framework example so adopters see a working shape; the empty `agents: {}` block at the top means zero overrides until edited. The SessionStart sync hook (`apply-agent-routing.sh`, #357) reads it on every session start. See `docs/multi-project.md` § "Centralised agent routing: `agent-routing.yaml`" for the schema. (Added in #351 PR 3.)
-   - `.gitignore` with `workspace/*/` so the inner clones don't get double-tracked in the private repo either
+   - **`agent-routing.yaml`** seeded from `<fork>/agent-routing.yaml.example` (the framework's worked-examples file). This is the adopter-routing source-of-truth for split-portfolio mode: every adopter override (per-agent model, endpoint, env, timeout) lives here. The seeded file starts as the framework example so adopters see a working shape; the empty `agents: {}` block at the top means zero overrides until edited. The SessionStart sync hook (`apply-agent-routing.sh`, #357) reads it on every session start. See `docs/multi-project.md` § "Centralised agent routing: `agent-routing.yaml`" for the schema. (Added in #351 PR 3.)
+   - `.gitignore` with `workspace/*/` so the inner clones do not get double-tracked in the private repo either
 
    The eight seed paths are `apexyard.projects.yaml`, `projects/.gitkeep`, `workspace/.gitkeep`, `onboarding.yaml`, `custom-skills/README.md`, `custom-handbooks/README.md`, `agent-routing.yaml`, and `.gitignore`.
 
@@ -287,9 +287,9 @@ Before item 4, run `git rev-parse --show-toplevel` in the ops fork. Record the p
 
    After two failed checks in one run, stop. Print: "Run /setup again to continue. Nothing reached the forge."
 
-6. **Configure path resolution in the fork** (recommended — v2 config-block mode). Continue here only when item 5 reports that LOCAL, REMOTE, and FORGE match, or when a resume row skips the commit and the push.
+6. **Configure path resolution in the fork** (recommended: v2 config-block mode). Continue here only when item 5 reports that LOCAL, REMOTE, and FORGE match, or when a resume row skips the commit and the push.
    - Append `.gitignore` lines for `apexyard.projects.yaml`, `projects`, and `onboarding.yaml`. Keep the framework's `workspace/*` + `!workspace/README.md` pair: it ignores every adopter workspace entry while leaving the committed convention README visible and re-includable. Do not add a broad `workspace` rule; Git cannot re-include the README when its parent directory is excluded.
-   - Untrack the upstream framework's tracked `projects/README.md` and `onboarding.yaml`: `git rm --cached -r projects onboarding.yaml 2>/dev/null || true`. **Do not untrack `workspace/README.md`** — it is a public framework artefact and stays in the fork per AgDR-0021 § G.
+   - Untrack the upstream framework's tracked `projects/README.md` and `onboarding.yaml`: `git rm --cached -r projects onboarding.yaml 2>/dev/null || true`. **Do not untrack `workspace/README.md`**. It is a public framework artefact and stays in the fork per AgDR-0021 § G.
    - Write `.claude/project-config.json` with the v2 `portfolio:` block pointing at the sibling repo. Substitute the actual sibling-dir name the operator chose for `apexyard-portfolio` below:
 
      ```json
@@ -309,7 +309,7 @@ Before item 4, run `git rev-parse --show-toplevel` in the ops fork. Record the p
 
      The two `custom_*_dir` keys are optional — defaults match `./custom-skills` and `./custom-handbooks` resolved against the ops-fork root. The `agent_routing` key is similarly optional — its default resolves to `./agent-routing.yaml` against the ops-fork root, so single-fork adopters who keep the file at the fork root don't need to set it explicitly. Setting all three explicitly here is the v2 split-portfolio shape and matches what step 5 just created in the private repo.
 
-   - **Write the `.apexyard-fork` marker** at the public-fork root. This is the v2 ops-fork anchor — `_lib-ops-root.sh` and every hook that walks up to find the ops fork looks for this marker first (with the legacy `onboarding.yaml + apexyard.projects.yaml` pair as fallback). **Spec: presence-only — readers MUST ignore content; only file presence matters.** Writers MAY include a single explanatory line so `head .apexyard-fork` is informative for operators encountering it the first time. See [AgDR-0021](../../../docs/agdr/AgDR-0021-split-portfolio-v2-path-resolution.md) § B for the rationale.
+   - **Write the `.apexyard-fork` marker** at the public-fork root. This is the v2 ops-fork anchor: `_lib-ops-root.sh` and every hook that walks up to find the ops fork looks for this marker first (with the legacy `onboarding.yaml + apexyard.projects.yaml` pair as fallback). **Spec: presence-only: readers MUST ignore content; only file presence matters.** Writers MAY include a single explanatory line so `head .apexyard-fork` is informative for operators encountering it the first time. See [AgDR-0021](../../../docs/agdr/AgDR-0021-split-portfolio-v2-path-resolution.md) § B for the rationale.
 
      ```bash
      # Either form is valid — both are presence-only as far as readers are concerned:
@@ -318,9 +318,9 @@ Before item 4, run `git rev-parse --show-toplevel` in the ops fork. Record the p
      # touch .apexyard-fork
      ```
 
-   - Stage `.gitignore` and `.apexyard-fork` for commit — both are per-fork, not per-machine. **Do NOT stage `.claude/project-config.json`** (me2resh/apexyard#1031): it is gitignored and untracked upstream, so `git add` on it exits 1 and the commit step that follows never runs. It is also the wrong thing to commit — in split-portfolio mode its `portfolio` block names the private sibling repo's path, and the ops fork may be public. Do not reach for `git add -f`; that recreates the exact bug #1031 fixed, where a tracked copy is overwritten by any later `git checkout` and the adopter's private config is lost with no way to restore it.
-   - **Legacy fallback (framework-version < #145)**: if the adopter's framework predates the `portfolio:` config block, fall back to creating symlinks pointing at `../<sibling-dir>/apexyard.projects.yaml` and `../<sibling-dir>/projects`. The helper resolves either way. v2 (`onboarding` / `workspace_dir` / `.apexyard-fork`) requires framework ≥ #242 — older forks should run `/update` first to pick up the v2 plumbing before going through this branch.
-7. **Verify**: source `.claude/hooks/_lib-portfolio-paths.sh` and call `portfolio_validate`. Skill MUST refuse to declare success if validate fails — surface the specific failure and ask the operator to fix it before re-running.
+   - Stage `.gitignore` and `.apexyard-fork` for commit. Both are per-fork, not per-machine. **Do NOT stage `.claude/project-config.json`** (me2resh/apexyard#1031). It is gitignored and untracked upstream, so `git add` on it exits 1 and the commit step that follows never runs. It is also the wrong thing to commit: in split-portfolio mode its `portfolio` block names the private sibling repo's path, and the ops fork may be public. Do not reach for `git add -f`; that recreates the exact bug #1031 fixed, where a tracked copy is overwritten by any later `git checkout` and the adopter's private config is lost with no way to restore it.
+   - **Legacy fallback (framework-version < #145)**: if the adopter's framework predates the `portfolio:` config block, fall back to creating symlinks pointing at `../<sibling-dir>/apexyard.projects.yaml` and `../<sibling-dir>/projects`. The helper resolves either way. V2 (`onboarding` / `workspace_dir` / `.apexyard-fork`) requires framework ≥ #242: older forks should run `/update` first to pick up the v2 plumbing before going through this branch.
+7. **Verify**: source `.claude/hooks/_lib-portfolio-paths.sh` and call `portfolio_validate`. Skill MUST refuse to declare success if validate fails: surface the specific failure and ask the operator to fix it before re-running.
 
    ```bash
    source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -334,17 +334,17 @@ Before item 4, run `git rev-parse --show-toplevel` in the ops fork. Record the p
 Run `bash .claude/hooks/write-rule-excludes.sh` again after the split-portfolio config exists.
 This adds the portfolio directory permission for the next session.
 
-Then proceed to Step 2c with the user's earlier description, configuring `onboarding.yaml` as normal. The rest of the skill is unchanged — the only difference between modes is where the registry physically lives.
+Then proceed to Step 2c with the user's earlier description, configuring `onboarding.yaml` as normal. The rest of the skill is unchanged: the only difference between modes is where the registry physically lives.
 
-**Do NOT auto-migrate** an adopter who's already in single-fork mode with private project names already pushed. Direct them to the migration guide in `docs/multi-project.md` § "Migrating from single-fork to split-portfolio" — that flow involves a force-push history rewrite, redacting GitHub Issue / PR bodies, and a backup-branch dance, and is destructive enough to warrant a deliberate, eyes-open run rather than a `/setup` side-effect.
+**Do NOT auto-migrate** an adopter who is already in single-fork mode with private project names already pushed. Direct them to the migration guide in `docs/multi-project.md` § "Migrating from single-fork to split-portfolio". That flow involves a force-push history rewrite, redacting GitHub Issue / PR bodies, and a backup-branch dance, and is destructive enough to warrant a deliberate, eyes-open run rather than a `/setup` side-effect.
 
 ### Step 2c: LSP enablement (recommended)
 
-Background. Claude Code v2.0.74+ ships a built-in LSP (Language Server Protocol) tool that answers semantic queries — "where is this defined?", "find references", "what does this symbol resolve to?" — by talking to a language server (`tsserver`, `pyright`, `gopls`, `rust-analyzer`) instead of grepping the file tree. The LSP spike (PR #184) measured **~3-15× cheaper** input-token cost on shallow semantic queries used by `/code-review`, `/threat-model`, `/security-review`, and `/handover` deep-dives. The framework's encouraged default is **on**.
+Background. Claude Code v2.0.74+ ships a built-in LSP (Language Server Protocol) tool that answers semantic queries: "where is this defined?", "find references", "what does this symbol resolve to?": by talking to a language server (`tsserver`, `pyright`, `gopls`, `rust-analyzer`) instead of grepping the file tree. The LSP spike (PR #184) measured **~3-15× cheaper** input-token cost on shallow semantic queries used by `/code-review`, `/threat-model`, `/security-review`, and `/handover` deep-dives. The framework's encouraged default is **on**.
 
 The manual opt-in path (still documented in `docs/getting-started.md` § "Optional: LSP-aware code navigation") is three steps spread across env-var + binary install + plugin install. This step bakes those three into one offer so the typical adopter gets LSP working out of the box.
 
-#### Step 2c.1 — Machine-spec heuristic for the default
+#### Step 2c.1: Machine-spec heuristic for the default
 
 LSP servers are non-trivial: a cold `gopls` or `rust-analyzer` index on a large repo can spike RAM by 1-4 GB. On constrained machines, LSP is more friction than benefit. Compute a default answer **before** prompting:
 
@@ -366,9 +366,9 @@ else
 fi
 ```
 
-Use `LSP_DEFAULT` as the highlighted choice in the prompt below — the operator can still pick the other option, but the default reflects what the machine can comfortably run.
+Use `LSP_DEFAULT` as the highlighted choice in the prompt below. The operator can still pick the other option, but the default reflects what the machine can comfortably run.
 
-#### Step 2c.2 — Idempotence check (skip if already enabled)
+#### Step 2c.2: Idempotence check (skip if already enabled)
 
 Before prompting, detect whether LSP is already fully enabled on this machine. If both conditions hold, **skip the prompt** and report "already enabled":
 
@@ -404,9 +404,9 @@ LSP already enabled on this machine (env var set in <rc-file>, <server-binary>
 on PATH). Skipping install. Next Claude Code session will use LSP.
 ```
 
-…and continue to Step 3 without prompting. This is the path that retrofit-flag (`/setup --enable-lsp`) re-runs hit on the second invocation — the skill stays silent rather than re-installing.
+…and continue to Step 3 without prompting. This is the path that retrofit-flag (`/setup --enable-lsp`) re-runs hit on the second invocation. The skill stays silent rather than re-installing.
 
-#### Step 2c.3 — Detect the language from the user's description
+#### Step 2c.3: Detect the language from the user's description
 
 Map signals from the `tech_stack` description the operator gave in Step 2 (or read from the existing `onboarding.yaml` in retrofit mode). The mapping table:
 
@@ -417,16 +417,16 @@ Map signals from the `tech_stack` description the operator gave in Step 2 (or re
 | "Go", "Golang" | `go` | `gopls` | `go install golang.org/x/tools/gopls@latest` |
 | "Rust", "Cargo", "rustup" | `rust` | `rust-analyzer` | `rustup component add rust-analyzer` |
 
-If the description mentions **multiple** matching languages (e.g. "TypeScript frontend + Python backend"), pick the language used by the primary application code — i.e. whichever language the operator is most likely to run `/code-review` against. When ambiguous, ask one explicit clarifying question:
+If the description mentions **multiple** matching languages (for example, "TypeScript frontend + Python backend"), pick the language used by the primary application code: that is, Whichever language the operator is most likely to run `/code-review` against. When ambiguous, ask one explicit clarifying question:
 
 ```
 Your stack mentions TypeScript and Python — which one should LSP target
 first? (You can install the other server later by re-running /setup --enable-lsp.)
 ```
 
-If no language matches the table, default to `typescript` (the LSP spike's baseline) and tell the operator they can install another server manually later — don't silently install anything they didn't ask for.
+If no language matches the table, default to `typescript` (the LSP spike's baseline) and tell the operator they can install another server manually later. Do not silently install anything they did not ask for.
 
-#### Step 2c.4 — Ask the operator (with the computed default)
+#### Step 2c.4: Ask the operator (with the computed default)
 
 Present the offer as a single block, with the heuristic default highlighted:
 
@@ -453,13 +453,13 @@ Default for this machine: {LSP_DEFAULT}  ({LSP_DEFAULT_REASON})
 
 Branch on the answer:
 
-- **y** (or operator pressed enter with `LSP_DEFAULT=y`) → proceed to Step 2c.5 and run all three installs without further prompting (unless one fails — see Step 2c.6).
+- **y** (or operator pressed enter with `LSP_DEFAULT=y`) → proceed to Step 2c.5 and run all three installs without further prompting (unless one fails: see Step 2c.6).
 - **n** (or operator pressed enter with `LSP_DEFAULT=n`) → skip Steps 2c.5–2c.7 entirely. Print: *"LSP skipped. You can enable it later via `/setup --enable-lsp` or by following the manual steps in `docs/getting-started.md` § "Optional: LSP-aware code navigation"."* Continue to Step 3.
-- **"ask before each"** (any phrasing — "step through", "one at a time", etc.) → run Step 2c.5 with `INTERACTIVE=1` so each sub-step asks for confirmation before mutating state.
+- **"ask before each"** (any phrasing: "step through", "one at a time", etc.) → run Step 2c.5 with `INTERACTIVE=1` so each sub-step asks for confirmation before mutating state.
 
-#### Step 2c.5 — Run the three install steps
+#### Step 2c.5: Run the three install steps
 
-Each sub-step is **independent and idempotent** — a failure in one doesn't roll back the others, and re-running on a machine where one is already done is a no-op. Print a one-line result for each.
+Each sub-step is **independent and idempotent**: a failure in one does not roll back the others, and re-running on a machine where one is already done is a no-op. Print a one-line result for each.
 
 ##### (a) Refuse on Windows for v1
 
@@ -485,7 +485,7 @@ For each detected language, the install command and its prerequisite check:
 | `go` | `command -v go` | `go install golang.org/x/tools/gopls@latest` |
 | `rust` | `command -v rustup` | `rustup component add rust-analyzer` |
 
-If the prerequisite is missing, refuse gracefully — do NOT attempt to auto-install Node, Python, Go, or Rust runtimes (that's out of scope, and silently installing language runtimes is the wrong shape). Example refusal for TypeScript:
+If the prerequisite is missing, refuse gracefully. Do NOT attempt to auto-install Node, Python, Go, or Rust runtimes (that is out of scope, and silently installing language runtimes is the wrong shape). Example refusal for TypeScript:
 
 ```bash
 if ! command -v npm >/dev/null 2>&1; then
@@ -503,7 +503,7 @@ else
 fi
 ```
 
-The other three languages follow the same shape — prerequisite check → install → verify-on-PATH → report. **Do not** continue to (c) or (d) if (b) fails on its own prerequisite; the env var and plugin without a server is dead weight. Tell the operator what's missing and move on.
+The other three languages follow the same shape: prerequisite check → install → verify-on-PATH → report. **Do not** continue to (c) or (d) if (b) fails on its own prerequisite; the env var and plugin without a server is dead weight. Tell the operator what is missing and move on.
 
 ##### (c) Set the env var idempotently in the shell rc
 
@@ -526,13 +526,13 @@ else
 fi
 ```
 
-Tell the operator they need to either open a new shell or `source "$RC_FILE"` for the env var to take effect in the **current** shell — `/setup` cannot mutate the parent shell's environment from its own subshell.
+Tell the operator they need to either open a new shell or `source "$RC_FILE"` for the env var to take effect in the **current** shell: `/setup` cannot mutate the parent shell's environment from its own subshell.
 
 ##### (d) Print the verified plugin-install commands
 
-The Claude Code plugin-marketplace command shape (`/plugin marketplace add`, `/plugin install <name>@<marketplace>`, `/reload-plugins`) is empirically stable as of Claude Code 2.1.138 — verified end-to-end during me2resh/apexyard#215. The official Anthropic marketplace is `claude-plugins-official`; per-language plugin names come from the verified table at [code.claude.com/docs/en/discover-plugins](https://code.claude.com/docs/en/discover-plugins#code-intelligence).
+The Claude Code plugin-marketplace command shape (`/plugin marketplace add`, `/plugin install <name>@<marketplace>`, `/reload-plugins`) is empirically stable as of Claude Code 2.1.138: verified end-to-end during me2resh/apexyard#215. The official Anthropic marketplace is `claude-plugins-official`; per-language plugin names come from the verified table at [code.claude.com/docs/en/discover-plugins](https://code.claude.com/docs/en/discover-plugins#code-intelligence).
 
-The skill does **not** invoke these commands directly — `/plugin` is a Claude Code UI built-in, not a shell command, so a Bash call to it would silently no-op. The skill prints a copy-paste block for the operator to run inside Claude Code. Use the language → plugin map:
+The skill does **not** invoke these commands directly: `/plugin` is a Claude Code UI built-in, not a shell command, so a Bash call to it would silently no-op. The skill prints a copy-paste block for the operator to run inside Claude Code. Use the language → plugin map:
 
 | Detected language | Plugin name |
 |---|---|
@@ -558,11 +558,11 @@ Code process won't see the env var until you restart.
 Verify after restart with `echo $ENABLE_LSP_TOOL` (should print 1).
 ```
 
-**Always emit the `marketplace add` line.** The Anthropic docs claim `claude-plugins-official` is auto-loaded when Claude Code starts, but in practice the auto-add can be missing on a fresh install — operators who skip the `add` and run only `/plugin install` hit "Marketplace not found" and have to debug it themselves. The `add` is a no-op when the marketplace is already registered, so there's no downside to emitting it every time. **Do not** try to optimise it away based on a presumed-already-loaded check.
+**Always emit the `marketplace add` line.** The Anthropic docs claim `claude-plugins-official` is auto-loaded when Claude Code starts, but in practice the auto-add can be missing on a fresh install: operators who skip the `add` and run only `/plugin install` hit "Marketplace not found" and have to debug it themselves. The `add` is a no-op when the marketplace is already registered, so there is no downside to emitting it every time. **Do not** try to optimise it away based on a presumed-already-loaded check.
 
 If a future Claude Code release changes the command shape, update the printed block here AND keep the docs URL above so a stale skill is recoverable from the link alone.
 
-#### Step 2c.6 — Smoke test
+#### Step 2c.6: Smoke test
 
 After Steps 2c.5 (b)–(d), run a single smoke test that confirms the server binary is on PATH and reports next-session behaviour:
 
@@ -583,11 +583,11 @@ fi
 echo "ℹ Next Claude Code session (with ENABLE_LSP_TOOL=1 in your shell environment) will use LSP."
 ```
 
-The smoke test is **diagnostic only** — it does NOT block Step 3. If the server isn't on PATH, the operator gets a clear message and can fix it later; `/setup` shouldn't refuse to finish the bootstrap over an LSP install hiccup.
+The smoke test is **diagnostic only**. It does NOT block Step 3. If the server is not on PATH, the operator gets a clear message and can fix it later; `/setup` should not refuse to finish the bootstrap over an LSP install hiccup.
 
-#### Step 2c.7 — Final summary line for this step
+#### Step 2c.7: Final summary line for this step
 
-End Step 2c with a single status line capturing the outcome — used by Step 4's proposed-config summary so the operator can see at-a-glance what the skill changed:
+End Step 2c with a single status line capturing the outcome: used by Step 4's proposed-config summary so the operator can see at-a-glance what the skill changed:
 
 ```
 LSP: server + env var configured ({detected-language} via {server-binary}, env var in {rc-file}); plugin-install commands printed for operator
@@ -597,9 +597,9 @@ LSP: skipped (Windows — manual install required, see getting-started.md)
 LSP: partial — server install or env var step failed (see above)
 ```
 
-The "plugin-install commands printed" wording is accurate even after the empirically-verified copy-paste from Step 2c.5(d): the skill prints the three `/plugin …` commands but cannot invoke them itself (they're Claude Code UI built-ins, not shell commands), so the operator's copy-paste is the final piece.
+The "plugin-install commands printed" wording is accurate even after the empirically-verified copy-paste from Step 2c.5(d). The skill prints the three `/plugin …` commands but cannot invoke them itself (they are Claude Code UI built-ins, not shell commands), so the operator's copy-paste is the final piece.
 
-Pick the line that matches the actual outcome. Don't claim "enabled" if any of (b)–(d) failed.
+Pick the line that matches the actual outcome. Do not claim "enabled" if any of (b)–(d) failed.
 
 ### Step 2d: Harness selection (skippable)
 
@@ -607,7 +607,7 @@ Use `AskUserQuestion` for harness selection. Recommend Claude Code first.
 Preserve multiple selections and split the six options across wizard questions.
 Use the numbered prompt below only when the harness lacks the tool.
 
-Background. As of 2026-07-09 the framework's mechanical gates (merge gate, ticket-first, secrets scanning, red-CI block) reach beyond Claude Code through thin per-harness adapters — see `docs/harnesses/README.md`, the single source of truth for the support matrix. This step surfaces that matrix at onboarding time so a non-Claude-Code adopter doesn't have to discover `docs/harnesses/` on their own. It is deliberately light: Claude Code adopters (the default) answer one question and move on.
+Background. As of 2026-07-09 the framework's mechanical gates (merge gate, ticket-first, secrets scanning, red-CI block) reach beyond Claude Code through thin per-harness adapters. See `docs/harnesses/README.md`, the single source of truth for the support matrix. This step surfaces that matrix at onboarding time so a non-Claude-Code adopter does not have to discover `docs/harnesses/` on their own. It is deliberately light: Claude Code adopters (the default) answer one question and move on.
 
 Ask:
 
@@ -625,22 +625,22 @@ Which harness(es) do you run ApexYard with?
 
 **Branch on the answer:**
 
-- **1 / default / empty** → print nothing further, continue straight to Step 3. This is the zero-friction path — most adopters are on Claude Code and shouldn't see any more text.
-- **6** → print one line — *"No adapter for that harness yet. The mechanical gates (`.claude/hooks/*.sh`) are portable bash; see `docs/harnesses/README.md` § 'Adapter-authoring pattern for future harnesses' if you want to write one."* — then continue to Step 3.
-- **2 / 3 / 4 / 5 (one or more)** → for each selected harness, print its install command + its one precondition, sourced from `docs/harnesses/README.md` (read it fresh rather than hardcoding — the matrix is the single source of truth and does change). Snapshot below. Refresh from the doc before printing:
+- **1 / default / empty** → print nothing further, continue straight to Step 3. This is the zero-friction path: most adopters are on Claude Code and should not see any more text.
+- **6** → print one line: *"No adapter for that harness yet. The mechanical gates (`.claude/hooks/*.sh`) are portable bash; see `docs/harnesses/README.md` § 'Adapter-authoring pattern for future harnesses' if you want to write one."*: then continue to Step 3.
+- **2 / 3 / 4 / 5 (one or more)** → for each selected harness, print its install command + its one precondition, sourced from `docs/harnesses/README.md` (read it fresh rather than hardcoding: the matrix is the single source of truth and does change). Snapshot below. Refresh from the doc before printing:
 
   | Harness | Install | Precondition | Tier |
   |---------|---------|---------------|------|
   | opencode | `bash bin/install-opencode-adapter.sh` | run opencode headless with `--auto` | ✅ live-proven |
   | pi | `bash bin/install-pi-adapter.sh` | run pi headless with `-a` / `--approve` | ✅ live-proven |
-  | Codex | `bash bin/sync-codex-adapter.sh` | grant hook-trust — `/hooks` interactively, `--dangerously-bypass-hook-trust` for a one-off headless run, or a user-level `~/.codex/hooks.json` | ✅ live-proven |
+  | Codex | `bash bin/sync-codex-adapter.sh` | grant hook-trust: `/hooks` interactively, `--dangerously-bypass-hook-trust` for a one-off headless run, or a user-level `~/.codex/hooks.json` | ✅ live-proven |
   | Cursor | `bash bin/install-cursor-adapter.sh` | enable third-party configs; leftover full adapter must be replaced | ✅ native in the IDE (2026-09-16). CLI ignores hooks. Not in conformance CI |
 
-  **Honesty is load-bearing here — never round a harness's tier up.** Print the current row from `docs/harnesses/README.md`. For Cursor, say native in the IDE, the `cursor-agent` CLI ignores hooks, a leftover full adapter can lock the session, and conformance CI has no headless path. Do not restore the retired failClosed-only claim.
+  **Honesty is load-bearing here. Never round a harness's tier up.** Print the current row from `docs/harnesses/README.md`. For Cursor, say native in the IDE, the `cursor-agent` CLI ignores hooks, a leftover full adapter can lock the session, and conformance CI has no headless path. Do not restore the retired failClosed-only claim.
 
   For each selected harness, link the per-harness page for the full workflow: `docs/harnesses/<harness>.md` (e.g. `docs/harnesses/opencode.md`).
 
-**Don't run the install command yourself.** This step is informational — print the command and the precondition, don't execute `bin/install-*-adapter.sh` on the operator's behalf. They run it when they're ready; onboarding shouldn't silently mutate a harness config the operator hasn't confirmed they want touched.
+**Do not run the install command yourself.** This step is informational. Print the command and the precondition, do not execute `bin/install-*-adapter.sh` on the operator's behalf. They run it when they are ready; onboarding should not silently mutate a harness config the operator has not confirmed they want touched.
 
 Record the pick (comma-separated list, or `claude-code` if 1/default) as `$SELECTED_HARNESSES` for the Step 4 summary line.
 
@@ -672,8 +672,8 @@ From the user's description, extract:
 
 | Field | Parse from | Default if not mentioned |
 |-------|-----------|------------------------|
-| `company.name` | Company name in the description | Ask explicitly — this one's required |
-| `company.mission` | What they're building | `""` (leave blank, user fills later) |
+| `company.name` | Company name in the description | Ask explicitly: this one's required |
+| `company.mission` | What they are building | `""` (leave blank, user fills later) |
 | `tech_stack.language` | "TypeScript", "Python", "Go", etc. | `"TypeScript"` |
 | `tech_stack.framework` | "React", "Vue", "Svelte", etc. | `""` (no frontend) |
 | `tech_stack.backend` | "Express", "FastAPI", "SAM", etc. | Inferred from language |
@@ -687,17 +687,17 @@ Also infer non-obvious settings:
 
 - If they mention "SAM" → `tech_stack.iac: "AWS SAM"` and add `sam validate --lint` to implied checks
 - If they mention "Terraform" → `tech_stack.iac: "Terraform"` and add `terraform validate`
-- If they mention "no frontend" or don't mention a framework → `workflows.require_design_review: false` (no UI = no design gate)
+- If they mention "no frontend" or do not mention a framework → `workflows.require_design_review: false` (no UI = no design gate)
 - If they mention "solo" or "1 person" → simplify team to just them, `required_reviews: 0`
 
 ### Step 4: Present the proposed config
 
-Show a clean summary (NOT raw YAML — a formatted table or bulleted list):
+Show a clean summary (NOT raw YAML: a formatted table or bulleted list):
 
 ```
 Based on your description, here's how I'd configure your fork:
 
-Company: ApexScript
+Company: Example Labs
 Stack: TypeScript + React (frontend), AWS SAM + DynamoDB (backend)
 Hosting: AWS
 CI checks: npm run lint, npm run typecheck, npm run test, npm run build, sam validate --lint
@@ -716,9 +716,9 @@ Status band: off
 Use these defaults, or customize?
 ```
 
-The Harness line reflects `$SELECTED_HARNESSES` from Step 2d — for a non-Claude-Code pick it reads e.g. `Harness: opencode (adapter install command printed above — see docs/harnesses/opencode.md)`.
+The Harness line reflects `$SELECTED_HARNESSES` from Step 2d: for a non-Claude-Code pick it reads for example, `Harness: opencode (adapter install command printed above — see docs/harnesses/opencode.md)`.
 
-Include the Step 2c.7 status line verbatim if Step 2c ran. If `/setup --enable-lsp` was invoked (retrofit mode), the summary is just the single LSP status line — no other proposed-config fields, since those are already configured.
+Include the Step 2c.7 status line verbatim if Step 2c ran. If `/setup --enable-lsp` was invoked (retrofit mode), the summary is just the single LSP status line: no other proposed-config fields, since those are already configured.
 
 ### Step 5: Confirm or customize
 
@@ -726,7 +726,7 @@ Include the Step 2c.7 status line verbatim if Step 2c ran. If `/setup --enable-l
 - **"customize X"** → ask about the specific field, update, re-show the summary with the change highlighted, re-confirm.
 - **"no, actually we use Y"** → re-parse, re-propose.
 
-Don't loop more than twice. If the user keeps correcting, switch to "tell me exactly what to change" direct-edit mode.
+Do not loop more than twice. If the user keeps correcting, switch to "tell me exactly what to change" direct-edit mode.
 
 ### Step 6: Write onboarding.yaml + the .apexyard-fork marker
 
@@ -738,11 +738,11 @@ EXAMPLE="$(dirname "$ONBOARDING")/onboarding.example.yaml"
 [ -f "$ONBOARDING" ] || cp "$EXAMPLE" "$ONBOARDING"
 ```
 
-Then read `onboarding.yaml` (single-fork: fork root; v2 split-portfolio: the private sibling repo, resolved via `portfolio_onboarding_path`), replace placeholder values with the confirmed config, and write back. Preserve the file's structure and comments — the comments are documentation for future readers.
+Then read `onboarding.yaml` (single-fork: fork root; v2 split-portfolio: the private sibling repo, resolved via `portfolio_onboarding_path`), replace placeholder values with the confirmed config, and write back. Preserve the file's structure and comments: the comments are documentation for future readers.
 
-**Important:** use `Edit` tool to modify in-place, not `Write` to overwrite — this preserves comments and structure that the user didn't touch.
+**Important:** use `Edit` tool to modify in-place, not `Write` to overwrite. This preserves comments and structure that the user did not touch.
 
-In **single-fork mode** also write the `.apexyard-fork` marker at the fork root if it doesn't already exist (idempotent — content is ignored, presence is the signal):
+In **single-fork mode** also write the `.apexyard-fork` marker at the fork root if it does not already exist (idempotent: content is ignored, presence is the signal):
 
 ```bash
 if [ ! -f .apexyard-fork ]; then
@@ -751,9 +751,9 @@ if [ ! -f .apexyard-fork ]; then
 fi
 ```
 
-The marker is the v2 ops-fork anchor — every hook that walks up to find the ops fork looks for it first. Single-fork adopters benefit from the same anchor (cheaper presence test, and consistency with v2 split-portfolio adopters). The legacy `onboarding.yaml + apexyard.projects.yaml` walk remains as a fallback for un-migrated forks (so existing tests + un-migrated single-fork installs keep working without a migration).
+The marker is the v2 ops-fork anchor: every hook that walks up to find the ops fork looks for it first. Single-fork adopters benefit from the same anchor (cheaper presence test, and consistency with v2 split-portfolio adopters). The legacy `onboarding.yaml + apexyard.projects.yaml` walk remains as a fallback for un-migrated forks (so existing tests + un-migrated single-fork installs keep working without a migration).
 
-In **split-portfolio v2 mode** the marker was already written in Step 2b — skip the bash above.
+In **split-portfolio v2 mode** the marker was already written in Step 2b. Skip the bash above.
 
 After writing:
 
@@ -778,7 +778,7 @@ case "$ONBOARDING" in
 esac
 ```
 
-In **single-fork mode** the config is intentionally NOT committed — tell the user:
+In **single-fork mode** the config is intentionally NOT committed: tell the user:
 
 ```
 onboarding.yaml written locally (it's gitignored — your real config stays on
@@ -787,7 +787,7 @@ Nothing to commit. If a teammate needs the config SHAPE, edit and commit
 onboarding.example.yaml instead.
 ```
 
-In **v2 split-portfolio mode** the real config is committed in the private sibling repo — point the user there for the diff + commit:
+In **v2 split-portfolio mode** the real config is committed in the private sibling repo: point the user there for the diff + commit:
 
 ```
 onboarding.yaml updated and staged in the private portfolio repo. Review with
@@ -809,9 +809,9 @@ If no → skip. They can add projects later with `/handover`.
 
 ### Step 7a: Single-fork agent-routing seeding (advisory)
 
-For **single-fork mode** only — split-portfolio adopters already got `agent-routing.yaml` seeded into the private repo in Step 5.
+For **single-fork mode** only: split-portfolio adopters already got `agent-routing.yaml` seeded into the private repo in Step 5.
 
-The framework ships `<fork>/agent-routing.yaml.example` as the worked-examples file, and `.gitignore` already has `/agent-routing.yaml` excluded so adopters can edit locally without leaking overrides to the public fork. By default `/setup` does NOT auto-copy the example to `agent-routing.yaml` — single-fork adopters' overrides shouldn't accumulate before they've made any. Mention the path explicitly so the operator knows where to start when they want to customise:
+The framework ships `<fork>/agent-routing.yaml.example` as the worked-examples file, and `.gitignore` already has `/agent-routing.yaml` excluded so adopters can edit locally without leaking overrides to the public fork. By default `/setup` does NOT auto-copy the example to `agent-routing.yaml`: single-fork adopters' overrides should not accumulate before they have made any. Mention the path explicitly so the operator knows where to start when they want to customise:
 
 ```
 Agent routing (model + endpoint per agent) is in agent-routing.yaml at the
@@ -827,13 +827,13 @@ The SessionStart sync hook (apply-agent-routing.sh) reads it on every
 session start. See docs/multi-project.md § "Centralised agent routing".
 ```
 
-No file writes here — purely informational. Added in #351 PR 3.
+No file writes here: purely informational. Added in #351 PR 3.
 
-### Step 7b: Check GitHub Issues is enabled (github tracker only — #653)
+### Step 7b: Check GitHub Issues is enabled (github tracker only: #653)
 
 GitHub disables **Issues on forks by default**, so a fresh fork that tracks via GitHub Issues will fail every issue-creating skill (`/feature`, `/bug`, `/task`, `/tickets-batch`, `/idea`, `/migration`, …) with a cryptic `the '<owner>/<repo>' repository has disabled issues` error. Catch it here, at first-run, instead.
 
-This step is **gated on `tracker.kind`** — for `linear` / `jira` / `none` adopters, GitHub Issues being off is correct, so the probe is a silent no-op. Source the tracker lib and probe the ops fork's repo:
+This step is **gated on `tracker.kind`**: for `linear` / `jira` / `none` adopters, GitHub Issues being off is correct, so the probe is a silent no-op. Source the tracker lib and probe the ops fork's repo:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -855,7 +855,7 @@ Enable it now? (needs admin on the repo)
   [n] skip — I'll print the command for later
 ```
 
-On **y**, run `gh repo edit <FORK_REPO> --enable-issues` and confirm. On **n**, print the one-liner and move on. Never enable silently — it's an externally-visible repo-settings change requiring admin scope, and the adopter may intend to track elsewhere. (In split-portfolio mode, the issue-hosting repo is the **public fork**, not the private portfolio — probe the fork, which is what `gh repo view` returns here.)
+On **y**, run `gh repo edit <FORK_REPO> --enable-issues` and confirm. On **n**, print the one-liner and move on. Never enable silently. It is an externally-visible repo-settings change requiring admin scope, and the adopter may intend to track elsewhere. (In split-portfolio mode, the issue-hosting repo is the **public fork**, not the private portfolio: probe the fork, which is what `gh repo view` returns here.)
 
 ### Step 7c: Record origin public proof for leak-hook exemption (#1477)
 
@@ -891,15 +891,15 @@ Always remove the marker on a clean exit so subsequent edits in the same session
 ## Rules
 
 1. **One question to start.** Do not ask about company, then stack, then team, then tools separately. One open-ended prompt, one natural-language response, one proposed config.
-2. **Propose, don't interrogate.** Show the full config with sensible defaults and let the user correct. Most fields have obvious defaults from the description.
-3. **Stage, don't commit.** The user should see the diff before it's committed. `/setup` stages; the user commits.
-4. **Preserve structure.** `onboarding.yaml` has comments that explain each section. Don't blow them away — edit in place.
-5. **Idempotent.** Running `/setup` again shows current config and asks what to update. Running with `--reset` clears and re-asks. Running with `--enable-lsp` retrofits the LSP step on an already-configured fork; if LSP is already enabled it's a no-op.
+2. **Propose, do not interrogate.** Show the full config with sensible defaults and let the user correct. Most fields have obvious defaults from the description.
+3. **Stage, do not commit.** The user should see the diff before it is committed. `/setup` stages; the user commits.
+4. **Preserve structure.** `onboarding.yaml` has comments that explain each section. Do not blow them away: edit in place.
+5. **Idempotent.** Running `/setup` again shows current config and asks what to update. Running with `--reset` clears and re-asks. Running with `--enable-lsp` retrofits the LSP step on an already-configured fork; if LSP is already enabled it is a no-op.
 6. **Project-config is narrow.** `/setup` configures the FRAMEWORK (`onboarding.yaml`). Do not invent broad `.claude/project-config.json` policy by hand. Allowed writes: the split-portfolio `portfolio:` block (Step 2b) and `leak_protection.origin_verified_public` via `bin/record-origin-verified-public.sh` (Step 7c). Per-project config otherwise stays with `/handover` and `/idea`.
 7. **Never auto-install language runtimes.** Step 2c installs LSP servers (e.g. `typescript-language-server`, `pyright`, `gopls`, `rust-analyzer`) but never the underlying runtime (`node`, `python`, `go`, `rustup`). If a runtime is missing, refuse the LSP install gracefully and tell the operator what to install.
-8. **Print plugin-install commands; never invoke them.** The Claude Code plugin marketplace command shape (`/plugin marketplace add`, `/plugin install`, `/reload-plugins`) is empirically stable — Step 2c.5(d) prints a copy-paste block for the operator. But `/plugin` is a Claude Code UI built-in, not a shell command, so the skill never runs the commands itself — it prints them. Always emit the `marketplace add` line; it's idempotent and recovers the case where the docs' auto-load claim doesn't fire on a fresh install.
-9. **`docs/harnesses/README.md` is the single source of truth for harness support.** Step 2d summarises and links it — it never copies the capability matrix inline as a maintained duplicate. When printing a harness's install command / precondition / tier, read the doc fresh rather than trusting a stale table baked into this skill; the matrix changes as adapters move through live-verification. Never round a harness's tier up. Do not restore the retired failClosed-only claim for Cursor.
+8. **Print plugin-install commands. Never invoke them.** The Claude Code plugin marketplace command shape (`/plugin marketplace add`, `/plugin install`, `/reload-plugins`) is empirically stable: Step 2c.5(d) prints a copy-paste block for the operator. But `/plugin` is a Claude Code UI built-in, not a shell command, so the skill never runs the commands itself. It prints them. Always emit the `marketplace add` line. It is idempotent and recovers the case where the docs' auto-load claim does not fire on a fresh install.
+9. **`docs/harnesses/README.md` is the single source of truth for harness support.** Step 2d summarises and links it. It never copies the capability matrix inline as a maintained duplicate. When printing a harness's install command / precondition / tier, read the doc fresh rather than trusting a stale table baked into this skill; the matrix changes as adapters move through live-verification. Never round a harness's tier up. Do not restore the retired failClosed-only claim for Cursor.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

@@ -281,7 +281,7 @@ reset_ops
 local_first .claude/skills/foo/SKILL.md
 : > "$ops/.apexyard-fork"
 mkdir -p "$ops/bin"
-cp "$SRC_ROOT/bin/update-files.sh" "$SRC_ROOT/bin/_lib-ownership.sh" "$ops/bin/"
+cp "$SRC_ROOT/bin/update-files.sh" "$SRC_ROOT/bin/_lib-ownership.sh" "$SRC_ROOT/bin/_lib-drift-rescue.sh" "$ops/bin/"
 code=0
 (cd "$ops" && /bin/bash "$SRC_ROOT/bin/apexyard" doctor --drift) > "$fixture/out" 2>&1 || code=$?
 assert_eq 'doctor drift exit' 1 "$code"

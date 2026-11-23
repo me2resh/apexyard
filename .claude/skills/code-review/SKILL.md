@@ -8,24 +8,23 @@ allowed-tools: Bash, Read, Grep, Glob
 
 # /code-review — Code Review
 
-Review PR quality, security, and standards.
+Review quality and security.
 
 
 Call `progress_note_update "$tree" Completed 'Review verdict: <evidence and head SHA>'` after the observed result.
 Details: docs/progress-notes.md.
 
-## LSP-aware (optional, recommended)
+## Optional LSP
 
-This skill performs semantic code navigation — finding definitions, walking references, tracing handlers across modules. With LSP enabled (`ENABLE_LSP_TOOL=1` + per-language plugin per `docs/getting-started.md`), queries are ~3-15× cheaper in token cost than grep + Read. Without LSP, the skill falls back to grep + Read transparently — no new failure mode, just optional speed.
-
-Per-language LSP plugins live in Claude Code's marketplace. Install once; the skill detects the active language and dispatches automatically.
+Use LSP navigation when enabled (`ENABLE_LSP_TOOL=1` and a language plugin).
+Setup: `docs/getting-started.md`. Otherwise use Grep and Read.
 
 ## Activated agent + role
 
 When `/code-review` runs:
 
-1. **Primary reviewer**: the **Code Reviewer agent (Rex)** at [`.claude/agents/code-reviewer.md`](../../agents/code-reviewer.md) — runs on every commit, owns the automated first-pass review.
-2. **Human approval gate**: the **[Tech Lead](../../../roles/engineering/tech-lead.md)** — activates to sign off on architecture, design patterns, and team conventions that Rex can't judge from code alone.
+1. **Primary reviewer**: the **Code Reviewer agent (Rex)** at [`.claude/agents/code-reviewer.md`](../../agents/code-reviewer.md) runs on every commit. Rex owns the automated first-pass review.
+2. **Human approval gate**: the **[Tech Lead](../../../roles/engineering/tech-lead.md)** activates to sign off on architecture, design patterns, and team conventions that Rex can't judge from code alone.
 3. **Conditional Security Auditor**: if the diff touches `**/auth/**`, `**/crypto/**`, `**/secrets/**`, `.env*`, or similar, the **[Security Auditor](../../../roles/security/security-auditor.md)** also activates and must sign off before merge. Consider chaining `/security-review` for the deeper pass.
 4. **Conditional UI Designer**: if the diff touches visible UI, the **[UI Designer](../../../roles/design/ui-designer.md)** activates for design review.
 
@@ -46,21 +45,30 @@ The reviewer mutation lock blocks `git clone`, `git fetch`, and `git checkout` w
 
 ## Process
 
+Read the PR's verify evidence first. Report missing evidence.
 Read .claude/rules/writing-standard.md before drafting or posting a review.
 Apply its controlled technical writing profile.
 Treat a writing-profile fault in the PR as advisory, per the Code Reviewer
 agent's § "Blocking-Severity Bar", unless the fault changes meaning or drops
-evidence — request changes only for that kind of fault.
-State the verdict and next action first. State the reason and evidence after it.
+evidence: request changes only for that kind of fault.
+State the verdict and next action first, then the reason and evidence.
 Use the Code Reviewer agent's required Output Format for first reviews, re-reviews, and reduced-scope reviews.
-Retain its required sections and give each checklist result a reason or evidence reference.
-Before submission, check the report against that format and repair omissions.
-Do not write a process transcript.
+Keep its required sections and give each checklist result a reason or evidence.
+Before you post, check the report against that format and fix omissions.
+Omit process transcripts.
 
 ### Severity policy
 
+Give each finding exactly one tag: `Important`, `Nit`, or `Pre-existing`.
+Only `Important` findings can cause `CHANGES REQUESTED` under the applicable blocking rules.
+`Nit` and `Pre-existing` findings never block the PR.
+Each `Pre-existing` finding includes base evidence and a suggested ticket title.
+Each `Important` line also carries a `Regression check:` field. See the agent's § "Regression check per blocker" (me2resh/apexyard#2091).
+Follow [Review severity](../../../templates/REVIEW.md).
+Keep all other security rules and independent gates in effect.
+
 Follow [policy resolution](../../../docs/skills/drive-to-green.md#override-the-review-policy) before spawning Rex.
-Give Rex the resolved policy path. Overrides change no gate decision.
+Take policy from the PR base branch, not the PR head. Overrides change no gate decision.
 
 ### CI order and depth
 
@@ -111,30 +119,20 @@ Nothing mechanically stops a build-class sub-agent writing the same file; Rex's 
 **The spawn prompt for Rex MUST NOT contain a literal marker path.** Say
 *"write your approval marker on an APPROVED verdict"*; say nothing about where.
 
-Rex already resolves the correct path through `review_marker_path` — the
-repo-qualified `<owner>__<repo>__<pr>-rex.approved` form from AgDR-0060,
-which is the exact path the gates read. A path in the prompt overrides that
-correct resolution: the agent obeys the instruction it was handed, and the
-marker lands at the bare-number `<pr>-rex.approved` instead. **No gate reads
-that path** — there is no bare-number fallback on any on-disk marker lookup.
-
-The failure is silent. `ls .claude/session/reviews/` shows a file that
-looks like a valid approval; only the merge attempt shows otherwise. The
-obvious repair — moving the file into place — is marker forging, the behaviour
-[`pr-workflow.md`](../../rules/pr-workflow.md) § "Build agents cannot
-self-review" exists to prevent. The right recovery is always: delete the
-gate-invisible file and re-run a real review.
-
-`warn-unqualified-review-marker.sh` warns (advisory) on a bare-number marker,
-and the merge gates name the near-miss. The cheap fix is upstream: pass no path.
+Rex already resolves the correct repo-qualified path itself (AgDR-0060). A
+path in the prompt overrides that and lands the marker where no gate reads
+it. See [`pr-workflow.md`](../../rules/pr-workflow.md) § "Never put a marker
+path in a reviewer's spawn prompt" for the failure mode and the recovery:
+delete the gate-invisible file and re-run a real review, never move it into
+place.
 
 1. Fetch PR details and the latest commit SHA
 2. Get the diff
 3. Review against the checklist (acceptance criteria, architecture, code quality, testing, security, performance)
 4. Check for the required Glossary section
 5. Check for AgDR links if technical decisions were made
-6. On JS/TS diffs, run the Fallow static-analysis pass (§ 9 of the agent) — changed-scope, fail-soft, advisory; render a `### Fallow Findings` table + dry-run fix preview
-7. Submit the review through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host — #758), not a hardcoded `gh pr review`, then clear the active-reviewer marker from step 0
+6. On JS/TS diffs, run the Fallow static-analysis pass (§ 9 of the agent). It is changed-scope, fail-soft, and advisory. Render a `### Fallow Findings` table + dry-run fix preview.
+7. Submit the review through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host, #758), not a hardcoded `gh pr review`, then clear the active-reviewer marker from step 0
 
 **Body path (AgDR-0266).** Rex writes the body with Write to `<ops-root>/.claude/session/reviews/bodies/<owner>__<repo>__<pr>-rex.md` (`review_body_path`), then posts it with `tracker_review_submit <owner/repo> <pr> comment <body_file>`. Not a heredoc.
 
@@ -243,7 +241,7 @@ A QA PASS does not grant approval. A QA failure stops this review flow but creat
 ### PR Description
 
 - Links to the ticket
-- **Has a Glossary section** (REQUIRED — request changes if missing)
+- **Has a Glossary section** (REQUIRED: request changes if missing)
 - AgDR links if decisions were made
 
 ### Technical Decisions (AgDR) — BLOCKING
@@ -273,8 +271,6 @@ Posts a GitHub review comment with:
 - Fallow findings (advisory; JS/TS diffs only, when the `fallow` CLI is available)
 - Verdict: APPROVED / CHANGES REQUESTED / COMMENT
 
-Invokes: Code Reviewer Agent (Rex)
-
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard), multi-project SDLC framework for Claude Code · MIT.*

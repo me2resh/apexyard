@@ -7,22 +7,22 @@ allowed-tools: Bash, Read, Grep, Glob, Write
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /extract-features — Feature Inventory for Greenfield Rewrites
+# /extract-features: Feature Inventory for Greenfield Rewrites
 
-Walks the target project's codebase across **six discovery axes** and writes a consolidated Feature Inventory. The artefact is the "what we must preserve" specification for a greenfield rewrite (different language, framework, or architecture) — instead of reverse-engineering features one route at a time, hand the inventory to the rewrite team.
+Walks the target project's codebase across **six discovery axes** and writes a consolidated Feature Inventory. The artefact is the "what we must preserve" specification for a greenfield rewrite (different language, framework, or architecture). Instead of reverse-engineering features one route at a time, hand the inventory to the rewrite team.
 
 This skill complements `/handover`:
 
-- `/handover` produces a **high-level project assessment** — origin, current health, integration plan, applicable roles. The output is the bridge between "we just inherited this codebase" and "this codebase is now governed by our normal SDLC".
-- `/extract-features` produces a **granular feature catalogue** — every route, model, job, test name, UI screen, and documented capability the existing system exposes. The output is the input to a greenfield-rewrite spec.
+- `/handover` produces a **high-level project assessment**: origin, current health, integration plan, applicable roles. The output is the bridge between "we just inherited this codebase" and "this codebase is now governed by our normal SDLC".
+- `/extract-features` produces a **granular feature catalogue**: every route, model, job, test name, UI screen, and documented capability the existing system exposes. The output is the input to a greenfield-rewrite spec.
 
 Run `/handover` first when adopting an unfamiliar repo; run `/extract-features` second when you've decided to rewrite it.
 
-**See also**: [`/feature-diagram <feature-slug>`](../feature-diagram/SKILL.md) — once the inventory exists, this skill emits a per-feature Mermaid sub-graph (routes + models + jobs + screens for one feature) at `projects/<name>/features/<slug>.md`. The inventory's `Feature` column gains a link to each per-feature diagram. Sibling to `/c4` (system topology) and `/dfd` (data flows) in the architecture-doc family — different lens (per-feature slice) on the same codebase. See `AgDR-0035` for the design rationale.
+**See also**: [`/feature-diagram <feature-slug>`](../feature-diagram/SKILL.md): once the inventory exists, this skill emits a per-feature Mermaid sub-graph (routes + models + jobs + screens for one feature) at `projects/<name>/features/<slug>.md`. The inventory's `Feature` column gains a link to each per-feature diagram. Sibling to `/c4` (system topology) and `/dfd` (data flows) in the architecture-doc family, different lens (per-feature slice) on the same codebase. See `AgDR-0035` for the design rationale.
 
 ## LSP-aware (optional, recommended)
 
-Discovery walks across all six axes — `documentSymbol`, `references`, `definition` queries — are the obvious win for LSP. With `ENABLE_LSP_TOOL=1` + per-language plugin (per `docs/getting-started.md` § "Optional: LSP-aware code navigation"), route-handler enumeration, model walks, and test-name extraction are ~3-15× cheaper in token cost than grep + Read. Without LSP, the skill falls back to grep transparently using the framework signatures listed below. No new failure mode, just optional speed.
+Discovery walks across all six axes, `documentSymbol`, `references`, `definition` queries, are the obvious win for LSP. With `ENABLE_LSP_TOOL=1` + per-language plugin (per `docs/getting-started.md` § "Optional: LSP-aware code navigation"), route-handler enumeration, model walks, and test-name extraction are ~3-15× cheaper in token cost than grep + Read. Without LSP, the skill falls back to grep transparently using the framework signatures listed below. No new failure mode, just optional speed.
 
 The skill detects the active language from `package.json` / `pyproject.toml` / `Gemfile` / `go.mod` / `Cargo.toml` and dispatches to the matching axis-walker logic regardless of LSP state.
 
@@ -36,9 +36,9 @@ source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
 projects_dir=$(portfolio_projects_dir)
 ```
 
-Defaults match today's single-fork layout (`./projects`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir}` keys in `.claude/project-config.json` — the helper resolves whichever mode they're in. See `docs/multi-project.md`.
+Defaults match today's single-fork layout (`./projects`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir}` keys in `.claude/project-config.json`. The helper resolves whichever mode they're in. See `docs/multi-project.md`.
 
-**Write targets** (see me2resh/apexyard#373 + #443): paths documented as `projects/<name>/X` in this skill are canonical adopter-facing forms — implement them in bash as `"${projects_dir}/<name>/X"`. Never construct from `"${PWD}/projects/..."`, `"$(git rev-parse --show-toplevel)/projects/..."`, or a literal `./projects/...` — those break in split-portfolio v2 mode where `projects_dir` resolves to a sibling repo.
+**Write targets** (see me2resh/apexyard#373 + #443): paths documented as `projects/<name>/X` in this skill are canonical adopter-facing forms: implement them in bash as `"${projects_dir}/<name>/X"`. Never construct from `"${PWD}/projects/..."`, `"$(git rev-parse --show-toplevel)/projects/..."`, or a literal `./projects/...`. Those break in split-portfolio v2 mode where `projects_dir` resolves to a sibling repo.
 
 **REQUIRED per-block preamble** (see #443): Claude executes each ```bash``` block as a separate shell invocation. The `projects_dir` assignment from the Path resolution section above does NOT carry into later blocks. Every bash block that writes to a `projects/<name>/X` path MUST start with this three-line preamble so it's self-contained:
 
@@ -60,18 +60,18 @@ The Path resolution section's example sources the helper *once* for documentatio
 /extract-features billing-api --with-mockups   # also emit AI-inferred ASCII wireframes per UI screen
 ```
 
-If `<project-name>` is given but `workspace/<name>/` doesn't exist, the skill stops and asks the user to clone the project (it does not auto-clone — that's a side-effect with cost; same convention as `/handover`).
+If `<project-name>` is given but `workspace/<name>/` doesn't exist, the skill stops and asks the user to clone the project (it does not auto-clone: that's a side-effect with cost; same convention as `/handover`).
 
 ### `--with-mockups` (opt-in, default off)
 
-When set, the inventory file gains a new `## Screens` section after the existing axes. For each UI screen discovered in axis 5, the skill emits a low-fidelity **ASCII wireframe** — boxed layout, form fields (`[ ]` text, `[v]` dropdown, `[X]` checkbox, `[ Button ]` button), tables as ASCII grids, max 80 chars wide.
+When set, the inventory file gains a new `## Screens` section after the existing axes. For each UI screen discovered in axis 5, the skill emits a low-fidelity **ASCII wireframe**: boxed layout, form fields (`[ ]` text, `[v]` dropdown, `[X]` checkbox, `[ Button ]` button), tables as ASCII grids, max 80 chars wide.
 
-The wireframes are **model-inferred from static analysis** — route component imports, form-field bindings, data-model field types. They're not lifts from real DOM. Two design constraints follow:
+The wireframes are **model-inferred from static analysis**: route component imports, form-field bindings, data-model field types. They're not lifts from real DOM. Two design constraints follow:
 
-1. **ASCII format only.** No PNG/SVG/HTML. ASCII boxes keep the fidelity honest — a reader sees a sketch and treats it as a sketch.
+1. **ASCII format only.** No PNG/SVG/HTML. ASCII boxes keep the fidelity honest: a reader sees a sketch and treats it as a sketch.
 2. **Mandatory disclaimer header per wireframe.** Every screen wireframe carries `> AI-inferred sketch — verify before relying on. Source: <route-or-component-path>` on its own line above the box.
 
-Backward-compat: running `/extract-features` without `--with-mockups` produces today's inventory exactly — the flag adds the `## Screens` section; nothing else changes.
+Backward-compat: running `/extract-features` without `--with-mockups` produces today's inventory exactly: the flag adds the `## Screens` section; nothing else changes.
 
 File-size policy: if more than **10 UI screens** are detected, the skill writes one file per screen under `<projects_dir>/<name>/screens/<slug>.md` and the `## Screens` section in the inventory becomes a linked index. Threshold rationale in [`AgDR-0036`](../../../docs/agdr/AgDR-0036-inferred-mockups-honesty.md).
 
@@ -81,7 +81,7 @@ File-size policy: if more than **10 UI screens** are detected, the skill writes 
 projects/<name>/feature-inventory.md          ← the artefact
 ```
 
-The file is a **one-off scan**, not a recurring audit. There is no audit-history rotation. If the file already exists, the skill OFFERS (default-no) to overwrite — accept only if the codebase has changed substantially since the last run.
+The file is a **one-off scan**, not a recurring audit. There is no audit-history rotation. If the file already exists, the skill OFFERS (default-no) to overwrite: accept only if the codebase has changed substantially since the last run.
 
 ## Custom template override (forward-looking)
 
@@ -112,11 +112,11 @@ Capture and report the **scope**: which subdirectories will be walked, which wil
 
 ### 1. Detect the tech stack
 
-Same detection table as `/handover` step 3 — minimum information to dispatch the per-axis walkers:
+Same detection table as `/handover` step 3, minimum information to dispatch the per-axis walkers:
 
 | Signal | Stack |
 |--------|-------|
-| `package.json` | Node — read `dependencies` / `devDependencies` to identify framework |
+| `package.json` | Node: read `dependencies` / `devDependencies` to identify framework |
 | `pyproject.toml` / `requirements.txt` / `setup.py` | Python |
 | `Gemfile` / `Gemfile.lock` | Ruby |
 | `go.mod` | Go |
@@ -132,9 +132,9 @@ Run the six axis-walkers below. Each produces a list; the consolidated matrix in
 
 When LSP is enabled and the per-language plugin is installed, prefer `documentSymbol` over grep for handler / class / function enumeration. When LSP is absent, use the grep signatures listed.
 
-#### Axis 2a — HTTP routes / entry points
+#### Axis 2a: HTTP routes / entry points
 
-Routes describe the **HTTP shape** of the system — every URL the system exposes is a candidate user-facing feature.
+Routes describe the **HTTP shape** of the system. Every URL the system exposes is a candidate user-facing feature.
 
 | Framework | Signature (grep fallback) |
 |-----------|---------------------------|
@@ -164,9 +164,9 @@ Routes describe the **HTTP shape** of the system — every URL the system expose
 
 For each route capture: HTTP method, path, handler symbol (file + line), and any docstring / comment immediately above. The handler name + comment is usually a strong feature signal.
 
-#### Axis 2b — Data models / DB schema
+#### Axis 2b: Data models / DB schema
 
-Models describe the **data shape** of the system — every persistent entity and its relations.
+Models describe the **data shape** of the system: every persistent entity and its relations.
 
 | Framework | Signature |
 |-----------|-----------|
@@ -186,9 +186,9 @@ Models describe the **data shape** of the system — every persistent entity and
 
 For each model capture: name, table name (if different), field list (name + type), relations (`@OneToMany`, `belongs_to`, `references`), and any unique / index constraints. Field names hint at features (an `email_verified_at` column implies email-verification flow).
 
-#### Axis 2c — Async jobs / queue handlers
+#### Axis 2c: Async jobs / queue handlers
 
-Background jobs describe **deferred work** — usually one job = one async feature (send email, generate report, sync external system).
+Background jobs describe **deferred work**: usually one job = one async feature (send email, generate report, sync external system).
 
 | Framework | Signature |
 |-----------|-----------|
@@ -211,9 +211,9 @@ Background jobs describe **deferred work** — usually one job = one async featu
 
 For each job capture: name, trigger (queue name, cron expression, event source), and the handler function. Job names are typically verb-phrases that name a feature directly.
 
-#### Axis 2d — Test names (the gold axis)
+#### Axis 2d: Test names (the gold axis)
 
-**Test names are the cheapest, most accurate signal of what a system DOES** — they're written by humans deliberately describing behaviour. Routes describe HTTP shape; models describe data shape; **tests describe behaviour**. Walking test names surfaces features that routes + models can't (e.g. "user can recover password via email", "admin can bulk-delete users with confirmation").
+**Test names are the cheapest, most accurate signal of what a system DOES**. They're written by humans deliberately describing behaviour. Routes describe HTTP shape; models describe data shape; **tests describe behaviour**. Walking test names surfaces features that routes + models can't (e.g. "user can recover password via email", "admin can bulk-delete users with confirmation").
 
 | Framework | Signature |
 |-----------|-----------|
@@ -228,11 +228,11 @@ For each job capture: name, trigger (queue name, cron expression, event source),
 | JUnit | `@Test` annotations; method names `void should_\w+` ; `void test\w+` |
 | PHPUnit | `function test\w+\(` ; `@test` docblocks |
 
-For each test capture: the full describe/context/it sentence (concatenated for nested specs). Cluster the sentences — patterns like "user can …", "admin can …", "guest cannot …" reveal features and roles.
+For each test capture: the full describe/context/it sentence (concatenated for nested specs). Cluster the sentences: patterns like "user can …", "admin can …", "guest cannot …" reveal features and roles.
 
-#### Axis 2e — UI screens / forms / interactions
+#### Axis 2e: UI screens / forms / interactions
 
-UI components describe the **interaction surface** of the system — every screen, form, and named interaction is a candidate feature.
+UI components describe the **interaction surface** of the system. Every screen, form, and named interaction is a candidate feature.
 
 | Framework | Signature |
 |-----------|-----------|
@@ -242,26 +242,26 @@ UI components describe the **interaction surface** of the system — every scree
 | Svelte / SvelteKit | `routes/**/+page.svelte` ; `routes/**/+layout.svelte` ; `.svelte` components |
 | Angular | `@Component\s*\(` ; `RouterModule\.forRoot\s*\(\s*\[` ; `path:` entries |
 | Form libraries | `<form>` tags; `useForm\(`; `react-hook-form` `register\(`; `formik`; `<Field name="`; Vue `v-model` |
-| Storybook | `*.stories.{ts,tsx,js,jsx,mdx}` files — story names are user-flow names |
+| Storybook | `*.stories.{ts,tsx,js,jsx,mdx}` files: story names are user-flow names |
 | Tailwind / CSS modules | not features themselves, but presence indicates UI surface area |
 | Mobile (RN) | `react-navigation` `Stack.Screen name=` ; `<Tab.Screen name=` |
 | Mobile (Flutter) | `MaterialPageRoute` ; `GoRoute` ; `Navigator.push` |
 
 For each screen capture: route path (if router-mapped), component name, and the form fields it contains (if any). Form-field names + labels are explicit feature signals (a `confirmEmail` field implies email-verification UX).
 
-#### Axis 2f — Documented features
+#### Axis 2f: Documented features
 
-Documented features are the **author's own enumeration** — usually the most accurate but least complete (often stale).
+Documented features are the **author's own enumeration**: usually the most accurate but least complete (often stale).
 
 Sources:
 
-- `README*` — look for "Features" / "What it does" sections (`^##\s+Features?` headers and the bullet list that follows)
-- `docs/features/**` — entire directory if present
-- `docs/index.md` / `docs/README.md` — top-level docs
-- `CHANGELOG*` — extract `## [Unreleased] Added` and historical `### Added` blocks
-- `CONTRIBUTING.md` — sometimes includes a feature taxonomy
-- API docs (`openapi.yaml`, `swagger.json`) — every operation summary is a feature
-- GitHub Issues with `enhancement` / `feature` labels (closed) — can hint at what shipped, but treat as supplementary
+- `README*`: look for "Features" / "What it does" sections (`^##\s+Features?` headers and the bullet list that follows)
+- `docs/features/**`: entire directory if present
+- `docs/index.md` / `docs/README.md`: top-level docs
+- `CHANGELOG*`: extract `## [Unreleased] Added` and historical `### Added` blocks
+- `CONTRIBUTING.md`: sometimes includes a feature taxonomy
+- API docs (`openapi.yaml`, `swagger.json`): every operation summary is a feature
+- GitHub Issues with `enhancement` / `feature` labels (closed): can hint at what shipped, but treat as supplementary
 
 For each documented feature capture: title, source (file + line), and the description verbatim. This is the only axis where the author's intent is recorded; the other five infer it from the code.
 
@@ -272,9 +272,9 @@ Build a **single feature matrix** that dedupes findings across the six axes. The
 | Column | Source |
 |--------|--------|
 | Feature | Inferred name (verb-phrase preferred: "Create order", "Reset password via email", "Bulk-delete users") |
-| Surface | UI / API / Job / Internal — the entry point the user / operator interacts with |
+| Surface | UI / API / Job / Internal: the entry point the user / operator interacts with |
 | Status | Active (referenced from a current code path) / Deprecated (only in CHANGELOG / removed code) / Untested (route exists, no test names match) |
-| Source | Which axes corroborated the feature — e.g. `route + test`, `model + UI`, `doc only` |
+| Source | Which axes corroborated the feature: e.g. `route + test`, `model + UI`, `doc only` |
 | Notes | Constraints, side effects, integrations the scanner spotted (e.g. "sends email via SendGrid", "Stripe webhook required", "rate-limited to 10/min") |
 
 Deduplication rules:
@@ -283,14 +283,14 @@ Deduplication rules:
 - A model with no route and no test → still a row (data feature), sources: `model only`
 - A documented feature not corroborated by code → row with `Status: Documented but not found in code` and a note flagging stale docs
 
-Aim for **30-150 rows** for a typical mid-sized app. If you produce fewer than 10 rows on a non-trivial codebase, the walker missed signatures — flag in "Coverage gaps".
+Aim for **30-150 rows** for a typical mid-sized app. If you produce fewer than 10 rows on a non-trivial codebase, the walker missed signatures. Flag in "Coverage gaps".
 
 ### 4. Write the inventory
 
 Default template (used when no custom override is configured):
 
 ````markdown
-# {project-name} — Feature Inventory
+# {project-name}: Feature Inventory
 
 **Date**: {YYYY-MM-DD}
 **Scanner**: `/extract-features` (apexyard)
@@ -364,28 +364,28 @@ on. Source: <path>` on its own line above the ASCII box. See step 4b.}
 
 ## Coverage gaps
 
-The scanner could **not** determine these — they need human review of the existing code or stakeholder interviews:
+The scanner could **not** determine these. They need human review of the existing code or stakeholder interviews:
 
-- **Business rules embedded in code logic** — discount stacking, eligibility checks, fraud heuristics. The scanner sees the function, not the policy.
-- **Integration patterns** — webhook signature schemes, retry policies, dead-letter queues unless they're explicit in IaC.
-- **Permission / authorisation matrix** — which roles can do what. Routes show endpoints; only manual review of guards / middleware reveals the full matrix.
-- **Configuration-driven behaviour** — feature flags, environment-specific toggles.
-- **Implicit features in cron / SQS handlers** with generic names — a job called `process_queue` doesn't name a feature.
-- **Data-cleanup / TTL policies** — usually only in DB triggers or cron specs.
-- **Stale documented features** — entries in CHANGELOG / README that reference removed code.
+- **Business rules embedded in code logic**: discount stacking, eligibility checks, fraud heuristics. The scanner sees the function, not the policy.
+- **Integration patterns**: webhook signature schemes, retry policies, dead-letter queues unless they're explicit in IaC.
+- **Permission / authorisation matrix**: which roles can do what. Routes show endpoints; only manual review of guards / middleware reveals the full matrix.
+- **Configuration-driven behaviour**: feature flags, environment-specific toggles.
+- **Implicit features in cron / SQS handlers** with generic names: a job called `process_queue` doesn't name a feature.
+- **Data-cleanup / TTL policies**: usually only in DB triggers or cron specs.
+- **Stale documented features**: entries in CHANGELOG / README that reference removed code.
 
 ## Recommended next steps
 
-1. **Review with the previous owner** — reconcile the matrix with their mental model. Expect ~10-20% drift (features they think exist that don't, features that exist they forgot about).
-2. **Write user stories per matrix row** — translate "GET /api/orders" into "As a customer, I want to view my orders". The inventory is the input; user-story authoring is a human task (consider `/feature` for each story you intend to ship in v1).
-3. **Identify the smallest-coherent-subset for v1 of the rewrite** — not every feature needs to ship in the first release. Bucket features into `must-have v1` / `nice-to-have v1.x` / `defer / drop`.
-4. **Validate the deferred / dropped buckets with stakeholders** — the prior-art bias makes the inventory feel exhaustive, but rewriting is also an opportunity to drop dead weight.
-5. **Run `/handover {project-name}`** if not already — for the high-level project assessment and integration plan that complements this granular inventory.
-6. **Use `/c4 {project-name} --level=2`** to capture the existing system's container topology — pairs well with the inventory as input to a rewrite design.
+1. **Review with the previous owner**: reconcile the matrix with their mental model. Expect ~10-20% drift (features they think exist that don't, features that exist they forgot about).
+2. **Write user stories per matrix row**: translate "GET /api/orders" into "As a customer, I want to view my orders". The inventory is the input; user-story authoring is a human task (consider `/feature` for each story you intend to ship in v1).
+3. **Identify the smallest-coherent-subset for v1 of the rewrite**: not every feature needs to ship in the first release. Bucket features into `must-have v1` / `nice-to-have v1.x` / `defer / drop`.
+4. **Validate the deferred / dropped buckets with stakeholders**: the prior-art bias makes the inventory feel exhaustive, but rewriting is also an opportunity to drop dead weight.
+5. **Run `/handover {project-name}`** if not already: for the high-level project assessment and integration plan that complements this granular inventory.
+6. **Use `/c4 {project-name} --level=2`** to capture the existing system's container topology: pairs well with the inventory as input to a rewrite design.
 
 ## Open questions
 
-- {anything axis-specific the scanner couldn't resolve, e.g. "saw `app.use(authMiddleware)` but couldn't trace the auth scheme — JWT? session? OAuth?"}
+- {anything axis-specific the scanner couldn't resolve, e.g. "saw `app.use(authMiddleware)` but couldn't trace the auth scheme: JWT? session? OAuth?"}
 
 ````
 
@@ -393,7 +393,7 @@ The scanner could **not** determine these — they need human review of the exis
 
 For each UI screen captured in axis 2e, build a low-fidelity ASCII wireframe. Append the section to the inventory if 10 or fewer screens; write per-screen files at `<projects_dir>/<name>/screens/<slug>.md` and replace the inventory's `## Screens` body with a linked index if more than 10 screens.
 
-#### Disclaimer header (MANDATORY — every wireframe)
+#### Disclaimer header (MANDATORY: every wireframe)
 
 Every wireframe carries this exact one-line header on its own line **above** the box:
 
@@ -401,7 +401,7 @@ Every wireframe carries this exact one-line header on its own line **above** the
 > AI-inferred sketch — verify before relying on. Source: <route or component path>
 ```
 
-The `<route or component path>` is the source detection result from the rules below — the file (or route) the wireframe was inferred from. No exceptions. A wireframe without a disclaimer is a broken artefact.
+The `<route or component path>` is the source detection result from the rules below: the file (or route) the wireframe was inferred from. No exceptions. A wireframe without a disclaimer is a broken artefact.
 
 #### Source detection (the `Source:` value in the disclaimer)
 
@@ -422,7 +422,7 @@ If a screen has both a route AND a component, prefer the route (it's the user-ad
 
 #### Inference rules
 
-The wireframe is built from these signals — all available **statically**, no runtime probing:
+The wireframe is built from these signals, all available **statically**, no runtime probing:
 
 | Signal | Inferred wireframe element |
 |--------|---------------------------|
@@ -577,21 +577,21 @@ All wireframes carry the AI-inferred disclaimer — verify before relying on.
 
 A greenfield rewrite that proceeds without a feature inventory has two common failure modes:
 
-1. **Forgotten features** — the rewrite ships and a long-tail user files a bug because feature X wasn't ported. The team thought X was deprecated; it wasn't.
-2. **Reverse-engineering during build** — every developer on the rewrite team spelunks the old codebase one route / one model at a time, duplicating work and producing inconsistent mental models.
+1. **Forgotten features**: the rewrite ships and a long-tail user files a bug because feature X wasn't ported. The team thought X was deprecated; it wasn't.
+2. **Reverse-engineering during build**: every developer on the rewrite team spelunks the old codebase one route / one model at a time, duplicating work and producing inconsistent mental models.
 
-The inventory is the single artefact that cuts both. It's not a spec, it's not a migration plan — it's a catalogue. The team negotiates trade-offs (drop / redesign / keep-as-is) against a known list, not against vibes.
+The inventory is the single artefact that cuts both. It's not a spec, it's not a migration plan, it's a catalogue. The team negotiates trade-offs (drop / redesign / keep-as-is) against a known list, not against vibes.
 
 ## Anti-patterns
 
 - **Don't auto-generate user stories from the matrix.** The inventory says "POST `/api/orders` exists"; only a human can decide it should become "As a customer, I want to place an order with one-click checkout". Translation is design work, not scanner work.
-- **Don't size features.** The matrix lists features but does not estimate effort to rewrite each one. Sizing depends on target stack, team familiarity, and downstream dependencies — all out of scope here.
+- **Don't size features.** The matrix lists features but does not estimate effort to rewrite each one. Sizing depends on target stack, team familiarity, and downstream dependencies: all out of scope here.
 - **Don't run this every sprint.** It's a pre-rewrite scan, not a recurring audit. Run once, treat the artefact as a baseline, update only when the source codebase has changed substantially.
 - **Don't substitute this for `/code-review` or `/launch-check`.** The inventory says what features exist; it doesn't say whether they're well-implemented, secure, or production-ready. Use the audit skills for quality signals.
-- **Don't skip the human review step.** Prior-art bias is real — the matrix can feel authoritative even when it's missing 20% of the picture. Always reconcile with the previous owner / stakeholders before treating the inventory as canonical.
-- **Don't strip the disclaimer header from `--with-mockups` wireframes.** The header is the trust contract for the artefact — the reader sees `AI-inferred sketch — verify before relying on` and treats it as a sketch. Without the header, an ASCII box looks more authoritative than it should. See [`AgDR-0036`](../../../docs/agdr/AgDR-0036-inferred-mockups-honesty.md).
-- **Don't upgrade `--with-mockups` to PNG/SVG.** The format is ASCII by design — visual fidelity should match epistemic confidence. A pixel-perfect render of a model's guess at a screen is exactly the failure mode the flag was designed to avoid.
+- **Don't skip the human review step.** Prior-art bias is real: the matrix can feel authoritative even when it's missing 20% of the picture. Always reconcile with the previous owner / stakeholders before treating the inventory as canonical.
+- **Don't strip the disclaimer header from `--with-mockups` wireframes.** The header is the trust contract for the artefact. The reader sees `AI-inferred sketch — verify before relying on` and treats it as a sketch. Without the header, an ASCII box looks more authoritative than it should. See [`AgDR-0036`](../../../docs/agdr/AgDR-0036-inferred-mockups-honesty.md).
+- **Don't upgrade `--with-mockups` to PNG/SVG.** The format is ASCII by design: visual fidelity should match epistemic confidence. A pixel-perfect render of a model's guess at a screen is exactly the failure mode the flag was designed to avoid.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

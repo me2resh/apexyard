@@ -1,16 +1,16 @@
 # Parallel Work — When to Offer Fan-Out
 
-ApexYard ships the `/fan-out` skill for spawning N parallel agents on independent tasks. The skill is the happy path; this rule is the **trigger heuristic** — it defines when an agent should *proactively offer* fan-out instead of executing work serially by default.
+ApexYard ships the `/fan-out` skill for spawning N parallel agents on independent tasks. The skill is the happy path. This rule is the **trigger heuristic**. It defines when an agent should *proactively offer* fan-out instead of executing work serially by default.
 
-A typical session serialises tasks that don't need to be serial — N unrelated audits, N independent tickets, research across N unrelated areas. The framework should make parallel execution the default *offer* when it's safe, not a pattern each user rediscovers.
+A typical session serialises tasks that do not need to be serial: N unrelated audits, N independent tickets, research across N unrelated areas. The framework should make parallel execution the default *offer* when it is safe, not a pattern each user rediscovers.
 
 ## When to OFFER parallel fan-out (proactively)
 
 Heuristic: when the user's request decomposes into ≥ 2 work items that are all of:
 
-- **File-independent** — different write targets, no shared edits
-- **Context-independent** — one task's output does not feed another's input
-- **Individually substantial** — ≥ 5 minutes of work each. Not "read 3 lines from 3 files" (overhead exceeds gain)
+- **File-independent**: different write targets, no shared edits
+- **Context-independent**: one task's output does not feed another's input
+- **Individually substantial**: ≥ 5 minutes of work each. Not "read 3 lines from 3 files" (overhead exceeds gain)
 
 Examples that should trigger an offer:
 
@@ -21,11 +21,11 @@ Examples that should trigger an offer:
 
 ## When NOT to fan out
 
-- **Shared state or files** — two tasks edit the same file → serial. Worktree merge-back conflicts cost more than the concurrency win.
-- **Sequential dependencies** — task B needs task A's output → serial.
-- **Architecture / AgDR-class decisions** — the work IS the cross-task reasoning. Splitting it loses the shared context that makes a good decision possible.
-- **Single large indivisible task** — e.g. "refactor module X from MVC to clean architecture". Splitting by file usually creates a sequential chain.
-- **Trivial work** — three two-line edits. Spawning agents adds more overhead than it saves.
+- **Shared state or files**: two tasks edit the same file → serial. Worktree merge-back conflicts cost more than the concurrency win.
+- **Sequential dependencies**: task B needs task A's output → serial.
+- **Architecture / AgDR-class decisions**: the work IS the cross-task reasoning. Splitting it loses the shared context that makes a good decision possible.
+- **Single large indivisible task**: for example, "refactor module X from MVC to clean architecture". Splitting by file usually creates a sequential chain.
+- **Trivial work**: three two-line edits. Spawning agents adds more overhead than it saves.
 
 ## How to offer
 
@@ -43,7 +43,7 @@ If the user says yes → invoke `/fan-out`. If serial → proceed normally.
 
 When you spawn an agent (via `/fan-out` or a single `Agent` call), the default is a **fresh, role-appropriate spawn with a written brief**. Do not fork the parent conversation. Pick `subagent_type` from [`.claude/rules/agent-role-selection.md`](agent-role-selection.md). Put the facts the agent needs in the brief.
 
-A fork is allowed only when the facts the agent needs are not yet in a file (and cannot be written into a brief). Forks inherit the parent's full context — measured at 430k median / 581k max first-turn tokens in the 2026-10-10 baseline — so they are the expensive path.
+A fork is allowed only when the facts the agent needs are not yet in a file (and cannot be written into a brief). Forks inherit the parent's full context. The 2026-10-10 baseline measured 430k median / 581k max first-turn tokens, so forks are the expensive path.
 
 ## Self-check before responding
 
@@ -61,10 +61,10 @@ If all four boxes are checked and you didn't offer fan-out, you missed a paralle
 
 ## Backstop
 
-This rule is **primarily self-discipline**. Mechanical enforcement isn't viable — no shell hook can see "the agent didn't propose parallel" in assistant prose. Pair this rule with feedback memory: if the CEO has previously asked "why didn't you fan this out?", surface the offer more aggressively next time.
+This rule is **primarily self-discipline**. Mechanical enforcement is not viable. No shell hook can see "the agent didn't propose parallel" in assistant prose. Pair this rule with feedback memory: if the CEO has previously asked "why didn't you fan this out?", surface the offer more aggressively next time.
 
 The cost of offering fan-out and being told "no, just serial" is one sentence. The cost of silently serialising N independent items is N times the wall-clock latency the user notices.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

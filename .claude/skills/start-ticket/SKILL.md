@@ -21,11 +21,11 @@ Each working tree keeps its own marker in its own git dir (AgDR-0222):
 | Main clone (the ops fork, or `workspace/<project>/`) | `<repo>/.git/apexyard-ticket` |
 | Linked worktree (`git worktree add`) | `<repo>/.git/worktrees/<id>/apexyard-ticket` |
 
-This is the mechanical enforcement of the Pre-Build Gate in `.claude/rules/workflow-gates.md` — "do not start coding until the ticket exists".
+This is the mechanical enforcement of the Pre-Build Gate in `.claude/rules/workflow-gates.md`: "do not start coding until the ticket exists".
 
 ## Path resolution
 
-Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+Use `.claude/hooks/_lib-portfolio-paths.sh` to resolve these paths. Read the registry path with `portfolio_registry`. Read the per-project docs directory with `portfolio_projects_dir`. Read the ideas backlog with `portfolio_ideas_backlog`. Source the helper at the top of any bash block that touches those paths:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -33,7 +33,7 @@ source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
 registry=$(portfolio_registry)
 ```
 
-Defaults match single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Split-portfolio overrides `portfolio.{registry, projects_dir, ideas_backlog}` in `.claude/project-config.json`. Do not hardcode those paths — the helper resolves the mode. See `docs/multi-project.md`.
+Defaults match single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Split-portfolio overrides `portfolio.{registry, projects_dir, ideas_backlog}` in `.claude/project-config.json`. Do not hardcode those paths. The helper resolves the mode. See `docs/multi-project.md`.
 
 ## Process
 
@@ -45,15 +45,15 @@ Defaults match single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./
 
 Expected forms:
 
-- `42` — plain number, resolves against the current repo. Read `git remote get-url origin` and extract `<owner>/<repo>`. If there's no origin, stop and ask for a fully-qualified reference.
-- `other-org/other-repo#128` — fully-qualified reference.
-- `apexyard#42` — owner defaults to the current org (parsed from the origin URL).
+- `42`: plain number, resolves against the current repo. Read `git remote get-url origin` and extract `<owner>/<repo>`. If there is no origin, stop and ask for a fully-qualified reference.
+- `other-org/other-repo#128`: fully-qualified reference.
+- `apexyard#42`: owner defaults to the current org (parsed from the origin URL).
 
-If `$ARGUMENTS` is empty, stop and ask the user which issue they're starting.
+If `$ARGUMENTS` is empty, stop and ask the user which issue they are starting.
 
 ### 2. Verify the Issue Exists
 
-Source the tracker library and call `tracker_view`. The library dispatches the right CLI based on `.tracker.kind` in `.claude/project-config.{defaults,}.json` — `gh` (default), `linear`, `jira`, `asana`, `custom`, or `none`. See `.claude/hooks/_lib-tracker.sh` and AgDR-0033.
+Source the tracker library and call `tracker_view`. The library dispatches the right CLI based on `.tracker.kind` in `.claude/project-config.{defaults,}.json`: `gh` (default), `linear`, `jira`, `asana`, `custom`, or `none`. See `.claude/hooks/_lib-tracker.sh` and AgDR-0033.
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -66,9 +66,9 @@ url=$(echo "$issue_json" | jq -r '.url // empty')
 body=$(echo "$issue_json" | jq -r '.body // empty')
 ```
 
-The lib emits normalised JSON: `{state, title, url, labels}`. Each tracker adapter parses the underlying CLI's JSON into this common shape, so the skill doesn't need to branch per-CLI.
+The lib emits normalised JSON: `{state, title, url, labels}`. Each tracker adapter parses the underlying CLI's JSON into this common shape, so the skill does not need to branch per-CLI.
 
-If the lib exits non-zero with empty stdout, the issue does not exist (or the CLI isn't installed / authenticated). Stop and report the error — do not write the marker.
+If the lib exits non-zero with empty stdout, the issue does not exist (or the CLI is not installed / authenticated). Stop and report the error. Do not write the marker.
 
 If `state` indicates the ticket is closed (gh: `CLOSED`; linear/jira/asana: `Done` / `Closed` / `Resolved` / `Cancelled` / `Canceled`), warn the user and confirm before continuing (sometimes you do want to resume work on a re-opened issue).
 
@@ -144,7 +144,7 @@ else
 fi
 ```
 
-`$project` is now either a registered project name (e.g. `sample-app`, `demo-svc`) or empty (ticket's tracker repo isn't registered — typically because the ticket is on the ops fork itself, or a repo that's not under management).
+`$project` now contains a registered project name, such as `sample-app` or `demo-svc`, or is empty. Empty means the ticket's tracker repo is not registered. Typically, the ticket belongs to the ops fork or an unmanaged repo.
 
 #### 4c. Pick the working tree
 
@@ -280,7 +280,7 @@ board_move_card "<number>" "in_progress"
 
 `board_move_card` degrades gracefully: if the board is not configured, the item
 is not on the board, or `gh project` scope is absent, it warns to stderr and
-returns 0 — it never blocks the ticket start.
+returns 0. It never blocks the ticket start.
 
 ### 7. Confirm to the User
 
@@ -300,9 +300,9 @@ Do NOT create the branch automatically. The user may already be on a branch, or 
 - Running `/start-ticket` again in the same tree overwrites that tree's marker when the same session switches tickets, or after take over (step 4e). A linked worktree and its main clone hold separate markers.
 - To clear a tree's marker, delete `<git dir>/apexyard-ticket`. `git worktree remove` does it for a linked worktree.
 - A tree needs its own `/start-ticket`. A marker in the main clone does not govern a linked worktree.
-- Exempt paths (`.claude/`, `docs/`, `projects/*/docs/`, any `*.md`) don't need a ticket. The skill is only required before touching source, config, or infra.
+- Exempt paths (`.claude/`, `docs/`, `projects/*/docs/`, any `*.md`) do not need a ticket. The skill is only required before touching source, config, or infra.
 - **Migration from the old layout**: `current-ticket` and `tickets/<project>` under `.claude/session/` still work; this skill still writes them. A SessionStart notice lists them. A breaking release will stop reading and writing them.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

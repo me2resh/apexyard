@@ -5,14 +5,13 @@ argument-hint: "<short description of the framework bug>"
 allowed-tools: Bash, Read, Write
 ---
 
-# /report-apexyard-bug — Report a Framework Bug Upstream
+# /report-apexyard-bug: Report a Framework Bug Upstream
 
 Read `.claude/rules/writing-standard.md`. Use the **controlled technical writing profile** for the
 upstream bug report: lead with the observed outcome and reproducible next action.
 
-Files a structured GitHub Issue **about the apexyard framework itself** to the
-canonical upstream **`me2resh/apexyard`** — for when a hook misfires, a skill is
-broken, a rule produces a wrong result, or the docs are wrong.
+File a structured GitHub Issue **about the apexyard framework itself** to the canonical upstream **`me2resh/apexyard`**.
+Use this skill when a hook misfires, a skill fails, a rule produces a wrong result, or the docs are wrong.
 
 This is the framework-feedback sibling of `/bug`. The difference is the target:
 
@@ -25,9 +24,9 @@ This is the framework-feedback sibling of `/bug`. The difference is the target:
 > NEVER include a registered private project's name, repo slug, or workspace path
 > in the issue. Per `.claude/rules/leak-protection.md`, describe the context
 > generically ("a registered project", "one of the managed workspaces"). The
-> `block-private-refs-in-public-repos.sh` hook is the mechanical backstop, but
-> scrub at authoring time — the private name is right there in your context while
-> you write, and not referencing it takes active suppression.
+> `block-private-refs-in-public-repos.sh` hook provides mechanical enforcement.
+> Scrub the report as you write it.
+> The private name remains in your context, so you must actively exclude it.
 
 ## Usage
 
@@ -39,7 +38,7 @@ This is the framework-feedback sibling of `/bug`. The difference is the target:
 
 ## Process
 
-### 0. Write the active-issue-skill marker (REQUIRED — me2resh/apexyard#268)
+### 0. Write the active-issue-skill marker (REQUIRED: me2resh/apexyard#268)
 
 Before any `gh issue create`, write this skill's name to the active-issue-skill
 marker so `require-skill-for-issue-create.sh` lets the command through. At entry:
@@ -75,22 +74,22 @@ UPSTREAM=$(git remote get-url upstream 2>/dev/null \
 UPSTREAM="${UPSTREAM:-me2resh/apexyard}"
 ```
 
-If `$UPSTREAM` doesn't look like `me2resh/apexyard` (a fork owner crept in via a
-mis-set `upstream`), confirm with the user before filing, or default to the
-canonical `me2resh/apexyard`.
+A misconfigured `upstream` can select a fork owner.
+If `$UPSTREAM` does not look like `me2resh/apexyard`, confirm with the user before filing.
+Alternatively, default to the canonical `me2resh/apexyard`.
 
 ### 2. Capture the framework version
 
-So the maintainer knows which version the report is against, capture the version
-from the fork (the SessionStart upstream-drift banner shows it; otherwise derive
-it).
+Capture the version from the fork so the maintainer knows which version the report concerns.
+Use the SessionStart upstream-drift banner, or derive the version if necessary.
 
-**Do NOT use `git describe --tags --abbrev=0`.** Under the release-cut branch
-model, release tags (`vX.Y.Z`) are created on `main` and are NOT ancestors of
-`dev`, so `git describe` from a `dev` checkout reports a stale version (observed:
-`v1.1.0` when the line is actually `v2.2.0`) — every issue filed from `dev` would
-be mislabeled (#503). Derive from `CHANGELOG.md` instead, which `/release-sync`
-carries `main → dev`, so it is always current on `dev`:
+**Do NOT use `git describe --tags --abbrev=0`.** The release-cut branch model creates release tags (`vX.Y.Z`) on `main`.
+These tags are NOT ancestors of `dev`.
+Thus, `git describe` from a `dev` checkout reports a stale version.
+It reported `v1.1.0` when the current line was `v2.2.0`.
+This would mislabel every issue from `dev` (#503).
+Derive the version from `CHANGELOG.md` instead.
+`/release-sync` carries this file `main → dev`, so it is always current on `dev`:
 
 ```bash
 # Primary: top-most `## [X.Y.Z]` heading in CHANGELOG.md (carried main→dev by
@@ -110,17 +109,17 @@ fi
 
 ### 3. Gather details (one question at a time)
 
-Ask conversationally — do NOT batch. Wait for each answer.
+Ask conversationally. Do NOT batch questions. Wait for each answer.
 
-**a) What part of the framework?** (which hook / skill / rule / agent / doc — e.g. `detect-role-trigger.sh`, `/handover`, `.claude/rules/leak-protection.md`)
+**a) What part of the framework?** (which hook / skill / rule / agent / doc, e.g. `detect-role-trigger.sh`, `/handover`, `.claude/rules/leak-protection.md`)
 
-**b) Given / When / Then** — what was the state, what did you do, what happened vs what should have happened.
+**b) Given / When / Then**: what was the state, what did you do, what happened vs what should have happened.
 
-**c) Repro** — the minimal steps. Include the exact command / skill invocation if relevant. **Scrub private project names** — use `<project>` / "a registered project".
+**c) Repro**: the minimal steps. Include the exact command / skill invocation if relevant. **Scrub private project names**: use `<project>` / "a registered project".
 
-**d) Severity** — `blocker` (can't work) / `major` (wrong result, workaround exists) / `minor` (cosmetic / docs).
+**d) Severity**: `blocker` (cannot work) / `major` (wrong result, workaround exists) / `minor` (cosmetic / docs).
 
-**e) Anything else** — error output, the banner text, related issue numbers (optional).
+**e) Anything else**: error output, the banner text, related issue numbers (optional).
 
 ### 4. Show the formatted issue for confirmation
 
@@ -181,9 +180,10 @@ gh issue create --repo "$UPSTREAM" \
   --body "{formatted body}"
 ```
 
-If the `bug` label doesn't exist on the upstream repo, drop `--label` and note it
-(don't fail the whole filing over a missing label — per the create-labels-first
-convention, but upstream label management isn't the adopter's job).
+If the `bug` label does not exist upstream, omit `--label`.
+Note the missing label.
+Do not fail the filing because of a missing label.
+Follow the create-labels-first convention, but the adopter does not manage upstream labels.
 
 ### 7. Return the URL
 
@@ -196,11 +196,11 @@ Filed upstream: <UPSTREAM>#{number} — {title}
 
 1. **One question at a time.** Never batch. Wait for each answer.
 2. **Always confirm before filing.** Show the full issue, get explicit "yes".
-3. **Scrub private project names** — this writes to a PUBLIC repo. Describe context generically. See `.claude/rules/leak-protection.md`. Use the `<!-- private-refs: allow -->` body marker ONLY on explicit user confirmation that a name must stay.
-4. **Always file upstream** — `me2resh/apexyard`, not the adopter's fork or a managed project.
+3. **Scrub private project names**: this writes to a PUBLIC repo. Describe context generically. See `.claude/rules/leak-protection.md`. Use the `<!-- private-refs: allow -->` body marker ONLY on explicit user confirmation that a name must stay.
+4. **Always file upstream**: `me2resh/apexyard`, not the adopter's fork or a managed project.
 5. **Capture the framework version** so the report is actionable.
 6. **Label `bug`.** Title prefix `[Bug]`.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

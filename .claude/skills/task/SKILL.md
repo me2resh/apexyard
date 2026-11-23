@@ -5,15 +5,15 @@ argument-hint: "<short title of the task> | --batch [--project <repo>] [--priori
 allowed-tools: Bash, Read, Write, AskUserQuestion
 ---
 
-# /task — Create a Technical Task Ticket
+# /task: Create a Technical Task Ticket
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-Creates a structured GitHub Issue for a technical task with driver (why), scope (what), acceptance criteria, and risks. Used for tech debt, infrastructure, refactoring, dependency updates, or any non-user-facing work that doesn't fit /feature or /bug.
+Creates a structured GitHub Issue for a technical task with driver (why), scope (what), acceptance criteria, and risks. Used for tech debt, infrastructure, refactoring, dependency updates, or any non-user-facing work that does not fit /feature or /bug.
 
 ## Path resolution
 
-Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+Use `.claude/hooks/_lib-portfolio-paths.sh` to resolve these paths. Read the registry path with `portfolio_registry`. Read the per-project docs directory with `portfolio_projects_dir`. Read the ideas backlog with `portfolio_ideas_backlog`. Source the helper at the top of any bash block that touches those paths:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -21,7 +21,7 @@ source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
 registry=$(portfolio_registry)
 ```
 
-Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Do not hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks. The helper resolves the paths for the adopter's mode. See `docs/multi-project.md`.
 
 ## Usage
 
@@ -54,7 +54,7 @@ If no word in `$ARGUMENTS` is a flag in the table, run the process below.
 
 ## Process
 
-### 0. Write the active-issue-skill marker (REQUIRED — me2resh/apexyard#268)
+### 0. Write the active-issue-skill marker (REQUIRED: me2resh/apexyard#268)
 
 Before any `gh issue create` (or other tracker CLI), write this skill's name to the active-issue-skill marker so `require-skill-for-issue-create.sh` lets the command through. At skill entry:
 
@@ -81,7 +81,7 @@ The `clear-issue-skill-marker.sh` SessionStart hook clears only the current sess
 
 ### 1. Resolve the target repo
 
-Read the active-ticket marker of the working tree you are in to determine which repo we're working in. The marker is the `apexyard-ticket` file in the git dir of that tree. See `/start-ticket` "Read the active ticket". If no active ticket, check `apexyard.projects.yaml` for managed projects. If only one project, use it. If multiple, ask:
+Read the active-ticket marker of the working tree you are in to determine which repo we are working in. The marker is the `apexyard-ticket` file in the git dir of that tree. See `/start-ticket` "Read the active ticket". If no active ticket, check `apexyard.projects.yaml` for managed projects. If only one project, use it. If multiple, ask:
 
 ```
 Which project is this task for?
@@ -99,7 +99,7 @@ What's the task? Give me a short title.
 
 ### 3. Gather details (one question at a time)
 
-Ask conversationally — do NOT batch all questions. Wait for each answer before asking the next.
+Ask conversationally. Do NOT batch all questions. Wait for each answer before asking the next.
 
 **a) Driver**
 
@@ -146,7 +146,7 @@ template=$(portfolio_resolve_template tickets/task.md)   # → custom-templates/
 
 Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/tickets/task.md`. Adopters who want a customised task-body shape drop their version at `<private_repo>/custom-templates/tickets/task.md`. See `templates/README.md` for the path-mirroring convention.
 
-**Backward-compat fallback**: if `portfolio_resolve_template` returns empty (template file missing — partial adopter setup), fall back to the inline heredoc body below and print a one-line WARN on stderr (`WARN: tickets/task.md template missing — using inline fallback`).
+**Backward-compat fallback**: `portfolio_resolve_template` returns empty if the template file is missing, for example, after partial adopter setup. In this case, use the inline heredoc body below. Print a one-line WARN on stderr (`WARN: tickets/task.md template missing — using inline fallback`).
 
 Read `.claude/rules/writing-standard.md` before drafting. Treat the resolved template as the source of truth. Keep required sections, remove empty conditional sections, replace unknown required values with `TBD`, and delete the guidance comment before filing.
 
@@ -194,7 +194,7 @@ The title prefix is derived from the content, and must come from the project's c
 - Documentation-only change → `[Docs]`
 - Everything else → `[Chore]`
 
-A fork that extends the whitelist (e.g. adds `[Security]`, `[Perf]`, `[Scaffold]`) automatically gains the option here — the skill reads the live config, it does not hardcode the list. See apexyard#109 for the schema and how to extend.
+A fork that extends the whitelist (for example, adds `[Security]`, `[Perf]`, `[Scaffold]`) automatically gains the option here. The skill reads the live config, it does not hardcode the list. See apexyard#109 for the schema and how to extend.
 
 ### 6. Handle response
 
@@ -205,7 +205,7 @@ A fork that extends the whitelist (e.g. adds `[Security]`, `[Perf]`, `[Scaffold]
 ### 7. Create the issue (via the tracker abstraction)
 
 Dispatch creation through `tracker_create` (#670 / AgDR-0072) so the issue lands
-in **this project's** tracker — GitHub, GitLab, or a `custom` CLI — per its
+in **this project's** tracker, GitHub, GitLab, or a `custom` CLI, per its
 `tracker:` block in `apexyard.projects.yaml`. For a GitHub adopter this runs
 `gh issue create` exactly as before; no behaviour change.
 
@@ -266,10 +266,10 @@ echo "${url}"
 1. **One question at a time.** Never batch questions. Wait for each answer.
 2. **Always confirm before creating.** Show the full ticket and get explicit "yes".
 3. **Driver is required.** Every technical task needs a "why".
-4. **At least one acceptance criterion.** Don't create tasks with empty ACs.
+4. **At least one acceptance criterion.** Do not create tasks with empty ACs.
 5. **Labels auto-applied.** Priority label always applied.
 6. **Title prefix.** Derived from the nature of the work: Testing, CI, Refactor, or Chore.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

@@ -179,7 +179,7 @@ Use this mode when any project name must stay private on GitHub Free. The framew
 ```
 ~/ops/
 ├── apexyard/                ← public fork of me2resh/apexyard (framework code + tooling)
-└── apexyard-portfolio/      ← private repo (registry + per-project docs — never goes public)
+└── apexyard-portfolio/      ← private repo (registry + per-project docs: never goes public)
 ```
 
 The default sibling-dir name is **`<fork>-portfolio`**, so the relationship between the two repos is self-documenting on disk and on GitHub. If you kept the fork name as `apexyard`, the sibling defaults to `apexyard-portfolio`. If you renamed the fork (e.g. `cos` for Chief-of-Staff), the sibling defaults to `cos-portfolio`. Pick something else if you would prefer: the framework only cares about the local path you point the config block at.
@@ -262,7 +262,7 @@ defaults:
 EOF
 
 # v2: onboarding.yaml lives here too. Seed from the framework template
-# OR run /setup later inside the public fork — /setup writes to the
+# OR run /setup later inside the public fork: /setup writes to the
 # resolved onboarding path.
 cp ~/ops/apexyard/onboarding.yaml.example onboarding.yaml 2>/dev/null \
   || cp ~/ops/apexyard/onboarding.yaml onboarding.yaml 2>/dev/null \
@@ -357,7 +357,7 @@ If you are on an older framework version that does not have the `portfolio:` con
 ```bash
 cd ~/ops/apexyard
 
-# Tell the fork to ignore the registry + projects/ — they live in the portfolio.
+# Tell the fork to ignore the registry + projects/: they live in the portfolio.
 cat >> .gitignore <<'EOF'
 
 # Portfolio data lives in a separate private repo (split-portfolio mode).
@@ -559,10 +559,10 @@ This pattern follows **Custom templates** (path-mirroring overrides, see AgDR-00
 Seed from the framework example. **`/setup --split-portfolio` does this automatically for split-portfolio adopters** (#351 PR 3). The skill copies the example into the private repo as part of Step 5 (private-repo init). Single-fork adopters do the `cp` manually when they want to start customising. The framework deliberately does not auto-seed for single-fork. The reason is that an empty override file accumulating in the fork root before any overrides exist is more ceremony than value.
 
 ```bash
-# Split-portfolio — `/setup --split-portfolio` does this for you. Manual fallback:
+# Split-portfolio: `/setup --split-portfolio` does this for you. Manual fallback:
 cp ~/ops/apexyard/agent-routing.yaml.example ~/ops/apexyard-portfolio/agent-routing.yaml
 
-# Single-fork — always manual (and only when you're ready to customise):
+# Single-fork: always manual (and only when you're ready to customise):
 cp ~/ops/apexyard/agent-routing.yaml.example ~/ops/apexyard/agent-routing.yaml
 ```
 
@@ -671,8 +671,8 @@ Migrate now? This will:
   - Add portfolio.{onboarding,workspace_dir} keys to .claude/project-config.json
 
 Per-file-class semantics: onboarding.yaml is COPIED (small text file, sibling is
-the canonical source of truth); workspace/ is MOVED (size constraint — clones
-are potentially gigabytes, doubling disk usage makes no sense). Idempotent — if
+the canonical source of truth); workspace/ is MOVED (size constraint: clones
+are potentially gigabytes, doubling disk usage makes no sense). Idempotent. If
 interrupted, re-run. Per AgDR-0021 § H.
 
 [Y / n / dry-run — show commands, don't execute]
@@ -685,11 +685,11 @@ The migration is **per-file-class confirmable** (copy `onboarding.yaml`? Y/N; mo
 The skill **does not commit**: staging is the contract. you own both the public-fork commit AND the sibling-repo commit. After accepting the migration:
 
 ```bash
-# Public fork — review what's staged + the marker + config-block additions
+# Public fork: review what's staged + the marker + config-block additions
 git diff --cached
 git commit -m "chore: migrate to split-portfolio v2"
 
-# Private sibling repo — onboarding + workspace landed here
+# Private sibling repo: onboarding + workspace landed here
 cd ../apexyard-portfolio
 git status        # see the moved files
 git add onboarding.yaml workspace
@@ -703,12 +703,12 @@ cd ~/ops/apexyard
 
 SIBLING=../apexyard-portfolio   # adjust to your sibling-dir name
 
-# Copy onboarding.yaml — sibling becomes canonical source of truth; public
+# Copy onboarding.yaml: sibling becomes canonical source of truth; public
 # fork keeps a gitignored snapshot for legacy tooling (per AgDR-0021 § H).
 cp -p onboarding.yaml "$SIBLING/onboarding.yaml"
 git rm --cached onboarding.yaml 2>/dev/null || true
 
-# Move workspace/<name>/ contents — size constraint (clones are potentially
+# Move workspace/<name>/ contents: size constraint (clones are potentially
 # gigabytes; duplicating wastes disk).
 mkdir -p "$SIBLING/workspace"
 for entry in workspace/*; do
@@ -731,14 +731,14 @@ IGNORE
 # Write the v2 anchor
 echo "# This file marks the directory as an ApexYard ops fork (split-portfolio v2)." > .apexyard-fork
 
-# Update the config block — add the v2 keys
+# Update the config block: add the v2 keys
 jq --arg onb "$SIBLING/onboarding.yaml" \
    --arg ws  "$SIBLING/workspace" \
    '.portfolio.onboarding = (.portfolio.onboarding // $onb)
     | .portfolio.workspace_dir = (.portfolio.workspace_dir // $ws)' \
    .claude/project-config.json > /tmp/pc.json && mv /tmp/pc.json .claude/project-config.json
 
-# .claude/project-config.json is deliberately NOT staged — see #1031.
+# .claude/project-config.json is deliberately NOT staged: see #1031.
 git add .gitignore .apexyard-fork
 ```
 
@@ -747,7 +747,7 @@ git add .gitignore .apexyard-fork
 If you have already started in single-fork mode and pushed private project names to your public fork, run the **`/split-portfolio`** skill (introduced #146). It automates the full destructive recovery flow with explicit operator-confirmation gates at each step:
 
 ```
-/split-portfolio              # full migration — 10 steps, all gated
+/split-portfolio              # full migration: 10 steps, all gated
 /split-portfolio --verify     # read-only state report, no destructive ops
 /split-portfolio --dry-run    # walk through each step printing the commands, execute none
 ```
@@ -842,7 +842,8 @@ Every portfolio skill reads `apexyard.projects.yaml` and iterates the registry.
 | `/feature-diagram` | Slice the system by feature. Reads one row from `projects/<name>/feature-inventory.md` and emits a Mermaid `flowchart LR` at `projects/<name>/features/<slug>.md` for that feature. It shows the participating routes / models / jobs / screens. Sibling to `/c4` (system topology) and `/dfd` (data flows): different lens (per-feature slice) on the same codebase. Inventory is a hard dependency: run `/extract-features` first. Re-runs prompt to overwrite; `--force` bypasses. See AgDR-0035. |
 | `/process` | Anchor-scoped scan across **seven** process-discovery axes (explicit workflow definitions, queue/job chains, cron triggers, state-column transitions, API choreography, existing BPMN/Mermaid, documented steps), optionally cross-repo via `apexyard.projects.yaml`. Interviews only on the gaps the code could not answer, then emits a lint-clean BPMN 2.0 file at `projects/<name>/processes/<slug>.bpmn`. Sibling to `/c4` (static system topology) and `/extract-features` (exhaustive feature catalogue): same read-first-then-ask shape, BPMN as the output. Needs `python3` ≥ 3.9 for the grid layout (falls back to bare BPMN with a warning when it is missing) and Node + npm for `bpmnlint`. |
 | `/c4` | Reads a project's codebase and writes filled-in C4 L1 + L2 Mermaid diagrams (location depends on invocation context: see `.claude/skills/c4/SKILL.md`) |
-| `/tech-vision` | Interactive section-by-section author for the **technical / architecture** vision template (named `tech-vision` to disambiguate from product / company vision). Walks the operator through Scope, Principles, Target-state C4 L1, Current vs Target gap table, multi-quarter Migration path, explicit Anti-scope, and Review cadence. Anti-scope means "things we explicitly chose NOT to build". Then writes `projects/<name>/architecture/vision.md`. Resolves the template via `portfolio_resolve_template architecture/vision.md` so adopters with `<private_repo>/custom-templates/architecture/vision.md` see their shape. Re-runs OFFER (default-no) to overwrite; refresh mode preserves existing content as defaults for a quarterly review. Markdown-only output: Mermaid C4 block renders inline on GitHub, same as `/c4` / `/dfd`. See AgDR-0028. |
+| `/approach` | Guide a Heavy change design from standards, record decisions through `/decide`, and transfer it to `/design-review`. |
+| `/tech-vision` | Interactive section-by-section author for the **technical / architecture** vision template (named `tech-vision` to disambiguate from product / company vision). Writes a one-page vision: ranked drivers, NFRs with sources, principles, reuse and vendors, and what we will not build. It drafts the factual sections from code and documents, and the operator confirms each value. An optional Heavy appendix holds the longer sections. Then writes `projects/<name>/architecture/vision.md`. Resolves the template via `portfolio_resolve_template architecture/vision.md` so adopters with `<private_repo>/custom-templates/architecture/vision.md` see their shape. Re-runs OFFER (default-no) to overwrite; refresh mode preserves existing content as defaults for a quarterly review. Markdown-only output. The optional appendix holds the target state, with a Mermaid block that renders inline on GitHub. See AgDR-0028 and AgDR-0322. |
 | `/pdf` | Convert any framework-generated doc (markdown, HTML, BPMN) to PDF. Asks where the PDF should land via a 4-option prompt. Options: `workspace/<name>/docs/` (travels with the code), `projects/<name>/pdfs/` (ApexYard's view), a custom path, or "keep next to source". Converter dispatch is pandoc → md-to-pdf → wkhtmltopdf for markdown/HTML, and bpmn-to-image → SVG → pandoc for BPMN. Graceful-degrades when no installed converter exists (exit 3 + advisory). See AgDR-0034. |
 | `/codify-rule` | Turn a human (or Copilot, or any second-pass) review comment that caught a Rex-miss into a draft handbook entry. Resolves the source PR (current branch's open PR, `--pr <N>`, or a full GitHub PR-comment URL). Prompts for the comment text + file:line context. Routes to the right bucket (domain / architecture / general / language), and gates the full draft on Y/edit/no before writing any file. Every entry carries a `_Source: PR #N comment by @author on YYYY-MM-DD_` footer for traceability. Defaults to advisory enforcement; `--blocking` flag opts in to `ENFORCEMENT: blocking`. Domain bucket pre-populates a `paths:` frontmatter glob from the file:line context for the operator to refine. For split-portfolio adopters with a configured `custom_handbooks_dir`, the skill offers to land the entry in the private layer instead of the public `handbooks/`. Stage 2 of #293 (Rex domain-aware handbooks); sibling to the future `/enrich-domain` skill (Stage 3). See AgDR-0040. |
 | `/geo-audit` | LLM/agent discoverability audit (GEO + AEO). Six check buckets (Discovery / Capability-signaling / Content-format / Token-economics / Analytics / UX). They cover `llms.txt`, `llms-full.txt`, AI-crawler directives in `robots.txt`, `AGENTS.md`, `skill.md` capability manifest. Also covers JSON-LD citation grounding (`author` / `dateModified` / `datePublished` / `publisher`). Also covers snippet-extractable Q&A shape, markdown alternates, first-500-tokens lead, prompt-injection hygiene, per-page token-count thresholds, and an AI-traffic fingerprint advisory. Covers GEO (LLM citations) + AEO (coding-agent consumption). Sibling to `/seo-audit`; `/launch-check` fans out to both at milestone boundaries. v1 AI-crawler list (12 entries: GPTBot, ChatGPT-User, OAI-SearchBot, ClaudeBot, Claude-Web, anthropic-ai, Google-Extended, PerplexityBot, CCBot, Bytespider, Applebot-Extended, cohere-ai) lives at `.claude/registries/ai-crawlers.json`. The audit's `skill.md` capability-manifest check is the upstream GEO/AEO convention: **distinct from Claude Code's `SKILL.md`** slash-command spec; AgDR-0043 documents the naming clash. Auto-PASS for non-web projects (APIs, CLIs, libraries). Advisory posture: severity ceiling is `high`, not `critical`. Persists via `_lib-audit-history.sh` (AgDR-0019). Originally shipped as `/generative-engine-audit` (PR #315); renamed in #334. See AgDR-0043. |
@@ -983,7 +984,7 @@ git log --oneline HEAD..upstream/main
 git checkout -b chore/sync-upstream
 git merge upstream/main
 
-# Resolve any conflicts (usually in files you haven't customised — role files, workflow files, CLAUDE.md imports)
+# Resolve any conflicts (usually in files you haven't customised: role files, workflow files, CLAUDE.md imports)
 # Then push and open a PR
 git push -u origin chore/sync-upstream
 gh pr create --title "chore: sync ops fork with upstream apexyard"

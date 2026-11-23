@@ -37,12 +37,12 @@ The recommended shape (mirrored across the four samples shipped with the framewo
 # Handbook: <Title>
 
 **Scope:** <which PRs this applies to, derived from the directory>
-**Enforcement:** advisory  (or: blocking — see below)
+**Enforcement:** advisory  (or: blocking, see below)
 
 ## The rule
 
 <the rule in concrete, actionable language. Tables, bullet lists, and
-code snippets are fine. Aim for ≤ 50 lines per handbook — one rule
+code snippets are fine. Aim for ≤ 50 lines per handbook: one rule
 cluster per file. Split into multiple files if a topic grows beyond
 that.>
 
@@ -65,15 +65,15 @@ Format-by-example is the cheapest way to keep findings consistent.>
 
 ## What's NOT a violation
 
-<the false-positive list. As load-bearing as the rule itself —
-without it, Rex over-reports and adopters tune him out.>
+<the false-positive list. This list is as load-bearing as the rule itself.
+Without it, Rex over-reports and adopters tune him out.>
 ```
 
 Other shapes are fine: Rex reads as prose. The shape above keeps the four samples consistent.
 
 ## Enforcement: advisory vs blocking
 
-**Default: advisory.** Rex surfaces the finding as a `nit:` / `suggestion:` comment in the review. The PR can still merge if other gates pass.
+**Default: advisory.** Rex surfaces the finding as a `Nit` (or `Pre-existing`) finding in the review. The PR can still merge if other gates pass.
 
 **Opt in to blocking** by adding the literal phrase `ENFORCEMENT: blocking`. Put it on the first line after the front matter block. When there is no front matter, put it at the top of the file. Example:
 

@@ -8,24 +8,27 @@ allowed-tools: Bash, Read, Grep, Glob
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /security-review — Security Review
+# /security-review: Security Review
 
 Review a pull request specifically for security vulnerabilities and best practices.
 
 ## LSP-aware (optional, recommended)
 
-This skill performs semantic code navigation — finding definitions, walking references, tracing handlers across modules. With LSP enabled (`ENABLE_LSP_TOOL=1` + per-language plugin per `docs/getting-started.md`), queries are ~3-15× cheaper in token cost than grep + Read. Without LSP, the skill falls back to grep + Read transparently — no new failure mode, just optional speed.
+This skill performs semantic code navigation: it finds definitions, follows references, and traces handlers across modules.
+With LSP enabled (`ENABLE_LSP_TOOL=1` + per-language plugin per `docs/getting-started.md`), queries cost ~3-15× fewer tokens than grep + Read.
+Without LSP, use grep + Read automatically. LSP adds optional speed without a new failure mode.
 
-Per-language LSP plugins live in Claude Code's marketplace. Install once; the skill detects the active language and dispatches automatically.
+Per-language LSP plugins live in Claude Code's marketplace.
+Install once. The skill detects the active language and dispatches automatically.
 
 ## Activated agent + role
 
 When `/security-review` runs:
 
-1. **Primary reviewer**: the **Security Reviewer agent (Hakim)** at [`.claude/agents/security-reviewer.md`](../../agents/security-reviewer.md) — runs the automated security checklist.
-2. **Human approval gate**: the **[Security Auditor](../../../roles/security/security-auditor.md)** role — activates on any PR that touches auth / crypto / secrets / user data / PII, or when `/security-review` is explicitly invoked.
-3. **Strategic calls**: **Hakim** owns threat modelling, compliance analysis, and novel attack surfaces (the [Security Auditor](../../../roles/security/security-auditor.md) § "Security posture", AgDR-0301). The **[Penetration Tester](../../../roles/security/penetration-tester.md)** (Hamza) reviews each threat model that Hakim writes, so Hakim does not review its own threat model. A CRITICAL finding blocks the release. For a HIGH finding, or any other finding that Hakim judges release-blocking, Hakim recommends that the human approver block the release. Risk acceptance, exceptions to security requirements, and lifting a release block go to the human approver.
-4. **For active testing**: the **[Penetration Tester](../../../roles/security/penetration-tester.md)** — exploit discovery, API security review, pre-release security sign-off.
+1. **Primary reviewer**: the **Security Reviewer agent (Hakim)** at [`.claude/agents/security-reviewer.md`](../../agents/security-reviewer.md) runs the automated security checklist.
+2. **Human approval gate**: activate the **[Security Auditor](../../../roles/security/security-auditor.md)** role for PRs touching auth, crypto, secrets, user data, or PII. Also activate this role whenever the user explicitly invokes `/security-review`.
+3. **Strategic calls**: **Hakim** owns threat modelling, compliance analysis, and novel attack surfaces (the [Security Auditor](../../../roles/security/security-auditor.md) § "Security posture", AgDR-0301). The **[Penetration Tester](../../../roles/security/penetration-tester.md)** (Hamza) reviews each threat model that Hakim writes, so Hakim does not review its own threat model. CRITICAL and HIGH findings the change introduced or worsened block the PR. Pre-existing findings follow the remediation SLA (AgDR-0313). A CRITICAL finding the change introduced or worsened blocks the release. For HIGH findings, Hakim recommends that the human approver block the release. Hakim also recommends this for any finding he judges release-blocking. Risk acceptance, exceptions to security requirements, and lifting a release block go to the human approver.
+4. **For active testing**: the **[Penetration Tester](../../../roles/security/penetration-tester.md)**: exploit discovery, API security review, pre-release security sign-off.
 
 See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the full activation protocol.
 
@@ -60,7 +63,7 @@ Every other blocker stays:
 - a hook change that runs code from command text, a cloned repository or other untrusted input
 - the checks that `.claude/agents/code-reviewer.md` § "Blocking-Severity Bar" keeps blocking. These are the Acceptance Criteria check, the AgDR check, the Glossary requirement, a handbook marked `ENFORCEMENT: blocking`, and rail 1 of `.claude/rules/right-size-ceremony.md`.
 
-A regression on an ordinary command is kind 1. An ordinary command is one that an agent or a human really types. A false block counts. A slowdown above the 2 s target in AgDR-0267 § "Cost budget" counts when `dev` is below it.
+A regression on an ordinary command is kind 1. An ordinary command is one that an agent or a human types. A false block counts. A slowdown above the 2 s target in AgDR-0267 § "Cost budget" counts when `dev` is below it.
 
 A deleted or weakened paired test for a shape that `dev` already blocks is a correctness finding (kind 3).
 
@@ -76,9 +79,16 @@ The reviewer mutation lock blocks `git clone`, `git fetch`, and `git checkout` w
 
 ## Process
 
-### 0. Write the active-reviewer marker (REQUIRED — me2resh/apexyard#843)
+### 0. Write the active-reviewer marker (REQUIRED: me2resh/apexyard#843)
 
-Before spawning the Security Reviewer agent, write the active-reviewer session marker. It records that this review pass is the sanctioned one and suppresses `warn-review-marker-write.sh`'s advisory warning on the `*-security.approved` write (same convention as `/code-review`'s rex marker; that hook warns and never blocks since #1026 — AgDR-0111). The marker is scoped to THIS Claude Code session (me2resh/apexyard#1376) — resolve its path through `active_reviewer_marker_path`, never write the bare `.claude/session/active-reviewer` path directly. At skill entry:
+Before spawning the Security Reviewer agent, write the active-reviewer session marker.
+It records this review as sanctioned.
+It also suppresses `warn-review-marker-write.sh`'s advisory warning on the `*-security.approved` write, like `/code-review`'s rex marker.
+Since #1026, that hook warns and never blocks (AgDR-0111).
+Scope the marker to THIS Claude Code session (me2resh/apexyard#1376).
+Resolve its path through `active_reviewer_marker_path`.
+Never write the bare `.claude/session/active-reviewer` path directly.
+At skill entry:
 
 ```bash
 # Ops root: pin first, then walk up (docs/skills/shared/ops-root.md).
@@ -89,7 +99,10 @@ mkdir -p "$(dirname "$active_marker")"
 printf '%s\n' "<owner/repo>#<pr>:security" > "$active_marker"
 ```
 
-On skill exit (after the review is posted), clear the marker. Shell variables do not persist across separate Bash tool calls, so the exit step re-resolves `ops_root` and `active_marker` from scratch — it does not reuse the step-0 variable, which would silently be empty in a later call and turn the `rm -f` into a no-op:
+On skill exit, after posting the review, clear the marker.
+Shell variables do not persist across separate Bash tool calls.
+Thus, resolve `ops_root` and `active_marker` again during the exit step.
+Do not reuse the step-0 variable. It would silently be empty in a later call and make `rm -f` a no-op:
 
 ```bash
 # Ops root: pin first, then walk up (docs/skills/shared/ops-root.md).
@@ -99,37 +112,34 @@ active_marker=$(active_reviewer_marker_path "$ops_root" "" "<owner/repo>" "<pr>"
 rm -f "$active_marker"
 ```
 
-The marker is keyed on session, repo, PR and review kind (me2resh/apexyard#1649). Each review writes and clears only its own file, so reviews run at the same time. The mutation lock applies to review agents only; the orchestrator and build agents can keep working. Use the same `<owner/repo>`, `<pr>` and kind in the write step and the exit step. Spawn the reviewer with the Agent tool and `subagent_type: security-reviewer`. Never use `general-purpose`: the lock finds a review agent by that type.
+The marker uses session, repo, PR, and review kind as its key (me2resh/apexyard#1649). Each review writes and clears only its own file, so reviews run at the same time. The mutation lock applies to review agents only. The orchestrator and build agents can keep working. Use the same `<owner/repo>`, `<pr>` and kind in the write step and the exit step. Spawn the reviewer with the Agent tool and `subagent_type: security-reviewer`. Never use `general-purpose`: the lock finds a review agent by that type.
 
-Nothing mechanically stops a build-class sub-agent writing the same file; what makes this marker legitimate is that a real, independent review happened. See `.claude/hooks/warn-review-marker-write.sh` and `.claude/rules/pr-workflow.md` § "Build agents cannot self-review".
+Nothing mechanically stops a build-class sub-agent writing the same file. This marker is legitimate only after a real, independent review. See `.claude/hooks/warn-review-marker-write.sh` and `.claude/rules/pr-workflow.md` § "Build agents cannot self-review".
 
 ### 0a. Never hand the reviewer a marker path (me2resh/apexyard#1144)
 
 **The spawn prompt for Hakim MUST NOT contain a literal marker path.** Say
-*"write your approval marker on an APPROVED verdict"*; say nothing about where.
+*"write your approval marker on an APPROVED verdict"*. Say nothing about where.
 
-Hakim already resolves the correct path through `review_marker_path` — the
-repo-qualified `<owner>__<repo>__<pr>-security.approved` form from AgDR-0060,
-which is the exact path the gates read. A path in the prompt overrides that
-correct resolution: the agent obeys the instruction it was handed, and the
-marker lands at the bare-number `<pr>-security.approved` instead. **No gate reads
-that path** — there is no bare-number fallback on any on-disk marker lookup.
+Hakim already resolves the correct path through `review_marker_path`.
+It uses the repo-qualified `<owner>__<repo>__<pr>-security.approved` form from AgDR-0060, which is the exact path the gates read.
+A path in the prompt overrides that correct resolution.
+The agent follows the supplied instruction and writes the bare-number `<pr>-security.approved` marker instead.
+**No gate reads that path**. No on-disk marker lookup has a bare-number fallback.
 
-The failure is silent in the dangerous direction. `ls .claude/session/reviews/`
-shows a file that reads, to a human, like a valid approval; only the merge
-attempt reveals otherwise. And at that moment the obvious repair — moving the
-file into place — is marker forging, the behaviour
-[`pr-workflow.md`](../../rules/pr-workflow.md) § "Build agents cannot
-self-review" exists to prevent. The right recovery is always: delete the
-gate-invisible file and re-run a real review.
+This failure silently permits an apparent approval.
+`ls .claude/session/reviews/` shows a file that looks valid to a human. Only the merge attempt reveals the failure.
+Moving the file into place at that point is marker forging.
+[`pr-workflow.md`](../../rules/pr-workflow.md) § "Build agents cannot self-review" prohibits that behaviour.
+Always recover by deleting the gate-invisible file and repeating a real review.
 
-`warn-unqualified-review-marker.sh` warns (advisory, never blocks) when a
-bare-number marker appears, and the merge gates name the near-miss in their
-refusal message — but the cheap fix is upstream of both: don't pass a path.
+`warn-unqualified-review-marker.sh` warns when a bare-number marker appears. Its warning is advisory and never blocks.
+The merge gates identify the near-miss in their refusal message.
+Prevent both problems: do not pass a path.
 
 ## Security Checklist
 
-> Baseline: OWASP Top 10 (2025) — supply-chain failures are now #3; use OWASP ASVS 5.0 as the verification baseline for these checks.
+> Baseline: OWASP Top 10 (2025). Supply-chain failures are now #3. Use OWASP ASVS 5.0 as the verification baseline for these checks.
 
 ### Secrets & Credentials
 
@@ -170,14 +180,29 @@ refusal message — but the cheap fix is upstream of both: don't pass a path.
 
 ## Severity Levels
 
+Security levels describe risk separately from finding tags.
+CRITICAL and HIGH findings introduced or worsened by the change are Important and retain their blocking actions.
+Apply this exact security SLA contract:
+
+```text
+A Pre-existing security finding does not block the PR. It gets a ticket due on its first-seen date plus its SLA (`.security.remediation_sla_days`: CRITICAL 7 days, HIGH 30 days, MEDIUM 90 days, LOW no SLA). It blocks a release only after the SLA is breached. The review names the severity, the SLA and the due date. Tracking: me2resh/apexyard#2109.
+```
+
 | Level | Action |
 |-------|--------|
-| CRITICAL | Block PR immediately |
-| HIGH | Block PR, require fix |
+| CRITICAL | Block PR immediately when the change introduced or worsened it |
+| HIGH | Block PR, require fix, when the change introduced or worsened it |
 | MEDIUM | Warn, recommend fix |
 | LOW | Informational |
 
 ## Output
+
+Give each finding exactly one tag: `Important`, `Nit`, or `Pre-existing`.
+Only `Important` findings can cause `CHANGES REQUESTED` under the applicable blocking rules.
+`Nit` and `Pre-existing` findings never block the PR.
+Each `Pre-existing` finding includes base evidence and a suggested ticket title.
+Follow [Review severity](../../../templates/REVIEW.md) and the agent's Output Format.
+Keep all other security rules and independent gates in effect.
 
 Posts a GitHub review with:
 
@@ -192,11 +217,14 @@ Invokes: Security Reviewer Agent (Hakim)
 
 ## Persist the run + render trend
 
-After the Security Reviewer agent posts the review — through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host — #763), not a hardcoded `gh pr review` — persist a structured artefact via the shared audit-history lib so the security-review trend across PRs becomes legible. See `docs/agdr/AgDR-0019-audit-artefact-persistence.md` for the schema rationale.
+After the Security Reviewer agent posts the review, persist a structured artefact via the shared audit-history lib.
+Post through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host, #763), not a hardcoded `gh pr review`.
+Persistence makes the security-review trend across PRs visible.
+See `docs/agdr/AgDR-0019-audit-artefact-persistence.md` for the schema rationale.
 
 ### 1. Resolve project name + score + verdict
 
-`<project-name>` is the project's registered name in `apexyard.projects.yaml`, derived from the PR's repo. If the project isn't registered, use the basename of the repo and tell the operator to `/handover` it for cross-machine trend continuity.
+`<project-name>` is the project's registered name in `apexyard.projects.yaml`, derived from the PR's repo. If the registry does not contain the project, use the basename of the repo and tell the operator to `/handover` it for cross-machine trend continuity.
 
 Compute a single headline score from the severity distribution of the findings in the review:
 
@@ -204,7 +232,8 @@ Compute a single headline score from the severity distribution of the findings i
 score = max(0, 100 - 25*critical - 10*high - 3*medium - 1*low)
 ```
 
-Compute the verdict by the worst-severity rule:
+Compute the audit-history verdict by the worst-severity rule.
+This metric does not set the PR verdict. Apply the finding tags to the PR verdict.
 
 | Worst severity present | Verdict |
 |---|---|
@@ -217,7 +246,7 @@ Compute the verdict by the worst-severity rule:
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-audit-history.sh"
 
-# Lowercase severity in the payload — the lib's stats derivation expects
+# Lowercase severity in the payload: the lib's stats derivation expects
 # critical / high / medium / low / info. The visible review on the PR
 # can use whatever capitalisation reads best.
 payload=$(mktemp); cat > "$payload" <<'EOF'
@@ -240,10 +269,10 @@ PR <number>; reviewed `<branch>..main` (X files, Y +/- lines).
 
 ## Findings
 
-| # | Severity | OWASP class | Finding | File:Line | Status |
-|---|---|---|---|---|---|
-| F1 | critical | A03 Injection | Unsanitised user input concatenated into SQL | `src/users.ts:42` | open |
-| F2 | high | A07 Auth failure | JWT signature not verified | `src/auth.ts:18` | open |
+| # | Tag | Severity | OWASP class | Finding | File:Line | Status |
+|---|---|---|---|---|---|---|
+| F1 | Important | critical | A03 Injection | Unsanitised user input concatenated into SQL | `src/users.ts:42` | open |
+| F2 | Important | high | A07 Auth failure | JWT signature not verified | `src/auth.ts:18` | open |
 
 ## Dependency vulnerabilities
 
@@ -255,8 +284,8 @@ PR <number>; reviewed `<branch>..main` (X files, Y +/- lines).
 
 ## Recommendations
 
-1. F1 — fix injection vector before merge
-2. F2 — verify JWT signatures
+1. F1: fix injection vector before merge
+2. F2: verify JWT signatures
 EOF
 
 ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -270,20 +299,64 @@ rm -f "$payload" "$body"
 audit_render_trend "<project-name>" "security-review" 5
 ```
 
-- < 2 prior runs → silent (no trend section). Don't append anything.
+- < 2 prior runs → silent (no trend section). Do not append anything.
 - ≥ 2 prior runs → prints a markdown trend block (heading + table + ASCII chart of `score` over time) to stdout. Append it to this run's MD artefact so the PR-by-PR security trend is visible.
 
 ### 4. Opt-in commit (history-tracked marker)
 
-By default the dimension's runs/ JSON files are gitignored. The lib applies a `.gitignore` based on the presence of the marker:
+By default, Git ignores the dimension's runs/ JSON files. The lib applies a `.gitignore` based on the presence of the marker:
 
 ```bash
 # Opt in to commit security-review history for this project
 touch projects/<name>/audits/security-review/.audit-history-tracked
 ```
 
-The MD artefacts at `<dim_dir>/<ts>.md` are committed regardless — they are the durable human-readable artefact of every PR's security review.
+Commit the MD artefacts at `<dim_dir>/<ts>.md` regardless. They provide a durable human-readable record of every PR's security review.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*
+
+
+### SLA tracker handoff
+
+The tracker issue is the record. Its creation date is the first-seen date.
+A fingerprint identifies the same finding across reviews.
+Use `.claude/hooks/_lib-sla.sh` to compute fingerprints:
+
+```bash
+source .claude/hooks/_lib-sla.sh
+sla_fingerprint dependency '<package>' '<advisory ID>'
+sla_fingerprint code '<rule>' '<repository-relative file>' '<function>'
+```
+
+Use exact scanner identifiers and case. Exclude versions, line numbers, and PR identifiers.
+Use repository-relative paths without `./`. Use `<module>` for code outside a function.
+The helper hashes a compact JSON array with SHA-256.
+
+1. Reproduce each finding on the PR base commit.
+2. Record the base SHA, path, and matching advisory or code evidence.
+3. Without base proof, treat the finding as new and block the PR.
+4. Include `Fingerprint: <fp>` and `Base proof: <short evidence>` on each Pre-existing line.
+5. Search with `sla_find_open <repo> <fp>`.
+6. On a match, report `tracked in #N, due YYYY-MM-DD` from the issue.
+7. Preserve the issue's severity, SLA, first-seen date, and due date.
+8. On no match, hand the fingerprint, severity, title, and proof to the orchestrator.
+
+Only the orchestrator calls `sla_track <repo> <fp> <severity> <title> <base-proof>`.
+Hakim and the PR author never file the SLA issue.
+The orchestrator serializes calls per repository and returns the issue reference before the final review.
+Never retry a failed create automatically. Search the tracker and reconcile the result first.
+A pending due date indicates incomplete creation. Finalize that issue from its creation date without creating another issue.
+Tracker errors leave the handoff unresolved. Do not report a successful search or completed tracking.
+LOW records use `SLA days: none` and `Due: none`.
+
+Write CRITICAL, HIGH, and MEDIUM findings on one line:
+
+```text
+- Pre-existing: <finding>. Suggested ticket title: <title>. Severity: HIGH. SLA: 30 days. Due: YYYY-MM-DD. Fingerprint: <fp> | Base proof: <base SHA, path, matching evidence> | tracked in #N, due YYYY-MM-DD
+```
+
+Run `check-review-body.sh --security` before submitting the review.
+The validator checks fields. Hakim must verify that the base evidence supports the classification.
+An overdue proven finding remains Pre-existing. The release check enforces its deadline.

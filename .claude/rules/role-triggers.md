@@ -1,6 +1,6 @@
 # Role Triggers — When to Activate Which Role
 
-ApexYard ships **12 role definitions** in `roles/{department}/`. They are not all loaded into every session (context efficiency — most of the files are idle during any given task). Instead, a role is **activated** when a specific condition is met: you read the role file, adopt its identity, responsibilities, and constraints for the duration of the task, then hand off to the next role in the chain.
+ApexYard ships **12 role definitions** in `roles/{department}/`. They are not all loaded into every session (context efficiency, most of the files are idle during any given task). Instead, a role is **activated** when a specific condition is met: you read the role file, adopt its identity, responsibilities, and constraints for the duration of the task, then hand off to the next role in the chain.
 
 AgDR-0301 reduced the roster from 23 agents to 15. Eight roles merged into five receivers, and their role files are redirect stubs for one release. There is no department-head role. Head-level approvals go to the **human approver**: the person who records each per-PR merge approval. The config key `.review_markers.human_approver_title` only sets the title that hooks print (default `CEO`). No hook records a head-level decision, so record it in an AgDR or in the PR approval comment. No agent approves its own work.
 
@@ -17,7 +17,7 @@ AgDR-0301 reduced the roster from 23 agents to 15. Eight roles merged into five 
 | **SRE** | `roles/engineering/sre.md` | Production incident · SLO breach · monitoring / alerting work · on-call rotation |
 | **Product Manager** | `roles/product/product-manager.md` | PRD creation · user-story breakdown · acceptance-criteria authoring · sprint planning · roadmap prioritization · feasibility call · market research · competitive analysis |
 | **UI Designer** | `roles/design/ui-designer.md` | Visual design · component specifications · design tokens · pixel-level work · design-system change · UX principles · user flows · information architecture · usability review · wireframing |
-| **Security Auditor** | `roles/security/security-auditor.md` | **PR touches auth / crypto / user data / secrets** · **the security-critical trust chain (production `.claude/hooks/*.sh`, `.claude/settings.json`, `.githooks/*`, and delegated gate runner `bin/run-pre-push-checks.sh`) — #777/#1302** · SAST findings · OWASP review · dependency vulnerability · security strategy · threat model · compliance call |
+| **Security Auditor** | `roles/security/security-auditor.md` | **PR touches auth / crypto / user data / secrets** · **the security-critical trust chain (production `.claude/hooks/*.sh`, `.claude/settings.json`, `.githooks/*`, and delegated gate runner `bin/run-pre-push-checks.sh`): #777/#1302** · SAST findings · OWASP review · dependency vulnerability · security strategy · threat model · compliance call |
 | **Penetration Tester** | `roles/security/penetration-tester.md` | Active testing · exploit discovery · API security review · pre-release security sign-off · review of a threat model that the Security Auditor wrote |
 | **Data Engineer** | `roles/data/data-engineer.md` | ETL pipelines · data modelling · data-quality work · warehouse schema changes · SQL queries · dashboards · A/B-test analysis · metric investigation · analytics strategy · data governance |
 
@@ -36,8 +36,8 @@ The old role titles still resolve. "Act as the Head of Product" activates the Pr
 When a trigger condition is met:
 
 1. **Read the role file**: `@roles/{department}/{role}.md`
-2. **Adopt the role's identity** — responsibilities, CAN / CANNOT constraints, interfaces
-3. **Follow the handoff rules** defined in the role file — who you receive from, who you deliver to
+2. **Adopt the role's identity**: responsibilities, CAN / CANNOT constraints, interfaces
+3. **Follow the handoff rules** defined in the role file: who you receive from, who you deliver to
 4. **Stay in the role** until the task completes or a different trigger activates a different role
 
 A single conversation can move through multiple roles. The SDLC for one feature typically chains:
@@ -67,28 +67,28 @@ An escalation that needs a head-level decision goes to the human approver, not t
 
 When you activate, hand off, or exit a role, print a single-line marker at the top of your response. The reader sees who's driving the work right now.
 
-**Activation** — when entering a role:
+**Activation**: when entering a role:
 
 ```
 ▸ Activating Salim (QA Engineer) for #42 (trigger: ticket labeled `qa`)
 ```
 
-**Handoff** — when one role hands off to another:
+**Handoff**: when one role hands off to another:
 
 ```
 ▸ Salim (QA Engineer) → Mariam (Product Manager) (handoff: acceptance criteria signed off)
 ```
 
-**Exit** — when finishing a role and returning to ambient mode:
+**Exit**: when finishing a role and returning to ambient mode:
 
 ```
 ▸ Salim (QA Engineer) task complete — returning to ambient mode
 ```
 
-**Main thread route** — Hadi prints a marker only when it routes work to a role. Hadi does not print a marker for ordinary work.
+**Main thread route**: Hadi prints a marker only when it routes work to a role. Hadi does not print a marker for ordinary work.
 
 ```
-▸ Hadi routes #42 to Rex (code review)
+▸ Hadi routes #42 to Rex (Code Reviewer)
 ▸ Hadi routes #42 to Salim (QA Engineer) (trigger: ticket labeled qa)
 ```
 
@@ -98,13 +98,13 @@ This is a **prose convention**, not a mechanically-enforced format. The sibling 
 
 ## Trigger Types
 
-**Auto-activation** — a role should activate automatically when its condition is detected in conversation context:
+**Auto-activation**: a role should activate automatically when its condition is detected in conversation context:
 
 | Signal | Activate |
 |--------|----------|
 | Ticket moved to `qa` label | QA Engineer |
 | PR diff touches `**/auth/**`, `**/crypto/**`, `**/secrets/**`, `.env*` | Security Auditor |
-| Edit/PR touches the trust chain — production `.claude/hooks/*.sh` (merge gates, tracker/forge lib, review-marker lib, credential-broker scripts), `.claude/settings.json` (the matcher wiring that decides whether a gate fires), `.githooks/*`, or a delegated gate runner such as `bin/run-pre-push-checks.sh` | Security Auditor (#777, #1302) |
+| Edit/PR touches the trust chain: production `.claude/hooks/*.sh` (merge gates, tracker/forge lib, review-marker lib, credential-broker scripts), `.claude/settings.json` (the matcher wiring that decides whether a gate fires), `.githooks/*`, or a delegated gate runner such as `bin/run-pre-push-checks.sh` | Security Auditor (#777, #1302) |
 | PR diff touches `.github/workflows/**`, `golden-paths/pipelines/**` | Platform Engineer |
 | PR diff touches `docs/agdr/**` or adds a new dependency | Tech Lead |
 | Edit/PR touches a design artifact (technical design, migration AgDR, feature spec / PRD) | Solution Architect |
@@ -115,7 +115,7 @@ This is a **prose convention**, not a mechanically-enforced format. The sibling 
 | Component spec / design tokens question | UI Designer |
 | Cross-project strategy question | The receiver for that discipline (Tech Lead, Product Manager, UI Designer, Security Auditor, or Data Engineer). The human approver makes the decision. |
 
-**Prompted activation** — the user explicitly asks for a role:
+**Prompted activation**: the user explicitly asks for a role:
 
 ```
 "Act as the QA Engineer and verify ticket #42"
@@ -138,7 +138,7 @@ When you hit a CANNOT, hand off to the role that can.
 
 ## Handoff Artefacts
 
-Roles deliver concrete artefacts at each handoff point. These are the contracts between roles — if the artefact isn't ready, the next role can't start.
+Roles deliver concrete artefacts at each handoff point. These are the contracts between roles. If the artefact is not ready, the next role cannot start.
 
 | From → To | Artefact |
 |-----------|----------|
@@ -161,11 +161,11 @@ Roles deliver concrete artefacts at each handoff point. These are the contracts 
 Two of the rows above encode a **practitioner-reviews / human-decides** split. AgDR-0301 supersedes the earlier head-escalates split of AgDR-0106:
 
 - **UI design gate.** The **UI Designer (Nour)** owns the routine per-PR design gate. She reviews the implementation diff, and a person records the verdict with `/approve-design` (gated by `require-design-review-for-ui.sh`). A design-system change, a brand change, a cross-product visual standard, or a design disagreement goes to the human approver.
-- **Security escalation.** A **Security Auditor's findings + required fixes go to the Tech Lead** — remediation is engineering work. Hakim also owns the security posture: strategy, threat models, and compliance. The Penetration Tester (Hamza) reviews each threat model that Hakim writes, so no agent reviews its own security work. A CRITICAL finding blocks the release, and only the human approver can lift that block. For a HIGH finding, or any other finding that Hakim judges release-blocking, Hakim recommends that the human approver block the release. Risk acceptance and exceptions to security requirements go to the human approver. Hakim keeps read-only tools.
+- **Security escalation.** A **Security Auditor's findings + required fixes go to the Tech Lead**: remediation is engineering work. Hakim also owns the security posture: strategy, threat models, and compliance. The Penetration Tester (Hamza) reviews each threat model that Hakim writes, so no agent reviews its own security work. CRITICAL and HIGH findings the change introduced or worsened block the PR; Pre-existing findings follow the remediation SLA (AgDR-0313). A CRITICAL finding the change introduced or worsened blocks the release, and only the human approver can lift that block. For a HIGH finding, or any other finding that Hakim judges release-blocking, Hakim recommends that the human approver block the release. Risk acceptance and exceptions to security requirements go to the human approver. Hakim keeps read-only tools.
 
 ## Aspirational → Real
 
-Before this rule existed, the 19 role files were passive markdown docs — no trigger, no activation, no automatic reference from workflows or skills. A user had to manually say *"please read `roles/engineering/qa-engineer.md` and act as the QA Engineer"* for anything to happen.
+Before this rule existed, the 19 role files were passive markdown docs: no trigger, no activation, no automatic reference from workflows or skills. A user had to manually say *"please read `roles/engineering/qa-engineer.md` and act as the QA Engineer"* for anything to happen.
 
 This file closes that gap. When in a Claude Code session under apexyard, the trigger table drives which role activates, and the workflow and skill files now explicitly reference the role files at every phase boundary. Roles are now **first-class participants** in the SDLC, not reference material.
 
@@ -173,7 +173,7 @@ This file closes that gap. When in a Claude Code session under apexyard, the tri
 
 Self-discipline (the agent remembering to read the role file when the rule fires) is the primary mechanism. The framework also ships a mechanical backstop: `.claude/hooks/detect-role-trigger.sh` scans for trigger conditions on every relevant tool call and emits a system-reminder-style banner naming the role + the file to read.
 
-Same advisory shape as `check-upstream-drift.sh` — non-blocking, exit 0 always. The banner cannot force the agent to adopt the role, but it removes the "I forgot the rule applied here" failure mode.
+Same advisory shape as `check-upstream-drift.sh`, non-blocking, exit 0 always. The banner cannot force the agent to adopt the role, but it removes the "I forgot the rule applied here" failure mode.
 
 #### Class-aware banner (HYBRID, AgDR-0050 § Axis 6 — live since #347 PR 5)
 
@@ -182,7 +182,7 @@ Each banner reads the matched role's `**Class**:` value from the `## Activation 
 - **Isolated-work-class** (6 roles: Tech Lead, Solution Architect, QA Engineer, SRE, Security Auditor, Pen Tester): the banner instructs the agent to **SPAWN the sub-agent via the Agent tool** with `subagent_type: <slug>`, naming both the canonical role file at `roles/<dept>/<role>.md` and the agent wrapper at `.claude/agents/<slug>.md`. Per AgDR-0050 § Axis 6, isolated work benefits from isolated context + tool restriction.
 - **In-flow-class** (6 roles: Backend / Frontend / Platform Engineer, Product Manager, UI Designer, Data Engineer): the banner instructs the agent to **adopt the persona IN-THREAD** by reading `roles/<dept>/<role>.md`. Per AgDR-0050 § Axis 6, in-flow work loses too much shared context if spawned out-of-thread.
 
-One naming exception: the Security Auditor role (`roles/security/security-auditor.md`) maps to the `security-reviewer` agent slug, not `security-auditor`. This is the Hatim→Hakim consolidation from PR #360 — the agent filename was preserved so `/security-review` and the auto-fire trigger keep working. The hook handles the exception via `agent_slug_for()`.
+One naming exception: the Security Auditor role (`roles/security/security-auditor.md`) maps to the `security-reviewer` agent slug, not `security-auditor`. This is the Hatim→Hakim consolidation from PR #360. The agent filename was preserved so `/security-review` and the auto-fire trigger keep working. The hook handles the exception via `agent_slug_for()`.
 
 The class lookup is conservative: if the role file is missing or the `**Class**:` line can't be parsed, the banner falls back to in-flow-class shape. Better to under-trigger sub-agent spawn than to incorrectly suggest one for an unclassified role.
 
@@ -192,13 +192,13 @@ Triggers wired in v1 (me2resh/apexyard#206):
 |----------------|------------|-----------|------|
 | Label-based  | `PreToolUse` on `Bash` (matcher: `gh issue edit *`) | `--add-label qa` (single or comma list) | QA Engineer |
 | Diff/path    | `PreToolUse` on `Edit` / `Write` / `MultiEdit` | path contains `auth/`, `crypto/`, `secrets/`, `.env*` | Security Auditor |
-| Diff/path    | same | path under `.claude/hooks/`, `.githooks/`, or matches `.claude/settings.json` and delegated gate runners such as `bin/run-pre-push-checks.sh` (the trust chain — #777, #1302) | Security Auditor |
+| Diff/path    | same | path under `.claude/hooks/`, `.githooks/`, or matches `.claude/settings.json` and delegated gate runners such as `bin/run-pre-push-checks.sh` (the trust chain: #777, #1302) | Security Auditor |
 | Diff/path    | same | path under `.github/workflows/` or `golden-paths/pipelines/` | Platform Engineer |
 | Diff/path    | same | path under `docs/agdr/` | Tech Lead |
 | Diff/path    | same | path matches a design artifact (`*technical-design*.md`, `*tech-design*.md`, `**/designs/**`, `**/prds/**`, `*prd*.md`, `*feature-spec*.md`, `docs/agdr/*migration*.md`) | Solution Architect |
 | Prompted     | `UserPromptSubmit` | "act as the X" / "as the X" / "put on your X hat" (case-insensitive, X matches any role in the activation table) | the named role |
 
-A migration AgDR fires **both** the Tech Lead trigger (`docs/agdr/**`, author) and the Solution Architect trigger (`docs/agdr/*migration*.md`, reviewer) — the two are additive by design: Hisham authors, Tariq reviews.
+A migration AgDR fires **both** the Tech Lead trigger (`docs/agdr/**`, author) and the Solution Architect trigger (`docs/agdr/*migration*.md`, reviewer). The two are additive by design: Hisham authors, Tariq reviews.
 
 Triggers from the table above that are **not** yet mechanically detected (e.g. "production incident mentioned" → SRE, "new PRD drafted" → Product Manager) still rely on self-discipline; the hook can be extended without changing the surrounding wiring.
 
@@ -208,15 +208,15 @@ Tests live at `.claude/hooks/tests/test_detect_role_trigger.sh` and cover the th
 
 ### The Contrarian (utility agent — premise-level adversary)
 
-Naqid (The Contrarian) is a **utility agent**, not a department role — like Rex (`code-reviewer`) and Tariq (`solution-architect`), it isn't tied to an SDLC phase and has no department file under `roles/`. It challenges the **premise** of an idea/feature/spec/decision/plan, and is **advisory-only** (no marker, no gate). It does **not** auto-fire on diffs — challenging a premise is a human-initiated act, so **prompted activation** is the primary path. The phrases below are mechanically detected by `detect-role-trigger.sh` (which emits an advisory banner suggesting `/challenge`).
+Naqid (The Contrarian) is a **utility agent**, not a department role. Like Rex (`code-reviewer`) and Tariq (`solution-architect`), it is not tied to an SDLC phase. It has no department file under `roles/`. It challenges the **premise** of an idea/feature/spec/decision/plan, and is **advisory-only** (no marker, no gate). It does **not** auto-fire on diffs. Challenging a premise is a human-initiated act, so **prompted activation** is the primary path. The phrases below are mechanically detected by `detect-role-trigger.sh` (which emits an advisory banner suggesting `/challenge`).
 
 | Signal | Activate |
 |--------|----------|
 | `/challenge <target>` | The Contrarian (Naqid) |
 | "play devil's advocate on …" / "challenge this" / "poke holes in …" / "what's the case against …" / "steelman then attack …" | The Contrarian (Naqid) |
 
-**Optional advisory offer (never forced).** At high-stakes moments — a new AgDR via `/decide`, a new PRD via `/write-spec`, or plan-mode exit on a large call — you MAY surface a one-line nudge offering to run `/challenge` first. The operator opts in; never auto-run it, and never let its verdict block work (it informs, it doesn't veto). See `.claude/agents/contrarian.md`, `.claude/skills/challenge/SKILL.md`, and AgDR-0078.
+**Optional advisory offer (never forced).** High-stakes moments include a new AgDR via `/decide`, a new PRD via `/write-spec`, or plan-mode exit on a large call. At these moments, you MAY surface a one-line nudge offering to run `/challenge` first. The operator opts in; never auto-run it, and never let its verdict block work (it informs, it does not veto). See `.claude/agents/contrarian.md`, `.claude/skills/challenge/SKILL.md`, and AgDR-0078.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*
