@@ -14,12 +14,18 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir "$tmp/base" "$tmp/head"
-if ! git -C "$repo" archive "$base" 2>/dev/null | tar -x -C "$tmp/base" 2>/dev/null; then
+# Export a commit to a folder. A temporary index and checkout-index ignore
+# export-ignore in .gitattributes, which git archive would honour.
+export_ref() {
+  GIT_INDEX_FILE="$tmp/index.$2" git -C "$repo" read-tree "$1" 2>/dev/null &&
+    GIT_INDEX_FILE="$tmp/index.$2" git -C "$repo" checkout-index -a --prefix="$tmp/$2/" 2>/dev/null
+}
+if ! export_ref "$base" base; then
   echo "check-dependency-record.sh: cannot read base ref: $base" >&2
   exit 2
 fi
 # Read HEAD from the commit, never from the working tree.
-if ! git -C "$repo" archive HEAD 2>/dev/null | tar -x -C "$tmp/head" 2>/dev/null; then
+if ! export_ref HEAD head; then
   echo "check-dependency-record.sh: cannot read HEAD" >&2
   exit 2
 fi

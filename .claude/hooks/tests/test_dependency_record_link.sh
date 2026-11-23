@@ -78,6 +78,17 @@ echo '{"dependencies":{"leftpadder":"1"}}' > "$R/scratch/package.json"
 echo "fetch('https://api.untracked-vendor.com/x')" > "$R/scratch/a.js"
 check test "$(rc)" = 0
 rm -r "$R/scratch"
+# export-ignore in .gitattributes must not hide a manifest or forge a record.
+setpkg ',"hidden-lib":"1"' ''
+printf 'package.json export-ignore\n' > "$R/.gitattributes"
+g add .gitattributes
+check test "$(rc)" = 1
+printf 'docs export-ignore\n' > "$R/.gitattributes"
+printf 'hidden-lib is fine\n' > "$R/docs/stack-register.md"
+check test "$(rc)" = 0
+printf 'package.json export-ignore\ndocs/stack-register.md export-ignore\n' > "$R/.gitattributes"
+check test "$(rc)" = 0
+rm "$R/.gitattributes"
 # Unknown base ref gives a usage error.
 check test "$(bash "$S" "$R" nosuchref >/dev/null 2>&1; echo $?)" = 2
 
