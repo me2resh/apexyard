@@ -454,6 +454,11 @@ echo "Backward-compat check (without --with-mockups):"
 assert_nomatch "no ## Screens section in default inventory" '^## Screens$' "$INVENTORY_WITHOUT"
 assert_nomatch "no AI-inferred disclaimer in default inventory" 'AI-inferred sketch' "$INVENTORY_WITHOUT"
 
+# The skill text must keep the exact AgDR-0036 disclaimer, so agents copy it
+# word for word (#2130, Rex review 6012870992).
+SKILL_FILE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)/SKILL.md"
+assert_match "SKILL.md keeps the exact AgDR-0036 disclaimer" "^> AI-inferred sketch — verify before relying on\\. Source: " "$SKILL_FILE"
+
 echo ""
 echo "----------------------------------------"
 echo "Total: $((PASS + FAIL))   Passed: $PASS   Failed: $FAIL"

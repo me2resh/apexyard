@@ -8,9 +8,9 @@ effort: medium
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /performance-audit — Bundle & Core Web Vitals Analysis
+# /performance-audit: Bundle & Core Web Vitals Analysis
 
-Deep-dive performance analysis focused on what's measurable from the codebase without running Lighthouse. Checks bundle size, image optimization, lazy loading, code splitting, and caching configuration. Invoke when `/launch-check`'s performance row shows WARN or FAIL.
+Analyze performance that the codebase can measure without Lighthouse. Check bundle size, image optimization, lazy loading, code splitting, and caching configuration. Invoke when `/launch-check`'s performance row shows WARN or FAIL.
 
 ## Usage
 
@@ -30,12 +30,12 @@ This audit runs on its own. It does not need a `/launch-check` run first.
 - If build exists: measure total JS + CSS size, identify the 5 largest files
 - Check for code splitting (dynamic imports, `React.lazy`, `next/dynamic`, route-based splitting)
 - Check for tree shaking configuration (ES modules, `sideEffects: false` in package.json)
-- Check if source maps are excluded from production build
+- Check whether the production build excludes source maps
 
 ### Step 2: Image optimization
 
 - Find all images in the project (src, public, static, assets directories)
-- Check formats: are images served as WebP/AVIF, or only PNG/JPEG?
+- Check whether images use WebP/AVIF, or only PNG/JPEG
 - Check for oversized images (> 500KB, > 2000px width)
 - Check for `next/image`, `@astrojs/image`, or similar optimization components
 - Check for `loading="lazy"` on below-the-fold images
@@ -50,7 +50,7 @@ This audit runs on its own. It does not need a `/launch-check` run first.
 
 ### Step 4: API performance (if applicable)
 
-- Check for N+1 query patterns (multiple sequential fetches that could be batched)
+- Check for N+1 query patterns (multiple sequential fetches that a batch could replace)
 - Check for pagination on list endpoints
 - Check for caching headers (Cache-Control, ETag)
 - Check for compression middleware (gzip/brotli)
@@ -58,7 +58,7 @@ This audit runs on its own. It does not need a `/launch-check` run first.
 ### Step 5: Output
 
 ```
-PERFORMANCE AUDIT — <project> @ <sha>
+PERFORMANCE AUDIT: <project> @ <sha>
 
 | # | Area | Status | Finding |
 |----|------|--------|---------|
@@ -75,7 +75,7 @@ Estimated LCP improvement: -1.2s if images are optimized and lazy-loaded
 
 ## Persist the run + render trend
 
-After printing the findings table, persist via the shared audit-history lib so the performance trend across runs becomes legible. See `docs/agdr/AgDR-0019-audit-artefact-persistence.md`.
+After printing the findings table, persist the run through the shared audit-history lib. This makes performance trends across runs visible. See `docs/agdr/AgDR-0019-audit-artefact-persistence.md`.
 
 ### Resolve project name + score + verdict
 
@@ -88,21 +88,21 @@ Score: `score = max(0, 100 - 25*critical - 10*high - 3*medium - 1*low)`. Verdict
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-audit-history.sh"
 
-# Lowercase severity in the payload — the lib expects critical/high/medium/low/info.
+# Lowercase severity in the payload: the lib expects critical/high/medium/low/info.
 payload=$(mktemp); cat > "$payload" <<'EOF'
 {
   "schema_version": 1,
   "findings": [
     {"id": "P1", "severity": "high",   "status": "open", "summary": "JS bundle 380KB gzipped (budget 250KB)"},
     {"id": "P3", "severity": "medium", "status": "open", "summary": "loading=lazy missing on 14 below-fold images"},
-    {"id": "P5", "severity": "high",   "status": "open", "summary": "Cache-Control no-cache on static assets — misses CDN edge caching"}
+    {"id": "P5", "severity": "high",   "status": "open", "summary": "Cache-Control no-cache on static assets: misses CDN edge caching"}
   ]
 }
 EOF
 
 # Body: per templates/audits/performance-audit.md
 body=$(mktemp); cat > "$body" <<'EOF'
-... (filled-in body — findings table + Recommended priority + estimated impact) ...
+... (filled-in body: findings table + Recommended priority + estimated impact) ...
 EOF
 
 ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -121,12 +121,12 @@ touch projects/<name>/audits/performance-audit/.audit-history-tracked
 ## Rules
 
 1. **Auto-PASS for non-web projects.** APIs, CLIs, libraries measure performance differently.
-2. **Measure what you can from code.** This skill reads source files and build output — it doesn't run Lighthouse. Suggest running Lighthouse separately for runtime metrics.
-3. **Give specific file names and sizes** for the largest offenders, not just "bundle is too big."
+2. **Measure what you can from code.** This skill reads source files and build output. It does not run Lighthouse. Suggest Lighthouse separately for runtime metrics.
+3. **Give specific file names and sizes** for the largest offenders. Do not report only "bundle is too big."
 4. **Estimate impact** where possible ("optimizing these 3 images would save ~800KB and improve LCP by ~1s").
 5. **Always persist via the lib.** The persist step runs regardless of opt-in commit state.
 6. **Severity vocabulary in the JSON is lowercase.** The lib expects `critical`/`high`/`medium`/`low`/`info`.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

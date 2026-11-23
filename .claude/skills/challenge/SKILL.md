@@ -6,18 +6,18 @@ argument-hint: "<idea | #N | path/to/doc | 'the plan'>"
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /challenge — Stress-test the premise with The Contrarian
+# /challenge: Stress-test the premise with The Contrarian
 
-`/challenge <target>` spawns the **Contrarian** agent (Naqid) to adversarially challenge an idea *before* you commit build effort to it. It is the premise-level analog of `/code-review` (Rex), `/security-review` (Hakim), and `/design-review` (Tariq) — but where those review **built artifacts** and gate a merge, the Contrarian challenges **whether the idea is right at all** and is **advisory-only**: it never writes a marker, never blocks a gate. The call stays yours.
+`/challenge <target>` spawns the **Contrarian** agent (Naqid) to adversarially challenge an idea *before* you commit build effort to it. It is the premise-level analog of `/code-review` (Rex), `/security-review` (Hakim), and `/design-review` (Tariq), but where those review **built artifacts** and gate a merge, the Contrarian challenges **whether the idea is right at all** and is **advisory-only**: it never writes a marker, never blocks a gate. The call stays yours.
 
-This is the operational tool for the "play devil's advocate" reflex — made a first-class, repeatable move instead of an ad-hoc prompt.
+This is the operational tool for the "play devil's advocate" reflex, made a first-class, repeatable move instead of an ad-hoc prompt.
 
 ## When to use it
 
-- Before writing a spec or filing an epic — pressure-test the idea while it's cheap to change.
-- Before a big technical decision (`/decide`) — surface the assumptions and the cheaper alternative.
-- Before committing to a multi-step plan — find the load-bearing assumption that, if wrong, sinks the plan.
-- Any time you catch yourself agreeing with an idea too easily — that's exactly when an adversary earns its keep.
+- Before writing a spec or filing an epic: pressure-test the idea while it's cheap to change.
+- Before a big technical decision (`/decide`): surface the assumptions and the cheaper alternative.
+- Before committing to a multi-step plan: find the load-bearing assumption that, if wrong, sinks the plan.
+- Any time you catch yourself agreeing with an idea too easily, that's exactly when an adversary earns its keep.
 
 ## Usage
 
@@ -38,10 +38,10 @@ Classify the argument:
 
 | Argument shape | Target the agent receives |
 |----------------|---------------------------|
-| `#N` or `owner/repo#N` | The ticket — instruct the agent to `gh issue view <N>` and challenge it. |
-| A path ending `.md` (or under `projects/`, `docs/`, `prds/`, `designs/`) that exists | The document — the agent reads it and challenges it. |
-| `the plan` / `this plan` | The most recent multi-step plan presented in the conversation — pass it inline to the agent. |
-| Anything else (free text) | An idea stated in the conversation — pass the idea text (plus relevant conversation context) inline to the agent. |
+| `#N` or `owner/repo#N` | The ticket: instruct the agent to `gh issue view <N>` and challenge it. |
+| A path ending `.md` (or under `projects/`, `docs/`, `prds/`, `designs/`) that exists | The document: the agent reads it and challenges it. |
+| `the plan` / `this plan` | The most recent multi-step plan presented in the conversation: pass it inline to the agent. |
+| Anything else (free text) | An idea stated in the conversation: pass the idea text (plus relevant conversation context) inline to the agent. |
 
 If the argument is empty, ask: `What should I challenge? An idea, a ticket #N, a doc path, or "the plan"?`
 
@@ -55,14 +55,14 @@ Agent(subagent_type: "contrarian", prompt: "Challenge the following <idea|ticket
 
 ### 3. Relay the verdict
 
-Present the agent's structured output verbatim (Steelman · Hidden assumptions · Failure modes · Strongest objections · Cheaper alternatives · What would have to be true · Verdict). Do **not** soften or editorialise it — the value is the unfiltered adversarial read.
+Present the agent's structured output verbatim (Steelman · Hidden assumptions · Failure modes · Strongest objections · Cheaper alternatives · What would have to be true · Verdict). Do **not** soften or editorialise it: the value is the unfiltered adversarial read.
 
-Then, in one line, note the next move the verdict implies — e.g. *"Verdict: reconsider — the cheaper alternative (a read replica) likely gets 80% of the value; want me to spec that instead?"* — and let the operator decide. Never auto-act on a `reconsider`; surface it and stop.
+Then, in one line, note the next move the verdict implies: e.g. *"Verdict: reconsider: the cheaper alternative (a read replica) likely gets 80% of the value; want me to spec that instead?"*, and let the operator decide. Never auto-act on a `reconsider`; surface it and stop.
 
 ## Rules
 
 1. **Advisory only.** This skill never writes an approval marker, never runs a merge, never blocks a gate. It produces an opinion, full stop.
-2. **One target per invocation.** Challenging two unrelated things at once muddies the verdict — run it twice.
+2. **One target per invocation.** Challenging two unrelated things at once muddies the verdict: run it twice.
 3. **Relay, don't dilute.** Present the Contrarian's objections as-is. If you disagree, say so as a separate note; don't edit the agent's verdict.
 4. **The call stays human.** A `reconsider` verdict is input, not a stop order. Surface it and let the operator choose.
 5. **Not a substitute for the gates.** The Contrarian challenges the premise; Rex / Hakim / Tariq still review the built artifact. Passing a challenge is not passing review.
@@ -77,4 +77,4 @@ Then, in one line, note the next move the verdict implies — e.g. *"Verdict: re
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

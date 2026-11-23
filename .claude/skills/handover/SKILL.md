@@ -5,7 +5,7 @@ argument-hint: "<project name> [path or url] [--topology <name>] [--all | --inte
 allowed-tools: Bash, Read, Grep, Glob, Write, AskUserQuestion
 ---
 
-# /handover — External Repo Handover Assessment
+# /handover: External Repo Handover Assessment
 
 Read `.claude/rules/writing-standard.md`. Use the **controlled technical writing profile** for the
 handover assessment: write for the receiving human, lead with the outcome, and
@@ -17,13 +17,13 @@ This is the bridge between "we just inherited this codebase" and "this codebase 
 
 ## LSP-aware (optional, recommended)
 
-The handover deep-dive — reading the codebase to populate the assessment — performs semantic code navigation: finding definitions, walking references, tracing handlers across modules. When a Git URL is given, the skill clones the repo into `workspace/<name>/` at step 1.5-clone (default, before any reads begin). With LSP enabled (`ENABLE_LSP_TOOL=1` + per-language plugin per `docs/getting-started.md`) **and** the repo cloned locally, queries are ~3-15× cheaper in token cost than grep + Read on shallow lookups, and ~1.4-5× cheaper on multi-hop traces. Without LSP — or when only metadata is available — the skill falls back to grep + Read transparently. No new failure mode, just optional speed during the deep-dive phase.
+The handover deep-dive, reading the codebase to populate the assessment, performs semantic code navigation: finding definitions, walking references, tracing handlers across modules. When a Git URL is given, the skill clones the repo into `workspace/<name>/` at step 1.5-clone (default, before any reads begin). With LSP enabled (`ENABLE_LSP_TOOL=1` + per-language plugin per `docs/getting-started.md`) **and** the repo cloned locally, queries are ~3-15× cheaper in token cost than grep + Read on shallow lookups, and ~1.4-5× cheaper on multi-hop traces. Without LSP, or when only metadata is available, the skill falls back to grep + Read transparently. No new failure mode, just optional speed during the deep-dive phase.
 
 Per-language LSP plugins live in Claude Code's marketplace. Install once; the skill detects the active language and dispatches automatically.
 
 ## Path resolution
 
-Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog`: all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -32,9 +32,9 @@ projects_dir=$(portfolio_projects_dir)
 registry=$(portfolio_registry)
 ```
 
-Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks. The helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
 
-**Write targets** (see me2resh/apexyard#373 + #443): paths documented as `projects/<name>/X` in this skill are canonical adopter-facing forms — implement them in bash as `"${projects_dir}/<name>/X"`. Never construct from `"${PWD}/projects/..."`, `"$(git rev-parse --show-toplevel)/projects/..."`, or a literal `./projects/...` — those break in split-portfolio v2 mode where `projects_dir` resolves to a sibling repo.
+**Write targets** (see me2resh/apexyard#373 + #443): paths documented as `projects/<name>/X` in this skill are canonical adopter-facing forms: implement them in bash as `"${projects_dir}/<name>/X"`. Never construct from `"${PWD}/projects/..."`, `"$(git rev-parse --show-toplevel)/projects/..."`, or a literal `./projects/...`. Those break in split-portfolio v2 mode where `projects_dir` resolves to a sibling repo.
 
 **REQUIRED per-block preamble** (see #443): Claude executes each ```bash``` block as a separate shell invocation. The `projects_dir` assignment from the Path resolution section above does NOT carry into later blocks. Every bash block that writes to a `projects/<name>/X` path MUST start with this three-line preamble so it's self-contained:
 
@@ -60,16 +60,16 @@ The Path resolution section's example sources the helper *once* for documentatio
 
 The `--topology <name>` flag pre-selects a topology bundle and skips the interactive pick in step 1.5. Available v1 topologies: `typescript-nextjs`, `python-fastapi`, `go-data-pipeline`. See [`topologies/README.md`](../../../topologies/README.md) and AgDR-0048.
 
-### Document-set flags (`--all` vs `--interactive`) — default is the checklist
+### Document-set flags (`--all` vs `--interactive`): default is the checklist
 
 By default the skill presents a **document selection checklist** (step 5.6) after the assessment is computed, so the operator opts in to exactly the artefacts they want and picks the template for each template-backed doc. Two flags override the prompt:
 
 | Flag | Behaviour |
 |------|-----------|
-| `--all` | **Non-interactive.** Generate the full default set with no checklist and the conventional template for each template-backed doc — byte-for-byte the pre-checklist behaviour. Use this for scripted / unattended runs or when you just want everything. |
+| `--all` | **Non-interactive.** Generate the full default set with no checklist and the conventional template for each template-backed doc: byte-for-byte the pre-checklist behaviour. Use this for scripted / unattended runs or when you just want everything. |
 | `--interactive` (default) | Present the checklist + per-doc template pick. Equivalent to passing no flag. The flag exists so the default is nameable in scripts and docs. |
 
-Default is `--interactive` because a handover rarely needs every artefact, and the wrong template choice on a template-backed doc is annoying to undo by hand. `--all` is the explicit escape that preserves today's muscle memory — existing invocations that pass neither flag now see the checklist; pass `--all` to keep the old no-prompt flow. The handover assessment + harnessability score are **always** generated regardless of flag — they are the skill's core output, not optional artefacts.
+Default is `--interactive` because a handover rarely needs every artefact, and the wrong template choice on a template-backed doc is annoying to undo by hand. `--all` is the explicit escape that preserves today's muscle memory. Existing invocations that pass neither flag now see the checklist; pass `--all` to keep the old no-prompt flow. The handover assessment + harnessability score are **always** generated regardless of flag. They are the skill's core output, not optional artefacts.
 
 ## Output location
 
@@ -77,27 +77,27 @@ The skill always writes the handover assessment; the rest of the artefacts are *
 
 ```
 projects/<name>/handover-assessment.md         ← always (re)written (assessment + harnessability)
-projects/<name>/architecture/container.md      ← if selected + missing — stub L2 C4 diagram (default-ticked)
-projects/<name>/architecture/context.md        ← if selected + missing — stub L1 C4 diagram
+projects/<name>/architecture/container.md      ← if selected + missing: stub L2 C4 diagram (default-ticked)
+projects/<name>/architecture/context.md        ← if selected + missing: stub L1 C4 diagram
 projects/<name>/architecture/sequence-<flow>.md ← if selected + a clear flow exists
 ```
 
-Richer artefacts the operator can select but which are owned by dedicated skills — DFD (`/dfd`), Feature Inventory (`/extract-features`), user-journey HTML (`/journey`), Architecture Vision (`/tech-vision`) — are **handed off** rather than generated inline (see step 5.6).
+Richer artefacts the operator can select but which are owned by dedicated skills, DFD (`/dfd`), Feature Inventory (`/extract-features`), user-journey HTML (`/journey`), Architecture Vision (`/tech-vision`), are **handed off** rather than generated inline (see step 5.6).
 
-One **opt-in (default-OFF)** artefact is written into the **target repo** instead of the ops fork — the in-repo operating manual:
+One **opt-in (default-OFF)** artefact is written into the **target repo** instead of the ops fork, the in-repo operating manual:
 
 ```
-<target repo>/AGENTS.md         ← if selected (default-OFF) + not already present — concise agent operating manual, delivered via a branch + PR (step 8.5)
-<target repo>/CLAUDE.md         ← only if no CLAUDE.md exists — a one-line `@AGENTS.md` import shim
+<target repo>/AGENTS.md         ← if selected (default-OFF) + not already present: concise agent operating manual, delivered via a branch + PR (step 8.5)
+<target repo>/CLAUDE.md         ← only if no CLAUDE.md exists: a one-line `@AGENTS.md` import shim
 ```
 
-This is the single exception to "read-only against the target repo" (Rule 1) — it is opt-in, confirmed per run, and PR-delivered (never a direct commit). See step 8.5 and AgDR-0073.
+This is the single exception to "read-only against the target repo" (Rule 1). It is opt-in, confirmed per run, and PR-delivered (never a direct commit). See step 8.5 and AgDR-0073.
 
 The folder lives in the ops repo (your fork of apexyard), alongside the rest of `projects/`.
 
-If `projects/<name>/` doesn't exist, create it. Also seed a `projects/<name>/README.md` stub if missing — see `projects/README.md` for the convention.
+If `projects/<name>/` doesn't exist, create it. Also seed a `projects/<name>/README.md` stub if missing. See `projects/README.md` for the convention.
 
-The architecture stub is **written once** and never overwritten — it's a starting point, not a generated artefact. After the first handover, any edits the team makes to refine the diagram survive re-runs of the skill.
+The architecture stub is **written once** and never overwritten. It's a starting point, not a generated artefact. After the first handover, any edits the team makes to refine the diagram survive re-runs of the skill.
 
 ## Process
 
@@ -119,13 +119,13 @@ mkdir -p "$marker_home/.claude/session" && echo "handover" > "$skill_marker"
 
 Clear the marker on completion (Step "Post-Handover Checklist" below). If the skill is interrupted, the SessionStart hook `clear-bootstrap-marker.sh` clears it at the start of the next session. See AgDR-0011 + me2resh/apexyard#150.
 
-### Bootstrap scope — what IS and IS NOT exempt
+### Bootstrap scope: what IS and IS NOT exempt
 
 The bootstrap exemption covers ONLY these writes:
 
-- `apexyard.projects.yaml` — registry append (step 7)
-- `projects/<name>/` — assessment, architecture stubs (container / context / sequence), README (steps 5, 6, 6.1)
-- the path from `active_bootstrap_marker_path` — the marker itself (step 0)
+- `apexyard.projects.yaml`: registry append (step 7)
+- `projects/<name>/`: assessment, architecture stubs (container / context / sequence), README (steps 5, 6, 6.1)
+- the path from `active_bootstrap_marker_path`: the marker itself (step 0)
 - Topology instantiation files (step 5.5, if a topology is picked)
 
 It does NOT cover:
@@ -134,11 +134,11 @@ It does NOT cover:
 - Creating or pushing new repositories
 - Commits to branches without a ticket
 
-If the user requests work outside the handover's scope mid-session, tell them: "That's outside the handover's bootstrap exemption — let me /start-ticket first." Then follow the normal SDLC: ticket → branch → PR → review.
+If the user requests work outside the handover's scope mid-session, tell them: "That's outside the handover's bootstrap exemption. Let me /start-ticket first." Then follow the normal SDLC: ticket → branch → PR → review.
 
 ### 1. Locate the target repo
 
-If a path is given, use it. If a URL is given, proceed immediately to clone it into `workspace/<name>/` (see step 1.5-clone below) — the user does not need to clone manually. If nothing is given, ask:
+If a path is given, use it. If a URL is given, proceed immediately to clone it into `workspace/<name>/` (see step 1.5-clone below). The user does not need to clone manually. If nothing is given, ask:
 
 ```
 Where is the target repo? Local path or git URL?
@@ -157,7 +157,7 @@ WORKSPACE_DIR=$(portfolio_workspace_dir)
 mkdir -p "$WORKSPACE_DIR"
 
 if [ -d "$WORKSPACE_DIR/<name>/.git" ]; then
-  echo "✓ $WORKSPACE_DIR/<name>/ already exists — skipping clone."
+  echo "✓ $WORKSPACE_DIR/<name>/ already exists: skipping clone."
 else
   git clone <repo-url> "$WORKSPACE_DIR/<name>"
 fi
@@ -179,13 +179,13 @@ CLONE_STATUS="cloned"   # or "preserved" | "declined" | "failed: <reason>"
 
 All subsequent reads in steps 2–6 use `$WORKSPACE_DIR/<name>/` as the repo root whenever `$CLONE_STATUS` is `cloned` or `preserved`. When `$CLONE_STATUS` is `declined` or `failed`, fall back to GitHub API reads via `gh api` / `gh -R <owner/name> …` (degraded but functional).
 
-> **`bin/install-git-hooks.sh` is deliberately NOT invoked here.** An earlier version of this step called it against the freshly-cloned workspace, on the reasoning that it mirrors `/setup`'s call for the ops fork. It does not: `/setup` points `core.hooksPath` at the **ops fork's own** `.githooks/`, which ApexYard controls. Calling the same installer against an arbitrary, just-cloned third-party repo instead points git at *that repo's own* `.githooks/` (whatever it ships), and does so with no provenance check — the installer's only gate is "does a directory of that name exist." Git deliberately never clones `$GIT_DIR/hooks`, which is exactly what makes `git clone` of an untrusted repo a safe, read-only act; repointing `core.hooksPath` at a *tracked* directory removes that property, and a hostile `.githooks/post-checkout` or `.githooks/reference-transaction` then runs as the operator on the very next ordinary git operation — no push required. `/handover`'s whole point is to evaluate a repo before deeper commitment, so this is exactly the wrong moment to hand it code execution. Confirmed by security review on PR #1087 (HIGH-1).
+> **`bin/install-git-hooks.sh` is deliberately NOT invoked here.** An earlier version of this step called it against the freshly-cloned workspace, on the reasoning that it mirrors `/setup`'s call for the ops fork. It does not: `/setup` points `core.hooksPath` at the **ops fork's own** `.githooks/`, which ApexYard controls. Calling the same installer against an arbitrary, just-cloned third-party repo instead points git at *that repo's own* `.githooks/` (whatever it ships), and does so with no provenance check: the installer's only gate is "does a directory of that name exist." Git deliberately never clones `$GIT_DIR/hooks`, which is exactly what makes `git clone` of an untrusted repo a safe, read-only act; repointing `core.hooksPath` at a *tracked* directory removes that property, and a hostile `.githooks/post-checkout` or `.githooks/reference-transaction` then runs as the operator on the very next ordinary git operation, no push required. `/handover`'s whole point is to evaluate a repo before deeper commitment, so this is exactly the wrong moment to hand it code execution. Confirmed by security review on PR #1087 (HIGH-1).
 >
-> The gap this leaves — a managed-project clone's *own* `.githooks/` still isn't wired up by anything, so its terminal `git push` stays unprotected — is real and deliberately deferred, not silently dropped. The correct shape is for the framework to install **its own** hook into the clone's untracked `.git/hooks/` (never point at a tracked third-party directory), which needs its own design and its own ticket. Do not attempt it here.
+> The gap this leaves, a managed-project clone's *own* `.githooks/` still isn't wired up by anything, so its terminal `git push` stays unprotected, is real and deliberately deferred, not silently dropped. The correct shape is for the framework to install **its own** hook into the clone's untracked `.git/hooks/` (never point at a tracked third-party directory), which needs its own design and its own ticket. Do not attempt it here.
 
 ### 1.5. Pick a topology (default: skip / custom)
 
-ApexYard ships **harness-template topologies** — bundles of curated handbooks + CI pipelines + AgDR templates per service shape. Picking one here pre-bakes the right governance surface for the stack; declining keeps the existing flow byte-for-byte. See [`topologies/README.md`](../../../topologies/README.md) and AgDR-0048.
+ApexYard ships **harness-template topologies**: bundles of curated handbooks + CI pipelines + AgDR templates per service shape. Picking one here pre-bakes the right governance surface for the stack; declining keeps the existing flow byte-for-byte. See [`topologies/README.md`](../../../topologies/README.md) and AgDR-0048.
 
 If the operator passed `--topology <name>` on the CLI, skip the interactive prompt and use that pick. Otherwise use `AskUserQuestion`.
 Recommend `Skip / custom` first. Give each topology a one-line effect. Use the prompt below only without the tool:
@@ -193,70 +193,70 @@ Recommend `Skip / custom` first. Give each topology a one-line effect. Use the p
 ```
 Which topology fits this project?
 
-  [1] typescript-nextjs   — TypeScript + Next.js web app (App Router, Prisma, JWT)
-  [2] python-fastapi      — Python + FastAPI service (Pydantic v2, SQLAlchemy async, JWT)
-  [3] go-data-pipeline    — Go batch / streaming pipeline (no HTTP surface)
-  [4] Skip / custom       — no topology bundle; use the framework defaults
+  [1] typescript-nextjs   : TypeScript + Next.js web app (App Router, Prisma, JWT)
+  [2] python-fastapi      : Python + FastAPI service (Pydantic v2, SQLAlchemy async, JWT)
+  [3] go-data-pipeline    : Go batch / streaming pipeline (no HTTP surface)
+  [4] Skip / custom       : no topology bundle; use the framework defaults
 
 Read topologies/<name>/README.md for what each bundle includes.
 
-[1/2/3/4 — default 4]
+[1/2/3/4: default 4]
 ```
 
 **Branching:**
 
-- **Pick 1/2/3:** record the topology name in `$PICKED_TOPOLOGY` (e.g. `typescript-nextjs`). Verify the topology dir exists at `<ops_root>/topologies/<name>/`. If missing (e.g. operator on an older framework version), print `⚠ topology dir not found — falling back to no bundle` and continue with `$PICKED_TOPOLOGY=""`.
+- **Pick 1/2/3:** record the topology name in `$PICKED_TOPOLOGY` (e.g. `typescript-nextjs`). Verify the topology dir exists at `<ops_root>/topologies/<name>/`. If missing (e.g. operator on an older framework version), print `⚠ topology dir not found: falling back to no bundle` and continue with `$PICKED_TOPOLOGY=""`.
 - **Pick 4 / default / any other input:** set `$PICKED_TOPOLOGY=""`. Continue exactly as the pre-topology flow.
 
 **Verifying the pick.** Read the topology's `README.md` and `VERSION` files. Print a one-line confirmation:
 
 ```
-Topology: typescript-nextjs v1.0.0 — will instantiate 11 files into projects/<name>/ and workspace/<name>/.github/workflows/. (See step 5.5.)
+Topology: typescript-nextjs v1.0.0, will instantiate 11 files into projects/<name>/ and workspace/<name>/.github/workflows/. (See step 5.5.)
 ```
 
-If `$PICKED_TOPOLOGY=""`, print nothing — the rest of the flow is unchanged.
+If `$PICKED_TOPOLOGY=""`, print nothing. The rest of the flow is unchanged.
 
 ### 1.6. Harness selection (skippable)
 
-Background. As of 2026-07-09 the framework's mechanical gates reach beyond Claude Code through thin per-harness adapters — see `docs/harnesses/README.md`, the single source of truth for the support matrix. A team adopting an existing repo may already be running (or want to run) a non-Claude-Code harness against it; this step surfaces the adapter path at handover time instead of leaving the adopter to discover `docs/harnesses/` on their own. Light and skippable — Claude Code adopters (the default) answer one question and move on.
+Background. As of 2026-07-09 the framework's mechanical gates reach beyond Claude Code through thin per-harness adapters: see `docs/harnesses/README.md`, the single source of truth for the support matrix. A team adopting an existing repo may already be running (or want to run) a non-Claude-Code harness against it; this step surfaces the adapter path at handover time instead of leaving the adopter to discover `docs/harnesses/` on their own. Light and skippable: Claude Code adopters (the default) answer one question and move on.
 
 Use `AskUserQuestion` to select harnesses. Preserve multiple selections and split the six options across wizard questions.
 Recommend Claude Code first. Use the prompt below only without the tool:
 
 ```
 Which harness(es) will drive work on {name}?
-  [1] Claude Code (default — the native, full experience)
+  [1] Claude Code (default: the native, full experience)
   [2] opencode
   [3] pi (pi.dev)
   [4] Codex
   [5] Cursor
   [6] Other / not sure
 
-[1-6, comma-separated for more than one — default 1]
+[1-6, comma-separated for more than one: default 1]
 ```
 
 **Branch on the answer:**
 
 - **1 / default / empty** → continue straight to step 2. No further output.
-- **6** → one line — *"No adapter for that harness yet. The mechanical gates (`.claude/hooks/*.sh`) are portable bash; see `docs/harnesses/README.md` § 'Adapter-authoring pattern for future harnesses' if you want to write one."* — then continue to step 2.
-- **2 / 3 / 4 / 5 (one or more)** → for each, print its install command + its one precondition, read fresh from `docs/harnesses/README.md` (single source of truth — don't duplicate the matrix here as a maintained copy). Snapshot below. Refresh from the doc before printing:
+- **6** → one line: *"No adapter for that harness yet. The mechanical gates (`.claude/hooks/*.sh`) are portable bash; see `docs/harnesses/README.md` § 'Adapter-authoring pattern for future harnesses' if you want to write one."*, then continue to step 2.
+- **2 / 3 / 4 / 5 (one or more)** → for each, print its install command + its one precondition, read fresh from `docs/harnesses/README.md` (single source of truth, don't duplicate the matrix here as a maintained copy). Snapshot below. Refresh from the doc before printing:
 
   | Harness | Install | Precondition | Tier |
   |---------|---------|---------------|------|
   | opencode | `bash bin/install-opencode-adapter.sh` | run opencode headless with `--auto` | ✅ live-proven |
   | pi | `bash bin/install-pi-adapter.sh` | run pi headless with `-a` / `--approve` | ✅ live-proven |
-  | Codex | `bash bin/sync-codex-adapter.sh` | grant hook-trust — `/hooks` interactively, `--dangerously-bypass-hook-trust` for a one-off headless run, or a user-level `~/.codex/hooks.json` | ✅ live-proven |
+  | Codex | `bash bin/sync-codex-adapter.sh` | grant hook-trust: `/hooks` interactively, `--dangerously-bypass-hook-trust` for a one-off headless run, or a user-level `~/.codex/hooks.json` | ✅ live-proven |
   | Cursor | `bash bin/install-cursor-adapter.sh` | enable third-party configs; leftover full adapter must be replaced | ✅ native in the IDE (2026-09-16). CLI ignores hooks. Not in conformance CI |
 
-  **Honesty is load-bearing — never round a harness's tier up.** Print the current row from `docs/harnesses/README.md`. For Cursor, say native in the IDE, the `cursor-agent` CLI ignores hooks, a leftover full adapter can lock the session, and conformance CI has no headless path. Do not restore the retired failClosed-only claim. Link the per-harness page for the full workflow: `docs/harnesses/<harness>.md`.
+  **Honesty is load-bearing: never round a harness's tier up.** Print the current row from `docs/harnesses/README.md`. For Cursor, say native in the IDE, the `cursor-agent` CLI ignores hooks, a leftover full adapter can lock the session, and conformance CI has no headless path. Do not restore the retired failClosed-only claim. Link the per-harness page for the full workflow: `docs/harnesses/<harness>.md`.
 
-**Don't run the install command yourself** — print it, don't execute `bin/install-*-adapter.sh` against the target repo on the operator's behalf. Adapter install is a decision for the team taking ownership, not a side effect of adoption.
+**Don't run the install command yourself**: print it, don't execute `bin/install-*-adapter.sh` against the target repo on the operator's behalf. Adapter install is a decision for the team taking ownership, not a side effect of adoption.
 
 Record the pick as `$SELECTED_HARNESSES` (comma-separated, or `claude-code` if 1/default) for the step 10 summary.
 
 ### 1.7. Check server-side branch protection (advisory, default: always attempt)
 
-> Why this exists. AgDR-0115 records the decision that ApexYard does NOT install any client-side push protection into a managed-project clone — doing so would mean pointing `core.hooksPath` at that clone's own tracked `.githooks/`, which is precisely the HIGH-risk wiring #1087's security review removed (see the "1.5-clone" note above and `bin/install-git-hooks.sh`'s header). The accepted consequence: a human running `git push origin main` from a terminal inside this clone is not blocked by anything ApexYard installs — only agent-driven pushes stay covered, via the ops-fork's own `PreToolUse` hooks. For that residual, the managed repo's own **server-side branch protection** is the actual control, not a client-side backstop ApexYard ships. This step only checks whether that control is turned on and nudges the operator if it looks like it isn't — it is advisory, forge-agnostic, and fail-open: a missing check, a network failure, or an unsupported tracker kind never blocks the rest of `/handover`.
+> Why this exists. AgDR-0115 records the decision that ApexYard does NOT install any client-side push protection into a managed-project clone: doing so would mean pointing `core.hooksPath` at that clone's own tracked `.githooks/`, which is precisely the HIGH-risk wiring #1087's security review removed (see the "1.5-clone" note above and `bin/install-git-hooks.sh`'s header). The accepted consequence: a human running `git push origin main` from a terminal inside this clone is not blocked by anything ApexYard installs. Only agent-driven pushes stay covered, via the ops-fork's own `PreToolUse` hooks. For that residual, the managed repo's own **server-side branch protection** is the actual control, not a client-side backstop ApexYard ships. This step only checks whether that control is turned on and nudges the operator if it looks like it isn't. It is advisory, forge-agnostic, and fail-open: a missing check, a network failure, or an unsupported tracker kind never blocks the rest of `/handover`.
 
 Only run this check when the target repo's `<owner/name>` is known (a Git URL was given in step 1). A plain local path with no resolvable remote host has nothing to query: set `BRANCH_PROTECTION_STATUS="skipped (no remote host)"`, print nothing, and continue straight to step 2.
 
@@ -282,7 +282,7 @@ if [ -n "$default_branch" ]; then
     gh)
       # gh api exits non-zero on BOTH "404 not protected" and a real
       # failure (auth/network/no-permission/rate-limit). This check does
-      # not need to tell those apart — the response is the same either
+      # not need to tell those apart: the response is the same either
       # way: advise, never block. Fail-open by construction, not by
       # accident.
       if gh api "repos/<owner/name>/branches/${default_branch}/protection" >/dev/null 2>&1; then
@@ -300,31 +300,31 @@ if [ -n "$default_branch" ]; then
       fi
       ;;
     none|custom|*)
-      # No queryable, generically-shaped REST endpoint for these kinds —
+      # No queryable, generically-shaped REST endpoint for these kinds:
       # a `custom` tracker's PR/MR host is unknown, and `none` has no host
       # at all. Say so plainly rather than guessing at an API shape.
-      BRANCH_PROTECTION_STATUS="skipped (no queryable forge for tracker.kind=${kind} — check your forge's branch protection settings manually)"
+      BRANCH_PROTECTION_STATUS="skipped (no queryable forge for tracker.kind=${kind}, check your forge's branch protection settings manually)"
       ;;
   esac
 fi
 ```
 
-If `$BRANCH_PROTECTION_STATUS` is `"not protected (or could not be verified)"`, print this nudge once (non-blocking — continue straight to step 2 regardless):
+If `$BRANCH_PROTECTION_STATUS` is `"not protected (or could not be verified)"`, print this nudge once (non-blocking, continue straight to step 2 regardless):
 
 ```
 ⚠ <name>'s default branch (<default_branch>) has no server-side branch
 protection turned on (or it couldn't be confirmed). ApexYard's own hooks
-only cover agent-driven pushes in this clone — a human running `git push`
+only cover agent-driven pushes in this clone: a human running `git push`
 from a terminal here is not blocked. Server-side branch protection on the
 forge is the actual control for that gap (see AgDR-0115). Recommended:
 require a pull request before merging to <default_branch>.
 ```
 
-If `$BRANCH_PROTECTION_STATUS` is `"protected"` or either `"skipped"` variant, print nothing further — the step 10 summary line is enough.
+If `$BRANCH_PROTECTION_STATUS` is `"protected"` or either `"skipped"` variant, print nothing further. The step 10 summary line is enough.
 
 ### 2. Read the surface area
 
-Use `$WORKSPACE_DIR/<name>/` as `<repo>` when available (clone succeeded or path was given). Fall back to GitHub API reads only when `$CLONE_STATUS` is `declined` or `failed`. Local reads are preferred — they are cheaper and more complete.
+Use `$WORKSPACE_DIR/<name>/` as `<repo>` when available (clone succeeded or path was given). Fall back to GitHub API reads only when `$CLONE_STATUS` is `declined` or `failed`. Local reads are preferred. They are cheaper and more complete.
 
 Without running anything destructive, gather:
 
@@ -347,7 +347,7 @@ ls <repo>/.github/workflows/ 2>/dev/null
 git -C <repo> log -1 --format='%h %ai %an %s'
 git -C <repo> shortlog -sn --no-merges | head -10
 
-# Open issues / PRs (if it's a GitHub repo — always from the API regardless of clone status)
+# Open issues / PRs (if it's a GitHub repo, always from the API regardless of clone status)
 gh -R <owner/name> issue list --state open --json number,title,labels --limit 10
 gh -R <owner/name> pr list --state open --json number,title --limit 10
 ```
@@ -365,6 +365,12 @@ Look at:
 - `.github/workflows/` → existing CI; how mature?
 - `tsconfig.json` strictness, presence of tests, presence of linters
 
+#### 3.1 Decision record coverage
+
+Run `bash .claude/skills/handover/scripts/coverage.sh <repo>`. It lists direct dependencies and outside hosts. It matches them, as whole words, against AgDR titles, `Chosen` lines, and bodies. It skips names of 3 characters or fewer.
+Ask a person to classify each row: choice recorded, usage recorded only, or not named. Ask about outside hosts that receive user data first.
+For each "not named" item, point to `/decide --backfill`. Do not write records here.
+
 ### 4. Try a build (optional, ask first)
 
 ```
@@ -375,9 +381,9 @@ If yes and it's a Node project: `npm install --ignore-scripts && npm run build` 
 
 ### 4.5. Harnessability assessment
 
-> Why this exists. ApexYard's value as a "harness" depends on the codebase having the ambient affordances the framework's rules and handbooks expect — type safety, module boundaries, lint baselines, etc. When those are missing, Rex's architecture handbooks (especially `ENFORCEMENT: blocking` ones like clean-architecture-layers) fire false positives and create review noise rather than catching real issues. Naming that gap during adoption — rather than after the first noisy code review — gives the operator a chance to either adopt advisory-only, or schedule the scaffolding work as a follow-up. This step codifies the assessment so a `low` score becomes a visible warning at adoption time, not a surprise.
+> Why this exists. ApexYard's value as a "harness" depends on the codebase having the ambient affordances the framework's rules and handbooks expect: type safety, module boundaries, lint baselines, etc. When those are missing, Rex's architecture handbooks (especially `ENFORCEMENT: blocking` ones like clean-architecture-layers) fire false positives and create review noise rather than catching real issues. Naming that gap during adoption, rather than after the first noisy code review, gives the operator a chance to either adopt advisory-only, or schedule the scaffolding work as a follow-up. This step codifies the assessment so a `low` score becomes a visible warning at adoption time, not a surprise.
 >
-> The framing draws on industry-standard harness-engineering prior art on **ambient affordances** — the idea that a tool's effectiveness depends on the working environment already supplying the signals the tool relies on. See AgDR-0042.
+> The framing draws on industry-standard harness-engineering prior art on **ambient affordances**: the idea that a tool's effectiveness depends on the working environment already supplying the signals the tool relies on. See AgDR-0042.
 
 Score 5 codebase dimensions, each with a 1-line rationale citing the evidence found in steps 2-4. Combine into an overall verdict (high / moderate / low) using the truth table below. If `low`, print the warning text verbatim. Persist the result in the handover assessment file (step 5).
 
@@ -394,11 +400,11 @@ Score 5 codebase dimensions, each with a 1-line rationale citing the evidence fo
 Each dimension MUST be backed by a one-line rationale citing the evidence path and key signal, e.g.:
 
 ```
-- Type safety: strong — tsconfig.json line 6: "strict": true
-- Module boundaries: flat — only src/, no domain/application/infrastructure dirs
-- Framework opinionation: moderate — package.json has express but no ORM/DI framework
-- Test coverage signal: absent — no coverageThreshold in jest.config.js, no coverage step in .github/workflows/
-- Lint baseline: present — .eslintrc.json at repo root
+- Type safety: strong, tsconfig.json line 6: "strict": true
+- Module boundaries: flat, only src/, no domain/application/infrastructure dirs
+- Framework opinionation: moderate, package.json has express but no ORM/DI framework
+- Test coverage signal: absent, no coverageThreshold in jest.config.js, no coverage step in .github/workflows/
+- Lint baseline: present, .eslintrc.json at repo root
 ```
 
 #### Overall verdict (truth table)
@@ -407,15 +413,15 @@ Count how many of the 5 dimensions are `strong` or `present` (the "good" buckets
 
 | Strong-or-present count | Other conditions | Verdict |
 |-------------------------|------------------|---------|
-| 5 / 5 | — | `high` |
-| 3 or 4 / 5 | — | `moderate` |
-| ≤ 2 / 5 | — | `low` |
-| any | Type safety is `none` AND framework opinionation is `weak` | `low` (override — these two together amplify each other) |
+| 5 / 5 | | `high` |
+| 3 or 4 / 5 | | `moderate` |
+| ≤ 2 / 5 | | `low` |
+| any | Type safety is `none` AND framework opinionation is `weak` | `low` (override: these two together amplify each other) |
 
 Implement the rule as a bash-shaped truth table so re-implementations agree:
 
 ```bash
-# Pseudocode — dimension verdicts as variables
+# Pseudocode: dimension verdicts as variables
 # Each is one of: strong/partial/none, strong/partial/flat,
 #                 strong/moderate/weak, present/absent, present/absent
 good=0
@@ -436,7 +442,7 @@ else
 fi
 ```
 
-These thresholds are deliberately conservative for v1 — `high` requires every dimension to be in the top bucket. See AgDR-0042 for the rationale and tuning notes.
+These thresholds are deliberately conservative for v1: `high` requires every dimension to be in the top bucket. See AgDR-0042 for the rationale and tuning notes.
 
 #### Warning text (only when verdict is `low`)
 
@@ -448,7 +454,7 @@ Print this text **verbatim** to the operator after the assessment, and also embe
 Rex's architecture handbooks will fire advisory-only on this codebase. The blocking gate (`ENFORCEMENT: blocking`) will generate false positives. Recommended: adopt as advisory-only, plan a follow-up to add the missing scaffolding (typescript strict, lint baseline, etc.)
 ```
 
-For `high` and `moderate` verdicts, do NOT print the warning — the score in the assessment file is enough.
+For `high` and `moderate` verdicts, do NOT print the warning. The score in the assessment file is enough.
 
 #### What this step does NOT do
 
@@ -463,7 +469,7 @@ See AgDR-0042 for the dimensions + thresholds rationale, the alternatives consid
 Write `projects/<name>/handover-assessment.md`:
 
 ````markdown
-# {name} — Handover Assessment
+# {name}: Handover Assessment
 
 **Date**: YYYY-MM-DD
 **Assessor**: {git user}
@@ -542,7 +548,7 @@ See AgDR-0042 for the scoring rationale and v1 thresholds.
 - {tech-lead, backend-engineer, frontend-engineer, sre, security-auditor, …}
 
 ### Workflows that kick in
-- [ ] PR workflow (`.claude/rules/pr-workflow.md`) — every change goes through a PR
+- [ ] PR workflow (`.claude/rules/pr-workflow.md`): every change goes through a PR
 - [ ] AgDR for technical decisions
 - [ ] Code Reviewer agent on every PR
 - [ ] Security Reviewer agent on first pass and high-risk PRs
@@ -563,7 +569,7 @@ See AgDR-0042 for the scoring rationale and v1 thresholds.
 
 ### Registry entry
 
-The entry that will be appended to `apexyard.projects.yaml` at the root of the ops repo (see step 7 — the skill does this append for you, with confirmation):
+The entry that will be appended to `apexyard.projects.yaml` at the root of the ops repo (see step 7, the skill does this append for you, with confirmation):
 
 ```yaml
 - name: {name}
@@ -572,7 +578,7 @@ The entry that will be appended to `apexyard.projects.yaml` at the root of the o
   docs: projects/{name}
   status: handover
   roles:
-    {dynamically derived from the tech stack + CI config — see
+    {dynamically derived from the tech stack + CI config, see
      "Deriving applicable roles" below}
 ```
 
@@ -591,16 +597,16 @@ For a typical handover you'll end up with 3-5 roles in the list.
 
 ## Next Steps
 
-Derived dynamically from the Quality Risks found in this assessment. Don't emit generic placeholders — emit specific actions.
+Derived dynamically from the Quality Risks found in this assessment. Don't emit generic placeholders, emit specific actions.
 
 Mapping table:
 
 | Risk found | Next step entry |
 |------------|-----------------|
-| ≥ 1 CVE in deps (any severity) | `1. /audit-deps {name} — triage the {severity} {package} CVE before any new feature work` |
+| ≥ 1 CVE in deps (any severity) | `1. /audit-deps {name}: triage the {severity} {package} CVE before any new feature work` |
 | Failing tests | `2. Fix the {N} failing tests in {module} before merging new PRs (baseline must be green)` |
 | No observability (no Sentry/Datadog/CloudWatch/etc.) | `3. /decide on observability ({two most common options for this stack})` |
-| Stale CI (no runs in > 30 days) | `4. Re-enable CI on this repo — copy in golden-paths/pipelines/ci.yml` |
+| Stale CI (no runs in > 30 days) | `4. Re-enable CI on this repo: copy in golden-paths/pipelines/ci.yml` |
 | Test coverage unknown | `5. Set up test coverage reporting (vitest/jest coverage config) before the first feature` |
 | ≥ 10 open issues | `6. Triage the issue backlog with the previous owner before taking ownership` |
 | Missing README or onboarding doc | `7. Write a minimum-viable README (what the project does, how to run it locally, where it deploys)` |
@@ -610,7 +616,7 @@ If no risks match a row, omit that row. If fewer than 3 actions come out, add:
 - `{next} /code-review the most-recent PR on this repo as Rex to calibrate review standards`
 - `{next} Stakeholder sync with the previous owner to cover context the static read couldn't surface`
 
-**Re-handover preservation.** On re-runs of `/handover`, the regenerated `## Next Steps` section MUST preserve any prior-run `~~strikethrough~~ → Filed as [#N](url)` markers on entries that recur in the new list. Detection rule: for each entry that would be emitted by the mapping table above, scan the prior `handover-assessment.md` (if present) for a matching entry by leading verb + key noun phrase (e.g. "Fix the N failing tests in {module}" matches the prior "Fix the M failing tests in {module}" regardless of the count). If matched and the prior version carries a `Filed as` link, preserve the link in the regenerated entry. This is the load-bearing input to step 7.5's filed-marker skip logic — without it, the operator gets re-prompted on every filed entry on every re-handover. See Rule 18.
+**Re-handover preservation.** On re-runs of `/handover`, the regenerated `## Next Steps` section MUST preserve any prior-run `~~strikethrough~~ → Filed as [#N](url)` markers on entries that recur in the new list. Detection rule: for each entry that would be emitted by the mapping table above, scan the prior `handover-assessment.md` (if present) for a matching entry by leading verb + key noun phrase (e.g. "Fix the N failing tests in {module}" matches the prior "Fix the M failing tests in {module}" regardless of the count). If matched and the prior version carries a `Filed as` link, preserve the link in the regenerated entry. This is the load-bearing input to step 7.5's filed-marker skip logic. Without it, the operator gets re-prompted on every filed entry on every re-handover. See Rule 18.
 
 ## Cleanup (REQUIRED before exit)
 
@@ -625,11 +631,11 @@ Always remove the bootstrap marker on a clean exit. If the skill is interrupted 
 
 ## Post-Handover Checklist
 
-Also derived from the risks found. Tailor to the specific repo — don't emit generic items.
+Also derived from the risks found. Tailor to the specific repo, don't emit generic items.
 
 - [ ] Review this assessment with the previous owner
-- [ ] {top quality risk} — close before the first feature PR
-- [ ] {second quality risk} — scheduled in the first 2 weeks
+- [ ] {top quality risk}: close before the first feature PR
+- [ ] {second quality risk}: scheduled in the first 2 weeks
 - [ ] Add `{name}` to the weekly `/stakeholder-update` rollup
 - [ ] Onboard the roles listed above into the team's on-call / review rotation
 - [ ] Set up a test coverage baseline (run `npm test -- --coverage` or equivalent and commit the threshold)
@@ -645,7 +651,7 @@ Also derived from the risks found. Tailor to the specific repo — don't emit ge
 
 **Skip condition**: if `$PICKED_TOPOLOGY` is empty (operator chose "Skip / custom"), skip this entire step and note in the final summary `topology: skipped`.
 
-If a topology was picked, copy the bundle into the project's instantiation locations. **All copies, never symlinks** — copies are stable across framework updates; `/update` detects drift on top (see AgDR-0048).
+If a topology was picked, copy the bundle into the project's instantiation locations. **All copies, never symlinks**: copies are stable across framework updates; `/update` detects drift on top (see AgDR-0048).
 
 #### Resolve paths
 
@@ -694,7 +700,7 @@ else
 fi
 ```
 
-The `--ignore-existing` / `-n` flag is load-bearing — adopters who've already started editing handbooks in the project keep their edits.
+The `--ignore-existing` / `-n` flag is load-bearing: adopters who've already started editing handbooks in the project keep their edits.
 
 #### Write the topology anchor (for `/update` drift detection)
 
@@ -706,7 +712,7 @@ cp "$TOPOLOGY_SRC/VERSION" "$PROJECTS_DIR/<name>/.topology/VERSION"
 
 `/update` reads these two files to know which topology to diff against (see [`.claude/skills/update/SKILL.md`](../update/SKILL.md) § "Topology drift detection").
 
-#### Seed the AgDR template (as a draft — `.draft.md` extension)
+#### Seed the AgDR template (as a draft: `.draft.md` extension)
 
 ```bash
 mkdir -p "$PROJECTS_DIR/<name>/docs/agdr"
@@ -735,7 +741,7 @@ if [ -d "$WORKSPACE_DIR/<name>/.git" ]; then
 fi
 ```
 
-If the workspace clone doesn't exist yet (operator hasn't cloned), defer the pipeline copy — emit a one-line note: `topology pipelines pending — clone the repo into workspace/<name>/ then re-run /handover, or copy topologies/$PICKED_TOPOLOGY/golden-paths/*.yml manually`.
+If the workspace clone doesn't exist yet (operator hasn't cloned), defer the pipeline copy. Emit a one-line note: `topology pipelines pending: clone the repo into workspace/<name>/ then re-run /handover, or copy topologies/$PICKED_TOPOLOGY/golden-paths/*.yml manually`.
 
 #### Set the instantiation marker for the final summary
 
@@ -743,11 +749,11 @@ If the workspace clone doesn't exist yet (operator hasn't cloned), defer the pip
 TOPOLOGY_INSTANTIATED="$PICKED_TOPOLOGY@$TOPOLOGY_VERSION"
 ```
 
-### 5.6. Document selection (checklist) — opt in to what gets generated
+### 5.6. Document selection (checklist): opt in to what gets generated
 
-By this point the **computed core** is done: the handover assessment (step 5) and the harnessability score (step 4.5) are written regardless of any selection. This step decides which of the *additional* generatable artefacts to produce, and — for each template-backed one — which template to render it from.
+By this point the **computed core** is done: the handover assessment (step 5) and the harnessability score (step 4.5) are written regardless of any selection. This step decides which of the *additional* generatable artefacts to produce, and, for each template-backed one, which template to render it from.
 
-**Skip condition (`--all`)**: if the operator passed `--all` on the invocation, skip the checklist entirely. Generate the full default set (every row marked "default ✓" in the catalogue below) using each doc's conventional template. Note `document selection: --all (full set)` in the step 10 summary and continue to step 6. This is the byte-for-byte pre-checklist behaviour — existing scripted invocations keep working by adding `--all`.
+**Skip condition (`--all`)**: if the operator passed `--all` on the invocation, skip the checklist entirely. Generate the full default set (every row marked "default ✓" in the catalogue below) using each doc's conventional template. Note `document selection: --all (full set)` in the step 10 summary and continue to step 6. This is the byte-for-byte pre-checklist behaviour: existing scripted invocations keep working by adding `--all`.
 
 Otherwise (default, or explicit `--interactive`): use `AskUserQuestion` for the document checklist.
 Split the nine documents into three wizard questions. Preserve the pre-ticked default and multiple selections.
@@ -755,10 +761,10 @@ Use the checklist below only without the tool.
 
 #### Two kinds of output
 
-The catalogue distinguishes two classes — keep them visually distinct in the prompt so the operator knows which ones offer a template pick:
+The catalogue distinguishes two classes: keep them visually distinct in the prompt so the operator knows which ones offer a template pick:
 
-- **Computed / toggle-only** — derived from the repo scan; there is no template to choose, only whether to emit. (Example: the L2 container diagram is *assembled* from detected signals, but it still renders **through** the `architecture/c4-container.md` template — so it's template-backed, see below. The handover assessment itself is pure-computed and is always on, never shown as a toggle.)
-- **Template-backed / choose-a-template** — rendered from a file in the template library. For these the operator gets a second sub-prompt to pick which resolved template to use (framework default vs an adopter `custom-templates/**` override, plus any sibling templates that fit the slot).
+- **Computed / toggle-only**: derived from the repo scan; there is no template to choose, only whether to emit. (Example: the L2 container diagram is *assembled* from detected signals, but it still renders **through** the `architecture/c4-container.md` template, so it's template-backed, see below. The handover assessment itself is pure-computed and is always on, never shown as a toggle.)
+- **Template-backed / choose-a-template**: rendered from a file in the template library. For these the operator gets a second sub-prompt to pick which resolved template to use (framework default vs an adopter `custom-templates/**` override, plus any sibling templates that fit the slot).
 
 #### The catalogue
 
@@ -767,18 +773,18 @@ Present this as a numbered checklist. The "default" column marks what `--all` (a
 | # | Artefact | Kind | Template (resolved via `portfolio_resolve_template`) | Default | Generated by |
 |---|----------|------|------------------------------------------------------|---------|--------------|
 | 1 | L2 container diagram (`architecture/container.md`) | template-backed | `architecture/c4-container.md` | ✓ (if signals + not already present) | step 6 |
-| 2 | L1 context diagram (`architecture/context.md`) | template-backed | `architecture/c4-context.md` | — | step 6.1 (`/c4` context pass) |
-| 3 | Data Flow Diagram (`architecture/dfd.md`) | template-backed | `architecture/dfd.md` | — | hand off to `/dfd <name>` |
-| 4 | Feature Inventory (`feature-inventory.md`) | computed (six-axis scan) | — | — | hand off to `/extract-features <name>` |
-| 5 | User-journey preview (`journeys/<flow>.html`) | computed (HTML, from flows) | — | — | hand off to `/journey <name>` |
-| 6 | Architecture Vision draft (`architecture/vision.md`) | template-backed | `architecture/vision.md` | — | hand off to `/tech-vision <name>` |
-| 7 | Sequence diagram (`architecture/sequence-<flow>.md`) | template-backed | `architecture/sequence.md` | — | step 6.1 (sequence pass) |
-| 8 | In-repo `AGENTS.md` (written into the **target repo** via a PR) | computed (from the live assessment) | — | **— (default-OFF)** | step 8.5 (PR into the target repo) |
-| 9 | "Governed by ApexYard" README badge (written into the **target repo** via a PR) | computed (badge markdown, two variants) | — | **— (default-OFF)** | step 8.6 (PR into the target repo) |
+| 2 | L1 context diagram (`architecture/context.md`) | template-backed | `architecture/c4-context.md` | | step 6.1 (`/c4` context pass) |
+| 3 | Data Flow Diagram (`architecture/dfd.md`) | template-backed | `architecture/dfd.md` | | hand off to `/dfd <name>` |
+| 4 | Feature Inventory (`feature-inventory.md`) | computed (six-axis scan) | | | hand off to `/extract-features <name>` |
+| 5 | User-journey preview (`journeys/<flow>.html`) | computed (HTML, from flows) | | | hand off to `/journey <name>` |
+| 6 | Architecture Vision draft (`architecture/vision.md`) | template-backed | `architecture/vision.md` | | hand off to `/tech-vision <name>` |
+| 7 | Sequence diagram (`architecture/sequence-<flow>.md`) | template-backed | `architecture/sequence.md` | | step 6.1 (sequence pass) |
+| 8 | In-repo `AGENTS.md` (written into the **target repo** via a PR) | computed (from the live assessment) | | **(default-OFF)** | step 8.5 (PR into the target repo) |
+| 9 | "Governed by ApexYard" README badge (written into the **target repo** via a PR) | computed (badge markdown, two variants) | | **(default-OFF)** | step 8.6 (PR into the target repo) |
 
-> The handover assessment + harnessability score are NOT in this catalogue — they are always written (step 5 / 4.5). The catalogue is only the *optional* surface.
+> The handover assessment + harnessability score are NOT in this catalogue. They are always written (step 5 / 4.5). The catalogue is only the *optional* surface.
 >
-> **Rows 8 and 9 are special**: they are the only catalogue rows that write into the **target repo** (everything else lands in the ops fork). Both are **default-OFF** so the "read-only against the target repo" rule (Rule 1) stays true unless the operator consciously opts in. When selected, each is delivered via a branch + PR — never a direct commit, never via the ops-fork bootstrap-exempt path. See AgDR-0073 (row 8) and AgDR-0090 (row 9).
+> **Rows 8 and 9 are special**: they are the only catalogue rows that write into the **target repo** (everything else lands in the ops fork). Both are **default-OFF** so the "read-only against the target repo" rule (Rule 1) stays true unless the operator consciously opts in. When selected, each is delivered via a branch + PR, never a direct commit, never via the ops-fork bootstrap-exempt path. See AgDR-0073 (row 8) and AgDR-0090 (row 9).
 
 Render the prompt like this (pre-tick the default rows; the operator toggles):
 
@@ -789,15 +795,15 @@ always written. Pick which additional docs to generate (default-ticked shown wit
   [x] 1. L2 container diagram          (template-backed → c4-container)
   [ ] 2. L1 context diagram            (template-backed → c4-context)
   [ ] 3. Data Flow Diagram             (template-backed → dfd)
-  [ ] 4. Feature Inventory             (computed — six-axis scan)
-  [ ] 5. User-journey preview          (computed — HTML)
+  [ ] 4. Feature Inventory             (computed: six-axis scan)
+  [ ] 5. User-journey preview          (computed: HTML)
   [ ] 6. Architecture Vision draft     (template-backed → vision)
   [ ] 7. Sequence diagram              (template-backed → sequence)
   [ ] 8. In-repo AGENTS.md             (computed → PR into the TARGET repo)
   [ ] 9. "Governed by ApexYard" badge  (computed → PR into the TARGET repo)
 
-Note: items 8 and 9 write into the adopted repo itself (via a branch + PR) — the
-only two that do. Both are default-OFF; tick 8 if you want the repo to be
+Note: items 8 and 9 write into the adopted repo itself (via a branch + PR). These
+are the only two that do. Both are default-OFF; tick 8 if you want the repo to be
 self-describing to agents, tick 9 if you want a visible badge crediting apexyard
 governance on the README.
 
@@ -808,11 +814,11 @@ or toggles like '+2 -1' to adjust the defaults.
 
 Accept:
 
-- `default` or empty — generate exactly the pre-ticked rows
-- `all` — generate every catalogue row (same set as `--all`)
-- `none` — generate nothing optional (assessment + harnessability only)
-- A comma-list (`1,3,4`) — generate exactly those rows
-- Toggle shorthand (`+2 -1`) — start from the defaults, add `+N`, remove `-N`
+- `default` or empty: generate exactly the pre-ticked rows
+- `all`: generate every catalogue row (same set as `--all`)
+- `none`: generate nothing optional (assessment + harnessability only)
+- A comma-list (`1,3,4`): generate exactly those rows
+- Toggle shorthand (`+2 -1`): start from the defaults, add `+N`, remove `-N`
 
 If the response is ambiguous, ask **one** clarification; on a second ambiguous answer, fall back to `default`.
 
@@ -829,7 +835,7 @@ source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
 # Conventional template for this slot (e.g. architecture/c4-container.md).
 default_tpl=$(portfolio_resolve_template architecture/c4-container.md)
 
-# Adopter override candidate (only listed when it actually exists — resolve()
+# Adopter override candidate (only listed when it actually exists, resolve()
 # already prefers it, so equality means there's only one real candidate).
 registry=$(portfolio_registry)
 custom_dir="$(dirname "$registry")/custom-templates"
@@ -841,40 +847,40 @@ Present the candidates below only when the harness lacks the tool:
 ```
 Template for the L2 container diagram:
 
-  [1] c4-container.md            (framework default — templates/architecture/)
-  [2] c4-container.md            (adopter override — custom-templates/architecture/)   ← only shown if it exists
+  [1] c4-container.md            (framework default: templates/architecture/)
+  [2] c4-container.md            (adopter override: custom-templates/architecture/)   ← only shown if it exists
   [3] Other library template     (pick any file under templates/architecture/ or custom-templates/architecture/)
 
-[1/2/3 — default 1]
+[1/2/3: default 1]
 ```
 
 Rules for the pick:
 
-- **List the override only when it exists.** `portfolio_resolve_template` already returns the override path when present, so when the custom file is absent, candidate `[2]` is omitted and `[1]` is the sole conventional pick — don't fabricate a second row.
-- **Default is always the conventional template** for that slot (candidate `[1]`, or the override if `portfolio_resolve_template` returned it — i.e. the path the helper would pick unprompted). Pressing enter / empty input takes the default. This keeps `--all` and "default" runs byte-stable.
+- **List the override only when it exists.** `portfolio_resolve_template` already returns the override path when present, so when the custom file is absent, candidate `[2]` is omitted and `[1]` is the sole conventional pick. Don't fabricate a second row.
+- **Default is always the conventional template** for that slot (candidate `[1]`, or the override if `portfolio_resolve_template` returned it, i.e. the path the helper would pick unprompted). Pressing enter / empty input takes the default. This keeps `--all` and "default" runs byte-stable.
 - **`[3] Other`** lets the operator point at any sibling template (e.g. render the container slot from a custom `c4-container-microservices.md` they keep in `custom-templates/architecture/`). Glob `templates/architecture/*.md` + `custom-templates/architecture/*.md`, list them, let the operator choose. If they pick a path that doesn't exist, re-prompt once, then fall back to the default.
 - Record the chosen absolute path in a per-doc variable (e.g. `$CONTAINER_TEMPLATE`) and pass it to the generating step instead of re-resolving. Step 6's "Assembling the file" block reads `$CONTAINER_TEMPLATE` when set, falling back to `portfolio_resolve_template architecture/c4-container.md` when the checklist was skipped (`--all`) or the variable is unset.
 
 #### Hand-offs vs in-skill generation
 
-Rows 1, 2, 7 are generated **in this skill** (steps 6 / 6.1). Row 8 (`AGENTS.md`) is also generated in this skill but in a dedicated step (8.5) because it is the only row that writes into the **target repo** via a PR. Rows 3–6 are richer artefacts owned by dedicated skills — for those, the checklist records the selection and, after the summary (step 10), the skill **offers to hand off** to the matching skill rather than reimplementing it:
+Rows 1, 2, 7 are generated **in this skill** (steps 6 / 6.1). Row 8 (`AGENTS.md`) is also generated in this skill but in a dedicated step (8.5) because it is the only row that writes into the **target repo** via a PR. Rows 3–6 are richer artefacts owned by dedicated skills: for those, the checklist records the selection and, after the summary (step 10), the skill **offers to hand off** to the matching skill rather than reimplementing it:
 
 ```
 You selected: Data Flow Diagram, Feature Inventory.
 Run the owning skills now against the cloned repo?
 
-  /dfd <name>               — Data Flow Diagram
-  /extract-features <name>  — Feature Inventory
+  /dfd <name>               : Data Flow Diagram
+  /extract-features <name>  : Feature Inventory
 
-[y to run in sequence / n to skip — default n]
+[y to run in sequence / n to skip: default n]
 ```
 
-This mirrors step 8's follow-up-skill offer (security/code review) — the checklist never reimplements `/dfd`, `/extract-features`, `/journey`, or `/tech-vision`; it routes to them. On `n`, note the selected-but-deferred docs in the summary so the operator can run them later.
+This mirrors step 8's follow-up-skill offer (security/code review). The checklist never reimplements `/dfd`, `/extract-features`, `/journey`, or `/tech-vision`; it routes to them. On `n`, note the selected-but-deferred docs in the summary so the operator can run them later.
 
 #### Record the selection for the summary
 
 ```bash
-# Examples — set per the operator's picks
+# Examples: set per the operator's picks
 SELECTED_DOCS="container,dfd,feature-inventory"
 CONTAINER_TEMPLATE="$default_tpl"   # absolute path chosen in the per-doc pick
 ```
@@ -883,11 +889,11 @@ The step 10 summary reports both the generated set and the deferred (handed-off)
 
 ### 6. Write the L2 container diagram stub (if selected and missing)
 
-**Selection condition**: generate this file only when row 1 (L2 container diagram) was selected in step 5.6 — i.e. the operator kept it ticked, passed `--all`, or named it in the comma-list. If row 1 was de-selected, skip this step and note `architecture/container.md: skipped (deselected)` in the summary.
+**Selection condition**: generate this file only when row 1 (L2 container diagram) was selected in step 5.6, i.e. the operator kept it ticked, passed `--all`, or named it in the comma-list. If row 1 was de-selected, skip this step and note `architecture/container.md: skipped (deselected)` in the summary.
 
 **Skip condition**: if `projects/<name>/architecture/container.md` already exists, skip this entire step and note it in the final summary (`architecture/container.md: preserved`). Never overwrite.
 
-If missing: emit a stub Mermaid C4 container diagram derived from the repo signals gathered in step 3. The goal is a file the user can render on GitHub immediately and then refine — correctness beats completeness.
+If missing: emit a stub Mermaid C4 container diagram derived from the repo signals gathered in step 3. The goal is a file the user can render on GitHub immediately and then refine. Correctness beats completeness.
 
 #### Container-detection signals
 
@@ -923,7 +929,7 @@ If none match → omit the web container. Not all projects have a frontend.
 | `Gemfile` has `rails` / `sinatra` | API | `Ruby / <framework>` |
 | `Cargo.toml` has `axum` / `actix-web` / `rocket` | API | `Rust / <framework>` |
 
-If the project is a monolith Next.js app with API routes, collapse `web` + `api` into one container labelled `Web App + API` with tech `Next.js` — don't fabricate a split the code doesn't have.
+If the project is a monolith Next.js app with API routes, collapse `web` + `api` into one container labelled `Web App + API` with tech `Next.js`. Don't fabricate a split the code doesn't have.
 
 **Slot: `worker` (async / background jobs)**
 
@@ -968,7 +974,7 @@ Use `ContainerDb(cache, ...)`.
 | `package.json` has `kafkajs` | Queue | `Kafka` |
 | `package.json` has `amqplib` / `@cloudamqp/*` | Queue | `RabbitMQ` |
 
-Only include a separate queue container if it's clearly distinct from worker infrastructure — otherwise fold into the worker's tech label.
+Only include a separate queue container if it's clearly distinct from worker infrastructure, otherwise fold into the worker's tech label.
 
 **Slot: external systems (from `System_Ext`)**
 
@@ -984,14 +990,14 @@ Include only the externals you find evidence for. Don't fabricate a Stripe depen
 
 **docker-compose.yml override**
 
-If `docker-compose.yml` exists at the repo root, it's a stronger signal than `package.json` for container composition — the compose services ARE the containers. For each service:
+If `docker-compose.yml` exists at the repo root, it's a stronger signal than `package.json` for container composition: the compose services ARE the containers. For each service:
 
 - Map `image: postgres:*` or `image: mysql:*` → `ContainerDb(db, ...)`
 - Map `image: redis:*` → `ContainerDb(cache, "Cache", "Redis", ...)`
 - Map `image: node:*` / `image: python:*` / `image: ruby:*` with a `build:` context → generic `Container(...)`, use the build context path as a hint
 - Map named application services (from `build: ./api`, `build: ./web`) to `api` / `web` slots
 
-When compose and `package.json` conflict, trust compose — it describes the deployment shape the project actually runs in.
+When compose and `package.json` conflict, trust compose: it describes the deployment shape the project actually runs in.
 
 **Dockerfile-only**
 
@@ -1024,15 +1030,15 @@ Start from the resolved template. Replace:
   - `worker → <external>` (API) for each external the worker plausibly calls
   - `api → <external>` for each external the API plausibly calls
 
-Also replace the bottom-of-file guidance section with a brief "Handover-generated — refine me" note so the user knows this was machine-drafted. Render the following literal blockquote + Maintenance section into the target file (the content below is the exact Markdown to write):
+Also replace the bottom-of-file guidance section with a brief "Handover-generated: refine me" note so the user knows this was machine-drafted. Render the following literal blockquote + Maintenance section into the target file (the content below is the exact Markdown to write):
 
-- A blockquote starting with `> **Note**: this diagram was auto-generated by /handover on YYYY-MM-DD from repo signals (package.json, docker-compose.yml, Dockerfile, Prisma schema, .env.example). It is a **starting point** — review and refine.`
+- A blockquote starting with `> **Note**: this diagram was auto-generated by /handover on YYYY-MM-DD from repo signals (package.json, docker-compose.yml, Dockerfile, Prisma schema, .env.example). It is a **starting point**: review and refine.`
 - Continue with a bulleted list inside the blockquote:
-  - "Container labels and tech strings — the detector may have picked a framework version wrong"
-  - "Inferred relationships — user → web assumes HTTPS; adjust if your stack uses something else"
-  - "External systems — anything your team uses that isn't in package.json (e.g. infra-only dependencies, direct cloud APIs called via HTTP) won't have been detected"
+  - "Container labels and tech strings: the detector may have picked a framework version wrong"
+  - "Inferred relationships: user → web assumes HTTPS; adjust if your stack uses something else"
+  - "External systems: anything your team uses that isn't in package.json (e.g. infra-only dependencies, direct cloud APIs called via HTTP) won't have been detected"
 - Close with: `> Update the "Maintenance" section below once the diagram is stable.`
-- Then a blank line, then a second-level heading `## Maintenance`, then one line: `(From the template — update when L2 containers change.)`
+- Then a blank line, then a second-level heading `## Maintenance`, then one line: `(From the template: update when L2 containers change.)`
 
 #### Write path
 
@@ -1044,13 +1050,13 @@ Create `projects/<name>/architecture/` if missing.
 
 #### If there's nothing meaningful to draw
 
-If after scanning you find zero signals (no `package.json`, no `pyproject.toml`, no Dockerfile, no known framework, no DB), skip the file and note in the summary: `architecture/container.md: skipped (no container signals detected — add manually from the C4 container template — resolve via portfolio_resolve_template architecture/c4-container.md — when ready)`. Better to write nothing than fabricate a wrong diagram.
+If after scanning you find zero signals (no `package.json`, no `pyproject.toml`, no Dockerfile, no known framework, no DB), skip the file and note in the summary: `architecture/container.md: skipped (no container signals detected: add manually from the C4 container template, resolve via portfolio_resolve_template architecture/c4-container.md, when ready)`. Better to write nothing than fabricate a wrong diagram.
 
 ### 6.1. Write the L1 context + sequence diagram stubs (if selected)
 
 These are the other two **in-skill** template-backed docs from the step 5.6 catalogue (rows 2 and 7). Generate each only when it was selected; otherwise skip silently.
 
-**Row 2 — L1 context diagram** (`projects/<name>/architecture/context.md`): render from the template chosen in the per-doc pick (`$CONTEXT_TEMPLATE`, falling back to `portfolio_resolve_template architecture/c4-context.md`). Populate the system box with the project name and the `System_Ext` actors from the externals detected in step 6's external-systems scan (auth / payments / email / storage / LLM). Same "auto-generated — refine me" note + never-overwrite rule as the container stub.
+**Row 2: L1 context diagram** (`projects/<name>/architecture/context.md`): render from the template chosen in the per-doc pick (`$CONTEXT_TEMPLATE`, falling back to `portfolio_resolve_template architecture/c4-context.md`). Populate the system box with the project name and the `System_Ext` actors from the externals detected in step 6's external-systems scan (auth / payments / email / storage / LLM). Same "auto-generated: refine me" note + never-overwrite rule as the container stub.
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -1058,7 +1064,7 @@ source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
 context_template="${CONTEXT_TEMPLATE:-$(portfolio_resolve_template architecture/c4-context.md)}"
 ```
 
-**Row 7 — sequence diagram** (`projects/<name>/architecture/sequence-<flow>.md`): only meaningful when a clear request flow surfaced during the read (e.g. an auth handshake or a primary API path). Render from `$SEQUENCE_TEMPLATE` (fallback `portfolio_resolve_template architecture/sequence.md`). If no obvious flow exists, skip and note `sequence: skipped (no clear flow detected)` — don't fabricate one.
+**Row 7: sequence diagram** (`projects/<name>/architecture/sequence-<flow>.md`): only meaningful when a clear request flow surfaced during the read (e.g. an auth handshake or a primary API path). Render from `$SEQUENCE_TEMPLATE` (fallback `portfolio_resolve_template architecture/sequence.md`). If no obvious flow exists, skip and note `sequence: skipped (no clear flow detected)`. Don't fabricate one.
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -1066,11 +1072,11 @@ source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
 sequence_template="${SEQUENCE_TEMPLATE:-$(portfolio_resolve_template architecture/sequence.md)}"
 ```
 
-Both follow the architecture-stub conventions: write once, never overwrite (preserve on re-handover), and prepend the machine-drafted note. The richer rows (3–6: DFD, Feature Inventory, journey, vision) are **not** generated here — they hand off to `/dfd`, `/extract-features`, `/journey`, `/tech-vision` per step 5.6's hand-off offer.
+Both follow the architecture-stub conventions: write once, never overwrite (preserve on re-handover), and prepend the machine-drafted note. The richer rows (3–6: DFD, Feature Inventory, journey, vision) are **not** generated here. They hand off to `/dfd`, `/extract-features`, `/journey`, `/tech-vision` per step 5.6's hand-off offer.
 
 ### 6.2. Lint the generated architecture stubs
 
-Run `lint.sh` against every architecture stub that exists on disk after steps 6 and 6.1 — `container.md`, `context.md`, and any `sequence-<flow>.md`. This block is a fresh process (per the per-block preamble rule above), so re-source the portfolio helper and re-resolve `$projects_dir` rather than reusing a variable from an earlier block. Use `find` to list the files, not a glob — under zsh, an unmatched glob (the common case: no `sequence-*.md` stub exists) prints "no matches found" and aborts the loop with exit 1 before any file lints. The lint wraps the shared `_lib-mermaid-lint.sh` — it extracts every ` ```mermaid ` block from the file and validates each via `mmdc` (mermaid-cli), so broken syntax is caught at write time, not when a human opens the file on GitHub.
+Run `lint.sh` against every architecture stub that exists on disk after steps 6 and 6.1: `container.md`, `context.md`, and any `sequence-<flow>.md`. This block is a fresh process (per the per-block preamble rule above), so re-source the portfolio helper and re-resolve `$projects_dir` rather than reusing a variable from an earlier block. Use `find` to list the files, not a glob: under zsh, an unmatched glob (the common case: no `sequence-*.md` stub exists) prints "no matches found" and aborts the loop with exit 1 before any file lints. The lint wraps the shared `_lib-mermaid-lint.sh`: it extracts every ` ```mermaid ` block from the file and validates each via `mmdc` (mermaid-cli), so broken syntax is caught at write time, not when a human opens the file on GitHub.
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
@@ -1088,14 +1094,14 @@ The loop resets `rc` to 0 before each file's lint call, so the per-file reportin
 
 Handle each file's exit code before reporting it as written:
 
-- **Exit 0** — clean. Report the stub as `written (Mermaid lint: clean)`.
-- **Exit 1** — parse error. Print the lint output and either fix the offending block and re-lint, or leave the file as-is and note `written (Mermaid lint: FAILED — see output above)` in the summary. Never report a failed stub as plain `written`.
-- **Exit 3** — `mmdc` / Node unavailable. Print the warning `Mermaid not validated: mmdc not available.` and report the stub as `written (Mermaid not validated: mmdc not available)`. Do not report success.
-- **`--skip-lint`** (operator-requested) — report `written (Mermaid lint skipped)`.
+- **Exit 0**: clean. Report the stub as `written (Mermaid lint: clean)`.
+- **Exit 1**: parse error. Print the lint output and either fix the offending block and re-lint, or leave the file as-is and note `written (Mermaid lint: FAILED, see output above)` in the summary. Never report a failed stub as plain `written`.
+- **Exit 3**: `mmdc` / Node unavailable. Print the warning `Mermaid not validated: mmdc not available.` and report the stub as `written (Mermaid not validated: mmdc not available)`. Do not report success.
+- **`--skip-lint`** (operator-requested): report `written (Mermaid lint skipped)`.
 
 ### 7. Append to the portfolio registry
 
-**Don't just print the snippet** — offer to append it automatically:
+**Don't just print the snippet**: offer to append it automatically:
 
 ```
 
@@ -1106,9 +1112,9 @@ Ready to add {name} to apexyard.projects.yaml? (y/n)
 
 If yes:
 
-1. **Locate the registry**: `apexyard.projects.yaml` at the root of the ops repo. If missing, first copy from `apexyard.projects.yaml.example` and show the user a warning: `⚠ Registry didn't exist — created from .example. You may need to fill in other projects.`
+1. **Locate the registry**: `apexyard.projects.yaml` at the root of the ops repo. If missing, first copy from `apexyard.projects.yaml.example` and show the user a warning: `⚠ Registry didn't exist: created from .example. You may need to fill in other projects.`
 
-2. **Append the entry**. Use `yq` if available for a safe YAML edit, otherwise append as plain text with careful indentation. Resolve the registry path via the helper (single-fork or split-portfolio — same code path):
+2. **Append the entry**. Use `yq` if available for a safe YAML edit, otherwise append as plain text with careful indentation. Resolve the registry path via the helper (single-fork or split-portfolio, same code path):
 
    ```bash
    source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -1166,42 +1172,42 @@ Skipping the auto-append. If you want to add it later, copy this into apexyard.p
 
 ### 7.5. Offer to file Next Steps as tracker tickets
 
-The assessment's `## Next Steps` section (written in step 5) enumerates concrete follow-up work derived from the risks found. By default those entries are static prose — the operator reads them in the markdown and translates each to a `/feature` / `/task` / `/bug` invocation by hand. Recommendations rot when that translation step has friction. This step closes the loop: surface each next-step entry inline, prompt y/n per item, and dispatch the right ticket-creation skill per accepted item.
+The assessment's `## Next Steps` section (written in step 5) enumerates concrete follow-up work derived from the risks found. By default those entries are static prose. The operator reads them in the markdown and translates each to a `/feature` / `/task` / `/bug` invocation by hand. Recommendations rot when that translation step has friction. This step closes the loop: surface each next-step entry inline, prompt y/n per item, and dispatch the right ticket-creation skill per accepted item.
 
-#### Pre-check: is GitHub Issues enabled on the project repo? (github tracker only — #653)
+#### Pre-check: is GitHub Issues enabled on the project repo? (github tracker only, #653)
 
-Tickets filed here land in the **project's own** repo, and GitHub disables Issues on forks/new repos by default — so this is the moment a `gh issue create` would fail with `the '<owner>/<repo>' repository has disabled issues`. Probe it first (gated on `tracker.kind` — silent no-op for linear/jira/none):
+Tickets filed here land in the **project's own** repo, and GitHub disables Issues on forks/new repos by default, so this is the moment a `gh issue create` would fail with `the '<owner>/<repo>' repository has disabled issues`. Probe it first (gated on `tracker.kind`: silent no-op for linear/jira/none):
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-tracker.sh"
 # <owner/repo> is the project's repo resolved in step 1 / appended in step 7.
 if ! tracker_check_issues "<owner/repo>"; then
-  : # warning + enable hint already printed to stderr — advisory, non-blocking
+  : # warning + enable hint already printed to stderr, advisory, non-blocking
 fi
 ```
 
-This is **advisory** — if issues are disabled, surface the warning + the `gh repo edit <owner/repo> --enable-issues` hint and let the operator decide before the per-item filing loop (offering to enable it is fine on explicit y/n; never auto-enable). If they decline, skip the filing offer (the tickets can't be created) and note the next steps remain in the assessment markdown.
+This is **advisory**: if issues are disabled, surface the warning + the `gh repo edit <owner/repo> --enable-issues` hint and let the operator decide before the per-item filing loop (offering to enable it is fine on explicit y/n; never auto-enable). If they decline, skip the filing offer (the tickets can't be created) and note the next steps remain in the assessment markdown.
 
 #### Skip conditions
 
 - **Zero next-step entries** (no risks found, no synthetic "calibrate review standards" / "stakeholder sync" entries either) → skip this step silently
-- **All next-step entries already carry a `Filed as #N` marker** from a prior run (re-handover with no NEW entries since the last filing pass) → skip with a one-line note: `All next steps were filed in prior runs — no new tickets offered.`. Detection: scan the regenerated `## Next Steps` list; if every entry either already-carries a `Filed as [#N](...)` link preserved through step 5's regeneration OR is a duplicate of a prior-run entry that did, skip. Mixed states (some filed, some new) do NOT skip — new entries get offered while filed-already entries are silently skipped at the per-item prompt loop (see § "Surface the entries" below).
+- **All next-step entries already carry a `Filed as #N` marker** from a prior run (re-handover with no NEW entries since the last filing pass) → skip with a one-line note: `All next steps were filed in prior runs. No new tickets offered.`. Detection: scan the regenerated `## Next Steps` list; if every entry either already-carries a `Filed as [#N](...)` link preserved through step 5's regeneration OR is a duplicate of a prior-run entry that did, skip. Mixed states (some filed, some new) do NOT skip. New entries get offered while filed-already entries are silently skipped at the per-item prompt loop (see § "Surface the entries" below).
 - **Operator opted out of the registry append at step 7** (answered `n` to "Ready to add {name} to apexyard.projects.yaml?") → skip. The project isn't in the registry, so ticket-source links pointing at `projects/<name>/handover-assessment.md` won't reach a teammate context.
 
 #### Surface the entries
 
 Scan the regenerated `## Next Steps` list. Partition into two buckets:
 
-- **Already-filed** — entries that carry a `Filed as [#N](...)` link from a prior step 7.5 run (preserved through step 5's regeneration; see § Next Steps "Re-handover preservation"). These are skipped silently — the operator never sees them in the prompt.
-- **Unfiled** — entries with no `Filed as` link. These are the only entries surfaced.
+- **Already-filed**: entries that carry a `Filed as [#N](...)` link from a prior step 7.5 run (preserved through step 5's regeneration; see § Next Steps "Re-handover preservation"). These are skipped silently. The operator never sees them in the prompt.
+- **Unfiled**: entries with no `Filed as` link. These are the only entries surfaced.
 
 If the unfiled bucket has zero entries, fall through to the skip-condition "All next-step entries already carry a `Filed as #N` marker" and emit the one-line note. Otherwise print the unfiled entries (top 3-5 by mapping-table order), numbered:
 
 ```
-Found 5 follow-up tasks in the assessment (2 were filed in a prior run — skipping). File any as tracker tickets?
+Found 5 follow-up tasks in the assessment (2 were filed in a prior run, skipping). File any as tracker tickets?
 
-  1. /audit-deps <name> — triage the high-severity lodash CVE before any new feature work
+  1. /audit-deps <name>: triage the high-severity lodash CVE before any new feature work
   2. Fix the 7 failing tests in src/api/orders before merging new PRs
   3. Set up test coverage reporting (vitest coverage config) before the first feature
   4. Triage the issue backlog with the previous owner before taking ownership
@@ -1210,14 +1216,14 @@ Found 5 follow-up tasks in the assessment (2 were filed in a prior run — skipp
 Per-item y/n (or 'all', 'none', a comma-list like '1,3,5'):
 ```
 
-The leading `(N were filed in a prior run — skipping)` parenthetical only appears when at least one prior-filed entry was found and skipped; on first-handover runs, omit it.
+The leading `(N were filed in a prior run, skipping)` parenthetical only appears when at least one prior-filed entry was found and skipped; on first-handover runs, omit it.
 
 Accept:
 
-- `all` or `y` — file every entry
-- `none` or `n` or empty input — skip all
-- Comma-separated indices (e.g. `1,3,5`) — file just those
-- Per-item y/n if the operator wants to walk through them one at a time — fall back to interactive if the response doesn't match the bulk shapes
+- `all` or `y`: file every entry
+- `none` or `n` or empty input: skip all
+- Comma-separated indices (e.g. `1,3,5`): file just those
+- Per-item y/n if the operator wants to walk through them one at a time, fall back to interactive if the response doesn't match the bulk shapes
 
 If the response is ambiguous, ask one clarification question; don't loop indefinitely. Default to skip-all on a second ambiguous answer.
 
@@ -1230,7 +1236,7 @@ For each accepted entry, classify by shape + dispatch the matching ticket-creati
 | Mentions a fix to broken behaviour ("Fix the N failing tests", "Resolve the X regression") | `/bug` | The work is to fix something measurably broken |
 | Mentions triage / decision / strategy ("Triage the backlog", "`/decide` on observability") | `/task` | Investigative or decision-making work; no broken behaviour to fix |
 | Mentions a new capability or scaffolding ("Set up coverage reporting", "Write a README", "Enable CI") | `/task` | Tech-debt or infra-fix; not user-facing capability so `/task` fits better than `/feature` |
-| Mentions invoking another framework skill ("`/audit-deps` <name>", "`/code-review` the most-recent PR") | `/task` | The work is "run this skill against this project" — track as a task to do, not a feature to build |
+| Mentions invoking another framework skill ("`/audit-deps` <name>", "`/code-review` the most-recent PR") | `/task` | The work is "run this skill against this project": track as a task to do, not a feature to build |
 | Mentions a stakeholder action ("Stakeholder sync", "Onboard role X") | `/task` | Coordination work; `/task` fits |
 
 **Default to `/task` when in doubt.** The framework's `/feature` skill is reserved for user-facing capabilities, and handover-derived next-steps are almost never that shape. The heuristic above keeps the routing predictable rather than asking the operator to disambiguate per item.
@@ -1241,11 +1247,11 @@ If the operator disagrees with the auto-route (e.g. they want a specific item fi
 
 For each accepted item, dispatch the chosen skill with these inputs:
 
-- **Title** pre-filled from the next-step entry — strip any leading skill-prefix (e.g. drop the `/audit-deps <name> —` lead to leave `triage the high-severity lodash CVE before any new feature work`), trim, capitalise the first letter
+- **Title** pre-filled from the next-step entry: strip any leading skill-prefix (e.g. drop the `/audit-deps <name>:` lead to leave `triage the high-severity lodash CVE before any new feature work`), trim, capitalise the first letter
 - **Body** pre-filled with the source line as the last paragraph:
 
   ```
-  _Source: handover deep-dive on YYYY-MM-DD — see `projects/<name>/handover-assessment.md` in the ops fork (or in the private portfolio sibling repo for split-portfolio v2 adopters) for the assessment that surfaced this work._
+  _Source: handover deep-dive on YYYY-MM-DD, see `projects/<name>/handover-assessment.md` in the ops fork (or in the private portfolio sibling repo for split-portfolio v2 adopters) for the assessment that surfaced this work._
   ```
 
   **Plain path, no markdown link.** The ticket is rendered against the TARGET repo's URL space on GitHub, but the assessment lives in the OPS FORK (or, for split-portfolio v2 adopters, the private sibling repo). A markdown link of any relative form would be dead-on-render. Naming the path as prose is honest about the cross-repo lookup the reader has to do, and survives the split-portfolio v2 case where the assessment isn't reachable from a public link at all.
@@ -1277,9 +1283,9 @@ Filed so far: 2 tickets (<owner>/<repo>#41, #42).
 Remaining: 3 entries (not filed).
 
 What now?
-  1. Retry — re-run the same dispatch
-  2. Skip — drop this entry, continue with the next 2
-  3. Abort — stop here; the 2 already-filed tickets stay
+  1. Retry: re-run the same dispatch
+  2. Skip: drop this entry, continue with the next 2
+  3. Abort: stop here; the 2 already-filed tickets stay
 ```
 
 Mirrors the failure-handling shape of `/task --batch` (see [`.claude/skills/_lib-modes/task-batch.md`](../_lib-modes/task-batch.md) § "Failure handling").
@@ -1296,13 +1302,13 @@ If at least one was filed, also list them inline in the summary:
 
 ```
 Filed follow-up tickets:
-  #41 — /task — Triage lodash CVE                  — <repo URL>
-  #42 — /bug  — Fix 7 failing tests in src/api/orders — <repo URL>
+  #41: /task: Triage lodash CVE                  : <repo URL>
+  #42: /bug  : Fix 7 failing tests in src/api/orders : <repo URL>
 ```
 
 ### 8. Offer follow-up deep-dive skills (against the already-cloned repo)
 
-The repo was cloned in step 1.5-clone (or was already local). Offer follow-up deep-dive skills that benefit from the local clone + LSP tooling. This replaces the old "clone first" offer — cloning happened earlier, so this step is purely about what to run next.
+The repo was cloned in step 1.5-clone (or was already local). Offer follow-up deep-dive skills that benefit from the local clone + LSP tooling. This replaces the old "clone first" offer. Cloning happened earlier, so this step is purely about what to run next.
 
 #### Branching on clone status
 
@@ -1314,9 +1320,9 @@ Print a single follow-up offer after the step 10 summary.
 ✓ <name> is cloned at $WORKSPACE_DIR/<name>/.
   Want to run any of the following against the clone now?
 
-  1. /threat-model <name>   — STRIDE threat model (recommended for first handover)
-  2. /security-review <name> — Security Auditor pass on the codebase
-  3. /code-review <name>    — Rex code-quality review
+  1. /threat-model <name>   : STRIDE threat model (recommended for first handover)
+  2. /security-review <name> : Security Auditor pass on the codebase
+  3. /code-review <name>    : Rex code-quality review
 
   Note: LSP-aware navigation requires ENABLE_LSP_TOOL=1 and a per-language
   Claude Code LSP plugin installed. Cross-project queries still need grep
@@ -1327,11 +1333,11 @@ Print a single follow-up offer after the step 10 summary.
 
 Accept:
 
-- `1`, `2`, `3` — run that specific skill
-- `all` — run all three in sequence
-- `none` or empty — skip; the operator can invoke any skill manually later
+- `1`, `2`, `3`: run that specific skill
+- `all`: run all three in sequence
+- `none` or empty: skip; the operator can invoke any skill manually later
 
-The skill never invokes follow-up skills automatically — the operator explicitly selects. On `none` / empty, continue to the final summary with no side effects.
+The skill never invokes follow-up skills automatically. The operator explicitly selects. On `none` / empty, continue to the final summary with no side effects.
 
 **If `$CLONE_STATUS` is `declined`:**
 
@@ -1339,7 +1345,7 @@ Skip this step silently. The operator consciously opted out of cloning; don't re
 
 **If `$CLONE_STATUS` is `failed: <reason>`:**
 
-Print a brief recovery note only — don't re-attempt the clone:
+Print a brief recovery note only, don't re-attempt the clone:
 
 ```
 Note: the clone of <name> failed earlier (<reason>). Once you have a local
@@ -1349,14 +1355,14 @@ or /code-review against it directly.
 
 Then continue to the final summary.
 
-### 8.5. Generate the in-repo `AGENTS.md` (only if row 8 was selected — default-OFF)
+### 8.5. Generate the in-repo `AGENTS.md` (only if row 8 was selected, default-OFF)
 
-This is the **only** step that writes into the **target repo**, and it does so the same way any change to that repo would: a branch + PR, reviewed by the repo owner before merge. It is a deliberate, scoped exception to Rule 1 ("read-only against the target repo") — see Rule 1's "Exception" note and AgDR-0073.
+This is the **only** step that writes into the **target repo**, and it does so the same way any change to that repo would: a branch + PR, reviewed by the repo owner before merge. It is a deliberate, scoped exception to Rule 1 ("read-only against the target repo"). See Rule 1's "Exception" note and AgDR-0073.
 
 #### Selection + preconditions
 
-- **Selection condition**: run this step only when row 8 (`In-repo AGENTS.md`) was selected in step 5.6. It is **default-OFF** — the operator must consciously tick it (or name it in the comma-list, or pass `--all`). If not selected, skip silently and note `AGENTS.md: not selected` in the summary.
-- **Clone precondition**: a local clone is required to branch + PR. If `$CLONE_STATUS` is `declined` or `failed`, skip with a one-line note: `AGENTS.md: skipped (no local clone — re-run with the repo cloned into workspace/<name>/)`. The repo root is `$WORKSPACE_DIR/<name>/` (resolve via `portfolio_workspace_dir`).
+- **Selection condition**: run this step only when row 8 (`In-repo AGENTS.md`) was selected in step 5.6. It is **default-OFF**: the operator must consciously tick it (or name it in the comma-list, or pass `--all`). If not selected, skip silently and note `AGENTS.md: not selected` in the summary.
+- **Clone precondition**: a local clone is required to branch + PR. If `$CLONE_STATUS` is `declined` or `failed`, skip with a one-line note: `AGENTS.md: skipped (no local clone: re-run with the repo cloned into workspace/<name>/)`. The repo root is `$WORKSPACE_DIR/<name>/` (resolve via `portfolio_workspace_dir`).
 - **Confirm before any target-repo write**. This is the first time `/handover` writes into the target repo, so make it explicit:
 
   ```
@@ -1371,7 +1377,7 @@ This is the **only** step that writes into the **target repo**, and it does so t
   No direct commit to the default branch. Existing AGENTS.md / CLAUDE.md
   are PRESERVED (never overwritten).
 
-  Proceed? [y/N — default N]
+  Proceed? [y/N: default N]
   ```
 
   Default **N**. On anything other than an explicit yes, skip and note `AGENTS.md: declined` in the summary.
@@ -1396,12 +1402,12 @@ CLAUDE_EXISTS=no; [ -f "$REPO/CLAUDE.md" ] && CLAUDE_EXISTS=yes
 
 #### Compose `AGENTS.md` from the live assessment (NOT a generic template)
 
-Derive the content from what this handover already discovered (steps 2–5). Keep it focused on **stable** information — the things an agent needs to start working and that don't change every commit (commands, layout, conventions). Leave the volatile risk/integration analysis in `handover-assessment.md` (the role-split — see Rule 22). Use this shape:
+Derive the content from what this handover already discovered (steps 2–5). Keep it focused on **stable** information: the things an agent needs to start working and that don't change every commit (commands, layout, conventions). Leave the volatile risk/integration analysis in `handover-assessment.md` (the role-split, see Rule 22). Use this shape:
 
 ````markdown
 # AGENTS.md
 
-> Generated by apexyard `/handover` on YYYY-MM-DD — review & refine. Keep this file focused on stable operating info (commands, layout, conventions); it is the operating manual for any agent (Claude Code, Cursor, Codex, …) working in this repo.
+> Generated by apexyard `/handover` on YYYY-MM-DD: review & refine. Keep this file focused on stable operating info (commands, layout, conventions); it is the operating manual for any agent (Claude Code, Cursor, Codex, …) working in this repo.
 
 ## What this is
 
@@ -1416,7 +1422,7 @@ Derive the content from what this handover already discovered (steps 2–5). Kee
 
 ## Commands
 
-{Real commands discovered in step 3 (package.json scripts / Makefile / pyproject) and verified in step 4 where a build was attempted. Do NOT invent commands — list only what the repo actually defines. Mark unverified ones.}
+{Real commands discovered in step 3 (package.json scripts / Makefile / pyproject) and verified in step 4 where a build was attempted. Do NOT invent commands. List only what the repo actually defines. Mark unverified ones.}
 
 ```bash
 # install
@@ -1433,22 +1439,22 @@ Derive the content from what this handover already discovered (steps 2–5). Kee
 
 ## Project layout
 
-{The top-level tree from step 2, annotated with what each dir holds where known. Keep it short — the load-bearing dirs, not an exhaustive listing.}
+{The top-level tree from step 2, annotated with what each dir holds where known. Keep it short: the load-bearing dirs, not an exhaustive listing.}
 
 ## Conventions
 
-{Type-safety / module-boundary / lint conventions from the step 4.5 harnessability scan, stated as "how code is expected to look here" — e.g. "TypeScript strict mode is on; keep new code strict-clean", "ESLint runs in CI; run `npm run lint` before pushing".}
+{Type-safety / module-boundary / lint conventions from the step 4.5 harnessability scan, stated as "how code is expected to look here", e.g. "TypeScript strict mode is on; keep new code strict-clean", "ESLint runs in CI; run `npm run lint` before pushing".}
 
 ## Gotchas
 
-{The key gotchas/risks from step 5 that an agent needs to know up front — stated as operating cautions, not the full risk register. For LOW-harnessability repos, surface what's fragile or missing explicitly, e.g. "No coverage threshold configured — tests may pass with low coverage", "No lint baseline — style is inconsistent across the codebase". Honesty over polish.}
+{The key gotchas/risks from step 5 that an agent needs to know up front, stated as operating cautions, not the full risk register. For LOW-harnessability repos, surface what's fragile or missing explicitly, e.g. "No coverage threshold configured: tests may pass with low coverage", "No lint baseline: style is inconsistent across the codebase". Honesty over polish.}
 ````
 
-For **low-harnessability** repos (step 4.5 verdict `low`), the Conventions + Gotchas sections MUST surface what's fragile/missing (no strict types, no lint baseline, no coverage signal) rather than implying a maturity the repo doesn't have. This is the in-repo echo of the assessment's LOW warning — agents working in the repo need to know the guardrails aren't there.
+For **low-harnessability** repos (step 4.5 verdict `low`), the Conventions + Gotchas sections MUST surface what's fragile/missing (no strict types, no lint baseline, no coverage signal) rather than implying a maturity the repo doesn't have. This is the in-repo echo of the assessment's LOW warning. Agents working in the repo need to know the guardrails aren't there.
 
 #### Write, branch, and open the PR
 
-All of this happens inside the target repo clone (`$REPO`), on a dedicated branch — never the default branch:
+All of this happens inside the target repo clone (`$REPO`), on a dedicated branch, never the default branch:
 
 ```bash
 cd "$REPO"
@@ -1459,10 +1465,10 @@ git checkout -b docs/agents-md "origin/$DEFAULT_BRANCH" 2>/dev/null || git check
 # Write the composed AGENTS.md (Write tool) to "$REPO/AGENTS.md".
 # If both AGENTS.md and CLAUDE.md were absent, also write the one-line shim:
 #   echo '@AGENTS.md' > "$REPO/CLAUDE.md"
-# (a CLAUDE.md whose entire content is the @AGENTS.md import — canonical content
+# (a CLAUDE.md whose entire content is the @AGENTS.md import, canonical content
 #  lives in AGENTS.md; CLAUDE.md just pulls it in for Claude Code.)
 
-git add AGENTS.md   # plus CLAUDE.md only if it was newly created — add SPECIFIC files, never -A
+git add AGENTS.md   # plus CLAUDE.md only if it was newly created, add SPECIFIC files, never -A
 [ "$CLAUDE_EXISTS" = no ] && [ -f CLAUDE.md ] && git add CLAUDE.md
 git commit -m "docs: add AGENTS.md operating manual (generated by apexyard /handover)"
 git push -u origin docs/agents-md
@@ -1477,17 +1483,17 @@ gh pr create --base "$DEFAULT_BRANCH" --head docs/agents-md \
 ## Testing
 - Open `AGENTS.md` and confirm the commands match how you actually build/test/run this repo; refine anything the static read got wrong.
 
-_Generated by apexyard `/handover` — review & refine._
+_Generated by apexyard `/handover`: review & refine._
 BODY
 )
 ```
 
 Notes:
 
-- **Keep the branch name `docs/agents-md` exactly.** `validate-branch-name.sh` carries an exact-literal exemption for it (and for step 8.6's `docs/apexyard-badge`), because `/handover` runs before the adopted repo has a ticket to name — and that repo may have no tracker at all. Renaming it to anything else, `docs/agents-md-v2` included, re-arms the ticket-ID gate and blocks the push. See me2resh/apexyard#1161 and AgDR-0129.
-- **Specific-file staging only** — `git add AGENTS.md` (and `CLAUDE.md` only when newly created). Never `git add -A` / `git add .`.
-- **Branch + PR, never a direct commit to the default branch.** The repo owner reviews before merge — `/handover` does not merge the PR.
-- This PR lives in the **target repo's** tracker/SDLC, not the ops fork's. The ops-fork merge gates (Rex/CEO markers) don't apply — this is the target repo's own review.
+- **Keep the branch name `docs/agents-md` exactly.** `validate-branch-name.sh` carries an exact-literal exemption for it (and for step 8.6's `docs/apexyard-badge`), because `/handover` runs before the adopted repo has a ticket to name, and that repo may have no tracker at all. Renaming it to anything else, `docs/agents-md-v2` included, re-arms the ticket-ID gate and blocks the push. See me2resh/apexyard#1161 and AgDR-0129.
+- **Specific-file staging only**: `git add AGENTS.md` (and `CLAUDE.md` only when newly created). Never `git add -A` / `git add .`.
+- **Branch + PR, never a direct commit to the default branch.** The repo owner reviews before merge. `/handover` does not merge the PR.
+- This PR lives in the **target repo's** tracker/SDLC, not the ops fork's. The ops-fork merge gates (Rex/CEO markers) don't apply. This is the target repo's own review.
 - On `gh pr create` failure (issues disabled, no push rights, etc.): report the error and the branch name, leave the local branch in place, and continue to step 9. Do not retry.
 
 #### Record for the summary
@@ -1496,15 +1502,15 @@ Notes:
 AGENTS_MD_STATUS="PR opened: <url>"   # or "preserved" | "declined" | "not selected" | "skipped (no clone)" | "failed: <reason>"
 ```
 
-### 8.6. Offer the "Governed by ApexYard" badge (only if row 9 was selected — default-OFF)
+### 8.6. Offer the "Governed by ApexYard" badge (only if row 9 was selected, default-OFF)
 
-Every repo apexyard governs is a potential backlink + a visible signal that the repo follows a real SDLC — but nothing in `/handover`'s output today surfaces that fact on the adopted repo itself. This step closes that gap the same way step 8.5 closes the "agent operating manual" gap: an opt-in, PR-delivered write into the **target repo**, never a direct commit. See AgDR-0090.
+Every repo apexyard governs is a potential backlink + a visible signal that the repo follows a real SDLC, but nothing in `/handover`'s output today surfaces that fact on the adopted repo itself. This step closes that gap the same way step 8.5 closes the "agent operating manual" gap: an opt-in, PR-delivered write into the **target repo**, never a direct commit. See AgDR-0090.
 
 #### Selection + preconditions
 
-- **Selection condition**: run this step only when row 9 (`"Governed by ApexYard" badge`) was selected in step 5.6. It is **default-OFF** — the operator must consciously tick it (or name it in the comma-list). If not selected, skip silently and note `Badge: not selected` in the summary.
-- **Clone precondition**: a local clone is required to branch + PR. If `$CLONE_STATUS` is `declined` or `failed`, skip with a one-line note: `Badge: skipped (no local clone — re-run with the repo cloned into workspace/<name>/)`. The repo root is `$WORKSPACE_DIR/<name>/` (resolve via `portfolio_workspace_dir`).
-- **Confirm before any target-repo write.** Editing a third-party repo's README is externally visible and easy to regret — ask explicitly, every run, default No:
+- **Selection condition**: run this step only when row 9 (`"Governed by ApexYard" badge`) was selected in step 5.6. It is **default-OFF**: the operator must consciously tick it (or name it in the comma-list). If not selected, skip silently and note `Badge: not selected` in the summary.
+- **Clone precondition**: a local clone is required to branch + PR. If `$CLONE_STATUS` is `declined` or `failed`, skip with a one-line note: `Badge: skipped (no local clone: re-run with the repo cloned into workspace/<name>/)`. The repo root is `$WORKSPACE_DIR/<name>/` (resolve via `portfolio_workspace_dir`).
+- **Confirm before any target-repo write.** Editing a third-party repo's README is externally visible and easy to regret. Ask explicitly, every run, default No:
 
   ```
   Add a "Governed by ApexYard" badge to <name>'s README?
@@ -1514,7 +1520,7 @@ Every repo apexyard governs is a potential backlink + a visible signal that the 
 
     [![Governed by ApexYard](https://img.shields.io/badge/governed_by-ApexYard-2F6DF6?style=flat-square)](https://github.com/me2resh/apexyard)
 
-  Add this badge to <name>'s README? [y/N — default N]
+  Add this badge to <name>'s README? [y/N: default N]
   ```
 
   Default **N**. On anything other than an explicit yes, skip and note `Badge: declined` in the summary.
@@ -1527,13 +1533,13 @@ Use the prompt below only when the harness lacks the tool:
 ```
 Which wording fits <name>?
 
-  [1] Governed by ApexYard   (adopted into apexyard's SDLC — the /handover case)
+  [1] Governed by ApexYard   (adopted into apexyard's SDLC: the /handover case)
   [2] Built with ApexYard    (built with apexyard from the start)
 
-[1/2 — default 1]
+[1/2: default 1]
 ```
 
-Record the pick as `$BADGE_VARIANT` (`governed_by` or `built_with`). The two canonical badge snippets — use these verbatim, never re-derive the URL by hand:
+Record the pick as `$BADGE_VARIANT` (`governed_by` or `built_with`). The two canonical badge snippets: use these verbatim, never re-derive the URL by hand:
 
 ```markdown
 [![Governed by ApexYard](https://img.shields.io/badge/governed_by-ApexYard-2F6DF6?style=flat-square)](https://github.com/me2resh/apexyard)
@@ -1543,7 +1549,7 @@ Record the pick as `$BADGE_VARIANT` (`governed_by` or `built_with`). The two can
 [![Built with ApexYard](https://img.shields.io/badge/built_with-ApexYard-2F6DF6?style=flat-square)](https://github.com/me2resh/apexyard)
 ```
 
-Brand blue `#2F6DF6`, `flat-square` style — keep both fixed; don't invent a third variant or a different color/style on your own initiative.
+Brand blue `#2F6DF6`, `flat-square` style. Keep both fixed; don't invent a third variant or a different color/style on your own initiative.
 
 #### Idempotency check (never double-add)
 
@@ -1565,12 +1571,12 @@ fi
 ```
 
 - **No README found** → skip; note `Badge: skipped (no README found)`. Don't create one just to hold a badge.
-- **Badge already present (either variant)** → skip; note `Badge: skipped (already present)`. Never add a second badge or swap the existing variant — a human who wants to change variants edits the README directly.
+- **Badge already present (either variant)** → skip; note `Badge: skipped (already present)`. Never add a second badge or swap the existing variant. A human who wants to change variants edits the README directly.
 - Otherwise, proceed to insertion.
 
 #### Insert near the top of the README (idempotent, one line)
 
-Insert the chosen badge markdown directly below the first top-level heading (`# Title`) in the README — the conventional badge position. If the README has no top-level heading, insert as the first line of the file.
+Insert the chosen badge markdown directly below the first top-level heading (`# Title`) in the README, the conventional badge position. If the README has no top-level heading, insert as the first line of the file.
 
 ```bash
 cd "$REPO" || exit 1
@@ -1581,11 +1587,11 @@ awk -v badge="$BADGE_MARKDOWN" '
 ' "$README_FILE" > "$README_FILE.tmp" && mv "$README_FILE.tmp" "$README_FILE"
 ```
 
-(`$BADGE_MARKDOWN` is the exact snippet for `$BADGE_VARIANT` chosen above, passed in verbatim — do not reconstruct it inline in the `awk` script.)
+(`$BADGE_MARKDOWN` is the exact snippet for `$BADGE_VARIANT` chosen above, passed in verbatim. Do not reconstruct it inline in the `awk` script.)
 
 #### Write, branch, and open the PR
 
-Mirrors step 8.5's delivery mechanics. If step 8.5 already opened (or is about to open) a PR on `docs/agents-md` in this same run, prefer adding the badge commit onto that same branch/PR instead of opening a second trivial PR — ask once: `Add the badge to the same AGENTS.md PR (branch docs/agents-md), or open a separate PR? [same/separate — default same]`. Otherwise (no AGENTS.md PR this run), open a dedicated branch:
+Mirrors step 8.5's delivery mechanics. If step 8.5 already opened (or is about to open) a PR on `docs/agents-md` in this same run, prefer adding the badge commit onto that same branch/PR instead of opening a second trivial PR, ask once: `Add the badge to the same AGENTS.md PR (branch docs/agents-md), or open a separate PR? [same/separate: default same]`. Otherwise (no AGENTS.md PR this run), open a dedicated branch:
 
 ```bash
 cd "$REPO" || exit 1
@@ -1600,21 +1606,21 @@ gh pr create --base "$DEFAULT_BRANCH" --head docs/apexyard-badge \
   --title "docs: add Governed-by-ApexYard badge" \
   --body-file <(cat <<'BODY'
 ## Summary
-- Adds a "Governed by ApexYard" badge near the top of the README, linking back to `https://github.com/me2resh/apexyard` — a visible signal that this repo follows apexyard's SDLC (offered opt-in during `/handover`, not auto-applied).
+- Adds a "Governed by ApexYard" badge near the top of the README, linking back to `https://github.com/me2resh/apexyard`, a visible signal that this repo follows apexyard's SDLC (offered opt-in during `/handover`, not auto-applied).
 
 ## Testing
 - Confirm the badge renders correctly and the wording (`Governed by` vs `Built with`) matches how this repo actually uses apexyard.
 
-_Generated by apexyard `/handover` — review & refine or close if you'd rather not carry the badge._
+_Generated by apexyard `/handover`: review & refine or close if you'd rather not carry the badge._
 BODY
 )
 ```
 
 Notes:
 
-- **Keep the branch name `docs/apexyard-badge` exactly** — same exact-literal exemption in `validate-branch-name.sh` as step 8.5's `docs/agents-md`. A renamed branch re-arms the ticket-ID gate and blocks the push. See me2resh/apexyard#1161 and AgDR-0129.
-- **Specific-file staging only** — `git add "$README_FILE"`. Never `git add -A` / `git add .`.
-- **Branch + PR, never a direct commit to the default branch.** The repo owner reviews before merge — `/handover` does not merge the PR.
+- **Keep the branch name `docs/apexyard-badge` exactly**: same exact-literal exemption in `validate-branch-name.sh` as step 8.5's `docs/agents-md`. A renamed branch re-arms the ticket-ID gate and blocks the push. See me2resh/apexyard#1161 and AgDR-0129.
+- **Specific-file staging only**: `git add "$README_FILE"`. Never `git add -A` / `git add .`.
+- **Branch + PR, never a direct commit to the default branch.** The repo owner reviews before merge. `/handover` does not merge the PR.
 - This PR lives in the **target repo's** tracker/SDLC, not the ops fork's. The ops-fork merge gates (Rex/CEO markers) don't apply.
 - On `gh pr create` failure (issues disabled, no push rights, etc.): report the error and the branch name, leave the local branch in place, and continue to step 9. Do not retry.
 
@@ -1654,32 +1660,32 @@ Include the offer outcome and any blockers in the handover summary.
 
 ### 9. Offer validation (conditional, default-no)
 
-If the project looks **dormant** by the heuristic — last commit > 90 days ago AND zero open PRs AND no recent issue activity (rough thresholds, the skill can probe `gh repo view` + `gh pr list` + `gh issue list` to compute) — ask:
+If the project looks **dormant** by the heuristic, last commit > 90 days ago AND zero open PRs AND no recent issue activity (rough thresholds, the skill can probe `gh repo view` + `gh pr list` + `gh issue list` to compute), ask:
 
 ```
-This project looks dormant — run /validate-idea {name} to confirm it's
+This project looks dormant: run /validate-idea {name} to confirm it's
 still worth investing in? y/n (default n)
 ```
 
 If the user accepts, hand off to `/validate-idea {name}` (which reads the just-written `handover-assessment.md` as starting context and writes its output to `projects/{name}/validation/handover-validation.md`).
 
-If the project is healthy (recent commits, active PRs/issues), skip the prompt entirely. Don't ask "should I validate?" on every handover — only when the dormancy signal warrants it.
+If the project is healthy (recent commits, active PRs/issues), skip the prompt entirely. Don't ask "should I validate?" on every handover, only when the dormancy signal warrants it.
 
 ### 10. Return a summary
 
 ```
 Handover assessment written: projects/{name}/handover-assessment.md
-Document selection:          {"checklist — generated: {list}; deferred (handed off): {list}" | "--all (full set)" | "none (assessment only)"}
-Architecture stub:           projects/{name}/architecture/container.md ({written (Mermaid lint: clean) | written (Mermaid not validated: mmdc not available) | written (Mermaid lint: FAILED — see output above) | preserved | skipped | skipped (deselected)})
+Document selection:          {"checklist, generated: {list}; deferred (handed off): {list}" | "--all (full set)" | "none (assessment only)"}
+Architecture stub:           projects/{name}/architecture/container.md ({written (Mermaid lint: clean) | written (Mermaid not validated: mmdc not available) | written (Mermaid lint: FAILED, see output above) | preserved | skipped | skipped (deselected)})
 In-repo AGENTS.md:           {PR opened: <url> | preserved (already present) | declined | not selected | skipped (no clone) | failed: <reason>}
 Governed-by-ApexYard badge:  {PR opened: <url> (<variant>) | skipped (already present) | declined | not selected | skipped (no clone) | skipped (no README) | failed: <reason>}
-Topology bundle:             {"<name>@<version> instantiated (handbooks + AgDR draft + CI pipelines)" | "declined" | "skipped (no pick)" | "pipelines pending — workspace not cloned"}
+Topology bundle:             {"<name>@<version> instantiated (handbooks + AgDR draft + CI pipelines)" | "declined" | "skipped (no pick)" | "pipelines pending: workspace not cloned"}
 Registry updated:            apexyard.projects.yaml ({added | skipped})
 Next-step tickets filed:     {N filed of M offered | none offered (zero risks) | declined (skipped all) | skipped (registry not appended)}
 Workspace clone:             workspace/{name}/ ({cloned at step 1.5 | preserved (already existed) | declined (--no-clone) | failed: <reason> | n/a (local path given)})
-Harness:                     {"Claude Code (native)" | "<harness list> — install command(s) printed, see docs/harnesses/<harness>.md" | "other / not sure — no adapter yet"}
-Branch protection:           {"protected" | "not protected (or could not be verified) — nudge printed" | "skipped (default branch unknown)" | "skipped (no queryable forge for tracker.kind=<kind>)" | "skipped (no remote host)"}
-Validation:                  {"completed — verdict <GREEN|YELLOW|RED>" | "skipped" | "not offered (project is active)"}
+Harness:                     {"Claude Code (native)" | "<harness list>: install command(s) printed, see docs/harnesses/<harness>.md" | "other / not sure: no adapter yet"}
+Branch protection:           {"protected" | "not protected (or could not be verified): nudge printed" | "skipped (default branch unknown)" | "skipped (no queryable forge for tracker.kind=<kind>)" | "skipped (no remote host)"}
+Validation:                  {"completed: verdict <GREEN|YELLOW|RED>" | "skipped" | "not offered (project is active)"}
 
 Tech stack: {one-liner}
 Build: {ok / failed}
@@ -1692,40 +1698,40 @@ Top 3 next steps (still TODO after step 7.5):
 
 {If next-step tickets were filed, append this block:}
 Filed follow-up tickets:
-  #41 — /task — Triage lodash CVE                  — <repo URL>
-  #42 — /bug  — Fix 7 failing tests in src/api/orders — <repo URL>
+  #41: /task: Triage lodash CVE                  : <repo URL>
+  #42: /bug  : Fix 7 failing tests in src/api/orders : <repo URL>
   ...
 ```
 
 ## Rules
 
-1. **Read-only against the target repo** — never modify the target repo without explicit permission. (The ops repo IS modified — you append to the registry and create the assessment file — but that's the point.)
+1. **Read-only against the target repo**: never modify the target repo without explicit permission. (The ops repo IS modified, you append to the registry and create the assessment file, but that's the point.)
 
-   **Exceptions (explicit, opt-in, PR-delivered): in-repo `AGENTS.md` generation and the "Governed by ApexYard" README badge.** Steps 8.5 and 8.6 are the only two sanctioned writes into the target repo. Both are **opt-in and default-OFF** (rows 8 and 9 of the step 5.6 checklist), each requires an explicit per-run confirmation, and each is delivered via a **branch + PR** the repo owner reviews — never a direct commit to the default branch, and never via the ops-fork bootstrap-exempt write path. With both rows left unticked (the default), this rule holds unchanged: `/handover` writes nothing into the target repo. See step 8.5, step 8.6, Rules 21–23, AgDR-0073, and AgDR-0090.
-2. **Honest assessment** — if a build fails, say so. Don't paper over problems.
-3. **Always seed `projects/<name>/`** — even if minimal.
-4. **Auto-append to the registry** (with confirmation) — don't leave the user to copy-paste a snippet. Propose the append, validate the resulting YAML, roll back on failure.
-5. **Derive roles from the stack** — don't hard-code `[tech-lead, backend-engineer]`. The roles list depends on the actual tech stack, CI config, and security surface detected in step 3.
-6. **Derive next steps from the risks** — don't emit generic placeholders. Every "Next Step" must correspond to a specific finding from the Quality Risks section of the assessment.
-7. **Clone immediately when a URL is given** — when the operator provides a Git URL in step 1, clone it into `workspace/<name>/` in step 1.5-clone without asking (default-yes). The only opt-out is an explicit `--no-clone` flag on the skill invocation. When only a local path is given, use it directly — no clone needed. The old "offer the clone at the end (step 8)" pattern is gone; cloning first makes every subsequent read cheaper.
-8. **Never store secrets** — if `.env` is found, list its presence but never read its contents.
-9. **Status starts at `handover`** — moves to `active` only after the integration plan is executed.
-10. **Never break the registry** — if the YAML append breaks the file, restore the previous version and ask the user to edit manually.
-11. **Never overwrite the architecture stub** — `projects/<name>/architecture/container.md` is written once on first handover, then owned by the team. Re-runs of `/handover` (e.g. if the tech stack changed) must preserve any manual refinements. If you want to regenerate, the user deletes the file first.
-12. **Architecture stubs are starting points, not truths** — the auto-generated note at the top of the file explicitly tells the user to review and refine. Never claim the detector is authoritative.
-13. **Topology instantiation never overwrites** — step 5.5 copies files with `rsync --ignore-existing` / `cp -n`. Adopters who edited a topology handbook keep their edits across re-runs. Drift detection lives in `/update` (see AgDR-0048).
-14. **Default is no topology** — pick 4 (Skip / custom) is the default. The pre-topology flow is byte-for-byte preserved for adopters who don't want a bundle. Never auto-pick a topology based on tech-stack detection in v1 — let the operator choose.
-15. **Next-step tickets are opt-in, never auto-filed** — step 7.5 always prompts the operator before any `gh issue create`. Bulk shapes (`all` / `none` / comma-list) are conveniences, not defaults. `none` and empty input are equivalent — skip-all is the safe default if the operator's intent is unclear.
-16. **The routing heuristic is the default, not the law** — step 7.5's auto-route from next-step shape to `/feature` / `/task` / `/bug` is a sensible default. The operator can override per item (`1 as feature` / `3 as bug`). When in doubt, default to `/task` — handover-derived next-steps are almost never user-facing capabilities (`/feature` shape) and rarely strictly broken behaviour (`/bug` shape).
-17. **Source-link every filed ticket back to the assessment** — each ticket dispatched in step 7.5 carries a `_Source: handover deep-dive on YYYY-MM-DD — see projects/<name>/handover-assessment.md_` footer. Without that link, the assessment's context (risks, harnessability score, build status) is invisible to anyone working the ticket later, and the recommendation traceability rot is exactly the failure mode this step exists to prevent.
-18. **Re-runs surface deltas, not redundancy** — the filed-marker presence on each next-step entry is the source of truth for "already done". On re-handover, step 5's regeneration of `## Next Steps` MUST preserve any `~~strikethrough~~ → Filed as [#N](url)` markers from prior runs (don't blow away the operator's filing history). Step 7.5 then prompts only on the entries that lack a `Filed as` link, so the operator never re-sees what they've already filed. If every entry already carries a `Filed as` link, the whole step skips (see § Skip conditions). Byte-equivalence of the section text is NOT the test — only the per-entry marker presence is.
-19. **Document selection is a checklist, not a fixed pipeline** — step 5.6 presents the generatable artefacts as an opt-in checklist (default-ticked: the L2 container diagram). The handover assessment + harnessability score are ALWAYS written and never appear in the checklist — they are the skill's core output. `--all` is the non-interactive escape that generates the full default set with conventional templates (byte-for-byte the pre-checklist behaviour); `--interactive` (the default) presents the checklist. Distinguish computed/toggle-only rows (no template to pick) from template-backed rows (per-doc template pick).
-20. **Per-doc template pick defaults to the conventional template** — for each selected template-backed doc, list the resolved candidates (framework `templates/**` + adopter `custom-templates/**` via `portfolio_resolve_template`) and default to the conventional one (candidate `[1]`, i.e. the path `portfolio_resolve_template` would pick unprompted). Empty input takes the default, keeping `--all` and "default" runs byte-stable. Only list the adopter override candidate when it actually exists. Never reimplement a dedicated skill's artefact — DFD / Feature Inventory / journey / vision hand off to `/dfd` / `/extract-features` / `/journey` / `/tech-vision`.
-21. **`AGENTS.md` is opt-in, PR-delivered, and never overwrites** — the in-repo `AGENTS.md` (step 8.5) is the only artefact written into the target repo, and it is **default-OFF** so Rule 1 holds unless the operator opts in. It is delivered via a branch + PR (never a direct commit to the default branch; never via the ops-fork bootstrap-exempt path). An existing `AGENTS.md` or `CLAUDE.md` is **preserved, never overwritten** — exactly like the architecture stubs (Rule 11). `AGENTS.md` is canonical; a one-line `CLAUDE.md` importing it (`@AGENTS.md`) is offered only when no `CLAUDE.md` exists. The file carries a "generated by `/handover` on `<date>` — review & refine" note and stays focused on stable info (commands, layout, conventions). Refresh is manual (delete + re-run). See AgDR-0073.
-22. **`AGENTS.md` and `handover-assessment.md` don't duplicate — they split by reader** — `handover-assessment.md` (ops fork) is the **operator's** full analysis: risks, harnessability verdict, integration plan, next-step tickets. `AGENTS.md` (in the target repo) is the **agent's** concise operating manual: stable commands, layout, conventions, and the up-front gotchas an agent needs to start working. The volatile risk/integration analysis stays in the assessment; it is not copied into `AGENTS.md`. For low-harnessability repos, `AGENTS.md`'s Gotchas section surfaces what's fragile/missing (no strict types, no lint baseline, no coverage signal) — the in-repo echo of the assessment's LOW warning.
-23. **The "Governed by ApexYard" badge (step 8.6) is opt-in, PR-delivered, idempotent, and never a default** — row 9 of the step 5.6 checklist is **default-OFF** in every mode (checklist default, `--all`, and interactive `all`); it is only generated when explicitly ticked or comma-listed. Every run confirms with the operator by name (`Add a "Governed by ApexYard" badge to <name>'s README?`) before touching the target repo — there is no silent or bulk-implied consent for an externally-visible README edit. The badge is delivered via a branch + PR exactly like `AGENTS.md` (never a direct commit). It is **idempotent**: if either badge variant (`governed_by` or `built_with`) is already present in the README, the step skips and reports `already present` rather than adding a duplicate or swapping variants. The badge markdown itself (URL, color `#2F6DF6`, `flat-square` style) is fixed and quoted verbatim in step 8.6 — don't re-derive it. See AgDR-0090.
-24. **`docs/harnesses/README.md` is the single source of truth for harness support — step 1.6 summarises and links it, never duplicates the matrix.** Read the doc fresh when printing a harness's install command, precondition, or tier rather than trusting a stale table baked into this skill. Never round a harness's tier up. Do not restore the retired failClosed-only claim for Cursor. Step 1.6 is informational only: it prints the adapter install command but never runs it against the target repo.
-25. **The branch-protection check (step 1.7) is advisory and fail-open, never a gate.** It never blocks the rest of `/handover`, never retries, and never escalates a check failure into anything stronger than the one-line nudge. It exists because AgDR-0115 accepted that ApexYard installs no client-side push protection into a managed-project clone — the nudge is the only signal the operator gets that the *actual* control (the forge's own server-side branch protection) might be off. Dispatch on `tracker_kind` (`.claude/hooks/_lib-tracker.sh`), the same pattern `tracker_review_submit`/`tracker_pr_merge` use — never hardcode one forge's CLI or REST shape. `custom` and `none` tracker kinds get a generic manual-check note, not a guessed API call.
+   **Exceptions (explicit, opt-in, PR-delivered): in-repo `AGENTS.md` generation and the "Governed by ApexYard" README badge.** Steps 8.5 and 8.6 are the only two sanctioned writes into the target repo. Both are **opt-in and default-OFF** (rows 8 and 9 of the step 5.6 checklist), each requires an explicit per-run confirmation, and each is delivered via a **branch + PR** the repo owner reviews, never a direct commit to the default branch, and never via the ops-fork bootstrap-exempt write path. With both rows left unticked (the default), this rule holds unchanged: `/handover` writes nothing into the target repo. See step 8.5, step 8.6, Rules 21–23, AgDR-0073, and AgDR-0090.
+2. **Honest assessment**: if a build fails, say so. Don't paper over problems.
+3. **Always seed `projects/<name>/`**, even if minimal.
+4. **Auto-append to the registry** (with confirmation). Don't leave the user to copy-paste a snippet. Propose the append, validate the resulting YAML, roll back on failure.
+5. **Derive roles from the stack**: don't hard-code `[tech-lead, backend-engineer]`. The roles list depends on the actual tech stack, CI config, and security surface detected in step 3.
+6. **Derive next steps from the risks**: don't emit generic placeholders. Every "Next Step" must correspond to a specific finding from the Quality Risks section of the assessment.
+7. **Clone immediately when a URL is given**: when the operator provides a Git URL in step 1, clone it into `workspace/<name>/` in step 1.5-clone without asking (default-yes). The only opt-out is an explicit `--no-clone` flag on the skill invocation. When only a local path is given, use it directly: no clone needed. The old "offer the clone at the end (step 8)" pattern is gone; cloning first makes every subsequent read cheaper.
+8. **Never store secrets**: if `.env` is found, list its presence but never read its contents.
+9. **Status starts at `handover`**: moves to `active` only after the integration plan is executed.
+10. **Never break the registry**: if the YAML append breaks the file, restore the previous version and ask the user to edit manually.
+11. **Never overwrite the architecture stub**: `projects/<name>/architecture/container.md` is written once on first handover, then owned by the team. Re-runs of `/handover` (e.g. if the tech stack changed) must preserve any manual refinements. If you want to regenerate, the user deletes the file first.
+12. **Architecture stubs are starting points, not truths**: the auto-generated note at the top of the file explicitly tells the user to review and refine. Never claim the detector is authoritative.
+13. **Topology instantiation never overwrites**: step 5.5 copies files with `rsync --ignore-existing` / `cp -n`. Adopters who edited a topology handbook keep their edits across re-runs. Drift detection lives in `/update` (see AgDR-0048).
+14. **Default is no topology**: pick 4 (Skip / custom) is the default. The pre-topology flow is byte-for-byte preserved for adopters who don't want a bundle. Never auto-pick a topology based on tech-stack detection in v1. Let the operator choose.
+15. **Next-step tickets are opt-in, never auto-filed**: step 7.5 always prompts the operator before any `gh issue create`. Bulk shapes (`all` / `none` / comma-list) are conveniences, not defaults. `none` and empty input are equivalent: skip-all is the safe default if the operator's intent is unclear.
+16. **The routing heuristic is the default, not the law**: step 7.5's auto-route from next-step shape to `/feature` / `/task` / `/bug` is a sensible default. The operator can override per item (`1 as feature` / `3 as bug`). When in doubt, default to `/task`: handover-derived next-steps are almost never user-facing capabilities (`/feature` shape) and rarely strictly broken behaviour (`/bug` shape).
+17. **Source-link every filed ticket back to the assessment**: each ticket dispatched in step 7.5 carries a `_Source: handover deep-dive on YYYY-MM-DD, see projects/<name>/handover-assessment.md_` footer. Without that link, the assessment's context (risks, harnessability score, build status) is invisible to anyone working the ticket later, and the recommendation traceability rot is exactly the failure mode this step exists to prevent.
+18. **Re-runs surface deltas, not redundancy**: the filed-marker presence on each next-step entry is the source of truth for "already done". On re-handover, step 5's regeneration of `## Next Steps` MUST preserve any `~~strikethrough~~ → Filed as [#N](url)` markers from prior runs (don't blow away the operator's filing history). Step 7.5 then prompts only on the entries that lack a `Filed as` link, so the operator never re-sees what they've already filed. If every entry already carries a `Filed as` link, the whole step skips (see § Skip conditions). Byte-equivalence of the section text is NOT the test: only the per-entry marker presence is.
+19. **Document selection is a checklist, not a fixed pipeline**: step 5.6 presents the generatable artefacts as an opt-in checklist (default-ticked: the L2 container diagram). The handover assessment + harnessability score are ALWAYS written and never appear in the checklist. They are the skill's core output. `--all` is the non-interactive escape that generates the full default set with conventional templates (byte-for-byte the pre-checklist behaviour); `--interactive` (the default) presents the checklist. Distinguish computed/toggle-only rows (no template to pick) from template-backed rows (per-doc template pick).
+20. **Per-doc template pick defaults to the conventional template**: for each selected template-backed doc, list the resolved candidates (framework `templates/**` + adopter `custom-templates/**` via `portfolio_resolve_template`) and default to the conventional one (candidate `[1]`, i.e. the path `portfolio_resolve_template` would pick unprompted). Empty input takes the default, keeping `--all` and "default" runs byte-stable. Only list the adopter override candidate when it actually exists. Never reimplement a dedicated skill's artefact: DFD / Feature Inventory / journey / vision hand off to `/dfd` / `/extract-features` / `/journey` / `/tech-vision`.
+21. **`AGENTS.md` is opt-in, PR-delivered, and never overwrites**: the in-repo `AGENTS.md` (step 8.5) is the only artefact written into the target repo, and it is **default-OFF** so Rule 1 holds unless the operator opts in. It is delivered via a branch + PR (never a direct commit to the default branch; never via the ops-fork bootstrap-exempt path). An existing `AGENTS.md` or `CLAUDE.md` is **preserved, never overwritten**: exactly like the architecture stubs (Rule 11). `AGENTS.md` is canonical; a one-line `CLAUDE.md` importing it (`@AGENTS.md`) is offered only when no `CLAUDE.md` exists. The file carries a "generated by `/handover` on `<date>`: review & refine" note and stays focused on stable info (commands, layout, conventions). Refresh is manual (delete + re-run). See AgDR-0073.
+22. **`AGENTS.md` and `handover-assessment.md` don't duplicate: they split by reader**, `handover-assessment.md` (ops fork) is the **operator's** full analysis: risks, harnessability verdict, integration plan, next-step tickets. `AGENTS.md` (in the target repo) is the **agent's** concise operating manual: stable commands, layout, conventions, and the up-front gotchas an agent needs to start working. The volatile risk/integration analysis stays in the assessment; it is not copied into `AGENTS.md`. For low-harnessability repos, `AGENTS.md`'s Gotchas section surfaces what's fragile/missing (no strict types, no lint baseline, no coverage signal), the in-repo echo of the assessment's LOW warning.
+23. **The "Governed by ApexYard" badge (step 8.6) is opt-in, PR-delivered, idempotent, and never a default**: row 9 of the step 5.6 checklist is **default-OFF** in every mode (checklist default, `--all`, and interactive `all`); it is only generated when explicitly ticked or comma-listed. Every run confirms with the operator by name (`Add a "Governed by ApexYard" badge to <name>'s README?`) before touching the target repo. There is no silent or bulk-implied consent for an externally-visible README edit. The badge is delivered via a branch + PR exactly like `AGENTS.md` (never a direct commit). It is **idempotent**: if either badge variant (`governed_by` or `built_with`) is already present in the README, the step skips and reports `already present` rather than adding a duplicate or swapping variants. The badge markdown itself (URL, color `#2F6DF6`, `flat-square` style) is fixed and quoted verbatim in step 8.6. Don't re-derive it. See AgDR-0090.
+24. **`docs/harnesses/README.md` is the single source of truth for harness support: step 1.6 summarises and links it, never duplicates the matrix.** Read the doc fresh when printing a harness's install command, precondition, or tier rather than trusting a stale table baked into this skill. Never round a harness's tier up. Do not restore the retired failClosed-only claim for Cursor. Step 1.6 is informational only: it prints the adapter install command but never runs it against the target repo.
+25. **The branch-protection check (step 1.7) is advisory and fail-open, never a gate.** It never blocks the rest of `/handover`, never retries, and never escalates a check failure into anything stronger than the one-line nudge. It exists because AgDR-0115 accepted that ApexYard installs no client-side push protection into a managed-project clone: the nudge is the only signal the operator gets that the *actual* control (the forge's own server-side branch protection) might be off. Dispatch on `tracker_kind` (`.claude/hooks/_lib-tracker.sh`), the same pattern `tracker_review_submit`/`tracker_pr_merge` use. Never hardcode one forge's CLI or REST shape. `custom` and `none` tracker kinds get a generic manual-check note, not a guessed API call.
 
 ## When to use this
 
@@ -1733,10 +1739,10 @@ Filed follow-up tickets:
 |---------|------------------|
 | Inherited a codebase from another team | Yes |
 | Acquired a company's repo | Yes |
-| Adopted an open-source project as a dependency | No — that's `/audit-deps` |
-| Forked an internal tool you wrote yesterday | No — it's already yours |
+| Adopted an open-source project as a dependency | No: that's `/audit-deps` |
+| Forked an internal tool you wrote yesterday | No: it's already yours |
 | Importing a side project into the org | Yes |
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard), multi-project SDLC framework for Claude Code · MIT.*

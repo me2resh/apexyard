@@ -7,7 +7,7 @@ allowed-tools: Bash, Read, Grep, Glob, AskUserQuestion
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /explain-pr — Explain a pull request
+# /explain-pr: Explain a pull request
 
 Read-only walkthrough of a PR for the operator. It never writes an approval marker and never merges.
 
@@ -41,10 +41,10 @@ Stop on a failed read. Do not invent facts outside the PR title, body, diff, and
 
 Report four short sections in this order:
 
-1. What changed — files and the main edits, with file names.
-2. Why — the reason from the PR body and any linked ticket text in that body.
-3. Risky parts — trust-chain, data, migrations, or behaviour that can break callers. Say "None found in the diff" when none appear.
-4. Decisions the agent made — choices visible in the diff or named in the PR body (for example an AgDR link). Do not invent a decision that is not there.
+1. What changed: files and the main edits, with file names.
+2. Why: the reason from the PR body and any linked ticket text in that body.
+3. Risky parts: trust-chain, data, migrations, or behaviour that can break callers. Say "None found in the diff" when none appear.
+4. Decisions the agent made: choices visible in the diff or named in the PR body (for example an AgDR link). Do not invent a decision that is not there.
 
 ### 5. Optional comprehension quiz
 
@@ -72,4 +72,4 @@ This skill still writes no marker and runs no merge after the quiz.
 
 ---
 
-*Part of ApexYard — multi-project SDLC framework for Claude Code.*
+*Part of ApexYard: multi-project SDLC framework for Claude Code.*

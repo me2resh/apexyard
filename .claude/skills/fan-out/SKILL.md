@@ -8,9 +8,9 @@ effort: medium
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /fan-out — Parallel Agent Fan-Out
+# /fan-out: Parallel Agent Fan-Out
 
-Spawns multiple specialised agents in parallel — each on its own task, optionally in its own git worktree — so independent work items progress concurrently instead of being silently serialised behind a single agent's session.
+Spawns multiple specialised agents in parallel, each on its own task, optionally in its own git worktree, so independent work items progress concurrently instead of being silently serialised behind a single agent's session.
 
 This skill is the **happy path** for parallel execution. The companion rule [`.claude/rules/parallel-work.md`](../../rules/parallel-work.md) defines **when** to *offer* fan-out proactively. Read both before invoking.
 
@@ -23,7 +23,7 @@ Do NOT use when:
 - Tasks share file write targets (worktree merge-back will conflict)
 - One task's output is another's input (sequential dependency)
 - The work is a single indivisible task
-- The decision itself is the work (architecture / AgDR-class) — that needs cross-task reasoning, not concurrency
+- The decision itself is the work (architecture / AgDR-class): that needs cross-task reasoning, not concurrency
 
 ## Process
 
@@ -37,17 +37,17 @@ The prose menus below are fallbacks only when the harness lacks `AskUserQuestion
 Accept tasks from any of these forms:
 
 - `$ARGUMENTS` as a comma-separated list: `"audit hooks dir, audit skills dir, audit rules dir"`
-- A markdown file path: `/fan-out tasks.md` — one task per line, blank lines and `#` comments ignored
-- `--from-tickets <list>`: `/fan-out --from-tickets apexyard#109,apexyard#110,apexyard#111` — fetch each issue title + body via `gh issue view` and use them as task descriptions
-- Interactive entry — if `$ARGUMENTS` is empty, prompt: *"Paste your tasks, one per line. Blank line to finish."*
+- A markdown file path: `/fan-out tasks.md`, one task per line, blank lines and `#` comments ignored
+- `--from-tickets <list>`: `/fan-out --from-tickets apexyard#109,apexyard#110,apexyard#111`, fetch each issue title + body via `gh issue view` and use them as task descriptions
+- Interactive entry: if `$ARGUMENTS` is empty, prompt: *"Paste your tasks, one per line. Blank line to finish."*
 
 Trim whitespace, drop empties. If the result is fewer than 2 tasks, stop: fan-out is overkill for one item.
 
-### 2. Per-task questions — ASK ONCE per task
+### 2. Per-task questions: ASK ONCE per task
 
 For each task, infer the answer from the description first, then ask only when ambiguous.
 
-**Agent type** — default a fresh, role-appropriate spawn with a written brief (see `.claude/rules/agent-role-selection.md`). Use `AskUserQuestion` when inference cannot resolve the type.
+**Agent type**: default a fresh, role-appropriate spawn with a written brief (see `.claude/rules/agent-role-selection.md`). Use `AskUserQuestion` when inference cannot resolve the type.
 Split the list across wizard questions. Use the options below only without the tool:
 
 | Agent | Use for |
@@ -58,12 +58,12 @@ Split the list across wizard questions. Use the options below only without the t
 | `Explore` | Read-only research, codebase questions, audits |
 | `code-reviewer` | Reviewing an existing PR (read-only) |
 | `security-reviewer` | Security audit of a PR (read-only) |
-| `Plan` | Plan-mode — produces a plan, no edits |
+| `Plan` | Plan-mode: produces a plan, no edits |
 | Custom | Any subagent in `.claude/agents/` |
 
 If a task obviously needs editing (verbs like *implement*, *add*, *fix*, *refactor*, *migrate*, *write*), reject any read-only agent type and suggest a role-appropriate editing agent (for example `backend-engineer`, `frontend-engineer`, or `platform-engineer`).
 
-**Spawn mode** — default a fresh spawn with a written brief. Fork the parent only when the facts the agent needs are not yet in a file.
+**Spawn mode**: default a fresh spawn with a written brief. Fork the parent only when the facts the agent needs are not yet in a file.
 
 **Isolation** - fan-out writers always use a `worktree`, regardless of the ops-fork setting `build.isolation`.
 Step 7 creates each writer worktree from the task's source tree.
@@ -80,7 +80,7 @@ The orchestrator decides the mode at spawn time and tells the agent which mode t
 `/fan-out` never follows `branch` mode for writers.
 See `.claude/rules/isolated-builds.md` and AgDR-0210.
 
-**Mode** — default `foreground` (≤ 2-minute estimated runtime); `background` if estimated > 2 minutes. Estimate from task scope (single-file edit ≈ short; cross-cutting refactor ≈ long; full audit ≈ long). Ask only when ambiguous.
+**Mode**: default `foreground` (≤ 2-minute estimated runtime); `background` if estimated > 2 minutes. Estimate from task scope (single-file edit ≈ short; cross-cutting refactor ≈ long; full audit ≈ long). Ask only when ambiguous.
 
 ### 3. Review queue check (#1995)
 
@@ -97,7 +97,7 @@ Do this for every task that involves code edits, not pure research. Find the wor
 If a source tree has no marker, **refuse the entire fan-out** and tell the user:
 
 ```
-Cannot fan out — task "<task>" needs an active ticket in <source tree>. Run, from that tree:
+Cannot fan out: task "<task>" needs an active ticket in <source tree>. Run, from that tree:
   /start-ticket <ref>
 …then re-run /fan-out.
 ```
@@ -111,14 +111,14 @@ Heuristically detect tasks that target the same file paths. Compare file paths m
 If two or more tasks share write targets, **refuse parallel** and recommend serial:
 
 ```
-Cannot fan out — these tasks share write targets:
+Cannot fan out: these tasks share write targets:
   - Task 2: edits .claude/hooks/pre-push-gate.sh
   - Task 4: edits .claude/hooks/pre-push-gate.sh
 
 Run them serially, or split task boundaries so each owns distinct files.
 ```
 
-The alternative is `git` worktree merge conflicts on merge-back — recoverable but always painful.
+The alternative is `git` worktree merge conflicts on merge-back, recoverable but always painful.
 
 ### 6. Show the plan and confirm
 
@@ -132,7 +132,7 @@ Print a table:
 …
 ```
 
-Wait for the user's `yes` / `confirm` / `go` before spawning. Edits to the plan in this step are fine — re-print the table and re-ask.
+Wait for the user's `yes` / `confirm` / `go` before spawning. Edits to the plan in this step are fine: re-print the table and re-ask.
 
 ### 7. Prepare the writer worktrees, then spawn
 
@@ -155,7 +155,7 @@ For every task with `isolation: worktree`, create the worktree and its marker **
 
 ### 8. Spawn - ALL CALLS IN A SINGLE ASSISTANT MESSAGE
 
-This is the only step where parallelism actually happens. Emit a SINGLE assistant message containing N `Agent` tool calls (one per task). Looping `Agent` invocations across multiple messages serialises them — the second agent will not start until the first returns.
+This is the only step where parallelism actually happens. Emit a SINGLE assistant message containing N `Agent` tool calls (one per task). Looping `Agent` invocations across multiple messages serialises them: the second agent will not start until the first returns.
 
 ```
 Spawning 4 agents in parallel…
@@ -165,7 +165,7 @@ Spawning 4 agents in parallel…
 [Agent call 4]
 ```
 
-Each agent's prompt must be **self-contained** — sub-agents do not inherit the parent's conversation context. Include in each prompt:
+Each agent's prompt must be **self-contained**: sub-agents do not inherit the parent's conversation context. Include in each prompt:
 
 - The task description verbatim
 - Any reference paths the agent needs to read
@@ -194,7 +194,7 @@ For long-running tasks with `mode: background`, pass `run_in_background: true`.
 
 ### 9. Collect results
 
-Foreground tasks return inline — wait for all of them. Background tasks return asynchronously — note their IDs and tell the user how to check on them later.
+Foreground tasks return inline: wait for all of them. Background tasks return asynchronously: note their IDs and tell the user how to check on them later.
 
 For each returned result, capture:
 
@@ -225,7 +225,7 @@ For each branch in turn:
 1. Switch to the branch (`git checkout`)
 2. Rebase onto the latest base if needed
 3. Optionally cherry-pick into the user's working branch
-4. **Pause on conflict** — ask the user to resolve interactively. Do not auto-resolve.
+4. **Pause on conflict**: ask the user to resolve interactively. Do not auto-resolve.
 
 Each project owns one merge-back attempt. If the user wants to skip a branch (e.g. open as its own PR instead), record that and continue.
 
@@ -271,17 +271,17 @@ Owners kept active: <path and reason, or none>.
 
 ## Rules
 
-1. **All `Agent` tool calls for a single fan-out MUST be in the SAME assistant message.** Multi-message loops do not get concurrency — they serialise. This is the most important rule in this skill.
-2. **Give every writer its own worktree, created from its source tree by `prepare-worktree.sh`.** This prevents file-level races between agents that share one working directory. It also gives each writer its own ticket marker. This overrides `build.isolation` — even when the ops fork sets `"build": {"isolation": "branch"}`, fan-out writers still get worktrees.
-3. **Refuse fan-out when tasks share file write targets.** Serialise instead — the merge-back conflict cost outweighs any concurrency win.
+1. **All `Agent` tool calls for a single fan-out MUST be in the SAME assistant message.** Multi-message loops do not get concurrency. They serialise. This is the most important rule in this skill.
+2. **Give every writer its own worktree, created from its source tree by `prepare-worktree.sh`.** This prevents file-level races between agents that share one working directory. It also gives each writer its own ticket marker. This overrides `build.isolation`: even when the ops fork sets `"build": {"isolation": "branch"}`, fan-out writers still get worktrees.
+3. **Refuse fan-out when tasks share file write targets.** Serialise instead: the merge-back conflict cost outweighs any concurrency win.
 4. **Refuse fan-out when tasks have sequential dependencies.** If task B reads task A's output, they cannot run in parallel.
 5. **Cap at 5 concurrent agents per invocation.** If the user wants more, ask them to split into batches. Beyond 5, returns diminish (review fatigue, merge-back queue) and risk grows (rate limits, context dilution).
-6. **Each agent's prompt must be self-contained** — sub-agents do not see the parent conversation. Include task description, reference paths, expected output format, and any inherited constraints inline.
+6. **Each agent's prompt must be self-contained**: sub-agents do not see the parent conversation. Include task description, reference paths, expected output format, and any inherited constraints inline.
 7. **Background mode only for >2-minute estimated work.** For short tasks, foreground is faster end-to-end (no async overhead).
 8. **Refuse a read-only agent type for an editing task. Default to a fresh role-appropriate spawn with a written brief.** `Explore`, `code-reviewer`, `security-reviewer`, and `Plan` cannot write. If the task verb says "implement" / "fix" / "add" / "refactor", suggest a role-appropriate editing agent (for example `backend-engineer`, `frontend-engineer`, or `platform-engineer`). Fork the parent only when the facts the agent needs are not yet in a file.
 9. **Active-ticket check happens at step 4, before step 8.** Failing at plan-time is kinder than failing mid-spawn.
-10. **Pause on merge-back conflict — never auto-resolve.** The user owns the merge.
+10. **Pause on merge-back conflict: never auto-resolve.** The user owns the merge.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard), multi-project SDLC framework for Claude Code · MIT.*

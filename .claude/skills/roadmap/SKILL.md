@@ -5,7 +5,7 @@ argument-hint: "[add|remove|reorder|show] [item]"
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 ---
 
-# /roadmap — Product Roadmap
+# /roadmap: Product Roadmap
 
 Read `.claude/rules/writing-standard.md`. Use the **controlled technical writing profile** for roadmap
 artefacts: keep decisions, uncertainty, and next actions clear and concise.
@@ -14,7 +14,7 @@ Manage the product roadmap as a single durable file. The skill is intentionally 
 
 ## Path resolution
 
-Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog`. Use these helpers from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -23,11 +23,11 @@ projects_dir=$(portfolio_projects_dir)
 registry=$(portfolio_registry)
 ```
 
-Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Do not hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks. The helper resolves the adopter's mode. See `docs/multi-project.md`.
 
-**Write targets** (see me2resh/apexyard#373 + #443): paths documented as `projects/<name>/X` in this skill are canonical adopter-facing forms — implement them in bash as `"${projects_dir}/<name>/X"`. Never construct from `"${PWD}/projects/..."`, `"$(git rev-parse --show-toplevel)/projects/..."`, or a literal `./projects/...` — those break in split-portfolio v2 mode where `projects_dir` resolves to a sibling repo.
+**Write targets** (see me2resh/apexyard#373 + #443): paths documented as `projects/<name>/X` in this skill are canonical adopter-facing forms. Implement them in bash as `"${projects_dir}/<name>/X"`. Never construct from `"${PWD}/projects/..."`, `"$(git rev-parse --show-toplevel)/projects/..."`, or a literal `./projects/...`. These break in split-portfolio v2 mode where `projects_dir` resolves to a sibling repo.
 
-**REQUIRED per-block preamble** (see #443): Claude executes each ```bash``` block as a separate shell invocation. The `projects_dir` assignment from the Path resolution section above does NOT carry into later blocks. Every bash block that writes to a `projects/<name>/X` path MUST start with this three-line preamble so it's self-contained:
+**REQUIRED per-block preamble** (see #443): Claude executes each ```bash``` block as a separate shell invocation. The `projects_dir` assignment from the Path resolution section above does NOT carry into later blocks. Every bash block that writes to a `projects/<name>/X` path MUST start with this three-line preamble so each block is self-contained:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -36,11 +36,11 @@ projects_dir=$(portfolio_projects_dir)
 # ... now write to "${projects_dir}/<name>/X"
 ```
 
-The Path resolution section's example sources the helper *once* for documentation purposes; it does not absolve later blocks from sourcing it themselves. Treat each ```bash``` fence as a fresh process.
+The Path resolution section's example sources the helper *once* for documentation purposes. Later blocks must also source it. Treat each ```bash``` fence as a fresh process.
 
 ## Activated role
 
-When `/roadmap` runs, activate the **[Product Manager](../../../roles/product/product-manager.md)** role — they own roadmap prioritisation, strategic sequencing, milestone proposals, and research (AgDR-0301). The human approver approves a material roadmap change. For adding a specific item with a PRD, chain to `/write-spec`. For items that require data-driven reprioritisation, ask the [Data Engineer](../../../roles/data/data-engineer.md) to check the numbers.
+When `/roadmap` runs, activate the **[Product Manager](../../../roles/product/product-manager.md)** role. They own roadmap prioritisation, strategic sequencing, milestone proposals, and research (AgDR-0301). The human approver approves a material roadmap change. For adding a specific item with a PRD, chain to `/write-spec`. For items that require data-driven reprioritisation, ask the [Data Engineer](../../../roles/data/data-engineer.md) to check the numbers.
 
 See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the full activation protocol.
 
@@ -91,7 +91,7 @@ Every roadmap lives at `projects/<name>/roadmap.md` inside your ops repo, where 
 | RM-000 | Health endpoint | 2026-04-05 | #41 |
 ```
 
-The default milestones are **Now / Next / Later / Done** (Now-Next-Later format). Custom milestones (Q1/Q2/Q3 or v1.0/v1.1/v2.0) are also accepted.
+The default milestones are **Now / Next / Later / Done** (Now-Next-Later format). The skill also accepts custom milestones (Q1/Q2/Q3 or v1.0/v1.1/v2.0).
 
 ## Process
 
@@ -137,23 +137,22 @@ The default milestones are **Now / Next / Later / Done** (Now-Next-Later format)
 
 1. Find the row by ID across Now / Next / Later
 2. Move it to Done
-3. Add `Shipped` date and `PR` column reference (ask user for PR # if it can't be inferred)
+3. Add the `Shipped` date and `PR` column reference. Ask the user for the PR # if necessary.
 
 ## Linking to GitHub Issues
 
 If the user passes `--with-issues`, also create or update tracker issues to
 mirror the roadmap. Dispatch through `tracker_create` (#670 / AgDR-0072,
 extended by the #709 creator sweep) so the issues land in **this project's**
-tracker — GitHub, GitLab, or a `custom` CLI. For a GitHub adopter this runs
+tracker: GitHub, GitLab, or a `custom` CLI. For a GitHub adopter this runs
 `gh issue create` exactly as before.
 
 ### Resolve the target repo
 
-`tracker_create`'s first argument is a concrete `owner/repo` slug — it is **not**
-resolved for you. Determine it **once**, before the loop, the same way the other
+`tracker_create` requires a concrete `owner/repo` slug as its first argument. It does **not** resolve the slug for you. Determine it **once**, before the loop, the same way the other
 creator skills (`/feature`, `/bug`, `/task`) do:
 
-Read the active-ticket marker of the working tree you are in to determine which repo we're working in. The marker is the `apexyard-ticket` file in the git dir of that tree. See `/start-ticket` "Read the active ticket".
+Read the active-ticket marker of the working tree you are in to determine the current repo. The marker is the `apexyard-ticket` file in the git dir of that tree. See `/start-ticket` "Read the active ticket".
 If no active ticket, check `apexyard.projects.yaml` for managed projects. If only
 one project, use it. If multiple, ask:
 
@@ -161,9 +160,8 @@ one project, use it. If multiple, ask:
 Which project should the roadmap issues be filed in?
 ```
 
-If no projects are registered, ask for the repo in `owner/repo` format. Pass the
-resolved value (e.g. `me2resh/apexyard`) as the first `tracker_create` argument —
-**never** the literal `{owner/repo}` placeholder.
+If the registry has no projects, ask for the repo in `owner/repo` format. Pass the
+resolved value (e.g. `me2resh/apexyard`) as the first `tracker_create` argument. Use **never** the literal `{owner/repo}` placeholder.
 
 ```bash
 # Resolve + source the tracker lib once (before the loop) by walking up from cwd.
@@ -199,7 +197,7 @@ fi
 ```
 
 Then write the issue reference (`${ref}`) back into the Notes column (only on the
-`rc -eq 0` path above — the `kind=none` and failure paths leave Notes untouched).
+`rc -eq 0` path above. The `kind=none` and failure paths leave Notes untouched).
 
 ## Output format (show)
 
@@ -245,27 +243,27 @@ Owner: @octocat
 |--------|---------|
 | not-started | No work yet |
 | in-progress | Active work, branch/PR exists |
-| blocked | Waiting on something — note in Notes column |
+| blocked | Waiting on a condition. Record the condition in the Notes column. |
 | in-review | PR open, awaiting review |
 | done | Shipped (auto-moves to Done milestone) |
 
 ## Rules
 
-1. **One file = one project's roadmap** — no shared roadmaps across projects
-2. **IDs are stable** — `RM-001` never changes once assigned
-3. **Done is append-only** — items move to Done, never out of it
+1. **One file = one project's roadmap**. Do not share roadmaps across projects.
+2. **IDs are stable**: never change `RM-001` after assignment.
+3. **Done is append-only**: move items to Done, never out of it.
 4. **Update `Last updated`** on every write
-5. **Confirm destructive ops** — `remove`, `reorder` ask first
-6. **One roadmap per project** — always write to `projects/<name>/roadmap.md` in the ops repo
-7. **Don't auto-create issues unless asked** — `--with-issues` is opt-in
-8. **Preserve markdown formatting** — don't reflow rows or change column widths unnecessarily
+5. **Confirm destructive ops**: ask before `remove` or `reorder`.
+6. **One roadmap per project**: always write to `projects/<name>/roadmap.md` in the ops repo
+7. **Do not auto-create issues unless asked**. `--with-issues` is opt-in.
+8. **Preserve markdown formatting**. Do not reflow rows or change column widths unnecessarily.
 
 ## Related skills
 
-- `/write-spec` — once a roadmap item is approved, write its PRD
-- `/stakeholder-update` — pulls "Now" and "Done" sections to summarise progress
-- `/idea` — for ideas not yet on the roadmap
+- `/write-spec`: after approval of a roadmap item, write its PRD
+- `/stakeholder-update`: pulls "Now" and "Done" sections to summarise progress
+- `/idea`: for ideas not yet on the roadmap
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*
