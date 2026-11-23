@@ -7,7 +7,7 @@ allowed-tools: Bash, Read, Write
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /spike-close — Deprecated Alias for `/spike --close`
+# /spike-close: Deprecated Alias for `/spike --close`
 
 `/spike-close` is deprecated (me2resh/apexyard#2028). Use `/spike --close`.
 This alias ships deprecated in v5.11.0. v5.12.0 removes it.
@@ -42,4 +42,4 @@ This alias does not read `/spike`. It works when an adopter overrides `/spike` w
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

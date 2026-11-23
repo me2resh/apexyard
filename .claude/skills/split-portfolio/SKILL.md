@@ -8,15 +8,15 @@ effort: high
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /split-portfolio — Migrate to split-portfolio mode
+# /split-portfolio: Migrate to split-portfolio mode
 
-Automates the recovery flow for ApexYard adopters who hit the **trip-wire** documented in `docs/multi-project.md` — pushed private project names to a public fork, then realized GitHub Free disallows fork-visibility changes.
+Automate recovery for the **trip-wire** in `docs/multi-project.md`. This occurs when adopters push private project names to a public fork, then discover that GitHub Free disallows fork-visibility changes.
 
 The skill is destructive: it force-pushes the public fork's main branch after rewriting history, redacts GitHub Issue / PR body content, and creates a new private repo. Every destructive step has an explicit operator-confirmation gate. None of those gates are skip-able.
 
 ## Path resolution
 
-Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+Use `.claude/hooks/_lib-portfolio-paths.sh` to resolve these paths. Read the registry path with `portfolio_registry`. Read the per-project docs directory with `portfolio_projects_dir`. Read the ideas backlog with `portfolio_ideas_backlog`. Source the helper at the top of any bash block that touches those paths:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -24,13 +24,13 @@ source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
 registry=$(portfolio_registry)
 ```
 
-Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Do not hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks. The helper resolves the paths for the adopter's mode. See `docs/multi-project.md`.
 
 ## Modes
 
 | Invocation | Effect |
 |------------|--------|
-| `/split-portfolio` | Full migration — runs all 10 steps with operator-confirmation gates |
+| `/split-portfolio` | Full migration: runs all 10 steps with operator-confirmation gates |
 | `/split-portfolio --verify` | Read-only state report (registry/config drift, backup branch age, validate). No destructive ops. |
 | `/split-portfolio --dry-run` | Walk through every step printing the commands that would run, but execute none. |
 
@@ -45,13 +45,13 @@ The skill refuses with a clear redirect when:
 | Working tree has uncommitted changes | "Refusing to migrate with a dirty working tree — commit or stash first. Force-push + history rewrite would lose your in-flight work." |
 | Already migrated (config-block mode OR symlink mode detected) | "Looks like this fork is already in split-portfolio mode (detected via config block / symlink). Run `/split-portfolio --verify` for the state report, or `/split-portfolio --dry-run` to see what a re-run would do." |
 
-Refusal at any of these gates is silent on every other check — show only the relevant message.
+Refusal at any of these gates is silent on every other check: show only the relevant message.
 
 ## Process
 
 ### 0. Mark this session as bootstrap (REQUIRED for non-`--verify` modes)
 
-`/split-portfolio` rewrites fork-root files (`.gitignore`, `.claude/project-config.json`, registry symlinks) which the `require-active-ticket.sh` PreToolUse hook would block — and the whole point of the migration is that the fork's existing private project names should no longer be referenced, so even filing a placeholder ticket is awkward. Write a marker so the hook exempts this skill (it's on the default `bootstrap_skills` list in `.claude/project-config.defaults.json`):
+`/split-portfolio` rewrites fork-root files: `.gitignore`, `.claude/project-config.json`, and registry symlinks. The `require-active-ticket.sh` PreToolUse hook would block these writes. The migration must stop references to existing private project names in the fork. Thus, even a placeholder ticket is difficult to file. Write a marker so the hook exempts this skill (it is on the default `bootstrap_skills` list in `.claude/project-config.defaults.json`):
 
 ```bash
 # Only on full / --dry-run modes. --verify is read-only and doesn't need the marker.
@@ -69,7 +69,7 @@ Clear the marker at the end of the migration (or on a confirmed-abort). If the s
 2. Run `portfolio_validate`. Capture result.
 3. Detect mode: config-block (presence of `portfolio:` block in `.claude/project-config.json`) vs symlink (`test -L apexyard.projects.yaml`) vs single-fork (neither).
 4. List `backup-pre-rewrite` branch age, if present (`gh api repos/<fork>/branches/backup-pre-rewrite --jq .commit.commit.author.date`).
-5. Detect drift (config-block AND symlink both present pointing at different things — broken state).
+5. Detect drift (config-block AND symlink both present pointing at different things: broken state).
 6. Print a structured report:
 
 ```
@@ -94,7 +94,7 @@ Exit 0 if valid + no drift; exit 1 if validate fails or drift detected.
 
 ### Full migration (10 steps)
 
-#### Step 1 — Pre-flight checklist
+#### Step 1: Pre-flight checklist
 
 After the pre-flight refusals above pass, show the operator a checklist and ask for explicit confirmation:
 
@@ -122,9 +122,9 @@ Are you running this during a low-traffic window so other clones won't be surpri
 Continue? (yes / cancel)
 ```
 
-#### Step 2 — Snapshot extraction
+#### Step 2: Snapshot extraction
 
-Copy the registry + `projects/` to a tmpdir. This is the data that will be pushed to the new private repo. Run BEFORE any destructive operation so a failure here doesn't cost the operator anything.
+Copy the registry + `projects/` to a tmpdir. This is the data that will be pushed to the new private repo. Run BEFORE any destructive operation so a failure here does not cost the operator anything.
 
 ```bash
 SNAPSHOT=$(mktemp -d)
@@ -135,9 +135,9 @@ echo "Snapshot at: $SNAPSHOT"
 
 Confirm to operator: snapshot exists, file count matches expectation. If not, refuse.
 
-#### Step 3 — Create the private repo
+#### Step 3: Create the private repo
 
-The suggested default name is **`<account>/<fork>-portfolio`** — keeps the relationship to the public fork explicit on GitHub. Compute `<fork>` from the public-fork repo name (`gh repo view --json name -q .name`) so the suggestion is correct even when the fork was renamed (e.g. fork = `cos` → suggested portfolio = `cos-portfolio`).
+The suggested default name is **`<account>/<fork>-portfolio`**. This keeps the relationship to the public fork explicit on GitHub. Compute `<fork>` from the public-fork repo name with `gh repo view --json name -q .name`. This keeps the suggestion correct after a fork rename. For example, fork = `cos` → suggested portfolio = `cos-portfolio`.
 
 ```
 Suggested name: <account>/<fork>-portfolio    (e.g. <account>/apexyard-portfolio)
@@ -150,7 +150,7 @@ Continue? (yes / cancel)
 
 If the repo name already exists in the operator's account, refuse and ask for a different name.
 
-#### Step 4 — Push the snapshot to the private repo
+#### Step 4: Push the snapshot to the private repo
 
 ```bash
 cd "$SNAPSHOT"
@@ -165,7 +165,7 @@ git push -u origin main
 
 Print: `✓ Private portfolio repo populated at <name>`.
 
-#### Step 4a — Configure branch protection on the private portfolio repo
+#### Step 4a: Configure branch protection on the private portfolio repo
 
 Immediately after the snapshot push, apply branch protection to `main` on the new private repo so that no one (including the operator's own account) can push directly to `main` without a PR.
 
@@ -189,7 +189,7 @@ gh api -X PUT "repos/${OWNER}/${REPO_NAME}/branches/main/protection" \
 EOF
 ```
 
-The `gh api` call requires the operator to have **admin** permission on the new private repo. Because the skill itself just created the repo via `gh repo create`, the operator is always the repo owner and therefore has admin access — so this call should succeed in the normal flow.
+The `gh api` call requires the operator to have **admin** permission on the new private repo. The skill just created the repo with `gh repo create`. Thus, the operator owns it and has admin access. The call should succeed in the normal flow.
 
 However, if the repo was pre-created by an org admin and the operator only has write access, the `PUT` will return HTTP 403. Handle this gracefully:
 
@@ -228,7 +228,7 @@ On success, print:
     enforce_admins:               false
 ```
 
-#### Step 5 — Backup branch on the public fork
+#### Step 5: Backup branch on the public fork
 
 Before any rewrite. Recoverable safety net.
 
@@ -240,7 +240,7 @@ git push origin "origin/main:refs/heads/backup-pre-rewrite"
 
 Print: `✓ backup-pre-rewrite pushed (will be auto-cleaned after 7-day soak in step 10)`.
 
-#### Step 6 — History rewrite
+#### Step 6: History rewrite
 
 Detect: was the registry + `projects/` added in a single commit? If yes, the cheap path:
 
@@ -261,7 +261,7 @@ git filter-repo --path apexyard.projects.yaml --path projects --invert-paths
 
 After rewrite, show the operator the diff: how many commits changed, sample of removed paths.
 
-#### Step 7 — Force-push to fork's main
+#### Step 7: Force-push to fork's main
 
 **This is the irreversible step.** Single explicit confirmation gate:
 
@@ -276,9 +276,9 @@ Continue? (yes / cancel)
 git push --force-with-lease origin main
 ```
 
-If the lease check fails (someone else pushed since the operator last fetched), refuse — operator should investigate before re-running.
+If the lease check fails (someone else pushed since the operator last fetched), refuse: operator should investigate before re-running.
 
-#### Step 8 — Redact GitHub Issue / PR bodies
+#### Step 8: Redact GitHub Issue / PR bodies
 
 For each registered project name, search the public fork's issues + PRs for bodies that mention them:
 
@@ -316,7 +316,7 @@ content from casual viewers, search engines, and the GitHub UI default
 view — that's it.
 ```
 
-#### Step 9 — Write the `portfolio:` config block + .gitignore
+#### Step 9: Write the `portfolio:` config block + .gitignore
 
 ```bash
 # .gitignore additions in the public fork
@@ -354,11 +354,11 @@ git add .gitignore
 git commit -m "chore: configure split-portfolio mode (#143 / #145)"
 ```
 
-If `.claude/project-config.json` already has a non-portfolio block, **merge** rather than overwrite — preserve existing keys.
+If `.claude/project-config.json` already has a non-portfolio block, **merge** rather than overwrite: preserve existing keys.
 
 If it has a `portfolio:` block already, refuse and ask the operator to manually reconcile.
 
-#### Step 9a — Produce the v2 layout (onboarding.yaml + workspace + marker + v2 config keys)
+#### Step 9a: Produce the v2 layout (onboarding.yaml + workspace + marker + v2 config keys)
 
 Steps 9a–9d extend the migration so the final fork is split-portfolio **v2**, not v1. Without these, adopters would land on the v1 layout and need a follow-up `/update` to migrate again. See [AgDR-0021](../../../docs/agdr/AgDR-0021-split-portfolio-v2-path-resolution.md) § "v1→v2 migration semantics" for the copy-vs-move rationale per file class.
 
@@ -369,7 +369,7 @@ SIBLING_ROOT=$(dirname "$(jq -r '.portfolio.registry' .claude/project-config.jso
 # e.g. SIBLING_ROOT=../<private-repo-name>
 ```
 
-Per-file-class confirmation — ask separately so the operator can defer either:
+Per-file-class confirmation. Ask separately so the operator can defer either:
 
 ```
 Copy onboarding.yaml to sibling private repo? [Y/n]
@@ -378,7 +378,7 @@ Move workspace/<name>/ contents to sibling private repo? [Y/n]   # surfaces disk
 
 `onboarding.yaml` is **copied** (not moved): the file is small, the legacy tracker fallback at `_lib-ops-root.sh` still reads it as part of the legacy ops-root walk-up, and keeping a snapshot in the public fork is a safety net while the sibling-repo copy becomes the canonical source of truth. `workspace/<name>/` is **moved**: clones are gigabytes; doubling disk makes no sense.
 
-##### Copy onboarding.yaml (not move — see AgDR-0021 § H)
+##### Copy onboarding.yaml (not move: see AgDR-0021 § H)
 
 ```bash
 if [ -f onboarding.yaml ] && [ ! -f "$SIBLING_ROOT/onboarding.yaml" ]; then
@@ -400,7 +400,7 @@ fi
 
 Idempotence: if `onboarding.yaml` is already only in the sibling repo (and untracked in the public fork), this block is a no-op.
 
-#### Step 9b — Move workspace/<name>/ contents to the sibling
+#### Step 9b: Move workspace/<name>/ contents to the sibling
 
 ```bash
 if [ -d workspace ] && [ "$(ls -A workspace 2>/dev/null)" ]; then
@@ -424,7 +424,7 @@ fi
 
 Idempotence: empty `workspace/` (no entries to move, or only `README.md` left) is a no-op.
 
-#### Step 9c — Extend .gitignore for v2 file classes
+#### Step 9c: Extend .gitignore for v2 file classes
 
 ```bash
 NEEDS=()
@@ -442,9 +442,9 @@ if [ "${#NEEDS[@]}" -gt 0 ]; then
 fi
 ```
 
-#### Step 9d — Write the .apexyard-fork marker + v2 config-block keys
+#### Step 9d: Write the .apexyard-fork marker + v2 config-block keys
 
-The marker is **presence-only**: readers (every ops-root walk) MUST ignore content; only file presence matters. Writers MAY include a single explanatory line so `head .apexyard-fork` is informative — both `echo "# comment" > .apexyard-fork` and `touch .apexyard-fork` are valid. See [AgDR-0021](../../../docs/agdr/AgDR-0021-split-portfolio-v2-path-resolution.md) § B.
+The marker is **presence-only**: readers (every ops-root walk) MUST ignore content; only file presence matters. Writers MAY include a single explanatory line so `head .apexyard-fork` is informative. Both `echo "# comment" > .apexyard-fork` and `touch .apexyard-fork` are valid. See [AgDR-0021](../../../docs/agdr/AgDR-0021-split-portfolio-v2-path-resolution.md) § B.
 
 ```bash
 if [ ! -f .apexyard-fork ]; then
@@ -453,7 +453,7 @@ if [ ! -f .apexyard-fork ]; then
 fi
 ```
 
-Add the four v2 keys to `.claude/project-config.json` — `onboarding`, `workspace_dir`, `custom_skills_dir`, `custom_handbooks_dir`. Use `jq` to merge so existing keys (Step 9's registry / projects_dir / ideas_backlog) are preserved, and `// $x` short-circuits if the operator already added a key by hand:
+Add the four v2 keys to `.claude/project-config.json`: `onboarding`, `workspace_dir`, `custom_skills_dir`, `custom_handbooks_dir`. Use `jq` to merge and preserve existing keys (Step 9's registry / projects_dir / ideas_backlog). `// $x` short-circuits if the operator already added a key by hand:
 
 ```bash
 PCONFIG=.claude/project-config.json
@@ -472,7 +472,7 @@ git add "$PCONFIG"
 
 Idempotence: re-running 9d is a no-op (existing key values are preserved via `// $x`; the marker write skips when present).
 
-#### Step 10 — Verify + cleanup
+#### Step 10: Verify + cleanup
 
 Verify migration:
 
@@ -560,4 +560,4 @@ Run on every exit path (successful migration, confirmed abort, refusal-in-flight
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

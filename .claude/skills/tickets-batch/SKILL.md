@@ -7,7 +7,7 @@ allowed-tools: Bash, Read, Write, AskUserQuestion
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /tickets-batch — Deprecated Alias for `/task --batch`
+# /tickets-batch: Deprecated Alias for `/task --batch`
 
 `/tickets-batch` is deprecated (me2resh/apexyard#2028). Use `/task --batch`.
 This alias ships deprecated in v5.11.0. v5.12.0 removes it.
@@ -42,4 +42,4 @@ This alias does not read `/task`. It works when an adopter overrides `/task` wit
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*
