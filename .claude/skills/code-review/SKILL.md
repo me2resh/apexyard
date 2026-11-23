@@ -24,7 +24,7 @@ Setup: `docs/getting-started.md`. Otherwise use Grep and Read.
 When `/code-review` runs:
 
 1. **Primary reviewer**: the **Code Reviewer agent (Rex)** at [`.claude/agents/code-reviewer.md`](../../agents/code-reviewer.md) runs on every commit. Rex owns the automated first-pass review.
-2. **Human approval gate**: the **[Tech Lead](../../../roles/engineering/tech-lead.md)** — activates to sign off on architecture, design patterns, and team conventions that Rex can't judge from code alone.
+2. **Human approval gate**: the **[Tech Lead](../../../roles/engineering/tech-lead.md)** activates to sign off on architecture, design patterns, and team conventions that Rex can't judge from code alone.
 3. **Conditional Security Auditor**: if the diff touches `**/auth/**`, `**/crypto/**`, `**/secrets/**`, `.env*`, or similar, the **[Security Auditor](../../../roles/security/security-auditor.md)** also activates and must sign off before merge. Consider chaining `/security-review` for the deeper pass.
 4. **Conditional UI Designer**: if the diff touches visible UI, the **[UI Designer](../../../roles/design/ui-designer.md)** activates for design review.
 
@@ -50,7 +50,7 @@ Read .claude/rules/writing-standard.md before drafting or posting a review.
 Apply its controlled technical writing profile.
 Treat a writing-profile fault in the PR as advisory, per the Code Reviewer
 agent's § "Blocking-Severity Bar", unless the fault changes meaning or drops
-evidence — request changes only for that kind of fault.
+evidence: request changes only for that kind of fault.
 State the verdict and next action first, then the reason and evidence.
 Use the Code Reviewer agent's required Output Format for first reviews, re-reviews, and reduced-scope reviews.
 Keep its required sections and give each checklist result a reason or evidence.
@@ -132,7 +132,7 @@ place.
 4. Check for the required Glossary section
 5. Check for AgDR links if technical decisions were made
 6. On JS/TS diffs, run the Fallow static-analysis pass (§ 9 of the agent). It is changed-scope, fail-soft, and advisory. Render a `### Fallow Findings` table + dry-run fix preview.
-7. Submit the review through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host — #758), not a hardcoded `gh pr review`, then clear the active-reviewer marker from step 0
+7. Submit the review through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host, #758), not a hardcoded `gh pr review`, then clear the active-reviewer marker from step 0
 
 **Body path (AgDR-0266).** Rex writes the body with Write to `<ops-root>/.claude/session/reviews/bodies/<owner>__<repo>__<pr>-rex.md` (`review_body_path`), then posts it with `tracker_review_submit <owner/repo> <pr> comment <body_file>`. Not a heredoc.
 
@@ -273,4 +273,4 @@ Posts a GitHub review comment with:
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard), multi-project SDLC framework for Claude Code · MIT.*

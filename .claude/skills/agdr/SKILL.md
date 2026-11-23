@@ -20,7 +20,7 @@ Walks `apexyard.projects.yaml`, collects every `docs/agdr/*.md` from every manag
 
 ## Path resolution
 
-Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog`, all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -28,7 +28,7 @@ source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
 registry=$(portfolio_registry)
 ```
 
-Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks. The helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
 
 ## Usage
 
@@ -297,7 +297,7 @@ The cache stores enough metadata for browse/stats but not full bodies. Search al
 
 ## Rules
 
-1. **Read-only** — never modifies any AgDR, never writes to `docs/agdr/` of any project. Cache writes go to `.claude/session/` only.
+1. **Read-only**: never modifies any AgDR, never writes to `docs/agdr/` of any project. Cache writes go to `.claude/session/` only.
 2. **Tolerant of missing frontmatter**: legacy AgDRs have full support. Put them in `other`.
 3. **No new categories without an AgDR**: the 6-category taxonomy is the contract. Operators wanting a 7th category should write an AgDR justifying it. This skill rejects unknown categories and reports them as `other`. It gives a one-line stderr warning so drift is visible.
 4. **Does not mutate the registry**: it consumes `apexyard.projects.yaml` without changes.
@@ -317,7 +317,7 @@ The cache stores enough metadata for browse/stats but not full bodies. Search al
 
 ## Related skills
 
-- `/decide`: writes AgDRs (the producer, this skill is the consumer)
+- `/decide`: writes AgDRs (the producer). This skill is the consumer
 - `/projects`: same registry walk, project-level rather than AgDR-level view
 - `/handover`: onboarding flow that may produce an early batch of AgDRs
 
@@ -330,4 +330,4 @@ The cache stores enough metadata for browse/stats but not full bodies. Search al
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard), multi-project SDLC framework for Claude Code · MIT.*
