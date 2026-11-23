@@ -75,11 +75,12 @@ onboarding): [`docs/whats-inside.md`](docs/whats-inside.md#more-ways-apexyard-di
 
 ### Who approves a merge
 
-The merge gate does not read approvals from the forge. A bot or app approval on the PR never counts as the human approval.
-The gate reads only the approval record that `/approve-merge` writes after a person approves that PR at its head commit.
-The hook checks the `approved_by=user` field and the head SHA (`.claude/hooks/block-unreviewed-merge.sh`, `.claude/skills/approve-merge/SKILL.md`).
-ApexYard works with any coding agent and next to any review agent. See [Run ApexYard next to another PR agent](docs/running-next-to-another-pr-agent.md).
-The approval record is a local file. Its write gate is a backstop, not a security boundary (AgDR-0109). Server-side branch protection is the hard control.
+The human half of the merge gate never reads approvals from the forge. A bot or app approval on the PR never counts as the human approval.
+The human half reads only one approval record. `/approve-merge` or the approval menu writes it after a person approves that PR at its head commit (`.claude/hooks/block-unreviewed-merge.sh` lines 20-46, `.claude/skills/approve-merge/SKILL.md`, `record-menu-approval.sh`, AgDR-0234).
+The hook checks the `approved_by=user` field and the head SHA (`.claude/hooks/block-unreviewed-merge.sh` lines 702-736).
+The optional `review_markers.require_posted_review` setting reads posted forge reviews for the agent-review half only (`.claude/hooks/block-unreviewed-merge.sh` lines 496-606, `.claude/hooks/_lib-tracker.sh` lines 2041-2049).
+ApexYard runs with Claude Code, and with other coding agents through an adapter. Proof and limits for each agent are in [`docs/harnesses/`](docs/harnesses/). It runs next to any review agent. See [Run ApexYard next to another PR agent](docs/running-next-to-another-pr-agent.md).
+The approval record is a local file. Its write gate is a backstop, not a security boundary (`docs/agdr/AgDR-0109-marker-write-gate-is-a-backstop.md`). Server-side branch protection is the hard control (`SECURITY.md` line 46).
 
 ## What is inside
 
