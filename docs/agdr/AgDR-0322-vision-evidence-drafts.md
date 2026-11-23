@@ -4,7 +4,7 @@
 
 Accepted
 
-Supersedes two parts of AgDR-0028: the rule that forbids the model from drafting vision content (Option B and the "model never authors the content" rule), and the target-state C4 L1 diagram in the vision.
+Supersedes two parts of AgDR-0028: the rule that forbids the model from drafting vision content (Option B and the "model never authors the content" rule), and the place of the target-state diagram (sub-decision A4).
 
 ## Context
 
@@ -34,7 +34,7 @@ These rules apply:
 4. The operator confirms or corrects each value.
 5. The operator writes the drivers, principles, risk appetite and what we won't build. The skill never drafts them.
 
-The one-page vision has no diagram. `/c4` already writes `context.md` and `container.md` in the same `architecture/` folder (AgDR-0028 A1). The template links to them. A diagram in the vision would repeat them and make the page longer than one page.
+The one-page vision has no diagram. The target state, with its optional Mermaid diagram, moves to a Target state section in the Heavy appendix, before the Migration path. `/c4` does not replace it: `/c4` draws the current state (AgDR-0028 A4). The cost: a project without the appendix records no target state. Its designs then state their own future state through `/approach`.
 
 The rest of AgDR-0028 stays in force: the interview, per-section confirm, the resolver for the template, and markdown-only output.
 

@@ -58,11 +58,14 @@ assert "template points to the optional appendix" has 'vision-appendix\.md' "$TE
 # Appendix
 assert "appendix exists" test -f "$APPENDIX"
 assert "appendix is optional" has '^> Optional\.' "$APPENDIX"
-for h in "Business context" "Capabilities" "Load and growth" "Data and processors" "Legal and regulatory" "Security posture" "Organisation and operations" "Limits and assumptions" "Alternatives" "Decisions" "Cost model" "Trade-offs" "Risks" "Migration path" "Fitness functions and review triggers"; do
+for h in "Business context" "Capabilities" "Load and growth" "Data and processors" "Legal and regulatory" "Security posture" "Organisation and operations" "Limits and assumptions" "Alternatives" "Decisions" "Cost model" "Trade-offs" "Risks" "Target state" "Migration path" "Fitness functions and review triggers"; do
   assert "appendix has section: $h" has "^## $h$" "$APPENDIX"
 done
 assert "appendix has no trace IDs" lacks '\b[A-Z]{1,6}-[0-9]+\b' "$APPENDIX"
 assert "appendix repeats the not-set rule" has 'not set \(owner: <name>\)' "$APPENDIX"
+assert "appendix puts Target state before Migration path" bash -c 'awk "/^## Target state$/{t=NR} /^## Migration path$/{m=NR} END{exit !(t && m && t < m)}" "$1"' _ "$APPENDIX"
+assert "one-page vision points to the appendix Target state" has 'Target state section of the appendix' "$TEMPLATE"
+assert "evidence draft never copies a credential" has 'Never copy a credential, token, key or connection string' "$SKILL"
 
 # Skill
 assert "skill exists" test -f "$SKILL"

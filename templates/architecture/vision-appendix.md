@@ -72,6 +72,16 @@
 |------|------------|--------|-------|----------|
 | [risk] | [level] | [level] | [name] | [response] |
 
+## Target state
+
+[Where the architecture is going: the containers and integrations at the end of the migration path. This is a choice: the operator writes it. Add a Mermaid diagram when it helps. `/c4` draws the current state, not this one.]
+
+```mermaid
+flowchart LR
+  user([User]) --> app[Target system]
+  app --> store[(Data store)]
+```
+
 ## Migration path
 
 | Quarter | Milestone | Owner | Done when |

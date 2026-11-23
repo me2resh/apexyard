@@ -12,7 +12,7 @@
 >
 > You need more depth? Add the optional Heavy appendix from [`vision-appendix.md`](vision-appendix.md). Do not add it by default.
 >
-> This page has no diagram. For the system context and containers, see `context.md` and `container.md` in the same folder, written by `/c4`.
+> This page has no diagram. For the current context and containers, see `context.md` and `container.md` in the same folder, written by `/c4`. For the target state, use the Target state section of the appendix.
 
 ## Rules for this page
 
