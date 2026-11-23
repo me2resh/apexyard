@@ -9,7 +9,7 @@
 #   2. portfolio_resolve_template architecture/vision.md returns the framework
 #      default in single-fork mode, and the override in split-portfolio mode
 #      when an override is dropped at custom-templates/architecture/vision.md.
-#   3. The discoverable section list (## headings) matches the seven sections
+#   3. The discoverable section list (## headings) matches the five sections
 #      named in SKILL.md so the interview drives off the template, not a
 #      hardcoded list — and a populated vision built from those sections is
 #      a structurally valid output.
@@ -72,15 +72,13 @@ echo "================================================================"
 
 TEMPLATE="$OPS_ROOT/templates/architecture/vision.md"
 
-# The seven sections SKILL.md drives the interview from.
+# The five sections SKILL.md drives the interview from.
 REQUIRED_HEADINGS=(
-  "Scope"
+  "Drivers"
+  "Non-functional requirements"
   "Principles"
-  "Target-state architecture"
-  "Current state vs target state"
-  "Migration path"
-  "Things we explicitly chose NOT to build"
-  "Review cadence"
+  "Reuse and vendors"
+  "What we won't build"
 )
 
 for heading in "${REQUIRED_HEADINGS[@]}"; do
@@ -156,28 +154,22 @@ version: 1
 projects: []
 YAML
 cat > "$TMPROOT/fake-private/custom-templates/architecture/vision.md" <<'MD'
-# Custom Architecture Vision — {Project Name}
+# Custom Architecture Vision - {Project Name}
 
-## Scope
-custom scope intro
+## Drivers
+custom drivers intro
+
+## Non-functional requirements
+custom NFR intro
 
 ## Principles
 custom principles intro
 
-## Target-state architecture
-custom target-state intro
+## Reuse and vendors
+custom reuse intro
 
-## Current state vs target state
-custom current-vs-target intro
-
-## Migration path
-custom migration intro
-
-## Things we explicitly chose NOT to build
-custom anti-scope intro
-
-## Review cadence
-custom review-cadence intro
+## What we won't build
+custom will-not-build intro
 MD
 
 # Manually mirror what portfolio_resolve_template does:
@@ -219,49 +211,29 @@ trap 'rm -rf "$TMPROOT" "$OUT"' EXIT
     echo "## ${heading}"
     echo ""
     case "$heading" in
-      "Scope")
-        echo "Covers the fixture-app customer-facing web platform — onboarding, orders, account self-service."
+      "Drivers")
+        echo "1. Ship a paid pilot by Q1 with two engineers."
+        echo "2. Keep the monthly cloud bill under budget."
+        ;;
+      "Non-functional requirements")
+        echo "| Requirement | Target | Today | How measured | Source and date |"
+        echo "|-------------|--------|-------|--------------|-----------------|"
+        echo "| Peak load | 50 rps | 12 rps | load balancer metrics | dashboard, 2026-11-01 |"
+        echo "| Monthly cost | 500 USD | not set (owner: Sam) | billing export | not set |"
         ;;
       "Principles")
-        echo "1. **Bounded contexts own their data** — no cross-context DB joins."
-        echo "2. **Failures are caller-handled** — services surface typed errors."
-        echo "3. **Idempotency by default** — every state-changing endpoint accepts an idempotency key."
-        echo "4. **Observability is a feature** — every service ships with structured logs + metrics."
-        echo "5. **Strict-typed boundaries** — every public interface has a versioned schema."
+        echo "1. **Bounded contexts own their data**: no cross-context DB joins."
+        echo "2. **Idempotency by default**: every state-changing endpoint accepts an idempotency key."
+        echo "3. **Observability is a feature**: every service ships with structured logs and metrics."
         ;;
-      "Target-state architecture")
-        echo '```mermaid'
-        echo 'C4Context'
-        echo '    title Target-state System Context for fixture-app'
-        echo '    Person(user, "Customer", "End user")'
-        echo '    System(main, "fixture-app", "Order management")'
-        echo '    System_Ext(stripe, "Stripe", "Payments")'
-        echo '    Rel(user, main, "Uses", "HTTPS")'
-        echo '    Rel(main, stripe, "Charges", "HTTPS")'
-        echo '```'
+      "Reuse and vendors")
+        echo "| Capability | What we use | Kind | What already in place could replace it | Source and date |"
+        echo "|------------|-------------|------|----------------------------------------|-----------------|"
+        echo "| Payments | Stripe | buy | nothing | package.json, 2026-11-01 |"
         ;;
-      "Current state vs target state")
-        echo "| Dimension | Today | Target | Gap |"
-        echo "|-----------|-------|--------|-----|"
-        echo "| Data layer | shared Postgres | per-context Postgres | extract billing tables |"
-        echo "| Auth | session cookies | OIDC | migrate to claims |"
-        echo "| Deployment | EC2 + script | ECS + GHA | containerise services |"
-        echo "| Observability | CloudWatch logs only | OTEL + Datadog | instrument services |"
-        ;;
-      "Migration path")
-        echo "| Quarter | Milestone | Owner | Done when |"
-        echo "|---------|-----------|-------|-----------|"
-        echo "| Q1 26 | Extract billing tables | Tech Lead — billing | cross-context joins fail in staging |"
-        echo "| Q2 26 | Introduce event bus | Tech Lead — platform | welcome email via UserRegistered event |"
-        echo "| Q3 26 | OIDC migration | Tech Lead — auth | session cookies retired |"
-        ;;
-      "Things we explicitly chose NOT to build")
-        echo "- **Microservices below the bounded-context level** — *Rationale: a 10-service split is more painful than a well-bounded modular monolith at our scale. Reconsider when org > 50 engineers.*"
-        echo "- **Multi-region active-active** — *Rationale: single-region customer base today; data-residency cost outweighs latency win. Reconsider when expansion lands in a second geographic region.*"
-        echo "- **Custom auth provider** — *Rationale: identity is not a differentiator; vendor lock-in acceptable. Reconsider only on a vendor exit event.*"
-        ;;
-      "Review cadence")
-        echo "Reviewed **quarterly** by Tech Lead + the human approver."
+      "What we won't build")
+        echo "- **Multi-region active-active**: single-region customer base today. Reconsider when: a second region has paying customers."
+        echo "- **Custom auth provider**: identity is not a differentiator. Reconsider when: the vendor exits."
         ;;
     esac
     echo ""
@@ -281,27 +253,27 @@ for heading in "${REQUIRED_HEADINGS[@]}"; do
   fi
 done
 
-# Anti-scope must have at least one "Reconsider when" rationale
+# What we won't build must have at least one "Reconsider when" trigger
 if grep -qE "[Rr]econsider when" "$OUT"; then
   pass "anti-scope has 'reconsider when' rationale (load-bearing per template note)"
 else
   fail "anti-scope missing 'reconsider when' clause — section is filler without it"
 fi
 
-# Migration path must be a non-trivial table (header + at least one data row)
-MIGRATION_ROWS=$(awk '/^## Migration path/{flag=1; next} /^## /{flag=0} flag && /^\| Q/' "$OUT" | wc -l | tr -d ' ')
-if [ "$MIGRATION_ROWS" -ge 1 ]; then
-  pass "migration path has $MIGRATION_ROWS milestone row(s)"
+# NFR table must have at least one data row with a source column
+NFR_ROWS=$(awk '/^## Non-functional requirements/{flag=1; next} /^## /{flag=0} flag && /^\| [A-Z]/' "$OUT" | wc -l | tr -d ' ')
+if [ "$NFR_ROWS" -ge 1 ]; then
+  pass "NFR table has $NFR_ROWS row(s)"
 else
-  fail "migration path has no milestone rows"
+  fail "NFR table has no rows"
 fi
 
-# Current-vs-target table must have at least one row
-CVT_ROWS=$(awk '/^## Current state vs target state/{flag=1; next} /^## /{flag=0} flag && /^\| [A-Z]/' "$OUT" | wc -l | tr -d ' ')
-if [ "$CVT_ROWS" -ge 1 ]; then
-  pass "current-vs-target table has $CVT_ROWS dimension row(s)"
+# Reuse table must have at least one row
+REUSE_ROWS=$(awk '/^## Reuse and vendors/{flag=1; next} /^## /{flag=0} flag && /^\| [A-Z]/' "$OUT" | wc -l | tr -d ' ')
+if [ "$REUSE_ROWS" -ge 1 ]; then
+  pass "reuse table has $REUSE_ROWS row(s)"
 else
-  fail "current-vs-target table has no dimension rows"
+  fail "reuse table has no rows"
 fi
 
 # Skill footer signature is present
@@ -311,12 +283,6 @@ else
   fail "skill footer signature missing"
 fi
 
-# Mermaid block for target-state diagram is present
-if grep -qE "^\`\`\`mermaid\$" "$OUT"; then
-  pass "target-state Mermaid C4 block present"
-else
-  fail "target-state Mermaid block missing"
-fi
 
 # ---------------------------------------------------------------------------
 # Summary
