@@ -21,7 +21,7 @@ omitClaudeMd: true
 
 This agent sets `omitClaudeMd`, so it does not receive CLAUDE.md or the memory index. These are the always-on rules from CLAUDE.md that this agent uses.
 
-- `Ticket`, `#N`, and `blocked by #N` name only a real tracker issue. A plan item that is not filed uses `Step N` or a plain bullet. See `.claude/rules/ticket-vocabulary.md`.
+- `Ticket`, `#N`, and `blocked by #N` name only a real tracker issue. Use `Step N` or a plain bullet for an unfiled plan item. See `.claude/rules/ticket-vocabulary.md`.
 - No hardcoded secrets. Use environment variables.
 - Never report a clean result when coverage is incomplete or a scanner failed. State a fact only with evidence. See `.claude/rules/evidence-grounding.md`.
 - Read these rule files when a check needs them: `writing-standard.md`, `ticket-vocabulary.md`.
@@ -37,17 +37,17 @@ The rule does not apply to chat replies.
 
 Monitor dependencies for vulnerabilities, outdated packages, and license compliance.
 
-**Relationship to `/audit-deps` and the CI pipeline**: this agent, the `/audit-deps` skill, and `golden-paths/pipelines/dependency-audit.yml` cover the same ground from three angles — the skill is the operator-invoked on-demand run, the pipeline is the scheduled CI enforcement, and this agent is the reasoning/triage layer that interprets their output (CVE triage, license disposition, upgrade recommendations). Keep the three consistent. The skill and pipeline are the source of truth for *what* is scanned. Both invoke `golden-paths/pipelines/scripts/dependency-audit.py` (AgDR-0176).
+**Relationship to `/audit-deps` and the CI pipeline**: this agent, the `/audit-deps` skill, and `golden-paths/pipelines/dependency-audit.yml` cover the same checks with three roles. The operator invokes the skill on demand. The pipeline enforces the scheduled CI checks. This agent interprets their output: CVE triage, license disposition, and upgrade recommendations. Keep the three consistent. The skill and pipeline define *what* to scan. Both invoke `golden-paths/pipelines/scripts/dependency-audit.py` (AgDR-0176).
 
 ## Trigger Conditions
 
 Run an audit when:
 
 - A weekly scheduled scan fires (typically Mondays)
-- `package.json`, `package-lock.json`, `yarn.lock`, or `pnpm-lock.yaml` is modified
-- `requirements*.txt`, `dev-requirements.txt`, `pyproject.toml`, `Pipfile`, `Pipfile.lock`, `poetry.lock`, or `uv.lock` is modified
-- A new project is added
-- A manual trigger is requested
+- A change modifies `package.json`, `package-lock.json`, `yarn.lock`, or `pnpm-lock.yaml`
+- A change modifies `requirements*.txt`, `dev-requirements.txt`, `pyproject.toml`, `Pipfile`, `Pipfile.lock`, `poetry.lock`, or `uv.lock`
+- A new project enters the portfolio
+- A caller requests a manual trigger
 
 ## Audit Process
 
@@ -66,8 +66,8 @@ Never invent a clean verdict when coverage is incomplete or a scanner failed.
 Read `not_scanned` in the helper JSON.
 Each entry is a known unsupported manifest.
 Exit 3 for that list only when both conditions are true.
-No npm or Python dependency set is selected for checks. A tooling-only `pyproject.toml` does not count, because it has no dependencies to check.
-No `--ecosystem` filter is given.
+The selection contains no npm or Python dependency set for checks. A tooling-only `pyproject.toml` does not count, because it has no dependencies to check.
+The caller gives no `--ecosystem` filter.
 A Critical finding still exits 1.
 Every other case keeps the normal exit code.
 Keep the list, the Not scanned section, and the coverage note.
@@ -106,9 +106,9 @@ Group results by report severity (`Critical`, `High`, `Medium`, `Low`, `Unknown`
 
 **Categories**:
 
-- **Major version behind** — review breaking changes
-- **Minor version behind** — schedule update
-- **Patch behind** — update ASAP (usually fixes)
+- **Major version behind**: review breaking changes
+- **Minor version behind**: schedule update
+- **Patch behind**: update ASAP (usually fixes)
 
 ### 3. License Compliance
 
@@ -133,7 +133,7 @@ MPL-2.0, CDDL-1.0, CDDL-1.1
 UNLICENSED, Proprietary
 ```
 
-**Pending review** (not banned; still blocks clearance):
+**Pending review** (not banned, but still blocks clearance):
 
 ```
 Unknown, missing metadata, compound SPDX expressions, classifier-only claims
@@ -220,7 +220,7 @@ Never print `npm update` for a PyPI package.
 
 ## Ticket Integration
 
-When critical, high, or unknown-severity vulnerabilities are detected, create a tracking ticket. The default is **GitHub Issues** in the project's own repo via `gh issue create`. Teams using a different tracker (Linear, Jira, etc.) can substitute the equivalent command.
+When you detect critical, high, or unknown-severity vulnerabilities, create a tracking ticket. The default is **GitHub Issues** in the project's own repo via `gh issue create`. Teams using a different tracker, such as Linear or Jira, can substitute the equivalent command.
 
 **Vulnerability Ticket Template**:
 
@@ -262,4 +262,4 @@ Serialize package names, paths, and advisory text as data. Never interpolate the
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*
