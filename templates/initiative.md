@@ -112,7 +112,7 @@ Rolled up from per-milestone `TBD` answers. Each entry names the milestone + the
 
 ## Anti-scope
 
-Things this initiative explicitly will NOT do. Mirrors `templates/architecture/vision.md` § Anti-scope — the items here are the ones the operator considered and rejected, not the ones nobody thought of.
+Things this initiative explicitly will NOT do. Mirrors `templates/architecture/vision.md` § What we won't build — the items here are the ones the operator considered and rejected, not the ones nobody thought of.
 
 - {anti-scope item 1}
 - {anti-scope item 2}

@@ -13,11 +13,9 @@ Standalone bash script that validates the three load-bearing contracts of the
    structured to be picked up by the resolver in split-portfolio mode.
 3. **Output validity** — a populated vision built from the template's section
    list (mimicking what the skill would write after a successful interview)
-   contains every required `##` heading, has at least one anti-scope item with
-   a "reconsider when" rationale (load-bearing per the template note), has a
-   non-trivial migration-path table, has a non-trivial current-vs-target
-   table, has the skill footer signature, and embeds a Mermaid C4 block for
-   the target state.
+   contains every required `##` heading, has at least one "will not build" item
+   with a "reconsider when" trigger, has non-trivial NFR and reuse tables, and
+   has the skill footer signature. The one-page default has no Mermaid block.
 
 The skill itself runs inside Claude Code with the interactive interview flow —
 operator answers prompts section by section, model assembles the file. This
@@ -36,7 +34,7 @@ Exits `0` on success, `1` if any contract check fails.
 
 ## What this does NOT test
 
-- **The interactive interview UX** — per-section confirm, anti-scope warning
+- **The interactive interview UX** — per-section confirm, "will not build" skip warning
   on skip, refresh-mode existing-content defaults. These run inside Claude
   Code and the model's response loop; they're verified by hand-walking the
   skill in a real session.
