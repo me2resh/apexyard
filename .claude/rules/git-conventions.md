@@ -30,7 +30,7 @@ Renaming such a branch breaks the tracker link, so the gate accepts extra shapes
 
 - Each entry is an extended regex matched against the whole branch name.
 - A match passes the branch-name gate. No match falls through to the normal `type/` rule.
-- The list is empty by default, so the default shape is unchanged.
+- The list is empty by default, so the default shape stays the same.
 - An invalid regex fails closed and the hook names the bad entry.
 
 This relaxes the branch-name check only. Every other gate still applies. See `docs/project-config.md` and me2resh/apexyard#2083.

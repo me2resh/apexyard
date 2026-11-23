@@ -131,7 +131,7 @@ exclusions.
 | `ticket.prefix_whitelist` | `/feature`, `/task`, `/bug`, (future) validate-issue-structure.sh | Bracketed title prefixes accepted for tickets (`[Feature]`, `[Chore]`, …). |
 | `ticket.label_priority_scheme` | `/feature`, `/bug`, `/task`, (future) batch skill | Comma-separated priority label scheme. Teams using `P0/P1/P2/P3` vs. `priority-p0/priority-p1/…` configure here. |
 | `branch.type_whitelist` | `validate-branch-name.sh` | Acceptable branch-name prefixes (`feature/`, `fix/`, …). |
-| `branch.extra_patterns` | `validate-branch-name.sh` | Extra whole-name shapes accepted on top of `{type}/{TICKET-ID}-{description}` — extended regexes, empty by default. For tracker-native names such as Jira's "Create branch" output. See [Tracker-native branch names](#tracker-native-branch-names-branchextra_patterns). |
+| `branch.extra_patterns` | `validate-branch-name.sh` | Extra whole-name shapes accepted on top of `{type}/{TICKET-ID}-{description}`: extended regexes, empty by default. For tracker-native names such as Jira's "Create branch" output. See [Tracker-native branch names](#tracker-native-branch-names-branchextra_patterns). |
 | `commit.type_whitelist` | `validate-commit-format.sh` | Conventional-commit types for commit subjects. |
 | `pr.title_type_whitelist` | `validate-pr-create.sh`, `pr-title-check.yml` (CI) | Conventional-commit types for PR titles. |
 | `external_contributions` | `validate-pr-create.sh` | Repositories you contribute to but do **not** govern. See below. |
@@ -146,7 +146,7 @@ exclusions.
 ### Tracker-native branch names (`branch.extra_patterns`)
 
 Some trackers name branches themselves. Jira's **Create branch** action
-produces `<KEY>-<number>-<summary-slug>` with no `type/` prefix, and Jira uses
+produces `<KEY>-<number>-<summary-slug>` with no `type/` prefix. Jira uses
 that exact name to link the branch (and its PR) back to the ticket. Renaming
 it to `{type}/{TICKET-ID}-{description}` breaks the link, so the adopter either
 loses the integration or works around the hook.
@@ -172,9 +172,9 @@ loses the integration or works around the hook.
 - The array replaces the default array (standard merge rule), so copy any
   entries you want to keep.
 
-This key relaxes the branch-**name** check only. Every other gate — ticket
-first, secrets, commit format, PR title, review, merge approval — still
-applies. See me2resh/apexyard#2083.
+This key relaxes the branch-**name** check only. Every other gate still
+applies: ticket first, secrets, commit format, PR title, review and merge
+approval. See me2resh/apexyard#2083.
 
 ### `external_contributions`: repos you contribute to but do not govern
 
