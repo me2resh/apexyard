@@ -413,6 +413,10 @@ Report a missing, empty, or vague section as an advisory finding. Do not change 
 
 **You MUST detect and enforce AgDR for *material* technical decisions**: architectural, hard to reverse, or cross-cutting. Routine implementation choices that are reversible inside this PR (local naming, extracting a helper, control flow, test structure, using an API from a dependency already in the manifest) do **NOT** need an AgDR and must not be flagged. See `.claude/rules/agdr-decisions.md` § "The threshold" for the full line, including the two non-negotiable rails: security / trust-chain / migration decisions are always material, and genuine ambiguity rounds **up**.
 
+#### New dependency or outside host
+
+Run `.claude/skills/agdr/scripts/check-dependency-record.sh <repo> <base-ref>`. A `BLOCK` line is a blocking finding: the PR adds a runtime dependency or outside host with no AgDR and no `docs/stack-register.md` line. A `WARN` line is advisory. Exit 2 means the check did not run, for example when the base commit is missing from a shallow copy. Report it as Unverified. Use a linked worktree or the project clone at the PR head for the base. See `.claude/rules/agdr-decisions.md` § "New tools".
+
 #### How to detect technical decisions in code
 
 Scan the diff for these patterns:
