@@ -13,7 +13,7 @@ Forces structured decision-making and creates an auditable Agent Decision Record
 
 ## Activated role
 
-When `/decide` runs, activate the **[Tech Lead](../../../roles/engineering/tech-lead.md)** role — they own technical decisions within their domain. For decisions that cross the architecture-review threshold (new service, new tech stack, new external integration, major data model change), escalate to the human approver before creating the AgDR (AgDR-0301).
+When `/decide` runs, activate the **[Tech Lead](../../../roles/engineering/tech-lead.md)** role. They own technical decisions within their domain. For decisions that cross the architecture-review threshold (new service, new tech stack, new external integration, major data model change), escalate to the human approver before creating the AgDR (AgDR-0301).
 
 If the decision touches auth / crypto / secrets / PII, also involve the **[Security Auditor](../../../roles/security/security-auditor.md)** for sign-off on the security implications before finalising the choice.
 
@@ -176,7 +176,7 @@ Rules for the offer:
   note the challenge under Artifacts.
 
 This mirrors the advisory stance in [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md)
-§ "Optional advisory offer" — see `.claude/skills/challenge/SKILL.md` and AgDR-0078.
+§ "Optional advisory offer": see `.claude/skills/challenge/SKILL.md` and AgDR-0078.
 
 ### 8. Return the Decision
 
@@ -188,15 +188,15 @@ Proceeding with: {brief action}
 
 ## Rules
 
-1. **Always create an AgDR** — no decision without a record
-2. **Y-statement required** — one-line summary at the top
+1. **Always create an AgDR**: no decision without a record
+2. **Y-statement required**: one-line summary at the top
 3. **Options table required**: compare at least 2 options, except in backfill mode.
 4. **Justification required**: use a `because` clause. For backfill mode, state unknown reasons explicitly instead of inventing justification.
-5. **Timestamp precise** — full ISO-8601 with time
-6. **Slug from title** — lowercase, hyphens, max 50 chars
-7. **Offer a challenge** — after drafting the AgDR, offer `/challenge` (opt-in,
-   advisory, never auto-run); update the AgDR if the verdict shifts the call
+5. **Timestamp precise**: full ISO-8601 with time
+6. **Slug from title**: lowercase, hyphens, max 50 chars
+7. **Offer a challenge**: after drafting the AgDR, offer `/challenge` (opt-in,
+   advisory, never auto-run). Update the AgDR if the verdict shifts the call.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard), multi-project SDLC framework for Claude Code · MIT.*
