@@ -251,7 +251,7 @@ if [ ! -r "$HOOK_DIR/_lib-ui-paths.sh" ] || ! . "$HOOK_DIR/_lib-ui-paths.sh" 2>/
   echo "BLOCKED: design-review gate could not load its UI pattern list (_lib-ui-paths.sh). Refusing to merge until the list can be read." >&2
   exit 2
 fi
-UI_GLOBS=$(ui_effective_globs "$REPO_ROOT")
+UI_GLOBS=$(ui_project_globs "$REPO_ROOT")
 if [ -z "$(printf '%s' "$UI_GLOBS" | tr -d '[:space:]')" ]; then
   echo "BLOCKED: design-review gate resolved an empty UI pattern list. Refusing to merge until the list can be read." >&2
   exit 2
@@ -304,7 +304,19 @@ if printf '%s\n' "$CHANGED" | grep -qxF '.claude/project-config.json'; then
   if [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
     HEAD_UI=$(jq -r '.ui_paths // [] | map(select(type == "string" and test("\\S"))) | .[]' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
   fi
-  UI_GLOBS="${BASE_UI}
+  UI_GLOBS=$BASE_UI
+fi
+
+# The sibling overlay can only tighten the resolved project value.
+if [ -r "$HOOK_DIR/_lib-config-guard.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-config-guard.sh"
+  UI_GLOBS=$(config_overlay_lines ui_paths "$UI_GLOBS" paths "$REPO_ROOT")
+fi
+
+# Add head paths after the overlay guard compares against the base list.
+if [ "$CONFIG_IN_PR" = 1 ] && [ -n "$HEAD_UI" ]; then
+  UI_GLOBS="${UI_GLOBS}
 ${HEAD_UI}"
 fi
 
@@ -332,6 +344,15 @@ if [ "$CONFIG_IN_PR" = 1 ]; then
   fi
 elif [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
   EXCLUDE=$(jq -r '.ui_paths_exclude // [] | join("|")' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
+fi
+if command -v config_overlay_lines >/dev/null 2>&1; then
+  OVERLAY_BASE='[]'
+  if [ "$CONFIG_IN_PR" = 1 ]; then
+    OVERLAY_BASE=$(printf '%s' "${BASE_CONFIG:-}" | jq -c '.ui_paths_exclude // []' 2>/dev/null)
+  elif [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
+    OVERLAY_BASE=$(jq -c '.ui_paths_exclude // []' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
+  fi
+  EXCLUDE=$(config_overlay ui_paths_exclude "${OVERLAY_BASE:-[]}" excludes "$REPO_ROOT" | jq -r 'join("|")')
 fi
 if true; then
   if [ -n "$EXCLUDE" ] && [ "$EXCLUDE" != "null" ] && [ -n "$TOUCHED_UI" ]; then

@@ -72,8 +72,8 @@ array in `.claude/project-config.defaults.json`.
 `design_paths`, `design_paths_exclude`, and `architecture_paths` have no
 entry in `.claude/project-config.defaults.json` at all: their hook holds
 the built-in default in code, not JSON. A drop against one of those produces
-no warning today. See AgDR-0167 for why, and #1401 for the follow-up that
-tracks closing this gap for those seven keys.
+no advisory drop warning from the shared reader. The scoped gate guards below
+reject loosening values independently. See AgDR-0167 and #1401 for the reader gap.
 
 ### Path keys in a PR that changes the config (AgDR-0310)
 
@@ -87,12 +87,45 @@ path lists. A `ui_paths` or `design_paths` list in the PR can only add
 patterns.
 
 If the base copy is absent or unreadable, the gate uses the built-in default
-paths with no exclusions. It prints one `NOTE:` line to stderr. Merge the
-config change by itself first to make the new exclusion take effect.
+paths with no exclusions. It prints one `NOTE:` line to stderr.
+The sibling overlay restrictions below apply after the gate resolves the base copy.
 
 GitLab: the gates do not read the base copy for a GitLab merge request. A
 merge request that changes the config uses the built-in default paths with no
 exclusions.
+
+### Sibling overlay gate settings can only tighten (#2127)
+
+Project configuration keeps its existing replacement and exclusion behavior.
+The optional sibling overlay file is `<overlay root>/.claude/project-config.json`.
+The overlay root is the private portfolio repo that holds `custom-templates/`,
+resolved as the parent of `portfolio_registry`. An in-fork registry is not an overlay.
+Single-fork adopters have no overlay layer.
+
+First resolve defaults and project configuration as before. Then compare each
+scoped overlay value with that resolved project value. Apply tightening values.
+Ignore a loosening value in full and print one stderr line that names the
+setting and overlay file. Missing overlay values preserve the project value.
+All other configuration keys ignore the overlay in this change.
+
+| Setting | Safe direction in the overlay layer only |
+| --- | --- |
+| `design_paths` | Keep every resolved project entry and add covered patterns. |
+| `design_paths_exclude` | Remove entries from the resolved project exclusion list. |
+| `ui_paths` | Keep every resolved project entry and add covered patterns. |
+| `ui_paths_exclude` | Remove entries from the resolved project exclusion list. |
+| `gates.<name>.mode` | Raise or retain the resolved project mode: `off` < `observe` < `enforce`. |
+
+Comparisons use literal array entries. Equivalent regex patterns do not replace
+an existing entry. A rejected overlay value leaves the resolved project value intact.
+The architecture hook reads `design_paths`; it does not read `architecture_paths`.
+Production gates remain outside the mode allowlist until code registers them.
+
+When a PR changes project configuration, the gate still reads the base copy as
+described above. Head path lists can still add coverage. The overlay file is
+outside the PR repo, so the gate always reads it from disk. The overlay comparison uses
+that resolved base value, including any added head coverage.
+See [AgDR-0315](agdr/AgDR-0315-overlay-tighten-only.md).
 
 ## Schema (v1)
 

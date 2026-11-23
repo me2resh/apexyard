@@ -275,6 +275,17 @@ if printf '%s\n' "$CHANGED" | grep -qxF '.claude/project-config.json'; then
   if [ -n "$BASE_CUSTOM" ] && [ "$BASE_CUSTOM" != "null" ]; then
     DESIGN_GLOBS=$(printf '%s' "$BASE_CUSTOM" | tr '|' '\n')
   fi
+fi
+
+# The sibling overlay can only tighten the resolved project value.
+if [ -r "$HOOK_DIR/_lib-config-guard.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-config-guard.sh"
+  DESIGN_GLOBS=$(config_overlay_lines design_paths "$DESIGN_GLOBS" paths "$REPO_ROOT")
+fi
+
+# Add head paths after the overlay guard compares against the base list.
+if [ "$CONFIG_IN_PR" = 1 ]; then
   if [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
     CUSTOM=$(jq -r '.design_paths // [] | join("|")' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
     if [ -n "$CUSTOM" ] && [ "$CUSTOM" != "null" ]; then
@@ -307,6 +318,15 @@ if [ "$CONFIG_IN_PR" = 1 ]; then
   fi
 elif [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
   EXCLUDE=$(jq -r '.design_paths_exclude // [] | join("|")' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
+fi
+if command -v config_overlay_lines >/dev/null 2>&1; then
+  OVERLAY_BASE='[]'
+  if [ "$CONFIG_IN_PR" = 1 ]; then
+    OVERLAY_BASE=$(printf '%s' "${BASE_CONFIG:-}" | jq -c '.design_paths_exclude // []' 2>/dev/null)
+  elif [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
+    OVERLAY_BASE=$(jq -c '.design_paths_exclude // []' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
+  fi
+  EXCLUDE=$(config_overlay design_paths_exclude "${OVERLAY_BASE:-[]}" excludes "$REPO_ROOT" | jq -r 'join("|")')
 fi
 if true; then
   if [ -n "$EXCLUDE" ] && [ "$EXCLUDE" != "null" ] && [ -n "$TOUCHED_DESIGN" ]; then
