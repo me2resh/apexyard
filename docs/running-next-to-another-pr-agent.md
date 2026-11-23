@@ -1,6 +1,6 @@
 # Run ApexYard next to another PR agent
 
-ApexYard runs with Claude Code, and with other coding agents through an adapter. See the README adapter table and `docs/harnesses/` for the proof and limits of each adapter. For example, Cursor has no merge gate (`docs/harnesses/cursor.md` line 11). The opencode and pi adapters skip the merge gate for a command that starts with `cd` (`docs/harnesses/opencode.md` line 66, `docs/harnesses/pi.md` line 52). ApexYard also runs next to any review agent that comments on or approves a pull request. This guide explains what counts as the human approval and how to set up the forge.
+ApexYard runs with Claude Code, and with other coding agents through an adapter. See the README adapter table and `docs/harnesses/` for the proof and limits of each adapter. For example, the Cursor IDE runs the same gates only when third-party configs are on (`docs/harnesses/cursor.md` line 9). The `cursor-agent` CLI has no coverage (`docs/harnesses/cursor.md` line 15). The opencode and pi adapters skip the merge gate for a command that starts with `cd` (`docs/harnesses/opencode.md` line 66, `docs/harnesses/pi.md` line 52). ApexYard also runs next to any review agent that comments on or approves a pull request. This guide explains what counts as the human approval and how to set up the forge.
 
 ## What counts as the human approval
 
