@@ -1,5 +1,7 @@
 # ApexYard Setup
 
+For Azure Boards or Azure Repos projects, see [Azure DevOps setup](how-to/azure-devops.md).
+
 ApexYard manages a **portfolio of repositories as one organisation**. Fork the framework, clone your fork as the ops repo, and register each project you want it to manage. This guide covers the setup choices, directory layout, daily workflow, and common questions.
 
 > There is no single-project fallback mode. Even if you have exactly one repo, you still fork apexyard and register that one repo. Future projects plug into the same registry.

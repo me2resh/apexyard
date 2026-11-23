@@ -242,7 +242,11 @@ fi
 CHANGED_RC=0
 TOTAL_FILES=""
 CHANGED=""
-if [ -n "$CMD_REPO" ] && CHANGED=$(prmeta_file_list "$PR_NUMBER" "$CMD_REPO") \
+if [ "$(_forge_kind_for "$CMD_REPO")" = az ]; then
+  AZURE_FILES=$(_tracker_azure files "$CMD_REPO" "$PR_NUMBER") || CHANGED_RC=1
+  CHANGED=$(printf '%s' "$AZURE_FILES" | jq -r '.files[]') || CHANGED_RC=1
+  TOTAL_FILES=$(printf '%s' "$AZURE_FILES" | jq -er .count) || CHANGED_RC=1
+elif [ -n "$CMD_REPO" ] && CHANGED=$(prmeta_file_list "$PR_NUMBER" "$CMD_REPO") \
   && TOTAL_FILES=$(prmeta_get count "$PR_NUMBER" "$CMD_REPO"); then
   CHANGED_RC=0
 else
@@ -267,6 +271,10 @@ BASE_CONFIG=""
 if printf '%s\n' "$CHANGED" | grep -qxF '.claude/project-config.json'; then
   CONFIG_IN_PR=1
   BASE_CONFIG=$(resolve_pr_base_config "$PR_NUMBER" "$CMD_REPO")
+  if [ "$(_forge_kind_for "$CMD_REPO")" = az ] && [ -z "$BASE_CONFIG" ]; then
+    echo 'BLOCKED: Azure base configuration is unavailable. Cannot evaluate changed gate configuration safely.' >&2
+    exit 2
+  fi
   if [ -z "$BASE_CONFIG" ]; then
     echo "NOTE: architecture-review gate could not read the base branch project config. Using the default design paths and no exclusions." >&2
   fi

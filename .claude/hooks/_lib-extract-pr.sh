@@ -164,8 +164,8 @@ if ! command -v tracker_review_kind >/dev/null 2>&1; then
   fi
 fi
 
-# Echoes the forge kind ('gh' | 'glab') for a repo, via tracker_review_kind.
-# Any non-glab kind (gh / none / jira / linear / unknown / unresolved) → 'gh', so
+# Echoes the forge kind ('gh' | 'glab' | 'az') via tracker_review_kind.
+# Other kinds (none / jira / linear / unknown / unresolved) default to 'gh', so
 # the GitHub CLI path stays the default. Used by the CLI-calling resolvers
 # (resolve_pr_head, resolve_pr_head_branch) which only have the repo, not the
 # command text.
@@ -174,7 +174,7 @@ _forge_kind_for() {
   if command -v tracker_review_kind >/dev/null 2>&1; then
     kind=$(tracker_review_kind "$repo" 2>/dev/null || echo gh)
   fi
-  case "$kind" in glab) echo glab ;; *) echo gh ;; esac
+  case "$kind" in az) echo az ;; glab) echo glab ;; *) echo gh ;; esac
 }
 
 # Echoes 'glab' if the command text is a GitLab (glab) invocation, else 'gh'.
@@ -2016,6 +2016,10 @@ resolve_pr_base_ref() {
     echo "$base"
     return
   fi
+  if [ "$(_forge_kind_for "$cmd_repo")" = az ]; then
+    _tracker_azure pr_field "$cmd_repo" "$pr_number" base
+    return
+  fi
   base=$(apexyard_gh pr view "$pr_number" --repo "$cmd_repo" --json baseRefName -q '.baseRefName' 2>/dev/null)
   echo "$base"
 }
@@ -2028,13 +2032,19 @@ resolve_pr_base_ref() {
 # (#2104). The gates call this only when the PR changes the config file. An
 # empty result means the base copy is absent (404) or unreadable. The caller
 # then uses the built-in defaults and no exclusions. Output is valid JSON or
-# empty. Only the GitHub forge is read. A glab merge returns empty.
+# empty. Azure rejects config-changing PRs without readable base configuration.
+# GitHub uses the fallback described above. A glab merge returns empty.
 resolve_pr_base_config() {
-  local pr_number="${1:-}" cmd_repo="${2:-}" base="" json=""
+  local pr_number="${1:-}" cmd_repo="${2:-}" base="" json="" forge
   if [ -z "$pr_number" ] || [ -z "$cmd_repo" ]; then
     return 0
   fi
-  if [ "$(_forge_kind_for "$cmd_repo")" = glab ]; then
+  forge=$(_forge_kind_for "$cmd_repo")
+  if [ "$forge" = az ]; then
+    _tracker_azure base_config "$cmd_repo" "$pr_number"
+    return
+  fi
+  if [ "$forge" != gh ]; then
     return 0
   fi
   base=$(resolve_pr_base_ref "$pr_number" "$cmd_repo")
@@ -2056,23 +2066,28 @@ resolve_pr_base_config() {
 resolve_pr_head() {
   local pr_number="$1"
   local cmd_repo="$2"
-  local sha=""
+  local sha="" forge
 
   if [ -z "$pr_number" ]; then
     echo ""
     return
   fi
-
   # Snapshot first (AgDR-0256). A miss falls through to the forge call.
+  # The trusted dispatcher only publishes snapshots for gh, never for az.
   if sha=$(prmeta_get head "$pr_number" "$cmd_repo"); then
     echo "$sha"
+    return
+  fi
+  forge=$(_forge_kind_for "$cmd_repo")
+  if [ "$forge" = az ]; then
+    _tracker_azure pr_field "$cmd_repo" "$pr_number" head
     return
   fi
 
   # Forge-aware (#764): glab projects resolve the MR HEAD SHA via `glab mr view`.
   # glab's MR JSON exposes the head commit as `.sha` (fallback `.diff_refs.head_sha`
   # on older glab). Any non-glab forge → the unchanged gh path.
-  if [ "$(_forge_kind_for "$cmd_repo")" = glab ]; then
+  if [ "$forge" = glab ]; then
     if [ -n "$cmd_repo" ]; then
       sha=$(glab mr view "$pr_number" -R "$cmd_repo" --output json 2>/dev/null | jq -r '.sha // .diff_refs.head_sha // empty' 2>/dev/null)
     else
@@ -2096,20 +2111,25 @@ resolve_pr_head() {
 resolve_pr_head_branch() {
   local pr_number="$1"
   local cmd_repo="$2"
-  local branch=""
+  local branch="" forge
 
   if [ -z "$pr_number" ]; then
     echo ""
     return
   fi
-
   # Snapshot first (AgDR-0256). A miss falls through to the forge call.
+  # The trusted dispatcher only publishes snapshots for gh, never for az.
   if branch=$(prmeta_get branch "$pr_number" "$cmd_repo"); then
     echo "$branch"
     return
   fi
+  forge=$(_forge_kind_for "$cmd_repo")
+  if [ "$forge" = az ]; then
+    _tracker_azure pr_field "$cmd_repo" "$pr_number" branch
+    return
+  fi
 
-  if [ "$(_forge_kind_for "$cmd_repo")" = glab ]; then
+  if [ "$forge" = glab ]; then
     if [ -n "$cmd_repo" ]; then
       branch=$(glab mr view "$pr_number" -R "$cmd_repo" --output json 2>/dev/null | jq -r '.source_branch // empty' 2>/dev/null)
     else

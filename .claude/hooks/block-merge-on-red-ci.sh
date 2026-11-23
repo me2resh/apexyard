@@ -386,6 +386,11 @@ if echo "$COMMAND" | grep -qE '\btracker_pr_merge\b'; then
 else
   FORGE=$(_forge_from_command "$COMMAND")
 fi
+if [ "$FORGE" = az ]; then
+  if [ "$(_tracker_azure ci "$CMD_REPO" "$PR_NUMBER")" = success ]; then exit 0; fi
+  echo 'BLOCKED: Azure PR policy or status evidence is missing, incomplete, pending, or failed.' >&2
+  exit 2
+fi
 if [ "$FORGE" = "glab" ]; then
   # --- GitLab path ---
   PIPELINE_STATUS=$(resolve_ci_status_glab "$PR_NUMBER" "$CMD_REPO")
