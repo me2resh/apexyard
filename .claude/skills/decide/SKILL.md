@@ -176,7 +176,7 @@ Rules for the offer:
   note the challenge under Artifacts.
 
 This mirrors the advisory stance in [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md)
-§ "Optional advisory offer" — see `.claude/skills/challenge/SKILL.md` and AgDR-0078.
+§ "Optional advisory offer": see `.claude/skills/challenge/SKILL.md` and AgDR-0078.
 
 ### 8. Return the Decision
 
@@ -188,14 +188,14 @@ Proceeding with: {brief action}
 
 ## Rules
 
-1. **Always create an AgDR** — no decision without a record
-2. **Y-statement required** — one-line summary at the top
+1. **Always create an AgDR**: no decision without a record
+2. **Y-statement required**: one-line summary at the top
 3. **Options table required**: compare at least 2 options, except in backfill mode.
 4. **Justification required**: use a `because` clause. For backfill mode, state unknown reasons explicitly instead of inventing justification.
-5. **Timestamp precise** — full ISO-8601 with time
-6. **Slug from title** — lowercase, hyphens, max 50 chars
-7. **Offer a challenge** — after drafting the AgDR, offer `/challenge` (opt-in,
-   advisory, never auto-run); update the AgDR if the verdict shifts the call
+5. **Timestamp precise**: full ISO-8601 with time
+6. **Slug from title**: lowercase, hyphens, max 50 chars
+7. **Offer a challenge**: after drafting the AgDR, offer `/challenge` (opt-in,
+   advisory, never auto-run). Update the AgDR if the verdict shifts the call.
 
 ---
 

@@ -85,7 +85,7 @@ Describe the command in prose instead.
 ## Input
 
 - A PR number supplies a diff, posting destination, and marker key (preferred).
-- A design path supports doc-only review.
+- A design path permits doc-only review.
 
 Tariq reviews ready technical designs, migration AgDRs, feature specs, or PRDs through `detect-role-trigger.sh` or `/design-review <pr-or-path>`.
 

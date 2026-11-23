@@ -32,7 +32,7 @@ Run a 10-dimension audit of a project to produce a one-page verdict. Use it at m
 
 ## Deep-dive companions
 
-Each dimension has a dedicated expert skill for investigation beyond the one-line summary. The launch check gives an overview. The expert skills investigate details.
+Each dimension has an expert skill to investigate beyond the one-line summary. The launch check gives an overview. The expert skills investigate details.
 
 | Dimension | Quick check | Deep dive |
 |-----------|------------|-----------|

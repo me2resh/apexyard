@@ -23,7 +23,7 @@ Setup: `docs/getting-started.md`. Otherwise use Grep and Read.
 
 When `/code-review` runs:
 
-1. **Primary reviewer**: the **Code Reviewer agent (Rex)** at [`.claude/agents/code-reviewer.md`](../../agents/code-reviewer.md) — runs on every commit, owns the automated first-pass review.
+1. **Primary reviewer**: the **Code Reviewer agent (Rex)** at [`.claude/agents/code-reviewer.md`](../../agents/code-reviewer.md) runs on every commit. Rex owns the automated first-pass review.
 2. **Human approval gate**: the **[Tech Lead](../../../roles/engineering/tech-lead.md)** — activates to sign off on architecture, design patterns, and team conventions that Rex can't judge from code alone.
 3. **Conditional Security Auditor**: if the diff touches `**/auth/**`, `**/crypto/**`, `**/secrets/**`, `.env*`, or similar, the **[Security Auditor](../../../roles/security/security-auditor.md)** also activates and must sign off before merge. Consider chaining `/security-review` for the deeper pass.
 4. **Conditional UI Designer**: if the diff touches visible UI, the **[UI Designer](../../../roles/design/ui-designer.md)** activates for design review.
@@ -131,7 +131,7 @@ place.
 3. Review against the checklist (acceptance criteria, architecture, code quality, testing, security, performance)
 4. Check for the required Glossary section
 5. Check for AgDR links if technical decisions were made
-6. On JS/TS diffs, run the Fallow static-analysis pass (§ 9 of the agent) — changed-scope, fail-soft, advisory; render a `### Fallow Findings` table + dry-run fix preview
+6. On JS/TS diffs, run the Fallow static-analysis pass (§ 9 of the agent). It is changed-scope, fail-soft, and advisory. Render a `### Fallow Findings` table + dry-run fix preview.
 7. Submit the review through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host — #758), not a hardcoded `gh pr review`, then clear the active-reviewer marker from step 0
 
 **Body path (AgDR-0266).** Rex writes the body with Write to `<ops-root>/.claude/session/reviews/bodies/<owner>__<repo>__<pr>-rex.md` (`review_body_path`), then posts it with `tracker_review_submit <owner/repo> <pr> comment <body_file>`. Not a heredoc.
@@ -241,7 +241,7 @@ A QA PASS does not grant approval. A QA failure stops this review flow but creat
 ### PR Description
 
 - Links to the ticket
-- **Has a Glossary section** (REQUIRED — request changes if missing)
+- **Has a Glossary section** (REQUIRED: request changes if missing)
 - AgDR links if decisions were made
 
 ### Technical Decisions (AgDR) — BLOCKING
