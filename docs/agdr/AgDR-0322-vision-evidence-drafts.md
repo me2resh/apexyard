@@ -4,7 +4,7 @@
 
 Accepted
 
-Supersedes the part of AgDR-0028 that forbids the model from drafting vision content (Option B and the "model never authors the content" rule).
+Supersedes two parts of AgDR-0028: the rule that forbids the model from drafting vision content (Option B and the "model never authors the content" rule), and the target-state C4 L1 diagram in the vision.
 
 ## Context
 
@@ -33,6 +33,8 @@ These rules apply:
 3. A value from reasoning is labelled `(estimate)`.
 4. The operator confirms or corrects each value.
 5. The operator writes the drivers, principles, risk appetite and what we won't build. The skill never drafts them.
+
+The one-page vision has no diagram. `/c4` already writes `context.md` and `container.md` in the same `architecture/` folder (AgDR-0028 A1). The template links to them. A diagram in the vision would repeat them and make the page longer than one page.
 
 The rest of AgDR-0028 stays in force: the interview, per-section confirm, the resolver for the template, and markdown-only output.
 

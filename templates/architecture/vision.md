@@ -11,6 +11,8 @@
 > Run `/tech-vision <project-name>` to write it. The skill drafts the factual sections from code and documents, with a source on each value. You confirm or correct each value. You write the drivers, principles and what we won't build.
 >
 > You need more depth? Add the optional Heavy appendix from [`vision-appendix.md`](vision-appendix.md). Do not add it by default.
+>
+> This page has no diagram. For the system context and containers, see `context.md` and `container.md` in the same folder, written by `/c4`.
 
 ## Rules for this page
 

@@ -69,7 +69,7 @@ For anything beyond a trivial design, prefer one of the dedicated architecture t
 
 - **As-is system context**: copy [`architecture/c4-context.md`](architecture/c4-context.md) (C4 L1).
 - **As-is container topology**: copy [`architecture/c4-container.md`](architecture/c4-container.md) (C4 L2).
-- **Target-state + migration path**: copy [`architecture/vision.md`](architecture/vision.md).
+- **Limits, principles and reuse**: cite the project's [`architecture/vision.md`](architecture/vision.md). For a target state and migration path, use its optional [`vision-appendix.md`](architecture/vision-appendix.md).
 - **Trust boundaries + data flows** (input to a STRIDE threat model): copy [`architecture/dfd.md`](architecture/dfd.md).
 - **Time-ordered request flow** (auth handshake, payment flow, webhook callback): copy [`architecture/sequence.md`](architecture/sequence.md).
 

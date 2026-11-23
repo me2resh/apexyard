@@ -563,7 +563,7 @@ Next:
 11. **Handle the active-issue-skill marker defensively.** Before the first pass-1 `tracker_create`, write `plan-initiative` to the path from `active_issue_skill_marker_path`. Remove it on success, abort, and error (AgDR-0030). Since #709/#771, command-substituted `tracker_create` calls do not trigger `require-skill-for-issue-create.sh`. The marker remains defensive for robustness and bare `gh issue create` calls at command boundaries.
 12. **No bootstrap exemption is necessary.** The skill writes `*.md`, exempt from `require-active-ticket.sh`. Command-substituted `tracker_create` calls do not trigger `require-skill-for-issue-create.sh` since #709/#771. The step-8 marker remains defensive. Do not add `plan-initiative` to `ticket.bootstrap_skills`.
 13. **Re-run history is append-only.** Add one row at the table's end per invocation. Do not truncate it. Long histories show active re-planning.
-14. **Record rejected items in Anti-scope.** Capture interview items the operator considered and rejected in `## Anti-scope`. Follow `templates/architecture/vision.md` § Anti-scope.
+14. **Record rejected items in Anti-scope.** Capture interview items the operator considered and rejected in `## Anti-scope`. Follow `templates/architecture/vision.md` § What we won't build.
 15. **No auto-decomposition.** v1 deliberately does NOT take the initiative goal and emit N milestones from an LLM call. The contract requires the Socratic interview. Auto-decomposition would be a different, worse product. See AgDR-0051 § Axis 1.
 
 ## Notes
