@@ -73,6 +73,14 @@ It marks each part as built, in progress or not built.
 More rows (migrations, architecture, portfolio view, upstream sync, roles,
 onboarding): [`docs/whats-inside.md`](docs/whats-inside.md#more-ways-apexyard-differs).
 
+### Who approves a merge
+
+The merge gate does not read approvals from the forge. A bot or app approval on the PR never counts as the human approval.
+The gate reads only the approval record that `/approve-merge` writes after a person approves that PR at its head commit.
+The hook checks the `approved_by=user` field and the head SHA (`.claude/hooks/block-unreviewed-merge.sh`, `.claude/skills/approve-merge/SKILL.md`).
+ApexYard works with any coding agent and next to any review agent. See [Run ApexYard next to another PR agent](docs/running-next-to-another-pr-agent.md).
+The approval record is a local file. Its write gate is a backstop, not a security boundary (AgDR-0109). Server-side branch protection is the hard control.
+
 ## What is inside
 
 Roles, hooks, skills, sub-agents, rules, workflows, and templates. Full
@@ -133,6 +141,7 @@ small adapter. Dated proof and limits live in
 ## Further reading
 
 - Agent authority and human gates: [Escalation pattern](docs/escalation-pattern.md)
+- Run next to another review agent: [Run ApexYard next to another PR agent](docs/running-next-to-another-pr-agent.md)
 - Site move note: [`docs/whats-inside.md`](docs/whats-inside.md#marketing-site)
 - Roles, workflows, and templates: [`docs/whats-inside.md`](docs/whats-inside.md#roles)
 - Project badges: [`docs/badges.md`](docs/badges.md)

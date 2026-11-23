@@ -166,6 +166,7 @@ See `golden-paths/pipelines/README.md` for the full details.
 | CI pipelines | `golden-paths/pipelines/` |
 | Getting started | `docs/getting-started.md` |
 | Full setup guide | `docs/multi-project.md` |
+| Run next to another PR agent (what counts as the human approval) | `docs/running-next-to-another-pr-agent.md` |
 | Rule audit (each MUST and its hook, advisory, or deferred status) | `docs/rule-audit.md` |
 | LSP-aware navigation (optional) | Set `ENABLE_LSP_TOOL=1` and install the plugin for each language. See `docs/getting-started.md` § "Optional: LSP-aware code navigation". |
 
