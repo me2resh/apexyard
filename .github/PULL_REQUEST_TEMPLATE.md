@@ -21,6 +21,24 @@ The sections below are REQUIRED — the validate-pr-create hook + Rex check for 
 
 -
 
+## Approach
+
+<!-- Optional for Standard changes. Remove this section when it does not apply.
+     This section creates no file and triggers no gate.
+     Heavy changes use /approach for a full technical design. -->
+
+### Delta
+
+<!-- State what changes and why. -->
+
+### Decisions
+
+<!-- Give each decision and the standard it follows, or "no project standard". -->
+
+### Verification
+
+<!-- State how checks prove the approach works. -->
+
 ## Testing
 
 <!-- How a reviewer verifies this. Commands run, what passed. -->

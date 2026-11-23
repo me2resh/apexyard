@@ -56,7 +56,7 @@ Three input paths, tried in order:
    should I codify a rule from? (pass --pr <N> or a full comment URL)
    ```
 
-Capture three values for use downstream:
+Capture three values for later use:
 
 - `pr_number`: the PR this rule comes from
 - `pr_owner_repo`: `owner/repo`

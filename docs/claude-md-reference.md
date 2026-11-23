@@ -27,7 +27,7 @@ The per-clone `claudeMdExcludes` setting in `.claude/settings.local.json` keeps 
 
 See `docs/getting-started.md` for the integration model and for how to install the `.claude/` layer.
 
-### Available skills (73)
+### Available skills (74)
 
 Each row gives one line for a skill. The full text for each skill is in `.claude/skills/<name>/SKILL.md`.
 The count includes 3 deprecated aliases: `/spike-close`, `/prototype-close`, and `/tickets-batch` (me2resh/apexyard#2028).
@@ -92,6 +92,7 @@ Each alias passes its arguments to the new mode. The aliases ship deprecated in 
 | `/process` | Extracts a business process from registered repos and writes lint-clean BPMN 2.0. |
 | `/c4` | Generates C4 L1 and L2 Mermaid diagrams from the codebase of a project. |
 | `/dfd` | Extracts a Data Flow Diagram with trust boundaries, as Mermaid and optional Threat Dragon JSON. |
+| `/approach` | Guide a Heavy change design from standards, record decisions through `/decide`, and transfer it to `/design-review`. |
 | `/tech-vision` | Interactive author for the architecture vision template: one-page drivers, NFRs, principles, reuse, and what we will not build. |
 | `/journey` | One self-contained user-journey HTML page with boxes, arrows, and a modal for each page. |
 | `/pdf` | Converts markdown, HTML, or BPMN to PDF. Asks for the destination. |
