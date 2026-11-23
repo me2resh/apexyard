@@ -54,7 +54,7 @@ GLOBS
 # and falling back to the defaults when nothing valid remains keeps the
 # override intentional: a malformed override degrades to the safe
 # (fail-closed) default list rather than to an empty, always-passing gate.
-ui_effective_globs() {
+ui_project_globs() {
   local repo_root="$1"
   if [ -n "$repo_root" ] && [ -f "${repo_root}/.claude/project-config.json" ] && command -v jq >/dev/null 2>&1; then
     local custom
@@ -71,4 +71,18 @@ ui_effective_globs() {
 # a single alternation suitable for one `grep -E` argument.
 ui_effective_globs_pipe() {
   ui_effective_globs "$1" | paste -sd'|' -
+}
+
+# Apply the optional sibling layer after the established project read.
+ui_effective_globs() {
+  local repo_root="$1" lines guard
+  lines=$(ui_project_globs "$repo_root")
+  guard="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib-config-guard.sh"
+  if [ -r "$guard" ] && command -v jq >/dev/null 2>&1; then
+    # shellcheck source=/dev/null
+    . "$guard"
+    config_overlay_lines ui_paths "$lines" paths "$repo_root"
+  else
+    printf '%s\n' "$lines"
+  fi
 }

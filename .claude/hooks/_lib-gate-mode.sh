@@ -52,7 +52,15 @@ gate_mode_resolve() {
     off|observe|enforce) ;;
     *) printf 'WARN: invalid mode for gate %s. Using enforce.\n' "$name" >&2; mode=enforce ;;
   esac
-  printf '%s\n' "$mode"
+  local guard
+  guard="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib-config-guard.sh"
+  if [ -r "$guard" ]; then
+    # shellcheck source=/dev/null
+    . "$guard"
+    config_overlay "gates.$name.mode" "\"$mode\"" mode | jq -r '.'
+  else
+    printf '%s\n' "$mode"
+  fi
 }
 
 # Call only for a would-block event. Return 0 to allow, 2 to block.
