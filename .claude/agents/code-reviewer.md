@@ -415,7 +415,7 @@ Report a missing, empty, or vague section as an advisory finding. Do not change 
 
 #### New dependency or outside host
 
-Run `.claude/skills/agdr/scripts/check-dependency-record.sh <repo> <base-ref>`. A `BLOCK` line is a blocking finding: the PR adds a runtime dependency or outside host with no AgDR and no `docs/stack-register.md` line. A `WARN` line is advisory. See `.claude/rules/agdr-decisions.md` § "New tools".
+Run `.claude/skills/agdr/scripts/check-dependency-record.sh <repo> <base-ref>`. A `BLOCK` line is a blocking finding: the PR adds a runtime dependency or outside host with no AgDR and no `docs/stack-register.md` line. A `WARN` line is advisory. Exit 2 means the check did not run, for example when the base commit is missing from a shallow copy. Report it as Unverified. Use a linked worktree or the project clone at the PR head for the base. See `.claude/rules/agdr-decisions.md` § "New tools".
 
 #### How to detect technical decisions in code
 

@@ -13,24 +13,29 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
 [ -d "$repo" ] || { echo "check-dependency-record.sh: no repository: $repo" >&2; exit 2; }
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-mkdir "$tmp/base"
+mkdir "$tmp/base" "$tmp/head"
 if ! git -C "$repo" archive "$base" 2>/dev/null | tar -x -C "$tmp/base" 2>/dev/null; then
   echo "check-dependency-record.sh: cannot read base ref: $base" >&2
   exit 2
 fi
+# Read HEAD from the commit, never from the working tree.
+if ! git -C "$repo" archive HEAD 2>/dev/null | tar -x -C "$tmp/head" 2>/dev/null; then
+  echo "check-dependency-record.sh: cannot read HEAD" >&2
+  exit 2
+fi
 bash "$here/list-subjects.sh" "$tmp/base" | cut -f1,2 | sort -u > "$tmp/old"
-bash "$here/list-subjects.sh" "$repo" | cut -f1,2 | sort -u > "$tmp/new"
+bash "$here/list-subjects.sh" "$tmp/head" | cut -f1,2 | sort -u > "$tmp/new"
 # A name is a whole word when no name character touches it. - . / _ @ are name characters.
 recorded() {
-  esc=$(printf '%s' "$1" | sed 's/[][\.*^$+?(){}|/]/\\&/g')
+  esc=$(printf '%s' "$1" | sed 's/[][\.*^$+?(){}|]/\\&/g')
   pre='(^|[^A-Za-z0-9_.@/-])'
-  post='([^A-Za-z0-9_@/-]|\.([^A-Za-z0-9]|$)|$)'
-  for f in "$repo"/docs/agdr/*.md "$repo/docs/stack-register.md"; do
-    [ -f "$f" ] || continue
-    if grep -Eiq -- "$pre$esc$post" "$f"; then return 0; fi
-  done
-  return 1
+  post='([^A-Za-z0-9_.@/-]|\.([^A-Za-z0-9]|$)|$)'
+  [ "${#recfiles[@]}" -gt 0 ] || return 1
+  grep -Eiq -- "$pre$esc$post" "${recfiles[@]}"
 }
+recfiles=()
+while IFS= read -r rf; do recfiles+=("$rf"); done < <(find "$tmp/head/docs/agdr" -maxdepth 1 -type f -name '*.md' 2>/dev/null || true)
+[ -f "$tmp/head/docs/stack-register.md" ] && [ ! -L "$tmp/head/docs/stack-register.md" ] && recfiles+=("$tmp/head/docs/stack-register.md")
 rc=0
 while IFS=$'\t' read -r kind name; do
   [ -n "$name" ] || continue

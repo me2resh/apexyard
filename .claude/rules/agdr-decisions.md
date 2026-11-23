@@ -44,6 +44,7 @@ A new tool needs an AgDR when any of these is true:
 
 Every other tool needs one line in `docs/stack-register.md`. Use `templates/stack-register.md`.
 A PR that adds a runtime dependency or an outside host links an AgDR or a register line.
+Write an outside host as a bare host name, for example `api.stripe.com`. The check reads committed files only.
 Run `.claude/skills/agdr/scripts/check-dependency-record.sh <repo> <base-ref>`. A runtime dependency with no record blocks. A dev-only dependency warns. See AgDR-0320.
 
 ## The two rails (unchanged, non-negotiable)
