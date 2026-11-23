@@ -33,6 +33,19 @@ A decision does **not** need an AgDR when it is a routine implementation choice,
 
 The older heuristic is **too sensitive on its own**: "if someone asked why you chose X over Y, would you need to explain trade-offs?" Almost every line of code has an unexplained alternative. Use it only *after* the threshold table above already says the decision is material; it helps you write a better AgDR, it does not decide whether you need one.
 
+## New tools: AgDR or stack-register line
+
+A new tool needs an AgDR when any of these is true:
+
+- It processes personal or health data, or it is a vendor with a contract.
+- It is a foundation that is expensive to change: framework, language, database, ORM, API style, cloud, deploy, auth.
+- It is a security control: hashing, 2FA, sessions, signing.
+- It overrides an earlier decision.
+
+Every other tool needs one line in `docs/stack-register.md`. Use `templates/stack-register.md`.
+A PR that adds a runtime dependency or an outside host links an AgDR or a register line.
+Run `.claude/skills/agdr/scripts/check-dependency-record.sh <repo> <base-ref>`. A runtime dependency with no record blocks. A dev-only dependency warns. See AgDR-0320.
+
 ## The two rails (unchanged, non-negotiable)
 
 Narrowing the rule does not narrow the rails from [`right-size-ceremony.md`](right-size-ceremony.md):
