@@ -167,11 +167,11 @@ Tokens:
 | `{id}` | The TICKET-ID the skill resolved (`GH-123`, `ABC-123`, …). |
 | `{title_slug}` | Kebab-case slug of the **full** title, stopwords trimmed from the edges, no length cap. |
 
-- The key is empty by default, so the built-in shape is unchanged.
-- `{title_slug}` is not capped. The 40-character cap belongs to the built-in
+- The key is empty by default, so the built-in shape stays the same.
+- `{title_slug}` has no length cap. The 40-character cap belongs to the built-in
   default only, because the point of a tracker-native name is to match the
   tracker's own slug.
-- An unknown token is reported on stderr and the built-in shape is returned.
+- For an unknown token, the helper writes a warning to stderr and returns the built-in shape.
   `suggested_branch` is a suggestion, not a gate, so a template typo must not
   stop a ticket from starting.
 - A template that produces a tracker-native shape also needs a matching
