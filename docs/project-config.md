@@ -163,7 +163,7 @@ Tokens:
 
 | Token | Value |
 | --- | --- |
-| `{type}` | Branch type, guessed from the title prefix (`[Feature]` → `feature`, `[Bug]` → `fix`, …; default `feature`). |
+| `{type}` | Branch type, guessed from the title prefix. `[Feature]` and `[Feat]` give `feature`. `[Bug]` and `[Fix]` give `fix`. `[Test]` and `[Testing]` give `test`. `[Docs]`, `[Chore]`, `[Refactor]`, `[CI]`, `[Spike]`, `[Prototype]` and `[Perf]` give the lowercase word. Any other prefix gives `feature`. |
 | `{id}` | The TICKET-ID the skill resolved (`GH-123`, `ABC-123`, …). |
 | `{title_slug}` | Kebab-case slug of the **full** title, stopwords trimmed from the edges, no length cap. |
 

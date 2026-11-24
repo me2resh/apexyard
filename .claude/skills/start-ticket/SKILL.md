@@ -97,13 +97,7 @@ source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-branch-suggest.sh"
 suggested_branch=$(branch_suggest "<TICKET-ID>" "<issue title>")
 ```
 
-- `<TICKET-ID>` is `GH-<number>` for GitHub Issues, or the project's configured `ticket_prefix` from `apexyard.projects.yaml` when set.
-- The helper guesses `<type>` from the title prefix. `[Feature]`/`[Feat]` → `feature`, `[Bug]`/`[Fix]` → `fix`, `[Docs]` → `docs`, `[Chore]` → `chore`, `[Refactor]` → `refactor`, `[Test]`/`[Testing]` → `test`, `[CI]` → `ci`, `[Spike]` → `spike`, `[Prototype]` → `prototype`, `[Perf]` → `perf`. Anything else → `feature`. Pass a third argument to force a type.
-- With `.branch.suggested_template` unset, it returns `<type>/<TICKET-ID>-<slug>`, with the slug capped at 40 characters. That is today's shape, unchanged.
-- With `.branch.suggested_template` set, it renders that template instead. Tokens: `{type}`, `{id}`, `{title_slug}` (the full summary slug, no 40-character cap). Example for a tracker that names its own branches: `"{id}-{title_slug}"` returns `ABC-123-add-login`.
-- An unknown token is reported on stderr and the built-in shape is returned, so a template typo cannot stop a ticket from starting. Show the warning to the operator.
-
-Match the convention in `.claude/rules/git-conventions.md`. When the template produces a tracker-native shape, also set `.branch.extra_patterns` so `validate-branch-name.sh` accepts it. See me2resh/apexyard#2083.
+`<TICKET-ID>` is `GH-<number>`, or the project's `ticket_prefix` when set. A third argument forces the type. The type map and `.branch.suggested_template` are in `docs/project-config.md`. Show any stderr warning to the operator.
 
 ### 4. Resolve the target marker
 
