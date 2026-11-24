@@ -74,14 +74,56 @@ pt_init() {
   PT_USER=$(pt_physical "${CLAUDE_CONFIG_DIR:-$HOME/.claude}") || return 2
   PT_HOME_CONFIG=$(pt_physical "$HOME/.claude") || return 2
 }
-# agy hook wiring, relative to a protected root (AgDR-0320). Each path can
-# switch the gates off under agy, or run another hook beside them:
+# An ApexYard fork root holds .claude/hooks and an ops-root anchor
+# (.apexyard-fork or onboarding.yaml), matching the resolver walk in
+# settings.json and harness-adapters/agy/agy-hook.sh. Non-fork project roots
+# and data-only portfolio siblings do not get the agy wiring forms.
+pt_is_fork_root() {
+  [ -d "$1/.claude/hooks" ] || return 1
+  [ -f "$1/.apexyard-fork" ] || [ -f "$1/onboarding.yaml" ]
+}
+pt_has_fork_root() {
+  local root
+  for root in ${PT_ROOTS[@]+"${PT_ROOTS[@]}"}; do
+    pt_is_fork_root "$root" && return 0
+  done
+  return 1
+}
+pt_live_fork_form() { pt_nocase pt_live_fork_form_nocase "$@"; }
+pt_live_fork_form_nocase() {
+  local p="$1" root
+  for root in ${PT_ROOTS[@]+"${PT_ROOTS[@]}"}; do
+    pt_is_fork_root "$root" || continue
+    [[ "$p" != "$root" ]] || return 0
+  done
+  return 1
+}
+pt_live_fork() {
+  local p="$1" lexical physical alt
+  case "$p" in
+    /*) ;;
+    *)
+      for alt in ${PT_ALTS[@]+"${PT_ALTS[@]}"}; do
+        [ "$alt" = "${PT_CWD:-$PWD}" ] || ! pt_live_fork "$alt/$p" || return 0
+      done
+      if [ "${PT_OR_ACTIVE:-0}" = 1 ]; then
+        for alt in ${PT_PENDING[@]+"${PT_PENDING[@]}"}; do
+          [ "$alt" = "${PT_CWD:-$PWD}" ] || ! pt_live_fork "$alt/$p" || return 0
+        done
+      fi
+      p="${PT_CWD:-$PWD}/$p" ;;
+  esac
+  lexical=$(pt_lexical "$p") || return 0
+  physical=$(pt_physical "$p") || return 0
+  pt_live_fork_form "$lexical" || pt_live_fork_form "$physical"
+}
+# agy hook wiring, relative to a live ApexYard fork root (AgDR-0320). Each
+# path can switch the gates off under agy, or run another hook beside them:
 #   .agents/hooks.json      the wiring that bin/sync-agy-adapter.sh writes
 #   .agents/plugins/        plugin discovery; each plugin runs its own hooks.json
 #   .agents/plugins.json    plugin registration
 #   harness-adapters/agy/   the wrapper that the wiring runs
-#   bin/sync-agy-adapter.sh the generator; the gate passes its plain run
-PT_ADAPTER_WIRING=(.agents/hooks.json .agents/plugins .agents/plugins.json harness-adapters/agy bin/sync-agy-adapter.sh)
+PT_ADAPTER_WIRING=(.agents/hooks.json .agents/plugins .agents/plugins.json harness-adapters/agy)
 # $2 is the role. 0 checks the path itself. 1 also blocks an ancestor of
 # protected state, for removal and recursive writes. 2 blocks an ancestor of
 # the core state only, not of the agy wiring: it judges the folder that a
@@ -92,39 +134,43 @@ pt_protected_form_nocase() {
   for root in ${PT_ROOTS[@]+"${PT_ROOTS[@]}"}; do
     case "$p" in "$root/.claude/settings.json"|"$root/.claude/settings.local.json"|"$root/.claude/hooks"|"$root/.claude/hooks/"*) return 0 ;; esac
     if [ "$ancestors" != 0 ]; then case "$root/.claude/hooks/" in "$p/"*) return 0 ;; esac; fi
-    for rel in "${PT_ADAPTER_WIRING[@]}"; do
-      case "$p" in "$root/$rel"|"$root/$rel/"*) return 0 ;; esac
-      if [ "$ancestors" = 1 ]; then case "$root/$rel/" in "$p/"*) return 0 ;; esac; fi
-    done
-    # agy also reads nested .agents/ hook config, so the same files are
-    # protected at any depth under the root. Direct form only, so an rm -rf
-    # of a parent folder still passes. An agent's rm of the nested file is
-    # blocked, so a person removes it. A linked worktree under .claude/worktrees/
-    # is its own fork root, so only its own root wiring is exempt. A case
-    # pattern * also matches /, so the worktree name is split off by hand:
-    # the prefix is cut by length, then the first path component.
-    case "$p" in
-      "$root/.claude/worktrees/"*)
-        wt="$root/.claude/worktrees/"
-        rest=${p:${#wt}}
-        case "$rest" in */*) sub=${rest#*/} ;; *) sub="" ;; esac
-        case "$sub" in
-          .agents|.agents/hooks.json|.agents/plugins.json|.agents/plugins|.agents/plugins/*) ;;
-          */.agents/hooks.json|*/.agents/plugins.json|*/.agents/plugins|*/.agents/plugins/*) return 0 ;;
-          */.agents) [ "$ancestors" != 1 ] || return 0 ;;
-        esac ;;
-      "$root/"*/.agents/hooks.json|"$root/"*/.agents/plugins.json|"$root/"*/.agents/plugins|"$root/"*/.agents/plugins/*) return 0 ;;
-      # A recursive copy, a link, or a removal whose target is a nested
-      # .agents folder can bring a hook config with it. A plain write of a
-      # file inside it still takes the forms above, so mkdir stays allowed.
-      "$root/"*/.agents) [ "$ancestors" != 1 ] || return 0 ;;
-    esac
+    if pt_is_fork_root "$root"; then
+      for rel in "${PT_ADAPTER_WIRING[@]}"; do
+        case "$p" in "$root/$rel"|"$root/$rel/"*) return 0 ;; esac
+        if [ "$ancestors" = 1 ]; then case "$root/$rel/" in "$p/"*) return 0 ;; esac; fi
+      done
+      # agy also reads nested .agents/ hook config, so the same files are
+      # protected at any depth under the fork root, except under workspace/
+      # (managed-project clones are not on agy's path from the fork root, and
+      # check_nested_agents denies every call if agy starts in one). Direct
+      # form only, so an rm -rf of a parent folder still passes. An agent's rm
+      # of the nested file is blocked, so a person removes it. A linked
+      # worktree under .claude/worktrees/ is its own fork root, so its own
+      # root wiring and workspace/ subtree are exempt. A case pattern * also
+      # matches /, so the worktree name is split off by hand: the prefix is
+      # cut by length, then the first path component.
+      case "$p" in
+        "$root/workspace"|"$root/workspace/"*) ;;
+        "$root/.claude/worktrees/"*)
+          wt="$root/.claude/worktrees/"
+          rest=${p:${#wt}}
+          case "$rest" in */*) sub=${rest#*/} ;; *) sub="" ;; esac
+          case "$sub" in
+            .agents|.agents/hooks.json|.agents/plugins.json|.agents/plugins|.agents/plugins/*) ;;
+            workspace|workspace/*) ;;
+            */.agents/hooks.json|*/.agents/plugins.json|*/.agents/plugins|*/.agents/plugins/*) return 0 ;;
+            */.agents) [ "$ancestors" != 1 ] || return 0 ;;
+          esac ;;
+        "$root/"*/.agents/hooks.json|"$root/"*/.agents/plugins.json|"$root/"*/.agents/plugins|"$root/"*/.agents/plugins/*) return 0 ;;
+        # A recursive copy, a link, or a removal whose target is a nested
+        # .agents folder can bring a hook config with it. A plain write of a
+        # file inside it still takes the forms above, so mkdir stays allowed.
+        "$root/"*/.agents) [ "$ancestors" != 1 ] || return 0 ;;
+      esac
+    fi
   done
   if [ "${#PT_ROOTS[@]}" = 0 ]; then
     case "$p" in */.claude/settings*.json|*/.claude/hooks*) return 0 ;; esac
-    for rel in "${PT_ADAPTER_WIRING[@]}"; do
-      case "$p" in */"$rel"|*/"$rel"/*) return 0 ;; esac
-    done
   fi
   for base in "$PT_USER" "$PT_HOME_CONFIG"; do
     case "$p" in "$base/settings.json"|"$base/session-env"|"$base/session-env/"*|"$base/shell-snapshots"|"$base/shell-snapshots/"*) return 0 ;; esac

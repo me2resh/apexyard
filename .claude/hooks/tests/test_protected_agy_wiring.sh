@@ -1,13 +1,14 @@
 #!/bin/bash
 # agy hook wiring is a protected target in the live fork root (AgDR-0320).
 #
-# .agents/hooks.json, the agy plugin files, harness-adapters/agy/, and
-# bin/sync-agy-adapter.sh can each switch the gates off under agy, or run
-# another hook beside them. block-protected-target-writes.sh must deny Write,
-# Edit, MultiEdit and Bash changes to them in the live root, as for
-# .claude/hooks/. An isolated worktree stays editable. The generator, run
-# through Bash, still passes, because the gate judges the command text, not
-# the script's own writes.
+# .agents/hooks.json, the agy plugin files, and harness-adapters/agy/ can each
+# switch the gates off under agy, or run another hook beside them.
+# block-protected-target-writes.sh must deny Write, Edit, MultiEdit and Bash
+# changes to them in a live ApexYard fork root, as for .claude/hooks/. An
+# isolated worktree, managed-project clones under workspace/, non-fork project
+# roots, and the no-root fallback stay editable. bin/sync-agy-adapter.sh is
+# outside the list because agy runs only .agents/hooks.json and
+# harness-adapters/agy/agy-hook.sh.
 # shellcheck source=/dev/null
 . "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
 set -uo pipefail
@@ -54,8 +55,6 @@ WIRING=(
   .agents/plugins/sibling/hooks.json
   .agents/plugins.json
   harness-adapters/agy/agy-hook.sh
-  # The generator. The gate passes its plain run.
-  bin/sync-agy-adapter.sh
 )
 
 for rel in "${WIRING[@]}"; do
@@ -77,17 +76,15 @@ check 2 "live rm -rf .agents/plugins" run_bash "$L" 'rm -rf .agents/plugins'
 check 2 "live rm -rf harness-adapters/agy" run_bash "$L" 'rm -rf harness-adapters/agy'
 check 2 "live rm -rf harness-adapters (holds the wrapper)" run_bash "$L" 'rm -rf harness-adapters'
 check 2 "live git rm -r harness-adapters/agy" run_bash "$L" 'git rm -r harness-adapters/agy'
-check 2 "live redirect into the generator" run_bash "$L" 'echo "exit 0" > bin/sync-agy-adapter.sh'
 check 2 "absolute rm of the live wrapper from another folder" run_bash "$S" "rm -f $L/harness-adapters/agy/agy-hook.sh"
 
 # agy reads nested .agents/ hook config too, so the same files are protected
-# at any depth in the live root. A worktree is its own root.
+# at any depth in the live fork root outside workspace/. A worktree is its own root.
 NESTED=(
   docs/.agents/hooks.json
   docs/.agents/plugins.json
   docs/.agents/plugins/x/hooks.json
   docs/.AGENTS/Hooks.JSON
-  workspace/proj/.agents/hooks.json
   # Deeper inside a linked worktree, a nested form is protected too.
   .claude/worktrees/wt/docs/.agents/hooks.json
   .claude/worktrees/wt/docs/.agents/plugins.json
@@ -154,26 +151,27 @@ check 0 "live plain cp of a file named .agents into an existing docs/ stays allo
 # A copy or link into a folder that holds agy wiring passes, as before the
 # wiring. Its new entry is judged on its own. A contents copy, which lands
 # directly in the folder, is judged against the folder itself.
-mkdir -p "$L/bin" "$L/harness-adapters" "$L/.agents"
+mkdir -p "$L/bin" "$L/harness-adapters" "$L/.agents" "$L/docs/dist" "$L/workspace/app/dist" "$L/workspace/proj/.agents"
 check 0 "live ln -s into an existing bin/ stays allowed" run_bash "$L" "ln -s $S/tool bin/"
 check 0 "live ln -s into an existing bin stays allowed" run_bash "$L" "ln -s $S/tool bin"
 check 0 "live cp -R into an existing bin/ stays allowed" run_bash "$L" "cp -R $S/build bin/"
 check 0 "live rsync -a into an existing bin/ stays allowed" run_bash "$L" "rsync -a $S/build bin/"
 check 0 "live cp -R into an existing harness-adapters/ stays allowed" run_bash "$L" "cp -R $S/build harness-adapters/"
+check 0 "live ln -s into an existing harness-adapters/ stays allowed" run_bash "$L" "ln -s $S/tool harness-adapters/"
 check 0 "live ln -s into an existing root .agents/ stays allowed" run_bash "$L" "ln -s $S/skills .agents/"
-check 2 "live rsync -a of folder contents into bin/" run_bash "$L" "rsync -a $S/build/ bin/"
-check 2 "live cp -R of folder contents into bin/" run_bash "$L" "cp -R $S/build/. bin/"
-check 2 "live ditto into bin" run_bash "$L" "ditto $S/build bin"
+check 2 "live rsync -a of folder contents into harness-adapters/" run_bash "$L" "rsync -a $S/build/ harness-adapters/"
+check 2 "live cp -R of folder contents into harness-adapters/" run_bash "$L" "cp -R $S/build/. harness-adapters/"
+check 2 "live ditto into harness-adapters" run_bash "$L" "ditto $S/build harness-adapters"
 check 2 "live cp -R of a plugins folder into the root .agents/" run_bash "$L" "cp -R $S/plugins .agents/"
 check 2 "live cp -R into .claude/ is still blocked" run_bash "$L" "cp -R $S/build .claude/"
 # A source that can land at another name judges the folder in full.
 check 2 "live cp -R of a glob into harness-adapters/" run_bash "$L" "cp -R $S/* harness-adapters/"
-check 2 "live rsync -a of a glob into bin/" run_bash "$L" "rsync -a $S/* bin/"
-check 2 "live ln -s of a glob into bin/" run_bash "$L" "ln -s $S/* bin/"
+check 2 "live rsync -a of a glob into harness-adapters/" run_bash "$L" "rsync -a $S/* harness-adapters/"
+check 2 "live ln -s of a glob into harness-adapters/" run_bash "$L" "ln -s $S/* harness-adapters/"
 check 2 "live mv of a glob into the root .agents/" run_bash "$L" "mv $S/* .agents/"
 check 2 "live plain cp of a glob into the root .agents/" run_bash "$L" "cp $S/* .agents/"
-check 2 "live cp -R of a brace into bin/" run_bash "$L" "cp -R $S/{a,b} bin/"
-check 2 "live cp -R of a variable into bin/" run_bash "$L" 'cp -R $X bin/'
+check 2 "live cp -R of a brace into harness-adapters/" run_bash "$L" "cp -R $S/{a,b} harness-adapters/"
+check 2 "live cp -R of a variable into harness-adapters/" run_bash "$L" 'cp -R $X harness-adapters/'
 check 2 "live cp -RT onto the root .agents" run_bash "$L" "cp -RT $S/build .agents"
 check 2 "live mv -T onto the root .agents" run_bash "$L" "mv -T $S/build .agents"
 check 2 "live cp --parents of a nested config into docs/" run_bash "$L" "cp --parents $S/x/.agents/hooks.json docs/"
@@ -205,18 +203,27 @@ check 2 "live install -mt with a hooks.json into .agents/" run_bash "$L" "instal
 check 0 "live cp -St into docs/ stays allowed" run_bash "$L" "cp -St x $S/a.txt docs/"
 check 0 "live cp -Rt docs stays allowed" run_bash "$L" "cp -Rt docs $S/build"
 check 0 "live cp -vt docs stays allowed" run_bash "$L" "cp -vt docs $S/a.txt"
-# A move with a dot glob can bring an .agents or .claude folder.
+# A move with a dot glob can bring an .agents or .claude folder into the fork root.
 check 2 "live mv of a dot glob into the fork root" run_bash "$L" "mv $S/.* ."
+check 2 "live mv of a dot glob up into the fork root from docs" run_bash "$L/docs" "mv $S/.* .."
 check 0 "live mv of a variable into the fork root stays allowed" run_bash "$L" 'mv "$f" .'
-check 0 "live rsync -a --recursive into bin/ stays allowed" run_bash "$L" "rsync -a --recursive $S/build bin/"
-check 0 "live rsync -a --partial into bin/ stays allowed" run_bash "$L" "rsync -a --partial $S/build bin/"
-check 0 "live rsync -a --no-times into bin/ stays allowed" run_bash "$L" "rsync -a --no-times $S/build bin/"
-# An unresolved operand that names the agy wiring blocks, as one that names
-# the settings files does.
+# Ordinary dot-glob moves inside subfolders and workspace/ stay allowed.
+check 0 "workspace dot-glob move with * and .* stays allowed" run_bash "$L/workspace/app" 'mv scaffold/* scaffold/.* .'
+check 0 "workspace dot-glob move with .[!.]* stays allowed" run_bash "$L/workspace/app" 'mv scaffold/.[!.]* .'
+check 0 "workspace dot-glob move into dist/ stays allowed" run_bash "$L/workspace/app" 'mv src/.* dist/'
+check 0 "workspace cp -r scaffold/. . stays allowed" run_bash "$L/workspace/app" 'cp -r scaffold/. .'
+check 0 "workspace rsync -a scaffold/ . stays allowed" run_bash "$L/workspace/app" 'rsync -a scaffold/ .'
+check 0 "fork subfolder dot-glob move with * and .* stays allowed" run_bash "$L/docs" 'mv scaffold/* scaffold/.* .'
+check 0 "fork subfolder dot-glob move with .[!.]* stays allowed" run_bash "$L/docs" 'mv scaffold/.[!.]* .'
+check 0 "fork subfolder dot-glob move into dist/ stays allowed" run_bash "$L/docs" 'mv src/.* dist/'
+check 0 "live rsync -a --recursive into harness-adapters/ stays allowed" run_bash "$L" "rsync -a --recursive $S/build harness-adapters/"
+check 0 "live rsync -a --partial into harness-adapters/ stays allowed" run_bash "$L" "rsync -a --partial $S/build harness-adapters/"
+check 0 "live rsync -a --no-times into harness-adapters/ stays allowed" run_bash "$L" "rsync -a --no-times $S/build harness-adapters/"
+# An unresolved operand that names the agy wiring blocks in a fork root, as
+# one that names the settings files does.
 check 2 "unresolved write to .agents/hooks.json" run_bash "$L" 'cp x $D/.agents/hooks.json'
 check 2 "unresolved write under .agents/plugins" run_bash "$L" 'cp x $D/.agents/plugins/p/hooks.json'
 check 2 "unresolved write to the wrapper" run_bash "$L" 'cp x $D/harness-adapters/agy/agy-hook.sh'
-check 2 "unresolved write to the generator" run_bash "$L" 'cp x $D/bin/sync-agy-adapter.sh'
 check 2 "unresolved removal of an .agents folder" run_bash "$L" 'rm -rf $D/.agents'
 check 2 "unresolved removal of harness-adapters" run_bash "$L" 'rm -rf $D/harness-adapters'
 check 2 "unresolved write to .agents//hooks.json" run_bash "$L" 'cp x $D/.agents//hooks.json'
@@ -232,12 +239,26 @@ check 0 "live cp of a variable into the fork root stays allowed" run_bash "$L" '
 check 0 "live mv of a glob into the fork root stays allowed" run_bash "$L" "mv $S/* ."
 check 0 "live mv of a glob into docs/ stays allowed" run_bash "$L" "mv $S/*.md docs/"
 check 0 "live cp -t of an unresolved folder with a glob stays allowed" run_bash "$L" 'cp -t $OUT x/*'
-check 2 "live cp of a glob into bin/" run_bash "$L" "cp $S/* bin/"
-check 2 "live cp of a variable into bin/" run_bash "$L" 'cp $X bin/'
+check 2 "live cp of a glob into harness-adapters/" run_bash "$L" "cp $S/* harness-adapters/"
+check 2 "live cp of a variable into harness-adapters/" run_bash "$L" 'cp $X harness-adapters/'
 check 2 "live cp of a glob into .claude/" run_bash "$L" "cp $S/* .claude/"
 check 0 "live cp of a glob into docs/ stays allowed" run_bash "$L" "cp $S/*.txt docs/"
 check 0 "live cp -R of a glob into docs/ stays allowed" run_bash "$L" "cp -R $S/* docs/"
-rmdir "$L/bin" "$L/harness-adapters" "$L/.agents"
+# Ordinary bin/ commands stay allowed at the fork root too.
+check 0 "fork root rm -rf bin stays allowed" run_bash "$L" 'rm -rf bin'
+check 0 "fork root cp x/* bin/ stays allowed" run_bash "$L" 'cp x/* bin/'
+check 0 "fork root cp \"\$f\" bin/ stays allowed" run_bash "$L" 'cp "$f" bin/'
+check 0 "fork root git mv bin scripts stays allowed" run_bash "$L" 'git mv bin scripts'
+check 0 "fork root cp -r dist/ bin/ stays allowed" run_bash "$L" 'cp -r dist/ bin/'
+check 0 "fork root rsync -a dist/ bin/ stays allowed" run_bash "$L" 'rsync -a dist/ bin/'
+# Managed-project clones under workspace/ stay editable from the fork root.
+check 0 "fork root Write workspace/proj/.agents/plugins/marketplace.json stays allowed" run_edit Write "$L/workspace/proj/.agents/plugins/marketplace.json"
+check 0 "fork root Edit workspace/proj/.agents/plugins/marketplace.json stays allowed" run_edit Edit "$L/workspace/proj/.agents/plugins/marketplace.json"
+check 0 "fork root Write workspace/proj/.agents/hooks.json stays allowed" run_edit Write "$L/workspace/proj/.agents/hooks.json"
+check 0 "fork root cwd workspace/proj rm -rf .agents stays allowed" run_bash "$L/workspace/proj" 'rm -rf .agents'
+check 0 "fork root Write .agents/skills/a/SKILL.md stays allowed" run_edit Write "$L/.agents/skills/a/SKILL.md"
+check 0 "fork root Write worktree workspace/proj/.agents/hooks.json stays allowed" run_edit Write "$W/workspace/proj/.agents/hooks.json"
+rm -rf "${L:?}/bin" "${L:?}/harness-adapters" "${L:?}/.agents" "${L:?}/docs/dist" "${L:?}/workspace"
 # For truncate, -s still takes a value, so the next word is the target.
 check 2 "live truncate -s 0 of the settings file" run_bash "$L" 'truncate -s 0 .claude/settings.json'
 check 0 "live truncate -s 0 of a plain file stays allowed" run_bash "$L" 'truncate -s 0 docs/notes.txt'
@@ -253,6 +274,87 @@ check 0 "live Write to another bin script stays allowed" run_edit Write "$L/bin/
 # command text, so the scripts' own writes are not judged.
 check 0 "live bash bin/sync-agy-adapter.sh" run_bash "$L" 'bash bin/sync-agy-adapter.sh'
 check 0 "live bash bin/sync-codex-adapter.sh --clean" run_bash "$L" 'bash bin/sync-codex-adapter.sh --clean'
+
+# Non-fork project root: agy wiring and nested .agents forms apply only at an
+# ApexYard fork root, not at an ordinary project root (CLAUDE_PROJECT_DIR).
+P="$TMP/app"
+mkdir -p "$P/.git" "$P/bin" "$P/harness-adapters" "$P/.agents" "$P/src" "$P/dist"
+run_edit_proj() {
+  jq -cn --arg cwd "$P" --arg file "$2" --arg tool "$1" \
+    '{tool_name:$tool,cwd:$cwd,tool_input:{file_path:$file}}' \
+    | CLAUDE_PROJECT_DIR="$P" CLAUDE_CODE_SESSION_ID=projroot /bin/bash "$ROOT/block-protected-target-writes.sh"
+}
+run_bash_proj() {
+  jq -cn --arg cwd "$1" --arg cmd "$2" '{tool_name:"Bash",cwd:$cwd,tool_input:{command:$cmd}}' \
+    | CLAUDE_PROJECT_DIR="$P" CLAUDE_CODE_SESSION_ID=projroot /bin/bash "$ROOT/block-protected-target-writes.sh"
+}
+check 0 "project root rm -rf bin obj stays allowed" run_bash_proj "$P" 'rm -rf bin obj'
+check 0 "project root make clean && rm -rf bin stays allowed" run_bash_proj "$P" 'make clean && rm -rf bin'
+check 0 "project root git rm -r --cached bin stays allowed" run_bash_proj "$P" 'git rm -r --cached bin'
+check 0 "project root cp build/* bin/ stays allowed" run_bash_proj "$P" 'cp build/* bin/'
+check 0 "project root cp \"\$f\" bin/ stays allowed" run_bash_proj "$P" 'cp "$f" bin/'
+check 0 "project root mv build/* bin/ stays allowed" run_bash_proj "$P" 'mv build/* bin/'
+check 0 "project root cp -r dist/ bin/ stays allowed" run_bash_proj "$P" 'cp -r dist/ bin/'
+check 0 "project root rsync -a dist/ bin/ stays allowed" run_bash_proj "$P" 'rsync -a dist/ bin/'
+check 0 "project root rm -rf harness-adapters stays allowed" run_bash_proj "$P" 'rm -rf harness-adapters'
+check 0 "project root rm -rf .agents stays allowed" run_bash_proj "$P" 'rm -rf .agents'
+check 0 "project root Write .agents/plugins/marketplace.json stays allowed" run_edit_proj Write "$P/.agents/plugins/marketplace.json"
+check 0 "project root Edit .agents/plugins/marketplace.json stays allowed" run_edit_proj Edit "$P/.agents/plugins/marketplace.json"
+check 0 "project root Write src/.agents/hooks.json stays allowed" run_edit_proj Write "$P/src/.agents/hooks.json"
+check 0 "project root mv scaffold/* scaffold/.* . stays allowed" run_bash_proj "$P" 'mv scaffold/* scaffold/.* .'
+check 0 "project root unresolved rm -rf \$D/.agents stays allowed" run_bash_proj "$P" 'rm -rf $D/.agents'
+check 2 "project root Write .claude/settings.json stays blocked" run_edit_proj Write "$P/.claude/settings.json"
+check 2 "project root rm -rf .claude/hooks stays blocked" run_bash_proj "$P" 'rm -rf .claude/hooks'
+# Direct lib check matching the security review probe.
+check_proj_lib() {
+  CLAUDE_PROJECT_DIR="$P" CLAUDE_CODE_SESSION_ID=projroot /bin/bash -c '
+    . "$1/_lib-protected-state.sh" || exit 9
+    pt_init "{}" || exit 9
+    pt_protected_form "$2" 1
+  ' _ "$ROOT" "$1"
+}
+check 1 "project root lib pt_protected_form bin role 1 is not protected" check_proj_lib "$P/bin"
+check 1 "project root lib pt_protected_form harness-adapters role 1 is not protected" check_proj_lib "$P/harness-adapters"
+check 1 "project root lib pt_protected_form .agents role 1 is not protected" check_proj_lib "$P/.agents"
+check 1 "project root lib pt_protected_form src/.agents role 1 is not protected" check_proj_lib "$P/src/.agents"
+
+# No-root fallback: with no session pin and no CLAUDE_PROJECT_DIR, agy wiring
+# forms must not match arbitrary folders on the machine.
+run_edit_noroot() {
+  jq -cn --arg cwd "$P" --arg file "$2" --arg tool "$1" \
+    '{tool_name:$tool,cwd:$cwd,tool_input:{file_path:$file}}' \
+    | env -u CLAUDE_PROJECT_DIR -u CLAUDE_CODE_SESSION_ID /bin/bash "$ROOT/block-protected-target-writes.sh"
+}
+run_bash_noroot() {
+  jq -cn --arg cwd "$1" --arg cmd "$2" '{tool_name:"Bash",cwd:$cwd,tool_input:{command:$cmd}}' \
+    | env -u CLAUDE_PROJECT_DIR -u CLAUDE_CODE_SESSION_ID /bin/bash "$ROOT/block-protected-target-writes.sh"
+}
+check 0 "no-root Write .agents/plugins/marketplace.json stays allowed" run_edit_noroot Write "$P/.agents/plugins/marketplace.json"
+check 0 "no-root Edit .agents/plugins/marketplace.json stays allowed" run_edit_noroot Edit "$P/.agents/plugins/marketplace.json"
+check 0 "no-root cp build/* bin/ stays allowed" run_bash_noroot "$P" 'cp build/* bin/'
+check 0 "no-root rm -rf .agents stays allowed" run_bash_noroot "$P" 'rm -rf .agents'
+check 0 "no-root unresolved rm -rf \$D/.agents stays allowed" run_bash_noroot "$P" 'rm -rf $D/.agents'
+check 2 "no-root Write .claude/settings.json stays blocked" run_edit_noroot Write "$P/.claude/settings.json"
+
+# Legacy v1 fork root (onboarding.yaml + .claude/hooks, no .apexyard-fork) still
+# protects agy wiring, while a data-only sibling (no .claude/hooks) does not.
+V1="$TMP/v1fork"
+DATA="$TMP/portfolio-data"
+mkdir -p "$V1/.claude/hooks" "$V1/.git" "$DATA/.git" "$DATA/bin"
+touch "$V1/onboarding.yaml" "$DATA/onboarding.yaml" "$DATA/apexyard.projects.yaml"
+run_edit_dir() {
+  jq -cn --arg cwd "$1" --arg file "$3" --arg tool "$2" \
+    '{tool_name:$tool,cwd:$cwd,tool_input:{file_path:$file}}' \
+    | CLAUDE_PROJECT_DIR="$1" CLAUDE_CODE_SESSION_ID=dircheck /bin/bash "$ROOT/block-protected-target-writes.sh"
+}
+run_bash_dir() {
+  jq -cn --arg cwd "$1" --arg cmd "$2" '{tool_name:"Bash",cwd:$cwd,tool_input:{command:$cmd}}' \
+    | CLAUDE_PROJECT_DIR="$1" CLAUDE_CODE_SESSION_ID=dircheck /bin/bash "$ROOT/block-protected-target-writes.sh"
+}
+check 2 "legacy v1 fork Write .agents/hooks.json is blocked" run_edit_dir "$V1" Write "$V1/.agents/hooks.json"
+check 2 "legacy v1 fork rm -rf harness-adapters is blocked" run_bash_dir "$V1" 'rm -rf harness-adapters'
+check 0 "data-only sibling Write .agents/hooks.json stays allowed" run_edit_dir "$DATA" Write "$DATA/.agents/hooks.json"
+check 0 "data-only sibling rm -rf bin stays allowed" run_bash_dir "$DATA" 'rm -rf bin'
 
 printf '%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]

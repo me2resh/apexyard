@@ -126,19 +126,24 @@ pt_is_dir() {
 # Judge each protected name as a direct child of folder $1. The names are
 # the core state, the pin files and the last part of each agy wiring path.
 # $2 is the role for each child: 1 for a move, which can bring a folder.
-# $3 set to 1 adds the dot folders .agents and .claude as children, for a
-# move whose glob can match a dot name.
+# $3 set to 1 adds the dot folders .agents and .claude as children when the
+# destination is a live ApexYard fork root, for a move whose glob can match a
+# dot name.
 pt_judge_children() {
-  local c rel
+  local c rel dest_expanded
   # An unresolved folder is the AgDR-0267 residual; a child name built from
   # it would only trip the unresolved-name check.
-  case "$1" in *'$'*|*'`'*) return 0 ;; esac
-  for c in settings.json settings.local.json hooks hooks.json plugins.json plugins session-env shell-snapshots ops-root-x gate-session-x resolve-cache-x projctx; do
+  dest_expanded=$(pt_expand "$1") || pt_block 'cannot expand a write operand.'
+  case "$dest_expanded" in ''|*'$'*|*'`'*) return 0 ;; esac
+  for c in settings.json settings.local.json hooks session-env shell-snapshots ops-root-x gate-session-x resolve-cache-x projctx; do
     pt_judge "$1/$c" "${2:-0}"
   done
   for rel in "${PT_ADAPTER_WIRING[@]}"; do pt_judge "$1/${rel##*/}" "${2:-0}"; done
   [ -z "${CLAUDE_ENV_FILE:-}" ] || pt_judge "$1/${CLAUDE_ENV_FILE##*/}" "${2:-0}"
-  if [ "${3:-0}" = 1 ]; then pt_judge "$1/.agents" 1; pt_judge "$1/.claude" 1; fi
+  if [ "${3:-0}" = 1 ] && pt_live_fork "$dest_expanded"; then
+    pt_judge "$1/.agents" 1
+    pt_judge "$1/.claude" 1
+  fi
 }
 # An unresolved operand that names protected state blocks.
 pt_unresolved_nocase() {
@@ -151,12 +156,13 @@ pt_unresolved_nocase() {
 }
 pt_unresolved_match() {
   case "$1" in *settings.json*|*settings.local.json*|*.claude/hooks*|*.claude/apexyard*|*ops-root-*|*gate-session-*|*session-env/*|*shell-snapshots/*) pt_block 'unresolved protected operand.' ;; esac
-  # The agy wiring (AgDR-0320). Its ancestors count at role 1 only, as in the lib.
-  case "$1" in *.agents/hooks.json*|*.agents/plugins*|*harness-adapters/agy*|*sync-agy-adapter.sh*) pt_block 'unresolved protected operand.' ;; esac
   if [ "$2" != 0 ]; then case "$1" in */.claude) pt_block 'unresolved protected ancestor.' ;; esac; fi
-  # An unresolved bin folder is not tied to the fork's own bin/, and
-  # rm -rf $BUILD/bin is ordinary, so only the distinct names block here.
-  if [ "$2" = 1 ]; then case "$1" in */.agents|*/harness-adapters) pt_block 'unresolved protected ancestor.' ;; esac; fi
+  # The agy wiring (AgDR-0320) applies only when a live root is an ApexYard
+  # fork. Its ancestors count at role 1 only, as in the lib.
+  if pt_has_fork_root; then
+    case "$1" in *.agents/hooks.json*|*.agents/plugins*|*harness-adapters/agy*) pt_block 'unresolved protected operand.' ;; esac
+    if [ "$2" = 1 ]; then case "$1" in */.agents|*/harness-adapters) pt_block 'unresolved protected ancestor.' ;; esac; fi
+  fi
   return 0
 }
 # True when $1 is a GNU long option that is a prefix of the full name $2.
@@ -415,10 +421,11 @@ pt_operands() {
       [ "$recursive" = 0 ] || moved=1
       # The folder that a source goes into is judged against the core state
       # only (role 2), as before the agy wiring, when each source is a
-      # literal path. So a copy or link into bin/ still passes. A source that
-      # can land at another name is judged against the folder in full: a
-      # contents copy (a trailing / or /.), any ditto, a flag such as -T,
-      # --parents or --relative, and a recursive glob, brace or variable.
+      # literal path. So a copy or link into harness-adapters/ or .agents/
+      # still passes. A source that can land at another name is judged against
+      # the folder in full: a contents copy (a trailing / or /.), any ditto,
+      # a flag such as -T, --parents or --relative, and a recursive glob,
+      # brace or variable.
       fold=2 loose=0 dotglob=0
       [ "$exact" = 1 ] || fold=1
       [ "$verb" != ditto ] || fold=1

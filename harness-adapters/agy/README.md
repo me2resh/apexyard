@@ -39,8 +39,8 @@ a parent folder was trusted. A refused trust prompt was not tested.
    passes, the wrapper prints `ask`, and agy applies its own permission check.
 
 The agy wiring is a protected target in the live fork root:
-`.agents/hooks.json`, `.agents/plugins/`, `.agents/plugins.json`, this folder,
-and `bin/sync-agy-adapter.sh`. Change them in an isolated worktree.
+`.agents/hooks.json`, `.agents/plugins/`, `.agents/plugins.json`, and this
+folder. Change them in an isolated worktree.
 
 ## Testing
 

@@ -950,7 +950,7 @@ expect_decision "C3h9 real gate: write_file of a sibling agy plugin hooks.json g
 run_wrapper "$C" PreToolUse "$(p_write_file "$C/.agents/plugins.json" '{}' "$C")"
 expect_decision "C3h10 real gate: write_file to .agents/plugins.json gets deny" deny "BLOCKED: the edit target is live hook state"
 run_wrapper "$C" PreToolUse "$(p_edit_file "$C/bin/sync-agy-adapter.sh" "set -euo pipefail" "exit 0" "$C")"
-expect_decision "C3h11 real gate: edit_file on the agy generator gets deny" deny "BLOCKED: the edit target is live hook state"
+expect_decision "C3h11 real gate: edit_file on the agy generator with an active ticket stays ask" ask
 run_wrapper "$C" PreToolUse "$(p_run_top "rm -rf .agents/plugins" "$C" "$(jq -n --arg d "$C" '$d')")"
 expect_decision "C3h12 real gate: run_command removing .agents/plugins gets deny" deny "BLOCKED"
 # agy reads nested .agents/ hook config, so agy must not create one.
@@ -992,8 +992,9 @@ for cmd in "cp -R x docs/agents" "cp -R x .claude/worktrees/wt/.agents" "mkdir -
   run_wrapper "$C" PreToolUse "$(p_run_top "$cmd" "$C" "$(jq -n --arg d "$C" '$d')")"
   expect_decision "C3h19 real gate: run_command $cmd stays ask" ask
 done
-# A linked worktree's own root wiring stays editable, as its .claude/hooks/ is.
-for rel in docs/agents/hooks.json docs/.agents/skills/x.md .claude/worktrees/wt/.agents/hooks.json .claude/worktrees/wt/.agents/plugins/x/hooks.json; do
+# A linked worktree's own root wiring and managed-project clones under
+# workspace/ stay editable from the fork root, as a worktree's .claude/hooks/ is.
+for rel in docs/agents/hooks.json docs/.agents/skills/x.md workspace/proj/.agents/hooks.json .claude/worktrees/wt/.agents/hooks.json .claude/worktrees/wt/.agents/plugins/x/hooks.json; do
   run_wrapper "$C" PreToolUse "$(p_write_file "$C/$rel" '{}' "$C")"
   expect_decision "C3h16 real gate: write_file to $rel stays ask" ask
   run_wrapper "$C" PreToolUse "$(p_run_top "echo {} > $rel" "$C" "$(jq -n --arg d "$C" '$d')")"
