@@ -1,5 +1,5 @@
 ---
-id: AgDR-0323
+id: AgDR-0325
 timestamp: 2026-11-21T00:00:00Z
 agent: Adel (Platform Engineer)
 model: claude-opus-5-5
@@ -9,7 +9,7 @@ status: executed
 category: integrations
 ---
 
-# AgDR-0323: Antigravity CLI (agy) harness adapter
+# AgDR-0325: Antigravity CLI (agy) harness adapter
 
 > Facing agy tool calls that reach no gate, we route every agy hook through one wrapper that runs the unmodified gates. The wrapper prints only `ask` or `deny`, and each clone generates its own `.agents/hooks.json`.
 
