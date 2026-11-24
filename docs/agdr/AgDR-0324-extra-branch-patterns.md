@@ -1,4 +1,4 @@
-# AgDR-0323: Accept tracker-native branch names from config
+# AgDR-0324: Accept tracker-native branch names from config
 
 ## Context
 
