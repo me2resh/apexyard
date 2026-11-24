@@ -171,7 +171,7 @@ Tokens:
 - `{title_slug}` has no length cap. The 40-character cap belongs to the built-in
   default only, because the point of a tracker-native name is to match the
   tracker's own slug.
-- For an unknown token, the helper writes a warning to stderr and returns the built-in shape.
+- For an unknown token, or a rendered name that is not a valid git ref, the helper writes a warning to stderr and returns the built-in shape.
   `suggested_branch` is a suggestion, not a gate, so a template typo must not
   stop a ticket from starting.
 - A template that produces a tracker-native shape also needs a matching

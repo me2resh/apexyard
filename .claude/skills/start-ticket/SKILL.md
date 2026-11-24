@@ -89,15 +89,7 @@ missing. A missing or unreadable issue body also produces the warning.
 
 ### 3. Derive a Branch Suggestion
 
-Call the helper. Do not assemble the name by hand.
-
-```bash
-source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
-source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-branch-suggest.sh"
-suggested_branch=$(branch_suggest "<TICKET-ID>" "<issue title>")
-```
-
-`<TICKET-ID>` is `GH-<number>`, or the project's `ticket_prefix` when set. A third argument forces the type. The type map and `.branch.suggested_template` are in `docs/project-config.md`. Show any stderr warning to the operator.
+`bin/apexyard-start-ticket` (step 5) builds the suggestion with `branch_suggest` in `.claude/hooks/_lib-branch-suggest.sh` and writes it to the marker as `suggested_branch`. Run no command that holds the issue title. On the Write fallback, build the name by hand from the type map and `.branch.suggested_template` in `docs/project-config.md`. `<TICKET-ID>` is `GH-<number>`, or the project's `ticket_prefix` when set.
 
 ### 4. Resolve the target marker
 

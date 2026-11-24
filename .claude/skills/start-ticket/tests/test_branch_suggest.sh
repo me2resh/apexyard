@@ -187,6 +187,71 @@ run_case "unknown token is reported and the built-in shape is returned" \
   "ABC-123" "[Feature] Add login" "feature/ABC-123-add-login" \
   "$UNKNOWN_TEMPLATE" "" "unknown token"
 
+# -- Rendered template must be a valid ref; otherwise fall back ------------
+
+SLUG_FIRST='{"branch":{"suggested_template":"{title_slug}-{id}"}}'
+TYPE_SLASH='{"branch":{"suggested_template":"{type}/{title_slug}"}}'
+SPACED='{"branch":{"suggested_template":"{id} {title_slug}"}}'
+DASH_LEAD='{"branch":{"suggested_template":"-{id}"}}'
+UNCLOSED='{"branch":{"suggested_template":"{id}-{title_slug"}}'
+DOTDOT='{"branch":{"suggested_template":"x/../{id}"}}'
+
+run_case "empty slug with a slug-first template falls back" \
+  "ABC-123" "[Feature] ***" "feature/ABC-123" "$SLUG_FIRST" "" "invalid branch name"
+
+run_case "empty slug with {type}/{title_slug} falls back" \
+  "ABC-123" "[Feature] ***" "feature/ABC-123" "$TYPE_SLASH" "" "invalid branch name"
+
+run_case "a space in the template falls back" \
+  "ABC-123" "[Feature] Add login" "feature/ABC-123-add-login" "$SPACED" "" "invalid branch name"
+
+run_case "a leading dash falls back" \
+  "ABC-123" "[Feature] Add login" "feature/ABC-123-add-login" "$DASH_LEAD" "" "invalid branch name"
+
+run_case "an unclosed brace falls back" \
+  "ABC-123" "[Feature] Add login" "feature/ABC-123-add-login" "$UNCLOSED" "" "invalid branch name"
+
+run_case "dot-dot in the template falls back" \
+  "ABC-123" "[Feature] Add login" "feature/ABC-123-add-login" "$DOTDOT" "" "invalid branch name"
+
+# -- Hostile titles are data: never evaluated, always cleaned --------------
+
+HOSTILE_DIR=$(mktemp -d)
+run_case "command substitution in a title is not run" \
+  "GH-9" "[Fix] Crash \$(touch $HOSTILE_DIR/pwned) now" "fix/GH-9-crash-touch-$(printf '%s' "$HOSTILE_DIR" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//')-pwned-now"
+if [ -e "$HOSTILE_DIR/pwned" ]; then
+  echo "FAIL [title command substitution created a file]" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}title-exec "
+else
+  echo "PASS [title command substitution created no file]"
+  PASS=$((PASS+1))
+fi
+rm -rf "$HOSTILE_DIR"
+
+run_case "backticks and a double quote are cleaned" \
+  "GH-10" '[Bug] `make clean` fails "again"' "fix/GH-10-make-clean-fails-again"
+
+run_case "a leading dash and dot-dot in a title are cleaned" \
+  "GH-11" "[Feature] --../etc@{x}" "feature/GH-11-etc-x"
+
+run_case "invalid UTF-8 does not truncate the slug" \
+  "GH-12" "$(printf '[Feature] Add \377 login now')" "feature/GH-12-add-login-now"
+
+# '&' is not a valid ref character, so the name falls back. The point is that
+# it is substituted literally, not as the matched token (bash 5.2).
+run_case "ampersand in the id is literal, then rejected as a ref" \
+  "A&B-1" "[Feature] Add login" "feature/A&B-1-add-login" "$JIRA_TEMPLATE" "" "invalid branch name"
+
+# -- SKILL.md never puts the issue title on a command line -----------------
+
+if awk '/^```/{f=!f; next} f' "$SRC_ROOT/.claude/skills/start-ticket/SKILL.md" | grep -q '<issue title>'; then
+  echo "FAIL [no fenced SKILL.md block holds <issue title>]" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}skill-title "
+else
+  echo "PASS [no fenced SKILL.md block holds <issue title>]"
+  PASS=$((PASS+1))
+fi
+
 # -- Missing id is a caller bug, not a config problem ----------------------
 
 sb=$(make_sandbox)

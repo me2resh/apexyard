@@ -50,6 +50,12 @@ for baseline_command in 'exit 0' ''; do
   rmdir .git/apexyard-progress.md.lock
 done
 rm .claude/project-config.json
+# A configured template reaches the marker on the headless route.
+jq -n '{branch:{suggested_template:"{id}-{title_slug}"}}' > .claude/project-config.json
+rm -f .git/apexyard-ticket
+check 0 'headless start with template' /bin/bash bin/apexyard-start-ticket me2resh/apexyard#1928
+check 0 'template reaches the marker' grep -qx 'suggested_branch=GH-1928-headless-start' .git/apexyard-ticket
+rm .claude/project-config.json
 for ref in 'bad#1928' 'a/b/c#1928' '../b#1928' 'a/b#x' 'a/b#1;id'; do
   check 1 "bad input $ref" /bin/bash bin/apexyard-start-ticket "$ref"
 done

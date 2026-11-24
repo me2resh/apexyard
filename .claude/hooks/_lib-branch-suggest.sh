@@ -28,9 +28,10 @@
 # marker; nothing gates on it, so a template typo must not stop a ticket from
 # starting. The operator sees the warning and fixes the config.
 #
-# Usage (from a bash block in /start-ticket):
-#   source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
-#   source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-branch-suggest.sh"
+# Usage: bin/apexyard-start-ticket sources this file and calls branch_suggest
+# with the title it already holds. The title never goes on a command line.
+#   . "$lib/_lib-read-config.sh"
+#   . "$lib/_lib-branch-suggest.sh"
 #   branch_suggest "GH-2083" "[Feature] Configurable branch-name shapes"
 #   branch_suggest "GH-2083" "[Feature] Configurable branch-name shapes" fix
 
@@ -42,9 +43,11 @@ _BRANCH_SUGGEST_STOPWORDS=" a an and are as at be but by for from in into is it 
 
 # _branch_suggest_slug <text> — lowercase, non-alphanumerics collapsed to '-'.
 _branch_suggest_slug() {
+  # LC_ALL=C keeps tr and sed byte-oriented, so invalid UTF-8 in a title gives
+  # the same slug on every platform.
   printf '%s' "$1" \
-    | tr '[:upper:]' '[:lower:]' \
-    | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
+    | LC_ALL=C tr '[:upper:]' '[:lower:]' \
+    | LC_ALL=C sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
 }
 
 # _branch_suggest_trim_edges <slug> — drop stopwords from both ends.
@@ -110,6 +113,23 @@ _branch_suggest_default() {
   fi
 }
 
+# _branch_suggest_valid_ref <name> — succeed only for a name safe to suggest.
+# Rejects an empty name, one over 200 characters, a leading '-' or '/', a
+# trailing '/' or '.', '..', '//', and characters outside [A-Za-z0-9._/-].
+# When git is available it then has the final word.
+_branch_suggest_valid_ref() {
+  local n="$1"
+  [ -n "$n" ] || return 1
+  [ "${#n}" -le 200 ] || return 1
+  case "$n" in
+    -*|/*|*/|*.|*..*|*//*|*.lock|*/.*|*[!A-Za-z0-9._/-]*) return 1 ;;
+  esac
+  if command -v git >/dev/null 2>&1; then
+    git check-ref-format --branch "$n" >/dev/null 2>&1 || return 1
+  fi
+  return 0
+}
+
 # branch_suggest <ticket-id> <title> [type] — print the suggested branch name.
 branch_suggest() {
   local id="${1:-}" title="${2:-}" type="${3:-}"
@@ -143,9 +163,10 @@ branch_suggest() {
   fi
 
   local out="$template"
-  out="${out//\{type\}/$type}"
-  out="${out//\{id\}/$id}"
-  out="${out//\{title_slug\}/$full_slug}"
+  # Quote the replacements so bash 5.2 patsub_replacement treats '&' literally.
+  out="${out//\{type\}/"$type"}"
+  out="${out//\{id\}/"$id"}"
+  out="${out//\{title_slug\}/"$full_slug"}"
 
   # Any brace pair left over is a token this helper does not know.
   case "$out" in
@@ -158,5 +179,13 @@ branch_suggest() {
   esac
 
   out="${out%-}"
+
+  # A template typo must not produce a name git rejects. Fall back to the
+  # built-in shape instead.
+  if ! _branch_suggest_valid_ref "$out"; then
+    echo "branch_suggest: .branch.suggested_template rendered an invalid branch name: $out" >&2
+    _branch_suggest_default "$type" "$id" "$full_slug"
+    return 0
+  fi
   printf '%s\n' "$out"
 }
