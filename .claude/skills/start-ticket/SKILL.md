@@ -89,13 +89,7 @@ missing. A missing or unreadable issue body also produces the warning.
 
 ### 3. Derive a Branch Suggestion
 
-From the issue title and number, generate: `<type>/<TICKET-ID>-<slug>` where:
-
-- `<type>` guessed from title prefix: `[Feat]` → `feature`, `[Fix]` → `fix`, `[Docs]` → `docs`, `[Chore]` → `chore`, default `feature`
-- `<TICKET-ID>` is `GH-<number>` for GitHub Issues, or matches the project's configured `ticket_prefix` from `apexyard.projects.yaml` if set
-- `<slug>` = lowercase title, kebab-case, max 40 chars, stopwords trimmed from the edges
-
-Match the convention in `.claude/rules/git-conventions.md`.
+`bin/apexyard-start-ticket` (step 5) builds the suggestion with `branch_suggest` in `.claude/hooks/_lib-branch-suggest.sh` and writes it to the marker as `suggested_branch`. Run no command that holds the issue title. On the Write fallback, build the name by hand from the type map and `.branch.suggested_template` in `docs/project-config.md`. `<TICKET-ID>` is `GH-<number>`, or the project's `ticket_prefix` when set.
 
 ### 4. Resolve the target marker
 

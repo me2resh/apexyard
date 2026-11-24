@@ -128,6 +128,8 @@
       "perf",
       "sync"
     ],
+    "_suggested_template_comment": "Optional template /start-ticket uses to build the branch name it suggests (me2resh/apexyard#2083). Empty by default: the helper then returns today's shape, <type>/<TICKET-ID>-<slug>, with the slug capped at 40 characters. Tokens: {type} (guessed from the title prefix), {id} (the TICKET-ID), {title_slug} (kebab-case slug of the FULL title, stopwords trimmed from the edges, no length cap). Use it for tracker-native names, e.g. \"{id}-{title_slug}\" for Jira's \"Create branch\" output (KEY-123-summary-slug). An unknown token is reported and the built-in shape is used, so a typo cannot stop a ticket from starting. Pair it with .branch.extra_patterns so the suggested shape also passes validate-branch-name.sh. Set it in .claude/project-config.json.",
+    "suggested_template": "",
     "_trunk_whitelist_comment": "Trunk/shared-integration branch names validate-branch-name.sh exempts from the {type}/{TICKET}-{description} shape entirely. Includes `development` — the gitflow long form some Bitbucket/gitflow remotes use as the integration branch, missed by the original hardcoded main/master/develop/dev list. Extend in .claude/project-config.json (REPLACES this array) to add client-mandated trunk names (e.g. `trunk`, `staging`). See me2resh/apexyard#888.",
     "trunk_whitelist": [
       "main",
