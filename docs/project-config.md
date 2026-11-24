@@ -139,7 +139,8 @@ See [AgDR-0315](agdr/AgDR-0315-overlay-tighten-only.md).
   },
 
   "branch": {
-    "type_whitelist": ["feature", "fix", "refactor", "chore", "docs", "test", "spike", "ci", "build", "perf"]
+    "type_whitelist": ["feature", "fix", "refactor", "chore", "docs", "test", "spike", "ci", "build", "perf"],
+    "extra_patterns": []
   },
 
   "commit": {
@@ -163,6 +164,7 @@ See [AgDR-0315](agdr/AgDR-0315-overlay-tighten-only.md).
 | `ticket.prefix_whitelist` | `/feature`, `/task`, `/bug`, (future) validate-issue-structure.sh | Bracketed title prefixes accepted for tickets (`[Feature]`, `[Chore]`, …). |
 | `ticket.label_priority_scheme` | `/feature`, `/bug`, `/task`, (future) batch skill | Comma-separated priority label scheme. Teams using `P0/P1/P2/P3` vs. `priority-p0/priority-p1/…` configure here. |
 | `branch.type_whitelist` | `validate-branch-name.sh` | Acceptable branch-name prefixes (`feature/`, `fix/`, …). |
+| `branch.extra_patterns` | `validate-branch-name.sh` | Extra whole-name shapes accepted on top of `{type}/{TICKET-ID}-{description}`: extended regexes, empty by default. For tracker-native names such as Jira's "Create branch" output. See [Tracker-native branch names](#tracker-native-branch-names-branchextra_patterns). |
 | `commit.type_whitelist` | `validate-commit-format.sh` | Conventional-commit types for commit subjects. |
 | `pr.title_type_whitelist` | `validate-pr-create.sh`, `pr-title-check.yml` (CI) | Conventional-commit types for PR titles. |
 | `external_contributions` | `validate-pr-create.sh` | Repositories you contribute to but do **not** govern. See below. |
@@ -173,6 +175,51 @@ See [AgDR-0315](agdr/AgDR-0315-overlay-tighten-only.md).
 | `merge.approval_quiz` | `/approve-merge` | When `true`, runs the opt-in comprehension check before the CEO marker write. Default: `false`. Pass `--quiz` for one run. See [Approval quiz](#approval-quiz-mergeapproval_quiz). |
 | `leak_protection.public_framework_repos` | `check-private-refs-*.sh`, `block-private-refs-in-public-repos.sh` | Known-public `owner/repo` slugs. Origin identity is exempt when origin matches an entry. |
 | `leak_protection.origin_verified_public` | `check-private-refs-staged.sh`, `check-private-refs-runtime.sh` | Exact origin `owner/repo` slug recorded by `/setup` or `/update` after `gh` confirms visibility is PUBLIC. Hooks stay offline and fail closed when this key is missing or does not match origin. See AgDR-0190. |
+
+### Tracker-native branch names (`branch.extra_patterns`)
+
+Some trackers name branches themselves. Jira's **Create branch** action
+produces `<KEY>-<number>-<summary-slug>` with no `type/` prefix. Jira uses
+that exact name to link the branch (and its PR) back to the ticket. Renaming
+it to `{type}/{TICKET-ID}-{description}` breaks the link, so the adopter either
+loses the integration or works around the hook.
+
+`branch.extra_patterns` holds extra shapes the gate accepts:
+
+```json
+{
+  "branch": {
+    "extra_patterns": ["^(ABC|JIRA)-[0-9]+-[a-z0-9]+(-[a-z0-9]+)*$"]
+  }
+}
+```
+
+- Each entry is an extended regex (ERE) matched against the **whole** branch
+  name, not a substring.
+- A match passes the gate. No match falls through to the normal
+  `type/` rule, unchanged.
+- The list is empty by default, so an adopter who does not set it keeps
+  today's behaviour exactly.
+- The hook checks every entry before it matches any. A bad entry fails
+  **closed**: the hook blocks and names it. An entry is bad when it is an
+  invalid regex, is not a string, or holds a newline. A value that is not an
+  array is bad too. A malformed list never widens the gate by accident.
+- Write portable POSIX ERE, such as `[0-9]`. Do not use `\d` or backreferences.
+  The hook uses the grep on the machine, and BSD grep (macOS) and GNU grep
+  (Linux) differ on those. A backreference pattern can also run for a long
+  time on BSD grep. An empty-string entry is ignored.
+- A broad pattern such as `.*` turns off the branch-name check for every branch
+  that reaches this key. That choice belongs to the adopter. Protected-branch
+  rules, trunk names and `orbit/` records checks still apply first.
+- The gate reads this key only from the ops fork's `.claude/project-config.json`.
+  It applies to every managed project that session pushes to. A pattern for one
+  project's tracker also accepts that shape in the others.
+- The array replaces the default array (standard merge rule), so copy any
+  entries you want to keep.
+
+This key relaxes the branch-**name** check only. Every other gate still
+applies: ticket first, secrets, commit format, PR title, review and merge
+approval. See me2resh/apexyard#2083.
 
 ### `external_contributions`: repos you contribute to but do not govern
 

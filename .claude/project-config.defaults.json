@@ -135,7 +135,9 @@
       "develop",
       "dev",
       "development"
-    ]
+    ],
+    "_extra_patterns_comment": "Extra branch-name shapes validate-branch-name.sh accepts on top of {type}/{TICKET}-{description} (me2resh/apexyard#2083). Each entry is an extended regex matched against the WHOLE branch name, and a match passes the gate. Empty by default, so every adopter that does not set it keeps today's behaviour. Use it for tracker-native names such as Jira's \"Create branch\" output (KEY-123-summary-slug, no type/ prefix), which the tracker needs verbatim to link the branch and its PR to the ticket. Set it in .claude/project-config.json (REPLACES this array). An invalid regex fails the gate closed.",
+    "extra_patterns": []
   },
 
   "commit": {

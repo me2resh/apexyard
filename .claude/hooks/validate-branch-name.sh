@@ -387,6 +387,71 @@ if [ -z "$INNER_PATTERN" ]; then
   INNER_PATTERN='[A-Z]{2,10}-[0-9]+|GH-[0-9]+|#[0-9]+'
 fi
 
+# Accept extra branch shapes from `.branch.extra_patterns[]` (me2resh/apexyard#2083).
+#
+# Some trackers name branches themselves. Jira's "Create branch" action
+# produces `<KEY>-<number>-<summary-slug>` with no `type/` prefix, and Jira
+# uses that exact name to link the branch (and its PR) back to the ticket.
+# Renaming it to the `{type}/{TICKET-ID}-{description}` shape breaks the link,
+# so adopters either lose the integration or work around this gate.
+#
+# Each entry is an extended regex matched against the WHOLE branch name
+# (`grep -x`, not a substring match), and a match passes the gate. The list is
+# opt-in and empty by default, so every adopter that does not set it keeps
+# today's behaviour exactly. Branches no entry matches still go through the
+# `type/` rule below.
+#
+# The whole list is validated BEFORE any entry is matched, so a bad entry blocks
+# wherever it sits in the list. An entry is bad when it is not a single-line
+# string, when the value is not an array, or when it is an invalid regex. A bad
+# entry fails CLOSED and is named. Silently skipping it would block the
+# adopter's tracker branches with no clue why; treating it as a match would
+# widen the gate by accident. Trunk, release, sync, bot, handover and ORBIT
+# names are exempted earlier in this hook and never reach this block.
+#
+# Write entries as portable POSIX ERE (`[0-9]`, not `\d`) with no
+# backreferences. The dialect is the platform grep's, and BSD and GNU differ.
+if [ -n "$REPO_ROOT" ] && [ -n "$CURRENT_BRANCH" ] && command -v config_get >/dev/null 2>&1; then
+  _extra_list=$(config_get '.branch.extra_patterns as $p
+    | if $p == null then empty
+      elif ($p | type) != "array" then "bad:" + ($p | tojson)
+      else $p[] | if type == "string" and (contains("\n") | not) then "ok:" + . else "bad:" + tojson end
+      end')
+  _extra_block() {
+    cat >&2 <<MSG
+BLOCKED: .branch.extra_patterns[] holds an invalid entry (it must be a single-line
+string holding a valid extended regex):
+  $1
+
+Fix or remove it in .claude/project-config.json. The branch-name gate fails
+closed while the list is invalid, so a branch that needs this list cannot pass.
+MSG
+    exit 2
+  }
+  # Pass 1: every entry must be usable.
+  while IFS= read -r _extra_line; do
+    [ -n "$_extra_line" ] || continue
+    case "$_extra_line" in
+      bad:*) _extra_block "${_extra_line#bad:}" ;;
+    esac
+    _extra_pattern="${_extra_line#ok:}"
+    [ -n "$_extra_pattern" ] || continue
+    grep -qxE -- "$_extra_pattern" </dev/null 2>/dev/null
+    [ "$?" -eq 2 ] && _extra_block "$_extra_pattern"
+  done <<EXTRA_PATTERNS
+$_extra_list
+EXTRA_PATTERNS
+  # Pass 2: a whole-name match passes the gate.
+  while IFS= read -r _extra_line; do
+    case "$_extra_line" in ok:?*) ;; *) continue ;; esac
+    if printf '%s\n' "$CURRENT_BRANCH" | grep -qxE -- "${_extra_line#ok:}" 2>/dev/null; then
+      exit 0
+    fi
+  done <<EXTRA_PATTERNS
+$_extra_list
+EXTRA_PATTERNS
+fi
+
 # Validate: type/<TICKET>-<description>
 # The TICKET pattern is sourced from tracker.id_pattern so Linear / Jira
 # / custom adopters get their own shape validation. Note: this pattern is
@@ -409,6 +474,11 @@ Examples:
   feature/ABC-123-add-auth
   fix/GH-45-login-bug
   docs/ENG-99-update-readme
+
+Tracker-native names (e.g. Jira's "Create branch" output) can be accepted
+without a type/ prefix:
+  .claude/project-config.json → .branch.extra_patterns[]
+  (extended regexes, each matched against the whole branch name)
 
 To unblock:
   1. Pick a ticket-ID (existing or new): /feature, /task, /bug
