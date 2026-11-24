@@ -651,6 +651,44 @@ _tracker_normalise_custom() {
 #   On non-zero exit, no JSON is emitted on stdout (so callers can treat
 #   empty stdout as "missing").
 # ------------------------------------------------------------------------------
+# Load the opt-in Azure adapter only when selected. Existing fixtures that
+# copy this library alone do not need Azure files. Never fall back to gh.
+_tracker_azure() (
+  local operation="$1" dir
+  shift
+  dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd) || return 1
+  [ -r "$dir/_lib-azure.sh" ] || { echo 'Azure adapter is unavailable.' >&2; return 1; }
+  # shellcheck source=/dev/null
+  . "$dir/_lib-azure.sh" || return 1
+  "_azure_$operation" "$@"
+)
+
+# Create a PR with a body file and explicit source/target branches. Azure never
+# enables automatic completion. Existing gh CLI workflows remain unchanged.
+tracker_pr_create() {
+  local repo="$1" title="$2" body_file="$3" base="$4" head="$5" kind dir command raw
+  [ -n "$repo" ] && [ -n "$title" ] && [ -n "$base" ] && [ -n "$head" ] || return 1
+  [ -f "$body_file" ] && [ -r "$body_file" ] && [ -s "$body_file" ] || return 1
+  _tracker_check_private_refs "$repo" "$title" "$body_file" || return $?
+  dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd) || return 1
+  [ -r "$dir/validate-pr-create.sh" ] || return 1
+  printf -v command 'gh pr create --repo %q --title %q --body-file %q --base %q --head %q' "$repo" "$title" "$body_file" "$base" "$head"
+  jq -nc --arg command "$command" --arg cwd "$PWD" '{tool_name:"Bash",cwd:$cwd,tool_input:{command:$command}}' |
+    bash "$dir/validate-pr-create.sh" || return 1
+  kind=$(tracker_review_kind "$repo")
+  case "$kind" in
+    az) _tracker_azure create_pr "$repo" "$title" "$body_file" "$base" "$head" ;;
+    gh)
+      raw=$(gh pr create --repo "$repo" --title "$title" --body-file "$body_file" --base "$base" --head "$head") || return 1
+      local url
+      url=$(printf '%s\n' "$raw" | grep -oE 'https?://[^[:space:]]+/pull/[0-9]+' | head -1)
+      [ -n "$url" ] || return 1
+      jq -nc --arg url "$url" '{url:$url,number:($url|capture("/pull/(?<number>[0-9]+)$").number|tonumber)}'
+      ;;
+    *) echo 'tracker_pr_create: unsupported review provider.' >&2; return 1 ;;
+  esac
+}
+
 tracker_view() {
   local id="$1"
   local owner_repo="${2:-}"
@@ -663,6 +701,11 @@ tracker_view() {
   # falling back to the global config block. See AgDR-0072 / #670.
   local kind
   kind=$(tracker_issue_kind "$owner_repo")
+
+  if [ "$kind" = az ]; then
+    _tracker_azure view "$owner_repo" "$id"
+    return $?
+  fi
 
   case "$kind" in
     none)
@@ -992,6 +1035,11 @@ tracker_create() {
     # First line only: the python reader can return a multi-line value that
     # the yq reader would have cut.
     milestone=${milestone%%$'\n'*}
+  fi
+
+  if [ "$kind" = az ]; then
+    _tracker_azure create "$repo" "$title" "$body_file" "$labels" "$milestone"
+    return $?
   fi
 
   local raw rc
@@ -1370,6 +1418,18 @@ tracker_list() {
       esac
       ;;
   esac
+
+  if [ "$kind" = az ]; then
+    # Return completeness separately because adapter execution is isolated.
+    local azure_raw azure_count
+    azure_raw=$(_tracker_azure list "$repo" "$f_state" "$f_assignee" "$f_author" "$f_labels" "$f_search" "$f_since" "$f_limit") || return 1
+    azure_count=$(printf '%s' "$azure_raw" | jq length) || return 1
+    # Since filtering can reduce a full page. Treat that case conservatively.
+    if [ -n "$f_since" ]; then TRACKER_LIST_STATUS=UNKNOWN
+    else TRACKER_LIST_STATUS=$(tracker_fetch_status 0 "$azure_count" "$f_limit" "$repo" az); fi
+    printf '%s\n' "$azure_raw"
+    return 0
+  fi
 
   local raw rc
   case "$kind" in
@@ -1961,6 +2021,7 @@ tracker_review_submit() {
       fi
       return 3
       ;;
+    az)     _tracker_azure review "$repo" "$pr" "$verdict" "$body_file" ;;
     gh)     _tracker_review_gh     "$repo" "$pr" "$verdict" "$body_file" ;;
     glab)   _tracker_review_glab   "$repo" "$pr" "$verdict" "$body_file" ;;
     custom) _tracker_review_custom "$repo" "$pr" "$verdict" "$body_file" ;;
@@ -1999,7 +2060,9 @@ tracker_review_submit() {
 #                                                        (fail-closed, AgDR-0104)
 #   3 — this forge cannot be verified (see below)      → caller should SKIP
 #
-# FORGE SUPPORT is honestly narrow. Only `gh` is implemented. GitLab exposes MR
+# FORGE SUPPORT includes gh and az. Azure joins server thread iteration context
+# to the iteration's source commit; unavailable evidence returns 2, not 3.
+# GitLab exposes MR
 # approvals and diff versions rather than SHA-stamped review submissions, and
 # mapping those onto "a review at this commit" correctly needs a live GitLab MR
 # to verify against — building it blind would be the kind of unverified claim
@@ -2031,6 +2094,10 @@ tracker_review_at_sha() {
   local kind
   kind=$(tracker_review_kind "$repo")
   case "$kind" in
+    az)
+      _tracker_azure review_at_sha "$repo" "$pr" "$sha"
+      return $?
+      ;;
     gh) : ;;
     *)  return 3 ;;   # not verifiable on this forge — see FORGE SUPPORT above
   esac
@@ -2310,6 +2377,10 @@ tracker_pr_merge() {
 
   local rc
   case "$kind" in
+    az)
+      _tracker_azure merge "$repo" "$pr" "$strategy" "$delete_branch" "$subject" "$body_file"
+      return $?
+      ;;
     gh)     _tracker_merge_gh     "$repo" "$pr" "$strategy" "$delete_branch" "$subject" "$body_file"; rc=$? ;;
     glab)   _tracker_merge_glab   "$repo" "$pr" "$strategy" "$delete_branch"; rc=$? ;;
     custom) _tracker_merge_custom "$repo" "$pr" "$strategy" "$delete_branch"; rc=$? ;;

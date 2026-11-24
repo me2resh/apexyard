@@ -56,6 +56,17 @@ if [ "$COMMAND" = "null" ]; then
   COMMAND=""
 fi
 
+# Azure completion has one supported route: tracker_pr_merge. Raw create can
+# enable automatic completion, and raw update or invoke can bypass approval.
+# This is a command-text guardrail, not a sandbox for arbitrary executable code.
+_azure_scan="${COMMAND:-$INPUT}"
+_azure_scan=${_azure_scan//$'\\\n'/ }
+if printf '%s' "$_azure_scan" | grep -qE '(^|[^[:alnum:]_])az[[:space:]]+(r(e(p(o(s)?)?)?)?[[:space:]]+p(r)?[[:space:]]+(c(r(e(a(t(e)?)?)?)?)?|u(p(d(a(t(e)?)?)?)?)?)([[:space:]]|$)|d(e(v(o(p(s)?)?)?)?)?[[:space:]]+i(n(v(o(k(e)?)?)?)?)?([[:space:]]|$))'; then
+  echo 'BLOCKED: use the governed tracker interface for Azure PR writes and REST invocation. Raw create, update, and invoke can bypass approvals.' >&2
+  exit 2
+fi
+unset _azure_scan
+
 # Merge-shape detection for wrapped commands (AgDR-0162, me2resh/apexyard#1338).
 # Prefix case arms still handle the one-line forms. is_merge_command scans the
 # full payload command, so `bash -c` around tracker_pr_merge still routes.
@@ -308,6 +319,7 @@ prefetch_pr_metadata() {
   if ! repo=$(extract_explicit_repo_from_command "$cmd") || [ -z "$repo" ]; then
     return 1
   fi
+  [ "$(_forge_kind_for "$repo")" != az ] || return 1
   if ! merge_repo_is_valid "$repo"; then
     return 1
   fi

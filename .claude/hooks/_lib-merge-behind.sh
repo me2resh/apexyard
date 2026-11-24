@@ -49,6 +49,12 @@ fi
 
 is_pr_behind_base() {
   local repo="$1" base="$2" head_sha="$3"
+  if command -v tracker_review_kind >/dev/null 2>&1 && [ "$(tracker_review_kind "$repo")" = az ]; then
+    local azure_behind
+    azure_behind=$(_tracker_azure behind "$repo" "$base" "$head_sha") || azure_behind=unknown
+    printf '%s\n' "$azure_behind"
+    return 0
+  fi
   if [ -z "$repo" ] || [ -z "$base" ] || [ -z "$head_sha" ]; then
     echo "unknown"
     return 0
@@ -389,6 +395,13 @@ _rex_carry_emit() {
 rex_approval_carries_over() {
   local repo="$1" old_sha="$2" new_sha="$3" base_branch="$4"
   _REX_CARRY_LAST="unknown"
+
+  # Carry-over's GraphQL proof is GitHub-specific. Azure approvals must be
+  # renewed at the new SHA; never query GitHub for an Azure registry alias.
+  if command -v tracker_review_kind >/dev/null 2>&1 && [ "$(tracker_review_kind "$repo")" = az ]; then
+    _rex_carry_emit false
+    return 0
+  fi
 
   if [ -z "$repo" ] || [ -z "$base_branch" ]; then
     _rex_carry_emit "unknown"
