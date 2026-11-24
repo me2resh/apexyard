@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # agy-hook.sh: route Google Antigravity CLI (agy) hook events to the
-# unmodified ApexYard gates in .claude/hooks/. Decision record: AgDR-0320.
+# unmodified ApexYard gates in .claude/hooks/. Decision record: AgDR-0323.
 #
 # The wrapper is a transport. Bash gates own every decision. The wrapper:
 #   1. reads the agy hook payload from stdin,
@@ -18,7 +18,7 @@
 # and deny. The public hooks page reads allow differently and lists
 # auto_approve. The wrapper prints only ask or deny under either reading:
 # never allow, force_ask, or auto_approve. ask requests agy's own permission
-# check. Whether agy then prompts depends on agy's own settings (AgDR-0320).
+# check. Whether agy then prompts depends on agy's own settings (AgDR-0323).
 #
 # Usage (agy calls the first two forms through .agents/hooks.json):
 #   agy-hook.sh PreToolUse     < agy payload   -> {"decision":"ask"|"deny",...}
@@ -518,7 +518,7 @@ run_sessionstart() {
   exit 0
 }
 
-# Tool policy for agy tool names (AgDR-0320). hooks.json routes every agy
+# Tool policy for agy tool names (AgDR-0323). hooks.json routes every agy
 # tool to this wrapper with a catch-all matcher. The wrapper then sorts the
 # tool into one of four classes:
 #   - GATED_TOOLS run the settings.json gates (see build_pretooluse_payload).
@@ -551,7 +551,7 @@ MANAGE_TASK_SAFE_ACTIONS="list kill status"
 # gates already judged. find_by_name and list_dir return names, not content.
 READ_ONLY_TOOLS="read_file view_file list_dir find_by_name search_web read_url_content command_status read_terminal ask_question ask_permission list_permissions"
 
-# Argument-shape checks (AgDR-0320). jq keeps the last of two duplicate keys
+# Argument-shape checks (AgDR-0323). jq keeps the last of two duplicate keys
 # and matches key case exactly. agy is a Go binary, and Go's encoding/json
 # matches struct fields case-insensitively. So a duplicate or case-variant key
 # could make the wrapper judge one value while agy acts on another. The
@@ -663,7 +663,7 @@ check_arg_shape() {
   return 0
 }
 
-# permissions.deny (AgDR-0320). Claude Code applies the permissions.deny
+# permissions.deny (AgDR-0323). Claude Code applies the permissions.deny
 # rules in .claude/settings.json itself. agy does not read them, so the
 # wrapper applies them, read at run time like the gates. Matching is literal:
 #   Read(<glob>)          any string argument of a read-only tool, as a path

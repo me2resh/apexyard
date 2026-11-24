@@ -157,7 +157,7 @@ pt_unresolved_nocase() {
 pt_unresolved_match() {
   case "$1" in *settings.json*|*settings.local.json*|*.claude/hooks*|*.claude/apexyard*|*ops-root-*|*gate-session-*|*session-env/*|*shell-snapshots/*) pt_block 'unresolved protected operand.' ;; esac
   if [ "$2" != 0 ]; then case "$1" in */.claude) pt_block 'unresolved protected ancestor.' ;; esac; fi
-  # The agy wiring (AgDR-0320) applies only when a live root is an ApexYard
+  # The agy wiring (AgDR-0323) applies only when a live root is an ApexYard
   # fork. Its ancestors count at role 1 only, as in the lib.
   if pt_has_fork_root; then
     case "$1" in *.agents/hooks.json*|*.agents/plugins*|*harness-adapters/agy*) pt_block 'unresolved protected operand.' ;; esac

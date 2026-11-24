@@ -1,6 +1,6 @@
 # Harness support: agy (Antigravity CLI)
 
-**Status:** ✅ **Live-checked on the fork build (2026-11-21) and on this port (2026-11-22)** for `run_command`, `write_file`, `edit_file`, `read_file`, and SessionStart. The contributor ran agy CLI 1.5.14 against both. In each check, a real turn's `git add -A` got `deny` from the unmodified `dispatch-bash.sh`, and the index stayed empty. Edits to `.claude/settings.json` got `deny` from `block-protected-target-writes.sh`. Decision record: [AgDR-0320](../agdr/AgDR-0320-agy-harness-adapter.md).
+**Status:** ✅ **Live-checked on the fork build (2026-11-21) and on this port (2026-11-22)** for `run_command`, `write_file`, `edit_file`, `read_file`, and SessionStart. The contributor ran agy CLI 1.5.14 against both. In each check, a real turn's `git add -A` got `deny` from the unmodified `dispatch-bash.sh`, and the index stayed empty. Edits to `.claude/settings.json` got `deny` from `block-protected-target-writes.sh`. Decision record: [AgDR-0323](../agdr/AgDR-0323-agy-harness-adapter.md).
 
 **Contract checked against:** agy CLI 1.5.14, bundled hooks reference `~/.gemini/antigravity-cli/builtin/skills/agy-customizations/docs/hooks.md`. That file is more current than the public web page. Check this page again after an agy upgrade.
 
@@ -268,7 +268,7 @@ The wrapper prints its decision before it writes the line, and it ignores loggin
 
 ## Related AgDRs
 
-- [AgDR-0320](../agdr/AgDR-0320-agy-harness-adapter.md): agy harness adapter
+- [AgDR-0323](../agdr/AgDR-0323-agy-harness-adapter.md): agy harness adapter
 - [AgDR-0088](../agdr/AgDR-0088-codex-adapter-generation.md): Codex adapter generation, the generator and drift-check precedent
 - [AgDR-0092](../agdr/AgDR-0092-opencode-gate-adapter.md): opencode adapter, the run-time read of `.claude/settings.json`
 - [AgDR-0250](../agdr/AgDR-0250-session-keyed-exemption-markers.md): session-keyed markers and `APEXYARD_SESSION_ID`

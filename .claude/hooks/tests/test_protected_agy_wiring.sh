@@ -1,5 +1,5 @@
 #!/bin/bash
-# agy hook wiring is a protected target in the live fork root (AgDR-0320).
+# agy hook wiring is a protected target in the live fork root (AgDR-0323).
 #
 # .agents/hooks.json, the agy plugin files, and harness-adapters/agy/ can each
 # switch the gates off under agy, or run another hook beside them.

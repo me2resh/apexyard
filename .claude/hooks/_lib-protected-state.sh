@@ -117,7 +117,7 @@ pt_live_fork() {
   physical=$(pt_physical "$p") || return 0
   pt_live_fork_form "$lexical" || pt_live_fork_form "$physical"
 }
-# agy hook wiring, relative to a live ApexYard fork root (AgDR-0320). Each
+# agy hook wiring, relative to a live ApexYard fork root (AgDR-0323). Each
 # path can switch the gates off under agy, or run another hook beside them:
 #   .agents/hooks.json      the wiring that bin/sync-agy-adapter.sh writes
 #   .agents/plugins/        plugin discovery; each plugin runs its own hooks.json

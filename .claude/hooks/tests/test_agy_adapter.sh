@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests for the Antigravity CLI (agy) adapter (AgDR-0320):
+# Tests for the Antigravity CLI (agy) adapter (AgDR-0323):
 #   harness-adapters/agy/agy-hook.sh   the hook wrapper
 #   bin/sync-agy-adapter.sh            the .agents/hooks.json generator
 #
