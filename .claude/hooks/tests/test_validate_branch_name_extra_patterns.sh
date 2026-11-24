@@ -68,6 +68,10 @@ make_sandbox() {
   cp "$SRC_ROOT/.claude/hooks/_lib-awk-fallback.sh" "$sb/.claude/hooks/"
   cp "$LIB_SRC" "$sb/.claude/hooks/_lib-extract-push-ref.sh"
   [ -f "$LIB_STRIP_HEREDOC_SRC" ] && cp "$LIB_STRIP_HEREDOC_SRC" "$sb/.claude/hooks/_lib-strip-heredoc.sh"
+  # The orbit/ records check runs before the extra-patterns block only when this
+  # library is present, so the case that a broad entry cannot unlock an orbit/
+  # name needs it.
+  [ -f "$SRC_ROOT/.claude/hooks/_lib-orbit-records.sh" ] && cp "$SRC_ROOT/.claude/hooks/_lib-orbit-records.sh" "$sb/.claude/hooks/"
   cp "$LIB_CONFIG_SRC" "$sb/.claude/hooks/_lib-read-config.sh"
   [ -f "$LIB_PR_REPO_SRC" ] && cp "$LIB_PR_REPO_SRC" "$sb/.claude/hooks/_lib-pr-repo.sh"
   cp "$DEFAULTS_SRC" "$sb/.claude/project-config.defaults.json"
@@ -143,13 +147,61 @@ run_case "unrelated branch is still BLOCKED when patterns are set" \
 # -- Invalid regex fails closed, with a message naming the problem ---------
 
 run_case "invalid regex fails closed with a clear message" \
-  "git push -u origin ABC-123-add-login" 2 "$BAD_REGEX_CONFIG" "invalid extended regex"
+  "git push -u origin ABC-123-add-login" 2 "$BAD_REGEX_CONFIG" "holds an invalid entry"
 
 run_case "invalid regex fails closed even when it is not the first entry" \
-  "git push -u origin ABC-123-add-login" 2 "$BAD_REGEX_SECOND_CONFIG" "invalid extended regex"
+  "git push -u origin ABC-123-add-login" 2 "$BAD_REGEX_SECOND_CONFIG" "holds an invalid entry"
 
 run_case "invalid regex blocks an otherwise conforming branch" \
-  "git push -u origin fix/GH-2083-extra-branch-patterns" 2 "$BAD_REGEX_CONFIG" "invalid extended regex"
+  "git push -u origin fix/GH-2083-extra-branch-patterns" 2 "$BAD_REGEX_CONFIG" "holds an invalid entry"
+
+# -- The list is validated before it is matched ----------------------------
+
+# A valid entry that matches, followed by an invalid one. Matching in list order
+# would pass this name before the bad entry is read.
+VALID_THEN_BAD_CONFIG='{"branch":{"extra_patterns":["^ABC-[0-9]+-.+$","^X-[0-9"]}}'
+# A JSON "\n" inside one entry would split into two patterns, and the second
+# (".*") would accept every name.
+NEWLINE_ENTRY_CONFIG='{"branch":{"extra_patterns":["^NOPE-[0-9]+$\n.*"]}}'
+STRING_VALUE_CONFIG='{"branch":{"extra_patterns":"^ABC-[0-9]+-.+$"}}'
+NUMBER_ENTRY_CONFIG='{"branch":{"extra_patterns":[5]}}'
+OBJECT_ENTRY_CONFIG='{"branch":{"extra_patterns":[{"a":"^ABC-.*$"}]}}'
+BROAD_CONFIG='{"branch":{"extra_patterns":[".*"]}}'
+
+run_case "invalid entry AFTER a matching entry still fails closed" \
+  "git push -u origin ABC-1-foo" 2 "$VALID_THEN_BAD_CONFIG" "holds an invalid entry"
+
+run_case "the message names the bad entry" \
+  "git push -u origin ABC-123-add-login" 2 "$BAD_REGEX_CONFIG" '^ABC-[0-9'
+
+run_case "false in place of the array fails closed" \
+  "git push -u origin ABC-123-add-login" 2 '{"branch":{"extra_patterns":false}}' "holds an invalid entry"
+
+run_case "an entry holding a newline fails closed" \
+  "git push -u origin random-branch" 2 "$NEWLINE_ENTRY_CONFIG" "holds an invalid entry"
+
+run_case "a string in place of the array fails closed" \
+  "git push -u origin ABC-123-add-login" 2 "$STRING_VALUE_CONFIG" "holds an invalid entry"
+
+run_case "a number entry fails closed" \
+  "git push -u origin ABC-123-add-login" 2 "$NUMBER_ENTRY_CONFIG" "holds an invalid entry"
+
+run_case "an object entry fails closed" \
+  "git push -u origin ABC-123-add-login" 2 "$OBJECT_ENTRY_CONFIG" "holds an invalid entry"
+
+# -- Push-ref forms and ORBIT: the new block takes no different path -------
+
+run_case "HEAD:<name> push-ref form matches on its destination" \
+  "git push origin HEAD:ABC-123-add-login" 0 "$JIRA_CONFIG"
+
+run_case "HEAD:<name> push-ref form is BLOCKED when the destination does not match" \
+  "git push origin HEAD:random-branch" 2 "$JIRA_CONFIG"
+
+run_case "a broad entry cannot unlock an orbit/ branch that fails the records check" \
+  "git push -u origin orbit/unknown-initiative-first-slice" 2 "$BROAD_CONFIG"
+
+run_case "a broad entry accepts any other name (the adopter's choice)" \
+  "git push -u origin random-branch" 0 "$BROAD_CONFIG"
 
 # -- Regression: the normal path and the built-in exemptions --------------
 

@@ -31,7 +31,10 @@ Renaming such a branch breaks the tracker link, so the gate accepts extra shapes
 - Each entry is an extended regex matched against the whole branch name.
 - A match passes the branch-name gate. No match falls through to the normal `type/` rule.
 - The list is empty by default, so the default shape stays the same.
-- An invalid regex fails closed and the hook names the bad entry.
+- The hook checks every entry before it matches any. A bad entry fails closed and the hook names it: an invalid regex, a non-string, an entry with a newline, or a value that is not an array.
+- Write portable POSIX ERE (`[0-9]`, not `\d`) and no backreferences. BSD and GNU grep differ.
+- A broad pattern such as `.*` turns off the branch-name check for every branch that reaches this key. That choice belongs to the adopter. Protected-branch rules still apply.
+- The gate reads this key only from the ops fork's config, so it applies to every managed project that session pushes to.
 
 This relaxes the branch-name check only. Every other gate still applies. See `docs/project-config.md` and me2resh/apexyard#2083.
 

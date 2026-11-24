@@ -167,8 +167,20 @@ loses the integration or works around the hook.
   `type/` rule, unchanged.
 - The list is empty by default, so an adopter who does not set it keeps
   today's behaviour exactly.
-- An invalid regex fails **closed**: the hook blocks and names the bad entry.
-  A malformed pattern never widens the gate by accident.
+- The hook checks every entry before it matches any. A bad entry fails
+  **closed**: the hook blocks and names it. An entry is bad when it is an
+  invalid regex, is not a string, or holds a newline. A value that is not an
+  array is bad too. A malformed list never widens the gate by accident.
+- Write portable POSIX ERE, such as `[0-9]`. Do not use `\d` or backreferences.
+  The hook uses the grep on the machine, and BSD grep (macOS) and GNU grep
+  (Linux) differ on those. A backreference pattern can also run for a long
+  time on BSD grep. An empty-string entry is ignored.
+- A broad pattern such as `.*` turns off the branch-name check for every branch
+  that reaches this key. That choice belongs to the adopter. Protected-branch
+  rules, trunk names and `orbit/` records checks still apply first.
+- The gate reads this key only from the ops fork's `.claude/project-config.json`.
+  It applies to every managed project that session pushes to. A pattern for one
+  project's tracker also accepts that shape in the others.
 - The array replaces the default array (standard merge rule), so copy any
   entries you want to keep.
 
