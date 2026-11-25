@@ -14,8 +14,7 @@
 # parenthesised one: `(` and `{` are prose punctuation as often as command
 # openers, so blocking them would be a false block on an ordinary command
 # (AgDR-0267). `(git add -A)` and `{ git add -A; }` are therefore NOT caught —
-# an exotic-shape residue that `dev` also left open (epic #1846), not a
-# regression.
+# a residue that `dev` also left open and that #2087 records, not a regression.
 #
 # Exit 0 if every case passes; 1 on the first failing case.
 
@@ -79,11 +78,10 @@ expect 2 'cd x
 
 # --- #2087: shapes that met the AgDR-0267 bar --------------------------------
 # Wrapper options, attached and other git global options, an absolute or
-# escaped git path, a quoted assignment value (double-quoted only), a `$( )`
-# substitution, and a bare `eval` are ordinary commands, so the cheap catch
-# lands here. Single-quoted FOO values with spaces are accepted residuals
-# (they were not caught before #2073 either, and AgDR-0262 ranks the kind‑1
-# prose‑block cost first).
+# escaped git path, a quoted assignment value (double-quoted only), and a bare
+# `eval` are ordinary commands, so the cheap catch lands here. Single-quoted
+# FOO values with spaces and a whole-command `$( )` substitution are accepted
+# residuals (the AgDR-0267 kind-1 bar ranks the false-block cost first).
 expect 2 'sudo -u root git add -A'
 expect 2 'sudo -E git add -A'
 expect 2 'env -i git add -A'
@@ -95,12 +93,18 @@ expect 2 '/usr/bin/git add -A'
 expect 2 '\git add -A'
 expect 2 'FOO="a b" git add -A'
 expect 0 "FOO='a b' git add -A"
-expect 2 'echo "$(git add -A)"'
+# A whole-command `$( )` substitution is a residual (#2110 review): the `$(`,
+# position also fires inside single quotes, grep patterns and quoted heredocs.
+expect 0 'echo "$(git add -A)"'
+# A substitution that contains a separator is still caught through the
+# separator, which is a real command position.
+expect 2 'echo "$(cd x; git add -A)"'
 expect 2 "eval 'git add -A'"
 expect 2 'eval "git add -A"'
 expect 2 'eval git add -A'
 expect 2 'eval "git add ."'
-# The eval branch stays narrow: the previous word must not be `eval` alone.
+# The eval branch stays narrow: the staging command must be the first word of
+# the eval argument.
 expect 0 "eval 'cd x && git add -A'"
 expect 0 'eval "$(fnm env)"'
 
@@ -138,6 +142,24 @@ expect 0 'git -C sub add src/'
 expect 0 'git --no-pager log'
 expect 0 "bash build.sh"
 expect 0 'zsh -l'
+
+# --- #2110 round 2: allow pins for the narrowed option and `$(` rules --------
+# Only the options that take a value may consume the next word. A read-only
+# search whose pattern is a bare `add` followed by `.` must stay allowed.
+expect 0 'git --no-pager grep -n add .'
+expect 0 'git -P grep -w add .'
+expect 0 'git --no-pager log --oneline --grep add .'
+expect 0 'git --no-pager log -S add .'
+# Flag options stay caught when the staging command really follows them.
+expect 2 'git -P add .'
+expect 2 'git --no-pager add -A'
+# A `$( )` mention is ordinary prose in a grep pattern or a quoted message.
+expect 0 'echo '"'"'docs: $(git add -A) is now caught'"'"''
+expect 0 "grep -rn '\$(git add -A)' .claude/"
+expect 0 "rg -F 'the hook catches \$(git add -A) now' docs/"
+expect 0 'cat > notes.md <<'"'"'EOF'"'"'
+$(git add -A) is only text here
+EOF'
 # A closing quote right after the flag is not a terminator, so this prose
 # mention stays allowed (the header names this shape; #2073 delta review).
 expect 0 'git commit -m "x && git add -A"'

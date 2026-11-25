@@ -26,9 +26,9 @@ fi
 # allowed for the same reason: `(` and `{` are prose punctuation as often as
 # command openers, and treating them as command positions would block ordinary
 # review prose. That is a false block on an ordinary command (kind 1,
-# AgDR-0267), so it outranks the catch. The cost is deliberate and named:
-# `(git add -A)` and `{ git add -A; }` are NOT caught. `dev` did not catch
-# them either, so they are exotic shapes that stay advisory (epic #1846).
+# AgDR-0267 § "Review bar for gate PRs"), so it outranks the catch. The cost
+# is deliberate and named: `(git add -A)` and `{ git add -A; }` are NOT
+# caught. `dev` did not catch them either, so #2087 records them as residuals.
 # A heredoc body is NOT stripped before this check: the governance rule in
 # _lib-strip-heredoc.sh forbids deciding whether a gate fires from stripped
 # text, so a body line that starts with `git add -A` still blocks. Write the
@@ -38,7 +38,11 @@ fi
 # done"` blocks, while `"x && git add -A"` stays allowed because a closing
 # quote right after the flag is not a direct-pattern terminator. The `-c`
 # wrapper tail does accept a closing quote, so a wrapper mention inside prose
-# still blocks. AgDR-0262 accepts prose blocks; use `-F` / `--body-file`.
+# still blocks. That prose block is the accepted cost of the `-c` wrapper
+# catch under the AgDR-0267 kind-1 bar; use `-F` / `--body-file`.
+# The absolute-path and git-option prefixes join the same separator-prose
+# class: `echo "x; /usr/bin/git add -A done"` blocks, while a quoted mention
+# with no trailing text stays allowed.
 # Triage of the shapes tracked in me2resh/apexyard#2087, against the AgDR-0267
 # bar: handle an ordinary command, or stay cheap without adding parser surface.
 #
@@ -49,15 +53,23 @@ fi
 #   - an absolute path to git: `/usr/bin/git add -A`.
 #   - a backslash-escaped command name: `\git add -A`.
 #   - a double-quoted assignment value with spaces: `FOO="a b" git add -A`.
-#   - a `$( )` command substitution, through the `$(` command position.
 #   - a bare `eval 'git add -A'`, through its own narrow branch: the staging
 #     command must be the first word of the eval argument.
 #
 # Accepted residuals, each with its one-line reason:
 #   - `(` and `{` openers. Treating them as command positions reopens the
-#     quoted-prose false blocks pinned below, which AgDR-0262 ranks first.
+#     quoted-prose false blocks pinned below, which the AgDR-0267 kind-1 bar
+#     ranks first.
 #   - a backtick command substitution. A backtick is ordinary markdown prose
 #     punctuation, so a command position there blocks prose mentions.
+#   - a whole-command `$( )` substitution, e.g. `echo "$(git add -A)"`. The
+#     `$(` position also fires inside single quotes, a grep pattern and a
+#     quoted heredoc, where the shell runs nothing; `dev` allowed those, so
+#     blocking them is a kind-1 false block (#2110 review). A substitution
+#     that contains a separator (`$(cd x; git add -A)`) stays caught through
+#     the separator.
+#   - a wrapper word outside the fixed list, or an end-of-options marker after
+#     one. Both are exotic under AgDR-0267, and the list is deliberately fixed.
 #   - a single-quoted assignment value with spaces (`FOO='a b' git add -A`).
 #     A portable single-quote match needs a shell-built pattern; the hex
 #     escape for a quote is not portable: BSD grep reads it as a quote, GNU
@@ -68,11 +80,14 @@ fi
 # The header stays aligned with the matrix in test_block_git_add_all.sh.
 _add_flag='(-A|--all|\.)'
 _add_tail='([[:space:];&|)}<>]|$)'
-_add_pos='(^[[:space:]]*|[;&|][[:space:]]*|[[:space:]](then|do|else)[[:space:]]+|\$\([[:space:]]*)'
+_add_pos='(^[[:space:]]*|[;&|][[:space:]]*|[[:space:]](then|do|else)[[:space:]]+)'
 _add_prefix='((sudo|env|command|nohup|time|exec|builtin)([[:space:]]+-{1,2}[A-Za-z][A-Za-z0-9-]*([[:space:]]+[^[:space:]]+)?)*[[:space:]]+)*([A-Za-z_][A-Za-z0-9_]*=([^[:space:]]*|"[^"]*")[[:space:]]+)*'
-# Any git global option, attached or separated: `-Csub`, `-C sub`,
-# `--git-dir=.git`, `--git-dir .git`, `--no-pager`.
-_add_gitopt='((-[A-Za-z]([A-Za-z0-9-]*|[[:space:]]+[^[:space:];&|]+)|--[a-z][a-z-]*([=][^[:space:];&|]+|[[:space:]]+[^[:space:];&|]+)?)[[:space:]]+)*'
+# A git global option, attached or separated. Only `-C`, `-c` and the long
+# options that take a value may consume the next word; a flag such as
+# `--no-pager` or `-P` must not, or `git --no-pager grep -n add .` reads
+# `grep` as the option value and the trailing `add .` as staging (#2110
+# review, kind 1).
+_add_gitopt='((-[Cc][[:space:]]+[^[:space:];&|]+|-[A-Za-z][A-Za-z0-9-]*|--(git-dir|work-tree|namespace|super-prefix|config-env)[[:space:]]+[^[:space:];&|]+|--[a-z][a-z-]*(=[^[:space:];&|]+)?)[[:space:]]+)*'
 # An absolute path to git, or a backslash-escaped command name, is the same
 # command at a command position.
 _add_gitcore="([[:alnum:]_./\\\\-]+/)?[\\\\/]?git[[:space:]]+${_add_gitopt}add[[:space:]]+${_add_flag}"
