@@ -65,6 +65,11 @@ assert_frontmatter_contains() {
 
 unset CLAUDE_CODE_SESSION_ID
 TMPBASE=$(mktemp -d "${TMPDIR:-/tmp}/sync-opencode-commands-test.XXXXXX") || exit 1
+# `TMPDIR` can end in a slash (macOS sets it that way), so `mktemp` returns a
+# path with a doubled slash. The generator normalises repeated slashes in the
+# paths it logs, so collapse them here too; otherwise the "drift names the
+# file" assertion fails on macOS and passes on Linux.
+TMPBASE=$(printf '%s\n' "$TMPBASE" | sed 's#//*#/#g')
 trap 'rm -rf "$TMPBASE"' EXIT
 
 # Fixture fork: three usable skills, one dir without SKILL.md, one _lib helper
