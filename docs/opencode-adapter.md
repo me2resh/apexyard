@@ -1,6 +1,6 @@
 # opencode Adapter
 
-apexyard's governance initially targeted Claude Code. `CLAUDE.md` is auto-loaded at session start, `.claude/hooks/*.sh` mechanically enforce the merge gate / ticket-first / secrets-scan rules, and `.claude/skills/*.md` become typed slash commands. [opencode](https://opencode.ai) has a different shape: a plugin-extensible agent CLI with an `execute.before` tool hook. It has no built-in slash-command runner and no Claude-Code-style hook wiring of its own. **apexyard reaches opencode through a plugin that shells out to the same, unmodified `.claude/hooks/*.sh` scripts Claude Code uses**: one governance implementation, enforced under two harnesses.
+apexyard's governance initially targeted Claude Code. `CLAUDE.md` is auto-loaded at session start, `.claude/hooks/*.sh` mechanically enforce the merge gate / ticket-first / secrets-scan rules, and `.claude/skills/*.md` become typed slash commands. [opencode](https://opencode.ai) has a different shape: a plugin-extensible agent CLI with an `execute.before` tool hook. It ships no way to turn a skill file into an operator-typed command, and no Claude-Code-style hook wiring of its own. **apexyard reaches opencode through a plugin that shells out to the same, unmodified `.claude/hooks/*.sh` scripts Claude Code uses**: one governance implementation, enforced under two harnesses.
 
 This adapter **serves both plugin generations from one entrypoint**. opencode 2.x calls `setup(ctx)` on a definition object. opencode 1.3.4+ calls `server()` on that same object. The export is `{ id: "apexyard.gates", setup, server }`. 2.x rejects a bare V1 `async (input) => hooks` factory with `Plugin must export a default definition with an id and an effect or setup function`, so the object carries both members. Running the release binaries verifies the 1.3.4 floor: 1.3.3 fails with `fn3 is not a function`, and 1.3.4 loads the object and calls `server()`. See the tool-id table below for the per-generation vocabulary.
 
@@ -12,6 +12,31 @@ The adapter (`harness-adapters/opencode/src/gate-dispatcher.ts`) derives its gat
 
 Concretely, the opencode adapter enforces the following non-exhaustive list. The list is whatever `.claude/settings.json` wires, not a fixed set. It includes the two-marker merge gate (`block-unreviewed-merge.sh`) and red-CI merge blocking (`block-merge-on-red-ci.sh`). It includes design and architecture review gates (`require-design-review-for-ui.sh`, `require-architecture-review.sh`), secrets scanning (`check-secrets.sh`), and leak protection (`block-private-refs-in-public-repos.sh`). It includes ticket-first and migration-ticket-first edit blocking (`require-active-ticket.sh`, `require-migration-ticket.sh`), and every other blocking `PreToolUse` hook the framework ships or an adopter adds. This happens automatically, with zero adapter changes required when the framework or an adopter wires a new gate.
 
+## Slash commands
+
+opencode discovers `.claude/skills` as a skill source. An agent can load a skill from it. The tree never becomes operator-invocable slash commands, because the `/` menu reads `.opencode/commands/*.md` only. Under Claude Code the same file serves both roles. `bin/sync-opencode-commands.sh` closes that half of the harness gap (me2resh/apexyard#2064):
+
+```bash
+bin/sync-opencode-commands.sh            # write or refresh, prune stale wrappers
+bin/sync-opencode-commands.sh --check    # write nothing; exit 1 when out of date
+```
+
+It writes one wrapper per `.claude/skills/<id>/SKILL.md`, at `.opencode/commands/<id>.md`:
+
+- The generator copies the skill's `description:` into the wrapper frontmatter. When the skill has an `argument-hint`, the generator appends it to that same value as `Usage: <hint>`, inside the one block scalar. The `/` menu and the command palette then show the same summary Claude Code shows. The hint stays out of the body on purpose, because opencode expands `$`, `@` and `!` in a command template at invocation time. The body is template text.
+- The body instructs the agent to load `<id>` with the skill tool and to forward `$ARGUMENTS`. The skill body therefore stays the single source of truth: prose edits need no regeneration, and only a `description:` or `argument-hint:` change does.
+- The generator prunes only wrappers that carry its marker. It never removes a hand-written `.opencode/commands/*.md`. The same marker guards the write path: when the target exists without it, the generator warns and skips that name. `--check` reports the clash as a name conflict, not as drift, because the generator did not write the file.
+- The generator refuses to write through a symlink. It skips a symlinked target, and any other non-regular target, such as a directory. It resolves a relative `--out` against the physical working directory and collapses `.` and `..` before checking. The generator writes to the collapsed path, even when a `..` follows a symlinked component. The generator checks every component of the output path below the fork root, so a symlink inside the fork stops the run with exit 2. It allows a symlink above the fork root, such as a symlinked projects or home folder. An `--out` outside the fork is the operator's named destination, so the generator checks only its last component. An empty `--out` and `/` itself are usage errors.
+- The generator skips `_lib-*` helpers, directories without a `SKILL.md`, and names that are not valid command IDs. It falls back to `apexyard /<id> skill` for a skill whose `description:` is a block scalar, and it says so on stderr.
+
+`.gitignore` lists `.opencode/commands/`. The wrappers regenerate per machine and per fork, the same way the install script's `.opencode/apexyard/` code directory and its `.opencode/plugins/apexyard.ts` shim stay local. Run the generator once after installing the adapter. `/update` regenerates them for a fork that has the opencode adapter, unless the operator passes `--skip-adapter-sync` (step 1e). It detects the adapter through the shim at `.opencode/plugins/apexyard.ts`, or through the pre-#2072 directory at `.opencode/plugins/apexyard/`. A fork that pulls new skills keeps its menu current. A fork that commits the wrappers instead can wire `--check` into CI.
+
+Command names come from skill IDs, so they shadow any opencode built-in with the same name: `/status` is apexyard's status skill, not opencode's.
+
+The generator writes the `description:` frontmatter as a block scalar. A skill description can then hold a colon, quotes, backticks, or an em dash without escaping.
+
+Tests: `bash .claude/hooks/tests/test_sync_opencode_commands.sh`.
+
 ## Install
 
 ```bash
@@ -19,6 +44,7 @@ cd harness-adapters/opencode
 npm install
 cd ../..
 bash bin/install-opencode-adapter.sh   # writes .opencode/apexyard/ plus a shim in .opencode/plugins/
+bash bin/sync-opencode-commands.sh     # writes .opencode/commands/ (slash commands)
 ```
 
 **The discovery directory is PLURAL: `.opencode/plugins/`, not `.opencode/plugin/`.** An earlier version of this doc claimed opencode's discovery glob accepted either form. That was wrong, confirmed live against opencode 1.17.16 in [me2resh/apexyard#844](https://github.com/me2resh/apexyard/issues/844). The singular form silently loads nothing.

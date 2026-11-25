@@ -47,7 +47,7 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 /update --git-merge                  # history merge (git merge) instead of the per-file update
 /update --from-version v1.2.0        # override the version anchor (use when fork anchor is missing/wrong)
 /update --skip-migrations            # files-only sync; do NOT run the per-version migration chain
-/update --skip-adapter-sync          # do not refresh an already-installed Codex adapter
+/update --skip-adapter-sync          # do not refresh generated adapters or opencode commands
 /update --from-dev                   # (hidden) pull from upstream/dev — pre-release; expect breakage
 ```
 
@@ -61,7 +61,7 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 | `--dry-run` | Run the preview step only. Print the commit delta and exit; no fetch-after-preview, no branch creation, no merge. **Does NOT execute migrations**: only previews the planned chain. |
 | `--from-version vN.N.N` | Explicit version-anchor override. Use when `.claude/framework-version` is missing (legacy fork pre-v1.4.0) OR you have manually rolled back and the anchor is stale. The chain is built against this value instead of the file. Refuses if the value does not match `vMAJOR.MINOR.PATCH`. |
 | `--skip-migrations` | Sync the framework files but DO NOT run the per-version migration chain. Prints an advisory warning naming each skipped pair and reminding the operator that the migrations can be replayed later with `bash .claude/migrations/<pair>.sh`. The anchor file IS still advanced to the new release tag, so subsequent runs will not re-offer the same migrations. Use sparingly: the chain is the point. |
-| `--skip-adapter-sync` | Do not refresh an already-installed Codex adapter. Detection is installation-based, not harness-session-based: without this flag, `/update` reconciles only a manifest-backed or complete legacy ApexYard Codex adapter and leaves uninstalled forks untouched. Intended as a troubleshooting escape hatch. |
+| `--skip-adapter-sync` | Do not refresh the generated artifacts `/update` reconciles. That is an installed Codex adapter and, when the opencode adapter is installed, the opencode slash-command wrappers. Detection is installation-based, not harness-session-based: without this flag, `/update` reconciles only a manifest-backed or complete legacy ApexYard Codex adapter and regenerates only opencode wrappers for a fork that has the opencode adapter. Uninstalled artifacts are left untouched. Intended as a troubleshooting escape hatch. |
 | `--from-dev` | **Hidden / opt-in.** Sync from `upstream/dev` (pre-release work) instead of the latest `upstream/main` tag. Prints a `⚠ PRE-RELEASE SYNC` banner BEFORE any fetch/state-mutation. Same sync-branch + conflict-resolution flow; branch is named `chore/sync-upstream-dev` (or `chore/#<TICKET>-sync-upstream-dev` if a tracking issue is supplied). Intended for the framework maintainer (testing pre-release work on another machine) and for adopters who explicitly want to validate an upcoming framework change. **Not** in the skill's `description` frontmatter on purpose: `/help` should not surface it, since the adopter contract is tagged releases (see AgDR-0007 release-cut model). Combinable with `--rebase` and `--dry-run`. **When `--from-dev` is set, the migration chain is automatically skipped**: pre-release work does not have a release tag to anchor against. |
 
 ## Output
@@ -224,6 +224,41 @@ Unlike the SessionStart advisory nudge described below, an explicit `/update`
 is strict: a detected adapter that cannot be generated and verified makes the
 update fail instead of being reported as current.
 
+#### 1e. Reconcile installed opencode command wrappers
+
+A fork that runs the opencode adapter needs one more artifact refreshed, or a
+skill added upstream never appears in opencode's `/` menu. The wrappers are
+generated, gitignored files, so they cannot come down with the sync. This step
+regenerates them when the adapter is installed and does nothing otherwise.
+
+```bash
+reconcile_installed_opencode_commands() {
+  if [ "$SKIP_ADAPTER_SYNC" = "1" ]; then
+    echo "opencode command reconciliation skipped (--skip-adapter-sync)."
+    return 0
+  fi
+  local root script
+  root="$(git rev-parse --show-toplevel)"
+  if [ ! -f "$root/.opencode/plugins/apexyard.ts" ] && [ ! -d "$root/.opencode/plugins/apexyard" ]; then
+    return 0
+  fi
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "DRY-RUN: would regenerate opencode command wrappers."
+    return 0
+  fi
+  script="$root/bin/sync-opencode-commands.sh"
+  if [ ! -f "$script" ]; then
+    echo "opencode command reconciliation failed: missing $script" >&2
+    return 1
+  fi
+  bash "$script" --root "$root"
+}
+```
+
+A hand-written `.opencode/commands/<name>.md` that collides with a skill name is
+reported and left alone. It is the operator's file, and the directory is
+gitignored, so no git operation can restore it.
+
 ### 2. Fetch both remotes
 
 `git fetch upstream --quiet` brings down all upstream branches by default (including `upstream/dev`), so a single fetch covers both the default and the `--from-dev` target. No conditional fetch needed.
@@ -309,11 +344,21 @@ Then report. Examples:
 **Up-to-date (no tag drift, no commit drift):**
 
 ```bash
-reconcile_installed_codex_adapter || exit 1
-marker_home="$(git rev-parse --show-toplevel)"
-. "$marker_home/.claude/hooks/_lib-session-markers.sh"
-skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session id is required. Restart through the harness adapter." >&2; exit 2; }
-rm -f "$skill_marker"
+# Every exit path past step 0 must clear the bootstrap marker, including a
+# reconciliation failure. A marker left behind keeps the ticket-first exemption
+# open until its expiry, so both helpers run under one cleanup guard.
+cleanup_bootstrap_marker() {
+  local marker_home skill_marker
+  marker_home="$(git rev-parse --show-toplevel)"
+  # shellcheck disable=SC1091
+  . "$marker_home/.claude/hooks/_lib-session-markers.sh"
+  skill_marker=$(active_bootstrap_marker_path "$marker_home") || return 0
+  rm -f "$skill_marker"
+}
+
+reconcile_installed_codex_adapter || { cleanup_bootstrap_marker; exit 1; }
+reconcile_installed_opencode_commands || { cleanup_bootstrap_marker; exit 1; }
+cleanup_bootstrap_marker
 
 echo "Fork is up to date with upstream/main. Nothing to sync."
 ```
@@ -322,9 +367,10 @@ Exit 0.
 
 Any other preview path that exits 0 without creating a sync branch (for
 example, the operator declines unreleased `upstream/main` commits) MUST call
-`reconcile_installed_codex_adapter` before cleanup and exit. This closes the
-stale-adapter bug even when there is no release work to merge. `--dry-run`
-reaches the same helper but prints intent without mutating files.
+`reconcile_installed_codex_adapter` and `reconcile_installed_opencode_commands`
+before cleanup and exit. This closes the stale-adapter bug even when there is
+no release work to merge. `--dry-run` reaches both helpers but prints intent
+without mutating files.
 
 **No release drift, but main has moved (common, NOT actionable):**
 
@@ -1049,7 +1095,7 @@ Topology drift: <N projects drifted | skipped> ({…}, …)
 
 This step **always** runs after step 8b. It does NOT block the sync: drift handling is purely additive and reversible (the operator can re-run `/update` later).
 
-### 8d. Reconcile an installed Codex adapter
+### 8d. Reconcile generated adapter output (Codex adapter, opencode command wrappers)
 
 After framework files, migrations, config offers, and topology handling have
 settled, refresh generated Codex output from the final canonical `.claude/`
@@ -1059,6 +1105,13 @@ state:
 reconcile_installed_codex_adapter || {
   echo "Framework files synced, but the installed Codex adapter could not be reconciled." >&2
   echo "Fix the generator error, then retry: bash bin/sync-codex-adapter.sh --reconcile-installed" >&2
+  cleanup_bootstrap_marker
+  exit 1
+}
+reconcile_installed_opencode_commands || {
+  echo "Framework files synced, but the installed opencode command wrappers could not be regenerated." >&2
+  echo "Fix the generator error, then retry: bash bin/sync-opencode-commands.sh" >&2
+  cleanup_bootstrap_marker
   exit 1
 }
 ```
@@ -1167,8 +1220,9 @@ Skill done. No remote state changed.
 | Anchor file says `unknown` (malformed content) | Treated identically to missing: interactive prompt in step 8b. |
 | Chain has a missing link (release shipped without a migration script) | Refuse with a clear message naming the gap; advance the anchor anyway so subsequent runs do not loop on the same gap. This is a framework bug: file an issue. |
 | `--skip-migrations` passed | Chain detection runs (printed for visibility) but no `migration_run` invocations. Anchor still advances. |
-| `--skip-adapter-sync` passed | Skip adapter detection/generation on every exit path; framework sync behavior is unchanged. |
+| `--skip-adapter-sync` passed | Skip adapter detection/generation and opencode command regeneration on every exit path; framework sync behavior is unchanged. |
 | Codex adapter reconciliation fails during explicit `/update` | Fail non-zero and print the direct `--reconcile-installed` retry command; never report stale generated governance as current. |
+| opencode command regeneration fails during explicit `/update` | Fail non-zero and print `bash bin/sync-opencode-commands.sh`; a missing or broken generator must not pass silently. The bootstrap marker is cleared before the non-zero exit. |
 | Individual migration exits 1 (conflict) | Chain pauses. Anchor NOT advanced. Operator resolves, then re-runs `/update`. |
 | Individual migration exits 2 (hard error) | Chain aborts. Anchor NOT advanced. Print the script's stderr and exit 2. |
 | `--from-version` argument fails the semver regex | Refuse with `--from-version: expected vMAJOR.MINOR.PATCH (got 'X')`. Exit 1 before any fetch. |
@@ -1250,7 +1304,7 @@ skill_marker=$(active_bootstrap_marker_path "$marker_home") || { echo "A session
 rm -f "$skill_marker"
 ```
 
-Always remove the bootstrap marker on a clean exit (after the sync branch is ready to push, or on a confirmed-abort during conflict resolution). If the skill is interrupted, `clear-bootstrap-marker.sh` clears the marker when the same session restarts.
+Always remove the bootstrap marker on a clean exit (after the sync branch is ready to push, or on a confirmed-abort during conflict resolution). A reconciliation failure is also an exit path: the up-to-date preview and step 8d clear the marker before their non-zero exit. If the skill is interrupted, `clear-bootstrap-marker.sh` clears the marker when the same session restarts.
 
 ## Related
 

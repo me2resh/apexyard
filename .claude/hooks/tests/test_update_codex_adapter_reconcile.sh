@@ -126,7 +126,7 @@ fi
 call_count=$(grep -c '^reconcile_installed_codex_adapter ||' "$SKILL")
 early_call=$(grep -n '^reconcile_installed_codex_adapter ||' "$SKILL" | head -n 1 | cut -d: -f1)
 current_report=$(grep -n 'echo "Fork is up to date with upstream/main' "$SKILL" | head -n 1 | cut -d: -f1)
-late_heading=$(grep -n '^### 8d\. Reconcile an installed Codex adapter' "$SKILL" | cut -d: -f1)
+late_heading=$(grep -n '^### 8d\. Reconcile generated adapter output' "$SKILL" | cut -d: -f1)
 final_heading=$(grep -n '^### 9\. Final state' "$SKILL" | cut -d: -f1)
 
 if [ "$call_count" -eq 2 ]; then
