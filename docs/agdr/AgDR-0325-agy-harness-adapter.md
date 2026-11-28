@@ -73,7 +73,7 @@ Whether agy prompts for an `ask` call depends on agy's own settings, not on the 
 | Fork check | The wrapper applies the settings.json resolver's walk from the workspace. A walk that finds no fork, or another fork, gets `deny`. | The resolver exits 0 when it finds no fork. A nested anchor would run another fork's gates. |
 | Existing terminals | A `run_command` with `RequestedTerminalID`, or with a `RunPersistent` other than `false`, gets `deny`. | Such a command runs in an existing terminal. Its directory can differ from the gated `Cwd`, for example after an earlier `cd`, so the gates would judge the wrong folder. agy CLI 1.5.14 does not declare these keys. |
 | Nested `.agents/` config | On every PreToolUse and SessionStart call, the wrapper checks each folder from agy's directory up to, but not including, the fork root. It starts at the top-level `cwd` and at `workspacePaths[0]`, in lexical and physical form. A `.agents/hooks.json`, `.agents/plugins.json`, or `.agents/plugins/` there gets `deny` for every tool, and an error step at SessionStart: "a nested .agents hook or plugin config at <dir> can override the fork's hooks. A person must remove it from the live fork, because the gates block an agent's removal". | agy reads `.agents/` config in the folders between its directory and the fork root, so a nested file could override the fork's hooks. The wiring protection below stops a write through the gates that creates such a file. This check catches a file that already exists, for example one that a person or another tool made. The walk checks only the ancestors on the path, so its cost stays small. The fork root's own `.agents/` is the real wiring. A linked worktree is its own fork root. A sibling folder, or a managed project under `workspace/` while agy runs in the fork root, is not on the path. |
-| Terminal sandbox | A `run_command` with a `BypassSandbox` other than absent or JSON `false` gets `deny`: it "asks agy to run outside its terminal sandbox; ApexYard does not allow agy to drop its sandbox". `IsDaemon` stays allowed, and its `CommandLine` still goes through the gates. | The repo enforces the policy, not agy. agy's sandbox is a second layer under the gates, and a call must not remove it. The cost: in a linked worktree, agy's git can fail inside the sandbox with "not a git repository: (null)", and agy may retry with `BypassSandbox`. That retry is now denied, so git inside a worktree may not work under agy. The fork root is not affected. |
+| Terminal sandbox | A `run_command` with a `BypassSandbox` other than absent or JSON `false` gets `deny`: it "asks agy to run outside its terminal sandbox; ApexYard does not allow agy to drop its sandbox". `IsDaemon` stays allowed, and its `CommandLine` still goes through the gates. | The repo enforces the policy, not agy. agy's sandbox is a second layer under the gates, and a call must not remove it. The cost: in a linked worktree, agy's git can fail inside the sandbox with "not a git repository: (null)", and agy may retry with `BypassSandbox`. That retry is now denied, so git inside a worktree may not work under agy. The fork root is not affected. The 2026-11-28 amendment reverses this deny. |
 | Run directory | A `run_command` runs in `args.Cwd`, else in the top-level `cwd`, else in the workspace. The value must be an existing directory. A top-level `cwd` outside the fork gets `deny`. | agy runs commands in its `cwd`. An explicit `args.Cwd` outside the fork is one command's choice, and the gates judge it there. |
 | Relative paths | When the top-level `cwd` differs from the workspace, a relative `Path`, `TargetFile`, or `args.Cwd` gets `deny`. | The contract does not say which folder a relative path uses. A guess could let a gate judge the wrong file. |
 | SessionStart | The wrapper prints the nested `systemMessage` and `errorMessage` shapes. | agy ignores a plain string. |
@@ -109,7 +109,7 @@ Open questions from the issue:
 - PreToolUse gates for `Bash`, `Write`, and `Edit` are live-checked under agy CLI 1.5.14 on the fork build and on this port. The `MultiEdit` gates run by construction only.
 - The wrapper never auto-approves a call. agy's permission settings decide whether agy prompts.
 - The `permissions.deny` rules apply literally, and the wrapper reads gates and rules only from `.claude/settings.json` (not `.claude/settings.local.json` or user settings). Pipes, chains, wrapped commands, and absolute command paths are not caught.
-- agy cannot drop its terminal sandbox. So git inside a linked worktree may fail under agy. The fork root is not affected.
+- agy cannot drop its terminal sandbox. So git inside a linked worktree may fail under agy. The fork root is not affected. The 2026-11-28 amendment replaces this consequence.
 - agy cannot use `grep_search` in the fork. It can search with `run_command`, which the gates judge.
 - PostToolUse, UserPromptSubmit, and ConfigChange handlers do not run under agy.
 - agy cannot use the subagent, schedule, browser, or MCP tools in the fork until each gets a mapping and a live check.
@@ -127,3 +127,62 @@ Open questions from the issue:
 - `bin/sync-codex-adapter.sh` (`--clean` scope)
 - `.claude/hooks/tests/test_agy_adapter.sh`, `.claude/hooks/tests/test_protected_agy_wiring.sh`, and `.claude/hooks/tests/fixtures/agy-payloads/`
 - `docs/harnesses/agy.md`
+
+## Amendment — 2026-11-28, #2089
+
+The wrapper now allows a boolean `BypassSandbox` on `run_command`. This reverses the "Terminal sandbox" deny in the Decision table. Two changes land with it: a `Read(...)` check of each shell word, and the `NotificationTimeoutSeconds` key.
+
+### Terminal sandbox: deny reversed
+
+In agy CLI 1.5.7 and later, `agentMode` is `auto` by default. Auto mode turns the terminal sandbox on even when `enableTerminalSandbox` is `false`. agy also removes `"enableTerminalSandbox": false` from `settings.json` at startup. Inside the sandbox, these commands fail:
+
+- git in a linked worktree,
+- `gh`,
+- network calls.
+
+agy then retries the command with `BypassSandbox: true`. The original deny refused that retry, so these commands could not run under agy at all. A person could not turn the sandbox off to work around it.
+
+The new rule:
+
+- A boolean `BypassSandbox` is allowed. A value that is not a boolean gets `deny`.
+- The `CommandLine` still goes through the argument-shape checks, the existing-terminal checks, `permissions.deny`, and every gate.
+
+`BypassSandbox: true` is still acceptable for these reasons:
+
+- The gates, not agy's sandbox, are the ApexYard control. Claude Code runs commands with no sandbox under the same gates.
+- The wrapper prints `ask` when every gate passes, never `allow`. agy's bundled `hooks.md` defines `ask` as "Prompt the user for permission (respects "Always Allow" cache)". So agy prompts the person for the command, unless that person put the command prefix on agy's own Always Allow list. The live checks found that agy's own permission settings also decide whether a prompt appears (see [`ask` and agy's permission check](../harnesses/agy.md#ask-and-agys-permission-check)).
+- The new `Read(...)` check of each shell word covers the main loss, the shell read of a protected file.
+
+The cost: for such a command, the sandbox is no longer a second layer under the gates.
+
+### `Read(...)` rules for shell commands
+
+Without the sandbox, agy could read a protected file with a shell command, such as `cat .env`. Claude Code refuses such a command. The wrapper now does the same:
+
+1. It splits the `CommandLine` into words on white space and the characters `|`, `;`, `&`, `<`, `>`, `(`, `)`, and the backtick.
+2. It removes quote characters. It removes each backslash and keeps the next character.
+3. For a word with `=`, it keeps only the text after the first `=`.
+4. It resolves a word only when the last path segment of the word matches the last segment of a `Read(...)` rule.
+5. It judges the resolved path as for a read-only tool.
+
+Accepted over-match: the check does not know which words a command reads. So a protected name used only as text also gets `deny`. Examples are an `echo` of the name into `.gitignore`, a `grep` pattern, a commit message given with `-m`, and `cp .env.example .env`. This over-match fails closed, as Claude Code does. `docs/harnesses/agy.md` lists the workarounds.
+
+Known limits: the check has no shell parser (AgDR-0267). These shape classes stay `ask` and reach the gates:
+
+- a glob, a brace expansion, a command substitution, or a variable,
+- a recursive read of a folder, such as a recursive `grep`. Claude Code has the same gap.
+- a symlink with an ordinary name that points at a protected file,
+- ANSI-C or locale quoting (`$'...'` and `$"..."`), which can hide a protected name,
+- a `cd` or `pushd` earlier in the same `CommandLine`, because the check resolves a relative word against the directory of the call,
+- a `~user` path, because the check expands only `~/`.
+
+An automated review named the last three classes. They stay advisory under AgDR-0267, which rejects a shell parser in the gates.
+
+### `NotificationTimeoutSeconds`
+
+agy CLI 1.5.17 sends `NotificationTimeoutSeconds` with `run_command`. The first version denied it as a key outside the key list. The key is now on the `run_command` key list. Only a non-negative integer is allowed, so the key carries no other data. Any other value gets `deny`.
+
+### Evidence
+
+- `.claude/hooks/tests/test_agy_adapter.sh` passes 401/401. On the adapter at 7a600be4, 40 of the new or changed cases fail.
+- No live agy run checked this amendment on this port. The `BypassSandbox: true` retries come from agy CLI 1.5.14 sessions in auto mode on the contributor's fork build. The `NotificationTimeoutSeconds` key comes from agy CLI 1.5.17 sessions on that build.

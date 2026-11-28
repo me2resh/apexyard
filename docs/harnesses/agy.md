@@ -2,7 +2,7 @@
 
 **Status:** ✅ **Live-checked on the fork build (2026-11-21) and on this port (2026-11-22)** for `run_command`, `write_file`, `edit_file`, `read_file`, and SessionStart. The contributor ran agy CLI 1.5.14 against both. In each check, a real turn's `git add -A` got `deny` from the unmodified `dispatch-bash.sh`, and the index stayed empty. Edits to `.claude/settings.json` got `deny` from `block-protected-target-writes.sh`. Decision record: [AgDR-0325](../agdr/AgDR-0325-agy-harness-adapter.md).
 
-**Contract checked against:** agy CLI 1.5.14, bundled hooks reference `~/.gemini/antigravity-cli/builtin/skills/agy-customizations/docs/hooks.md`. That file is more current than the public web page. Check this page again after an agy upgrade.
+**Contract checked against:** agy CLI 1.5.14, bundled hooks reference `~/.gemini/antigravity-cli/builtin/skills/agy-customizations/docs/hooks.md`. That file is more current than the public web page. The `run_command` argument keys also cover agy CLI 1.5.17, which adds `NotificationTimeoutSeconds`. Check this page again after an agy upgrade.
 
 agy is the Google Antigravity CLI, a terminal coding agent. agy loads the fork's `AGENTS.md` and `.agents/skills/`, so it receives the rules as text. The adapter adds the mechanical gates. It routes agy hook events to the same unmodified `.claude/hooks/*.sh` gates that Claude Code runs.
 
@@ -16,6 +16,8 @@ Google's terms forbid driving agy from another agent. So no agent, harness, or C
   - `git add -A` gets `deny` from the real `block-git-add-all.sh`. `git status` gets `ask`.
   - A code-path `write_file` gets `deny` from the real `require-active-ticket.sh` without a ticket, and `ask` with one.
   - A `write_file` or `edit_file` to `.claude/settings.json` gets `deny`, also when agy works in a subfolder of the fork.
+  - A `run_command` that names a protected file, such as `cat .env`, gets `deny` from a `Read(...)` rule, also with `BypassSandbox: true`.
+  - A boolean `BypassSandbox` and a non-negative integer `NotificationTimeoutSeconds` reach the real gates. Any other value of either key gets `deny`.
   - Malformed stdin, a missing `jq`, a missing gate, a gate timeout, an unrouted tool, and a duplicate or case-variant argument key each get `deny`.
   - No output is `allow`, `force_ask`, or `auto_approve`. A test checks that every decision emit path in the wrapper source is `ask` or `deny`.
 - **Wiring test:** `.claude/hooks/tests/test_protected_agy_wiring.sh` checks that the agy wiring is a protected target in the live fork root and editable in a worktree.
@@ -50,13 +52,13 @@ In the fork root, agy loaded `.agents/hooks.json` with no trust step. agy alread
 | `edit_file` | `.claude/settings.json` | deny | `block-protected-target-writes.sh`: "the edit target is live hook state" |
 | `write_file`, `read_file` | a new file, then a read of it | ask | both succeeded |
 | `read_file` | a test file named `*.private-key.pem` | deny | the `permissions.deny` rule `Read(//**/*.private-key.pem)` |
-| `run_command` | `pwd` with `BypassSandbox: true` | deny | the wrapper's sandbox check |
+| `run_command` | `pwd` with `BypassSandbox: true` | deny | the wrapper's sandbox check. The wrapper no longer applies it since 2026-11-28 (see the terminal sandbox gap). |
 | `write_file` | a nested `sub/.agents/hooks.json` | deny | `block-protected-target-writes.sh`: "the edit target is live hook state" |
 | `run_command` | `ls` | ask | ran |
 | SessionStart, `agy -p` | none | inject | the headless run injected the ApexYard text |
 | `run_command`, `read_file`, `agy -p` | the model's first two calls | ask | agy denied the `read_file` itself, because headless mode cannot prompt, and the run ended with no output |
 
-The gate denied the nested write, so the nested `.agents/` walk found no config, and the live check did not exercise its deny. An earlier run in the same worktree, before the setup script wired it, ran no hook. So agy did not read the `.agents/hooks.json` of the main checkout, which is a parent folder. In that run, `git` failed under agy's default sandbox with "not a git repository", which is the known cost of the sandbox deny.
+The gate denied the nested write, so the nested `.agents/` walk found no config, and the live check did not exercise its deny. An earlier run in the same worktree, before the setup script wired it, ran no hook. So agy did not read the `.agents/hooks.json` of the main checkout, which is a parent folder. In that run, `git` failed under agy's default sandbox with "not a git repository". This failure is one reason the wrapper now allows a boolean `BypassSandbox`.
 
 **Not verified live on this port:** an edit of the root `.agents/hooks.json` and the persistent-terminal deny. The live check also did not verify the `Bash` rules of `permissions.deny`, or the nested `.agents/` walk with an existing nested config. The `Bash` rules name secret-printing commands, so the live check did not run them. agy CLI 1.5.14 did not use `replace_file_content`, `multi_replace_file_content`, or `write_to_file`, so the live check did not verify them.
 
@@ -88,7 +90,7 @@ Claude Code applies the `permissions.deny` rules in `.claude/settings.json` itse
 
 | Rule type | Applied to | Match |
 |-----------|-----------|-------|
-| `Read(<glob>)` | Every string argument of a read-only tool, such as the `read_file` `Path` or a `view_file` path | The path, its lexical form, or its symlink-resolved form matches the glob. The resolved form follows the whole chain, up to 40 links. A loop, a longer chain, or an unreadable link gets `deny`. |
+| `Read(<glob>)` | Every string argument of a read-only tool, such as the `read_file` `Path` or a `view_file` path. Each word of a `run_command` that names a path (see the next section). | The path, its lexical form, or its symlink-resolved form matches the glob. The resolved form follows the whole chain, up to 40 links. A loop, a longer chain, or an unreadable link gets `deny`. |
 | `Edit(<glob>)` | The file path of `write_file`, `edit_file`, and the other write tools | The same |
 | `Write(<glob>)` | The file path of `write_file` and `write_to_file` | The same |
 | `Bash(<cmd>)` | `run_command` | The normalized `CommandLine` is `<cmd>` |
@@ -97,6 +99,38 @@ Claude Code applies the `permissions.deny` rules in `.claude/settings.json` itse
 The wrapper trims the normalized `CommandLine`, and turns each run of spaces and tabs in it into one space.
 
 The `Read(...)` check judges every string argument of a read-only tool, not only a path field, as a path. So a `search_web` query whose last path segment is `.env`, such as `config/.env`, gets `deny`. This over-match fails closed. A query that only mentions `.env` in other words does not match.
+
+### `Read(...)` rules and shell commands
+
+A `run_command` can run outside agy's terminal sandbox, because the wrapper allows a boolean `BypassSandbox` (see the argument-key table under [Tool policy](#tool-policy)). So the gates must protect shell commands as they do for Claude Code. Claude Code refuses a shell command that names a path that a `Read(...)` rule covers. The wrapper does the same for a `run_command`:
+
+1. The wrapper splits the `CommandLine` into words. It splits on spaces, tabs, newlines, and the characters `|`, `;`, `&`, `<`, `>`, `(`, `)`, and the backtick.
+2. It removes the quote characters from each word. It removes each backslash and keeps the character after it, as the shell does. So `.e\nv` gives `.env`.
+3. For a word that contains `=`, it keeps only the text after the first `=`. So `--env-file=.env` gives `.env`.
+4. It resolves a word only when its last path segment matches the last segment of a `Read(...)` rule. A relative word resolves against the command directory. A `~/` word resolves against the home folder.
+5. It judges each resolved path as for a read-only tool.
+
+So `cat .env`, `grep KEY config/.env.local`, `wc -l < .env`, and `cat ~/proj/.mcp.json` get `deny`. Commands that do not name a protected file still reach the gates. Examples are `git status`, `php artisan test`, `grep -r APP_ENV config/`, `cat .envrc`, and `APP_ENV=testing php artisan test`.
+
+The check does not know which words a command reads. So a protected name that appears only as text also gets `deny`. ApexYard accepts this over-match, because it fails closed, as Claude Code does. Examples and workarounds:
+
+| Command | Workaround |
+|---------|------------|
+| `echo .env >> .gitignore` | Edit `.gitignore` with the file tools. |
+| `grep -n '\.env' .gitignore` | Use a pattern that does not name the file, such as `grep -n 'env$' .gitignore`. |
+| A commit message that names `.env`, given with `-m` | Write the message to a file, and use `git commit -F <file>`. |
+| `cp .env.example .env` | A person runs it. |
+
+The check has no shell parser (AgDR-0267). These cases stay `ask` and reach the gates:
+
+- a recursive read of a folder, such as `grep -rn DB_PASSWORD .`, which can print `.env` content. Claude Code has the same gap.
+- a path built at run time: a glob (`cat .en*`), a brace expansion (`cat .{e,}nv`), a command substitution, or a variable.
+- a symlink with an ordinary name that points at a `.env` file.
+- ANSI-C or locale quoting (`$'...'` and `$"..."`), which can hide a protected name from the word check.
+- a `cd` or `pushd` earlier in the same `CommandLine`. It changes the directory of the later words, but the check resolves a relative word against the directory of the call.
+- a `~user` path. The check expands only `~/`.
+
+A command that runs outside the sandbox gets the environment of the terminal that started agy, the same as Claude Code. Keep tokens out of that environment.
 
 Glob rules: a leading `//` is an absolute path, and `~/` is the home folder. A leading `/` is the fork root. A pattern with neither matches anywhere under the fork. `**` is any depth, including none, `*` is one path segment, and `?` is one character. Paths match without case. Over-matching is acceptable, because it fails closed.
 
@@ -110,8 +144,8 @@ With the current rules, agy gets `deny` for these calls:
 
 Limits:
 
-- Matching is literal, with no shell parser. The match does not catch pipes, chains, wrapped commands, or absolute command paths. This is the same limit as the shell-text gates (AgDR-0267).
-- A rule never matches a word in the middle of a command, so a search for the word passes.
+- Matching is literal, with no shell parser. A `Bash(...)` rule does not catch pipes, chains, wrapped commands, or absolute command paths. This is the same limit as the shell-text gates (AgDR-0267).
+- A `Bash(...)` rule never matches a word in the middle of a command, so a search for the word passes. A `Read(...)` rule does judge each word of a command, as the previous section describes.
 - The wrapper does not apply other rule types, such as `WebFetch(...)`.
 - When the wrapper cannot read the rules, a call that names a path or a command gets `deny`.
 - The wrapper reads rules only from `.claude/settings.json`. It ignores `.claude/settings.local.json` and user settings.
@@ -160,7 +194,7 @@ Before the classes apply, the wrapper checks the argument shape. jq keeps the la
 
 | Tool | Allowed args keys |
 |------|-------------------|
-| `run_command` | `CommandLine`, `Cwd`, `WaitMsBeforeAsync`, `IsDaemon`, `BypassSandbox`, `toolSummary`. A `RequestedTerminalID`, or a `RunPersistent` other than `false`, gets `deny`: the command runs in an existing terminal whose directory the gates cannot see. agy CLI 1.5.14 does not declare these two keys. A `BypassSandbox` other than absent or `false` gets `deny`: ApexYard does not allow agy to drop its terminal sandbox. The wrapper allows `IsDaemon`, and its `CommandLine` still goes through the gates. |
+| `run_command` | `CommandLine`, `Cwd`, `WaitMsBeforeAsync`, `IsDaemon`, `BypassSandbox`, `NotificationTimeoutSeconds`, `toolSummary`. A `RequestedTerminalID`, or a `RunPersistent` other than `false`, gets `deny`: the command runs in an existing terminal whose directory the gates cannot see. agy CLI 1.5.14 does not declare these two keys. The wrapper allows a boolean `BypassSandbox`, and its `CommandLine` still goes through `permissions.deny` and every gate. A `BypassSandbox` that is not a boolean gets `deny`. agy CLI 1.5.17 sends `NotificationTimeoutSeconds`. The wrapper allows it when it is a non-negative integer, and any other value gets `deny`. The wrapper allows `IsDaemon`, and its `CommandLine` still goes through the gates. |
 | `write_file` | `Path`, `Content`, `Append`, `Overwrite`, `ArtifactMetadata`, `toolSummary` |
 | `edit_file` | `Path`, `Target`, `Replacement`, `ArtifactMetadata`, `toolSummary` |
 | `read_file` | `Path`, `StartLine`, `EndLine`, `ByteOffset`, `toolSummary` |
@@ -257,8 +291,8 @@ The wrapper prints its decision before it writes the line, and it ignores loggin
 
 ## Gaps + tracking
 
-- **Permission rules:** under agy, the wrapper applies `permissions.deny` as written. It reads gates and rules only from `.claude/settings.json`, not from `.claude/settings.local.json` or user settings. The match does not catch pipes, chains, wrapped commands, or absolute command paths. The wrapper does not apply rule types other than `Read`, `Edit`, `Write`, and `Bash`. The other adapters do not apply these rules yet.
-- **Terminal sandbox:** a `run_command` with `BypassSandbox` gets `deny`, because the repo enforces the policy, not agy. The cost: in a linked worktree, agy's git can fail inside its sandbox with "not a git repository: (null)", and agy may retry with `BypassSandbox`. The wrapper denies that retry too, so git inside a worktree may not work under agy. This cost does not apply in the fork root.
+- **Permission rules:** under agy, the wrapper applies `permissions.deny` as written. It reads gates and rules only from `.claude/settings.json`, not from `.claude/settings.local.json` or user settings. A `Bash(...)` rule does not catch pipes, chains, wrapped commands, or absolute command paths. A `Read(...)` rule judges each word of a command, but it does not see a path built at run time or a recursive folder read. The wrapper does not apply rule types other than `Read`, `Edit`, `Write`, and `Bash`. The other adapters do not apply these rules yet.
+- **Terminal sandbox:** the wrapper allows a boolean `BypassSandbox`. In agy CLI 1.5.7 and later, `agentMode` is `auto` by default. Auto mode turns the terminal sandbox on even when `enableTerminalSandbox` is `false`, and it removes that key from `settings.json` at startup. Inside the sandbox, git in a linked worktree, `gh`, and network calls fail, and agy retries with `BypassSandbox: true`. The first version of this adapter denied that retry, so those commands could not run under agy. A command that runs outside the sandbox still goes through `permissions.deny`, the `Read(...)` check of each word, and every gate. The wrapper prints `ask` for such a command. agy's bundled `hooks.md` defines `ask` as a prompt that respects agy's Always Allow list. agy's own settings also decide whether it prompts (see [`ask` and agy's permission check](#ask-and-agys-permission-check)). The cost: the sandbox is no longer a second layer under the gates for that command. The `Read(...)` check of each word covers the main loss, the shell read of a protected file. Its limits are in [`Read(...)` rules and shell commands](#read-rules-and-shell-commands).
 - **Agent shell session id:** a PreToolUse hook cannot change the agent's command. So agy's `run_command` shell does not get `APEXYARD_SESSION_ID`.
 - **Network reads:** `search_web` and `read_url_content` are in the read-only allowlist. Claude Code has the same path, because no PreToolUse gate covers `WebFetch` or `WebSearch`.
 - **`if` predicates:** the wrapper matches a `Bash(<glob>)` predicate against the whole command. Claude Code matches each subcommand. No PreToolUse handler uses `if` today.

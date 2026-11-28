@@ -828,8 +828,9 @@ check_read_denies() {
 # used only as text, such as a grep pattern or a commit message, also gets
 # deny; this over-match fails closed. There is no shell parser: a path built
 # at run time, such as $(ls), a glob, a brace expansion, a variable, a
-# recursive folder read, and a symlink with an ordinary name are not seen
-# (AgDR-0267).
+# recursive folder read, and a symlink with an ordinary name are not seen.
+# Nor are ANSI-C or locale quoting, a cd earlier in the same command, and a
+# ~user path (AgDR-0267).
 bash_read_rule() {
   local cwd w
   local -a paths=()
