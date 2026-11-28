@@ -234,9 +234,20 @@ build_pretooluse_payload() {
             error("run_command with RequestedTerminalID runs in an existing terminal whose directory the gates cannot see")
           elif ($a | has("RunPersistent")) and $a.RunPersistent != false then
             error("run_command with RunPersistent runs in an existing terminal whose directory the gates cannot see")
-          # The repo enforces, not agy: agy keeps its terminal sandbox.
-          elif ($a | has("BypassSandbox")) and $a.BypassSandbox != false then
-            error("run_command with BypassSandbox asks agy to run outside its terminal sandbox; ApexYard does not allow agy to drop its sandbox")
+          # agy CLI 1.5.7+ runs in auto mode by default, which forces the
+          # terminal sandbox on, and git in a linked worktree, gh, and network
+          # calls fail there. agy then retries with BypassSandbox: true. A
+          # boolean is allowed: the CommandLine still goes through
+          # permissions.deny, including the Read(...) check of each word, and
+          # every gate. Any other value fails closed.
+          elif ($a | has("BypassSandbox")) and (($a.BypassSandbox | type) != "boolean") then
+            error("argument BypassSandbox is not a boolean")
+          # agy CLI 1.5.17 sends NotificationTimeoutSeconds. Only a
+          # non-negative integer is allowed, so the key carries no other data.
+          elif ($a | has("NotificationTimeoutSeconds"))
+               and ($a.NotificationTimeoutSeconds as $n
+                    | (($n | type) != "number") or ($n < 0) or (($n | floor) != $n)) then
+            error("argument NotificationTimeoutSeconds is not a non-negative integer")
           else . end)
          | (if ($a.CommandLine | nonempty_string) then . else error("argument CommandLine is missing or empty") end)
          | (if ($a.Cwd != null and $a.Cwd != "") then [(check_dir($a.Cwd; "argument Cwd") | no_relative_when_cwd_differs(.; "Cwd")), "args"]
@@ -574,12 +585,13 @@ JQ_DUPS='
 
 # Allowed args keys for each tool, case-sensitive. The agy CLI 1.5.14 keys
 # come from the live check, the binary's json tags, and agy's own tool list
-# (read_file, write_file, edit_file). The documented
+# (read_file, write_file, edit_file). agy CLI 1.5.17 adds the run_command
+# key NotificationTimeoutSeconds. The documented
 # tools keep their documented keys. A tool not listed here has no key list:
 # it is read-only or denied by the tool policy.
 # shellcheck disable=SC2016  # jq variables, not shell variables.
 JQ_ARG_KEYS='{
-  "run_command": ["CommandLine", "Cwd", "WaitMsBeforeAsync", "RunPersistent", "RequestedTerminalID", "IsDaemon", "BypassSandbox", "toolSummary"],
+  "run_command": ["CommandLine", "Cwd", "WaitMsBeforeAsync", "RunPersistent", "RequestedTerminalID", "IsDaemon", "BypassSandbox", "NotificationTimeoutSeconds", "toolSummary"],
   "write_file": ["Path", "Content", "Append", "Overwrite", "ArtifactMetadata", "toolSummary"],
   "edit_file": ["Path", "Target", "Replacement", "ArtifactMetadata", "toolSummary"],
   "read_file": ["Path", "StartLine", "EndLine", "ByteOffset", "toolSummary"],
@@ -666,7 +678,9 @@ check_arg_shape() {
 # permissions.deny (AgDR-0325). Claude Code applies the permissions.deny
 # rules in .claude/settings.json itself. agy does not read them, so the
 # wrapper applies them, read at run time like the gates. Matching is literal:
-#   Read(<glob>)          any string argument of a read-only tool, as a path
+#   Read(<glob>)          any string argument of a read-only tool, as a path,
+#                         and each word of a run_command that names a path
+#                         (see bash_read_rule)
 #   Edit(<glob>)          the file path of Write, Edit, and MultiEdit calls
 #   Write(<glob>)         the file path of Write calls
 #   Bash(<cmd>)           a run_command whose trimmed CommandLine is <cmd>
@@ -702,7 +716,8 @@ load_perm_rules() {
     | if type != "array" then error("permissions.deny is not an array") else . end
     | [ .[] | select(type == "string") | . as $rule
         | ( (capture("\\A(?<kind>Read|Edit|Write)\\((?<glob>.+)\\)\\z")
-             | {rule: $rule, kind: .kind, re: ("^" + (.glob | rooted | glob_re) + "$")})
+             | {rule: $rule, kind: .kind, re: ("^" + (.glob | rooted | glob_re) + "$"),
+                last: ("^" + (.glob | sub("/+\\z"; "") | split("/") | last | glob_re) + "$")})
           // (capture("\\ABash\\((?<cmd>.+)\\)\\z") | {rule: $rule, kind: "Bash", cmd: .cmd})
           // empty ) ]
   ' "$SETTINGS" > "$WORK/perm-rules.json" 2>/dev/null && [ -s "$WORK/perm-rules.json" ] \
@@ -800,8 +815,53 @@ check_read_denies() {
   return 0
 }
 
+# bash_read_rule: print the first Read(...) rule that a word of the mapped
+# run_command names as a path, or nothing. Claude Code refuses a shell
+# command that names a path a Read rule covers, such as cat .env. A
+# run_command can run outside agy's terminal sandbox (BypassSandbox), so the
+# wrapper does the same. The command is split on spaces, tabs, newlines and
+# the characters | ; & < > ( ) and backtick. Quotes are removed, a backslash
+# is removed and keeps the next character, as the shell does, and of a word
+# with = only the text after the first = is kept. Only a word whose last part
+# matches the last part of a Read rule is resolved, against the command
+# directory or the home folder, which keeps the cost low. A protected name
+# used only as text, such as a grep pattern or a commit message, also gets
+# deny; this over-match fails closed. There is no shell parser: a path built
+# at run time, such as $(ls), a glob, a brace expansion, a variable, a
+# recursive folder read, and a symlink with an ordinary name are not seen
+# (AgDR-0267).
+bash_read_rule() {
+  local cwd w
+  local -a paths=()
+  cwd=$(jq -r '.cwd // ""' "$WORK/payload" 2>/dev/null) || cwd=""
+  [ -n "$cwd" ] || cwd="$WORKSPACE"
+  jq -r --slurpfile rules "$WORK/perm-rules.json" --arg sq "'" '
+    [ $rules[0][] | select(.kind == "Read") | .last ] as $lasts
+    | if ($lasts | length) == 0 then empty else
+        (.tool_input.command // "")
+        | [ splits("[\\s|;&<>()`]+") | gsub("[\"" + $sq + "]"; "") | gsub("\\\\(?<c>.)"; "\(.c)")
+            | if test("=") then sub("\\A[^=]*="; "") else . end
+            | select(length > 0) ]
+        | .[] | . as $w
+        | ($w | sub("/+\\z"; "") | split("/") | last // "") as $b
+        | select(any($lasts[]; . as $re | $b | test($re; "i")))
+        | $w
+      end' "$WORK/payload" > "$WORK/bash-words" 2>/dev/null || { printf '%s' '!error'; return 0; }
+  while IFS= read -r w; do
+    [ -n "$w" ] || continue
+    case "$w" in
+      /*) paths[${#paths[@]}]="$w" ;;
+      \~/*) paths[${#paths[@]}]="${HOME:-/nonexistent}/${w#\~/}" ;;
+      *) paths[${#paths[@]}]="$cwd/$w" ;;
+    esac
+  done < "$WORK/bash-words"
+  [ "${#paths[@]}" -gt 0 ] || return 0
+  perm_path_rule "Read" "${paths[@]}"
+}
+
 # check_gated_denies <tool>: apply Edit(...) and Write(...) rules to a file
-# path, and Bash(...) rules to a command, of a mapped gated call.
+# path, and Bash(...) rules to a command, of a mapped gated call. For a
+# command, Read(...) rules also judge each word that names a path.
 check_gated_denies() {
   local tool="$1" kinds="" file rule
   load_perm_rules
@@ -813,6 +873,7 @@ check_gated_denies() {
       | [ $rules[0][] | select(.kind == "Bash")
           | select(if (.cmd | endswith(":*")) then (.cmd[:-2]) as $p | ($c == $p or ($c | startswith($p + " ")))
                    else $c == .cmd end) | .rule ] | (.[0] // "")' "$WORK/payload" 2>/dev/null) || rule="!error"
+    [ -n "$rule" ] || rule=$(bash_read_rule)
   else
     case "$tool" in
       Write) kinds="Edit Write" ;;

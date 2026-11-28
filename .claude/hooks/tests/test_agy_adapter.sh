@@ -441,15 +441,47 @@ run_wrapper "$A" PreToolUse "$(raw_payload '{"CommandLine":"git status","RunPers
 expect_decision "A24ue run_command with RunPersistent null gets deny" deny "RunPersistent runs in an existing terminal"
 run_wrapper "$A" PreToolUse "$(raw_payload '{"CommandLine":"git status","RunPersistent":false}' run_command)"
 expect_decision "A24uf run_command with RunPersistent false still reaches the gates" ask
-# The repo enforces, not agy: agy may not drop its terminal sandbox.
-for v in true '"true"' null 1; do
+# A boolean BypassSandbox is allowed, because agy CLI 1.5.7+ auto mode forces
+# the terminal sandbox on. The CommandLine still goes through
+# permissions.deny and every gate. Any other value fails closed.
+n=0
+for v in '"true"' null 1; do
+  n=$((n + 1))
   # Build the args outside "$(...)": bash 3.2 mangles escaped quotes there.
   bypass_args=$(jq -cn --argjson b "$v" '{CommandLine: "git status", BypassSandbox: $b}')
   run_wrapper "$A" PreToolUse "$(raw_payload "$bypass_args" run_command)"
-  expect_decision "A24ug run_command with BypassSandbox $v gets deny" deny "BypassSandbox asks agy to run outside its terminal sandbox; ApexYard does not allow agy to drop its sandbox"
+  expect_decision "A24ug$n run_command with non-boolean BypassSandbox $v gets deny" deny "argument BypassSandbox is not a boolean"
 done
+run_wrapper "$A" PreToolUse "$(raw_payload '{"CommandLine":"git status","BypassSandbox":true}' run_command)"
+expect_decision "A24ug4 run_command with BypassSandbox true reaches the gates" ask
+run_wrapper "$A" PreToolUse "$(raw_payload '{"CommandLine":"echo deny-me","BypassSandbox":true}' run_command)"
+expect_decision "A24ug5 run_command with BypassSandbox true still gets deny from a gate" deny "refuses deny-me"
+run_wrapper "$A" PreToolUse "$(raw_payload '{"CommandLine":"git status","BypassSandbox":true,"RequestedTerminalID":"term-1"}' run_command)"
+expect_decision "A24ug6 run_command with BypassSandbox true and RequestedTerminalID gets deny" deny "runs in an existing terminal"
+run_wrapper "$A" PreToolUse "$(raw_payload '{"CommandLine":"git status","BypassSandbox":true,"RunPersistent":true}' run_command)"
+expect_decision "A24ug7 run_command with BypassSandbox true and RunPersistent true gets deny" deny "runs in an existing terminal"
 run_wrapper "$A" PreToolUse "$(raw_payload '{"CommandLine":"git status","BypassSandbox":false}' run_command)"
 expect_decision "A24uh run_command with BypassSandbox false still reaches the gates" ask
+# agy CLI 1.5.17 sends NotificationTimeoutSeconds. A non-negative integer
+# reaches the gates. Any other value fails closed.
+n=0
+for v in 300 0; do
+  n=$((n + 1))
+  nts_args=$(jq -cn --argjson t "$v" '{CommandLine: "git status", NotificationTimeoutSeconds: $t}')
+  run_wrapper "$A" PreToolUse "$(raw_payload "$nts_args" run_command)"
+  expect_decision "A24uk$n run_command with NotificationTimeoutSeconds $v reaches the gates" ask
+done
+n=0
+for v in '"300"' -1 1.5 null true '{"a":1}'; do
+  n=$((n + 1))
+  nts_args=$(jq -cn --argjson t "$v" '{CommandLine: "git status", NotificationTimeoutSeconds: $t}')
+  run_wrapper "$A" PreToolUse "$(raw_payload "$nts_args" run_command)"
+  expect_decision "A24ul$n run_command with NotificationTimeoutSeconds $v gets deny" deny "argument NotificationTimeoutSeconds is not a non-negative integer"
+done
+run_wrapper "$A" PreToolUse "$(raw_payload '{"CommandLine":"echo deny-me","NotificationTimeoutSeconds":300}' run_command)"
+expect_decision "A24um run_command with NotificationTimeoutSeconds still gets deny from a gate" deny "refuses deny-me"
+run_wrapper "$A" PreToolUse "$(raw_payload '{"CommandLine":"git status","NotificationTimeoutSeconds":300,"BypassSandbox":true}' run_command)"
+expect_decision "A24un run_command with NotificationTimeoutSeconds and BypassSandbox true reaches the gates" ask
 run_wrapper "$A" PreToolUse "$(raw_payload '{"CommandLine":"sh","IsDaemon":true}' run_command)"
 expect_decision "A24ui run_command with IsDaemon true still reaches the gates" ask
 # Keep the escaped literal outside "$(...)": bash 3.2 mangles backslashes
@@ -912,6 +944,16 @@ run_wrapper "$C" PreToolUse "$(p_run "rm -rf $HOOKS_REL" "$C" "$C/no-such-dir")"
 expect_decision "C2c removing the hooks folder with a missing Cwd gets deny" deny "not an existing directory"
 run_wrapper "$C" PreToolUse "$(p_run "rm -rf $HOOKS_REL" "$C" "$C")"
 expect_decision "C2d removing the hooks folder with the fork as Cwd gets deny from the gates" deny "BLOCKED"
+# BypassSandbox: true reaches the real gates, and they still deny a bad command.
+run_wrapper "$C" PreToolUse "$(jq -cn --arg ws "$C" --arg id "$CONV" '{toolCall:{name:"run_command",args:{CommandLine:"git status",BypassSandbox:true}}, conversationId:$id, workspacePaths:[$ws], cwd:$ws}')"
+expect_decision "C2e real gate: run_command git status with BypassSandbox true gets ask" ask
+run_wrapper "$C" PreToolUse "$(jq -cn --arg ws "$C" --arg id "$CONV" '{toolCall:{name:"run_command",args:{CommandLine:"git add -A",BypassSandbox:true}}, conversationId:$id, workspacePaths:[$ws], cwd:$ws}')"
+expect_decision "C2f real gate: run_command git add -A with BypassSandbox true gets deny" deny "'git add -A', 'git add --all', and 'git add \.' are forbidden"
+# NotificationTimeoutSeconds does not weaken the real gates.
+run_wrapper "$C" PreToolUse "$(jq -cn --arg ws "$C" --arg id "$CONV" '{toolCall:{name:"run_command",args:{CommandLine:"git add -A",NotificationTimeoutSeconds:300}}, conversationId:$id, workspacePaths:[$ws], cwd:$ws}')"
+expect_decision "C2f2 real gate: run_command git add -A with NotificationTimeoutSeconds gets deny" deny "'git add -A', 'git add --all', and 'git add \.' are forbidden"
+run_wrapper "$C" PreToolUse "$(jq -cn --arg ws "$C" --arg id "$CONV" --arg h "$HOOKS_REL" '{toolCall:{name:"run_command",args:{CommandLine:("rm -rf " + $h),BypassSandbox:true}}, conversationId:$id, workspacePaths:[$ws], cwd:$ws}')"
+expect_decision "C2g real gate: removing the hooks folder with BypassSandbox true gets deny" deny "BLOCKED"
 
 run_wrapper "$C" PreToolUse "$(p_write "$C/src/app.ts" "export const x = 1;" "$C")"
 expect_decision "C3 real gate: write_to_file on a code path without a ticket gets deny" deny "BLOCKED: No active ticket set for this session"
@@ -1065,6 +1107,47 @@ bash_case "P24e git grep printenv is not a printenv match" "git grep printenv" a
 # wrapped command. This case pins the documented behaviour.
 bash_case "P25 known limit: a chained printenv is not caught" "true && printenv" ask
 bash_case "P26 known limit: sh -c printenv is not caught" "sh -c printenv" ask
+
+# A run_command that names a path a Read(...) rule covers gets deny, as in
+# Claude Code. A run_command can run outside agy's terminal sandbox.
+bash_case "P27 cat .env gets deny" "cat .env" deny 'rule Read\(//\*\*/\.env\)'
+bash_case "P27b cat of a nested .env.local gets deny" "cat config/.env.local" deny 'Read\(//\*\*/\.env\.\*\)'
+bash_case "P27c head of a quoted .env gets deny" 'head -5 ".env"' deny 'Read\(//\*\*/\.env\)'
+bash_case "P27d grep in .env gets deny" "grep SECRET .env" deny 'Read\(//\*\*/\.env\)'
+bash_case "P27e cp of .env gets deny" "cp .env /tmp/x" deny 'Read\(//\*\*/\.env\)'
+bash_case "P27f a redirect from .env gets deny" "wc -l < .env" deny 'Read\(//\*\*/\.env\)'
+bash_case "P27g an --env-file=.env option gets deny" "docker run --env-file=.env img" deny 'Read\(//\*\*/\.env\)'
+bash_case "P27h cat of an absolute private-key.pem gets deny" "cat $C/keys/app.private-key.pem" deny 'Read\(//\*\*/\*\.private-key\.pem\)'
+bash_case "P27i cat of .config/apexyard/*.pem gets deny" "cat $TMPROOT/h/.config/apexyard/app.pem" deny 'Read\(//\*\*/\.config/apexyard/\*\.pem\)'
+bash_case "P27j cat .mcp.json gets deny" "cat .mcp.json" deny 'Read\(//\*\*/\.mcp\.json\)'
+bash_case "P27k a .env inside a chain gets deny" "true && cat .env | head" deny 'Read\(//\*\*/\.env\)'
+bash_case "P27l cat .ENV gets deny (case-insensitive)" "cat .ENV" deny 'Read\(//\*\*/\.env\)'
+bash_case "P27m a ~/ path to a .env gets deny" "cat ~/proj/.env" deny 'Read\(//\*\*/\.env\)'
+bash_case "P27n a backslash-escaped .env gets deny" 'cat .e\nv' deny 'Read\(//\*\*/\.env\)'
+bash_case "P27o an escaped dot before env gets deny" 'cat \.env' deny 'Read\(//\*\*/\.env\)'
+# Accepted over-match: a protected name that appears only as text also gets
+# deny. The check fails closed, as Claude Code does.
+bash_case "P27p over-match: echo of the name into .gitignore gets deny" "echo .env >> .gitignore" deny 'Read\(//\*\*/\.env\)'
+bash_case "P27q over-match: a grep pattern that names .env gets deny" "grep -n '\\.env' .gitignore" deny 'Read\(//\*\*/\.env\)'
+bash_case "P27r over-match: a commit message that names .env gets deny" 'git commit -m "ignore .env"' deny 'Read\(//\*\*/\.env\)'
+bash_case "P27s over-match: cp .env.example .env gets deny" "cp .env.example .env" deny 'Read\(//\*\*/\.env'
+bash_case "P27t workaround: a grep pattern without the exact name still reaches the gates" "grep -n 'env\$' .gitignore" ask
+run_wrapper "$C" PreToolUse "$(p_args run_command '{"CommandLine":"cat .env","BypassSandbox":true}')"
+expect_decision "P27u cat .env with BypassSandbox true still gets deny" deny 'rule Read\(//\*\*/\.env\)'
+run_wrapper "$C" PreToolUse "$(p_args run_command '{"CommandLine":"printenv","BypassSandbox":true}')"
+expect_decision "P27v printenv with BypassSandbox true still gets deny" deny 'rule Bash\(printenv\)'
+bash_case "P28 git status still reaches the gates" "git status" ask
+bash_case "P28b php artisan test still reaches the gates" "php artisan test" ask
+bash_case "P28c grep for APP_ENV still reaches the gates" "grep -r APP_ENV config/" ask
+bash_case "P28d cat src/env.ts still reaches the gates" "cat src/env.ts" ask
+bash_case "P28e cat .envrc still reaches the gates" "cat .envrc" ask
+bash_case "P28f an ENV=testing assignment still reaches the gates" "APP_ENV=testing php artisan test" ask
+# Known limits (AgDR-0267): no shell parser, so a glob, a path built at run
+# time, a brace expansion, and a recursive folder read are not seen.
+bash_case "P29 known limit: a glob that matches .env is not caught" "cat .en*" ask
+bash_case "P29b known limit: a command substitution is not caught" 'cat "$(printf .en)v"' ask
+bash_case "P29c known limit: a brace expansion is not caught" 'cat .{e,}nv' ask
+bash_case "P29d known limit: a recursive read of a folder is not caught" "grep -rn DB_PASSWORD ." ask
 
 # agy opened in a subfolder of the fork must still protect <fork>/.claude/.
 mkdir -p "$C/docs"
