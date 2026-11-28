@@ -25,7 +25,8 @@ Generate Codex adapter files from .claude:
 
 Options:
   --check       Do not write files; fail if generated output would differ.
-  --clean       Remove generated .agents/.codex before writing.
+  --clean       Remove generated .agents/skills and .codex before writing.
+                Other files under .agents/ stay in place.
   --reconcile-installed
                 Refresh and verify an existing ApexYard Codex adapter. Silently
                 do nothing when no manifest or complete legacy adapter exists.
@@ -339,7 +340,9 @@ if [ "$RECONCILE_INSTALLED" = "1" ] \
 fi
 
 if [ "$CLEAN" = "1" ]; then
-  rm -rf "$TARGET_ROOT/.agents" "$TARGET_ROOT/.codex"
+  # Remove only the Codex-owned path under .agents/. Other harnesses keep
+  # files there, for example agy's .agents/hooks.json (AgDR-0325).
+  rm -rf "$TARGET_ROOT/.agents/skills" "$TARGET_ROOT/.codex"
 fi
 
 mkdir -p "$TARGET_ROOT/.agents" "$TARGET_ROOT/.codex"

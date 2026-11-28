@@ -88,8 +88,10 @@ session startup.
 bin/sync-codex-adapter.sh --clean
 ```
 
-Use `--clean` when you want to remove any existing generated `.agents/` and
-`.codex/` trees before regenerating them. This is useful after generator changes
+Use `--clean` when you want to remove any existing generated `.agents/skills/`
+and `.codex/` trees before regenerating them. Other files under `.agents/` stay
+in place, for example the agy adapter's `.agents/hooks.json`
+([AgDR-0325](agdr/AgDR-0325-agy-harness-adapter.md)). This is useful after generator changes
 or after a source file rename or deletion. It also removes stale generated
 `.codex/hooks/`, `.codex/rules/`, `.codex/migrations/`, and `.codex/registries/`
 directories from earlier adapter versions that copied too much of `.claude/`.

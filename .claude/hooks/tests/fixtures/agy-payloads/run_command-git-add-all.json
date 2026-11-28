@@ -1,0 +1,20 @@
+{
+  "toolCall": {
+    "id": "toolu_fixture_run_02",
+    "name": "run_command",
+    "args": {
+      "CommandLine": "git add -A",
+      "WaitMsBeforeAsync": 500,
+      "toolSummary": "Stage every change"
+    }
+  },
+  "stepIdx": 4,
+  "conversationId": "0f1e2d3c-4b5a-4968-8776-655443322110",
+  "workspacePaths": ["/work/fork"],
+  "transcriptPath": "/work/agy-data/conversations/transcript.jsonl",
+  "artifactDirectoryPath": "/work/agy-data/conversations/artifacts",
+  "modelName": "example-model",
+  "lastUserInput": "Stage everything",
+  "hookEventName": "PreToolUse",
+  "cwd": "/work/fork"
+}
