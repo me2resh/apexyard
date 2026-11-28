@@ -6,19 +6,19 @@ argument-hint: "[project-path] [--format=markdown|dragon|both]"
 effort: high
 ---
 
-# /threat-model — STRIDE Threat Modelling
+# /threat-model: STRIDE Threat Modelling
 
 Read `.claude/rules/writing-standard.md`. Use the **controlled technical writing profile** for the
 threat model and its findings: lead with the outcome, preserve uncertainty, and
 remove empty sections.
 
-Deep-dive security analysis using the STRIDE framework. Produces a prioritized threat catalogue with mitigations. This is the expert companion to `/launch-check`'s security row — invoke it when security shows WARN or FAIL, or proactively before any launch.
+Deep-dive security analysis using the STRIDE framework. Produces a prioritized threat catalogue with mitigations. This is the expert companion to `/launch-check`'s security row: invoke it when security shows WARN or FAIL, or proactively before any launch.
 
-**Consumes the DFD produced by [`/dfd`](../dfd/SKILL.md).** The Data Flow Diagram at `projects/<project>/architecture/dfd.md` is the source of truth; this skill iterates its trust-boundary crossings rather than rebuilding its own data-flow view. If the DFD doesn't exist, this skill OFFERS to run `/dfd` first (see Step 1). See AgDR-0026 for the single-source-of-truth rationale.
+**Consumes the DFD produced by [`/dfd`](../dfd/SKILL.md).** The Data Flow Diagram at `projects/<project>/architecture/dfd.md` is the source of truth. This skill iterates its trust-boundary crossings rather than rebuilding its own data-flow view. If the DFD does not exist, this skill OFFERS to run `/dfd` first (see Step 1). See AgDR-0026 for the single-source-of-truth rationale.
 
 ## LSP-aware (optional, recommended)
 
-This skill performs semantic code navigation — finding definitions, walking references, tracing handlers across modules. With LSP enabled (`ENABLE_LSP_TOOL=1` + per-language plugin per `docs/getting-started.md`), queries are ~3-15× cheaper in token cost than grep + Read on shallow lookups, and ~1.4-5× cheaper on multi-hop traces. Without LSP, the skill falls back to grep + Read transparently — no new failure mode, just optional speed.
+This skill performs semantic code navigation: finding definitions, walking references, tracing handlers across modules. Enable LSP with `ENABLE_LSP_TOOL=1` and the per-language plugin from `docs/getting-started.md`. Compared with grep + Read, queries cost ~3-15× fewer tokens for shallow lookups and ~1.4-5× fewer for multi-hop traces. Without LSP, the skill falls back to grep + Read transparently: no new failure mode, just optional speed.
 
 Per-language LSP plugins live in Claude Code's marketplace. Install once; the skill detects the active language and dispatches automatically.
 
@@ -35,7 +35,7 @@ Per-language LSP plugins live in Claude Code's marketplace. Install once; the sk
 | Flag | Effect |
 |------|--------|
 | (none) | Persist the markdown catalogue via `_lib-audit-history.sh` (default). Backwards-compatible. |
-| `--format=markdown` | Same as default — explicit form. |
+| `--format=markdown` | Same as default: explicit form. |
 | `--format=dragon` | Skip the markdown body; emit only `<output-dir>/threat-model.json` in OWASP Threat Dragon v2 schema. JSON still flows through `_lib-audit-history.sh` for findings persistence (the lib's per-run JSON is unrelated to the Dragon export). |
 | `--format=both` | Emit markdown AND `<output-dir>/threat-model.json`. Recommended when you want PR-reviewable markdown AND a Dragon-openable file. |
 
@@ -53,7 +53,7 @@ After the STRIDE walk produces the entities + flows + threats, the skill emits:
 projects/example-app/audits/threat-model/threat-model.json
 ```
 
-Open the JSON in Threat Dragon (`File → Open Existing Threat Model`). Dragon's auto-arrange (toolbar) re-flows the auto-grid layout into a tidier view — the grid is just a sane starting state. STRIDE findings appear pinned to their parent shapes; click any shape's threat tab to edit them visually.
+Open the JSON in Threat Dragon (`File → Open Existing Threat Model`). Dragon's auto-arrange (toolbar) re-flows the auto-grid layout into a tidier view: the grid is just a sane starting state. STRIDE findings appear pinned to their parent shapes; click any shape's threat tab to edit them visually.
 
 ## STRIDE Categories
 
@@ -68,9 +68,9 @@ Open the JSON in Threat Dragon (`File → Open Existing Threat Model`). Dragon's
 
 ## Process
 
-### Step 1: Read the DFD (source of truth) — refuse if absent
+### Step 1: Read the DFD (source of truth): refuse if absent
 
-The DFD is produced by [`/dfd`](../dfd/SKILL.md) and lives at `projects/<project>/architecture/dfd.md` — this is the **source of truth**. This skill consumes it; it does NOT regenerate it. The STRIDE walk in Step 2 iterates the DFD's trust-boundary crossings (the table in `dfd.md` § "Trust boundaries") rather than inventing threats ad-hoc.
+The DFD is produced by [`/dfd`](../dfd/SKILL.md) and lives at `projects/<project>/architecture/dfd.md`. This is the **source of truth**. This skill consumes it. It does NOT regenerate it. The STRIDE walk in Step 2 iterates the DFD's trust-boundary crossings (the table in `dfd.md` § "Trust boundaries") rather than inventing threats ad-hoc.
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -94,14 +94,14 @@ MSG
 fi
 ```
 
-**Refusal (not fallback) is deliberate (#270).** The audit artefact embeds a DFD snapshot at audit time so the threat model remains internally consistent after the live DFD evolves. A threat model authored without a DFD has no anchor; the legacy "inline discovery" fallback that preceded #270 silently produced low-quality artefacts whose threats couldn't be re-validated later. Better to fail fast.
+**Refusal (not fallback) is deliberate (#270).** The audit artefact embeds a DFD snapshot at audit time so the threat model remains internally consistent after the live DFD evolves. A threat model authored without a DFD has no anchor; the legacy "inline discovery" fallback that preceded #270 silently produced low-quality artefacts whose threats could not be re-validated later. Better to fail fast.
 
 The DFD's structured elements feed Step 2:
 
-- **Entry points** — every external actor → process arrow in the DFD is an entry point
-- **Data stores** — every store node in the DFD
-- **External integrations** — every external-service actor in the DFD
-- **Trust boundaries** — every dashed subgraph border in the DFD; the per-boundary auth + classification table in `dfd.md` is the STRIDE worksheet
+- **Entry points**: every external actor → process arrow in the DFD is an entry point
+- **Data stores**: every store node in the DFD
+- **External integrations**: every external-service actor in the DFD
+- **Trust boundaries**: every dashed subgraph border in the DFD; the per-boundary auth + classification table in `dfd.md` is the STRIDE worksheet
 
 ### Step 1b: Extract DFD sections for snapshot inlining
 
@@ -196,7 +196,7 @@ After printing the human-readable catalogue (Step 3) and OWASP check (Step 4), p
 
 #### 5a. Resolve project name + score + verdict
 
-`<project-name>` is the project's registered name in `apexyard.projects.yaml`. If the project isn't registered, use the basename of the project path and tell the operator to `/handover` it for cross-machine trend continuity.
+`<project-name>` is the project's registered name in `apexyard.projects.yaml`. If the project is not registered, use the basename of the project path and tell the operator to `/handover` it for cross-machine trend continuity.
 
 Compute a single headline score from the severity distribution:
 
@@ -292,7 +292,7 @@ ops_root="$(git rev-parse --show-toplevel)"
 "$ops_root/.claude/skills/_lib-mermaid-lint.sh" "$audit_md" || lint_rc=$?
 ```
 
-Exit 1 (parse error in the snapshotted block) → the DFD itself has broken Mermaid; surface that and ask the operator to fix the live DFD before re-running. Exit 3 (Node missing) → one-line warning, proceed. The snapshot's lint passes whenever the live DFD's lint passes — same parser, same input.
+Exit 1 (parse error in the snapshotted block) → the DFD itself has broken Mermaid; surface that and ask the operator to fix the live DFD before re-running. Exit 3 (Node missing) → one-line warning, proceed. The snapshot's lint passes whenever the live DFD's lint passes: same parser, same input.
 
 #### 5c. Render the trend section
 
@@ -300,12 +300,12 @@ Exit 1 (parse error in the snapshotted block) → the DFD itself has broken Merm
 audit_render_trend "<project-name>" "threat-model" 5
 ```
 
-- < 2 prior runs → silent (no trend section). Don't append anything.
+- < 2 prior runs → silent (no trend section). Do not append anything.
 - ≥ 2 prior runs → prints a markdown trend block (heading + table + ASCII chart of `score` over time) to stdout. Append it to this run's MD artefact and to the chat output.
 
 ### Step 6: Emit Threat Dragon JSON (only if `--format=dragon` or `--format=both`)
 
-When `--format=dragon` or `--format=both` is set, build a structured-input YAML (or JSON — either is accepted by the serialiser) from the DFD + STRIDE catalogue, then invoke `serialize_dragon.py`.
+When `--format=dragon` or `--format=both` is set, build structured YAML or JSON input from the DFD + STRIDE catalogue. The serialiser accepts either format. Then invoke `serialize_dragon.py`.
 
 Structured-input schema (see `fixtures/sample-input.yaml` for a worked example):
 
@@ -332,7 +332,7 @@ out_dir=$(audit_resolve_dir "<project-name>" "threat-model")
 dragon_path="$out_dir/threat-model.json"
 ```
 
-`$out_dir` is the same per-project audit dir Step 5 writes to. The Dragon JSON sits alongside the per-run JSON + per-run MD; one Dragon export per project at a time (overwritten on subsequent runs). Operators who want to keep historic Dragon exports for diffing should rename them by hand — the markdown trend in Step 5c is the supported way to track findings over time.
+`$out_dir` is the same per-project audit dir Step 5 writes to. The Dragon JSON sits alongside the per-run JSON + per-run MD; one Dragon export per project at a time (overwritten on subsequent runs). Operators who want to keep historic Dragon exports for diffing should rename them by hand: the markdown trend in Step 5c is the supported way to track findings over time.
 
 #### 6b. Build the structured input and invoke the serialiser
 
@@ -392,39 +392,39 @@ Dragon's auto-arrange (toolbar) re-flows the auto-grid layout on first open.
 
 #### 6d. Layout note
 
-The serialiser uses an auto-grid layout (actors row at `y=0`, processes at `y=200`, stores at `y=400`; x-spaced 200px). Trust-boundary boxes wrap their children with a 40px margin. This is a sane starting state — Threat Dragon's own auto-arrange button re-flows the diagram into a tidier view on first open. Hand-authored coordinates are out of scope for v1 (see AgDR-0024 § "Auto-grid layout decision").
+The serialiser uses an auto-grid layout (actors row at `y=0`, processes at `y=200`, stores at `y=400`; x-spaced 200px). Trust-boundary boxes wrap their children with a 40px margin. This is a sane starting state: Threat Dragon's own auto-arrange button re-flows the diagram into a tidier view on first open. Hand-authored coordinates are out of scope for v1 (see AgDR-0024 § "Auto-grid layout decision").
 
 #### 5d. Opt-in commit (history-tracked marker)
 
-By default the dimension's runs/ JSON files are gitignored — most adopters don't want audit history bloat in the repo. The lib applies a `.gitignore` based on the presence of the marker:
+By default the dimension's runs/ JSON files are gitignored: most adopters do not want audit history bloat in the repo. The lib applies a `.gitignore` based on the presence of the marker:
 
 ```bash
 # Opt in to commit threat-model history (per-project, per-dimension)
 touch projects/<name>/audits/threat-model/.audit-history-tracked
 ```
 
-The lib re-evaluates the marker on every persist; the operator can toggle freely. The MD artefacts at `<dim_dir>/<ts>.md` are committed regardless — they are the durable human-readable artefact.
+The lib re-evaluates the marker on every persist; the operator can toggle freely. The MD artefacts at `<dim_dir>/<ts>.md` are committed regardless. They are the durable human-readable artefact.
 
 ## Rules
 
 1. **Lead with the summary table.** Details (code snippets, exploit scenarios) go AFTER the table, organized by severity.
 2. **Be specific about mitigations.** "Add auth" is not a mitigation. "Add JWT verification middleware to routes /api/admin/* using the existing authMiddleware.ts" is.
-3. **Don't cry wolf.** Only flag threats that are realistic for this codebase. A static site doesn't need CSRF protection.
+3. **Do not cry wolf.** Only flag threats that are realistic for this codebase. A static site does not need CSRF protection.
 4. **Adapt scope to project type.** API-only? Focus on auth, input validation, rate limiting. Full-stack? Add XSS, CSRF, cookie security. Library? Focus on supply chain and input handling.
 5. **Always persist.** Step 5 always writes a JSON + MD pair via `audit_run_persist`, regardless of opt-in commit state. The marker only controls whether the JSON is committed; persistence is unconditional so the trend is visible across runs.
 6. **Severity vocabulary in the JSON is lowercase.** The lib's `stats.by_severity` derivation expects `critical` / `high` / `medium` / `low` / `info`. The human-readable Step 3 table can use whatever capitalisation reads best.
 7. **Default output is unchanged.** `--format=dragon` and `--format=both` are opt-in; the markdown-only path stays default so existing adopters see no behaviour change. See AgDR-0024 for the format-choice rationale.
-8. **No DFD → no threat model (#270).** Refuse rather than fall back to inline discovery. A threat model that wasn't enumerated against a DFD has no point-in-time anchor; future readers can't replay the analysis. The fail-fast behaviour is mechanical (Step 1 `exit 1`), not advisory.
-9. **DFD snapshot is by copy, not by link.** The audit artefact embeds the DFD's Mermaid block + Trust-boundaries table + Data-classifications table inline. This is deliberate (#270) — linking would couple the rendering of historical threat models to whatever the live DFD says today, defeating the audit's point-in-time guarantee. Re-run `/threat-model` to refresh the snapshot.
+8. **No DFD → no threat model (#270).** Refuse rather than fall back to inline discovery. A threat model that was not enumerated against a DFD has no point-in-time anchor; future readers cannot replay the analysis. The fail-fast behaviour is mechanical (Step 1 `exit 1`), not advisory.
+9. **DFD snapshot is by copy, not by link.** The audit artefact embeds the DFD's Mermaid block + Trust-boundaries table + Data-classifications table inline. This is deliberate (#270): linking would couple the rendering of historical threat models to whatever the live DFD says today, defeating the audit's point-in-time guarantee. Re-run `/threat-model` to refresh the snapshot.
 10. **Discovery provenance is excluded from the snapshot.** The live DFD's `## Discovery provenance` section (raw axis-by-axis evidence) is too noisy for an audit artefact. Readers click through to the live DFD if they need the provenance trail.
 
 ## Anti-patterns
 
-- **Don't link to the live DFD.** Inline copy at audit time. The whole point of the snapshot is that the threat model survives later DFD edits without rotting.
-- **Don't fall back to "inline discovery" when the DFD is missing.** That was the pre-#270 behaviour; it produced low-quality artefacts that couldn't be re-validated later. Refuse instead.
-- **Don't extract from `dfd.md` programmatically beyond the three sections named in Step 1b.** The contract is the three exact headings `## Diagram` (Mermaid block), `## Trust boundaries` (table), and `## Data classifications` (table) — both `templates/architecture/dfd.md` and `.claude/skills/dfd/generate-mermaid.sh` MUST emit these verbatim (see the heading-contract rule in `.claude/skills/dfd/SKILL.md`). Adding more (e.g. provenance) bloats the artefact; adding less, or renaming a heading, breaks the audit's self-containment and silently zeroes out the matching `dfd_*` variable in Step 1b.
-- **Don't skip the Mermaid lint after persistence.** If the live DFD has broken Mermaid, the snapshot inherits it. Surfacing that here is cheaper than discovering it on GitHub.
+- **Do not link to the live DFD.** Inline copy at audit time. The whole point of the snapshot is that the threat model survives later DFD edits without rotting.
+- **Do not fall back to "inline discovery" when the DFD is missing.** That was the pre-#270 behaviour. It produced low-quality artefacts that could not be re-validated later. Refuse instead.
+- **Do not extract from `dfd.md` programmatically beyond the three sections named in Step 1b.** The contract is the three exact headings `## Diagram` (Mermaid block), `## Trust boundaries` (table), and `## Data classifications` (table): both `templates/architecture/dfd.md` and `.claude/skills/dfd/generate-mermaid.sh` MUST emit these verbatim (see the heading-contract rule in `.claude/skills/dfd/SKILL.md`). Adding more (for example, provenance) bloats the artefact; adding less, or renaming a heading, breaks the audit's self-containment and silently zeroes out the matching `dfd_*` variable in Step 1b.
+- **Do not skip the Mermaid lint after persistence.** If the live DFD has broken Mermaid, the snapshot inherits it. Surfacing that here is cheaper than discovering it on GitHub.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

@@ -73,6 +73,15 @@ It marks each part as built, in progress or not built.
 More rows (migrations, architecture, portfolio view, upstream sync, roles,
 onboarding): [`docs/whats-inside.md`](docs/whats-inside.md#more-ways-apexyard-differs).
 
+### Who approves a merge
+
+The human half of the merge gate never reads approvals from the forge. A bot or app approval on the PR never counts as the human approval.
+The human half reads only one approval record. `/approve-merge` or the approval menu writes it after a person approves that PR at its head commit (`.claude/hooks/block-unreviewed-merge.sh` lines 20-46, `.claude/skills/approve-merge/SKILL.md`, `.claude/hooks/record-menu-approval.sh`, AgDR-0234).
+The hook checks the `approved_by=user` field and the head SHA (`.claude/hooks/block-unreviewed-merge.sh` lines 702-736).
+The optional `review_markers.require_posted_review` setting reads posted forge reviews for the agent-review half only (`.claude/hooks/block-unreviewed-merge.sh` lines 496-606, `.claude/hooks/_lib-tracker.sh` lines 2041-2049).
+ApexYard runs with Claude Code, and with other coding agents through an adapter. Proof and limits for each agent are in [`docs/harnesses/`](docs/harnesses/). It runs next to any review agent. See [Run ApexYard next to another PR agent](docs/running-next-to-another-pr-agent.md).
+The approval record is a local file. Its write gate is a backstop, not a security boundary (`docs/agdr/AgDR-0109-marker-write-gate-is-a-backstop.md`). Server-side branch protection is the hard control (`SECURITY.md` line 46).
+
 ## What is inside
 
 Roles, hooks, skills, sub-agents, rules, workflows, and templates. Full
@@ -133,6 +142,7 @@ small adapter. Dated proof and limits live in
 ## Further reading
 
 - Agent authority and human gates: [Escalation pattern](docs/escalation-pattern.md)
+- Run next to another review agent: [Run ApexYard next to another PR agent](docs/running-next-to-another-pr-agent.md)
 - Site move note: [`docs/whats-inside.md`](docs/whats-inside.md#marketing-site)
 - Roles, workflows, and templates: [`docs/whats-inside.md`](docs/whats-inside.md#roles)
 - Project badges: [`docs/badges.md`](docs/badges.md)

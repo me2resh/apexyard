@@ -8,7 +8,7 @@ allowed-tools: Bash, Read, Grep, Glob
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /audit-deps — Dependency Audit
+# /audit-deps: Dependency Audit
 
 Audit project dependencies for security vulnerabilities, outdated packages, and license compliance across npm and Python.
 
@@ -174,10 +174,10 @@ WARN or incomplete coverage does not install tools automatically. Print per-ecos
 ### 9. Install advice (missing tools)
 
 ```
-npm          — install Node.js + npm for the project
-pip-audit    — pip install pip-audit==2.10.0 packaging==25.0
+npm          : install Node.js + npm for the project
+pip-audit    : pip install pip-audit==2.10.0 packaging==25.0
                (trusted env only; see golden-paths/pipelines/scripts/dependency-audit-tools.lock.json)
-OSV fallback — no extra install. Needs network to api.osv.dev
+OSV fallback : no extra install. Needs network to api.osv.dev
 ```
 
 ## Output
@@ -188,4 +188,4 @@ Invokes: Dependency Auditor Agent (Munir / Guardian)
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard), multi-project SDLC framework for Claude Code · MIT.*

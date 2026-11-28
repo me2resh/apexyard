@@ -8,7 +8,7 @@ effort: low
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /approve-architecture — Record Per-PR Design-Review Approval
+# /approve-architecture: Record Per-PR Design-Review Approval
 
 Writes `.claude/session/reviews/<owner>__<repo>__<pr>-architecture.approved` (repo-qualified path, see AgDR-0060) with the current HEAD SHA so the `require-architecture-review.sh` merge-gate hook will let a design-artifact PR through. Without this marker, the hook blocks merges on any PR that touches a technical design, a migration AgDR, or a feature spec / PRD.
 
@@ -18,22 +18,22 @@ This skill is the architecture-review analog of `/approve-design` (UI gate) and 
 
 **INVOKE THIS SKILL ONLY ON EXPLICIT, PER-PR, DESIGN-REVIEW APPROVAL.**
 
-Normally Tariq writes the marker himself on an APPROVED verdict (see `.claude/agents/solution-architect.md`). This skill is the **operator path** to record the same marker — for when a human architect reviewed the design, or when you need to re-record after a rebase.
+Normally Tariq writes the marker himself on an APPROVED verdict (see `.claude/agents/solution-architect.md`). This skill is the **operator path** to record the same marker: for when a human architect reviewed the design, or when you need to re-record after a rebase.
 
 Valid invocation triggers:
 
-- "design review passed" / "architecture approved" / "the design in #42 is sound" — **if and only if** the surrounding context clearly names a specific PR and the design has actually been reviewed against the architecture lens.
-- "PR #42 architecture approved" — names the PR explicitly.
-- A reply to your own "PR #42's design — architecture review approved?" message that consists of any affirmative token.
+- "design review passed" / "architecture approved" / "the design in #42 is sound": **if and only if** the surrounding context clearly names a specific PR and the design has actually been reviewed against the architecture lens.
+- "PR #42 architecture approved": names the PR explicitly.
+- A reply to your own "PR #42's design: architecture review approved?" message that consists of any affirmative token.
 
 **Invalid triggers** (do NOT run this skill):
 
-- "looks good" / "nice design" — when said about a whiteboard sketch, a Figma, or a verbal proposal that is not a specific PR's design artifact. Architecture review means reviewing the *committed design doc / AgDR / spec in a PR*, not a sketch.
-- "the approach is fine" — when said in a planning context ("let's go with this approach") rather than a review context ("I've reviewed the design doc against the lens and it's sound").
-- "go" / "continue" / "ship it" — umbrella responses to a multi-step plan. Same rule as `/approve-merge`.
+- "looks good" / "nice design": when said about a whiteboard sketch, a Figma, or a verbal proposal that is not a specific PR's design artifact. Architecture review means reviewing the *committed design doc / AgDR / spec in a PR*, not a sketch.
+- "the approach is fine": when said in a planning context ("let's go with this approach") rather than a review context ("I've reviewed the design doc against the lens and it's sound").
+- "go" / "continue" / "ship it": umbrella responses to a multi-step plan. Same rule as `/approve-merge`.
 - Your own inference that "the design is probably fine." NO. Stop and ask.
 
-**If in doubt: STOP AND ASK.** "PR #X carries a technical design — has it been reviewed and approved against the architecture lens?" is one message. Building against an unsound design is much worse.
+**If in doubt: STOP AND ASK.** "PR #X carries a technical design. Has it been reviewed and approved against the architecture lens?" is one message. Building against an unsound design is much worse.
 
 ## Menu path
 
@@ -64,11 +64,11 @@ See AgDR-0234.
 
 ## Process
 
-### 1. Parse the PR number — and the repo
+### 1. Parse the PR number, and the repo
 
 Extract the PR number from the argument. If none given, infer from the current branch's open PR (`gh pr view --json number --jq '.number'`) or the user's most recent message. If ambiguous, STOP and ask.
 
-**Also resolve the repo (`REPO`).** Accept the fully-qualified `owner/repo#N` form, or an explicit `owner/repo` second token. In split-portfolio v2 the PR lives in a *sibling* repo, so a bare `gh pr view <pr>` resolved against the ops-fork cwd hits the WRONG repo — the marker would then be written under the ops-fork qualifier and the `require-architecture-review.sh` gate (which keys on the PR's real repo, derived from the merge command's cd-target, me2resh/apexyard#687) would never find it → false-block. Pass `--repo "$REPO"` to **every** `gh pr view` call below when `REPO` is known. **Fail loud:** if only a bare number was given and `gh pr view <pr>` cannot resolve the PR from the current cwd, STOP and ask for the `owner/repo#N` form — never write the marker under a guessed qualifier.
+**Also resolve the repo (`REPO`).** Accept the fully-qualified `owner/repo#N` form, or an explicit `owner/repo` second token. In split-portfolio v2 the PR lives in a *sibling* repo, so a bare `gh pr view <pr>` resolved against the ops-fork cwd hits the WRONG repo. The marker would then be written under the ops-fork qualifier and the `require-architecture-review.sh` gate (which keys on the PR's real repo, derived from the merge command's cd-target, me2resh/apexyard#687) would never find it → false-block. Pass `--repo "$REPO"` to **every** `gh pr view` call below when `REPO` is known. **Fail loud:** if only a bare number was given and `gh pr view <pr>` cannot resolve the PR from the current cwd, STOP and ask for the `owner/repo#N` form. Never write the marker under a guessed qualifier.
 
 ### 2. Sanity-check the user's intent
 
@@ -78,7 +78,7 @@ Re-read the user's most recent message:
 - Was the *design artifact in the PR* reviewed, or just a sketch / verbal proposal?
 - Is the approval for this specific PR's design, or for a general direction?
 
-If any are unclear — STOP and ask a per-PR explicit question.
+If any are unclear, STOP and ask a per-PR explicit question.
 
 ### 3. Verify the PR state
 
@@ -88,11 +88,11 @@ gh pr view <pr> ${REPO:+--repo "$REPO"} --json state,isDraft,mergeable,headRefOi
 
 - `state` must be `OPEN`. Refuse if `MERGED`, `CLOSED`, or `DRAFT`.
 - `mergeable` should be `MERGEABLE` or `UNKNOWN`.
-- Capture `headRefOid` — the marker must match the PR's GitHub HEAD.
+- Capture `headRefOid`: the marker must match the PR's GitHub HEAD.
 
 ### 4. Verify the Rex marker exists at current HEAD
 
-Architecture sign-off is a stamp on top of a Rex-approved HEAD (the design PR still gets a normal code review for its prose / diff), not parallel to it. Resolve the ops fork root (NOT git toplevel — inside `workspace/<project>/` the markers live in the ops fork above) and source the marker path helper:
+Architecture sign-off is a stamp on top of a Rex-approved HEAD (the design PR still gets a normal code review for its prose / diff), not parallel to it. Resolve the ops fork root (NOT git toplevel: inside `workspace/<project>/` the markers live in the ops fork above) and source the marker path helper:
 
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel)
@@ -101,16 +101,16 @@ OPS_ROOT=$(p="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_
 MARKER_HOME="${OPS_ROOT:-$REPO_ROOT}"
 # shellcheck source=/dev/null
 . "$MARKER_HOME/.claude/hooks/_lib-review-markers.sh"
-# Base (host) repo — the canonical marker key: it matches solution-architect.md's
+# Base (host) repo, the canonical marker key: it matches solution-architect.md's
 # architecture marker AND the require-architecture-review.sh gate's lookup (which
 # keys on the merge command's base repo, #765). Prefer the repo resolved in step 1
 # (already the base, #687); if it wasn't given, fall back to the CURRENT
-# checkout's own remote — a deterministic, non-ambient source of truth. Do NOT
+# checkout's own remote, a deterministic, non-ambient source of truth. Do NOT
 # fall back to an unscoped `gh pr view <pr> --json headRepository`: that call
 # reads the wrong field (the PR's head/fork) and is itself an ambient-resolved
 # gh query that can silently prefer the wrong repo in a fork checkout (#887).
-# pr_base_repo now REQUIRES this repo and scopes its own gh query to it — never
-# gh's ambient default — so same-repo PRs still resolve unchanged.
+# pr_base_repo now REQUIRES this repo and scopes its own gh query to it, never
+# gh's ambient default, so same-repo PRs still resolve unchanged.
 if [ -n "$REPO" ]; then
   REPO_FOR_BASE="$REPO"
 else
@@ -128,7 +128,7 @@ If Rex's marker is missing or its SHA doesn't match HEAD, refuse and tell the us
 
 ### 5. Verify the PR actually carries a design artifact
 
-Check whether the PR's diff includes files that trigger the architecture-review gate (technical design, migration AgDR, PRD / spec). If it has none, the marker is unnecessary — tell the user and skip.
+Check whether the PR's diff includes files that trigger the architecture-review gate (technical design, migration AgDR, PRD / spec). If it has none, the marker is unnecessary. Tell the user and skip.
 
 ```bash
 gh pr diff <pr> --name-only | grep -qiE '(docs/agdr/.*migration.*\.md|technical-design|tech-design|/designs/|/prds/|prd.*\.md|feature-spec)'
@@ -139,9 +139,9 @@ gh pr diff <pr> --name-only | grep -qiE '(docs/agdr/.*migration.*\.md|technical-
 Use the repo-qualified path via `_lib-review-markers.sh` (already sourced in step 4):
 
 ```bash
-# (MARKER_HOME and PR_HOST_REPO already resolved in step 4 — reuse them here.)
+# (MARKER_HOME and PR_HOST_REPO already resolved in step 4. Reuse them here.)
 mkdir -p "$MARKER_HOME/.claude/session/reviews"
-# architecture marker keyed on the BASE repo — same key as solution-architect.md
+# architecture marker keyed on the BASE repo: same key as solution-architect.md
 # + the gate (#765). Keying on the fork would leave a cross-fork design PR blocked.
 ARCH=$(review_marker_path "$PR_HOST_REPO" <pr> architecture "$MARKER_HOME")
 printf '%s\n' "<headRefOid>" > "$ARCH"
@@ -160,8 +160,8 @@ Architecture approval recorded for PR #<pr> at <sha>. The architecture-review me
 ## Notes
 
 - The marker is gitignored (`.claude/session/` is in `.gitignore`). Session state, not code.
-- Re-running `/approve-architecture <pr>` is idempotent — overwrites with current HEAD.
-- New commits after approval invalidate the marker (the gate compares SHAs) — re-request review.
+- Re-running `/approve-architecture <pr>` is idempotent: overwrites with current HEAD.
+- New commits after approval invalidate the marker (the gate compares SHAs). Re-request review.
 - This skill does NOT invoke the Solution Architect role. It records approval *after* the design has been reviewed (by Tariq via `/design-review`, or by a human architect).
 
 ## Anti-pattern
@@ -210,4 +210,4 @@ All follow the same pattern: verify PR state → verify Rex marker → write mar
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard), multi-project SDLC framework for Claude Code · MIT.*

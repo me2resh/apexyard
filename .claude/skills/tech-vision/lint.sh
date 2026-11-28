@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # /tech-vision lint.sh — validate any Mermaid blocks in a generated
-# architecture vision markdown file (typically the target-state C4 L1
-# block). Thin wrapper around the shared _lib-mermaid-lint.sh — see
+# architecture vision markdown file (typically the target-state
+# block in the Heavy appendix). Thin wrapper around the shared _lib-mermaid-lint.sh — see
 # that file for full flag + exit-code semantics.
 #
 # Usage:

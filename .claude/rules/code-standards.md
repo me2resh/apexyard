@@ -1,6 +1,6 @@
 # Code Standards
 
-These are sensible defaults for a TypeScript-leaning team. Adjust to fit your stack — the principles transfer.
+These are sensible defaults for a TypeScript-leaning team. Adjust to fit your stack. The principles transfer.
 
 ## TypeScript
 
@@ -51,4 +51,4 @@ Pick the testing tools that fit your stack. Vitest + Playwright is one common co
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

@@ -10,7 +10,7 @@ Writing: read docs/skills/shared/writing-rule.md before you write a durable arti
 
 # /approve-design - Record Per-PR Design-Review Approval
 
-Writes `.claude/session/reviews/<owner>__<repo>__<pr>-design.approved` (repo-qualified path, see AgDR-0060) with the current HEAD SHA so the `require-design-review-for-ui.sh` merge-gate hook will let a UI PR through. Without this marker, the hook blocks merges on any PR that touches a UI file — the pattern list lives in `.claude/hooks/_lib-ui-paths.sh` (React/Vue/Svelte/Astro/MDX components, template-engine files, styles, and design tokens), shared with step 5 below so the two checks never diverge (me2resh/apexyard#1390).
+Writes `.claude/session/reviews/<owner>__<repo>__<pr>-design.approved` (repo-qualified path, see AgDR-0060) with the current HEAD SHA so the `require-design-review-for-ui.sh` merge-gate hook will let a UI PR through. Without this marker, the hook blocks merges on any PR that touches a UI file: the pattern list lives in `.claude/hooks/_lib-ui-paths.sh` (React/Vue/Svelte/Astro/MDX components, template-engine files, styles, and design tokens), shared with step 5 below so the two checks never diverge (me2resh/apexyard#1390).
 
 This skill is the design-review analog of `/approve-merge` (which writes the CEO marker for the merge gate). Same pattern, different gate.
 
@@ -20,18 +20,18 @@ This skill is the design-review analog of `/approve-merge` (which writes the CEO
 
 The valid invocation triggers look like this:
 
-- "design approved" / "UI looks good" / "design review passed" — **if and only if** the surrounding context clearly names a specific PR and the designer has actually reviewed the PR's visual changes.
-- "PR #42 design approved" / "the UI in #42 looks right" — names the PR explicitly.
-- A reply to your own "PR #42 has UI changes — design review approved?" message that consists of any affirmative token — because you just named the PR and the user/designer is responding to that specific question.
+- "design approved" / "UI looks good" / "design review passed", **if and only if** the surrounding context clearly names a specific PR and the designer has actually reviewed the PR's visual changes.
+- "PR #42 design approved" / "the UI in #42 looks right": names the PR explicitly.
+- A reply to your own "PR #42 has UI changes, design review approved?" message that consists of any affirmative token, because you just named the PR and the user/designer is responding to that specific question.
 
 **Invalid triggers** (do NOT run this skill):
 
-- "looks good" / "nice" / "approved" — **when said about a Figma mockup, a design spec, a screenshot, or any artifact that is not a specific PR's diff**. Design review means reviewing the *actual code changes in a PR*, not a mockup. A mockup approval and a PR approval are different moments.
-- "the design is fine" — **when said in a planning context** ("let's go with this design approach") rather than a PR-review context ("I've looked at the PR diff and the implementation matches the design"). The skill is for the latter.
-- "go" / "continue" / "ship it" — when these are umbrella responses to a multi-step plan. Same rule as `/approve-merge`.
+- "looks good" / "nice" / "approved", **when said about a Figma mockup, a design spec, a screenshot, or any artifact that is not a specific PR's diff**. Design review means reviewing the *actual code changes in a PR*, not a mockup. A mockup approval and a PR approval are different moments.
+- "the design is fine", **when said in a planning context** ("let's go with this design approach") rather than a PR-review context ("I've looked at the PR diff and the implementation matches the design"). The skill is for the latter.
+- "go" / "continue" / "ship it", when these are umbrella responses to a multi-step plan. Same rule as `/approve-merge`.
 - Your own inference that "the designer probably approves because they liked the mockup earlier." NO. Mockup approval ≠ implementation approval. Stop and ask.
 
-**If in doubt: STOP AND ASK.** "PR #X has UI changes — has the design been reviewed and approved?" is one message. Merging a PR with incorrect UI that needs a follow-up revert is much worse.
+**If in doubt: STOP AND ASK.** "PR #X has UI changes, has the design been reviewed and approved?" is one message. Merging a PR with incorrect UI that needs a follow-up revert is much worse.
 
 ## Menu path
 
@@ -62,7 +62,7 @@ See AgDR-0234.
 
 ## Process
 
-### 1. Parse the PR number — and the repo
+### 1. Parse the PR number, and the repo
 
 Extract the PR number from `$ARGUMENTS`. If no argument is given, try to infer from:
 
@@ -71,7 +71,7 @@ Extract the PR number from `$ARGUMENTS`. If no argument is given, try to infer f
 
 If the PR number is ambiguous, STOP and ask.
 
-**Also resolve the repo (`REPO`).** Accept the fully-qualified `owner/repo#N` form, or an explicit `owner/repo` second token. In split-portfolio v2 the PR lives in a *sibling* repo, so a bare `gh pr view <pr>` resolved against the ops-fork cwd hits the WRONG repo — the marker would then be written under the ops-fork qualifier and the `require-design-review-for-ui.sh` gate (which keys on the PR's real repo, derived from the merge command's cd-target, me2resh/apexyard#687) would never find it → false-block. Pass `--repo "$REPO"` to **every** `gh pr view` call below when `REPO` is known. **Fail loud:** if only a bare number was given and `gh pr view <pr>` cannot resolve the PR from the current cwd, STOP and ask for the `owner/repo#N` form — never write the marker under a guessed qualifier.
+**Also resolve the repo (`REPO`).** Accept the fully-qualified `owner/repo#N` form, or an explicit `owner/repo` second token. In split-portfolio v2 the PR lives in a *sibling* repo, so a bare `gh pr view <pr>` resolved against the ops-fork cwd hits the WRONG repo: the marker would then be written under the ops-fork qualifier and the `require-design-review-for-ui.sh` gate (which keys on the PR's real repo, derived from the merge command's cd-target, me2resh/apexyard#687) would never find it → false-block. Pass `--repo "$REPO"` to **every** `gh pr view` call below when `REPO` is known. **Fail loud:** if only a bare number was given and `gh pr view <pr>` cannot resolve the PR from the current cwd, STOP and ask for the `owner/repo#N` form: never write the marker under a guessed qualifier.
 
 ### 2. Sanity-check the user's intent
 
@@ -81,8 +81,8 @@ Before writing the marker, re-read the user's most recent message. Ask yourself:
 - Did the designer review the *PR diff* (code changes), or just a mockup / screenshot / Figma link?
 - Is the approval for the design aspects of this specific PR, or for a general design direction?
 
-If any of these are unclear — **STOP**. Reply with a per-PR explicit question:
-> "PR #X touches UI files (.tsx/.css/etc). Has the design review been completed on the actual PR diff — approved?"
+If any of these are unclear, **STOP**. Reply with a per-PR explicit question:
+> "PR #X touches UI files (.tsx/.css/etc). Has the design review been completed on the actual PR diff, approved?"
 
 ### 3. Verify the PR state
 
@@ -103,15 +103,15 @@ OPS_ROOT=$(p="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_
 MARKER_HOME="${OPS_ROOT:-$REPO_ROOT}"
 # shellcheck source=/dev/null
 . "$MARKER_HOME/.claude/hooks/_lib-review-markers.sh"
-# Base (host) repo — the canonical marker key: it matches Rex's marker AND the
+# Base (host) repo, the canonical marker key: it matches Rex's marker AND the
 # merge gate's lookup (which keys on the merge command's base repo, #765). Prefer
 # the repo resolved in step 1 (already the base, #687); if it wasn't given, fall
-# back to the CURRENT checkout's own remote — a deterministic, non-ambient
+# back to the CURRENT checkout's own remote, a deterministic, non-ambient
 # source of truth. Do NOT fall back to an unscoped
 # `gh pr view <pr> --json headRepository`: that call reads the wrong field (the
 # PR's head/fork) and is itself an ambient-resolved gh query that can silently
 # prefer the wrong repo in a fork checkout (#887). pr_base_repo now REQUIRES
-# this repo and scopes its own gh query to it — never gh's ambient default —
+# this repo and scopes its own gh query to it, never gh's ambient default,
 # so same-repo PRs still resolve unchanged.
 if [ -n "$REPO" ]; then
   REPO_FOR_BASE="$REPO"
@@ -130,14 +130,14 @@ If Rex's marker is missing or its SHA doesn't match HEAD, refuse and tell the us
 
 ### 5. Verify the PR actually touches UI files
 
-Check whether the PR's diff includes files that would trigger the design-review gate. If the PR has NO UI files, the marker is unnecessary — tell the user and skip.
+Check whether the PR's diff includes files that would trigger the design-review gate. If the PR has NO UI files, the marker is unnecessary: tell the user and skip.
 
-Read the pattern list from `_lib-ui-paths.sh` — the same source `require-design-review-for-ui.sh` reads — instead of a separate hard-coded copy. The two lists drifted apart before this (me2resh/apexyard#1390); sourcing the shared library keeps them in sync going forward:
+Read the pattern list from `_lib-ui-paths.sh`, the same source `require-design-review-for-ui.sh` reads, instead of a separate hard-coded copy. The two lists drifted apart before this (me2resh/apexyard#1390); sourcing the shared library keeps them in sync going forward:
 
 ```bash
 # MARKER_HOME and REPO_ROOT already resolved in step 4. Source the library
 # from MARKER_HOME (the hook scripts live in the ops fork), but pass
-# REPO_ROOT — the PR's own git root — to look up `.ui_paths`. That is the
+# REPO_ROOT, the PR's own git root, to look up `.ui_paths`. That is the
 # same root require-design-review-for-ui.sh reads. Passing MARKER_HOME here
 # instead reads the wrong project-config.json inside a workspace/ clone,
 # so a project-level `.ui_paths` override could make this check and the
@@ -152,9 +152,9 @@ gh pr diff <pr> --name-only | grep -qE "$UI_GLOB_PATTERN"
 Use the repo-qualified path via `_lib-review-markers.sh` (already sourced in step 4):
 
 ```bash
-# (MARKER_HOME and PR_HOST_REPO already resolved in step 4 — reuse them here.)
+# (MARKER_HOME and PR_HOST_REPO already resolved in step 4, reuse them here.)
 mkdir -p "$MARKER_HOME/.claude/session/reviews"
-# design marker keyed on the BASE repo — same key as Rex's marker + the gate (#765).
+# design marker keyed on the BASE repo, same key as Rex's marker + the gate (#765).
 DESIGN=$(review_marker_path "$PR_HOST_REPO" <pr> design "$MARKER_HOME")
 git rev-parse HEAD > "$DESIGN"
 ```
@@ -174,8 +174,8 @@ Design approval recorded for PR #<pr> at <sha>. The design-review merge gate wil
 ## Notes
 
 - The design marker is gitignored (`.claude/session/` is in `.gitignore`). It's session state, not code.
-- Re-running `/approve-design <pr>` is idempotent — it overwrites the marker with the current HEAD.
-- New commits after the design approval invalidate the marker: the hook will refuse to merge because the SHA no longer matches HEAD. This is intentional — a new commit might change the UI. Re-request design review.
+- Re-running `/approve-design <pr>` is idempotent: it overwrites the marker with the current HEAD.
+- New commits after the design approval invalidate the marker: the hook will refuse to merge because the SHA no longer matches HEAD. This is intentional: a new commit might change the UI. Re-request design review.
 - This skill does NOT invoke the UI Designer role. It records the approval *after* the designer has reviewed. The review itself happens through whatever process the team uses (role activation, human review, Figma comparison, etc.).
 
 ## Anti-pattern
@@ -213,10 +213,10 @@ Both skills follow the same pattern: verify PR state → verify Rex marker → w
 
 The merge flow for a UI PR requires **three** markers before the merge-gate hooks allow through:
 
-1. `<pr>-rex.approved` — from the code-reviewer agent
-2. `<pr>-design.approved` — from this skill
-3. `<pr>-ceo.approved` — from `/approve-merge`
+1. `<pr>-rex.approved`: from the code-reviewer agent
+2. `<pr>-design.approved`: from this skill
+3. `<pr>-ceo.approved`: from `/approve-merge`
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard), multi-project SDLC framework for Claude Code · MIT.*

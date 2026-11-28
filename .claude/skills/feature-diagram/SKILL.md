@@ -7,7 +7,7 @@ allowed-tools: Bash, Read, Grep, Glob, Write, Edit
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /feature-diagram — Per-feature Mermaid Sub-graph
+# /feature-diagram: Per-feature Mermaid Sub-graph
 
 Reads the Feature Inventory at `projects/<name>/feature-inventory.md` (produced by `/extract-features`) and writes a per-feature Mermaid `flowchart LR` showing the **HTTP routes, data models, async jobs, and UI screens** that participate in one feature. Output: `projects/<name>/features/<slug>.md` (one file per feature).
 
@@ -33,9 +33,9 @@ source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
 projects_dir=$(portfolio_projects_dir)
 ```
 
-Defaults match today's single-fork layout (`./projects`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir}` keys in `.claude/project-config.json` — the helper resolves whichever mode they're in. See `docs/multi-project.md`.
+Defaults match today's single-fork layout (`./projects`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir}` keys in `.claude/project-config.json`. The helper resolves whichever mode they're in. See `docs/multi-project.md`.
 
-**Write targets** (see me2resh/apexyard#373 + #443): paths documented as `projects/<name>/X` in this skill are canonical adopter-facing forms — implement them in bash as `"${projects_dir}/<name>/X"`. Never construct from `"${PWD}/projects/..."`, `"$(git rev-parse --show-toplevel)/projects/..."`, or a literal `./projects/...` — those break in split-portfolio v2 mode where `projects_dir` resolves to a sibling repo.
+**Write targets** (see me2resh/apexyard#373 + #443): paths documented as `projects/<name>/X` in this skill are canonical adopter-facing forms: implement them in bash as `"${projects_dir}/<name>/X"`. Never construct from `"${PWD}/projects/..."`, `"$(git rev-parse --show-toplevel)/projects/..."`, or a literal `./projects/...`. Those break in split-portfolio v2 mode where `projects_dir` resolves to a sibling repo.
 
 **REQUIRED per-block preamble** (see #443): Claude executes each ```bash``` block as a separate shell invocation. The `projects_dir` assignment from the Path resolution section above does NOT carry into later blocks. Every bash block that writes to a `projects/<name>/X` path MUST start with this three-line preamble so it's self-contained:
 
@@ -69,7 +69,7 @@ The `features/` directory is created if missing.
 
 ## Activated role
 
-When `/feature-diagram` runs, activate the **[Tech Lead](../../../roles/engineering/tech-lead.md)** role — they own architectural slicing and the "which surfaces participate in this feature" view. See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the full activation protocol.
+When `/feature-diagram` runs, activate the **[Tech Lead](../../../roles/engineering/tech-lead.md)** role. They own architectural slicing and the "which surfaces participate in this feature" view. See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the full activation protocol.
 
 ## Process
 
@@ -95,7 +95,7 @@ The inventory file must exist at `<projects_dir>/<name>/feature-inventory.md`. I
 
 ```
 No feature inventory at projects/<name>/feature-inventory.md.
-Run /extract-features <project> first — that produces the inventory
+Run /extract-features <project> first: that produces the inventory
 this skill reads from.
 ```
 
@@ -103,9 +103,9 @@ this skill reads from.
 
 The slug matches a row in the inventory's consolidated feature matrix. Match in this order:
 
-1. **Exact slug match** in an existing `[link text](features/<slug>.md)` cell — re-runs.
-2. **Feature title match** (kebab-case the title and compare) — e.g. operator passes `create-order` and a row says `Create order`.
-3. **Substring match** — e.g. `password` matches `Reset password via email`. Ambiguous matches (≥ 2 rows) ask the operator to disambiguate.
+1. **Exact slug match** in an existing `[link text](features/<slug>.md)` cell: re-runs.
+2. **Feature title match** (kebab-case the title and compare): e.g. operator passes `create-order` and a row says `Create order`.
+3. **Substring match**: e.g. `password` matches `Reset password via email`. Ambiguous matches (≥ 2 rows) ask the operator to disambiguate.
 
 If no match → exit 2 with a helpful message listing the available slugs:
 
@@ -166,7 +166,7 @@ flowchart LR
     job_<id> -->|reads/writes| model_<id>
 ```
 
-**Empty subgraphs** stay visible — render `<Subgraph>_empty["(none)"]` as a placeholder so the four-quadrant shape is constant across features:
+**Empty subgraphs** stay visible: render `<Subgraph>_empty["(none)"]` as a placeholder so the four-quadrant shape is constant across features:
 
 ```
 subgraph Jobs["Async Jobs"]
@@ -176,7 +176,7 @@ end
 
 **Node IDs** are stable: `screen_<slug>`, `route_<slug>`, `model_<slug>`, `job_<slug>` where `<slug>` is a kebab-case-ified version of the element's name. Stability matters because operators may hand-add a comment or annotation under a specific node ID; re-runs should keep those grounded.
 
-**Edge inference rules** — same as documented in AgDR-0035:
+**Edge inference rules**, same as documented in AgDR-0035:
 
 | Source axis | Target axis | Edge label |
 |-------------|-------------|------------|
@@ -185,7 +185,7 @@ end
 | Route | Job | `"enqueues"` |
 | Job | Model | `"reads/writes"` (only if the inventory row mentions both as participating) |
 
-Don't invent edges. If the inventory row doesn't corroborate a screen → route mapping (no shared URL prefix, no shared component name), don't draw the edge — emit the nodes only and add a one-line coverage-gap note at the bottom of the file.
+Don't invent edges. If the inventory row doesn't corroborate a screen → route mapping (no shared URL prefix, no shared component name), don't draw the edge. Emit the nodes only and add a one-line coverage-gap note at the bottom of the file.
 
 ### 5a. HTML view (`--html` only)
 
@@ -300,7 +300,7 @@ In `<projects_dir>/<name>/feature-inventory.md`'s **consolidated feature matrix 
 | 1 | [Create order](features/create-order.md) | API + UI | Active | route + test + UI | POST /api/orders; charges Stripe; sends confirmation email |
 ```
 
-Idempotent — if the cell already contains a link to the same target file, leave it. If the cell contains a link to a different target file (rare; manual rename), overwrite.
+Idempotent: if the cell already contains a link to the same target file, leave it. If the cell contains a link to a different target file (rare; manual rename), overwrite.
 
 If the inventory is read-only (no write permission, or the operator passed `--no-update-inventory`) the back-link step is skipped with a one-line warning.
 
@@ -313,9 +313,9 @@ SKILL_DIR="$(dirname "$(realpath "$0")")"
 "$SKILL_DIR/lint.sh" "$out_file" || lint_rc=$?
 ```
 
-The lint wraps the shared `_lib-mermaid-lint.sh` — extracts the `` ```mermaid `` flowchart block and validates each via `mmdc` (mermaid-cli). Graceful-degrades when Node / npx is unavailable (exit 3, advisory only).
+The lint wraps the shared `_lib-mermaid-lint.sh`: extracts the `` ```mermaid `` flowchart block and validates each via `mmdc` (mermaid-cli). Graceful-degrades when Node / npx is unavailable (exit 3, advisory only).
 
-Treat exit 1 (parse error) as a hard fail — print the lint output, ask the operator whether to (a) auto-regenerate the offending block, (b) keep the file as-is and fix by hand, or (c) re-run with `--skip-lint` if `mmdc` is misbehaving. Exit 3 (Node missing) prints a one-line warning and proceeds.
+Treat exit 1 (parse error) as a hard fail: print the lint output, ask the operator whether to (a) auto-regenerate the offending block, (b) keep the file as-is and fix by hand, or (c) re-run with `--skip-lint` if `mmdc` is misbehaving. Exit 3 (Node missing) prints a one-line warning and proceeds.
 
 ### 9. Confirm to the user
 
@@ -328,7 +328,7 @@ Treat exit 1 (parse error) as a hard fail — print the lint output, ask the ope
   Routes: 3   Models: 2   Jobs: 1   Screens: 1
   Mermaid lint: 1 of 1 block parsed cleanly
 
-Preview: open the file on GitHub — Mermaid renders inline.
+Preview: open the file on GitHub: Mermaid renders inline.
 Re-run /feature-diagram <slug> --force when the feature's surfaces change.
 ```
 
@@ -339,36 +339,36 @@ Re-run /feature-diagram <slug> --force when the feature's surfaces change.
 3. **Don't auto-overwrite.** Existing diagrams require explicit `--force`. The diagrams may have been hand-edited.
 4. **Empty subgraphs stay visible.** Four quadrants every time; render `(none)` placeholders so the reader's eye doesn't have to re-orient between features.
 5. **Don't invent edges.** Every edge must trace to a column in the inventory row. Missing corroboration becomes a coverage-gap note, not a fabricated arrow.
-6. **Stable node IDs.** `screen_<slug>` / `route_<slug>` / `model_<slug>` / `job_<slug>` — slug is kebab-case-ified element name. Reproducibility matters; operators may annotate by ID.
+6. **Stable node IDs.** `screen_<slug>` / `route_<slug>` / `model_<slug>` / `job_<slug>`: slug is kebab-case-ified element name. Reproducibility matters; operators may annotate by ID.
 7. **Footer signature is mandatory.** Every generated file ends with the `Generated by /feature-diagram on YYYY-MM-DD` line so future readers know it's regenerable.
-8. **Refuse if the slug doesn't match a row.** Exit 2 with the list of available slugs — no silent best-guess fallback.
+8. **Refuse if the slug doesn't match a row.** Exit 2 with the list of available slugs: no silent best-guess fallback.
 
 ## When to use this
 
 | Trigger | Use `/feature-diagram`? |
 |---------|-------------------------|
-| Onboarding a new engineer to a specific feature | Yes — pairs with `/handover` and `/extract-features` |
-| Planning a refactor scoped to one feature | Yes — visualises the blast radius before code edits |
-| Greenfield rewrite, slicing the v1 scope by feature | Yes — each "must-have v1" feature gets a per-feature diagram showing what must be preserved |
-| Major arch change to one feature (new model added, new job triggered) | Yes — re-run with `--force` |
-| Whole-system view | No — use `/c4` (topology) or `/dfd` (data flows) |
-| User-flow preview for stakeholders | No — use `/journey` (product-facing HTML) |
+| Onboarding a new engineer to a specific feature | Yes: pairs with `/handover` and `/extract-features` |
+| Planning a refactor scoped to one feature | Yes: visualises the blast radius before code edits |
+| Greenfield rewrite, slicing the v1 scope by feature | Yes: each "must-have v1" feature gets a per-feature diagram showing what must be preserved |
+| Major arch change to one feature (new model added, new job triggered) | Yes: re-run with `--force` |
+| Whole-system view | No: use `/c4` (topology) or `/dfd` (data flows) |
+| User-flow preview for stakeholders | No: use `/journey` (product-facing HTML) |
 
 ## Out of scope (v1)
 
-- **Cross-feature diagrams** (showing how features depend on each other) — listed as out-of-scope in #288.
-- **Per-feature sequence diagrams** — use `templates/architecture/sequence.md` manually if needed.
-- **Trust-boundary overlays** — that's `/dfd`'s slice. If the operator wants security-scoped feature analysis, run `/dfd` and `/feature-diagram` side by side.
-- **Auto-running `/extract-features`** — the inventory is a hard dependency, not an optional auto-trigger.
-- **Cross-project per-feature diagrams** — single project per invocation. Multi-project per-feature is a separate concern.
+- **Cross-feature diagrams** (showing how features depend on each other): listed as out-of-scope in #288.
+- **Per-feature sequence diagrams**: use `templates/architecture/sequence.md` manually if needed.
+- **Trust-boundary overlays**: that's `/dfd`'s slice. If the operator wants security-scoped feature analysis, run `/dfd` and `/feature-diagram` side by side.
+- **Auto-running `/extract-features`**: the inventory is a hard dependency, not an optional auto-trigger.
+- **Cross-project per-feature diagrams**: single project per invocation. Multi-project per-feature is a separate concern.
 
 ## Anti-patterns
 
 - **Don't substitute `/feature-diagram` for `/c4`.** The per-feature slice shows ONE feature's surfaces. System-wide topology lives in `/c4`.
 - **Don't run `/feature-diagram` for every row on every PR.** It's refresh-on-arch-change, not per-PR. The whole inventory only changes when features ship; the per-feature diagrams only change when the feature's routes / models / jobs / screens change.
 - **Don't hand-edit a generated diagram and lose the footer.** Re-runs detect the footer; without it the skill can't tell if a file is regenerable. If you must hand-edit, keep the footer line in place.
-- **Don't treat coverage gaps as failures.** The inventory has gaps by design (the scanner can't see business rules, permission matrices, or implicit features). Per-feature diagrams inherit those gaps — that's a feature, not a bug; the gaps are surfaced explicitly so a human can fill them in.
+- **Don't treat coverage gaps as failures.** The inventory has gaps by design (the scanner can't see business rules, permission matrices, or implicit features). Per-feature diagrams inherit those gaps. That's a feature, not a bug; the gaps are surfaced explicitly so a human can fill them in.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

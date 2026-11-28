@@ -6,26 +6,26 @@ argument-hint: "<pr-number-or-path> [repo]"
 allowed-tools: Bash, Read, Grep, Glob
 ---
 
-# /design-review — Solution Architecture Review
+# /design-review: Solution Architecture Review
 
 Read .claude/rules/writing-standard.md before you write a review.
 Use the controlled technical writing profile for the architecture review.
 Treat a profile fault in the design artifact as advisory, with the failed
 rule named and a clear replacement shown. Request changes only when the
-fault changes meaning or drops evidence — that fault is a correctness
+fault changes meaning or drops evidence. That fault is a correctness
 finding, not a style nit.
 State the verdict and next action first. State evidence after the verdict.
 
-Review a **design artifact** — a technical design doc, a migration AgDR, or a feature spec / PRD — for architectural soundness before any code is built against it. This is the non-code analog of `/code-review`: where Rex reviews a code PR, **Tariq (the Solution Architect)** reviews the design.
+Review a **design artifact**, a technical design doc, a migration AgDR, or a feature spec / PRD, for architectural soundness before any code is built against it. This is the non-code analog of `/code-review`: where Rex reviews a code PR, **Tariq (the Solution Architect)** reviews the design.
 
-The Tech Lead *authors* the design; Tariq *reviews* it. Authoring and reviewing are deliberately separate — an author reviewing their own design is the gap this role closes.
+The Tech Lead *authors* the design; Tariq *reviews* it. Authoring and reviewing are deliberately separate. An author reviewing their own design is the gap this role closes.
 
 ## Activated agent + role
 
 When `/design-review` runs:
 
-1. **Primary reviewer**: the **Solution Architect agent (Tariq)** at [`.claude/agents/solution-architect.md`](../../agents/solution-architect.md) — reviews the design against the architecture review lens (NFRs, patterns, tech debt, AgDR linkage, risk, trade-offs, traceability, migration safety) and discovers + applies adopter handbooks exactly as Rex does.
-2. **Escalation**: the **human approver** (AgDR-0301) — for enterprise / cross-project / new-tech-stack concerns that exceed the Solution Architect's remit. The escalation does not go to the Tech Lead, who authored the design.
+1. **Primary reviewer**: the **Solution Architect agent (Tariq)** at [`.claude/agents/solution-architect.md`](../../agents/solution-architect.md), reviews the design against the architecture review lens (NFRs, patterns, tech debt, AgDR linkage, risk, trade-offs, traceability, migration safety) and discovers + applies adopter handbooks exactly as Rex does.
+2. **Escalation**: the **human approver** (AgDR-0301): for enterprise / cross-project / new-tech-stack concerns that exceed the Solution Architect's remit. The escalation does not go to the Tech Lead, who authored the design.
 3. **Conditional Security Auditor**: if the design touches auth / crypto / secrets / user data, chain `/security-review` for the deeper pass.
 
 See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the full activation protocol. Per the role's `isolated-work-class`, the reviewer runs as a spawned sub-agent.
@@ -46,11 +46,11 @@ The reviewer mutation lock blocks `git clone`, `git fetch`, and `git checkout` w
 
 ## Process
 
-### 0. Write the active-reviewer marker (REQUIRED — me2resh/apexyard#843, when reviewing a PR)
+### 0. Write the active-reviewer marker (REQUIRED, me2resh/apexyard#843, when reviewing a PR)
 
 When the review will run the traceability check in step 3, fetch the base branch into the scratch clone before you write this marker. Fetch it from the base repository, not from a contributor fork, and store it as `origin/<base-branch>`. The mutation lock blocks `git fetch` while the marker exists.
 
-Before spawning the Solution Architect agent (Tariq) for a PR review, write the active-reviewer session marker. It records that this review pass is the sanctioned one and suppresses `warn-review-marker-write.sh`'s advisory warning on the `*-architecture.approved` write (same convention as `/code-review`'s rex marker; that hook warns and never blocks since #1026 — AgDR-0111). The marker is scoped to THIS Claude Code session (me2resh/apexyard#1376) — resolve its path through `active_reviewer_marker_path`, never write the bare `.claude/session/active-reviewer` path directly. Use the SAME resolved `owner/repo` from step 1 (below) — the sibling-repo resolution in split-portfolio v2 matters here too. At skill entry:
+Before spawning the Solution Architect agent (Tariq) for a PR review, write the active-reviewer session marker. It records that this review pass is the sanctioned one and suppresses `warn-review-marker-write.sh`'s advisory warning on the `*-architecture.approved` write (same convention as `/code-review`'s rex marker; that hook warns and never blocks since #1026, AgDR-0111). The marker is scoped to THIS Claude Code session (me2resh/apexyard#1376). Resolve its path through `active_reviewer_marker_path`, never write the bare `.claude/session/active-reviewer` path directly. Use the SAME resolved `owner/repo` from step 1 (below): the sibling-repo resolution in split-portfolio v2 matters here too. At skill entry:
 
 ```bash
 # Ops root: pin first, then walk up (docs/skills/shared/ops-root.md).
@@ -61,7 +61,7 @@ mkdir -p "$(dirname "$active_marker")"
 printf '%s\n' "<owner/repo>#<pr>:architecture" > "$active_marker"
 ```
 
-On skill exit (after the review is posted, whether or not the marker gets written), clear it. Shell variables do not persist across separate Bash tool calls, so the exit step re-resolves `ops_root` and `active_marker` from scratch — it does not reuse the step-0 variable, which would silently be empty in a later call and turn the `rm -f` into a no-op:
+On skill exit (after the review is posted, whether or not the marker gets written), clear it. Shell variables do not persist across separate Bash tool calls, so the exit step re-resolves `ops_root` and `active_marker` from scratch. It does not reuse the step-0 variable, which would silently be empty in a later call and turn the `rm -f` into a no-op:
 
 ```bash
 # Ops root: pin first, then walk up (docs/skills/shared/ops-root.md).
@@ -80,26 +80,26 @@ Doc-only reviews (no PR yet) never write a marker, so this step is a no-op for t
 **The spawn prompt for Tariq MUST NOT contain a literal marker path.** Say
 *"write your approval marker on an APPROVED verdict"*; say nothing about where.
 
-Tariq already resolves the correct path through `review_marker_path` — the
+Tariq already resolves the correct path through `review_marker_path`: the
 repo-qualified `<owner>__<repo>__<pr>-architecture.approved` form from AgDR-0060,
 which is the exact path the gates read. A path in the prompt overrides that
 correct resolution: the agent obeys the instruction it was handed, and the
 marker lands at the bare-number `<pr>-architecture.approved` instead. **No gate reads
-that path** — there is no bare-number fallback on any on-disk marker lookup.
+that path**: there is no bare-number fallback on any on-disk marker lookup.
 
 The failure is silent in the dangerous direction. `ls .claude/session/reviews/`
 shows a file that reads, to a human, like a valid approval; only the merge
-attempt reveals otherwise. And at that moment the obvious repair — moving the
-file into place — is marker forging, the behaviour
+attempt reveals otherwise. And at that moment the obvious repair, moving the
+file into place, is marker forging, the behaviour
 [`pr-workflow.md`](../../rules/pr-workflow.md) § "Build agents cannot
 self-review" exists to prevent. The right recovery is always: delete the
 gate-invisible file and re-run a real review.
 
 `warn-unqualified-review-marker.sh` warns (advisory, never blocks) when a
 bare-number marker appears, and the merge gates name the near-miss in their
-refusal message — but the cheap fix is upstream of both: don't pass a path.
+refusal message, but the cheap fix is upstream of both: don't pass a path.
 
-1. Resolve the target — a PR number (preferred: gives a diff + a place to post the verdict + a marker key) or a path to a design artifact. **Also resolve the repo**: the optional second arg (`/design-review 42 owner/repo`), or the `owner/repo#N` form. In split-portfolio v2 the PR lives in a sibling repo, so a bare `gh pr view 42` resolved against the ops-fork cwd hits the WRONG repo — pass the resolved repo as `--repo` to **every** `gh pr view` / `gh pr diff` call, and thread it into Tariq's spawn so it becomes BOTH his `$PR_HOST_REPO` (the base repo `tracker_review_submit` posts the review to — #763) AND the key for his `<owner>__<repo>__<pr>-architecture.approved` marker (and the active-reviewer marker from step 0). This is the slug the `require-architecture-review.sh` gate derives from the merge command's cd-target (me2resh/apexyard#687). If only a bare number is given and `gh pr view <N>` can't resolve the PR from the current cwd, STOP and ask for the `owner/repo#N` form — never write the marker under a guessed qualifier.
+1. Resolve the target: a PR number (preferred: gives a diff + a place to post the verdict + a marker key) or a path to a design artifact. **Also resolve the repo**: the optional second arg (`/design-review 42 owner/repo`), or the `owner/repo#N` form. In split-portfolio v2 the PR lives in a sibling repo, so a bare `gh pr view 42` resolved against the ops-fork cwd hits the WRONG repo. Pass the resolved repo as `--repo` to **every** `gh pr view` / `gh pr diff` call, and thread it into Tariq's spawn so it becomes BOTH his `$PR_HOST_REPO` (the base repo `tracker_review_submit` posts the review to, #763) AND the key for his `<owner>__<repo>__<pr>-architecture.approved` marker (and the active-reviewer marker from step 0). This is the slug the `require-architecture-review.sh` gate derives from the merge command's cd-target (me2resh/apexyard#687). If only a bare number is given and `gh pr view <N>` can't resolve the PR from the current cwd, STOP and ask for the `owner/repo#N` form. Never write the marker under a guessed qualifier.
 2. Fetch PR details and the latest commit SHA (when reviewing a PR).
 3. Read the design artifact(s). Read the PRD that the design covers from the PR's base branch, not from the PR head. A design branch can hold an old copy of the PRD, and git shows no conflict when the base branch adds a user story (me2resh/apexyard#1749).
    - Run the traceability check and give its output to Tariq. The PRD and design files come from a checkout of the PR head, such as the scratch clone, with `origin/<base-branch>` fetched there. Resolve `ops_root` as in step 0, from the ops fork, before you change into the scratch clone. Call the script by its ops-fork path, and pass the clone's files as absolute paths in single quotes:
@@ -114,8 +114,8 @@ refusal message — but the cheap fix is upstream of both: don't pass a path.
    - Add `--orbit <project>/docs/orbit` when the PRD has the optional Traceability table.
    - Each `BLOCK` line is a Requirements traceability finding. Each `WARN` line is a concern. The check is advisory. It does not gate the merge.
 4. Review against the architecture review lens (below) plus discovered handbooks.
-5. Submit the review through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host — #763), not a hardcoded `gh pr review` (when reviewing a PR).
-6. On APPROVED only: write the sign-off marker so the Design→Build gate passes (see `/approve-architecture` — Tariq writes the marker himself on an APPROVED verdict; `/approve-architecture` is the human/operator path to record the same marker). Clear the active-reviewer marker from step 0 after the review is posted.
+5. Submit the review through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host, #763), not a hardcoded `gh pr review` (when reviewing a PR).
+6. On APPROVED only: write the sign-off marker so the Design→Build gate passes (see `/approve-architecture`: Tariq writes the marker himself on an APPROVED verdict; `/approve-architecture` is the human/operator path to record the same marker). Clear the active-reviewer marker from step 0 after the review is posted.
 
 
 ## Review Lens
@@ -130,9 +130,9 @@ refusal message — but the cheap fix is upstream of both: don't pass a path.
 
 ### Technical debt
 
-- Incurred debt is explicit, justified, and has a paydown path — no silent debt.
+- Incurred debt is explicit, justified, and has a paydown path: no silent debt.
 
-### Decisions (AgDR linkage) — BLOCKING
+### Decisions (AgDR linkage): BLOCKING
 
 - Every significant technical decision (library, framework, storage, integration, pattern) is captured in an AgDR.
 - A real decision with no AgDR → REQUEST CHANGES (run `/decide` first).
@@ -189,4 +189,4 @@ Invokes: Solution Architect Agent (Tariq)
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard), multi-project SDLC framework for Claude Code · MIT.*

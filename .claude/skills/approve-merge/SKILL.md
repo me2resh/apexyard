@@ -241,7 +241,7 @@ source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-project-board.sh"
 board_move_card "<pr>" "measurement"
 ```
 
-`board_move_card` degrades gracefully — any failure warns to stderr and returns
+`board_move_card` handles failures: any failure warns to stderr and returns
 0. It never blocks the merge report.
 
 ### 9. Report

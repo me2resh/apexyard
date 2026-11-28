@@ -6,13 +6,13 @@ allowed-tools: Bash, Read, Grep, Glob
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /status — Current Status Snapshot
+# /status: Current Status Snapshot
 
-A focused "where am I" view. Where `/inbox` shows what's waiting on you and `/projects` shows portfolio health, `/status` shows the **current state of work**: branch, dirty files, recent commits, open PRs, and the in-progress issue.
+A focused "where am I" view. Where `/inbox` shows what is waiting on you and `/projects` shows portfolio health, `/status` shows the **current state of work**: branch, dirty files, recent commits, open PRs, and the in-progress issue.
 
 ## Path resolution
 
-Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+Use `.claude/hooks/_lib-portfolio-paths.sh` to resolve these paths. Read the registry path with `portfolio_registry`. Read the per-project docs directory with `portfolio_projects_dir`. Read the ideas backlog with `portfolio_ideas_backlog`. Source the helper at the top of any bash block that touches those paths:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -20,7 +20,7 @@ source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
 registry=$(portfolio_registry)
 ```
 
-Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Do not hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks. The helper resolves the paths for the adopter's mode. See `docs/multi-project.md`.
 
 ## Usage
 
@@ -115,7 +115,7 @@ In progress: #42 — Add CSV export
   URL:      https://…
 ```
 
-If the branch doesn't carry an issue ID, say so and suggest:
+If the branch does not carry an issue ID, say so and suggest:
 
 ```
 No issue ID in the current branch name.
@@ -185,7 +185,7 @@ bash "$ops_root/.claude/skills/status/disk-usage.sh"
 
 Example: `ApexYard is using 12.3 GB; 9.1 GB can be reclaimed`.
 The helper measures only folders that ApexYard owns: worktrees under `workspace/*.worktrees`, review-copy folders, `.claude/session`, and build output in the project clones.
-Reclaimable means a worktree or review copy that is older than `disk_budget.sweep_min_age_days` (default 7), has no uncommitted, untracked or stashed work, has no commits that are not on a remote, and has a merged or closed PR. Review copies come from `review-copy.sh`'s root (`APEXYARD_REVIEW_COPY_ROOT` or `<temp dir>/apexyard-review-copies`) plus every folder in `disk_budget.review_copy_roots` — the configured roots ADD to the step-3 root, they never replace it. The age comes from the copy record. The record must identify the repo as `owner/name`; older records without an owner are not reclaimable. Copies with extra worktrees are kept. Review roots must be real directories owned by the current user, without group or world write permission.
+A worktree or review copy is reclaimable only if all these conditions apply. Its age exceeds `disk_budget.sweep_min_age_days` (default 7). It has no uncommitted, untracked, or stashed work. All its commits are on a remote. Its PR is merged or closed. Review copies come from `review-copy.sh`'s root (`APEXYARD_REVIEW_COPY_ROOT` or `<temp dir>/apexyard-review-copies`) and every folder in `disk_budget.review_copy_roots`. Configured roots ADD to the step-3 root. They never replace it. The age comes from the copy record. The record must identify the repo as `owner/name`; older records without an owner are not reclaimable. Copies with extra worktrees are kept. Review roots must be real directories owned by the current user, without group or world write permission.
 When a check is blocked (for example a detached HEAD), the line says `at least X can be reclaimed`.
 When the total is above `disk_budget.max_owned_gb` (default 10), the line ends with `(over the N GB budget)`. Step 4 owns the `disk_budget` keys; this helper reads them with built-in defaults.
 The helper has a time box of `disk_budget.measure_timeout_seconds` (default 6 when the key is absent). A timeout prints `ApexYard disk use is unknown`. Briefing mode does not run it.
@@ -223,7 +223,7 @@ PROJECT: billing-api  (handover)
 …
 ```
 
-If a project's workspace isn't cloned locally, show GitHub data only and mark git sections as `(workspace not cloned)`.
+If a project's workspace is not cloned locally, show GitHub data only and mark git sections as `(workspace not cloned)`.
 
 ## Verbose mode
 
@@ -268,7 +268,7 @@ Worktrees:
 
 ## Briefing mode (`--briefing` / `-b`)
 
-A compact 4-line "where am I" snapshot — workspace, ticket, branch, role. Designed to answer the orientation question in 2 seconds at the top of a session, instead of running 3 skills (`/projects`, `/inbox`, `/status`). This is the same output produced by `bin/apexyard status` (the CLI shim — see below), so the on-screen view in Claude Code and the shell view stay identical.
+A compact 4-line "where am I" snapshot: workspace, ticket, branch, role. Designed to answer the orientation question in 2 seconds at the top of a session, instead of running 3 skills (`/projects`, `/inbox`, `/status`). This is the same output produced by `bin/apexyard status` (the CLI shim. See below), so the on-screen view in Claude Code and the shell view stay identical.
 
 Output shape (me2resh/apexyard#182, me2resh/apexyard#1995):
 
@@ -290,7 +290,7 @@ Behaviour:
 | Branch | `git branch --show-current`, run inside the inferred workspace dir (or cwd if no workspace). Detached HEAD or no git repo → `(no branch)` |
 | Role set | Active ticket's labels - first match against the canonical list (`backend`, `frontend`, `qa`, `security`, `platform`, `sre`, `data`, `ux`, `ui`, `product`, `tech-lead`, plus the `-engineer` / `-auditor` / `-designer` / `-manager` / `-lead` long forms). No match (or no ticket) -> `<none - inferred per task>`. Followed by `; Waiting on you: N PRs, the oldest X hours` from `_lib-review-queue.sh`. |
 
-Implementation: the logic lives in `.claude/skills/status/briefing.sh` so it's testable in isolation and runnable from a plain shell (no Claude Code dependency). Smoke tests at `.claude/hooks/tests/test_status_briefing.sh`.
+Implementation: the logic lives in `.claude/skills/status/briefing.sh` so it is testable in isolation and runnable from a plain shell (no Claude Code dependency). Smoke tests at `.claude/hooks/tests/test_status_briefing.sh`.
 
 When invoked from inside Claude Code as `/status --briefing`, run the helper:
 
@@ -302,9 +302,9 @@ When invoked from a shell as `apexyard status`, the same helper runs via `bin/ap
 
 ### Role inference scope
 
-V1 ships **label-based inference only** — (a) on the trigger list in #182. The (b) recent-edits and (c) prompt-history strategies are explicit non-goals for v1; they land in a follow-up ticket if the basic version proves useful.
+V1 ships **label-based inference only**: (a) on the trigger list in #182. The (b) recent-edits and (c) prompt-history strategies are explicit non-goals for v1. They land in a follow-up ticket if the basic version proves useful.
 
-### CLI shim — `apexyard status`
+### CLI shim: `apexyard status`
 
 `bin/apexyard` is a small bash script that exposes briefing mode at the shell:
 
@@ -316,27 +316,27 @@ ln -s "$(pwd)/bin/apexyard" ~/.local/bin/apexyard
 apexyard status
 ```
 
-The shim walks up from `$PWD` looking for the apexyard fork root — the `.apexyard-fork` marker (split-portfolio v2) OR the legacy `onboarding.yaml` + `apexyard.projects.yaml` pair (v1) — then runs the same briefing helper. No PATH-shadowing of the `claude` binary, no recursion into Claude Code — pure `bash` end-to-end.
+The shim searches upward from `$PWD` for the apexyard fork root. It identifies the root from `.apexyard-fork` (split-portfolio v2) OR the legacy `onboarding.yaml` + `apexyard.projects.yaml` pair (v1). Then it runs the same briefing helper. No PATH-shadowing of the `claude` binary, no recursion into Claude Code: pure `bash` end-to-end.
 
 ## Rules
 
-1. **Read-only** — never modify state from this skill
-2. **Always show branch + dirty count** — even if everything is clean
-3. **Map branch → issue automatically** — saves the user from looking it up
-4. **Don't print empty sections** — except git and `Worktrees: none`, which always appear
-5. **Multi-project iterates the registry** — not "all repos in the org"
-6. **Never fail noisily** — if `gh` is unavailable, show git data and a warning
-7. **Always include warnings section if there are any** — silence on dirty `.env` is dangerous
+1. **Read-only**. Never modify state from this skill
+2. **Always show branch + dirty count**: even if everything is clean
+3. **Map branch → issue automatically**: saves the user from looking it up
+4. **Do not print empty sections**: except git and `Worktrees: none`, which always appear
+5. **Multi-project iterates the registry**: not "all repos in the org"
+6. **Never fail noisily**: if `gh` is unavailable, show git data and a warning
+7. **Always include warnings section if there are any**: silence on dirty `.env` is dangerous
 
 ## Related skills
 
-- `/inbox` — what's waiting on you across projects
-- `/tasks` — actionable TODOs with URLs
-- `/projects` — portfolio table view
+- `/inbox`: what is waiting on you across projects
+- `/tasks`: actionable TODOs with URLs
+- `/projects`: portfolio table view
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*
 
 Machine readers can run `disk-usage.sh --json` for one JSON object.
 The schema is `apexyard.disk-usage/1`.

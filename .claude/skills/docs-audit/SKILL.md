@@ -8,7 +8,7 @@ effort: medium
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /docs-audit — Documentation Completeness (Diataxis)
+# /docs-audit: Documentation Completeness (Diataxis)
 
 Deep-dive documentation analysis using the Diataxis framework. Checks that docs cover all four quadrants (tutorials, how-to guides, reference, explanation) and are not stale. Invoke when `/launch-check`'s documentation row shows WARN or FAIL.
 
@@ -72,7 +72,7 @@ Check `README.md` for these sections (each is pass/fail):
 ### Step 5: Output
 
 ```
-DOCS AUDIT — <project> @ <sha>
+DOCS AUDIT: <project> @ <sha>
 
 Diataxis coverage:
   Tutorials:   ✓ getting-started.md exists
@@ -106,7 +106,7 @@ Score: `score = max(0, 100 - 25*critical - 10*high - 3*medium - 1*low)`. Verdict
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-audit-history.sh"
 
-# Lowercase severity in the payload — the lib expects critical/high/medium/low/info.
+# Lowercase severity in the payload: the lib expects critical/high/medium/low/info.
 payload=$(mktemp); cat > "$payload" <<'EOF'
 {
   "schema_version": 1,
@@ -120,7 +120,7 @@ EOF
 
 # Body: per templates/audits/docs-audit.md (Diataxis quadrants + README + staleness)
 body=$(mktemp); cat > "$body" <<'EOF'
-... (filled-in body — Diataxis groupings + README quality + staleness + Recommended priority) ...
+... (filled-in body: Diataxis groupings + README quality + staleness + Recommended priority) ...
 EOF
 
 ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -140,11 +140,11 @@ touch projects/<name>/audits/docs-audit/.audit-history-tracked
 
 1. **README is the minimum.** Every project needs a README with at least: description, quick start, and how to deploy. Everything else is a "should have."
 2. **Check for staleness, not just existence.** A README that exists but describes the wrong stack is worse than no README.
-3. **Diataxis is a lens, not a checklist.** Don't fail a project for missing all four quadrants — most projects start with tutorials + reference and add the rest over time.
-4. **Auto-PASS for the ops repo itself.** ApexYard's own docs are governed by its own process — this skill is for managed projects.
+3. **Diataxis is a lens, not a checklist.** Don't fail a project for missing all four quadrants. Most projects start with tutorials + reference and add the rest over time.
+4. **Auto-PASS for the ops repo itself.** ApexYard's own docs are governed by its own process. This skill is for managed projects.
 5. **Always persist via the lib.** The persist step runs regardless of opt-in commit state.
 6. **Severity vocabulary in the JSON is lowercase.** The lib expects `critical`/`high`/`medium`/`low`/`info`.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

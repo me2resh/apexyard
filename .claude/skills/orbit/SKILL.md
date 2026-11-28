@@ -25,7 +25,7 @@ command -v "$ORBIT_BIN" >/dev/null 2>&1 || {
 }
 ```
 
-Spec 0.2 (optional `outcomeIds` on an execution slice, for a slice that contributes criteria from several outcomes) needs an ORBIT CLI built from orbit-spec with spec 0.2 support. That is any release after `v0.1.0` that lists `0.2` under "Spec versions" in its README. At the time of writing, no such release exists, so use a checkout of orbit-spec that includes the cross-outcome change. An older CLI rejects a `0.2` record. The helper scripts here accept both shapes: they read `outcomeIds` when present and `outcomeId` otherwise.
+Spec 0.2 adds optional `outcomeIds` to an execution slice that contributes criteria from several outcomes. It needs an ORBIT CLI with orbit-spec spec 0.2 support. Any release after `v0.1.0` that lists `0.2` under "Spec versions" in its README qualifies. At the time of writing, no such release exists. Use an orbit-spec checkout with the cross-outcome change. An older CLI rejects a `0.2` record. The helper scripts accept both shapes: they read `outcomeIds` when present and `outcomeId` otherwise.
 
 The active ApexYard ticket remains required for source changes. ORBIT records are planning documents and belong under the managed project's `docs/orbit/` directory.
 
@@ -93,7 +93,7 @@ Capture the managed project's current Git branch and commit:
   --output "$orbit_root/snapshots/snapshot-<timestamp>.json"
 ```
 
-The snapshot is evidence only. It does not claim that a criterion is achieved.
+The snapshot is evidence only. It does not claim achievement of a criterion.
 
 ### `/orbit reconcile --project <name> --plan <file> --snapshot <file>`
 
@@ -121,7 +121,7 @@ fi
 (exit "$cli_status")
 ```
 
-The first CLI implementation marks criteria `not-verified` until explicit evidence is supplied. Do not upgrade a status from inference.
+The first CLI implementation marks criteria `not-verified` until you supply explicit evidence. Do not upgrade a status from inference.
 Report each `WARNING` line. If the CLI fails, report its failure.
 
 **Write a record only when a status changes (AgDR-0225).** Write the CLI output to a scratch file, not to `$orbit_root/reconciliations/`. Then compare it with the newest Reconciliation of the same Plan:
@@ -167,11 +167,11 @@ digits, and single hyphen separators, then rename the file to
 `$orbit_root/slices/<id>.json`. The issue guard checks that exact path. Do not
 file the issue while the record exists only on a working branch. Have the
 record PR reviewed and merged, then run the handoff steps below. `/orbit slice`
-is complete when the issue URL is reported. ApexYard's normal build, review,
+is complete when you report the issue URL. ApexYard's normal build, review,
 QA, and deployment gates still apply.
 
 A slice ID exists only when its record exists. Never reserve a slice number in
-prose. When work is planned, create the slice record. Set `contributesTo` to
+prose. When you plan work, create the slice record. Set `contributesTo` to
 the criterion IDs that the slice advances. A slice with
 an empty `contributesTo` list does not cover an outcome.
 
@@ -198,7 +198,7 @@ fi
 (exit "$cli_status")
 ```
 
-Return the CLI exit status. A non-zero result blocks the handoff until the record or provenance is corrected.
+Return the CLI exit status. A non-zero result blocks the handoff until you correct the record or provenance.
 Report each `WARNING` line after successful validation.
 
 ### `/orbit lint --project <name>`
@@ -273,7 +273,7 @@ preview=$("$(git rev-parse --show-toplevel)/.claude/skills/orbit/lib/handoff-pre
 
 The helper's flow, in order:
 
-1. **CLI check.** If `$ORBIT_BIN` (default `orbit`) is not on `PATH`, stop with one install note (ac1-4): "ORBIT CLI not found. Install orbit-spec ... or set ORBIT_BIN to the CLI path." Take no further action.
+1. **CLI check.** If `$ORBIT_BIN` (default `orbit`) is not on `PATH`, stop with one install note (ac1-4): "ORBIT CLI not found. Install orbit-spec ... Or set ORBIT_BIN to the CLI path." Take no further action.
 2. **Validate.** Run `orbit validate --all --root "$orbit_root"`. On a non-zero exit, stop and state the reason from the CLI's own error text (ac1-3).
 3. **Duplicate check.** Search open issues in `$project_repo` for the slice ID. Count only an exact backtick-quoted token under Orbit identifiers. A shared word or prefix does not match. Stop with a cannot verify error if the search fails. Never treat a failed search as no duplicate found.
 4. **Dry-run preview.** Run `orbit sync github --dry-run --plan <plan_file> --snapshot <snapshot_file> --reconciliation <reconciliation_file> --slice <slice_file> --repo "$project_repo"`. The adapter renders the issue title and body with the Plan ID and revision, objective, scope, and identifiers. The preflight requires a `[Slice]` title. Keep that content.
@@ -293,8 +293,8 @@ An unclear or missing answer does not mark a slice withdrawn.
 7. **File the issue.** Only after a yes, resolve the merged slice PR's base branch.
    Use its PR base, with `dev` as the framework default. Check the record on `refs/remotes/origin/<base>`.
    Check that branch, not only `origin/HEAD`. Stop until its local ref contains `docs/orbit/slices/<slice-id>.json`.
-   Write the adapter preview's `.body` to a temporary file, with
-   `` **ORBIT slice:** `<slice-id>` `` as its first line and one blank line before
+   Write the adapter preview's `.body` to a temporary file.
+   Start with `` **ORBIT slice:** `<slice-id>` `` and one blank line before
    the preview body. Use the preview's `.title`. Before the create call, write
    `orbit` to the path from `active_issue_skill_marker_path`. Resolve
    the ops root with `resolve_ops_root` from `_lib-ops-root.sh`, as the ticket
@@ -339,12 +339,12 @@ Later ORBIT slices cover these items:
 
 ## End-to-end planning workflow
 
-When the operator asks for the full lifecycle, run these stages in order. Do not skip a stage because a later record can be written without it.
+When the operator asks for the full lifecycle, run these stages in order. Do not skip a stage because you can write a later record without it.
 
 1. **Plan.** Ask for the project intent, desired outcomes, acceptance criteria, constraints, and assumptions. Draft the Plan JSON in the project record directory. Preserve the operator's wording. Validate it with `orbit plan --input <file> --output <file>`. Do not invent outcomes or criteria.
-2. **Snapshot.** Capture the current branch and commit with `/orbit snapshot`. Treat the result as observed evidence, not as a claim that the Plan is achieved.
-3. **Reconcile.** Write a record only when a status changes (see `reconcile`). Read the Plan and Snapshot. For every acceptance criterion, inspect the repository evidence and ask for or record a factual status: `not-verified`, `partially-verified`, `achieved`, or `contradicted`. The CLI creates a `not-verified` scaffold. Fill in evidence and explanations before handoff, then run `orbit validate`.
-4. **Slice.** Ask which one bounded outcome should be advanced, why the evidence justifies it, what is included, and what is excluded. Create the Execution Slice with `/orbit slice`. Keep the Plan revision, Reconciliation ID, and repository commits unchanged.
+2. **Snapshot.** Capture the current branch and commit with `/orbit snapshot`. Treat the result as observed evidence, not a Plan achievement claim.
+3. **Reconcile.** Write a record only when a status changes (see `reconcile`). Read the Plan and Snapshot. Inspect repository evidence for every acceptance criterion. Ask for or record a factual status: `not-verified`, `partially-verified`, `achieved`, or `contradicted`. The CLI creates a `not-verified` scaffold. Fill in evidence and explanations before handoff, then run `orbit validate`.
+4. **Slice.** Ask which bounded outcome to advance and why the evidence justifies it. Ask what to include and exclude. Create the Execution Slice with `/orbit slice`. Keep the Plan revision, Reconciliation ID, and repository commits unchanged.
 5. **Validate and hand off.** Run `/orbit validate` and `/orbit lint`. Merge the slice record, then run `/orbit handoff` to file its issue. Report the records, provenance, and issue URL. Hand the issue to the normal ApexYard build gate. Do not execute it from this skill.
 
 ### Progress in a slice PR
@@ -369,7 +369,7 @@ A merge alone changes no status.
     Add the record to the PR. Describe its scope under `## Proposed next slice` in the PR body.
     The owner confirms or changes its scope during PR review, before merge. A scope change needs new confirmation.
     A basedOn-only change needs no new confirmation. File no ticket before merge and a yes at handoff.
-    When every outcome is achieved, add no slice. Write `No next slice: every outcome is achieved.` under that heading.
+    When all outcomes reach achievement, add no slice. Write `No next slice: every outcome is achieved.` under that heading.
 
 The lint rejects scope faults with exit 17, evidence faults with exit 18, and provenance faults with exit 19.
 A slice PR without a Reconciliation produces a warning.
@@ -402,7 +402,7 @@ One planning cycle ships one records PR (AgDR-0225). Run these steps in order:
    `git commit -m "docs: update ORBIT records" -m "Initiative: plan-<initiative-id>"`.
    Use `git log --grep "Initiative: plan-<initiative-id>"` to find every change.
    Lint blocks records from other initiatives, including Plan notes and history.
-   A changed Snapshot must be referenced by a changed Reconciliation of this Plan.
+   A changed Reconciliation of this Plan must reference a changed Snapshot.
    This branch name and title exemption does not change review or merge gates.
 7. After the merge, run `/orbit handoff` for each slice.
 
@@ -423,7 +423,7 @@ Run `/challenge` by default on Plan and Execution Slice drafts. For Reconciliati
 
 Naqid must steelman it. Challenge assumptions, failure modes, missing evidence, and cheaper alternatives. Relay its verdict intact. You may revise, accept, or stop. Naqid cannot write records or block gates.
 
-The operator may pass `--no-challenge` when a challenge was already run for the same unchanged draft. Report that the challenge was skipped and preserve the reason.
+The operator may pass `--no-challenge` after a challenge for the same unchanged draft. Report that you skipped the challenge and preserve the reason.
 
 ### Plan interview
 
@@ -497,7 +497,7 @@ Report:
 - operation performed
 - records read and written
 - validation result
-- provenance commit and branch when a snapshot or slice was created
+- provenance commit and branch at snapshot or slice creation
 - next ApexYard gate, if the operator is handing off a slice
 - for `handoff`: resolved record files, preflight exit code, leak scrub result, operator confirmation, and issue URL
 - for a stopped `handoff`: refusal reason and exit code

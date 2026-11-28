@@ -4,7 +4,7 @@ description: Write a feature spec or PRD from a problem statement or feature ide
 argument-hint: "<feature or problem statement>"
 ---
 
-# /write-spec — Feature Specification
+# /write-spec: Feature Specification
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
@@ -12,9 +12,9 @@ Write a feature specification or product requirements document (PRD).
 
 ## Activated role
 
-When `/write-spec` runs, activate the **[Product Manager](../../../roles/product/product-manager.md)** role — they own PRD creation, user stories, and acceptance criteria. For roadmap-level prioritisation calls, escalate to the **human approver** (AgDR-0301).
+When `/write-spec` runs, activate the **[Product Manager](../../../roles/product/product-manager.md)** role. They own PRD creation, user stories, and acceptance criteria. For roadmap-level prioritisation calls, escalate to the **human approver** (AgDR-0301).
 
-Design-heavy features should also involve the **[UI Designer](../../../roles/design/ui-designer.md)** (for user flows and component specs) once the PRD has a problem statement. Technical feasibility review happens at the Tech Design phase, not here — the `/write-spec` output hands off to the [Tech Lead](../../../roles/engineering/tech-lead.md) who activates for Phase 2.
+Design-heavy features should also involve the **[UI Designer](../../../roles/design/ui-designer.md)** (for user flows and component specs) once the PRD has a problem statement. Technical feasibility review happens at the Tech Design phase, not here: the `/write-spec` output hands off to the [Tech Lead](../../../roles/engineering/tech-lead.md) who activates for Phase 2.
 
 See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the full activation protocol.
 
@@ -36,19 +36,19 @@ Accept any of: a feature name, a problem statement, a user request, or a vague i
 
 Ask conversationally:
 
-- **User problem** — what problem does this solve? Who experiences it?
-- **Target users** — which user segment(s)?
-- **Success metrics** — how will we know this worked?
-- **Constraints** — technical, timeline, dependencies?
-- **Prior art** — has this been attempted before?
+- **User problem**: what problem does this solve? Who experiences it?
+- **Target users**: which user segment(s)?
+- **Success metrics**: how will we know this worked?
+- **Constraints**: technical, timeline, dependencies?
+- **Prior art**: has this been attempted before?
 
 ### 3. Pull Context from Connected Tools
 
 If the project has integrations available:
 
-- **GitHub Issues** (the default tracker) — search for related issues, epics, or features in the project's repo. Teams using other trackers (Linear, Jira) can substitute the equivalent search.
-- **Notion / Confluence** — search for related research, specs, or design docs
-- **Figma** — pull related mockups or wireframes
+- **GitHub Issues** (the default tracker): search for related issues, epics, or features in the project's repo. Teams using other trackers (Linear, Jira) can substitute the equivalent search.
+- **Notion / Confluence**: search for related research, specs, or design docs
+- **Figma**: pull related mockups or wireframes
 
 ### 4. Generate the PRD
 
@@ -115,4 +115,4 @@ Offer to create an epic / feature ticket in the team's tracker with the PRD cont
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

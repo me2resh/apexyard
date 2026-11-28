@@ -5,26 +5,26 @@ argument-hint: "<short title of the prototype> | --close --promote|--discard [<p
 allowed-tools: Bash, Read, Write, AskUserQuestion
 ---
 
-# /prototype — Create a Throwaway Prototype Ticket
+# /prototype: Create a Throwaway Prototype Ticket
 
 Read `.claude/rules/writing-standard.md`. Use the **controlled technical writing profile** for prototype
 artefacts: lead with the learning goal and next action.
 
-Creates a structured GitHub Issue for a **prototype** — a disposable UX/demo artifact (clickable mockup, demo flow, interactive proof-of-concept UI) built to answer *"what should this look and feel like?"*. The output is the **learning / chosen direction**, not shippable code: a prototype is thrown away once the direction is decided.
+Create a structured GitHub Issue for a **prototype**: a disposable UX/demo artifact that answers *"what should this look and feel like?"*. Examples include clickable mockups, demo flows, and interactive proof-of-concept UIs. The output is the **learning / chosen direction**. Discard the prototype after deciding the direction.
 
-> **The taxonomy — three skills, two axes (throwaway vs kept, technical vs UX).**
+> **The taxonomy: three skills, two axes (throwaway vs kept, technical vs UX).**
 >
 > | Skill | Question it answers | Lifecycle |
 > |-------|---------------------|-----------|
-> | `/spike` | "Will this **technically** work?" | **THROWAWAY** — discarded after the technical answer is in (`/spike --close`). |
-> | **`/prototype`** | "What should this **look and feel** like?" | **THROWAWAY** — discarded after the UX/demo direction is chosen (`/prototype --close`). |
-> | `/walking-skeleton` | "Is the **whole architecture** wired end-to-end?" | **KEPT** — the production spine you flesh out. Full SDLC. |
+> | `/spike` | "Will this **technically** work?" | **THROWAWAY**: discarded after the technical answer is in (`/spike --close`). |
+> | **`/prototype`** | "What should this **look and feel** like?" | **THROWAWAY**: discard after choosing the UX/demo direction (`/prototype --close`). |
+> | `/walking-skeleton` | "Is the **whole architecture** wired end-to-end?" | **KEPT**: the production spine you flesh out. Full SDLC. |
 >
-> `/prototype` and `/spike` are **both throwaway** — the difference is the *question*. A spike answers a **technical feasibility** question ("will library X scale?", "can we replace Auth0?"). A prototype answers a **UX/demo direction** question ("which onboarding flow feels right?", "what should the dashboard look like for the investor demo?"). If your question is "will it work?", file a `/spike` instead. If you need a minimal-but-**kept** end-to-end slice, you want `/walking-skeleton`. See `workflows/sdlc.md` § Phase 1.
+> `/prototype` and `/spike` are **both throwaway**. They answer different questions. A spike answers **technical feasibility** questions ("will library X scale?", "can we replace Auth0?"). A prototype answers **UX/demo direction** questions ("which onboarding flow feels right?", "what should the dashboard look like for the investor demo?"). If the question is "will it work?", file a `/spike`. Use `/walking-skeleton` for a minimal end-to-end slice that you keep. See `workflows/sdlc.md` § Phase 1.
 
 ## Path resolution
 
-Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+Use `.claude/hooks/_lib-portfolio-paths.sh` to resolve paths. Read the registry through `portfolio_registry`, per-project docs through `portfolio_projects_dir`, and the ideas backlog through `portfolio_ideas_backlog`. Source the helper at the start of each bash block that uses these paths:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -32,7 +32,7 @@ source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
 registry=$(portfolio_registry)
 ```
 
-Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+Defaults match the single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Split-portfolio adopters override `portfolio.{registry, projects_dir, ideas_backlog}` in `.claude/project-config.json`. Do not hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks. The helper resolves the adopter's mode. See `docs/multi-project.md`.
 
 ## Usage
 
@@ -57,7 +57,7 @@ In a mode, do not run the steps below. Do not write the active-issue-skill marke
 
 The mode file is in `.claude/skills/_lib-modes/`, not in this skill's directory. It stays in place when an adopter overrides `/prototype` with `custom-skills/prototype/`. An override keeps the mode only when its SKILL.md has this section. Copy this section into the override to keep the mode.
 
-The close mode keeps every behaviour of the old `/prototype-close` skill: the PROMOTE and DISCARD paths, the follow-up `[Feature]`, the memo path, and the close comment.
+The close mode preserves the old `/prototype-close` behaviour. This includes PROMOTE and DISCARD, the follow-up `[Feature]`, the memo path, and the close comment.
 `/prototype-close` still works as a deprecated alias that reads the same mode file.
 
 If no word in `$ARGUMENTS` is a flag in the table, run the process below.
@@ -69,9 +69,9 @@ Preserve multiple selections where the menu permits them. Split menus with more 
 Keep single yes/no and ticket confirmation prompts as written.
 The prose menus below are fallbacks only when the harness lacks `AskUserQuestion`.
 
-### 0. Write the active-issue-skill marker (REQUIRED — me2resh/apexyard#268)
+### 0. Write the active-issue-skill marker (REQUIRED: me2resh/apexyard#268)
 
-Before any `gh issue create` (or other tracker CLI), write this skill's name to the active-issue-skill marker so `require-skill-for-issue-create.sh` lets the command through. At skill entry:
+Before any `gh issue create` or other tracker CLI call, write this skill's name to the active-issue-skill marker. This permits the command through `require-skill-for-issue-create.sh`. At skill entry:
 
 ```bash
 # Ops root through the session pin (docs/skills/shared/ops-root.md).
@@ -96,13 +96,13 @@ The `clear-issue-skill-marker.sh` SessionStart hook clears only the current sess
 
 ### 1. Resolve the target repo
 
-Read the active-ticket marker of the working tree you are in to determine which repo we're working in. The marker is the `apexyard-ticket` file in the git dir of that tree. See `/start-ticket` "Read the active ticket". If no active ticket, check `apexyard.projects.yaml` for managed projects. If only one project, use it. If multiple, ask:
+Read the working tree's active-ticket marker to identify the repository. The marker is `apexyard-ticket` in that tree's git directory. See `/start-ticket` "Read the active ticket". Without an active ticket, check `apexyard.projects.yaml`. Use the only managed project, or ask if multiple exist:
 
 ```
 Which project is this prototype for?
 ```
 
-If no projects are registered, ask for the repo in `owner/repo` format.
+If the registry lists no projects, ask for the repository in `owner/repo` format.
 
 ### 2. Verify the prefix is on the whitelist
 
@@ -126,7 +126,7 @@ What's the prototype? Give me a short title.
 
 ### 4. Gather details (one question at a time)
 
-Ask conversationally — do NOT batch all questions. Wait for each answer before asking the next. Fields a–d are required; e is optional.
+Ask conversationally, one question at a time. Wait for each answer before the next question. Require fields a–d. Field e is optional.
 
 **a) Direction Question (required)**
 
@@ -136,10 +136,10 @@ prototype answers? Format: "We're exploring {direction}; the prototype
 tells us {what we'll decide}."
 (One sentence. A prototype answers a UX/demo-direction question, NOT a
 technical-feasibility one. If your question is "will this work?", you want
-/spike — push back and redirect.)
+/spike: push back and redirect.)
 ```
 
-If the user gives a technical-feasibility question ("will X scale?", "can we integrate Y?"), stop and redirect to `/spike` — that's a different tool.
+If the user asks a technical-feasibility question ("will X scale?", "can we integrate Y?"), stop. Redirect to `/spike`, which addresses that question.
 
 **b) Fidelity (required)**
 
@@ -149,8 +149,8 @@ What kind of disposable artifact is this, and how far does it go? Examples:
   - Demo flow (wired screens, stubbed data, happy-path only)
   - Interactive proof-of-concept UI (real framework, fake everything else)
 
-Whatever you pick, it's a throwaway for learning a direction — not the
-start of production code. Which fidelity?
+Whatever you select, discard the artifact after learning the direction. It must not become
+production code. Which fidelity?
 ```
 
 **c) Budget (required)**
@@ -164,33 +164,33 @@ What's the hard cap on time/effort? Examples:
 At the budget cap, the prototype ENDS regardless of polish. What's yours?
 ```
 
-Reject vague answers ("a while", "until it's pretty") — push for an explicit time/effort cap.
+Reject vague answers ("a while", "until it is pretty"). Require an explicit time/effort cap.
 
-**d) Disposition (required — PROMOTE or DISCARD)**
+**d) Disposition (required: PROMOTE or DISCARD)**
 
 Use `AskUserQuestion` for this choice. Recommend `DISCARD` first and describe both effects.
 Use the prompt below only when the harness lacks the tool.
 
 ```
-What happens when the prototype closes — PROMOTE or DISCARD?
+What happens when the prototype closes: PROMOTE or DISCARD?
 
-  PROMOTE — if the direction is chosen, file a fresh [Feature] ticket for
+  PROMOTE: if the direction is chosen, file a fresh [Feature] ticket for
             production-shaped delivery; the prototype artifact is NOT
             lifted into production, the feature re-implements the direction.
-  DISCARD — if the direction is rejected (or "not now"), write a memo at
+  DISCARD: if the direction is rejected (or "not now"), write a memo at
             docs/prototype-memos/<slug>.md with what we learned.
 
-"Decide later" is NOT allowed — that's how a throwaway mockup gets
+"Decide later" is NOT allowed. That lets a throwaway mockup be
 accidentally promoted into production. Pick one.
 ```
 
-If the user says "decide later" or "depends", explain the rule and ask again. The author must commit to one path in advance. DISCARD-by-default is the prototype norm — a prototype exists to be thrown away once the direction is clear; PROMOTE just means the *direction*, not the artifact, survives.
+If the user says "decide later" or "depends", explain the rule. Ask again. The author must choose one path in advance. DISCARD-by-default is the norm. Discard the prototype once the direction is clear. PROMOTE preserves only the direction, never the artifact.
 
 **e) Approach (optional)**
 
 ```
 Any sketch of what you'll mock up? (or press Enter to skip)
-NOT a tech design, NOT a PRD — a few bullets: which screens / flows, what
+Use a few bullets, not a tech design or PRD: which screens / flows, what
 tools (Figma, static HTML, v0, the real framework with stubs), what you're
 deliberately faking.
 ```
@@ -207,9 +207,9 @@ template=$(portfolio_resolve_template tickets/prototype.md)   # → custom-templ
 
 Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/tickets/prototype.md`. Adopters who want a customised prototype-body shape drop their version at `<private_repo>/custom-templates/tickets/prototype.md`. See `templates/README.md` for the path-mirroring convention.
 
-**Backward-compat fallback**: if `portfolio_resolve_template` returns empty (template file missing — partial adopter setup), fall back to the inline heredoc body below and print a one-line WARN on stderr (`WARN: tickets/prototype.md template missing — using inline fallback`).
+**Backward-compat fallback**: if `portfolio_resolve_template` returns empty, the template is missing (partial adopter setup). Use the inline heredoc body below. Print this one-line stderr warning: `WARN: tickets/prototype.md template missing — using inline fallback`.
 
-Display the full ticket using the resolved template's section headings (the default `templates/tickets/prototype.md` shape is reproduced below):
+Display the full ticket with the resolved template's section headings. The default `templates/tickets/prototype.md` form follows:
 
 ```
 Here's the ticket I'll create:
@@ -251,11 +251,7 @@ Create this ticket? (yes / edit / cancel)
 
 ### 7. Create the issue (via the tracker abstraction)
 
-Dispatch creation through `tracker_create` (#670 / AgDR-0072, extended by
-the #709 creator sweep) so the prototype lands in **this project's** tracker —
-GitHub, GitLab, or a `custom` CLI — per its `tracker:` block in
-`apexyard.projects.yaml`. For a GitHub adopter this runs `gh issue create`
-exactly as before.
+Dispatch creation through `tracker_create` (#670 / AgDR-0072, extended by #709). This uses **the project's** tracker: GitHub, GitLab, or a `custom` CLI. Read its `tracker:` block in `apexyard.projects.yaml`. GitHub adopters still use `gh issue create`.
 
 ```bash
 # Resolve the tracker lib (it lives in the ops fork's hooks dir) by walking up
@@ -268,10 +264,10 @@ tracker_lib="$(r="$PWD"; while [ -n "$r" ] && [ "$r" != / ]; do \
 
 # Ensure the `prototype` trigger label exists on the target tracker. Best-effort
 # (tracker_label_ensure always exits 0). Same mechanism `/spike` uses with the
-# `spike` label — downstream hooks read it to apply the workflow exemptions.
+# `spike` label: downstream hooks read it to apply the workflow exemptions.
 tracker_label_ensure "{owner/repo}" "prototype" "C5DEF5" "Throw-away UX/demo prototype; exempt from AgDR + coverage gates"
 
-# Pass the body via a file (arbitrary markdown — never inline-interpolated).
+# Pass the body via a file (arbitrary markdown: never inline-interpolated).
 body_file="$(mktemp)"
 cat > "$body_file" <<'BODY'
 {formatted body}
@@ -297,7 +293,7 @@ url="$(printf '%s' "$result" | jq -r '.url')"
 ```
 
 The `prototype` label is the trigger that downstream hooks (AgDR-required hooks,
-coverage gates) read to apply the workflow exemptions — the same mechanism
+coverage gates) read to apply the workflow exemptions. This is the same mechanism
 `/spike` uses with the `spike` label.
 
 ### 8. Return the URL + branch suggestion
@@ -305,7 +301,7 @@ coverage gates) read to apply the workflow exemptions — the same mechanism
 Use the `ref` / `url` parsed from `tracker_create` in step 7:
 
 ```
-Created: {owner/repo}#${ref} — {title}
+Created: {owner/repo}#${ref}: {title}
 ${url}
 
 When you start work:
@@ -329,30 +325,30 @@ record of what was learned.
 
 1. **One question at a time.** Never batch questions. Wait for each answer.
 2. **Always confirm before creating.** Show the full ticket and get explicit "yes".
-3. **All four required fields are mandatory.** Direction Question, Fidelity, Budget, Disposition — none can be skipped or deferred.
-4. **Disposition is PROMOTE or DISCARD only.** "Decide later" is not allowed; reject it and re-ask. DISCARD-by-default is the norm.
+3. **Require all four mandatory fields.** Require Direction Question, Fidelity, Budget, and Disposition. Do not skip or defer them.
+4. **Accept only PROMOTE or DISCARD.** Reject "Decide later" and ask again. DISCARD-by-default is the norm.
 5. **UX/demo question, not a technical one.** If the user's real question is feasibility ("will it work?"), redirect to `/spike`. If they want a kept end-to-end slice, redirect to `/walking-skeleton`.
-6. **Labels.** `prototype` always — it's the exemption trigger. Priority labels (P0/P1/etc.) are NOT applied — prototypes are time-boxed by Budget. The accepted prefix list reads from `.claude/project-config.*.json` → `.ticket.prefix_whitelist`; `[Prototype]` must be in that list.
+6. **Labels.** Always apply `prototype` as the exemption trigger. Do not apply priority labels (P0/P1/other priorities). Budget limits prototype time. Read `.ticket.prefix_whitelist` from `.claude/project-config.*.json`. The list must include `[Prototype]`.
 7. **Branch suggestion.** Always `prototype/<TICKET-ID>-<slug>`. The branch name is what AgDR-exemption hooks check (alongside the `[Prototype]` active-ticket marker and the `prototype(...)` PR type).
-8. **No PRD, no tech design.** Prototypes describe a direction to explore, not a feature. Don't ask for user stories, ACs, or design specs — those belong on the follow-up `[Feature]` ticket if the disposition is PROMOTE.
+8. **No PRD, no tech design.** Prototypes describe a direction to explore. Do not request user stories, ACs, or design specs. These belong on the follow-up `[Feature]` ticket if disposition is PROMOTE.
 
 ## Workflow exemptions for prototype work
 
-A prototype PR is exempt from the production SDLC subset listed below — the **same surgical exemptions as `/spike`**; everything else still applies. The exemptions are mechanical (the AgDR hooks detect the `[Prototype]` prefix, the `prototype(...)` PR type, or the `prototype/` branch and skip), not advisory.
+A prototype PR has the production SDLC exemptions below, identical to `/spike`. All other requirements apply. AgDR hooks enforce these exemptions. They detect `[Prototype]`, the `prototype(...)` PR type, or the `prototype/` branch and skip the applicable gates.
 
 | Gate | Production work | Prototype work |
 |------|----------------|----------------|
-| Pre-Build (parent epic, story tickets, ACs, design review) | Required | Skipped — the prototype ticket IS the unit |
-| AgDR for technical decisions (`require-agdr-for-arch-pr.sh`, `require-agdr-for-arch-changes.sh`) | Required | Skipped — ship a memo on `/prototype --close --discard` instead |
-| Test coverage > 80% | Required | Skipped — coverage is irrelevant for throw-away mockups |
-| Code Reviewer agent (Rex) | Required on every PR | **Required** — even throw-away code gets a sanity check |
-| Security Auditor (auth/crypto/secrets diff) | Required | **Required** — security gates fire regardless of intent |
-| Glossary in PR body | Required | **Required** — prototype PRs explain WHAT DIRECTION WAS LEARNED, which is the artefact |
+| Pre-Build (parent epic, story tickets, ACs, design review) | Required | Skipped: the prototype ticket IS the unit |
+| AgDR for technical decisions (`require-agdr-for-arch-pr.sh`, `require-agdr-for-arch-changes.sh`) | Required | Skipped: ship a memo on `/prototype --close --discard` instead |
+| Test coverage > 80% | Required | Skipped: coverage is irrelevant for throw-away mockups |
+| Code Reviewer agent (Rex) | Required on every PR | **Required**: even throw-away code gets a sanity check |
+| Security Auditor (auth/crypto/secrets diff) | Required | **Required**: security gates fire regardless of intent |
+| Glossary in PR body | Required | **Required**: prototype PRs explain the direction learned, which is the artefact |
 | QA Engineer verification | Required (AC verification) | **Required** (Direction verification: did we learn what to build?) |
-| Disposition decision before close | N/A | **Required** — operator must declare PROMOTE or DISCARD via `/prototype --close` |
+| Disposition decision before close | N/A | **Required**: operator must declare PROMOTE or DISCARD via `/prototype --close` |
 
-See `.claude/rules/workflow-gates.md` § Spike work for the rule statement (which covers prototype work under the same exemption set), `.claude/skills/spike/SKILL.md` (the throwaway technical sibling), and `.claude/skills/walking-skeleton/SKILL.md` (the kept end-to-end slice).
+See `.claude/rules/workflow-gates.md` § Spike work for the shared exemptions. See `.claude/skills/spike/SKILL.md` for throwaway technical work. See `.claude/skills/walking-skeleton/SKILL.md` for an end-to-end slice to keep.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*

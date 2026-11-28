@@ -8,9 +8,9 @@ effort: medium
 
 Writing: read docs/skills/shared/writing-rule.md before you write a durable artifact.
 
-# /monitoring-audit — Observability & Incident Readiness
+# /monitoring-audit: Observability & Incident Readiness
 
-Deep-dive observability analysis. Checks that production issues will be detected, alerted on, and resolvable. Invoke when `/launch-check`'s monitoring row shows WARN or FAIL.
+Perform a detailed observability analysis. Check that monitoring can detect production issues, issue alerts, and support resolution. Invoke when `/launch-check`'s monitoring row shows WARN or FAIL.
 
 ## Usage
 
@@ -27,7 +27,7 @@ This audit runs on its own. It does not need a `/launch-check` run first.
 | Pillar | Question | What to look for |
 |--------|----------|-----------------|
 | **Logs** | Can you see what happened? | Structured logging, log levels, no PII in logs |
-| **Metrics** | Can you measure what's happening? | Request counts, latency, error rates, business metrics |
+| **Metrics** | Can you measure what is happening? | Request counts, latency, error rates, business metrics |
 | **Traces** | Can you follow a request end-to-end? | Distributed tracing, correlation IDs |
 | **Alerts** | Will you know when something breaks? | Alerting rules, on-call, PagerDuty/OpsGenie |
 
@@ -38,20 +38,20 @@ This audit runs on its own. It does not need a `/launch-check` run first.
 - Grep for error tracking SDK (Sentry, Datadog, Bugsnag, LogRocket, Rollbar)
 - Check initialization: is the SDK configured with the correct DSN/API key (env var, not hardcoded)?
 - Check error boundaries (React ErrorBoundary, Vue errorHandler, global uncaughtException handler)
-- Check if source maps are uploaded to the error tracker for readable stack traces
+- Check whether the error tracker receives source maps for readable stack traces
 
 ### Step 2: Health endpoints
 
 - Check for a health check route (`/health`, `/healthz`, `/api/health`, `/_health`)
-- Check what the health endpoint verifies (just "alive"? database connectivity? external service reachability?)
+- Check what the health endpoint verifies (only "alive"? database connectivity? external service reachability?)
 - Check for a readiness probe separate from liveness (Kubernetes-style)
 
 ### Step 3: Logging
 
 - Check for a logging library (winston, pino, bunyan, python logging, structured logging)
-- Check if logs are structured (JSON) or unstructured (console.log with string concatenation)
-- Check for appropriate log levels (error, warn, info, debug) — not everything at `console.log`
-- Check that sensitive data (passwords, tokens, PII) is NOT logged
+- Check whether logs use a structured format (JSON) or an unstructured format (console.log with string concatenation)
+- Check for appropriate log levels (error, warn, info, debug): not everything at `console.log`
+- Check that logging excludes sensitive data (passwords, tokens, PII)
 
 ### Step 4: Alerting and incident response
 
@@ -62,7 +62,7 @@ This audit runs on its own. It does not need a `/launch-check` run first.
 ### Step 5: Output
 
 ```
-MONITORING AUDIT — <project> @ <sha>
+MONITORING AUDIT: <project> @ <sha>
 
 | # | Pillar | Status | Finding |
 |----|--------|--------|---------|
@@ -72,7 +72,7 @@ MONITORING AUDIT — <project> @ <sha>
 | M4 | Alerting | WARN | No alerting rules found in code or IaC |
 | M5 | Runbook | FAIL | No runbook or incident response doc |
 
-Incident readiness: NOT READY (2 fails — health endpoint and runbook are minimum viable)
+Incident readiness: NOT READY (2 fails: health endpoint and runbook are minimum viable)
 
 Priority fixes:
   1. [ ] Add GET /health returning { status: "ok", db: "connected" }
@@ -95,7 +95,7 @@ Score: `score = max(0, 100 - 25*critical - 10*high - 3*medium - 1*low)`. Verdict
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-audit-history.sh"
 
-# Lowercase severity in the payload — the lib expects critical/high/medium/low/info.
+# Lowercase severity in the payload: the lib expects critical/high/medium/low/info.
 payload=$(mktemp); cat > "$payload" <<'EOF'
 {
   "schema_version": 1,
@@ -109,7 +109,7 @@ EOF
 
 # Body: per templates/audits/monitoring-audit.md
 body=$(mktemp); cat > "$body" <<'EOF'
-... (filled-in body — findings table + Priority fixes) ...
+... (filled-in body: findings table + Priority fixes) ...
 EOF
 
 ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -127,13 +127,13 @@ touch projects/<name>/audits/monitoring-audit/.audit-history-tracked
 
 ## Rules
 
-1. **Auto-PASS for projects not yet in production.** Pre-launch monitoring gaps are expected — flag them as "set up before first deploy" rather than "FAIL."
+1. **Auto-PASS for projects not yet in production.** Expect pre-launch monitoring gaps. Flag them as "set up before first deploy" rather than "FAIL."
 2. **Check IaC too.** Alerting rules might be in Terraform, CloudFormation, or CDK files rather than application code.
-3. **Don't require all four pillars.** Logs + error tracking + health endpoint is the minimum. Distributed tracing and detailed metrics are "nice to have" for most teams.
-4. **Be specific about what the health endpoint should check** — "returns 200" is table stakes; checking database connectivity is the real test.
+3. **Do not require all four pillars.** Logs + error tracking + health endpoint is the minimum. Distributed tracing and detailed metrics are "nice to have" for most teams.
+4. **Be specific about what the health endpoint should check**: "returns 200" is table stakes. Checking database connectivity is the real test.
 5. **Always persist via the lib.** The persist step runs regardless of opt-in commit state.
 6. **Severity vocabulary in the JSON is lowercase.** The lib expects `critical`/`high`/`medium`/`low`/`info`.
 
 ---
 
-*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+*Part of [ApexYard](https://github.com/me2resh/apexyard): multi-project SDLC framework for Claude Code · MIT.*
